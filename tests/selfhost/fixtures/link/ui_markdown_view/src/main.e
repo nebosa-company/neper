@@ -17,7 +17,7 @@ use e.ui.markdown_view as mv
 use e.ui.widget
 
 // BEGIN DOCS
-fn doc_count() -> usize { ret 8usize }
+fn doc_count() -> usize { ret 12usize }
 
 fn doc_src(i: usize) -> str {
     if i == 0usize { ret "# Title of the page\n\nA paragraph with *emphasis*, **strong text**, `inline code` and a [link](https://example.org/a) in it,\nwrapped over several lines of the viewer width.\n\n### Third\n\nfirst line\\\nline two after a hard break\n\n###### six" }
@@ -28,6 +28,10 @@ fn doc_src(i: usize) -> str {
     if i == 5usize { ret "<script>alert(1)</script> and <img src=x onerror=alert(1)>\n\n<div>\n**bold in html block**\n</div>\n\n[ref][1] stays\n\n<b>tag</b> stays" }
     if i == 6usize { ret "short supercalifragilisticexpialidocious end foo**bar**baz `code` x" }
     if i == 7usize { ret "1. > ## Heading in quote\n   > text\n\n- - nested bullets\n  - second" }
+    if i == 8usize { ret "Before the table\n| Name | Qty | Note |\n|:-----|:---:|-----:|\n| apple | 3 | **fresh** and *sweet* fruit from the market |\n| fig | 12 |\n| `code` | 7 | a | extra | cells |\n\nafter the table" }
+    if i == 9usize { ret "- item\n\n  a | b\n  --|--\n  1 | 2\n\n> | x | y |\n> |---|---|\n> | left \\| pipe | z |\n" }
+    if i == 10usize { ret "| alpha | beta |\n|---|---|\n| supercalifragilistic | b |\n| c | d |" }
+    if i == 11usize { ret "a | b | c\n--|--\n\n| a | b |\n| c | d |\n\n| h1 | h2 |\n|----|----|\n| 1 | 2 |\n# heading\n\n| h |\n|---|\n| only |\n- list" }
     ret ""
 }
 
@@ -40,6 +44,10 @@ fn doc_width(i: usize) -> f32 {
     if i == 5usize { ret 240.0 }
     if i == 6usize { ret 96.0 }
     if i == 7usize { ret 240.0 }
+    if i == 8usize { ret 240.0 }
+    if i == 9usize { ret 240.0 }
+    if i == 10usize { ret 120.0 }
+    if i == 11usize { ret 240.0 }
     ret 0.0
 }
 
@@ -52,6 +60,10 @@ fn doc_expected(i: usize) -> str {
     if i == 5usize { ret "W 0 0 200 16 0 0 <script>alert(1)</script>\nW 208 0 24 16 0 0 and\nW 0 16 32 16 0 0 <img\nW 40 16 40 16 0 0 src=x\nW 88 16 136 16 0 0 onerror=alert(1)>\nW 0 40 40 16 0 0 <div>\nW 48 40 32 16 1 0 bold\nW 88 40 16 16 1 0 in\nW 112 40 32 16 1 0 html\nW 152 40 40 16 1 0 block\nW 0 56 48 16 0 0 </div>\nW 0 80 64 16 0 0 [ref][1]\nW 72 80 40 16 0 0 stays\nW 0 104 80 16 0 0 <b>tag</b>\nW 88 104 40 16 0 0 stays\nN P 0 0 0 5 <script>alert(1)</script> and <img src=x onerror=alert(1)>\nN P 0 0 5 6 <div> bold in html block </div>\nN P 0 0 11 2 [ref][1] stays\nN P 0 0 13 2 <b>tag</b> stays\nH 120\n" }
     if i == 6usize { ret "W 0 0 40 16 0 0 short\nW 0 16 272 16 0 0 supercalifragilisticexpialidocious\nW 0 32 24 16 0 0 end\nW 32 32 24 16 0 0 foo\nW 56 32 24 16 33 0 bar\nW 0 48 24 16 32 0 baz\nW 32 48 32 16 4 0 code\nW 72 48 8 16 0 0 x\nN P 0 0 0 8 short supercalifragilisticexpialidocious end foobarbaz code x\nH 64\n" }
     if i == 7usize { ret "M 0 0 16 24 0 0 1.\nW 32 0 84 24 64 0 Heading\nW 128 0 24 24 64 0 in\nW 164 0 60 24 64 0 quote\nQ 16 0 2 24 0 0 \nW 32 24 32 16 0 0 text\nQ 16 24 2 16 0 0 \nM 0 40 16 16 0 0 •\nM 16 40 16 16 0 0 •\nW 32 40 48 16 0 0 nested\nW 88 40 56 16 0 0 bullets\nM 16 56 16 16 0 0 •\nW 32 56 48 16 0 0 second\nN L 1 0 0 7 \nN I 1 0 0 7 \nN Q 0 1 0 7 \nN H 2 2 0 5 Heading in quote\nN P 0 2 5 2 text\nN L 0 0 7 6 \nN I 0 0 7 6 \nN L 0 1 7 6 \nN I 0 1 7 4 \nN P 0 2 7 4 nested bullets\nN I 0 1 11 2 \nN P 0 2 11 2 second\nH 72\n" }
+    if i == 8usize { ret "W 0 0 48 16 0 0 Before\nW 56 0 24 16 0 0 the\nW 88 0 40 16 0 0 table\nT 0 24 80 24 0 0 \nW 4 28 32 16 1 0 Name\nT 80 24 80 24 0 0 \nW 108 28 24 16 1 0 Qty\nT 160 24 80 24 0 0 \nW 204 28 32 16 1 0 Note\nT 0 48 80 88 0 0 \nW 4 52 40 16 0 0 apple\nT 80 48 80 88 0 0 \nW 116 52 8 16 0 0 3\nT 160 48 80 88 0 0 \nW 164 52 40 16 1 0 fresh\nW 212 52 24 16 0 0 and\nW 196 68 40 16 2 0 sweet\nW 196 84 40 16 0 0 fruit\nW 172 100 32 16 0 0 from\nW 212 100 24 16 0 0 the\nW 188 116 48 16 0 0 market\nT 0 136 80 24 0 0 \nW 4 140 24 16 0 0 fig\nT 80 136 80 24 0 0 \nW 112 140 16 16 0 0 12\nT 160 136 80 24 0 0 \nT 0 160 80 24 0 0 \nW 4 164 32 16 4 0 code\nT 80 160 80 24 0 0 \nW 116 164 8 16 0 0 7\nT 160 160 80 24 0 0 \nW 228 164 8 16 0 0 a\nW 0 192 40 16 0 0 after\nW 48 192 24 16 0 0 the\nW 80 192 40 16 0 0 table\nN P 0 0 0 3 Before the table\nN A 3 0 3 29 \nN O 0 0 3 6 \nN E 1 0 3 2 Name\nN E 2 0 5 2 Qty\nN E 3 0 7 2 Note\nN O 1 0 9 12 \nN D 1 0 9 2 apple\nN D 2 0 11 2 3\nN D 3 0 13 8 fresh and sweet fruit from the market\nN O 2 0 21 5 \nN D 1 0 21 2 fig\nN D 2 0 23 2 12\nN D 3 0 25 1 \nN O 3 0 26 6 \nN D 1 0 26 2 code\nN D 2 0 28 2 7\nN D 3 0 30 2 a\nN P 0 0 32 3 after the table\nH 208\n" }
+    if i == 9usize { ret "M 0 0 16 16 0 0 •\nW 16 0 32 16 0 0 item\nT 16 24 112 24 0 0 \nW 20 28 8 16 1 0 a\nT 128 24 112 24 0 0 \nW 132 28 8 16 1 0 b\nT 16 48 112 24 0 0 \nW 20 52 8 16 0 0 1\nT 128 48 112 24 0 0 \nW 132 52 8 16 0 0 2\nT 16 80 112 24 0 0 \nW 20 84 8 16 1 0 x\nT 128 80 112 24 0 0 \nW 132 84 8 16 1 0 y\nT 16 104 112 24 0 0 \nW 20 108 32 16 0 0 left\nW 60 108 8 16 0 0 |\nW 76 108 32 16 0 0 pipe\nT 128 104 112 24 0 0 \nW 132 108 8 16 0 0 z\nQ 0 80 2 48 0 0 \nN L 0 0 0 10 \nN I 0 0 0 10 \nN P 0 1 0 2 item\nN A 2 1 2 8 \nN O 0 1 2 4 \nN E 0 1 2 2 a\nN E 0 1 4 2 b\nN O 1 1 6 4 \nN D 0 1 6 2 1\nN D 0 1 8 2 2\nN Q 0 0 10 11 \nN A 2 1 10 11 \nN O 0 1 10 4 \nN E 0 1 10 2 x\nN E 0 1 12 2 y\nN O 1 1 14 6 \nN D 0 1 14 4 left | pipe\nN D 0 1 18 2 z\nH 128\n" }
+    if i == 10usize { ret "T 0 0 60 24 0 0 \nW 4 4 40 16 1 0 alpha\nT 60 0 60 24 0 0 \nW 64 4 32 16 1 0 beta\nT 0 24 60 24 0 0 \nW 4 28 160 16 0 0 supercalifragilistic\nT 60 24 60 24 0 0 \nW 64 28 8 16 0 0 b\nT 0 48 60 24 0 0 \nW 4 52 8 16 0 0 c\nT 60 48 60 24 0 0 \nW 64 52 8 16 0 0 d\nN A 2 0 0 12 \nN O 0 0 0 4 \nN E 0 0 0 2 alpha\nN E 0 0 2 2 beta\nN O 1 0 4 4 \nN D 0 0 4 2 supercalifragilistic\nN D 0 0 6 2 b\nN O 2 0 8 4 \nN D 0 0 8 2 c\nN D 0 0 10 2 d\nH 72\n" }
+    if i == 11usize { ret "W 0 0 8 16 0 0 a\nW 16 0 8 16 0 0 |\nW 32 0 8 16 0 0 b\nW 48 0 8 16 0 0 |\nW 64 0 8 16 0 0 c\nW 80 0 40 16 0 0 --|--\nW 0 24 8 16 0 0 |\nW 16 24 8 16 0 0 a\nW 32 24 8 16 0 0 |\nW 48 24 8 16 0 0 b\nW 64 24 8 16 0 0 |\nW 80 24 8 16 0 0 |\nW 96 24 8 16 0 0 c\nW 112 24 8 16 0 0 |\nW 128 24 8 16 0 0 d\nW 144 24 8 16 0 0 |\nT 0 48 120 24 0 0 \nW 4 52 16 16 1 0 h1\nT 120 48 120 24 0 0 \nW 124 52 16 16 1 0 h2\nT 0 72 120 24 0 0 \nW 4 76 8 16 0 0 1\nT 120 72 120 24 0 0 \nW 124 76 8 16 0 0 2\nW 0 104 112 32 64 0 heading\nT 0 144 240 24 0 0 \nW 4 148 8 16 1 0 h\nT 0 168 240 24 0 0 \nW 4 172 32 16 0 0 only\nM 0 200 16 16 0 0 •\nW 16 200 32 16 0 0 list\nN P 0 0 0 6 a | b | c --|--\nN P 0 0 6 10 | a | b | | c | d |\nN A 2 0 16 8 \nN O 0 0 16 4 \nN E 0 0 16 2 h1\nN E 0 0 18 2 h2\nN O 1 0 20 4 \nN D 0 0 20 2 1\nN D 0 0 22 2 2\nN H 1 0 24 1 heading\nN A 1 0 25 4 \nN O 0 0 25 2 \nN E 0 0 25 2 h\nN O 1 0 27 2 \nN D 0 0 27 2 only\nN L 0 0 29 2 \nN I 0 0 29 2 \nN P 0 1 29 2 list\nH 216\n" }
     ret ""
 }
 
@@ -64,6 +76,10 @@ fn doc_selection(i: usize) -> str {
     if i == 5usize { ret "<script>alert(1)</script> and\n<img src=x onerror=alert(1)>\n<div> bold in html block\n</div>\n[ref][1] stays\n<b>tag</b> stays" }
     if i == 6usize { ret "short\nsupercalifragilisticexpialidocious\nend foobar\nbaz code x" }
     if i == 7usize { ret "Heading in quote\ntext\nnested bullets\nsecond" }
+    if i == 8usize { ret "Before the table\nName\tQty\tNote\napple\t3\tfresh and\nsweet\nfruit\nfrom the\nmarket\nfig\t12\ncode\t7\ta\nafter the table" }
+    if i == 9usize { ret "item\na\tb\n1\t2\nx\ty\nleft | pipe\tz" }
+    if i == 10usize { ret "alpha\tbeta\nsupercalifragilistic\tb\nc\td" }
+    if i == 11usize { ret "a | b | c --|--\n| a | b | | c | d |\nh1\th2\n1\t2\nheading\nh\nonly\nlist" }
     ret ""
 }
 
@@ -76,6 +92,10 @@ fn doc_probes(i: usize) -> str {
     if i == 5usize { ret "1,1,0;209,1,1;1,17,2;41,17,3;89,17,4;1,41,5;49,41,6;89,41,7;113,41,8;153,41,9;1,57,10;1,81,11;73,81,12;1,105,13;89,105,14;290,3,-1;1,170,-1" }
     if i == 6usize { ret "1,1,0;1,17,1;1,33,2;33,33,3;57,33,4;1,49,5;33,49,6;73,49,7;146,3,-1;1,114,-1" }
     if i == 7usize { ret "1,1,0;33,1,1;129,1,2;165,1,3;33,25,5;1,41,7;17,41,8;33,41,9;89,41,10;17,57,11;33,57,12;290,3,-1;1,122,-1" }
+    if i == 8usize { ret "1,1,0;57,1,1;89,1,2;5,29,4;109,29,6;205,29,8;5,53,10;117,53,12;165,53,14;213,53,15;197,69,16;197,85,17;173,101,18;213,101,19;189,117,20;5,141,22;113,141,24;5,165,27;117,165,29;229,165,31;1,193,32;49,193,33;81,193,34;290,3,-1;1,258,-1" }
+    if i == 9usize { ret "1,1,0;17,1,1;21,29,3;133,29,5;21,53,7;133,53,9;21,85,11;133,85,13;21,109,15;61,109,16;77,109,17;133,109,19;290,3,-1;1,178,-1" }
+    if i == 10usize { ret "5,5,1;65,5,3;5,29,5;65,29,7;5,53,9;65,53,11;170,3,-1;1,122,-1" }
+    if i == 11usize { ret "1,1,0;17,1,1;33,1,2;49,1,3;65,1,4;81,1,5;1,25,6;17,25,7;33,25,8;49,25,9;65,25,10;81,25,11;97,25,12;113,25,13;129,25,14;145,25,15;5,53,17;125,53,19;5,77,21;125,77,23;1,105,24;5,149,26;5,173,28;1,201,29;17,201,30;290,3,-1;1,266,-1" }
     ret ""
 }
 
@@ -88,6 +108,10 @@ fn doc_spans(i: usize) -> str {
     if i == 5usize { ret "-" }
     if i == 6usize { ret "p:short :0;p:supercalifragilisticexpialidocious :0;p:end :0;p:foo:0;b:bar:0;p:baz :0;c:code :0;p:x:0;" }
     if i == 7usize { ret "-" }
+    if i == 8usize { ret "b:Name:0;" }
+    if i == 9usize { ret "-" }
+    if i == 10usize { ret "-" }
+    if i == 11usize { ret "-" }
     ret ""
 }
 // END DOCS
@@ -100,6 +124,7 @@ fn letter(k: mv.ItemKind) -> str {
     if k == .Rule { ret "R" }
     if k == .QuoteBar { ret "Q" }
     if k == .CodeBack { ret "B" }
+    if k == .CellBack { ret "T" }
     ret "L"
 }
 
@@ -110,6 +135,10 @@ fn role_letter(r: mv.NodeRole) -> str {
     if r == .ListItem { ret "I" }
     if r == .Quote { ret "Q" }
     if r == .Code { ret "C" }
+    if r == .Table { ret "A" }
+    if r == .Row { ret "O" }
+    if r == .Cell { ret "D" }
+    if r == .HeaderCell { ret "E" }
     ret "S"
 }
 
@@ -284,10 +313,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Rich spans for the paragraph of doc 0, the links of doc 4 and the narrow doc 6, under
     // the host-activated policy; none of them carries the action when display-only.
     var s = 0usize
-    while s < 3usize {
+    while s < 4usize {
         let mark = mem.mark(a)
         var which = 0usize
         var which_node = 1usize
+        if s == 3usize {
+            // The first header cell of the table of doc 8 (after its paragraph, the table and a row).
+            which = 8usize
+            which_node = 3usize
+        }
         if s == 1usize {
             which = 4usize
             which_node = 0usize

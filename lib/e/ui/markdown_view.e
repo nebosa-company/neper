@@ -23,6 +23,20 @@
 // overflows); a hard break starts a line. A code block is `pad` inside a background, one
 // unwrapped line per source line.
 //
+// Tables (GFM pipe tables, which `e.fmt.markdown` leaves as paragraph lines): a paragraph's
+// first line with a pipe followed by a delimiter row (`:?-+:?` cells) of the same number of
+// cells starts a table, lines before it being a paragraph of their own and every line after
+// it a row. Leading and trailing pipes are optional, `\|` is a literal pipe and, as in the
+// GFM specification, a pipe inside a code span still separates (markdown-it differs); a
+// body row with fewer cells is padded with empty ones and extra cells are dropped, up to 16
+// columns. The columns share the available width equally; a cell is `pad` inside its
+// `CellBack` box, wraps its words in the width left, the header row is bold, and a centred
+// or right-aligned column shifts each line of its cells. A row is as tall as its tallest
+// cell. Nodes: a `Table` (level the columns), a `Row` per row (level its index, header 0), a
+// `HeaderCell` or `Cell` per cell (level its alignment, `row`, `column`, a plain-text label,
+// usable with `rich_spans`); `selected_text` joins the cells of a row by a tab and rows by a
+// newline.
+//
 // ponytail: the metric is one advance per code point, so a proportional face needs the
 // host's measurement in place of `char_w`; a style change inside a word may break the line
 // there; a quote bar is drawn per leaf block, so it is broken at the gaps.
@@ -43,17 +57,18 @@ const E_QUOTE: u8 = 1u8
 const E_LIST: u8 = 2u8
 const E_ITEM: u8 = 3u8
 
-type ItemKind = enum u8 { Word, Marker, Rule, QuoteBar, CodeBack, CodeLine }
-type NodeRole = enum u8 { Heading, Paragraph, List, ListItem, Quote, Code, Separator }
+type ItemKind = enum u8 { Word, Marker, Rule, QuoteBar, CodeBack, CodeLine, CellBack }
+type NodeRole = enum u8 { Heading, Paragraph, List, ListItem, Quote, Code, Separator, Table, Row, Cell, HeaderCell }
 type LinkPolicy = enum u8 { DisplayOnly, HostActivated }
 
 // `style`: the BOLD, ITALIC, CODE, LINK, IMAGE, GLUED (no space before it) and HEADING
 // bits. `link` is the link index plus one, zero for none. `node` is the leaf node.
 type Item = struct { kind: ItemKind, style: u8, x: f32, y: f32, w: f32, h: f32, start: usize, len: usize, link: u32, node: u32 }
 // `level`: a heading's level, an ordered list's first number or an item's number (0 for a
-// bullet). `first`/`count`: the items it covers. `label`: plain text in the store (a code
-// block's is its info string).
-type Node = struct { role: NodeRole, level: u32, depth: u32, first: usize, count: usize, label_start: usize, label_len: usize }
+// bullet; a table's column count, a row's index with the header row 0, a cell's alignment 0
+// none, 1 left, 2 center, 3 right). `first`/`count`: the items it covers. `label`: plain text
+// in the store (a code block's is its info string). `row`, `column`: a cell's place.
+type Node = struct { role: NodeRole, level: u32, depth: u32, first: usize, count: usize, label_start: usize, label_len: usize, row: u32, column: u32 }
 type Link = struct { dest_start: usize, dest_len: usize, safe: bool, mail: bool }
 type Word = struct { start: usize, len: usize, cols: usize, style: u8, link: u32, glued: bool, hard: bool }
 type Metrics = struct { width: f32, char_w: f32, line_h: f32, gap: f32, indent: f32, pad: f32, bar: f32 }
@@ -300,10 +315,10 @@ fn end_leaf(c: *Ctx, top: f32, height: f32) -> err {
 }
 
 // Joins the lines of a leaf by `\n` into the scratch; (length, index of the end event).
-fn join_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, usize, err) {
+fn join_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, stop: usize) -> (usize, usize, err) {
     var used = 0usize
     var i = from
-    while i < blocks.len && blocks[i].kind == .Line {
+    while i < stop && i < blocks.len && blocks[i].kind == .Line {
         if i > from {
             if used >= c.st.scratch.len { ret (0usize, 0usize, TooLarge) }
             c.st.scratch[used] = 10u8
@@ -459,11 +474,25 @@ fn place_words(c: *Ctx, count: usize, scale: f32, x0: f32, avail: f32, top: f32,
     ret (line + 1usize, ok)
 }
 
+// The index just past the `Line` blocks that start at `from`.
+fn lines_end(blocks: []const markdown.Block, from: usize) -> usize {
+    var i = from
+    while i < blocks.len && blocks[i].kind == .Line { i += 1usize }
+    ret i
+}
+
 fn text_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, heading: u32) -> (usize, err) {
-    let (used, end, join_error) = join_lines(c, src, blocks, from + 1usize)
-    if join_error != ok { ret (0usize, join_error) }
+    let end = lines_end(blocks, from + 1usize)
+    let e = leaf_lines(c, src, blocks, from + 1usize, end, heading)
+    ret (end, e)
+}
+
+// A paragraph or heading from the `Line` blocks `from..stop`.
+fn leaf_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, stop: usize, heading: u32) -> err {
+    let (used, _, join_error) = join_lines(c, src, blocks, from, stop)
+    if join_error != ok { ret join_error }
     let (count, parse_error) = markdown.parse_inlines(c.st.scratch[0usize..used], c.st.inlines)
-    if parse_error != ok { ret (0usize, parse_error) }
+    if parse_error != ok { ret parse_error }
     var role: NodeRole = .Paragraph
     var scale: f32 = 1.0
     var extra = 0u8
@@ -473,25 +502,263 @@ fn text_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, hea
         extra = HEADING
     }
     let (node, node_error) = put_node(c, role, heading)
-    if node_error != ok { ret (0usize, node_error) }
+    if node_error != ok { ret node_error }
     let (top, begin_error) = begin_leaf(c, scale)
-    if begin_error != ok { ret (0usize, begin_error) }
+    if begin_error != ok { ret begin_error }
     let links_before = c.links
     let joined = c.st.scratch[0usize..used]
     let (w, words_error) = collect_words(c, joined, c.st.inlines[0usize..count])
-    if words_error != ok { ret (0usize, words_error) }
+    if words_error != ok { ret words_error }
     let (label_start, label_len, commit_error) = commit_words(c, joined, w.count)
-    if commit_error != ok { ret (0usize, commit_error) }
+    if commit_error != ok { ret commit_error }
     try commit_links(c, joined, links_before)
     let x0 = f32(c.levels) * c.m.indent
     let (lines, place_error) = place_words(c, w.count, scale, x0, avail_width(c, x0), top, node, extra)
-    if place_error != ok { ret (0usize, place_error) }
+    if place_error != ok { ret place_error }
     let height = f32(lines) * c.m.line_h * scale
     c.st.nodes[node].label_start = label_start
     c.st.nodes[node].label_len = label_len
     try end_leaf(c, top, height)
     c.st.nodes[node].count = c.items - c.st.nodes[node].first
-    ret (end, ok)
+    ret ok
+}
+
+// ---- tables (GFM pipe tables, read from a paragraph's lines) ----
+
+const MAX_COLS: usize = 16usize
+
+fn is_blank_byte(ch: u8) -> bool { ret ch == 32u8 || ch == 9u8 }
+
+// Splits a table row into its cells: a leading and a trailing pipe are optional, a
+// backslash keeps the next byte (so `\|` is no separator), each cell is trimmed. Writes
+// the byte ranges of up to MAX_COLS cells and answers how many cells the row has (more
+// than MAX_COLS is answered as MAX_COLS + 1).
+fn split_row(line: str, begins: []usize, ends: []usize) -> usize {
+    var i = 0usize
+    while i < line.len && is_blank_byte(line[i]) { i += 1usize }
+    var after_pipe = false
+    if i < line.len && line[i] == 124u8 {
+        i += 1usize
+        after_pipe = true
+    }
+    var count = 0usize
+    var start = i
+    while i <= line.len {
+        var cut = false
+        var at_pipe = false
+        if i == line.len {
+            cut = true
+        } else if line[i] == 92u8 && i + 1usize < line.len {
+            i += 2usize
+            continue
+        } else if line[i] == 124u8 {
+            cut = true
+            at_pipe = true
+        }
+        if cut {
+            var a = start
+            var b = i
+            while a < b && is_blank_byte(line[a]) { a += 1usize }
+            while b > a && is_blank_byte(line[b - 1usize]) { b -= 1usize }
+            // The text after the last pipe counts only when it is not empty.
+            if at_pipe || b > a || !after_pipe {
+                if count < begins.len {
+                    begins[count] = a
+                    ends[count] = b
+                }
+                count += 1usize
+            }
+            start = i + 1usize
+            after_pipe = at_pipe
+        }
+        i += 1usize
+    }
+    if count > MAX_COLS { ret MAX_COLS + 1usize }
+    ret count
+}
+
+// Whether `line` is a delimiter row (cells of `:?-+:?`); the alignments (0 none, 1 left,
+// 2 center, 3 right) into `aligns` and the number of cells, zero when it is not one.
+fn delimiter_row(line: str, aligns: []u32) -> usize {
+    var begins: [16]usize = zero
+    var ends: [16]usize = zero
+    let count = split_row(line, begins[..], ends[..])
+    if count == 0usize || count > MAX_COLS { ret 0usize }
+    var k = 0usize
+    while k < count {
+        var a = begins[k]
+        var b = ends[k]
+        var left = false
+        var right = false
+        if a < b && line[a] == 58u8 {
+            left = true
+            a += 1usize
+        }
+        if b > a && line[b - 1usize] == 58u8 {
+            right = true
+            b -= 1usize
+        }
+        if a >= b { ret 0usize }
+        var j = a
+        while j < b {
+            if line[j] != 45u8 { ret 0usize }
+            j += 1usize
+        }
+        var align = 0u32
+        if left && right {
+            align = 2u32
+        } else if left {
+            align = 1u32
+        } else if right {
+            align = 3u32
+        }
+        aligns[k] = align
+        k += 1usize
+    }
+    ret count
+}
+
+fn has_pipe(line: str) -> bool {
+    var i = 0usize
+    while i < line.len {
+        if line[i] == 124u8 { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+fn line_text(src: str, b: markdown.Block) -> str { ret src[b.start..b.start + b.len] }
+
+// Lays out one cell: `text` (a slice of the source) as words at `x`, wrapped to `inner`,
+// under the row top `y`; its node and items. Answers the number of lines.
+fn cell_words(c: *Ctx, text: str, x: f32, y: f32, back_w: f32, inner: f32, header: bool, align: u32, row: u32, column: u32) -> (usize, err) {
+    var role: NodeRole = .Cell
+    var extra = 0u8
+    if header {
+        role = .HeaderCell
+        extra = BOLD
+    }
+    let (node, node_error) = put_node(c, role, align)
+    if node_error != ok { ret (0usize, node_error) }
+    c.st.nodes[node].row = row
+    c.st.nodes[node].column = column
+    try put_item(c, Item { kind: .CellBack, style: 0u8, x: x, y: y, w: back_w, h: 0.0, start: 0usize, len: 0usize, link: 0u32, node: u32(node) })
+    let (count, parse_error) = markdown.parse_inlines(text, c.st.inlines)
+    if parse_error != ok { ret (0usize, parse_error) }
+    let links_before = c.links
+    let (w, words_error) = collect_words(c, text, c.st.inlines[0usize..count])
+    if words_error != ok { ret (0usize, words_error) }
+    let (label_start, label_len, commit_error) = commit_words(c, text, w.count)
+    if commit_error != ok { ret (0usize, commit_error) }
+    try commit_links(c, text, links_before)
+    c.st.nodes[node].label_start = label_start
+    c.st.nodes[node].label_len = label_len
+    let first_word = c.items
+    let (lines, place_error) = place_words(c, w.count, 1.0, x + c.m.pad, inner, y + c.m.pad, node, extra)
+    if place_error != ok { ret (0usize, place_error) }
+    if align >= 2u32 && lines > 0usize {
+        // Shift each line to the middle or the right of the cell.
+        var i = first_word
+        while i < c.items {
+            let line_y = c.st.items[i].y
+            var left_x = c.st.items[i].x
+            var right_x = left_x + c.st.items[i].w
+            var j = i + 1usize
+            while j < c.items && c.st.items[j].y == line_y {
+                right_x = c.st.items[j].x + c.st.items[j].w
+                j += 1usize
+            }
+            var shift = inner - (right_x - left_x)
+            if align == 2u32 { shift = shift / 2.0 }
+            if shift > 0.0 {
+                var k = i
+                while k < j {
+                    c.st.items[k].x += shift
+                    k += 1usize
+                }
+            }
+            i = j
+        }
+    }
+    c.st.nodes[node].count = c.items - c.st.nodes[node].first
+    ret (lines, ok)
+}
+
+// Lays out the table whose header row is the line block `header` and delimiter row the one
+// after it, rows following to `stop`. Cells are equal columns of the available width.
+fn table_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, stop: usize, columns: usize, aligns: []const u32) -> err {
+    let (table, table_error) = put_node(c, .Table, u32(columns))
+    if table_error != ok { ret table_error }
+    let (top, begin_error) = begin_leaf(c, 1.0)
+    if begin_error != ok { ret begin_error }
+    let x0 = f32(c.levels) * c.m.indent
+    let total = avail_width(c, x0)
+    let col_w = total / f32(columns)
+    var inner = col_w - 2.0 * c.m.pad
+    if inner < c.m.char_w { inner = c.m.char_w }
+    var y = top
+    var row = 0u32
+    var at = header
+    while at < stop {
+        if at == header + 1usize {
+            at += 1usize
+            continue
+        }
+        let line = line_text(src, blocks[at])
+        var begins: [16]usize = zero
+        var ends: [16]usize = zero
+        let found = split_row(line, begins[..], ends[..])
+        let (row_node, row_error) = put_node(c, .Row, row)
+        if row_error != ok { ret row_error }
+        let first_back = c.items
+        var most = 1usize
+        var k = 0usize
+        while k < columns {
+            var cell_text = ""
+            if k < found && k < MAX_COLS { cell_text = line[begins[k]..ends[k]] }
+            var align = 0u32
+            if k < aligns.len { align = aligns[k] }
+            let (lines, cell_error) = cell_words(c, cell_text, x0 + f32(k) * col_w, y, col_w, inner, row == 0u32, align, row, u32(k))
+            if cell_error != ok { ret cell_error }
+            if lines > most { most = lines }
+            k += 1usize
+        }
+        let row_h = f32(most) * c.m.line_h + 2.0 * c.m.pad
+        var m = first_back
+        while m < c.items {
+            if c.st.items[m].kind == .CellBack { c.st.items[m].h = row_h }
+            m += 1usize
+        }
+        close_node(c, row_node)
+        y += row_h
+        row += 1u32
+        at += 1usize
+    }
+    try end_leaf(c, top, y - top)
+    close_node(c, table)
+    ret ok
+}
+
+// Whether the paragraph whose lines are `from..stop` holds a table (a header row with a
+// pipe followed by a delimiter row of the same number of cells, the first such pair): the
+// index of the header line block, the column count and the alignments; zero columns when it
+// does not.
+fn find_table(src: str, blocks: []const markdown.Block, from: usize, stop: usize, aligns: []u32) -> (usize, usize) {
+    var k = from
+    while k + 1usize < stop {
+        let head = line_text(src, blocks[k])
+        if has_pipe(head) {
+            var begins: [16]usize = zero
+            var ends: [16]usize = zero
+            let head_cells = split_row(head, begins[..], ends[..])
+            if head_cells > 0usize && head_cells <= MAX_COLS {
+                let cols = delimiter_row(line_text(src, blocks[k + 1usize]), aligns)
+                if cols == head_cells { ret (k, cols) }
+            }
+        }
+        k += 1usize
+    }
+    ret (0usize, 0usize)
 }
 
 fn code_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, err) {
@@ -551,8 +818,21 @@ fn lay_out(c: *Ctx, src: str, blocks: []const markdown.Block) -> err {
         let b = blocks[i]
         let kind = b.kind
         if kind == .ParagraphStart {
-            let (end, e) = text_leaf(c, src, blocks, i, 0u32)
-            if e != ok { ret e }
+            let end = lines_end(blocks, i + 1usize)
+            var aligns: [16]u32 = zero
+            let (header, columns) = find_table(src, blocks, i + 1usize, end, aligns[..])
+            if columns > 0usize {
+                // Lines before the header row are a paragraph of their own.
+                if header > i + 1usize {
+                    let before = leaf_lines(c, src, blocks, i + 1usize, header, 0u32)
+                    if before != ok { ret before }
+                }
+                let table_error = table_leaf(c, src, blocks, header, end, columns, aligns[0usize..columns])
+                if table_error != ok { ret table_error }
+            } else {
+                let e = leaf_lines(c, src, blocks, i + 1usize, end, 0u32)
+                if e != ok { ret e }
+            }
             i = end + 1usize
             continue
         }
@@ -715,6 +995,7 @@ fn selected_text(v: *const View, first: usize, last: usize, out: []u8) -> (usize
     var used = 0usize
     var have = false
     var prev_y: f32 = 0.0
+    var prev_node = 0u32
     var i = first
     while i <= last {
         let it = v.items[i]
@@ -724,6 +1005,18 @@ fn selected_text(v: *const View, first: usize, last: usize, out: []u8) -> (usize
                 if it.y != prev_y { sep = 10u8 }
                 if it.kind == .Word && sep == 32u8 && (it.style & GLUED) != 0u8 {
                     sep = 0u8
+                }
+                // Across the cells of a table: a tab inside a row, a newline between rows.
+                let here = v.nodes[usize(it.node)]
+                if it.node != prev_node && (here.role == .Cell || here.role == .HeaderCell) {
+                    let before = v.nodes[usize(prev_node)]
+                    if before.role == .Cell || before.role == .HeaderCell {
+                        if before.row == here.row {
+                            sep = 9u8
+                        } else {
+                            sep = 10u8
+                        }
+                    }
                 }
                 if sep != 0u8 {
                     if used >= out.len { ret (0usize, TooLarge) }
@@ -740,6 +1033,7 @@ fn selected_text(v: *const View, first: usize, last: usize, out: []u8) -> (usize
             used += it.len
             have = true
             prev_y = it.y
+            prev_node = it.node
         }
         i += 1usize
     }
@@ -751,7 +1045,7 @@ fn selected_text(v: *const View, first: usize, last: usize, out: []u8) -> (usize
 fn rich_spans(v: *const View, node: usize, out: []control.RichSpan, action: widget.Submit) -> (usize, err) {
     if node >= v.node_count { ret (0usize, Invalid) }
     let nd = v.nodes[node]
-    if nd.role != .Heading && nd.role != .Paragraph { ret (0usize, Invalid) }
+    if nd.role != .Heading && nd.role != .Paragraph && nd.role != .Cell && nd.role != .HeaderCell { ret (0usize, Invalid) }
     let limit = nd.label_start + nd.label_len
     var n = 0usize
     var i = nd.first

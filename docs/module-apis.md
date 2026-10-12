@@ -9174,11 +9174,11 @@ const HEADING: u8 = 64u8
 const E_QUOTE: u8 = 1u8
 const E_LIST: u8 = 2u8
 const E_ITEM: u8 = 3u8
-type ItemKind = enum u8 { Word, Marker, Rule, QuoteBar, CodeBack, CodeLine }
-type NodeRole = enum u8 { Heading, Paragraph, List, ListItem, Quote, Code, Separator }
+type ItemKind = enum u8 { Word, Marker, Rule, QuoteBar, CodeBack, CodeLine, CellBack }
+type NodeRole = enum u8 { Heading, Paragraph, List, ListItem, Quote, Code, Separator, Table, Row, Cell, HeaderCell }
 type LinkPolicy = enum u8 { DisplayOnly, HostActivated }
 type Item = struct { kind: ItemKind, style: u8, x: f32, y: f32, w: f32, h: f32, start: usize, len: usize, link: u32, node: u32 }
-type Node = struct { role: NodeRole, level: u32, depth: u32, first: usize, count: usize, label_start: usize, label_len: usize }
+type Node = struct { role: NodeRole, level: u32, depth: u32, first: usize, count: usize, label_start: usize, label_len: usize, row: u32, column: u32 }
 type Link = struct { dest_start: usize, dest_len: usize, safe: bool, mail: bool }
 type Word = struct { start: usize, len: usize, cols: usize, style: u8, link: u32, glued: bool, hard: bool }
 type Metrics = struct { width: f32, char_w: f32, line_h: f32, gap: f32, indent: f32, pad: f32, bar: f32 }
@@ -9205,13 +9205,24 @@ fn leaf_gap(c: *Ctx) -> f32
 fn decimal(n: u32, out: []u8) -> usize
 fn begin_leaf(c: *Ctx, scale: f32) -> (f32, err)
 fn end_leaf(c: *Ctx, top: f32, height: f32) -> err
-fn join_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, usize, err)
+fn join_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, stop: usize) -> (usize, usize, err)
 type Words = struct { count: usize, after_space: bool, hard: bool }
 fn add_word(c: *Ctx, w: *Words, at: usize, bytes: str, style: u8, link: u32) -> err
 fn add_text(c: *Ctx, w: *Words, base: usize, seg: str, style: u8, link: u32) -> err
 fn collect_words(c: *Ctx, joined: str, nodes: []const markdown.Inline) -> (Words, err)
 fn place_words(c: *Ctx, count: usize, scale: f32, x0: f32, avail: f32, top: f32, node: usize, extra: u8) -> (usize, err)
+fn lines_end(blocks: []const markdown.Block, from: usize) -> usize
 fn text_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, heading: u32) -> (usize, err)
+fn leaf_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, stop: usize, heading: u32) -> err
+const MAX_COLS: usize = 16usize
+fn is_blank_byte(ch: u8) -> bool
+fn split_row(line: str, begins: []usize, ends: []usize) -> usize
+fn delimiter_row(line: str, aligns: []u32) -> usize
+fn has_pipe(line: str) -> bool
+fn line_text(src: str, b: markdown.Block) -> str
+fn cell_words(c: *Ctx, text: str, x: f32, y: f32, back_w: f32, inner: f32, header: bool, align: u32, row: u32, column: u32) -> (usize, err)
+fn table_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, stop: usize, columns: usize, aligns: []const u32) -> err
+fn find_table(src: str, blocks: []const markdown.Block, from: usize, stop: usize, aligns: []u32) -> (usize, usize)
 fn code_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, err)
 fn push_entry(c: *Ctx, e: Entry) -> err
 fn pop_entry(c: *Ctx) -> Entry
@@ -9240,8 +9251,10 @@ with `fallback` set. A link is display-only under `DisplayOnly`; under `HostActi
 `activation` answers the destination only if it is relative or http, https or mailto
 (`safe`), and never opens anything. `item_at` and `link_at` are the hit regions,
 `selected_text` the selectable text of an item range, and `rich_spans` a heading's or
-paragraph's words as `control.RichSpan`s for `control.paragraph`. Layout and queries are
-data, checked against a markdown-it-py oracle; a window-level check would still need a
+paragraph's (or a table cell's) words as `control.RichSpan`s for `control.paragraph`. GFM
+pipe tables (D3304) are read from paragraph lines into `Table`, `Row`, `Cell` and
+`HeaderCell` nodes with `CellBack` boxes, equal columns and per-column alignment.
+Layout and queries are data, checked against a markdown-it-py oracle; a window-level check would still need a
 shaped-text measure in place of the grid advance and the pointer and clipboard plumbing
 of a host.
 
