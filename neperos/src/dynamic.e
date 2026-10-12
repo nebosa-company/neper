@@ -13,9 +13,9 @@
 // image is installed with its icon on the home screen -- is queued as C124.
 // (C151) With a network the prompt goes to the build server instead (httpstream.e, over TLS): its stages are the
 // server's own, shown as it sends them (server-sent events); the signed package is streamed into memory, checked
-// against the server's key (package.e), kept in /apps, and the shell puts its icon on the home screen when this app
-// is left. The revocation list is fetched from the server and its signature checked before it is kept (C173). A
-// machine without a network makes the three templates as before.
+// against the server's key (package.e), kept in /apps, and the shell puts its icon on the home screen when it next
+// starts (it adopts a package at start, the single slot). The revocation list is fetched from the server and its
+// signature checked before it is kept (C173). A machine without a network makes the three templates as before.
 use e.mem
 use e.os
 use e.fmt.sse as sse
@@ -326,7 +326,7 @@ fn draw_served(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     var line = "Signed by the server and installed"
     if !s.srv_kept { line = "Signed by the server (the disk would not keep it)" }
     try ui.centred(a, builder, faces.grotesk, 14.0, line, 206.0, 266.0, ui.amber())
-    try ui.centred(a, builder, faces.grotesk, 12.0, "Its icon appears on the home screen when you leave Dynamic.", 206.0, 296.0, ui.light_muted())
+    try ui.centred(a, builder, faces.grotesk, 12.0, "Its icon is on the home screen the next time the phone starts.", 206.0, 296.0, ui.light_muted())
     try ui.pill(a, builder, &s.hits, faces, 470usize, 16.0, 360.0, 186.0, 52.0, "Details", ui.soft(), 18.0)
     try ui.pill(a, builder, &s.hits, faces, 471usize, 210.0, 360.0, 186.0, 52.0, "Done", ui.amber(), 18.0)
     ret ok
