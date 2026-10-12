@@ -6882,6 +6882,177 @@ fn render_conflict_review(a: *mem.Arena, review: json.Value, translate: *const s
 The offline conflict review as markup (L037), after `renderConflictReview` of appdor's `src/offline/conflict-review.js`: `render_conflict_review` turns a review (`e.algo.offline.build_conflict_review`) into one section per conflict with its field table, its choice buttons, the contested fields and the reason a merge is not offered; `escape_html` is the DOM's text serialisation. Sentences come through the host's translator.
 
 
+### `e.fmt.protodesc`
+
+```neper
+error Invalid
+fn max_depth() -> u32
+fn type_name(code: i64) -> str
+fn label_name(code: i64) -> str
+fn put_number(a: *mem.Arena, o: *ir.Obj, key: str, value: i64)
+fn read_int(r: *pb.Reader) -> (i64, err)
+fn read_flag(r: *pb.Reader) -> (bool, err)
+fn read_text(a: *mem.Arena, r: *pb.Reader) -> (json.Value, err)
+fn push_array(l: *list.List[json.Value], v: json.Value)
+fn array_of(l: list.List[json.Value]) -> json.Value
+fn finished(o: *ir.Obj) -> json.Value
+fn parse_range(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_flags(a: *mem.Arena, source: []const u8, first: u32, first_name: str, second: u32, second_name: str) -> (json.Value, err)
+fn parse_oneof(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_field(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_enum_value(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_enum(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_method(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_service(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_message(a: *mem.Arena, source: []const u8, depth: u32) -> (json.Value, err)
+fn read_int_list(a: *mem.Arena, r: *pb.Reader, key: pb.Key, out: *list.List[json.Value]) -> err
+fn parse_file(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_set(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+```
+
+A protocol buffer descriptor reader (L164): `parse_set` and `parse_file` read the bytes of a `FileDescriptorSet` or `FileDescriptorProto` into JSON the way protobuf's JSON mapping writes the same message (lower-camel names, enums by name, set fields present) for files, messages (nested, oneofs, reserved and extension ranges, map entries), enums, services and methods, with the option members a code generator needs. Nesting beyond 32 messages and malformed wire data are `Invalid`.
+
+
+### `e.net.grpcstub`
+
+```neper
+error Invalid
+type Gen = struct { a: *mem.Arena, o: rt.Out, good: bool }
+fn put(g: *Gen, s: str)
+fn cat(g: *Gen, x: str, y: str) -> str
+fn num_text(g: *Gen, n: i64) -> str
+fn replace_all(g: *Gen, text: str, needle: str, with: str) -> str
+fn text_of(v: json.Value, key: str) -> str
+fn lower_text(g: *Gen, s: str) -> str
+fn upper_text(g: *Gen, s: str) -> str
+fn is_upper(c: u8) -> bool
+fn is_lower_or_digit(c: u8) -> bool
+fn snake(g: *Gen, s: str) -> str
+fn type_ident(g: *Gen, full: str) -> str
+fn is_keyword(s: str) -> bool
+fn field_ident(g: *Gen, name: str) -> str
+type Info = struct { name: str, number: u32, kind: str, repeated: bool, explicit: bool, packed: bool, element: str, supported: bool }
+fn kind_of(type_text: str) -> str
+fn neper_scalar(kind: str) -> str
+fn zero_literal(element: str) -> str
+fn packable(kind: str) -> bool
+fn info_of(g: *Gen, field: json.Value, proto3: bool) -> Info
+fn wire_text(kind: str) -> str
+fn put_statement(g: *Gen, info: Info, x: str) -> str
+fn raw_statement(g: *Gen, info: Info, x: str) -> str
+fn nonzero_condition(g: *Gen, info: Info, x: str) -> str
+fn fill(g: *Gen, t: str, info: Info, number: str) -> str
+fn write_field(g: *Gen, info: Info, always: bool) -> str
+fn read_call(g: *Gen, kind: str, reader: str) -> str
+fn convert(kind: str) -> str
+fn read_field(g: *Gen, info: Info) -> str
+fn struct_field(g: *Gen, info: Info) -> str
+fn emit_enum(g: *Gen, full: str, e: json.Value)
+fn emit_message(g: *Gen, full: str, message: json.Value, proto3: bool)
+type %TYPE% = struct { %STRUCT%}
+fn %FN%_write(o: *rt.Out, m: *const %TYPE%) -> err
+fn %FN%_encode(a: *mem.Arena, m: *const %TYPE%) -> ([]const u8, err)
+fn %FN%_read(a: *mem.Arena, source: []const u8, depth: u32) -> (%TYPE%, err)
+fn %FN%_decode(a: *mem.Arena, source: []const u8) -> (%TYPE%, err)
+fn emit_nested(g: *Gen, full: str, message: json.Value, proto3: bool)
+fn emit_service(g: *Gen, package: str, service: json.Value)
+fn %FN%_path() -> str
+fn %FN%_start(c: *grpc.Conn, dst: []u8, authority: str, timeout_nanos: u64, metadata: []const h2.Header, buf: []u8) -> (u32, usize, err)
+fn %FN%_send(a: *mem.Arena, c: *grpc.Conn, dst: []u8, id: u32, request: *const %REQ%, end_stream: bool) -> (usize, err)
+fn %FN%_reply(a: *mem.Arena, payload: []const u8) -> (%RES%, err)
+fn %SVC%_method_index(path: str) -> i32
+fn generate(a: *mem.Arena, set: json.Value) -> (str, err)
+```
+
+Typed gRPC stubs from descriptors (L164): `generate` writes the source of one module for a descriptor set (the JSON of `e.fmt.protodesc.parse_set`): a struct and `*_write`, `*_encode`, `*_read`, `*_decode` per message (nested and map entry messages included, packed and unpacked lists, explicit presence as `has_*`, nested messages as `*const T`), `i32` constants per enum value, and per service method its path function and the typed `*_start`, `*_send` and `*_reply` of the client state machine and a `*_method_index` router.
+
+
+### `e.fmt.protomsg`
+
+```neper
+error TooLarge
+error Invalid
+type Out = struct { a: *mem.Arena, data: []u8, len: usize }
+fn out_new(a: *mem.Arena) -> Out
+fn out_bytes(o: *Out) -> []const u8
+fn reserve(o: *Out, extra: usize) -> err
+fn push_byte(o: *Out, v: u8) -> err
+fn push_bytes(o: *Out, v: []const u8) -> err
+fn raw_varint(o: *Out, value: u64) -> err
+fn raw_int(o: *Out, value: i64) -> err
+fn zigzag(value: i64) -> u64
+fn raw_sint(o: *Out, value: i64) -> err
+fn raw_fixed32(o: *Out, value: u32) -> err
+fn raw_fixed64(o: *Out, value: u64) -> err
+fn bits_f32(v: u32) -> f32
+fn bits_f64(v: u64) -> f64
+fn f32_bits(v: f32) -> u32
+fn f64_bits(v: f64) -> u64
+fn trunc_i32(raw: u64) -> i32
+fn trunc_u32(raw: u64) -> u32
+fn from_zigzag(raw: u64) -> i64
+fn i32_from_bits(v: u32) -> i32
+fn i64_from_bits(v: u64) -> i64
+fn bits_from_i32(v: i32) -> u32
+fn bits_from_i64(v: i64) -> u64
+fn put_key(o: *Out, number: u32, wire: u32) -> err
+fn put_varint(o: *Out, number: u32, value: u64) -> err
+fn put_int(o: *Out, number: u32, value: i64) -> err
+fn put_sint(o: *Out, number: u32, value: i64) -> err
+fn put_bool(o: *Out, number: u32, value: bool) -> err
+fn put_fixed32(o: *Out, number: u32, value: u32) -> err
+fn put_fixed64(o: *Out, number: u32, value: u64) -> err
+fn put_bytes(o: *Out, number: u32, value: []const u8) -> err
+fn put_message(o: *Out, number: u32, child: *const Out) -> err
+fn view_of(source: []const u8, remaining: usize, length: u64) -> ([]const u8, err)
+```
+
+What generated protocol buffer message code stands on (L164): the growing output buffer `Out` that `*_write` functions append keyed fields to (`put_int`, `put_sint`, `put_varint`, `put_bool`, `put_fixed32`, `put_fixed64`, `put_bytes`, `put_message`, with `raw_*` for the packed lists), the conversions between raw bits and typed values, and `view_of` for a length-delimited view of the source.
+
+
+### `e.net.grpcretry`
+
+```neper
+error Invalid
+type Policy = struct { max_attempts: u32, initial_ns: u64, max_ns: u64, multiplier: f64, codes: u32 }
+type Throttle = struct { max_tokens: f64, ratio: f64, tokens: f64 }
+type Decision = struct { retry: bool, delay_ns: u64, reason: str }
+fn attempts_cap() -> u32
+fn code_from_name(name: str) -> i32
+fn parse_duration(text: str) -> (u64, err)
+fn number_member(v: json.Value, key: str) -> (f64, bool)
+fn policy_parse(config: json.Value) -> (Policy, err)
+fn throttle_parse(config: json.Value) -> (Throttle, err)
+fn status_retryable(p: *const Policy, code: u32) -> bool
+fn backoff_cap_ns(p: *const Policy, n: u32) -> u64
+fn backoff_ns(p: *const Policy, n: u32, jitter: f64) -> u64
+fn pushback_parse(text: str) -> (u64, err)
+fn throttle_allows(t: *const Throttle) -> bool
+fn throttle_success(t: *Throttle)
+fn throttle_failure(t: *Throttle)
+fn refuse(reason: str) -> Decision
+fn decide(p: *const Policy, t: *Throttle, attempts: u32, code: u32, committed: bool, pushback: str, has_pushback: bool, jitter: f64, now_ns: u64, deadline_ns: u64) -> Decision
+```
+
+gRPC retries and backoff (L164), the decisions of gRFC A6 as pure functions: `policy_parse` and `throttle_parse` read a service config's `retryPolicy` and `retryThrottling`, `parse_duration`, `backoff_cap_ns` and `backoff_ns` (the jitter supplied by the caller), `pushback_parse` for `grpc-retry-pushback-ms` and `decide`, which answers whether a failed attempt is retried and after how long while it updates the token bucket.
+
+
+### `e.net.grpctls`
+
+```neper
+error NoH2
+type Channel = struct { socket: net.Socket, secure: tls.Stream, open: bool }
+fn client_config(a: *mem.Arena, server_name: str, trust_roots: []const u8, entropy: []const u8, now: time.Timestamp) -> (tls.ClientConfig, err)
+fn establish(c: *Channel, a: *mem.Arena, config: tls.ClientConfig) -> err
+fn dial(c: *Channel, a: *mem.Arena, endpoint: net.Endpoint, server_name: str, trust_roots: []const u8, entropy: []const u8, now: time.Timestamp) -> err
+fn reader(c: *Channel) -> io.Reader
+fn writer(c: *Channel) -> io.Writer
+fn close(c: *Channel) -> err
+```
+
+The TLS dial helper of gRPC (L164): `dial` fills a `Channel` with a TCP connection and a TLS 1.3 handshake that offers only `h2` through ALPN and refuses a server that does not select it (`NoH2`); `reader` and `writer` are the protected stream `e.net.grpc` and `e.net.grpcserver` are driven over, `close` sends close_notify and closes the socket.
+
+
 ### `e.algo.fulltext`
 
 ```neper
@@ -14854,9 +15025,15 @@ error Unsupported
 fn supported(encoding: str) -> bool
 fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err)
 fn inflate(a: *mem.Arena, encoding: str, payload: []const u8, limit: usize) -> ([]const u8, err)
+fn compress(a: *mem.Arena, encoding: str, payload: []const u8) -> ([]const u8, err)
+
+type Prepared = struct { body: []const u8, compressed: bool }
+
+fn compress_message(a: *mem.Arena, encoding: str, payload: []const u8, threshold: usize) -> (Prepared, err)
+fn choose_encoding(accept: str) -> str
 ```
 
-gRPC message compression (L164), the part `e.net.grpc` and `e.net.grpcserver` only report: `inflate` undoes a message flagged compressed in the call's `grpc-encoding` (`gzip` is RFC 1952, `deflate` the zlib stream every gRPC implementation means by that name, `identity` or none passes the payload on), at most `limit` bytes; `supported` names the encodings it reads. An unknown encoding is `Unsupported` and a body that does not check out is the codec's own error. Checked against Python's gzip and zlib over every level, a named gzip member, stored blocks, an empty body and 70000 bytes, and against corrupted CRC, size, magic, header and truncated inputs, on Windows (D2923).
+gRPC message compression (L164), the part `e.net.grpc` and `e.net.grpcserver` only report: `inflate` undoes a message flagged compressed in the call's `grpc-encoding` (`gzip` is RFC 1952, `deflate` the zlib stream every gRPC implementation means by that name, `identity` or none passes the payload on), at most `limit` bytes; `supported` names the encodings it reads. An unknown encoding is `Unsupported` and a body that does not check out is the codec's own error. Checked against Python's gzip and zlib over every level, a named gzip member, stored blocks, an empty body and 70000 bytes, and against corrupted CRC, size, magic, header and truncated inputs, on Windows (D2923). The send side: `compress` writes a message body in `gzip` or `deflate` (the zlib stream), `compress_message` decides what goes on the wire for one message (compressed and flagged at or above a threshold, as it is otherwise) and `choose_encoding` picks the first encoding of a peer's `grpc-accept-encoding` list that `compress` writes.
 
 
 ### `e.net.http2`

@@ -3716,6 +3716,34 @@ algo_syncsource_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/algo-syncsource-selfhost"
 algo_syncsource_output=$("$test_build/algo-syncsource-selfhost")
 [ "$algo_syncsource_output" = 'algo syncsource ok' ]
+# `e.net.grpctls`: the TLS dial helper: ALPN h2 only, over loopback against the TLS 1.3 server
+# # (a server that selects h2, one that offers only http/1.1, one with no ALPN and a certificate for another name, D3008).
+net_grpctls_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpctls/src/main.e" "$repo" x64 linux "$test_build/net-grpctls-selfhost" -j 2)
+[ "$net_grpctls_written" = 'executable written' ]
+chmod +x "$test_build/net-grpctls-selfhost"
+net_grpctls_output=$("$test_build/net-grpctls-selfhost")
+[ "$net_grpctls_output" = 'net grpctls ok' ]
+# `e.net.grpcretry`: gRFC A6 retry policy, backoff, pushback and throttling
+# # against an independent model (263 lines, D3007).
+net_grpcretry_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpcretry/src/main.e" "$repo" x64 linux "$test_build/net-grpcretry-selfhost" -j 2)
+[ "$net_grpcretry_written" = 'executable written' ]
+chmod +x "$test_build/net-grpcretry-selfhost"
+net_grpcretry_output=$("$test_build/net-grpcretry-selfhost")
+[ "$net_grpcretry_output" = 'net grpcretry ok' ]
+# `e.net.grpcstub`: typed gRPC stubs generated from descriptors, round-tripped against Python's protobuf wire bytes
+# # (242 serialised instances, fixed messages, the generator's own output, D3006).
+net_grpcstub_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpcstub/src/main.e" "$repo" x64 linux "$test_build/net-grpcstub-selfhost" -j 2)
+[ "$net_grpcstub_written" = 'executable written' ]
+chmod +x "$test_build/net-grpcstub-selfhost"
+net_grpcstub_output=$("$test_build/net-grpcstub-selfhost")
+[ "$net_grpcstub_output" = 'net grpcstub ok' ]
+# `e.fmt.protodesc`: descriptor sets read into JSON the way protobuf's own JSON mapping writes them
+# # against Python's protobuf on descriptor.proto, the well-known types and hand-built files (D3005).
+fmt_protodesc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_protodesc/src/main.e" "$repo" x64 linux "$test_build/fmt-protodesc-selfhost" -j 2)
+[ "$fmt_protodesc_written" = 'executable written' ]
+chmod +x "$test_build/fmt-protodesc-selfhost"
+fmt_protodesc_output=$("$test_build/fmt-protodesc-selfhost")
+[ "$fmt_protodesc_output" = 'fmt protodesc ok' ]
 # `e.algo.conflictview`: the offline conflict review as markup
 # # against appdor's src/offline/conflict-review.js renderConflictReview (300 reviews, D3003).
 algo_conflictview_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_conflictview/src/main.e" "$repo" x64 linux "$test_build/algo-conflictview-selfhost" -j 2)
@@ -3903,6 +3931,12 @@ net_grpccodec_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/net-grpccodec-selfhost"
 net_grpccodec_output=$("$test_build/net-grpccodec-selfhost")
 [ "$net_grpccodec_output" = 'net grpccodec ok' ]
+# `e.net.grpccodec` send side: gzip and deflate bodies against the trailers Python computes, the threshold and the encoding choice (D3004).
+net_grpccompress_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpccompress/src/main.e" "$repo" x64 linux "$test_build/net-grpccompress-selfhost" -j 2)
+[ "$net_grpccompress_written" = 'executable written' ]
+chmod +x "$test_build/net-grpccompress-selfhost"
+net_grpccompress_output=$("$test_build/net-grpccompress-selfhost")
+[ "$net_grpccompress_output" = 'net grpccompress ok' ]
 # x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
 x_api_protocols_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_api_protocols/src/main.e" "$repo" x64 linux "$test_build/x-api-protocols-selfhost" -j 2)
 [ "$x_api_protocols_written" = 'executable written' ]

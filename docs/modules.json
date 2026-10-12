@@ -266,6 +266,11 @@
     "e.algo.syncjob",
     "e.algo.offline",
     "e.algo.syncsource",
+    "e.net.grpctls",
+    "e.net.grpcretry",
+    "e.fmt.protomsg",
+    "e.net.grpcstub",
+    "e.fmt.protodesc",
     "e.algo.conflictview",
     "e.algo.syncpull",
     "e.algo.sqlsource",
@@ -7847,6 +7852,80 @@
     "e.algo.syncjob",
     "e.data.list",
     "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.grpctls",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.io",
+    "e.mem",
+    "e.net",
+    "e.net.tls",
+    "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.grpcretry",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.fmt.json",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.protomsg",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.grpcstub",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.fmt.json",
+    "e.fmt.protomsg",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.protodesc",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.bytes",
+    "e.data.list",
+    "e.fmt.json",
+    "e.fmt.protobuf",
     "e.mem",
     "e.str"
    ],

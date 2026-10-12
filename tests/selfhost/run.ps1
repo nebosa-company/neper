@@ -4195,6 +4195,34 @@ $algoSyncsourceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $algoSyncsourceWritten -ne 'executable written') { throw 'algo_syncsource emission failed' }
 $algoSyncsourceOutput = & $algoSyncsourcePath
 if ($LASTEXITCODE -ne 0 -or $algoSyncsourceOutput -ne 'algo syncsource ok') { throw "algo_syncsource answered wrongly: exit $LASTEXITCODE" }
+# `e.net.grpctls`: the TLS dial helper: ALPN h2 only, over loopback against the TLS 1.3 server
+# # (a server that selects h2, one that offers only http/1.1, one with no ALPN and a certificate for another name, D3008).
+$netGrpctlsPath = Join-Path $testBuild 'net-grpctls-selfhost.exe'
+$netGrpctlsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpctls\src\main.e') $repo 'x64' 'windows' $netGrpctlsPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netGrpctlsWritten -ne 'executable written') { throw 'net_grpctls emission failed' }
+$netGrpctlsOutput = & $netGrpctlsPath
+if ($LASTEXITCODE -ne 0 -or $netGrpctlsOutput -ne 'net grpctls ok') { throw "net_grpctls answered wrongly: exit $LASTEXITCODE" }
+# `e.net.grpcretry`: gRFC A6 retry policy, backoff, pushback and throttling
+# # against an independent model (263 lines, D3007).
+$netGrpcretryPath = Join-Path $testBuild 'net-grpcretry-selfhost.exe'
+$netGrpcretryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpcretry\src\main.e') $repo 'x64' 'windows' $netGrpcretryPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netGrpcretryWritten -ne 'executable written') { throw 'net_grpcretry emission failed' }
+$netGrpcretryOutput = & $netGrpcretryPath
+if ($LASTEXITCODE -ne 0 -or $netGrpcretryOutput -ne 'net grpcretry ok') { throw "net_grpcretry answered wrongly: exit $LASTEXITCODE" }
+# `e.net.grpcstub`: typed gRPC stubs generated from descriptors, round-tripped against Python's protobuf wire bytes
+# # (242 serialised instances, fixed messages, the generator's own output, D3006).
+$netGrpcstubPath = Join-Path $testBuild 'net-grpcstub-selfhost.exe'
+$netGrpcstubWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpcstub\src\main.e') $repo 'x64' 'windows' $netGrpcstubPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netGrpcstubWritten -ne 'executable written') { throw 'net_grpcstub emission failed' }
+$netGrpcstubOutput = & $netGrpcstubPath
+if ($LASTEXITCODE -ne 0 -or $netGrpcstubOutput -ne 'net grpcstub ok') { throw "net_grpcstub answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.protodesc`: descriptor sets read into JSON the way protobuf's own JSON mapping writes them
+# # against Python's protobuf on descriptor.proto, the well-known types and hand-built files (D3005).
+$fmtProtodescPath = Join-Path $testBuild 'fmt-protodesc-selfhost.exe'
+$fmtProtodescWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_protodesc\src\main.e') $repo 'x64' 'windows' $fmtProtodescPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtProtodescWritten -ne 'executable written') { throw 'fmt_protodesc emission failed' }
+$fmtProtodescOutput = & $fmtProtodescPath
+if ($LASTEXITCODE -ne 0 -or $fmtProtodescOutput -ne 'fmt protodesc ok') { throw "fmt_protodesc answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.conflictview`: the offline conflict review as markup
 # # against appdor's src/offline/conflict-review.js renderConflictReview (300 reviews, D3003).
 $algoConflictviewPath = Join-Path $testBuild 'algo-conflictview-selfhost.exe'
@@ -4382,6 +4410,12 @@ $netGrpccodecWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $netGrpccodecWritten -ne 'executable written') { throw 'net_grpccodec emission failed' }
 $netGrpccodecOutput = & $netGrpccodecPath
 if ($LASTEXITCODE -ne 0 -or $netGrpccodecOutput -ne 'net grpccodec ok') { throw "net_grpccodec answered wrongly: exit $LASTEXITCODE" }
+# `e.net.grpccodec` send side: gzip and deflate bodies against the trailers Python computes, the threshold and the encoding choice (D3004).
+$netGrpccompressPath = Join-Path $testBuild 'net-grpccompress-selfhost.exe'
+$netGrpccompressWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpccompress\src\main.e') $repo 'x64' 'windows' $netGrpccompressPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netGrpccompressWritten -ne 'executable written') { throw 'net_grpccompress emission failed' }
+$netGrpccompressOutput = & $netGrpccompressPath
+if ($LASTEXITCODE -ne 0 -or $netGrpccompressOutput -ne 'net grpccompress ok') { throw "net_grpccompress answered wrongly: exit $LASTEXITCODE" }
 # x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
 $xApiProtocolsPath = Join-Path $testBuild 'x-api-protocols-selfhost.exe'
 $xApiProtocolsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_api_protocols\src\main.e') $repo 'x64' 'windows' $xApiProtocolsPath -j 2
