@@ -2242,6 +2242,16 @@ x_elastic_rest_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$x_elastic_rest_written" = 'executable written' ]
 chmod +x "$test_build/x-elastic-rest-selfhost"
 "$test_build/x-elastic-rest-selfhost"
+# `e.net.http2` against hpack and hyperframe: blocks, frames, Huffman, integers, encoder goldens verified by hpack.Decoder (D2646).
+net_http2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http2/src/main.e" "$repo" x64 linux "$test_build/net-http2-selfhost")
+[ "$net_http2_written" = 'executable written' ]
+chmod +x "$test_build/net-http2-selfhost"
+"$test_build/net-http2-selfhost"
+# `e.net.grpc` against grpcio transcripts and h2 reading the client bytes (D2646).
+net_grpc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpc/src/main.e" "$repo" x64 linux "$test_build/net-grpc-selfhost")
+[ "$net_grpc_written" = 'executable written' ]
+chmod +x "$test_build/net-grpc-selfhost"
+"$test_build/net-grpc-selfhost"
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
 [ "$net_http_pool_written" = 'executable written' ]

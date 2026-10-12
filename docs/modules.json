@@ -108,6 +108,8 @@
     "e.net.tls",
     "e.net.policy",
     "e.net.ssrf",
+    "e.net.grpc",
+    "e.net.http2",
     "x.elastic.rest",
     "x.mongodb.wire",
     "x.redis.resp",
@@ -3560,6 +3562,32 @@
    "direct_dependencies": [
     "e.fmt.json",
     "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.http2",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.grpc",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.mem",
+    "e.net.http2",
     "e.str"
    ],
    "blocked_by": []

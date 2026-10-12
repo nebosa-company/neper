@@ -2539,6 +2539,18 @@ $xElasticRestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $xElasticRestWritten -ne 'executable written') { throw 'x_elastic_rest emission failed' }
 & $xElasticRestPath
 if ($LASTEXITCODE -ne 0) { throw "a x_elastic_rest check failed: exit $LASTEXITCODE" }
+# `e.net.http2` against hpack and hyperframe: blocks, frames, Huffman, integers, encoder goldens verified by hpack.Decoder (D2646).
+$netHttp2Path = Join-Path $testBuild 'net-http2-selfhost.exe'
+$netHttp2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http2\src\main.e') $repo 'x64' 'windows' $netHttp2Path
+if ($LASTEXITCODE -ne 0 -or $netHttp2Written -ne 'executable written') { throw 'net_http2 emission failed' }
+& $netHttp2Path
+if ($LASTEXITCODE -ne 0) { throw "a net_http2 check failed: exit $LASTEXITCODE" }
+# `e.net.grpc` against grpcio transcripts and h2 reading the client bytes (D2646).
+$netGrpcPath = Join-Path $testBuild 'net-grpc-selfhost.exe'
+$netGrpcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpc\src\main.e') $repo 'x64' 'windows' $netGrpcPath
+if ($LASTEXITCODE -ne 0 -or $netGrpcWritten -ne 'executable written') { throw 'net_grpc emission failed' }
+& $netGrpcPath
+if ($LASTEXITCODE -ne 0) { throw "a net_grpc check failed: exit $LASTEXITCODE" }
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 $netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
 $netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath

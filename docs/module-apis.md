@@ -12840,6 +12840,145 @@ fn parse_error(a: *mem.Arena, body: str) -> (ErrorInfo, err)
 
 The Elasticsearch REST codecs (L114): the parts of a client that are not sockets. `quote`, `path` and `query` percent-encode URL parts and query strings as elasticsearch-py does (`urllib.parse.quote` with `,` and `*` safe, empty path segments skipped); `bulk_meta` and `bulk_line` write the `_bulk` NDJSON action line with the metadata keys in the driver's order (`_id`, `_index`, `if_seq_no`, `if_primary_term`, `retry_on_conflict`, `routing`, `version`, `version_type`, `pipeline`; -1 and empty strings are absent) and the source line (none for delete, no raw newline allowed). `parse_bulk`, `parse_search` and `parse_error` read the documented response shapes (per-item status, error type and reason; total as an object or a plain integer; the new and the legacy error forms) over `e.fmt.json`, hit sources left as JSON values. HTTP, headers (`application/x-ndjson`), retry and cluster sniffing are the caller's (`e.net.http`, `http.pool_request`). Checked against elasticsearch-py's `_quote`, `_quote_query`, `expand_action` and elastic-transport's NDJSON serializer, with response shapes from a model, over 171 vectors on both hosts (D2645). Not done: a typed query DSL, scroll and point-in-time management, the async search and ingest APIs, ES|QL, cluster sniffing and node health, TLS and API-key header helpers.
 
+### `e.net.http2`
+
+```neper
+error Incomplete
+error Invalid
+error FrameSize
+error Compression
+error TooSmall
+error TooLarge
+const DATA: u8 = 0u8
+const HEADERS: u8 = 1u8
+const PRIORITY: u8 = 2u8
+const RST_STREAM: u8 = 3u8
+const SETTINGS: u8 = 4u8
+const PUSH_PROMISE: u8 = 5u8
+const PING: u8 = 6u8
+const GOAWAY: u8 = 7u8
+const WINDOW_UPDATE: u8 = 8u8
+const CONTINUATION: u8 = 9u8
+const FLAG_ACK: u8 = 1u8
+const FLAG_END_STREAM: u8 = 1u8
+const FLAG_END_HEADERS: u8 = 4u8
+const FLAG_PADDED: u8 = 8u8
+const FLAG_PRIORITY: u8 = 32u8
+const DEFAULT_MAX_FRAME: usize = 16384usize
+const DEFAULT_WINDOW: u32 = 65535u32
+type Frame = struct { kind: u8, flags: u8, stream: u32, payload: []const u8 }
+type Setting = struct { id: u16, value: u32 }
+type Header = struct { name: str, value: str }
+type Table = struct { data: []u8, lens: []u32, count: usize, used: usize, size: usize, max_size: usize, limit: usize, pending: bool, pending_size: usize, smallest: usize }
+
+fn preface() -> str
+fn be16(b: []const u8, at: usize) -> u32
+fn be32(b: []const u8, at: usize) -> u32
+fn put32(b: []u8, at: usize, v: u32)
+fn frame_decode(buf: []const u8, max_size: usize) -> (Frame, usize, err)
+fn frame_encode(dst: []u8, kind: u8, flags: u8, stream: u32, payload: []const u8) -> (usize, err)
+fn unpad(f: Frame) -> ([]const u8, err)
+fn headers_fragment(f: Frame) -> ([]const u8, err)
+fn settings_decode(payload: []const u8, out: []Setting) -> (usize, err)
+fn settings_encode(dst: []u8, settings: []const Setting) -> (usize, err)
+fn table_new(data: []u8, lens: []u32, max_size: usize) -> Table
+fn entry_size(name_len: usize, value_len: usize) -> usize
+fn entry_offset(t: *const Table, i: usize) -> usize
+fn evict_oldest(t: *Table)
+fn evict_to(t: *Table, limit: usize)
+fn insert(t: *Table, name: str, value: str)
+fn table_resize(t: *Table, size: usize) -> err
+fn table_announce(t: *Table, size: usize)
+fn lookup(t: *const Table, index: usize) -> (str, str, err)
+fn huffman_shape(counts: []usize, order: []u16)
+fn huffman_decode(src: []const u8, dst: []u8) -> (usize, err)
+fn huffman_len(src: []const u8) -> usize
+fn huffman_encode(src: []const u8, dst: []u8) -> (usize, err)
+fn read_int(b: []const u8, at: *usize, prefix: u8) -> (u64, err)
+fn write_int(dst: []u8, at: *usize, value: u64, prefix: u8, flags: u8) -> err
+fn read_string(b: []const u8, at: *usize, scratch: []u8, used: *usize) -> (str, err)
+fn copy_scratch(scratch: []u8, used: *usize, s: str) -> (str, err)
+fn decode_block(t: *Table, block: []const u8, out: []Header, scratch: []u8) -> (usize, err)
+fn find_field(t: *const Table, name: str, value: str) -> (usize, usize)
+fn write_string(dst: []u8, at: *usize, s: str, huffman: bool) -> err
+fn same_name(names: []const str, name: str) -> bool
+fn encode_block(t: *Table, dst: []u8, headers: []const Header, sensitive: []const str, huffman: bool) -> (usize, err)
+fn static_name(index: usize) -> str
+fn static_value(index: usize) -> str
+fn huffman_table() -> str
+```
+
+HTTP/2 framing and HPACK (L101's transport half), over caller buffers with no transport. `frame_decode` reads one frame (the 9-byte header, `Incomplete` at a partial tail, `FrameSize` past the peer's maximum) and `frame_encode` writes one; `unpad`, `headers_fragment`, `settings_decode`/`settings_encode` and the connection `preface` cover the payloads a client needs. The header codec is RFC 7541 whole: static and dynamic tables (the dynamic one in caller storage, newest first), prefix integers, string literals with Huffman coding (canonical decode), size updates (`table_announce` writes the smallest size seen then the current one), never-indexed fields (`encode_block`'s `sensitive` names), and the RFC's refusals (index 0 or out of range, an update past the limit or after the first field, bad Huffman padding or an EOS symbol). `decode_block` copies every name and value into the caller's scratch so the headers stay valid when the table changes. Stream state and flow control are the caller's (`e.net.grpc` has a client connection). Checked against hpack and hyperframe: library-written blocks (Huffman on and off, size changes, never-indexed fields), every frame type, integers at every prefix, the 257 Huffman codes (via 24 strings), the invalid-block refusals, and Neper's own encoder output read back by `hpack.Decoder` before it became a golden (D2646).
+
+### `e.net.grpc`
+
+```neper
+error Incomplete
+error Invalid
+error TooLarge
+error TooSmall
+error Blocked
+error Protocol
+error NoStream
+const OK: u32 = 0u32
+const CANCELLED: u32 = 1u32
+const UNKNOWN: u32 = 2u32
+const INVALID_ARGUMENT: u32 = 3u32
+const DEADLINE_EXCEEDED: u32 = 4u32
+const NOT_FOUND: u32 = 5u32
+const ALREADY_EXISTS: u32 = 6u32
+const PERMISSION_DENIED: u32 = 7u32
+const RESOURCE_EXHAUSTED: u32 = 8u32
+const FAILED_PRECONDITION: u32 = 9u32
+const ABORTED: u32 = 10u32
+const OUT_OF_RANGE: u32 = 11u32
+const UNIMPLEMENTED: u32 = 12u32
+const INTERNAL: u32 = 13u32
+const UNAVAILABLE: u32 = 14u32
+const DATA_LOSS: u32 = 15u32
+const UNAUTHENTICATED: u32 = 16u32
+const EVENT_HEADERS: u8 = 1u8
+const EVENT_MESSAGE: u8 = 2u8
+const EVENT_TRAILERS: u8 = 3u8
+const EVENT_RESET: u8 = 4u8
+const EVENT_GOAWAY: u8 = 5u8
+type Message = struct { compressed: bool, payload: []const u8 }
+type Stream = struct { id: u32, used: bool, got_headers: bool, remote_closed: bool, local_closed: bool, send_window: i64, recv_window: i64, buf: []u8, buf_len: usize, consumed: usize }
+type Event = struct { kind: u8, stream: u32, code: u32, compressed: bool, text: str, payload: []const u8, headers: []const h2.Header }
+type Conn = struct { streams: []Stream, next_id: u32, enc: h2.Table, dec: h2.Table, send_window: i64, recv_window: i64, peer_initial_window: i64, peer_max_frame: usize, initial_recv: i64, max_frame: usize, started: bool, got_settings: bool, goaway: bool, last_stream: u32, block: []u8, block_len: usize, block_stream: u32, block_end_stream: bool, block_active: bool }
+
+fn status_name(code: u32) -> str
+fn http_to_grpc(status: u32) -> u32
+fn message_encode(dst: []u8, payload: []const u8, compressed: bool) -> (usize, err)
+fn message_decode(buf: []const u8, max_size: usize) -> (Message, usize, err)
+fn put_decimal(dst: []u8, at: *usize, value: u64) -> err
+fn ceil_div(value: u64, unit: u64) -> u64
+fn timeout_encode(dst: []u8, nanos: u64) -> (usize, err)
+fn timeout_parse(text: str) -> (u64, err)
+fn hex_upper(v: u8) -> u8
+fn hex_value(c: u8) -> (u8, bool)
+fn message_percent_encode(dst: []u8, text: str) -> (usize, err)
+fn message_percent_decode(dst: []u8, text: str) -> (usize, err)
+fn ends_with_bin(name: str) -> bool
+fn binary_value_encode(dst: []u8, value: []const u8) -> (usize, err)
+fn binary_value_decode(dst: []u8, text: str) -> (usize, err)
+fn conn_new(streams: []Stream, enc: h2.Table, dec: h2.Table, block: []u8, initial_recv: u32, max_frame: u32) -> Conn
+fn put_frame(dst: []u8, at: *usize, kind: u8, flags: u8, stream: u32, payload: []const u8) -> err
+fn u32_bytes(v: u32) -> [4]u8
+fn conn_start(c: *Conn, dst: []u8) -> (usize, err)
+fn find_stream(c: *Conn, id: u32) -> usize
+fn call_start(c: *Conn, dst: []u8, authority: str, path: str, timeout_nanos: u64, metadata: []const h2.Header, buf: []u8) -> (u32, usize, err)
+fn call_send(c: *Conn, dst: []u8, id: u32, payload: []const u8, compressed: bool, end_stream: bool) -> (usize, err)
+fn call_close_send(c: *Conn, dst: []u8, id: u32) -> (usize, err)
+fn call_cancel(c: *Conn, dst: []u8, id: u32) -> (usize, err)
+fn find_header(headers: []const h2.Header, name: str) -> (str, bool)
+fn parse_u32(text: str) -> (u32, bool)
+fn release(c: *Conn, at_stream: usize)
+fn conn_receive(c: *Conn, input: []const u8, dst: []u8, events: []Event, hdr: []h2.Header, scratch: []u8) -> (usize, usize, usize, err)
+```
+
+gRPC over HTTP/2 (L101), client side, over caller buffers and `e.net.http2`: no sockets. The protocol pieces are plain functions: the 5-byte message prefix (`message_encode`, `message_decode`), `grpc-timeout` (`timeout_encode` as grpc-go's `encodeTimeout`, `timeout_parse`), the status names and codes with the HTTP-to-gRPC mapping, `grpc-message` percent-encoding, and `-bin` metadata (base64 sent unpadded; padded, unpadded and the raw zero-prefixed form gRPC C-core writes are accepted). `Conn` is the client state machine: `conn_start` (preface, SETTINGS, window raise), `call_start` (request headers, stream ids), `call_send` (DATA frames split at the peer's frame size, `Blocked` when the windows are short), `call_close_send`, `call_cancel`, and `conn_receive`, which turns the byte stream into events (initial metadata, whole messages across DATA boundaries, trailers with the status and decoded message, trailers-only responses, resets, GOAWAY) while answering SETTINGS and PING and returning flow-control credit. Unary and streaming calls are the same machine. Compression is reported (the flag), never undone. Checked against grpcio transcripts replayed at four chunk sizes (unary, errors with non-ASCII details, metadata incl. binary, a 70 KB message, gzip, server/client/bidi streaming, UNIMPLEMENTED trailers-only) and against `h2` reading Neper's client bytes as a server (D2646). Not done: the server side, gRPC over HTTP/3 and the H2-over-TLS dial (the transport is the caller's), deadlines as a timer (the timeout is carried, not enforced), service stubs from `.proto` descriptors, the retry and keepalive policies, compression.
+
 ### `e.net.packet`
 
 ```neper
