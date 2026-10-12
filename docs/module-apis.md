@@ -15730,6 +15730,64 @@ fn open(a: *mem.Arena, s: *store.Store, key: str, lim: Limits) -> (Db, usize, er
 
 An embedded document and event store in one append-only file (L147), in the shape of LiteDB and Marten. The file is `NDS1` and CRC32-framed records (a document put, a document delete, an event, a mark); every operation appends its frame and applies that same frame to the in-memory tables, exactly as `restore` does, so a reopened database equals the one that wrote it. Documents are named collections of id to text. The journal is global-sequenced and per-stream-versioned; `append` takes the version the caller expects (`ANY_VERSION` for none) and a mismatch is `Concurrency` with nothing written. `project` folds events after the projection's persisted mark through its idempotent `apply`, `rebuild` clears the collection and folds again, `poll`/`ack` give a subscription a persisted position. `restore` replays sound frames and reports the bytes of a torn or damaged tail it dropped; `compact` rebuilds from live documents, every event and the marks; `save`/`open` use an `e.store` key. Lookups are linear; the store is single-threaded; clustering stays with `e.dist`.
 
+### `e.dist.actor`
+
+```neper
+const MAX_FIRE: usize = 64usize
+const KEY_SEP: u8 = 31u8
+type Silo = struct { name: str, id: u64, alive: bool }
+type Activation = struct { grain: str, silo: u32, state: str, version: u32, busy: bool, live: bool, last_used: i64 }
+type Timer = struct { grain: str, name: str, due: i64, period: i64, live: bool }
+type Behavior = struct { ctx: *void, activate: fn(*void, *Turn) -> err, handle: fn(*void, *Turn) -> err, deactivate: fn(*void, *Turn) -> err }
+type Turn = struct { sys: *System, act: usize, grain: str, kind: str, payload: str, now: i64, state: str, state_changed: bool, reply: str, silo: u32 }
+type System = struct { a: *mem.Arena, db: *ds.Db, behavior: Behavior, silos: []Silo, nsilos: usize, acts: []Activation, nacts: usize, timers: []Timer, ntimers: usize, turns: u64 }
+error NoSilo
+error Reentrancy
+error Full
+error Invalid
+error NotFound
+fn state_collection() -> str
+fn reminder_collection() -> str
+fn create(a: *mem.Arena, db: *ds.Db, behavior: Behavior, max_silos: usize, max_activations: usize, max_timers: usize) -> (System, err)
+fn keep(a: *mem.Arena, s: str) -> (str, err)
+fn add_silo(sys: *System, name: str) -> (usize, err)
+fn live_silos(sys: *System) -> usize
+fn place(sys: *System, grain: str) -> (usize, bool)
+fn find_activation(sys: *System, grain: str) -> (usize, bool)
+fn is_active(sys: *System, grain: str) -> bool
+fn silo_of(sys: *System, grain: str) -> (usize, bool)
+fn active_count(sys: *System) -> usize
+fn stored_state(sys: *System, grain: str) -> (str, bool)
+fn new_turn(sys: *System, at: usize, kind: str, payload: str, now: i64) -> Turn
+fn activate(sys: *System, grain: str, now: i64) -> (usize, err)
+fn commit(sys: *System, at: usize, turn: *Turn) -> err
+fn deliver(sys: *System, at: usize, kind: str, payload: str, now: i64) -> (str, err)
+fn call(sys: *System, grain: str, kind: str, payload: str, now: i64) -> (str, err)
+fn call_from(t: *Turn, grain: str, kind: str, payload: str) -> (str, err)
+fn set_state(t: *Turn, s: str)
+fn set_reply(t: *Turn, s: str)
+fn deactivate_at(sys: *System, at: usize, now: i64) -> err
+fn drop_timers(sys: *System, grain: str)
+fn deactivate(sys: *System, grain: str, now: i64) -> err
+fn collect(sys: *System, now: i64, idle_ms: i64) -> (usize, err)
+fn fail_silo(sys: *System, silo: usize) -> usize
+fn timer_start(t: *Turn, name: str, due: i64, period: i64) -> err
+fn timer_stop(t: *Turn, name: str) -> bool
+fn timer_count(sys: *System) -> usize
+fn reminder_key(a: *mem.Arena, grain: str, name: str) -> (str, err)
+fn reminder_value(a: *mem.Arena, due: i64, period: i64) -> (str, err)
+fn parse_pair(s: str) -> (i64, i64, bool)
+fn reminder_set(sys: *System, grain: str, name: str, due: i64, period: i64) -> err
+fn reminder_cancel(sys: *System, grain: str, name: str) -> (bool, err)
+fn reminder_count(sys: *System) -> usize
+fn next_due(due: i64, period: i64, now: i64) -> i64
+type Pending = struct { key: str, due: i64, period: i64 }
+fn tick(sys: *System, now: i64) -> (usize, err)
+fn timer_kind(a: *mem.Arena, prefix: str, name: str) -> str
+```
+
+A virtual-actor framework (L141) in the shape of Orleans grains, over `e.algo.consistent_hash` placement and `e.db.docstore` storage. A grain is an id that always exists: the first `call` places it on a live silo by rendezvous hashing of its id, loads its persisted state, runs `activate` and delivers messages one turn at a time through the behavior's `handle`; `collect` deactivates idle grains and the next call activates them again. A turn's state change and reply take effect only when the handler returns `ok`, and the state is written through to the store first. A turn is not reentrant: a call to a grain that is in a turn (its own, or a cycle) is `Reentrancy`, refused rather than deadlocked. Timers are in memory and die with the activation; reminders are durable documents that fire whether or not the grain is active and survive a restart of the same file; a periodic schedule's next firing is its due time plus the smallest period multiple after `now`, so a gap is one firing. `fail_silo` drops a silo's activations with no hook and no write; the next call re-places and reloads. There is no transport: a silo is a placement target and failure domain in one process.
+
 ### `e.db.migrate`
 
 ```neper

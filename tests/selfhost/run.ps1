@@ -2362,6 +2362,12 @@ $dbDocstoreWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $dbDocstoreWritten -ne 'executable written') { throw 'db_docstore emission failed' }
 & $dbDocstorePath
 if ($LASTEXITCODE -ne 0) { throw "a db_docstore check failed: exit $LASTEXITCODE" }
+# `e.dist.actor`: activation and placement against xxhash plus a rendezvous model, state through deactivation, silo failure and re-placement, reentrancy and cycle refusal, turn atomicity, timers, durable reminders across a restart, capacity refusals (D2764).
+$distActorPath = Join-Path $testBuild 'dist-actor-selfhost.exe'
+$distActorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_actor\src\main.e') $repo 'x64' 'windows' $distActorPath
+if ($LASTEXITCODE -ne 0 -or $distActorWritten -ne 'executable written') { throw 'dist_actor emission failed' }
+& $distActorPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_actor check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath

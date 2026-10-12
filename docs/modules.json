@@ -502,6 +502,7 @@
     "e.data.mapper",
     "e.task.jobs",
     "e.db.docstore",
+    "e.dist.actor",
     "e.db.migrate",
     "e.db.orm",
     "e.test.match",
@@ -6986,6 +6987,21 @@
     "e.algo.hash",
     "e.mem",
     "e.store",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.actor",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.consistent_hash",
+    "e.algo.hash",
+    "e.db.docstore",
+    "e.mem",
     "e.str"
    ],
    "blocked_by": []
