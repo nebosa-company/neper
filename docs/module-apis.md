@@ -27745,6 +27745,28 @@ fn finger_target(spec: str) -> (str, str)
 The small text protocols (L137): Gemini (`gemini_request`, `gemini_response` with its status, meta and body offset, `gemini_line_kind` and `gemini_link` for gemtext), Gopher (`gopher_request`, `gopher_item` for menu lines, `gopher_is_end`) and Finger (`finger_request`, verbose or not, and `finger_target` splitting user@host). Codecs only; the caller dials ports 1965 (over TLS), 70 and 79. Checked against cases written out from the gemini 0.16 spec, RFC 1436 and RFC 1288.
 
 
+### `e.fmt.cap`
+
+```neper
+error NotCap
+error TooMany
+
+type Info = struct { language: str, category: str, event: str, urgency: str, severity: str, certainty: str, effective: str, onset: str, expires: str, sender_name: str, headline: str, description: str, instruction: str, web: str, area_description: str, areas: usize }
+type Alert = struct { identifier: str, sender: str, sent: str, status: str, message_type: str, scope: str, infos: []Info }
+
+const MAX_INFOS: usize = 16usize
+
+fn local(name: str) -> str
+fn is_space(c: u8) -> bool
+fn trim(s: str) -> str
+fn text_under(a: *mem.Arena, nodes: []const xml.Node, at: usize) -> (str, err)
+fn set_field(info: *Info, name: str, value: str)
+fn parse(a: *mem.Arena, source: []const u8) -> (Alert, err)
+```
+
+Common Alerting Protocol 1.2 (C156): `parse` reads an `<alert>` over `e.fmt.xml` into the message (identifier, sender, sent, status, message type, scope) and each `<info>` block (language, first category, event, urgency, severity, certainty, effective, onset, expires, sender name, headline, description, instruction, web, the first area's description and the number of areas), element names matched without a namespace prefix and text trimmed. No polygons, geocodes, resources or signatures; a document whose root is not `alert` is `NotCap`, malformed XML the parser's error. Checked against an ElementTree walk of two-language, cancel and prefixed documents (`scripts/gen_cap_test.py`).
+
+
 ### `e.fmt.pdf`
 
 ```neper

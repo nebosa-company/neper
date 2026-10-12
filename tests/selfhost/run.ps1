@@ -1330,6 +1330,12 @@ $timeCalendarsAfricanWritten = & $compiler emit-executable (Join-Path $PSScriptR
 if ($LASTEXITCODE -ne 0 -or $timeCalendarsAfricanWritten -ne 'executable written') { throw 'time_calendars_african emission failed' }
 & $timeCalendarsAfricanPath
 if ($LASTEXITCODE -ne 0) { throw "a time_calendars_african check failed: exit $LASTEXITCODE" }
+# `e.fmt.cap`: Common Alerting Protocol alerts against an ElementTree walk (C156).
+$fmtCapPath = Join-Path $testBuild 'fmt-cap-selfhost.exe'
+$fmtCapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_cap\src\main.e') $repo 'x64' 'windows' $fmtCapPath
+if ($LASTEXITCODE -ne 0 -or $fmtCapWritten -ne 'executable written') { throw 'fmt_cap emission failed' }
+& $fmtCapPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_cap check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath

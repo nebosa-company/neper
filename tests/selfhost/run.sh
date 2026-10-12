@@ -1227,6 +1227,11 @@ time_calendars_african_written=$($test_build/neper-self emit-executable "$repo/t
 [ "$time_calendars_african_written" = 'executable written' ]
 chmod +x "$test_build/time-calendars-african-selfhost"
 "$test_build/time-calendars-african-selfhost"
+# `e.fmt.cap`: Common Alerting Protocol alerts against an ElementTree walk (C156).
+fmt_cap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_cap/src/main.e" "$repo" x64 linux "$test_build/fmt-cap-selfhost")
+[ "$fmt_cap_written" = 'executable written' ]
+chmod +x "$test_build/fmt-cap-selfhost"
+"$test_build/fmt-cap-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

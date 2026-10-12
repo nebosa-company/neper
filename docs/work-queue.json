@@ -592,10 +592,10 @@
       "group": "NeperOS",
       "order": 156,
       "title": "NeperOS Weather remainder: the current location and weather alerts",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C119 (D2408): Weather shows live Open-Meteo forecasts for places the user adds, kept in storage with the unit. Acceptance: (1) the current location as a place by the user's choice once the location service exists (C131: GPS or network location, a permission the user grants); (2) alerts for a place from a source that has them (the Norwegian MET API's alerts, or a national feed), shown on the main screen and as a notification (C106), checked against recorded responses."
+      "evidence": "Split from C119 (D2408): Weather shows live Open-Meteo forecasts for places the user adds, kept in storage with the unit. Acceptance: (1) the current location as a place by the user's choice once the location service exists (C131: GPS or network location, a permission the user grants); (2) alerts for a place from a source that has them (the Norwegian MET API's alerts, or a national feed), shown on the main screen and as a notification (C106), checked against recorded responses. PART (D2452): e.fmt.cap reads Common Alerting Protocol alerts (fmt_cap, 74 checks vs ElementTree). Remaining: the alert source and place-to-area match in Weather, the notification, and the current location (C161)."
     },
     {
       "id": "C157",

@@ -61,6 +61,7 @@
     "e.fmt.docx",
     "e.fmt.extract",
     "e.fmt.odf",
+    "e.fmt.cap",
     "e.fmt.pdf",
     "e.fmt.pdf.write",
     "e.fmt.vcard",
@@ -7934,6 +7935,19 @@
     "e.fmt.gzip",
     "e.fmt.zlib",
     "e.io",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.cap",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.xml",
     "e.mem",
     "e.str"
    ],
