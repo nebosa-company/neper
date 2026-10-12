@@ -468,6 +468,7 @@
     "e.ui.state",
     "e.ui.undo",
     "e.ui.ink",
+    "e.ui.markdown_view",
     "e.fmt.lzma",
     "e.fmt.parquet",
     "e.net.cidr",
@@ -7491,6 +7492,19 @@
    "direct_dependencies": [
     "e.mem",
     "e.gfx.geometry"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.markdown_view",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.markdown",
+    "e.ui.control",
+    "e.ui.widget"
    ],
    "blocked_by": []
   },

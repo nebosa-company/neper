@@ -4309,6 +4309,12 @@ $uiInkWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $uiInkWritten -ne 'executable written') { throw 'ui_ink emission failed' }
 $uiInkOutput = & $uiInkPath
 if ($LASTEXITCODE -ne 0 -or $uiInkOutput -ne 'ui ink ok') { throw "ui_ink answered wrongly: exit $LASTEXITCODE" }
+# e.ui.markdown_view: eight documents laid out (items, nodes, links, selection, hits, rich spans) against a markdown-it-py oracle, link policy and unbounded-input fallbacks (D2880).
+$uiMarkdownViewPath = Join-Path $testBuild 'ui-markdown-view-selfhost.exe'
+$uiMarkdownViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_markdown_view\src\main.e') $repo 'x64' 'windows' $uiMarkdownViewPath -j 2
+if ($LASTEXITCODE -ne 0 -or $uiMarkdownViewWritten -ne 'executable written') { throw 'ui_markdown_view emission failed' }
+$uiMarkdownViewOutput = & $uiMarkdownViewPath
+if ($LASTEXITCODE -ne 0 -or $uiMarkdownViewOutput -ne 'ui markdown view ok') { throw "ui_markdown_view answered wrongly: exit $LASTEXITCODE" }
 # e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
 $gfxSvgRenderPath = Join-Path $testBuild 'gfx-svg-render-selfhost.exe'
 $gfxSvgRenderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_render\src\main.e') $repo 'x64' 'windows' $gfxSvgRenderPath -j 2

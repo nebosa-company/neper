@@ -3837,6 +3837,12 @@ ui_ink_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 chmod +x "$test_build/ui-ink-selfhost"
 ui_ink_output=$("$test_build/ui-ink-selfhost")
 [ "$ui_ink_output" = 'ui ink ok' ]
+# e.ui.markdown_view: eight documents laid out (items, nodes, links, selection, hits, rich spans) against a markdown-it-py oracle, link policy and unbounded-input fallbacks (D2880).
+ui_markdown_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_markdown_view/src/main.e" "$repo" x64 linux "$test_build/ui-markdown-view-selfhost" -j 2)
+[ "$ui_markdown_view_written" = 'executable written' ]
+chmod +x "$test_build/ui-markdown-view-selfhost"
+ui_markdown_view_output=$("$test_build/ui-markdown-view-selfhost")
+[ "$ui_markdown_view_output" = 'ui markdown view ok' ]
 # e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
 gfx_svg_render_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_render/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-render-selfhost" -j 2)
 [ "$gfx_svg_render_written" = 'executable written' ]

@@ -9076,6 +9076,90 @@ first stroke's first sample), `duration` its length, and `path_of` a stroke's pr
 a polyline for `StrokePath`. Capacity is `TooSmall`; state errors and non-finite
 values are `Invalid`. Pressure is the caller's (the `e.ui.input` pointer has none).
 
+### `e.ui.markdown_view`
+
+```neper
+const BOLD: u8 = 1u8
+const ITALIC: u8 = 2u8
+const CODE: u8 = 4u8
+const LINK: u8 = 8u8
+const IMAGE: u8 = 16u8
+const GLUED: u8 = 32u8
+const HEADING: u8 = 64u8
+const E_QUOTE: u8 = 1u8
+const E_LIST: u8 = 2u8
+const E_ITEM: u8 = 3u8
+type ItemKind = enum u8 { Word, Marker, Rule, QuoteBar, CodeBack, CodeLine }
+type NodeRole = enum u8 { Heading, Paragraph, List, ListItem, Quote, Code, Separator }
+type LinkPolicy = enum u8 { DisplayOnly, HostActivated }
+type Item = struct { kind: ItemKind, style: u8, x: f32, y: f32, w: f32, h: f32, start: usize, len: usize, link: u32, node: u32 }
+type Node = struct { role: NodeRole, level: u32, depth: u32, first: usize, count: usize, label_start: usize, label_len: usize }
+type Link = struct { dest_start: usize, dest_len: usize, safe: bool, mail: bool }
+type Word = struct { start: usize, len: usize, cols: usize, style: u8, link: u32, glued: bool, hard: bool }
+type Metrics = struct { width: f32, char_w: f32, line_h: f32, gap: f32, indent: f32, pad: f32, bar: f32 }
+type Storage = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, scratch: []u8, blocks: []markdown.Block, inlines: []markdown.Inline, words: []Word }
+type View = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, item_count: usize, node_count: usize, link_count: usize, store_len: usize, height: f32, fallback: bool, policy: LinkPolicy }
+error TooLarge
+error TooDeep
+error Invalid
+type Entry = struct { kind: u8, level_at: usize, tight: bool, ordered: bool, number: u32, marker: bool, node: usize }
+type Ctx = struct { st: Storage, m: Metrics, policy: LinkPolicy, items: usize, nodes: usize, links: usize, store_len: usize, y: f32, any: bool, fresh: bool, stack: [32]Entry, depth: usize, levels: usize }
+fn utf8_cols(s: str) -> usize
+fn lower(c: u8) -> u8
+fn same_scheme(d: str, n: usize, want: str) -> bool
+fn dest_safe(d: str) -> bool
+fn put_item(c: *Ctx, item: Item) -> err
+fn put_node(c: *Ctx, role: NodeRole, level: u32) -> (usize, err)
+fn put_bytes(c: *Ctx, s: str) -> (usize, err)
+fn put_link(c: *Ctx, at: usize, len: usize, mail: bool) -> (u32, err)
+fn commit_links(c: *Ctx, joined: str, from: usize) -> err
+fn commit_words(c: *Ctx, joined: str, count: usize) -> (usize, usize, err)
+fn heading_scale(level: u32) -> f32
+fn avail_width(c: *Ctx, x0: f32) -> f32
+fn leaf_gap(c: *Ctx) -> f32
+fn decimal(n: u32, out: []u8) -> usize
+fn begin_leaf(c: *Ctx, scale: f32) -> (f32, err)
+fn end_leaf(c: *Ctx, top: f32, height: f32) -> err
+fn join_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, usize, err)
+type Words = struct { count: usize, after_space: bool, hard: bool }
+fn add_word(c: *Ctx, w: *Words, at: usize, bytes: str, style: u8, link: u32) -> err
+fn add_text(c: *Ctx, w: *Words, base: usize, seg: str, style: u8, link: u32) -> err
+fn collect_words(c: *Ctx, joined: str, nodes: []const markdown.Inline) -> (Words, err)
+fn place_words(c: *Ctx, count: usize, scale: f32, x0: f32, avail: f32, top: f32, node: usize, extra: u8) -> (usize, err)
+fn text_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, heading: u32) -> (usize, err)
+fn code_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, err)
+fn push_entry(c: *Ctx, e: Entry) -> err
+fn pop_entry(c: *Ctx) -> Entry
+fn close_node(c: *Ctx, node: usize)
+fn lay_out(c: *Ctx, src: str, blocks: []const markdown.Block) -> err
+fn reset(c: *Ctx)
+fn plain(c: *Ctx, src: str) -> err
+fn build(src: str, st: Storage, m: Metrics, policy: LinkPolicy) -> (View, err)
+fn inside(it: Item, x: f32, y: f32) -> bool
+fn item_at(v: *const View, x: f32, y: f32) -> (usize, bool)
+fn link_at(v: *const View, x: f32, y: f32) -> (usize, bool)
+fn activation(v: *const View, link: usize) -> (str, bool)
+fn selected_text(v: *const View, first: usize, last: usize, out: []u8) -> (usize, err)
+fn rich_spans(v: *const View, node: usize, out: []control.RichSpan, action: widget.Submit) -> (usize, err)
+```
+
+Safe structured Markdown viewer (L066, D2880): `build` parses a source with
+`e.fmt.markdown` into caller `Storage` and lays it out on a fixed-advance grid
+(`Metrics`) as a flat scene `Item` list (words, list markers, rules, quote bars, code
+backgrounds and lines), an accessible `Node` list (heading with level, paragraph, list,
+list item, quote, code, separator, each with the item range it covers and a plain-text
+label) and `Link` records. Raw HTML, reference links and unknown syntax are the literal
+text the parser leaves; an image is its alt text and is never loaded; a source the
+parser, the depth limit or the storage cannot bound is drawn whole as preformatted lines
+with `fallback` set. A link is display-only under `DisplayOnly`; under `HostActivated`
+`activation` answers the destination only if it is relative or http, https or mailto
+(`safe`), and never opens anything. `item_at` and `link_at` are the hit regions,
+`selected_text` the selectable text of an item range, and `rich_spans` a heading's or
+paragraph's words as `control.RichSpan`s for `control.paragraph`. Layout and queries are
+data, checked against a markdown-it-py oracle; a window-level check would still need a
+shaped-text measure in place of the grid advance and the pointer and clipboard plumbing
+of a host.
+
 ### `e.ui.undo`
 
 ```neper
