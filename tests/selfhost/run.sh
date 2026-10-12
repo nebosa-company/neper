@@ -951,6 +951,12 @@ chmod +x "$test_build/data-tableview-selfhost"
 data_tablefilter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tablefilter/src/main.e" "$repo" x64 linux "$test_build/data-tablefilter-selfhost" --arena 512m)
 [ "$data_tablefilter_written" = 'executable written' ]
 chmod +x "$test_build/data-tablefilter-selfhost"
+"$test_build/data-tablefilter-selfhost"
+# `e.data.tablegroup`: grouping and summaries over a 150,000-row view against an independent reference: boundaries by neighbour equality, one to three levels, folded and exact text, null keys, the visible list, expansion by path through a re-sort and a re-filter, summaries with nulls, groups ordered by a summary at two levels, refusals (D2365).
+data_tablegroup_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tablegroup/src/main.e" "$repo" x64 linux "$test_build/data-tablegroup-selfhost" --arena 768m)
+[ "$data_tablegroup_written" = 'executable written' ]
+chmod +x "$test_build/data-tablegroup-selfhost"
+"$test_build/data-tablegroup-selfhost"
 # `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
 # generational keys: stale after removal, reused with the next generation, retired at the last.
 stat_slots_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/stat_slots/src/main.e" "$repo" x64 linux "$test_build/stat-slots-selfhost")

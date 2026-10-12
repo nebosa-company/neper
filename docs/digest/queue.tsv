@@ -144,7 +144,7 @@ L163	library	0	1019	Fast, small PNG encoding: dynamic Huffman, lazy matching and
 G001	library	0.7	859	e.data.table: typed columns, null bitmaps, string dictionary + heap, bulk load, journal	row compaction, a boxed Value accessor, u16 dictionary ids, the e.db cursor adapter, a Linux run, and the load/rank timings against the design targets (load <= 250 ms).
 G002	library	0.6	903	e.data.tableview sort: key derivation, stable radix, multi-key, comparer slow path	the parallel driver, cachegrind budget check, Date/Enum kinds, single-row repositioning, a Linux run.
 G003	library	0.7	1097	filter tree compile + evaluate (dictionary fast path, narrowing, parallel)	parallel evaluation, relative-date operators, custom functions, the MTG 56,095 count (needs the real pool), a Linux run.
-G004	library	0	293	group + summary engine, expansion keyed by path, group summaries/footers	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
+G004	library	0.7	943	group + summary engine, expansion keyed by path, group summaries/footers	group footers, date-part grouping, parallel passes, incremental upkeep under edits, a Linux run.
 G005	library	0	298	search / locate / value list	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G006	library	0	337	e.ui.datagrid v1: bands, footer, group rows, filter row, navigator, indicator, preview, no-data	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G007	library	0	275	editing: cell kinds + editors + write-through + lock	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
