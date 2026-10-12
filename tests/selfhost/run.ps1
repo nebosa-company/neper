@@ -4237,6 +4237,54 @@ $textReportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $textReportWritten -ne 'executable written') { throw 'text_report emission failed' }
 $textReportOutput = & $textReportPath
 if ($LASTEXITCODE -ne 0 -or $textReportOutput -ne 'text report ok') { throw "text_report answered wrongly: exit $LASTEXITCODE" }
+# e.text.encoding.detect_legacy: byte-frequency charset detection against a Python port of the model (258 vectors, D2720).
+$textCharsetPath = Join-Path $testBuild 'text-charset-selfhost.exe'
+$textCharsetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_charset\src\main.e') $repo 'x64' 'windows' $textCharsetPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textCharsetWritten -ne 'executable written') { throw 'text_charset emission failed' }
+$textCharsetOutput = & $textCharsetPath
+if ($LASTEXITCODE -ne 0 -or $textCharsetOutput -ne 'text charset ok') { throw "text_charset answered wrongly: exit $LASTEXITCODE" }
+# e.text.termkit: tqdm progress line, rich markup to SGR and rich boxed tables, vector by vector (517 cases, D2721).
+$textTermkitPath = Join-Path $testBuild 'text-termkit-selfhost.exe'
+$textTermkitWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_termkit\src\main.e') $repo 'x64' 'windows' $textTermkitPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textTermkitWritten -ne 'executable written') { throw 'text_termkit emission failed' }
+$textTermkitOutput = & $textTermkitPath
+if ($LASTEXITCODE -ne 0 -or $textTermkitOutput -ne 'termkit ok') { throw "text_termkit answered wrongly: exit $LASTEXITCODE" }
+# e.proc.sys: /proc parsers against a regex reader plus the live host by shape (261 records, D2722).
+$procSysPath = Join-Path $testBuild 'proc-sys-selfhost.exe'
+$procSysWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\proc_sys\src\main.e') $repo 'x64' 'windows' $procSysPath -j 2
+if ($LASTEXITCODE -ne 0 -or $procSysWritten -ne 'executable written') { throw 'proc_sys emission failed' }
+$procSysOutput = & $procSysPath
+if ($LASTEXITCODE -ne 0 -or $procSysOutput -ne 'proc sys ok') { throw "proc_sys answered wrongly: exit $LASTEXITCODE" }
+# e.metrics.export: Prometheus and OpenMetrics text against prometheus_client, OTLP/JSON against the OTLP protobuf definitions (130 cases, D2723).
+$metricsExportPath = Join-Path $testBuild 'metrics-export-selfhost.exe'
+$metricsExportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\metrics_export\src\main.e') $repo 'x64' 'windows' $metricsExportPath -j 2
+if ($LASTEXITCODE -ne 0 -or $metricsExportWritten -ne 'executable written') { throw 'metrics_export emission failed' }
+$metricsExportOutput = & $metricsExportPath
+if ($LASTEXITCODE -ne 0 -or $metricsExportOutput -ne 'metrics export ok') { throw "metrics_export answered wrongly: exit $LASTEXITCODE" }
+# e.store: one conformance script over the memory, filesystem and HTTP backends plus key rules against Python (D2724).
+$storePath = Join-Path $testBuild 'store-selfhost.exe'
+$storeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\store\src\main.e') $repo 'x64' 'windows' $storePath -j 2
+if ($LASTEXITCODE -ne 0 -or $storeWritten -ne 'executable written') { throw 'store emission failed' }
+$storeOutput = & $storePath
+if ($LASTEXITCODE -ne 0 -or $storeOutput -ne 'store ok') { throw "store answered wrongly: exit $LASTEXITCODE" }
+# e.cli.complete: bash, zsh and fish completion scripts and man pages, goldens held to real shells and groff (D2725).
+$cliCompletePath = Join-Path $testBuild 'cli-complete-selfhost.exe'
+$cliCompleteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\cli_complete\src\main.e') $repo 'x64' 'windows' $cliCompletePath -j 2
+if ($LASTEXITCODE -ne 0 -or $cliCompleteWritten -ne 'executable written') { throw 'cli_complete emission failed' }
+$cliCompleteOutput = & $cliCompletePath
+if ($LASTEXITCODE -ne 0 -or $cliCompleteOutput -ne 'cli complete ok') { throw "cli_complete answered wrongly: exit $LASTEXITCODE" }
+# e.math.sym: parse, eval, diff, integrate and solve against SymPy and mpmath by value (176 records, D2726).
+$mathSymPath = Join-Path $testBuild 'math-sym-selfhost.exe'
+$mathSymWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_sym\src\main.e') $repo 'x64' 'windows' $mathSymPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mathSymWritten -ne 'executable written') { throw 'math_sym emission failed' }
+$mathSymOutput = & $mathSymPath
+if ($LASTEXITCODE -ne 0 -or $mathSymOutput -ne 'math sym ok') { throw "math_sym answered wrongly: exit $LASTEXITCODE" }
+# e.mediator: handlers, listeners and pipeline behaviors against an independent model of MediatR semantics (60 scenarios, D2727).
+$mediatorPath = Join-Path $testBuild 'mediator-selfhost.exe'
+$mediatorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mediator\src\main.e') $repo 'x64' 'windows' $mediatorPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mediatorWritten -ne 'executable written') { throw 'mediator emission failed' }
+$mediatorOutput = & $mediatorPath
+if ($LASTEXITCODE -ne 0 -or $mediatorOutput -ne 'mediator ok') { throw "mediator answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

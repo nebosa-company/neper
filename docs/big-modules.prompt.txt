@@ -1,0 +1,63 @@
+Refactor Neper’s three large UI modules for better model context, human auditability, and incremental compilation:
+
+- lib/e/ui/control.e
+- lib/e/ui/collection.e
+- lib/e/ui/widget.e
+
+Read AGENTS.md, RTK.md, docs/spec.md §2, and decisions D36/D47 before acting.
+
+Goal:
+Extract cohesive modules without changing behavior or unnecessarily changing the existing public API. File size alone is not justification—the split must improve ownership and dependency direction.
+
+Constraints:
+- Neper has one file per module.
+- The module graph must remain a DAG.
+- Neper currently has no private declarations, so do not expose large internal APIs merely to shorten files.
+- Keep e.ui.widget as the stable foundational API.
+- Prefer existing types and helpers; add no speculative abstraction, façade boilerplate, dependency, generated forwarding layer, or compatibility wrapper farm.
+- Preserve all current behavior and accessibility semantics.
+- Respect the shared working tree. Do not overwrite unrelated changes.
+- Never use git add -A or git add ..
+- Do not hand-edit docs/progress.html.
+
+Work in this order:
+1. control.e
+2. collection.e
+3. widget.e
+
+For each file:
+1. Record its current byte count, line count, major sections, imports, consumers, and dependency direction.
+2. Identify boundaries whose functions and types form a coherent public feature family.
+3. Extract only boundaries that:
+   - have a clear single responsibility;
+   - can own their tests;
+   - do not require a dependency cycle;
+   - do not leak implementation-only types;
+   - materially reduce the original module’s cognitive load.
+4. If no clean boundary exists, leave that section in place and document why. Do not force a split.
+5. Keep callers unchanged where practical. When imports must change, make the smallest explicit change.
+6. Run the relevant UI fixtures on Windows and Linux after every extraction.
+7. After completing each source file, run the full ui_* fixture suite on both hosts.
+8. Make one focused commit per independently verified extraction, staging only explicit touched paths.
+
+Likely areas to investigate, not predetermined designs:
+- control.e: independent component families such as inputs, selection, content, and feedback.
+- collection.e: tables/grids, trees/outlines, and list/view families.
+- widget.e: constructors, reconciliation/state, layout/painting, input/editing, and tree algorithms. Extract from widget.e only when the dependency direction is genuinely clean; otherwise retain its cohesive runtime core.
+
+Documentation:
+- Append durable module-boundary decisions to docs/decisions.md.
+- Update readiness evidence only when capability evidence actually changes; do not award progress for file movement.
+- Regenerate docs/progress.html when required by the repository instructions.
+- Maintain an ignored working ledger under build/ with completed, rejected, and remaining candidate boundaries.
+
+Completion report:
+- Before/after byte and line counts for each target.
+- New module dependency graph.
+- Extracted and deliberately retained sections.
+- Public API changes, ideally none.
+- Windows and Linux test results.
+- Commit hashes.
+- Remaining structural risks.
+
+Start with analysis of all three files, then implement the smallest clean extraction from control.e. Continue autonomously until every defensible extraction is complete or a real architectural blocker is reached.

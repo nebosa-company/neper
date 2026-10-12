@@ -12,6 +12,7 @@
     "e.mem",
     "e.meta",
     "e.math",
+    "e.math.sym",
     "e.simd",
     "e.atomic",
     "e.bytes",
@@ -31,7 +32,12 @@
     "e.os",
     "e.io",
     "e.fs",
+    "e.store",
+    "e.store.http",
     "e.proc",
+    "e.proc.sys.format",
+    "e.proc.sys.host",
+    "e.proc.sys",
     "e.thread",
     "e.sync",
     "e.channel",
@@ -60,6 +66,7 @@
     "e.text.highlight",
     "e.barcode",
     "e.text.terminal",
+    "e.text.termkit",
     "e.net.ssh",
     "e.fmt.csv",
     "e.fmt.ini",
@@ -105,6 +112,7 @@
     "e.concurrent.queue",
     "e.concurrent.map",
     "e.task",
+    "e.mediator",
     "e.time.calendar",
     "e.tz",
     "e.gpu",
@@ -113,8 +121,10 @@
     "e.test.fuzz",
     "e.debug",
     "e.metrics",
+    "e.metrics.export",
     "e.log",
     "e.cli",
+    "e.cli.complete",
     "e.cli.config",
     "e.cli.line",
     "e.async",
@@ -7047,6 +7057,140 @@
     "e.algo.hash",
     "e.fmt.zip",
     "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.cli.complete",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.cli",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.store",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fs",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.store.http",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.net",
+    "e.net.http",
+    "e.store",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.metrics.export",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.metrics",
+    "e.net",
+    "e.net.http",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.proc.sys.format",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.proc.sys.host",
+   "layer": 4,
+   "surface": "spec",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.os",
+    "e.proc.sys.format",
+    "e.str",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.proc.sys",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.os",
+    "e.proc.sys.format",
+    "e.proc.sys.host"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.mediator",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.task"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.sym",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.termkit",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   }

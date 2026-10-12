@@ -330,6 +330,100 @@ fn saturating_sub[T: type](a: T, b: T) -> T
 fn saturating_mul[T: type](a: T, b: T) -> T
 ```
 
+### `e.math.sym`
+
+```neper
+error TooLarge
+error Syntax
+error Unsupported
+type Q = struct { n: i64, d: i64 }
+type Node = struct { kind: u8, f: u8, a: u32, b: u32, n: i64, d: i64 }
+type Pool = struct { nodes: []Node, count: u32, names: []str, name_count: u32, failed: bool }
+type Poly = struct { c: [20]Q, deg: i32 }
+type Parser = struct { src: str, at: usize, pool: *Pool, bad: bool }
+const K_NUM: u8 = 0u8
+const K_SYM: u8 = 1u8
+const K_ADD: u8 = 2u8
+const K_MUL: u8 = 3u8
+const K_POW: u8 = 4u8
+const K_FUN: u8 = 5u8
+const F_SIN: u8 = 0u8
+const F_COS: u8 = 1u8
+const F_TAN: u8 = 2u8
+const F_EXP: u8 = 3u8
+const F_LN: u8 = 4u8
+const F_ATAN: u8 = 5u8
+const LIMIT: i64 = 2147483648i64
+
+fn pool(a: *mem.Arena, capacity: usize) -> (Pool, err)
+fn mk(p: *Pool, kind: u8, f: u8, a: u32, b: u32, n: i64, d: i64) -> u32
+fn abs64(v: i64) -> i64
+fn gcd64(x: i64, y: i64) -> i64
+fn q(n: i64, d: i64) -> Q
+fn big(p: *Pool, v: i64) -> bool
+fn q_add(p: *Pool, x: Q, y: Q) -> Q
+fn q_mul(p: *Pool, x: Q, y: Q) -> Q
+fn q_neg(x: Q) -> Q
+fn q_inv(p: *Pool, x: Q) -> Q
+fn q_zero() -> Q
+fn q_one() -> Q
+fn q_pow(p: *Pool, x: Q, e: i64) -> Q
+fn num(p: *Pool, n: i64, d: i64) -> u32
+fn int(p: *Pool, n: i64) -> u32
+fn qnode(p: *Pool, v: Q) -> u32
+fn is_num(p: *Pool, e: u32) -> bool
+fn q_of(p: *Pool, e: u32) -> Q
+fn is_int(p: *Pool, e: u32) -> bool
+fn is_value(p: *Pool, e: u32, n: i64) -> bool
+fn sym(p: *Pool, name: str) -> u32
+fn same(p: *Pool, x: u32, y: u32) -> bool
+fn add(p: *Pool, x: u32, y: u32) -> u32
+fn mul(p: *Pool, x: u32, y: u32) -> u32
+fn neg(p: *Pool, x: u32) -> u32
+fn sub(p: *Pool, x: u32, y: u32) -> u32
+fn pow(p: *Pool, x: u32, y: u32) -> u32
+fn div(p: *Pool, x: u32, y: u32) -> u32
+fn isqrt(v: i64) -> i64
+fn func(p: *Pool, f: u8, x: u32) -> u32
+fn has(p: *Pool, e: u32, s: u32) -> bool
+fn symbol_index(p: *Pool, e: u32) -> u32
+fn index_of(p: *Pool, name: str) -> u32
+fn skip_blanks(s: *Parser)
+fn peek(s: *Parser) -> u8
+fn is_alpha(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn parse_number(s: *Parser) -> u32
+fn function_id(name: str) -> i32
+fn parse_atom(s: *Parser, depth: u32) -> u32
+fn parse_unary(s: *Parser, depth: u32) -> u32
+fn parse_power(s: *Parser, depth: u32) -> u32
+fn parse_product(s: *Parser, depth: u32) -> u32
+fn parse_sum(s: *Parser, depth: u32) -> u32
+fn parse(p: *Pool, src: str) -> (u32, err)
+fn prec(p: *Pool, e: u32) -> u8
+fn function_name(f: u8) -> str
+fn push_expr(b: *str.Builder, p: *Pool, e: u32, parent: u8) -> err
+fn to_string(a: *mem.Arena, p: *Pool, e: u32) -> (str, err)
+fn eval(p: *Pool, e: u32, names: []const str, values: []const f64) -> f64
+fn diff(p: *Pool, e: u32, s: u32) -> u32
+fn poly_zero() -> Poly
+fn poly_const(v: Q) -> Poly
+fn poly_trim(r: *Poly)
+fn poly_add(p: *Pool, x: Poly, y: Poly) -> Poly
+fn poly_mul(p: *Pool, x: Poly, y: Poly) -> (Poly, bool)
+fn poly_of(p: *Pool, e: u32, s: u32) -> (Poly, bool)
+fn poly_expr(p: *Pool, f: Poly, x: u32) -> u32
+fn poly_derivative(p: *Pool, f: Poly) -> Poly
+fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool)
+fn by_parts(p: *Pool, poly: Poly, f: u8, u: u32, slope: Q, x: u32) -> (u32, bool)
+fn divides(d: i64, v: i64) -> bool
+fn horner(p: *Pool, f: Poly, r: Q) -> Q
+fn deflate(p: *Pool, f: Poly, r: Q) -> Poly
+fn solve(p: *Pool, e: u32, s: u32, out: []u32) -> (usize, err)
+```
+
+Symbolic mathematics over exact rationals (`i64` pairs, `failed` on the pool instead of wrapping past 2^62): expression trees in an arena `Pool` built by smart constructors (`add`, `mul`, `pow`, `div`, `func` fold constants, drop identities and merge a numeric factor; simplification stays that minimal, so equal expressions need not print alike and are compared by evaluating). `parse` reads `+ - * / ^ **`, decimals (exact), names, `sin cos tan exp ln log atan sqrt`; `to_string` prints; `eval` evaluates over `e.math`; `diff` differentiates anything buildable (product, quotient, general power, chain rule); `integrate` returns an antiderivative for polynomials, sums, constant factors, powers and elementary functions of a linear argument, `1/(a x + b)`, and polynomial times `exp`, `sin` or `cos` of a linear argument (by parts), `false` otherwise; `solve` finds the distinct real roots of a polynomial with rational coefficients (rational-root theorem with deflation, quadratic formula with exact roots or `sqrt` expressions) and answers `Unsupported` for anything else, including a factor of degree three or more with no rational root. Not here: factoring, trigonometric identities, symbolic definite limits, systems, inequalities, limits and series, complex roots.
+
 ### `e.simd`
 
 `V` is a legal `Vec[T,N]`; `M` is its `Mask[T,N]`; `I` is an integer vector with
@@ -7135,10 +7229,12 @@ type InvalidPolicy = enum u8 { Reject, Replace }
 type Decoder = struct { encoding: Encoding, policy: InvalidPolicy, pending: [4]u8, pending_len: u8, bom_seen: bool }
 type Encoder = struct { encoding: Encoding, emit_bom: bool, started: bool }
 type Guess = struct { encoding: Encoding, confidence: u8 }
+type LegacyGuess = struct { charset: u8, confidence: u8 }
 error Invalid
 error Incomplete
 error TooSmall
 const REPLACEMENT: u32 = 65533u32
+const LEGACY_COUNT: usize = 12usize
 
 fn detect_bom(src: []const u8) -> (Encoding, usize, bool)
 fn decoder(encoding: Encoding, policy: InvalidPolicy, consume_bom: bool) -> Decoder
@@ -7160,13 +7256,27 @@ fn to_utf8(a: *mem.Arena, encoding: Encoding, src: []const u8, policy: InvalidPo
 fn from_utf8(a: *mem.Arena, encoding: Encoding, src: str, emit_bom: bool) -> ([]u8, err)
 fn decodes(encoding: Encoding, src: []const u8) -> bool
 fn detect(src: []const u8) -> Guess
+fn detect_legacy(src: []const u8) -> LegacyGuess
+fn encoding_name(encoding: Encoding) -> str
+fn detect_name(src: []const u8) -> (str, u8)
+fn legacy_name(id: usize) -> str
+fn legacy_table(id: usize) -> str
 ```
 
 The streaming calls return consumed source bytes followed by written destination
 bytes. `TooSmall` is resumable and consumes only complete scalar values. `final`
 reports a trailing partial sequence as `Incomplete`; `Replace` emits U+FFFD for each
 maximal invalid subsequence. This toolchain module intentionally excludes locale and
-legacy code pages.
+legacy code pages as decoders.
+
+`detect_legacy` names the likeliest single-byte charset of bytes that are not UTF
+(`legacy_name`: windows-1252, windows-1250, iso-8859-2, windows-1251, koi8-r,
+iso-8859-5, ibm866, iso-8859-7, windows-1254, windows-1255, windows-1256,
+windows-1257; `us-ascii` when no byte passes 0x7F) with a tempered naive-Bayes
+confidence from per-charset byte-frequency tables (`scripts/gen_charset_test.py`
+regenerates them from `scripts/charset_corpus.py`). `detect_name` is the one-call
+form over `detect` and `detect_legacy`. Not here: CJK multi-byte charsets, bigram
+models, and a decoder for any legacy page.
 
 ### `e.text.utf8`
 
@@ -7259,6 +7369,59 @@ fn scan(s: *const Set, data: []const u8, counts: []u32, matched: []bool) -> err
 ```
 
 YARA-lite signature scanning: `compile` parses rule text (`meta:`, `strings:`, `condition:`) into arena tables and `scan` counts, per string, the offsets where it matches and evaluates every rule. Strings are quoted text (`ascii`, `wide`, `nocase`, `fullword`, `\xHH` escapes) or hex (`??`, nibble wildcards, `[n]`/`[n-m]` jumps); conditions have `and`/`or`/`not`, `$a`, `$a at N`, `#a OP N`, `filesize OP N`, and `any|all|none|N of them|($a, $b*)`. Overlapping occurrences count, ascii and wide hits at one offset count once; jumps backtrack, so cost per offset is bounded by the product of the jump widths. Capacities: 64 rules, 256 strings, 4096 tokens, 1024 condition nodes (`TooMany`). Not here: regexes, modules, imports, ranges beyond `at`, alternatives, tags, `for` loops, xor/base64.
+
+### `e.text.termkit`
+
+```neper
+error BadShape
+error BadMarkup
+type Align = enum u8 { Left, Right, Center }
+type BoxStyle = enum u8 { Ascii, Square, Rounded, HeavyHead }
+type Column = struct { header: str, align: Align }
+type Entry = struct { attrs: u16, fg: u8, bg: u8, name: str }
+const ATTR_BOLD: u16 = 1u16
+const ATTR_DIM: u16 = 2u16
+const ATTR_ITALIC: u16 = 4u16
+const ATTR_UNDERLINE: u16 = 8u16
+const ATTR_BLINK: u16 = 16u16
+const ATTR_REVERSE: u16 = 64u16
+const ATTR_CONCEAL: u16 = 128u16
+const ATTR_STRIKE: u16 = 256u16
+const MARKUP_DEPTH: usize = 16usize
+
+fn display_width(s: str) -> usize
+fn push_spaces(b: *str.Builder, n: usize) -> err
+fn push_two_digits(b: *str.Builder, v: u64) -> err
+fn digits(v: u64) -> usize
+fn round_half_even(x: f64) -> u64
+fn push_interval(b: *str.Builder, seconds: f64) -> err
+fn threshold(k: usize) -> f64
+fn push_fixed2(b: *str.Builder, v: f64) -> err
+fn push_rate(b: *str.Builder, n: u64, elapsed: f64, unit: str) -> err
+fn push_bar(b: *str.Builder, frac_in: f64, columns: usize, ascii: bool) -> err
+fn trim_columns(s: str, columns: usize) -> str
+fn meter_line(a: *mem.Arena, n: u64, total: u64, elapsed: f64, ncols: usize, prefix: str, unit: str, ascii: bool) -> (str, err)
+fn render_meter(a: *mem.Arena, n: u64, total: u64, elapsed: f64, ncols: usize, prefix: str, unit: str, ascii: bool) -> (str, err)
+fn push_cell(b: *str.Builder, s: str, w: usize, align: Align) -> err
+fn push_line(b: *str.Builder, style: BoxStyle, row: usize, widths: []const usize) -> err
+fn push_row(b: *str.Builder, style: BoxStyle, row: usize, cols: []const Column, cells: []const str, first: usize, widths: []const usize, header: bool) -> err
+fn render_table(a: *mem.Arena, cols: []const Column, cells: []const str, style: BoxStyle) -> (str, err)
+fn attribute_bit(w: str) -> u16
+fn base_color(w: str) -> i32
+fn color_index(w: str) -> i32
+fn is_tag_start(c: u8) -> bool
+fn parse_tag(body: str, e: *Entry) -> err
+fn push_sgr(b: *str.Builder, attrs: u16, fg: u8, bg: u8) -> err
+fn render_markup(a: *mem.Arena, src: str, color: bool) -> (str, err)
+fn box_ascii(row: usize, part: usize) -> str
+fn box_square(row: usize, part: usize) -> str
+fn box_rounded(row: usize, part: usize) -> str
+fn box_heavyhead(row: usize, part: usize) -> str
+fn box_part(style: BoxStyle, row: usize, part: usize) -> str
+fn bar_char(ascii: bool, k: u64) -> str
+```
+
+Terminal output as pure string builders: `render_meter` is tqdm's default progress line (`prefix: PPP%|bar| n/total [elapsed<left, rate]`, or `n unit [elapsed, rate]` with no total or past it; an ASCII or block-element bar; `ncols` trims the line, 0 means a ten-column bar), taking the elapsed seconds so the caller owns the clock. `render_markup` turns rich-style tags (`[bold red]`, `[on blue]`, `[/]`, `[/name]`, `\[` literal; attributes bold dim italic underline blink reverse conceal strike and their one-letter forms; the 16 ANSI colours) into one SGR run per text segment, or strips them with `color` false; anything else is `BadMarkup`. `render_table` draws a header, a rule and row-major cells in `Ascii`, `Square`, `Rounded` or `HeavyHead` boxes with per-column alignment, widths counted in scalars. Windows VT-mode enabling, interactive prompts, wide-character widths, 256-colour and truecolour, word wrapping and spinners are not here.
 
 ### `e.text.search`
 
@@ -10788,6 +10951,63 @@ supported containment facility established before child code executes; unsupport
 containment is rejected before spawning. No shell is inserted. Child-only mode
 does not promise descendant cleanup. See SL05 for platform limits and test cases.
 
+### `e.proc.sys.format`
+
+```neper
+error Malformed
+type CpuTimes = struct { user_ms: u64, system_ms: u64, idle_ms: u64, iowait_ms: u64 }
+type MemoryInfo = struct { total: u64, available: u64, swap_total: u64, swap_free: u64 }
+type ProcessInfo = struct { pid: u32, parent: u32, threads: u32, state: u8, name: str }
+
+fn is_digit(c: u8) -> bool
+fn read_number(src: str, at: usize) -> (u64, usize, bool)
+fn line_end(src: str, from: usize) -> usize
+fn meminfo_field(src: str, key: str) -> (u64, bool)
+fn parse_meminfo(src: str) -> (MemoryInfo, err)
+fn parse_cpu_times(src: str, hz: u64) -> (CpuTimes, err)
+fn count_cpus(src: str) -> u32
+fn parse_uptime_ms(src: str) -> (u64, err)
+fn parse_stat(src: str) -> (ProcessInfo, err)
+```
+
+Pure parsers for the Linux text files `e.proc.sys.host` reads: `parse_meminfo` (`MemTotal`, `MemAvailable` or free plus buffers plus cache, swap; kilobytes to bytes), `parse_cpu_times` (the aggregate `cpu ` line of `/proc/stat` from ticks of `1/hz` second to milliseconds: user plus nice, system plus irq plus softirq, idle, iowait), `count_cpus` (the `cpuN` lines), `parse_uptime_ms` (`/proc/uptime`, up to three decimals) and `parse_stat` (`pid (comm) state ppid ...` with the name running to the last `)`, thread count from field 20; the name borrows from the input). A malformed file is `Malformed`.
+
+### `e.proc.sys`
+
+```neper
+type CpuTimes = struct { user_ms: u64, system_ms: u64, idle_ms: u64, iowait_ms: u64 }
+type MemoryInfo = struct { total: u64, available: u64, swap_total: u64, swap_free: u64 }
+type DiskUsage = struct { total: u64, free: u64, used: u64 }
+type ProcessInfo = struct { pid: u32, parent: u32, threads: u32, state: u8, name: str }
+
+fn cpu_count(a: *mem.Arena) -> (u32, err)
+fn cpu_times(a: *mem.Arena) -> (CpuTimes, err)
+fn memory(a: *mem.Arena) -> (MemoryInfo, err)
+fn uptime_ms(a: *mem.Arena) -> (u64, err)
+fn boot_time(a: *mem.Arena) -> (i64, err)
+fn disk_usage(a: *mem.Arena, path: str) -> (DiskUsage, err)
+fn process_id() -> u32
+fn self_memory(a: *mem.Arena) -> (u64, err)
+fn processes(a: *mem.Arena, limit: usize) -> ([]ProcessInfo, err)
+```
+
+psutil-shaped system and process information: `cpu_count` (logical processors), `cpu_times` (cumulative milliseconds), `memory` (physical total and available, swap), `uptime_ms`, `boot_time` (Unix seconds: wall clock less uptime), `disk_usage` (total, free to the caller, used of the volume holding a path), `process_id`, `self_memory` (resident or working-set bytes of this process) and `processes` (up to `limit` entries of the process table with parent, thread count, state and name; names borrow from the arena). The per-OS readers are `e.proc.sys.host` (kernel32 on Windows; `/proc` and `statfs` on Linux, where `statfs` is the x86-64 syscall number). Every figure is a snapshot. Not here: another process's CPU and memory, open files, connections, network interface addresses and counters, sensors, per-CPU times; Windows swap is the commit limit less physical memory and iowait is zero there.
+
+### `e.proc.sys.host`
+
+```neper
+fn cpu_count(a: *mem.Arena) -> (u32, err)
+fn cpu_times(a: *mem.Arena) -> (format.CpuTimes, err)
+fn memory(a: *mem.Arena) -> (format.MemoryInfo, err)
+fn uptime_ms(a: *mem.Arena) -> (u64, err)
+fn disk_usage(a: *mem.Arena, path: str) -> (u64, u64, u64, err)
+fn process_id() -> u32
+fn self_memory(a: *mem.Arena) -> (u64, err)
+fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err)
+```
+
+The host half of `e.proc.sys`, composed of per-target variants only (`host.windows.e`, `host.linux.e`). Windows reads kernel32 (`GetActiveProcessorCount`, `GetSystemTimes`, `GlobalMemoryStatusEx`, `GetTickCount64`, `GetDiskFreeSpaceExW`, a Toolhelp process snapshot, `K32GetProcessMemoryInfo`); Linux reads `/proc/stat`, `/proc/meminfo`, `/proc/uptime`, `/proc/<pid>/stat` and `/proc/self/statm` whole and hands them to `e.proc.sys.format`, plus one `statfs`. `disk_usage` answers (total, free, used).
+
 ### `e.thread.pool`
 
 ```neper
@@ -11153,6 +11373,39 @@ cancels queued work and joins every worker. `wait_all` returns the first error i
 input order, not completion order. `parallel_for` partitions `[begin..end)` into
 deterministic ranges no smaller than `grain` except the last; scheduling order is not
 observable and callers synchronize shared state explicitly.
+
+### `e.mediator`
+
+```neper
+error NoHandler
+error Duplicate
+error Full
+type Message = struct { kind: u32, data: []const u8 }
+type Handler = struct { kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> (Message, err) }
+type Listener = struct { kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> err }
+type Behavior = struct { kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message, *const Next) -> (Message, err) }
+type Mediator = struct { handlers: []Handler, listeners: []Listener, behaviors: []Behavior, handler_count: usize, listener_count: usize, behavior_count: usize }
+type Next = struct { mediator: *const Mediator, position: usize, handler: *const Handler }
+type SendJob = struct { mediator: *Mediator, arena: *mem.Arena, request: Message }
+type Retry = struct { attempts: u32 }
+type Validation = struct { ctx: *void, check: fn(*void, *const Message) -> err }
+type Logging = struct { ctx: *void, sink: fn(*void, str) }
+
+fn mediator(a: *mem.Arena, handlers: usize, listeners: usize, behaviors: usize) -> (Mediator, err)
+fn register(m: *Mediator, kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> (Message, err)) -> err
+fn subscribe(m: *Mediator, kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> err) -> err
+fn behave(m: *Mediator, kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message, *const Next) -> (Message, err)) -> err
+fn proceed(n: *const Next, a: *mem.Arena, req: *const Message) -> (Message, err)
+fn send(m: *const Mediator, a: *mem.Arena, req: Message) -> (Message, err)
+fn publish(m: *const Mediator, a: *mem.Arena, note: Message) -> err
+fn publish_all(m: *const Mediator, a: *mem.Arena, note: Message) -> (usize, err)
+fn send_job(job: *SendJob, token: *const task.Cancel) -> (Message, err)
+fn retry_run(ctx: *void, a: *mem.Arena, req: *const Message, n: *const Next) -> (Message, err)
+fn validation_run(ctx: *void, a: *mem.Arena, req: *const Message, n: *const Next) -> (Message, err)
+fn logging_run(ctx: *void, a: *mem.Arena, req: *const Message, n: *const Next) -> (Message, err)
+```
+
+An in-process mediator in the shape of MediatR. A request is a `Message` (a `u32` kind and payload bytes); `register` binds the one handler of a kind (`Duplicate` for a second, `Full` past capacity), `subscribe` adds a notification listener, `behave` adds a pipeline behavior for one kind or, with kind 0, for every request. `send` runs the pipeline -- behaviors in registration order, the first registered outermost, then the handler -- and answers `NoHandler` for an unregistered kind without running any behavior. A behavior calls `proceed` zero times (short circuit, refusal), once or several (retry). `publish` calls every listener of the kind in registration order and stops at the first failure; `publish_all` runs them all and answers the failure count and the first error. Stock behaviors: `retry_run` (`Retry.attempts`), `validation_run` (a check function refuses before the handler) and `logging_run` (start and ok/failed lines to a sink). `send_job` is the body of a task-pool job so one `send` becomes a `task.future`; give each job its own arena. No broker: distributed messaging belongs to the queue and bus modules. There is no type-based dispatch (no reflection), so typed layers are a cast in each handler.
 
 ### `e.time`
 
@@ -12248,6 +12501,119 @@ fn histogram_snapshot(a: *mem.Arena, h: *const Histogram) -> (Snapshot, err)
 Bounds must be finite and strictly increasing. The final implicit bucket is positive
 infinity.
 
+### `e.metrics.export`
+
+```neper
+error Invalid
+type Kind = enum u8 { Counter, Gauge, Histogram }
+type Label = struct { name: str, value: str }
+type Sample = struct { name: str, help: str, kind: Kind, labels: []const Label, value: f64, bounds: []const f64, buckets: []const u64, sum: f64 }
+type Span = struct { trace_id: [16]u8, span_id: [8]u8, parent_span_id: [8]u8, name: str, kind: u8, start_ns: u64, end_ns: u64, attributes: []const Label, status_code: u8, status_message: str }
+type Scrape = struct { content_type: str, body: str }
+type Digits = struct { text: [24]u8, count: usize, exponent: i32, negative: bool }
+
+fn counter_sample(name: str, help: str, labels: []const Label, c: *metrics.Counter) -> Sample
+fn gauge_sample(name: str, help: str, labels: []const Label, g: *metrics.Gauge) -> Sample
+fn histogram_sample(a: *mem.Arena, name: str, help: str, labels: []const Label, h: *const metrics.Histogram) -> (Sample, err)
+fn digits_of(v: f64) -> (Digits, err)
+fn push_zeros(b: *str.Builder, n: i32) -> err
+fn push_exponent(b: *str.Builder, e: i32) -> err
+fn push_number(b: *str.Builder, v: f64, prometheus: bool) -> err
+fn less_bytes(x: str, y: str) -> bool
+fn push_escaped(b: *str.Builder, s: str, quotes: bool) -> err
+fn push_labels(b: *str.Builder, labels: []const Label, extra_name: str, extra_value: str) -> err
+fn ends_with_total(s: str) -> bool
+fn push_value_line(b: *str.Builder, name: str, suffix: str, labels: []const Label, le: str, v: f64) -> err
+fn render_text(a: *mem.Arena, samples: []const Sample, openmetrics: bool) -> (str, err)
+fn scrape(a: *mem.Arena, samples: []const Sample, accept: str) -> (Scrape, err)
+fn push_json_string(b: *str.Builder, s: str) -> err
+fn push_json_u64(b: *str.Builder, v: u64) -> err
+fn push_json_double(b: *str.Builder, v: f64) -> err
+fn push_attributes(b: *str.Builder, labels: []const Label, comma: bool) -> err
+fn push_scope_key(b: *str.Builder, scope: str, comma: bool) -> err
+fn payload_capacity(samples: []const Sample, extra: usize) -> usize
+fn render_otlp_metrics(a: *mem.Arena, resource: []const Label, scope: str, samples: []const Sample, start_ns: u64, time_ns: u64) -> (str, err)
+fn close_metric(b: *str.Builder, kind: Kind) -> err
+fn push_hex(b: *str.Builder, bytes: []const u8) -> err
+fn all_zero(bytes: []const u8) -> bool
+fn render_otlp_spans(a: *mem.Arena, resource: []const Label, scope: str, spans: []const Span) -> (str, err)
+fn otlp_request(a: *mem.Arena, host: str, path: str, body: str) -> (http.Request, err)
+fn post(a: *mem.Arena, endpoint: net.Endpoint, req: *const http.Request) -> (http.Response, err)
+```
+
+Exposition and export over `e.metrics` and `e.trace` values. A `Sample` is a reading (counter, gauge, or histogram with cumulative buckets); `counter_sample`, `gauge_sample` and `histogram_sample` take one from the metric types, so registries, label sets and sampling stay with the caller. `render_text` writes the Prometheus text exposition (0.0.4) or, with `openmetrics`, the OpenMetrics text with `# EOF`: samples of one name are listed together under one `HELP`/`TYPE`, labels are written in name order with `le` slotted in, and numbers follow `prometheus_client` (`3.0`, `1e-05`, `1.2345675e+06` from a million up, `+Inf`, `NaN`). `scrape` picks the format from an `Accept` header and returns the content type with the body. `render_otlp_metrics` and `render_otlp_spans` write OTLP/JSON requests (counters as monotonic cumulative sums, gauges, cumulative histograms with per-bucket counts; hex ids, quoted 64-bit integers, string attributes only). `otlp_request` builds the `POST` to `/v1/metrics` or `/v1/traces` and `post` sends it over `e.net.http` (plain TCP; TLS is `e.net.http.request_tls`). Not here: protobuf encoding, gzip, retries and batching, exemplars, summaries, native histograms, non-string attribute values, span events and links.
+
+### `e.store`
+
+```neper
+error NotFound
+error Invalid
+error TooLarge
+error Failed
+type Entry = struct { key: str, size: u64 }
+type Store = struct { ctx: *void, put: fn(*void, *mem.Arena, str, []const u8) -> err, get: fn(*void, *mem.Arena, str, usize) -> ([]u8, err), stat: fn(*void, *mem.Arena, str) -> (u64, err), delete: fn(*void, *mem.Arena, str) -> err, list: fn(*void, *mem.Arena, str, []Entry) -> (usize, err) }
+type MemoryStore = struct { keys: []str, values: []str, count: usize }
+type FsStore = struct { root: str }
+
+fn valid_key(key: str) -> bool
+fn has_prefix(key: str, prefix: str) -> bool
+fn key_less(x: str, y: str) -> bool
+fn put(s: *Store, a: *mem.Arena, key: str, data: []const u8) -> err
+fn get(s: *Store, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err)
+fn stat(s: *Store, a: *mem.Arena, key: str) -> (u64, err)
+fn exists(s: *Store, a: *mem.Arena, key: str) -> (bool, err)
+fn delete(s: *Store, a: *mem.Arena, key: str) -> err
+fn list(s: *Store, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
+fn memory(a: *mem.Arena, capacity: usize) -> (MemoryStore, err)
+fn memory_store(m: *MemoryStore) -> Store
+fn memory_find(m: *MemoryStore, key: str) -> (usize, bool)
+fn copy_str(a: *mem.Arena, s: str) -> (str, err)
+fn memory_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err
+fn memory_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err)
+fn memory_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err)
+fn memory_delete(ctx: *void, a: *mem.Arena, key: str) -> err
+fn memory_list(ctx: *void, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
+fn fs_store(f: *FsStore) -> Store
+fn fs_error(e: err) -> err
+fn fs_path(a: *mem.Arena, f: *FsStore, key: str) -> (str, err)
+fn fs_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err
+fn fs_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err)
+fn fs_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err)
+fn fs_delete(ctx: *void, a: *mem.Arena, key: str) -> err
+fn fs_list(ctx: *void, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
+fn bytes_equal(x: []const u8, y: []const u8) -> bool
+fn conformance(s: *Store, a: *mem.Arena) -> u32
+```
+
+One put/get/stat/delete/list surface over places that hold named blobs (opendal and fsspec at the portable layer). A `Store` is a context pointer plus five function pointers, so a backend is whatever fills them in; `memory_store` (a sorted table copied into the arena, at most `capacity` keys, `TooLarge` past it) and `fs_store` (a root directory; `/`-separated keys become nested files and parent directories are made) ship here, `e.store.http` is the third. A key has no empty, `.` or `..` segment, no leading or trailing `/`, no backslash and no NUL (`Invalid`), so it cannot leave its store; `list` is a byte prefix over keys in byte order (`TooLarge` when `out` is full); reading an absent key is `NotFound` and deleting one is `ok`. `conformance` is the one script every backend runs: overwrite, binary and empty values, nested and non-ASCII keys, read bounds, ordering, prefix listing, absent keys, idempotent delete, escaping keys, a 70000-byte value; it answers 0 or the first failing step. A filesystem backend cannot hold a key and a key beneath it at once (`a` and `a/b`); object stores can. Not here: streaming reads and writes, ranges, metadata beyond size, conditional writes, multipart, and the virtual-filesystem overlay and union mounts of L119.
+
+### `e.store.http`
+
+```neper
+type Transport = struct { ctx: *void, send: fn(*void, *mem.Arena, *const http.Request) -> (http.Response, err) }
+type HttpStore = struct { transport: Transport, host: str, base: str }
+type NetTransport = struct { endpoint: net.Endpoint, limits: http.Limits }
+
+fn net_transport(t: *NetTransport) -> Transport
+fn net_send(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err)
+fn http_store(h: *HttpStore) -> store.Store
+fn is_unreserved(c: u8) -> bool
+fn push_hex_byte(b: *str.Builder, v: u8) -> err
+fn push_encoded(b: *str.Builder, s: str) -> err
+fn encoded(a: *mem.Arena, s: str) -> (str, err)
+fn target_of(a: *mem.Arena, h: *HttpStore, key: str, listing: bool) -> (str, err)
+fn send(h: *HttpStore, a: *mem.Arena, method: http.Method, path_text: str, body: []const u8) -> (http.Response, err)
+fn success(status: u16) -> bool
+fn http_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err
+fn http_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err)
+fn parse_decimal(s: str) -> (u64, bool)
+fn http_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err)
+fn http_delete(ctx: *void, a: *mem.Arena, key: str) -> err
+fn http_list(ctx: *void, a: *mem.Arena, prefix: str, out: []store.Entry) -> (usize, err)
+```
+
+`e.store` over HTTP. An `HttpStore` speaks a small REST object protocol under a base path: `PUT base/key` stores, `GET` reads (404 is `NotFound`), `HEAD` answers the size in Content-Length, `DELETE` removes (404 is fine), and `GET base/?prefix=P` lists `key<TAB>size` lines in byte order. Keys are percent-encoded per byte (uppercase hex; `A-Za-z0-9-._~` and `/` kept), checked against `urllib.parse.quote`. The `Transport` is a function pointer so a TLS client, a proxy or a test server can sit behind it; `net_transport` is plain TCP over `e.net.http.request`. One request per call, no connection reuse, no signing: an S3 or GCS client is a cloud client and stays out by the cloud ruling.
+
 ### `e.log`
 
 ```neper
@@ -12413,6 +12779,32 @@ fish-style suffix of the newest matching entry (`accept_hint` appends it); `subm
 the line and clears the editor; validators stay with the caller, who answers an incomplete
 entry with `insert_newline`. Words are alphanumeric runs (bytes of 128 and up count as word
 bytes); a code point is one column; a full buffer ignores further input.
+### `e.cli.complete`
+
+```neper
+error Invalid
+type Node = struct { path: str, command: *const cli.Command, parent: usize }
+
+fn valid_name(s: str) -> bool
+fn count_commands(c: *const cli.Command) -> usize
+fn joined(a: *mem.Arena, prefix: str, name: str) -> (str, err)
+fn flatten(a: *mem.Arena, root: *const cli.Command) -> ([]Node, err)
+fn takes_value(o: *const cli.Option) -> bool
+fn push_ident(b: *str.Builder, s: str) -> err
+fn push_short(b: *str.Builder, o: *const cli.Option) -> err
+fn bash(a: *mem.Arena, root: *const cli.Command) -> (str, err)
+fn push_fish_text(b: *str.Builder, s: str) -> err
+fn push_fish_condition(b: *str.Builder, nodes: []const Node, i: usize) -> err
+fn fish(a: *mem.Arena, root: *const cli.Command) -> (str, err)
+fn push_zsh_text(b: *str.Builder, s: str) -> err
+fn push_zsh_function(b: *str.Builder, nodes: []const Node, i: usize) -> err
+fn zsh(a: *mem.Arena, root: *const cli.Command) -> (str, err)
+fn push_roff(b: *str.Builder, s: str) -> err
+fn push_upper(b: *str.Builder, s: str) -> err
+fn man_page(a: *mem.Arena, command: *const cli.Command, title: str, section: u8, date: str, version: str) -> (str, err)
+```
+
+Shell completion scripts and man pages from an `e.cli` command spec (clap_complete and clap_mangen at the portable layer). `bash`, `zsh` and `fish` each write a script that completes the deepest subcommand's options (`--long`, `-s`) and subcommands, and file names after an option that takes a value; `man_page` writes the roff page for one command, titled `title` (`tool`, or `tool sub` for a subcommand's own page), with NAME, SYNOPSIS, DESCRIPTION, OPTIONS, COMMANDS and ENVIRONMENT (the `env` fallbacks). Command and long-option names are limited to letters, digits and `_ . + -` because they are written into shell syntax unquoted (`Invalid` otherwise); help text is escaped per target. Installing a script or a page is host policy. Not here: value hints beyond files, dynamic completion that calls back into the program, PowerShell and elvish scripts, aliases, a subcommand name reused at two levels in fish.
 
 ### `e.async`
 

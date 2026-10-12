@@ -466,28 +466,6 @@
       "evidence": "Planning only (D1873). grpcio parity missing: HTTP/2-framed unary and streaming RPC over e.net.http3/quic and e.fmt.protobuf, with stub generation from .proto descriptors. Fixtures against grpcio reference transcripts on loopback; deadlines, trailers and status codes included. No service mesh. Follow-on (D1881): classic H2C/H2-TLS transport for grpc-go interop, not just H2 over QUIC."
     },
     {
-      "id": "L102",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 200,
-      "title": "Process and system info (psutil parity) in e.proc",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). psutil parity missing (verified: no cpu/mem/disk/net counters anywhere): process listing, cpu times, memory, disk usage, network addresses and boot time over e.proc with per-OS readers. Fixtures assert shape and self-consistency on both hosts, not live values."
-    },
-    {
-      "id": "L104",
-      "category": "library",
-      "group": "UI",
-      "order": 202,
-      "title": "Terminal kit: progress meters and rich text tables",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). tqdm/rich/colorama parity missing on the terminal side (GUI ProgressBar exists): stderr progress meters with ETA, rich tables and markup for CLI apps, plus Windows VT-mode enable behind e.os. Pure layout fixtures plus golden byte streams; no GUI dependency. Follow-on (D1881): interactive prompts and selection lists (survey/inquire parity) as a second slice. Follow-on (D1890): Humanizer-style relative dates and quantities as display formatting."
-    },
-    {
       "id": "L107",
       "category": "library",
       "group": "Drivers",
@@ -508,17 +486,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1873). certifi parity gap (verified: no store readers or bundle found): OS trust-store readers per host plus an optional bundled Mozilla set feeding the existing caller-roots config. Fixtures assert chain building against test roots, never live trust contents."
-    },
-    {
-      "id": "L110",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 208,
-      "title": "Statistical legacy-charset detection in e.text.encoding",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). chardet parity gap: detect() covers BOM plus zero-byte/UTF-8 heuristics only, with no statistical disambiguation of legacy 8-bit encodings. Add frequency-table scoring with confidence calibration over the existing Guess type. Fixtures on multilingual corpora."
     },
     {
       "id": "L114",
@@ -543,17 +510,6 @@
       "evidence": "Planning only (D1877). Messaging-client gap, NATS first: text-protocol codec with pub/sub, request-reply and queue groups over e.net, loopback fixtures against scripted servers. Kafka and AMQP stay deferred as heavier protocols; MQTT already exists. Follow-on (D1891): Pulsar, RocketMQ and Artemis share the deferred slot."
     },
     {
-      "id": "L116",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 214,
-      "title": "Prometheus exposition and OTLP export for e.metrics/e.trace",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). Observability-export gap (verified: no exposition surface): OpenMetrics text exposition with a scrape handler plus OTLP/HTTP metric and span export over e.net.http. Registries and sampling stay in e.metrics/e.trace. Golden-body fixtures; no collector dependency. Follow-on (D1891): JMX-style management beans (attributes/operations) as a second slice."
-    },
-    {
       "id": "L125",
       "category": "library",
       "group": "Formats",
@@ -576,28 +532,6 @@
       "evidence": "Planning only (D1881). zbus parity gap (verified: e.dbus is only a forward reference; AT-SPI calls are hand-rolled): D-Bus wire codec plus session/system bus client behind e.os, unlocking Linux notification, portal and tray backends. Loopback bus fixtures; no service implementations."
     },
     {
-      "id": "L127",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 225,
-      "title": "Object-store abstraction over fs, http and memory",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). opendal parity at the portable layer: unified put/get/list/delete over L119 virtual FS, e.net.http clients and memory backends. Vendor clouds stay out per the cloud ruling. Fixtures run every backend through one conformance script."
-    },
-    {
-      "id": "L134",
-      "category": "library",
-      "group": "UI",
-      "order": 232,
-      "title": "Shell completions and man pages for e.cli",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). clap_complete/mangen parity missing: bash/zsh/fish completion scripts plus man-page generation from e.cli command specs. Golden fixtures per shell; installation stays host policy."
-    },
-    {
       "id": "L135",
       "category": "library",
       "group": "Algorithms",
@@ -618,17 +552,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1889). ghostty/wezterm/kitty parity gap (verified: only false-positive matches anywhere): pty ownership, VT/ECMA-48 parser and cell grid with scrollback over e.ui.collection virtualization and text layout. Fixtures replay byte streams into grid assertions; shell integration and GPU rendering stay out."
-    },
-    {
-      "id": "L138",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 236,
-      "title": "Mediator: requests, notifications and pipeline behaviors",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). MediatR parity missing: in-process request/response with handler registry, notification fan-out and pipeline behaviors (validation, logging, retry) over e.task. No broker dependency; distributed messaging stays with L115. Fixtures for handler resolution, behavior ordering and error paths. Follow-on (D1891): Guava EventBus and Vert.x event-bus ride the notification fan-out."
     },
     {
       "id": "L139",
@@ -728,17 +651,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1890). Third small-completions item: CMS/PKCS#7 signing for S/MIME, json5 codec, TFTP client, singleflight call-dedup, MAC/hostname lookups and file-sink log rotation. Each lands with table or loopback fixtures; split out any that grows, mirroring L135."
-    },
-    {
-      "id": "L154",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 252,
-      "title": "Symbolic math: expression trees, diff, integrate, solve",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1891). SymPy/Symja parity missing: symbolic expression trees with differentiation, integration and equation solving over e.math numerics. Numeric solvers exist; nothing is symbolic. Fixtures against reference derivations; simplification heuristics stay minimal."
     },
     {
       "id": "L156",

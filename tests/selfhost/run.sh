@@ -3783,6 +3783,54 @@ textReport_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/text-report-selfhost"
 textReport_output=$("$test_build/text-report-selfhost")
 [ "$textReport_output" = 'text report ok' ]
+# e.text.encoding.detect_legacy: byte-frequency charset detection against a Python port of the model (258 vectors, D2720).
+text_charset_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_charset/src/main.e" "$repo" x64 linux "$test_build/text-charset-selfhost" -j 2)
+[ "$text_charset_written" = 'executable written' ]
+chmod +x "$test_build/text-charset-selfhost"
+text_charset_output=$("$test_build/text-charset-selfhost")
+[ "$text_charset_output" = 'text charset ok' ]
+# e.text.termkit: tqdm progress line, rich markup to SGR and rich boxed tables, vector by vector (517 cases, D2721).
+text_termkit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_termkit/src/main.e" "$repo" x64 linux "$test_build/text-termkit-selfhost" -j 2)
+[ "$text_termkit_written" = 'executable written' ]
+chmod +x "$test_build/text-termkit-selfhost"
+text_termkit_output=$("$test_build/text-termkit-selfhost")
+[ "$text_termkit_output" = 'termkit ok' ]
+# e.proc.sys: /proc parsers against a regex reader plus the live host by shape (261 records, D2722).
+proc_sys_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/proc_sys/src/main.e" "$repo" x64 linux "$test_build/proc-sys-selfhost" -j 2)
+[ "$proc_sys_written" = 'executable written' ]
+chmod +x "$test_build/proc-sys-selfhost"
+proc_sys_output=$("$test_build/proc-sys-selfhost")
+[ "$proc_sys_output" = 'proc sys ok' ]
+# e.metrics.export: Prometheus and OpenMetrics text against prometheus_client, OTLP/JSON against the OTLP protobuf definitions (130 cases, D2723).
+metrics_export_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/metrics_export/src/main.e" "$repo" x64 linux "$test_build/metrics-export-selfhost" -j 2)
+[ "$metrics_export_written" = 'executable written' ]
+chmod +x "$test_build/metrics-export-selfhost"
+metrics_export_output=$("$test_build/metrics-export-selfhost")
+[ "$metrics_export_output" = 'metrics export ok' ]
+# e.store: one conformance script over the memory, filesystem and HTTP backends plus key rules against Python (D2724).
+store_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/store/src/main.e" "$repo" x64 linux "$test_build/store-selfhost" -j 2)
+[ "$store_written" = 'executable written' ]
+chmod +x "$test_build/store-selfhost"
+store_output=$("$test_build/store-selfhost")
+[ "$store_output" = 'store ok' ]
+# e.cli.complete: bash, zsh and fish completion scripts and man pages, goldens held to real shells and groff (D2725).
+cli_complete_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/cli_complete/src/main.e" "$repo" x64 linux "$test_build/cli-complete-selfhost" -j 2)
+[ "$cli_complete_written" = 'executable written' ]
+chmod +x "$test_build/cli-complete-selfhost"
+cli_complete_output=$("$test_build/cli-complete-selfhost")
+[ "$cli_complete_output" = 'cli complete ok' ]
+# e.math.sym: parse, eval, diff, integrate and solve against SymPy and mpmath by value (176 records, D2726).
+math_sym_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_sym/src/main.e" "$repo" x64 linux "$test_build/math-sym-selfhost" -j 2)
+[ "$math_sym_written" = 'executable written' ]
+chmod +x "$test_build/math-sym-selfhost"
+math_sym_output=$("$test_build/math-sym-selfhost")
+[ "$math_sym_output" = 'math sym ok' ]
+# e.mediator: handlers, listeners and pipeline behaviors against an independent model of MediatR semantics (60 scenarios, D2727).
+mediator_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/mediator/src/main.e" "$repo" x64 linux "$test_build/mediator-selfhost" -j 2)
+[ "$mediator_written" = 'executable written' ]
+chmod +x "$test_build/mediator-selfhost"
+mediator_output=$("$test_build/mediator-selfhost")
+[ "$mediator_output" = 'mediator ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

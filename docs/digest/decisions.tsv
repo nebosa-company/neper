@@ -2231,4 +2231,13 @@ D2601	2329	L145: `e.fmt.pdf.write`, a page model over the built-in Helvetica fac
 D2602	2357	L146: `e.fmt.docx` writes Word documents over the stored zip writer, byte-checked against an independent writer and opened by python-docx
 D2603	2856	L153: `e.fmt.extract` detects and extracts text, title, author and part count through the existing codecs
 D2604	2738	L155: `e.fmt.graph` reads and writes GraphML, GEXF and GML over one attributed, nestable model, and converts to `e.data.graph`
-D2605	2886	L132: `e.fmt.html.sanitize`, an allowlist sanitizer that matches nh3 (ammonia) byte for byte on its corpus
+D2605	2887	L132: `e.fmt.html.sanitize`, an allowlist sanitizer that matches nh3 (ammonia) byte for byte on its corpus
+D2720	2017	L110 closed: statistical legacy single-byte charset detection in e.text.encoding
+D2721	2012	L104 closed: e.text.terminal, a tqdm progress line, rich markup and boxed tables checked against tqdm and rich
+D2722	2197	L102 closed: e.proc.sys, psutil-shaped system and process information over per-target host readers
+D2723	2237	L116 closed: e.metrics.export, Prometheus and OpenMetrics exposition and OTLP/JSON export
+D2724	2069	L127 closed: e.store and e.store.http, one object-store surface over memory, filesystem and HTTP
+D2725	1933	L134 closed: e.cli.complete, shell completions and man pages from e.cli specs
+D2726	2186	L154 closed: e.math.sym, symbolic expression trees with diff, integrate and solve checked against SymPy
+D2727	2195	L138 closed: e.mediator, requests, notifications and pipeline behaviors
+D2439	660	Lane H's terminal kit lands as e.text.termkit
