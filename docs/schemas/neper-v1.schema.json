@@ -2824,7 +2824,7 @@
                 "uniqueItems": true,
                 "items": {
                   "type": "string",
-                  "pattern": "^e(\\.[a-z][a-z0-9_]*)+$"
+                  "pattern": "^(e|x)(\\.[a-z][a-z0-9_]*)+$"
                 }
               }
             },
@@ -2934,7 +2934,7 @@
             "properties": {
               "name": {
                 "type": "string",
-                "pattern": "^e(\\.[a-z][a-z0-9_]*)+$"
+                "pattern": "^(e|x)(\\.[a-z][a-z0-9_]*)+$"
               },
               "layer": {
                 "type": "integer",
@@ -2971,7 +2971,7 @@
                 "uniqueItems": true,
                 "items": {
                   "type": "string",
-                  "pattern": "^e(\\.[a-z][a-z0-9_]*)+$"
+                  "pattern": "^(e|x)(\\.[a-z][a-z0-9_]*)+$"
                 }
               },
               "blocked_by": {
