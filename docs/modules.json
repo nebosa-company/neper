@@ -469,6 +469,7 @@
     "e.ui.undo",
     "e.ui.ink",
     "e.ui.markdown_view",
+    "e.ui.tree_adapter",
     "e.fmt.lzma",
     "e.fmt.parquet",
     "e.net.cidr",
@@ -7503,6 +7504,22 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.fmt.markdown",
+    "e.ui.control",
+    "e.ui.widget"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.tree_adapter",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.mem",
+    "e.text.collate",
+    "e.ui.collection",
     "e.ui.control",
     "e.ui.widget"
    ],

@@ -9160,6 +9160,71 @@ data, checked against a markdown-it-py oracle; a window-level check would still 
 shaped-text measure in place of the grid advance and the pointer and clipboard plumbing
 of a host.
 
+### `e.ui.tree_adapter`
+
+```neper
+const NONE: u32 = 4294967295u32
+type NodeKind = enum u8 { File, Folder, Loading, Failed }
+type DirState = enum u8 { Ready, Loading, Failed }
+type Entry = struct { path: str, dir: bool, state: DirState }
+type Rename = struct { from: str, to: str }
+type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64 }
+type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize }
+type Storage = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, order: []u32, scratch: []u8 }
+type Tree = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, count: usize, root_first: usize, root_count: usize, case_sensitive_paths: bool }
+error TooLarge
+error Duplicate
+error MissingParent
+error NotDirectory
+error Invalid
+fn default_hash(s: str) -> u64
+fn policy(case_sensitive_paths: bool) -> Policy
+fn fold_byte(ch: u8, sensitive: bool) -> u8
+fn id_cmp(x: str, y: str, sensitive: bool) -> i32
+type Ctx = struct { nodes: []Node, paths: []u8, policy: Policy }
+fn node_path(c: *const Ctx, i: usize) -> str
+fn node_name(c: *const Ctx, i: usize) -> str
+fn rank_of(c: *const Ctx, n: Node) -> u32
+fn before(c: *const Ctx, x: u32, y: u32, mode: u32) -> bool
+fn sort(c: *const Ctx, idx: []u32, tmp: []u32, n: usize, mode: u32)
+fn find_path(t: *const Tree, p: str) -> (u32, bool)
+fn slot_find(slots: []u32, nodes: []Node, key: widget.Key) -> u32
+fn slot_put(slots: []u32, key: widget.Key, node: u32)
+fn prev_key(prev: *const Tree, renames: []const Rename, p: str, scratch: []u8) -> (widget.Key, bool)
+fn put_path(paths: []u8, used: *usize, p: str) -> (usize, err)
+fn last_slash(p: str) -> (usize, bool)
+fn build(entries: []const Entry, renames: []const Rename, prev: *const Tree, pol: Policy, st: Storage) -> (Tree, err)
+fn find(t: *const Tree, key: widget.Key) -> (usize, bool)
+fn path_of(t: *const Tree, node: usize) -> str
+fn name_of(t: *const Tree, node: usize) -> str
+fn retain(t: *const Tree, keys: []widget.Key, n: usize, folders_only: bool) -> usize
+fn settle(prev: *const Tree, next: *const Tree, key: widget.Key) -> widget.Key
+fn position_of(t: *const Tree, node: usize) -> usize
+fn anchor_offset(before_rows: []const collection.TreeRow, after_rows: []const collection.TreeRow, offset: f32, row_height: f32, viewport: f32) -> f32
+type Bridge = struct { tree: *const Tree, theme: *const control.Theme }
+fn bridge_count(ctx: *void, key: widget.Key) -> usize
+fn bridge_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key
+fn bridge_has_children(ctx: *void, key: widget.Key) -> bool
+fn bridge_build(ctx: *void, a: *mem.Arena, key: widget.Key, out: *widget.Node) -> err
+fn source(b: *Bridge) -> collection.TreeSource
+fn visible(b: *Bridge, expanded: []const widget.Key, out: []collection.TreeRow) -> usize
+```
+
+Refresh-stable explorer tree (L067, D2881): `build` turns a host snapshot of `Entry`
+(relative path, folder or file, a folder's `DirState`) into a `Tree` in caller `Storage`:
+folders first and natural order inside each folder through `e.text.collate`, a loading or
+failed folder carrying a placeholder row, and a 64-bit key per node. Keys are the
+policy's hash of the path identity (exact on a case-sensitive host, ASCII-folded on a
+case-insensitive one), kept from the `prev` tree by path or by a `Rename` (descendants of
+a renamed folder included), probed apart in identity order when a hash is taken, so they
+do not depend on listing order. `source` and `visible` hand the tree to `e.ui.collection`
+as a `TreeSource` and its `flatten`; `retain` drops keys no longer present, `settle`
+chooses where a removed selection falls (the sibling at the same position under its
+surviving parent, else the ancestor, else the root's sibling) and `anchor_offset` keeps
+the row at the viewport top under refresh. `Duplicate`, `MissingParent`, `NotDirectory`,
+`Invalid` and `TooLarge` refuse a snapshot that is not a tree. Enumeration, path
+resolution and mutation authorization stay with the host's filesystem services.
+
 ### `e.ui.undo`
 
 ```neper

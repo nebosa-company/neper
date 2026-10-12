@@ -3843,6 +3843,12 @@ ui_markdown_view_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/ui-markdown-view-selfhost"
 ui_markdown_view_output=$("$test_build/ui-markdown-view-selfhost")
 [ "$ui_markdown_view_output" = 'ui markdown view ok' ]
+# e.ui.tree_adapter: file trees from host snapshots against an independent model: folders-first natural order, placeholders, keys across refresh and rename, forced hash collisions, settling, scroll anchor and a 3,000-entry refresh (D2881).
+ui_tree_adapter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_tree_adapter/src/main.e" "$repo" x64 linux "$test_build/ui-tree-adapter-selfhost" -j 2)
+[ "$ui_tree_adapter_written" = 'executable written' ]
+chmod +x "$test_build/ui-tree-adapter-selfhost"
+ui_tree_adapter_output=$("$test_build/ui-tree-adapter-selfhost")
+[ "$ui_tree_adapter_output" = 'ui tree adapter ok' ]
 # e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
 gfx_svg_render_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_render/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-render-selfhost" -j 2)
 [ "$gfx_svg_render_written" = 'executable written' ]

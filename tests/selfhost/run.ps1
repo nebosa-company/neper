@@ -4315,6 +4315,12 @@ $uiMarkdownViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $uiMarkdownViewWritten -ne 'executable written') { throw 'ui_markdown_view emission failed' }
 $uiMarkdownViewOutput = & $uiMarkdownViewPath
 if ($LASTEXITCODE -ne 0 -or $uiMarkdownViewOutput -ne 'ui markdown view ok') { throw "ui_markdown_view answered wrongly: exit $LASTEXITCODE" }
+# e.ui.tree_adapter: file trees from host snapshots against an independent model: folders-first natural order, placeholders, keys across refresh and rename, forced hash collisions, settling, scroll anchor and a 3,000-entry refresh (D2881).
+$uiTreeAdapterPath = Join-Path $testBuild 'ui-tree-adapter-selfhost.exe'
+$uiTreeAdapterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_tree_adapter\src\main.e') $repo 'x64' 'windows' $uiTreeAdapterPath -j 2
+if ($LASTEXITCODE -ne 0 -or $uiTreeAdapterWritten -ne 'executable written') { throw 'ui_tree_adapter emission failed' }
+$uiTreeAdapterOutput = & $uiTreeAdapterPath
+if ($LASTEXITCODE -ne 0 -or $uiTreeAdapterOutput -ne 'ui tree adapter ok') { throw "ui_tree_adapter answered wrongly: exit $LASTEXITCODE" }
 # e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
 $gfxSvgRenderPath = Join-Path $testBuild 'gfx-svg-render-selfhost.exe'
 $gfxSvgRenderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_render\src\main.e') $repo 'x64' 'windows' $gfxSvgRenderPath -j 2

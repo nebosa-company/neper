@@ -3405,6 +3405,7 @@
     "ui_tabular",
     "ui_title_bar",
     "ui_transient",
+    "ui_tree_adapter",
     "ui_workspace"
    ]
   },
@@ -3484,7 +3485,8 @@
     "ui_paged",
     "ui_property",
     "ui_ripple_v2",
-    "ui_tabular"
+    "ui_tabular",
+    "ui_tree_adapter"
    ]
   },
   {
@@ -4129,6 +4131,7 @@
     "ui_testing",
     "ui_title_bar",
     "ui_transient",
+    "ui_tree_adapter",
     "ui_widget",
     "ui_workspace"
    ]
