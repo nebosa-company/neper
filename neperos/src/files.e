@@ -12,6 +12,10 @@
 use e.mem
 use e.os
 use e.time
+use e.io
+use e.gfx.image
+use e.fmt.png
+use e.fmt.jpeg
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -169,6 +173,14 @@ type State = struct {
     query_len: usize,
     store_used: usize,
     store_total: usize,
+    // (C150) The grid view with image thumbnails: per node, 0 not tried, 1 decoded (texture and size), 2 not an
+    // image or too big to decode here.
+    grid: bool,
+    thumb_state: [48]u8,
+    thumb_tex: [48]scene.TextureId,
+    thumb_w: [48]f32,
+    thumb_h: [48]f32,
+    thumb_key: [48]usize,
     hits: [96]Hit,
     hit_total: usize,
 }
@@ -653,6 +665,105 @@ fn draw_row(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
     ret ok
 }
 
+// (C150) One tile of the grid: the thumbnail of an image (kept in its own proportions), else the type's tile; the name
+// under it. A tap opens it like the list's row.
+fn draw_tile(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, index: usize, x: f32, y: f32) -> err {
+    let node = s.nodes[index]
+    try card(a, builder, x, y, 120.0, 112.0, 14.0, cream())
+    if s.thumb_state[index] == 1u8 {
+        var w: f32 = 108.0
+        var h: f32 = w * s.thumb_h[index] / s.thumb_w[index]
+        if h > 70.0 {
+            h = 70.0
+            w = h * s.thumb_w[index] / s.thumb_h[index]
+        }
+        try scene.push(builder, scene.Command { Image: scene.DrawImage { texture: s.thumb_tex[index], source: geometry.rect(0.0, 0.0, s.thumb_w[index], s.thumb_h[index]), destination: geometry.rect(x + 60.0 - w / 2.0, y + 6.0 + (70.0 - h) / 2.0, w, h), opacity: 1.0 } })
+    } else {
+        try card(a, builder, x + 6.0, y + 6.0, 108.0, 70.0, 10.0, kind_color(node.kind))
+        if node.is_dir {
+            try svg.draw(a, builder, folder_icon(), geometry.rect(x + 44.0, y + 20.0, 32.0, 32.0), ink())
+        } else {
+            try centred(a, builder, faces.grotesk, 14.0, kind_tag(node.kind), x + 60.0, y + 33.0, ink())
+        }
+    }
+    try clipped(a, builder, faces.grotesk, 13.0, name_of(a, s, index), x + 8.0, y + 86.0, 104.0, ink())
+    hit(s, 200usize + index, x, y, 120.0, 112.0)
+    if s.select_mode { try tick_mark(a, builder, x + 104.0, y + 16.0, s.checked[index]) }
+    ret ok
+}
+
+// (C150) Decode the images among the tiles on screen, once each, into textures (PNG or JPEG by their first bytes; a
+// file over 256 KB or an image over a million pixels is left with its type tile).
+fn load_thumbs(a: *mem.Arena, kit: *appkit.Kit, s: *State) {
+    if !s.grid || !s.real { ret }
+    var pos = 0usize
+    while pos < s.child_total {
+        let index = s.children[pos]
+        // A node slot reused for another file (after a delete, a rename or a move) is read again: its key is the
+        // file's name and size.
+        var key = (s.nodes[index].kb % 100000usize) * 131usize + s.nodes[index].name_len
+        var k = 0usize
+        while k < s.nodes[index].name_len {
+            key = (key * 31usize + usize(s.nodes[index].name[k])) % 1000003usize
+            k += 1usize
+        }
+        if s.thumb_state[index] != 0u8 && s.thumb_key[index] != key { s.thumb_state[index] = 0u8 }
+        if s.thumb_state[index] == 0u8 && !s.nodes[index].is_dir && s.nodes[index].kind == 6usize {
+            s.thumb_state[index] = 2u8
+            s.thumb_key[index] = key
+            let path = path_of(a, s, index)
+            let (size, kind, day, found) = vaultfs.stat(path)
+            if found && size > 8usize && size <= 262144usize {
+                let (raw, raw_error) = mem.alloc[u8](a, size)
+                if raw_error == ok {
+                    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+                    if read_ok && got == size {
+                        var reader_state: io.SliceReader = zero
+                        reader_state.data = raw[0usize..got]
+                        reader_state.off = 0usize
+                        var decoded: image.Image = zero
+                        var decode_error = ok
+                        if raw[0usize] == 255u8 && raw[1usize] == 216u8 {
+                            let (jpeg_image, jpeg_error) = jpeg.decode(a, io.slice_reader(&reader_state), jpeg.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 1000000u64 })
+                            decoded = jpeg_image
+                            decode_error = jpeg_error
+                        } else {
+                            let (png_image, png_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 1000000u64, verify_crc: true })
+                            decoded = png_image
+                            decode_error = png_error
+                        }
+                        if decode_error == ok {
+                            let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+                            if view_error == ok {
+                                let (texture, upload_error) = scene.upload_image(&kit.renderer, view)
+                                if upload_error == ok {
+                                    s.thumb_tex[index] = texture
+                                    s.thumb_w[index] = f32(decoded.width)
+                                    s.thumb_h[index] = f32(decoded.height)
+                                    s.thumb_state[index] = 1u8
+                                    say("files thumbnail ")
+                                    say_text(name_of(a, s, index))
+                                    say(" ")
+                                    say_text(number(a, usize(decoded.width)))
+                                    say("x")
+                                    say_text(number(a, usize(decoded.height)))
+                                    say("\n")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        pos += 1usize
+    }
+}
+
+fn grid_label(grid: bool) -> str {
+    if grid { ret "List" }
+    ret "Grid"
+}
+
 fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     build_children(s)
     var list_y: f32 = 96.0
@@ -674,20 +785,31 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), light())
         hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
         try clipped(a, builder, faces.jost_bold, 26.0, name_of(a, s, s.cwd), 62.0, 14.0, 220.0, light())
-        try clipped(a, builder, faces.grotesk, 12.0, path_text(a, s, s.cwd), 62.0, 54.0, 290.0, light_muted())
+        try clipped(a, builder, faces.grotesk, 12.0, path_text(a, s, s.cwd), 62.0, 54.0, 250.0, light_muted())
     }
     try pill(a, builder, s, faces, 700usize, 312.0, 20.0, 84.0, 34.0, sort_name(s.sort), soft(), 14.0)
+    if s.real && !s.recent && s.query_len == 0usize { try pill(a, builder, s, faces, 156usize, 322.0, 58.0, 74.0, 28.0, grid_label(s.grid), soft(), 13.0) }
     if s.query_len == 0usize && !s.recent { try pill(a, builder, s, faces, 152usize, 220.0, 20.0, 84.0, 34.0, "Search", soft(), 14.0) }
     if s.query_len == 0usize && s.moving == NONE && s.real && !s.select_mode { try pill(a, builder, s, faces, 153usize, 128.0, 20.0, 84.0, 34.0, "Select", soft(), 14.0) }
     // The rows, shifted by the scroll; only whole rows are drawn.
     var pos = 0usize
-    while pos < s.child_total {
-        let y: f32 = list_y - s.scroll + f32(pos) * 64.0
-        if y >= list_y - 1.0 && y + 64.0 <= 826.0 { try draw_row(a, builder, s, faces, s.children[pos], y) }
-        pos += 1usize
+    var content = f32(s.child_total) * 64.0
+    if s.grid {
+        // (C150) Three tiles to a row, an image's own thumbnail in its tile.
+        content = f32((s.child_total + 2usize) / 3usize) * 122.0
+        while pos < s.child_total {
+            let y: f32 = list_y - s.scroll + f32(pos / 3usize) * 122.0
+            if y >= list_y - 1.0 && y + 112.0 <= 826.0 { try draw_tile(a, builder, s, faces, s.children[pos], 16.0 + f32(pos % 3usize) * 130.0, y) }
+            pos += 1usize
+        }
+    } else {
+        while pos < s.child_total {
+            let y: f32 = list_y - s.scroll + f32(pos) * 64.0
+            if y >= list_y - 1.0 && y + 64.0 <= 826.0 { try draw_row(a, builder, s, faces, s.children[pos], y) }
+            pos += 1usize
+        }
     }
     if s.child_total == 0usize { try centred(a, builder, faces.jost, 19.0, "This folder is empty", 206.0, 300.0, light_muted()) }
-    let content = f32(s.child_total) * 64.0
     let visible = 826.0 - list_y
     if content > visible {
         if s.scroll > 0.0 {
@@ -884,6 +1006,10 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     // command (the renderer's incremental redraw skips shapes under changed text otherwise).
     try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: appkit.ground_color(0.08, 0.09, 0.11, 1.0 - f32(kit.frame % 2usize) * 0.002) } } })
     if s.screen == BROWSE_SCREEN {
+        if s.grid {
+            build_children(s)
+            load_thumbs(a, kit, s)
+        }
         try draw_browse(a, builder, s, faces)
     } else {
         try draw_entry(a, builder, s, faces)
@@ -1142,6 +1268,14 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret true
         }
         ret false
+    }
+    // (C150) The grid of thumbnails and the list, in a folder.
+    if id == 156usize && s.real {
+        s.grid = !s.grid
+        s.scroll = 0.0
+        say("files view ")
+        if s.grid { say("grid\n") } else { say("list\n") }
+        ret true
     }
     if id == 153usize && s.real && s.moving == NONE {
         s.select_mode = true

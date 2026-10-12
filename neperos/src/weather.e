@@ -26,6 +26,7 @@ use e.gfx.svg
 use e.text.layout
 use e.text.shape
 use e.fmt.json as json
+use e.fmt.cap as alerts
 use appkit
 use text
 use ui
@@ -75,6 +76,9 @@ type Forecast = struct {
     dpop: [7]usize,
     sunrise: [7]usize,
     sunset: [7]usize,
+    // (C156) The headline of the first alert in force for the place (MetAlerts, read as CAP), empty when there is none.
+    alert: [48]u8,
+    alert_len: usize,
 }
 
 type State = struct {
@@ -549,6 +553,89 @@ fn fetch_forecast(a: *mem.Arena, s: *State, p: usize) -> bool {
     ret good
 }
 
+// (C156) The alerts for place `p` from the Norwegian Meteorological Institute's MetAlerts: the list for the point
+// (`properties.resources` of the first feature names its CAP message) and then that message, read with e.fmt.cap; the
+// service has none for a point outside Norway. The headline (or the event) is kept for the main screen; false when
+// the place has no alert or the service could not be had (the forecast's reason is left as it was).
+fn fetch_alert(a: *mem.Arena, s: *State, p: usize) -> bool {
+    s.fc[p].alert_len = 0usize
+    let kept_reason = s.reason
+    let mark = mem.mark(a)
+    var path = ui.join(a, "/weatherapi/metalerts/2.0/current.json?lat=", centi_text(a, s.lat[p]), "&lon=")
+    path = ui.join(a, path, centi_text(a, s.lon[p]), "")
+    let (parsed, fetched) = fetch_json(a, s, "api.met.no", path)
+    s.reason = kept_reason
+    if !fetched {
+        mem.reset(a, mark)
+        ret false
+    }
+    var cap_host = ""
+    var cap_path = ""
+    var has_cap = false
+    switch parsed {
+    case .Object as fields:
+        let (features, has_features) = array_of(fields, "features")
+        if has_features && features.len > 0usize {
+            let first_feature = features[0usize]
+            switch first_feature {
+            case .Object as feature:
+                let (props, has_props) = object_of(feature, "properties")
+                if has_props {
+                    let (resources, has_resources) = array_of(props, "resources")
+                    var r = 0usize
+                    while has_resources && r < resources.len && !has_cap {
+                        let this_resource = resources[r]
+                        switch this_resource {
+                        case .Object as resource:
+                            let (uri_value, has_uri) = member(resource, "uri")
+                            let (uri, uri_is_text) = string_of(uri_value)
+                            if has_uri && uri_is_text && uri.len > 8usize && ui.same(uri[0usize..8usize], "https://") {
+                                var slash = 8usize
+                                while slash < uri.len && uri[slash] != 47u8 { slash += 1usize }
+                                if slash < uri.len {
+                                    cap_host = uri[8usize..slash]
+                                    cap_path = uri[slash..uri.len]
+                                    has_cap = true
+                                }
+                            }
+                        default:
+                            has_cap = false
+                        }
+                        r += 1usize
+                    }
+                }
+            default:
+                has_cap = false
+            }
+        }
+    default:
+        has_cap = false
+    }
+    if !has_cap {
+        mem.reset(a, mark)
+        ret false
+    }
+    let (reply, get_error) = httpc.get(a, cap_host, cap_path, "")
+    var kept = false
+    if get_error == ok && reply.status == 200usize {
+        let (message, cap_error) = alerts.parse(a, reply.body)
+        if cap_error == ok && message.infos.len > 0usize {
+            let info = message.infos[0usize]
+            var headline = info.headline
+            if headline.len == 0usize { headline = info.event }
+            var k = 0usize
+            while k < headline.len && k < 48usize {
+                s.fc[p].alert[k] = headline[k]
+                k += 1usize
+            }
+            s.fc[p].alert_len = k
+            kept = k > 0usize
+        }
+    }
+    mem.reset(a, mark)
+    ret kept
+}
+
 // Open-Meteo's geocoding search for the typed name: up to FOUND_MAX places, with where they are, in `found_*`.
 fn search_places(a: *mem.Arena, s: *State) -> bool {
     s.found = 0usize
@@ -719,6 +806,17 @@ fn remove_place(s: *State, p: usize) {
     if s.place >= s.count { s.place = s.count - 1usize }
 }
 
+// (C156) After a live forecast: the place's alert, if the service has one.
+fn say_alert(a: *mem.Arena, s: *State, p: usize) {
+    if fetch_alert(a, s, p) {
+        ui.say("weather alert ")
+        ui.say_text(place_name(s, p))
+        ui.say(": ")
+        ui.say_text(ui.text_of(a, s.fc[p].alert[0usize..], s.fc[p].alert_len))
+        ui.say("\n")
+    }
+}
+
 // One step of the running job, done on a tick.
 fn job_step(a: *mem.Arena, s: *State) {
     if s.job == JOB_FETCH {
@@ -732,6 +830,7 @@ fn job_step(a: *mem.Arena, s: *State) {
             ui.say(" ")
             ui.say_text(minute_text(a, s.fc[p].updated))
             ui.say("\n")
+            say_alert(a, s, p)
         } else {
             say_status(s, ui.join(a, "Sample data, not live (", reason_text(s.reason), ")"))
             ui.say("weather sample ")
@@ -933,7 +1032,14 @@ fn draw_main(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     var line = "Sample data, not live"
     if fc.live { line = ui.join(a, ui.join(a, "Updated ", minute_text(a, fc.updated), ", "), fc.zone[0usize..fc.zone_len], "") }
     if !fc.live && s.status_len > 0usize { line = s.status[0usize..s.status_len] }
-    try ui.centred(a, builder, faces.grotesk, 12.0, line, 206.0, 872.0, ui.light_muted())
+    // (C156) An alert in force for the place stands in red above the status line.
+    if fc.alert_len > 0usize {
+        try ui.card(a, builder, 16.0, 862.0, 380.0, 30.0, 15.0, paint.Color { red: 0.78, green: 0.22, blue: 0.18, alpha: 1.0 })
+        try ui.centred(a, builder, faces.jost, 14.0, ui.text_of(a, fc.alert[0usize..], fc.alert_len), 206.0, 868.0, ui.light())
+        ui.say("weather alert shown\n")
+    } else {
+        try ui.centred(a, builder, faces.grotesk, 12.0, line, 206.0, 872.0, ui.light_muted())
+    }
     ret ok
 }
 

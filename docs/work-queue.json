@@ -262,10 +262,10 @@
       "group": "NeperOS",
       "order": 150,
       "title": "NeperOS storage remainder: per-app directories, Share, thumbnails, zip, external storage, large files",
-      "score": 0.15,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C125 (D2382): the Files app is on the real filesystem with list, create, rename, move, copy, trash, search, recent and select, and hands a file to Document. Acceptance: (1) the capability model: the filesystem server tells its clients apart (badged endpoints from the kernel or a per-app request endpoint) so an app sees only its own directory and what Files shares to it; (2) Share to another app and the Camera, Wallet and Mail apps saving into Files once they exist (C121, C122, C128); (3) a grid view with image thumbnails (PNG/JPEG decode into e.gfx scenes); (4) browse and extract a zip with e.fmt.zip (the disk image seeded by scripts/make_fs_image.py so a fixture has one); (5) external storage: a second block device as a second root through a second filesystem server instance; (6) entries beyond sixteen a directory (files larger than 4 KB: done, D2387). Delivered by C125 and not to redo: everything in D2375-D2382. PART (D2446): zip archives are browsed (entries and sizes) in Document via Files' handover, e.fmt.zip, fixture document_zip. Remaining: extract an entry, per-app directories, Share, thumbnails, external storage."
+      "evidence": "Split from C125 (D2382): the Files app is on the real filesystem with list, create, rename, move, copy, trash, search, recent and select, and hands a file to Document. Acceptance: (1) the capability model: the filesystem server tells its clients apart (badged endpoints from the kernel or a per-app request endpoint) so an app sees only its own directory and what Files shares to it; (2) Share to another app and the Camera, Wallet and Mail apps saving into Files once they exist (C121, C122, C128); (3) a grid view with image thumbnails (PNG/JPEG decode into e.gfx scenes); (4) browse and extract a zip with e.fmt.zip (the disk image seeded by scripts/make_fs_image.py so a fixture has one); (5) external storage: a second block device as a second root through a second filesystem server instance; (6) entries beyond sixteen a directory (files larger than 4 KB: done, D2387). Delivered by C125 and not to redo: everything in D2375-D2382. PART (D2446): zip archives are browsed (entries and sizes) in Document via Files' handover, e.fmt.zip, fixture document_zip. Remaining: extract an entry, per-app directories, Share, thumbnails, external storage. PART (D3806, D3803): Files grid with PNG/JPEG thumbnails and zip extraction of the whole archive into /<name> with zip-slip refusal; QEMU rows files_grid and document_zip_extract pass. Missing: per-app directories (no kernel badging), Share and saving from Camera/Wallet/Mail into Files, external storage, single-entry extract."
     },
     {
       "id": "C151",
@@ -284,10 +284,10 @@
       "group": "NeperOS",
       "order": 152,
       "title": "NeperOS Document remainder: PDF images and vectors, Office layout, pinch zoom, attachments",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C123 (D2394): Document shows the text of PDF, Word and PowerPoint files, rendered Markdown and highlighted code from the disk, with paging, find and text size. Acceptance: (1) PDF pages painted, not only their text: vector paths, images (DCT through e.fmt.jpeg, Flate images), fonts with their own encodings, the outline and search with the match highlighted; (2) Word tables, images and styles and PowerPoint shapes laid out; (3) pinch zoom and a page or slide strip once the touch layer carries more than taps; (4) opening from Mail attachments and Wallet pages (C128, C121) and Share; (5) shebang detection and the TIOBE list refreshed from tiobe.com with the month recorded; (6) files over 16 KB paged from the disk, not read whole. Delivered by C123 and not to redo: D2389-D2394."
+      "evidence": "Split from C123 (D2394): Document shows the text of PDF, Word and PowerPoint files, rendered Markdown and highlighted code from the disk, with paging, find and text size. Acceptance: (1) PDF pages painted, not only their text: vector paths, images (DCT through e.fmt.jpeg, Flate images), fonts with their own encodings, the outline and search with the match highlighted; (2) Word tables, images and styles and PowerPoint shapes laid out; (3) pinch zoom and a page or slide strip once the touch layer carries more than taps; (4) opening from Mail attachments and Wallet pages (C128, C121) and Share; (5) shebang detection and the TIOBE list refreshed from tiobe.com with the month recorded; (6) files over 16 KB paged from the disk, not read whole. Delivered by C123 and not to redo: D2389-D2394. PART (D3801, D3802, D3804, D3805, D3809): painted PDF pages (rects, segments, text, colours, q/Q, cm), Word tables as grids, shebang detection, 12000-byte windows for big text files; QEMU rows document_pdf_paint, document_docx_table, document_big, document_shebang pass; fmt_pdf (23) and fmt_ooxml (39) pass. Missing: PDF images/fonts/outline/search highlight, Word images/styles, PPTX shapes, pinch zoom, open from Mail/Wallet/Share."
     },
     {
       "id": "L037",
@@ -570,10 +570,10 @@
       "group": "NeperOS",
       "order": 154,
       "title": "NeperOS Wallet remainder: encrypted storage, MRZ from an image, editing, camera scanning",
-      "score": 0.15,
+      "score": 0.55,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C121 (D2402): Wallet draws real QR and Code 128 symbols, validates its form with e.valid, and shows the newest Camera scan on a document. Acceptance: (1) the cards kept encrypted at rest under the Secure vault's master password (the vault module's derive/seal over the filesystem server), with no card number beyond the last four digits unless the user asks, loaded at start and fixture-tested through an encrypted round trip on a disk; (2) editing an existing card or document with the same validation; (3) Camera Scan mode feeding frames to e.barcode.qr_scan and offering the decoded text (a pass, a URL) to Wallet or the browser; (4) a machine-readable zone read from a scanned page (the OCR-B glyphs) and checked by e.valid.mrz_td3; (5) a scan stored with its own document instead of the newest one; (6) expiry checked against the clock. PART (D2447): a card's expiry is checked against the clock (Expired status; fixture wallet). Remaining: encrypted storage under the Secure master password, editing, Camera Scan mode, MRZ from an image, a scan per document."
+      "evidence": "Split from C121 (D2402): Wallet draws real QR and Code 128 symbols, validates its form with e.valid, and shows the newest Camera scan on a document. Acceptance: (1) the cards kept encrypted at rest under the Secure vault's master password (the vault module's derive/seal over the filesystem server), with no card number beyond the last four digits unless the user asks, loaded at start and fixture-tested through an encrypted round trip on a disk; (2) editing an existing card or document with the same validation; (3) Camera Scan mode feeding frames to e.barcode.qr_scan and offering the decoded text (a pass, a URL) to Wallet or the browser; (4) a machine-readable zone read from a scanned page (the OCR-B glyphs) and checked by e.valid.mrz_td3; (5) a scan stored with its own document instead of the newest one; (6) expiry checked against the clock. PART (D2447): a card's expiry is checked against the clock (Expired status; fixture wallet). Remaining: encrypted storage under the Secure master password, editing, Camera Scan mode, MRZ from an image, a scan per document. PART (D3807, D3808): cards sealed under the Secure vault key with an unlock screen, edit card for payment/bank/document, scan stored per document; disk chain secure_vault -> secure_vault_more -> secure_vault_again passes (12 records, expiry edited) and camera_scan -> camera_scan_more passes. Missing: Camera scan mode feeding qr_scan, MRZ from an image (no OCR-B recogniser), password prompt when no vault exists."
     },
     {
       "id": "C155",
@@ -592,10 +592,10 @@
       "group": "NeperOS",
       "order": 156,
       "title": "NeperOS Weather remainder: the current location and weather alerts",
-      "score": 0.15,
+      "score": 0.5,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C119 (D2408): Weather shows live Open-Meteo forecasts for places the user adds, kept in storage with the unit. Acceptance: (1) the current location as a place by the user's choice once the location service exists (C131: GPS or network location, a permission the user grants); (2) alerts for a place from a source that has them (the Norwegian MET API's alerts, or a national feed), shown on the main screen and as a notification (C106), checked against recorded responses. PART (D2452): e.fmt.cap reads Common Alerting Protocol alerts (fmt_cap, 74 checks vs ElementTree). Remaining: the alert source and place-to-area match in Weather, the notification, and the current location (C161)."
+      "evidence": "Split from C119 (D2408): Weather shows live Open-Meteo forecasts for places the user adds, kept in storage with the unit. Acceptance: (1) the current location as a place by the user's choice once the location service exists (C131: GPS or network location, a permission the user grants); (2) alerts for a place from a source that has them (the Norwegian MET API's alerts, or a national feed), shown on the main screen and as a notification (C106), checked against recorded responses. PART (D2452): e.fmt.cap reads Common Alerting Protocol alerts (fmt_cap, 74 checks vs ElementTree). Remaining: the alert source and place-to-area match in Weather, the notification, and the current location (C161). PART (D3902): MetAlerts alert list and its CAP resource read with e.fmt.cap, headline in a red bar; weather_alert passes. Test server alert JSON is written from the documented shape, not captured. Missing: notification (no status-service grant), current location, other feeds."
     },
     {
       "id": "C157",
@@ -614,10 +614,10 @@
       "group": "NeperOS",
       "order": 158,
       "title": "NeperOS Mail remainder: accounts, folders and threads, HTML and attachments, notifications",
-      "score": 0.2,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C128 (D2413): Mail syncs the INBOX of a fixed test account over IMAP and sends over SMTP, on TLS, and marks read and deleted on the server. Acceptance: (1) accounts added in the app (server, user, password kept in Secure, C116), OAuth for the large providers, several accounts, folder list and sync, IDLE or polling for push; (2) threads, labels, search, archive, mark unread and swipe actions done on the server; (3) rich messages: MIME multipart, HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (the vCard store, C127/C157); (5) notifications through the status server and a badge on the icon; (6) a fixture against the test IMAP and SMTP server that fetches, threads, searches, replies with an attachment and checks the sent message. PART (D2448): MIME bodies (multipart/alternative, HTML-only, quoted-printable) shown as text through e.fmt.extract; fixture mail_live. Remaining: HTML rendering through Document, inline images, attachments, compose with attachments, accounts/folders/threads, push."
+      "evidence": "Split from C128 (D2413): Mail syncs the INBOX of a fixed test account over IMAP and sends over SMTP, on TLS, and marks read and deleted on the server. Acceptance: (1) accounts added in the app (server, user, password kept in Secure, C116), OAuth for the large providers, several accounts, folder list and sync, IDLE or polling for push; (2) threads, labels, search, archive, mark unread and swipe actions done on the server; (3) rich messages: MIME multipart, HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (the vCard store, C127/C157); (5) notifications through the status server and a badge on the icon; (6) a fixture against the test IMAP and SMTP server that fetches, threads, searches, replies with an attachment and checks the sent message. PART (D2448): MIME bodies (multipart/alternative, HTML-only, quoted-printable) shown as text through e.fmt.extract; fixture mail_live. Remaining: HTML rendering through Document, inline images, attachments, compose with attachments, accounts/folders/threads, push. PART (D3903): Mail lists and saves multipart attachments (mail_attach, base64 menu.txt); verified on the pre-L125 image, and D2470 now lets the grown Mail image launch. Missing: HTML via Document, inline images, compose attachments, accounts, folders, threads, push."
     },
     {
       "id": "C159",
@@ -625,10 +625,10 @@
       "group": "NeperOS",
       "order": 159,
       "title": "NeperOS Browser remainder: CSS layout, images, forms, cookies, storage and downloads",
-      "score": 0.3,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C129 (D2415): the Browser fetches an address over HTTPS and shows its HTML as lines of text with links. Acceptance: (1) HTTP/1.1 redirects, cookies, a cache, HTTP/2 and plain HTTP, the system proxy settings; (2) a CSS layout engine over e.fmt.css and e.fmt.html (block, inline, flex, grid, the common properties) painting through e.gfx.scene with shaped text, images (PNG, JPEG, SVG) and fonts; (3) forms and their submission, history, bookmarks, tabs that survive a restart (C125 storage), incognito, search suggestions and a chosen search engine; (4) downloads into Files and opening files in their apps; (5) permissions per site tied to Settings (C126); (6) a fixture against a local web server with a page that has an image and a form and a redirect. PART (D2455): e.net.cookie, an RFC 6265 cookie jar (net_cookie, 28 events vs an independent model). Remaining: the Browser using it (persisted store, request/response hooks), redirects and cache, CSS layout, forms, tabs, downloads. PART (D2456): the Browser keeps cookies in a jar that owns its strings and sends them (fixture browser_cookie, live); httpc.Reply carries the header block. Remaining: persisting the jar, redirects, cache, CSS layout, forms, tabs, downloads. PART (D2457): redirects followed (up to five hops, cookies kept at each; fixture browser_redirect, live). Remaining: persisting the jar, cache, HTTP/2, CSS layout, forms, tabs, downloads. PART (D2458): the persistent cookies are kept in /cookies across restarts (livediskfixture browser_jar and browser_jar_again). Remaining: cache, HTTP/2, CSS layout, forms, tabs, downloads, per-site permissions."
+      "evidence": "Split from C129 (D2415): the Browser fetches an address over HTTPS and shows its HTML as lines of text with links. Acceptance: (1) HTTP/1.1 redirects, cookies, a cache, HTTP/2 and plain HTTP, the system proxy settings; (2) a CSS layout engine over e.fmt.css and e.fmt.html (block, inline, flex, grid, the common properties) painting through e.gfx.scene with shaped text, images (PNG, JPEG, SVG) and fonts; (3) forms and their submission, history, bookmarks, tabs that survive a restart (C125 storage), incognito, search suggestions and a chosen search engine; (4) downloads into Files and opening files in their apps; (5) permissions per site tied to Settings (C126); (6) a fixture against a local web server with a page that has an image and a form and a redirect. PART (D2455): e.net.cookie, an RFC 6265 cookie jar (net_cookie, 28 events vs an independent model). Remaining: the Browser using it (persisted store, request/response hooks), redirects and cache, CSS layout, forms, tabs, downloads. PART (D2456): the Browser keeps cookies in a jar that owns its strings and sends them (fixture browser_cookie, live); httpc.Reply carries the header block. Remaining: persisting the jar, redirects, cache, CSS layout, forms, tabs, downloads. PART (D2457): redirects followed (up to five hops, cookies kept at each; fixture browser_redirect, live). Remaining: persisting the jar, cache, HTTP/2, CSS layout, forms, tabs, downloads. PART (D2458): the persistent cookies are kept in /cookies across restarts (livediskfixture browser_jar and browser_jar_again). Remaining: cache, HTTP/2, CSS layout, forms, tabs, downloads, per-site permissions. PART (D3900): Browser fetches and draws an SVG <img>, submits a GET form (text and hidden fields), saves a non-page reply to /Downloads and reads it back; browser_form passes. Missing: POST, field editing, PNG/JPEG images, cache, HTTP/2, CSS layout, tabs across restart, permissions."
     },
     {
       "id": "C160",
@@ -636,10 +636,10 @@
       "group": "NeperOS",
       "order": 160,
       "title": "NeperOS Maps remainder: map data, location, search and turn-by-turn navigation",
-      "score": 0.1,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C130 (D2417): Maps routes over a small road graph with the library's Dijkstra and draws the way. Acceptance: (1) map data on the device: vector tiles or OpenStreetMap extracts rendered through e.gfx.scene with labels, icons, zoom levels and rotation, offline regions kept in Files, and drag and pinch (the touch layer needs both); (2) a location service (GPS and network location on the Pixel, a simulated provider under QEMU) with its permission in Settings (C126); (3) search by name and category with suggestions, place cards with hours and photos from the network; (4) routing for walking, cycling, driving and transit over the road graph with turn-by-turn instructions, rerouting and voice; (5) saved places, recent searches and a Home and Work shortcut shared with Wallet and Weather; (6) a fixture that loads a small offline region, finds a place and routes to it, checking the route length. Data source (user, 2026-10-11): free, non-Google maps -- OpenStreetMap (ODbL, attribution shown in the app): regional extracts (Geofabrik) or Protomaps/OpenFreeMap vector tiles cached in Files, the road graph built from the extract's highways, search from the extract's names (Nominatim only for light, identified use under its policy), no heavy use of tile.openstreetmap.org. PART (D2454): e.fmt.mvt decodes Mapbox Vector Tiles (fmt_mvt, 36 checks vs an independent encoder). Remaining: drawing tiles with styles and labels, offline regions, the road graph from the highway layer, search, location, navigation."
+      "evidence": "Split from C130 (D2417): Maps routes over a small road graph with the library's Dijkstra and draws the way. Acceptance: (1) map data on the device: vector tiles or OpenStreetMap extracts rendered through e.gfx.scene with labels, icons, zoom levels and rotation, offline regions kept in Files, and drag and pinch (the touch layer needs both); (2) a location service (GPS and network location on the Pixel, a simulated provider under QEMU) with its permission in Settings (C126); (3) search by name and category with suggestions, place cards with hours and photos from the network; (4) routing for walking, cycling, driving and transit over the road graph with turn-by-turn instructions, rerouting and voice; (5) saved places, recent searches and a Home and Work shortcut shared with Wallet and Weather; (6) a fixture that loads a small offline region, finds a place and routes to it, checking the route length. Data source (user, 2026-10-11): free, non-Google maps -- OpenStreetMap (ODbL, attribution shown in the app): regional extracts (Geofabrik) or Protomaps/OpenFreeMap vector tiles cached in Files, the road graph built from the extract's highways, search from the extract's names (Nominatim only for light, identified use under its policy), no heavy use of tile.openstreetmap.org. PART (D2454): e.fmt.mvt decodes Mapbox Vector Tiles (fmt_mvt, 36 checks vs an independent encoder). Remaining: drawing tiles with styles and labels, offline regions, the road graph from the highway layer, search, location, navigation. PART (D3904): Maps fetches a zoom-14 vector tile, decodes it with e.fmt.mvt and draws roads, water and POI names with the ODbL line; maps_tile passes against an independent tile encoder. Missing: tile pyramid and panning, offline regions, road graph, search, location, navigation."
     },
     {
       "id": "C161",
@@ -768,10 +768,10 @@
       "group": "NeperOS",
       "order": 172,
       "title": "NeperOS Document remainder: PDF painting, zoom, tables, HTML view, spreadsheets",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C142 (D2431): Document reads the text of PDF, Word, PowerPoint and OpenDocument files and renders Markdown and highlighted code. Acceptance: (1) PDF pages painted, not just their text: fonts and text positioning, vector paths and images through e.gfx.scene, with the outline, search and page jump; (2) pinch zoom and pan (the touch layer needs press, move and release events); (3) CommonMark with tables in the Markdown parser and an HTML view shared with Mail (C128) and the Browser (C129); (4) Word and PowerPoint tables, images and slide shapes, and spreadsheets (.ods, .xlsx) as grids; (5) open from Mail attachments and the Browser's downloads, an open-with and share sheet, and Dynamic's source view using the code view; (6) a fixture on QEMU that opens a real PDF, DOCX and PPTX and checks what is drawn. Not queued here: editing, annotation, signing."
+      "evidence": "Split from C142 (D2431): Document reads the text of PDF, Word, PowerPoint and OpenDocument files and renders Markdown and highlighted code. Acceptance: (1) PDF pages painted, not just their text: fonts and text positioning, vector paths and images through e.gfx.scene, with the outline, search and page jump; (2) pinch zoom and pan (the touch layer needs press, move and release events); (3) CommonMark with tables in the Markdown parser and an HTML view shared with Mail (C128) and the Browser (C129); (4) Word and PowerPoint tables, images and slide shapes, and spreadsheets (.ods, .xlsx) as grids; (5) open from Mail attachments and the Browser's downloads, an open-with and share sheet, and Dynamic's source view using the code view; (6) a fixture on QEMU that opens a real PDF, DOCX and PPTX and checks what is drawn. Not queued here: editing, annotation, signing. PART (D3800-D3802, D3809): PDF painting, Markdown tables, xlsx as a grid (sheet_names/sheet_grid), Word tables; QEMU rows document_sheet, document_mdtable pass. Missing: pinch zoom/pan, HTML view, .ods grid, PPTX shapes, Word images, open from Mail/Browser, share sheet."
     },
     {
       "id": "C173",
@@ -827,6 +827,127 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from L101 (D2646): e.net.http2 and the e.net.grpc client protocol exist and are checked against hpack/h2 and recorded grpcio transcripts. Acceptance: (1) a server side over e.net.http2 (unary, then streaming); (2) deadlines, retries and message compression; (3) the gRPC-over-HTTP/3 binding on e.net.http3 frames; (4) a TLS dial helper; (5) stub generation from .proto descriptors (e.fmt.protobuf needs a descriptor reader first) with typed request and response messages. PART (D2923): e.net.grpcserver (preface, SETTINGS, HPACK, flow control, request events, flow-controlled responses, trailers-only, deadlines, resets) and e.net.grpccodec (gzip/deflate/identity decompression) checked with grpcio against a live loopback server (14 calls). NOT DONE: retries and backoff, gRPC over HTTP/3, a TLS dial helper, send-side compression wiring, stub generation (e.fmt.protobuf has no descriptor reader). PART (D3004-D3008): send-side compression (net_grpccompress, decoded by Python gzip/zlib), e.fmt.protodesc descriptor reader (32 cases vs protobuf MessageToDict), typed stubs e.fmt.protomsg/e.net.grpcstub (242 Python-serialised instances round trip), e.net.grpcretry (gRFC A6 vs a Python model), e.net.grpctls dial helper. Missing: gRPC over HTTP/3, retry wired into a transport loop, hedging, perAttemptRecvTimeout. PART (D3401): e.net.grpccall retry and hedging loop over e.net.grpc with deadline and per-attempt timeout; net_grpccall 331 runs, 60 against live grpcio, 271 against an independent A6 model. Missing: HTTP/3, transparent retries, a socket run; per_attempt_ns has no live oracle."
+    },
+    {
+      "id": "G001",
+      "category": "library",
+      "group": "Library",
+      "order": 262,
+      "title": "e.data.table: typed columns, null bitmaps, string dictionary + heap, bulk load, journal",
+      "score": 0.7,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: 150k × 24 load fixture; typed get/set round-trip; dictionary rank/fold correct; memory ≤ budget. PART (D3905): lib/e/data/table.e: typed I32/I64/F64/Bool columns, null bitmaps, Str heap and Dict (deduplicated, fold-order ranks via e.algo.sort), bulk load, tombstones, per-column version journal; tests/selfhost/fixtures/link/data_table: 150,000 x 24 loaded, every cell read back, ranks vs compare_fold, versions, capacity errors, 41 MiB (bound 45). NOT DONE: row compaction, a boxed Value accessor, u16 dictionary ids, the e.db cursor adapter, a Linux run, and the load/rank timings against the design targets (load <= 250 ms)."
+    },
+    {
+      "id": "G002",
+      "category": "library",
+      "group": "Library",
+      "order": 263,
+      "title": "e.data.tableview sort: key derivation, stable radix, multi-key, comparer slow path",
+      "score": 0.6,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: stable tie-break by row; null first; case-insensitive parity; ≤ budget at 150k (cachegrind). PART (D3906): lib/e/data/tableview.e: View over an e.data.table, stable LSD multi-key sort (numeric/bool/dict-rank/heap-string-rank keys, key function, comparer slow path, nulls first asc / last desc, row tie-break); tests/selfhost/fixtures/link/data_tableview: 22 sorts over 150,000 rows each checked against an independent reference ordering, mutation-checked; measured 8 ms (rarity) to 92 ms (35k-entry dictionary), heap-string rank build 644 ms then 16 ms cached. NOT DONE: the parallel driver, cachegrind budget check, Date/Enum kinds, single-row repositioning, a Linux run."
+    },
+    {
+      "id": "G003",
+      "category": "library",
+      "group": "Library",
+      "order": 264,
+      "title": "filter tree compile + evaluate (dictionary fast path, narrowing, parallel)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: every operator in §4.2; */? wildcards; **text operators case-insensitive by default, match_case opt-in** (*creature* → 56,095 on the MTG pool); nested depth 6; ≤ budget."
+    },
+    {
+      "id": "G004",
+      "category": "library",
+      "group": "Library",
+      "order": 265,
+      "title": "group + summary engine, expansion keyed by path, group summaries/footers",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: group boundaries equal golden; summaries equal; sort-by-summary."
+    },
+    {
+      "id": "G005",
+      "category": "library",
+      "group": "Library",
+      "order": 266,
+      "title": "search / locate / value list",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: begins-with and within; next/prev with wrap; value list = dictionary."
+    },
+    {
+      "id": "G006",
+      "category": "library",
+      "group": "UI",
+      "order": 267,
+      "title": "e.ui.datagrid v1: bands, footer, group rows, filter row, navigator, indicator, preview, no-data",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: pixel-level offline screenshot fixtures (per neper offline UI screenshot recipe); keyboard/pointer fixtures."
+    },
+    {
+      "id": "G007",
+      "category": "library",
+      "group": "UI",
+      "order": 268,
+      "title": "editing: cell kinds + editors + write-through + lock",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: edit-then-commit fixtures incl. sort-key edit."
+    },
+    {
+      "id": "G008",
+      "category": "library",
+      "group": "UI",
+      "order": 269,
+      "title": "custom painters + row style + conditional formatting rules",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: mana-cost/legality/foil painter fixtures from MTG assets."
+    },
+    {
+      "id": "G009",
+      "category": "library",
+      "group": "UI",
+      "order": 270,
+      "title": "layout + filter persistence, customization panel, quick customization",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: round-trip; unknown/new column tolerance."
+    },
+    {
+      "id": "G010",
+      "category": "library",
+      "group": "UI",
+      "order": 271,
+      "title": "export + clipboard (+ print hand-off)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: CSV/XML/HTML/XLSX of filtered+grouped view equals golden."
+    },
+    {
+      "id": "G011",
+      "category": "library",
+      "group": "UI",
+      "order": 272,
+      "title": "MTG Studio reference app: card-pool/deck/collection views over a 150k fixture",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: all §7 rows exercised; benchmark table filled with measured numbers."
     }
   ]
 }

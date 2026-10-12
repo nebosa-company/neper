@@ -2169,6 +2169,16 @@ data_objpool_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$data_objpool_written" = 'executable written' ]
 chmod +x "$test_build/data-objpool-selfhost"
 "$test_build/data-objpool-selfhost"
+# `e.data.table`: a 150,000-row by 24-column columnar store (typed columns, null bitmaps, dictionary and heap strings) bulk loaded, read back cell by cell, ranked in ASCII-fold order, edited, versioned, tombstoned and bounded (D3905).
+data_table_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_table/src/main.e" "$repo" x64 linux "$test_build/data-table-selfhost" --arena 128m)
+[ "$data_table_written" = 'executable written' ]
+chmod +x "$test_build/data-table-selfhost"
+"$test_build/data-table-selfhost"
+# `e.data.tableview`: the stable multi-key LSD sort over a 150,000-row `e.data.table`: dictionary ranks folded and exact, nulls first and last, 64-bit integers, floats, booleans, heap strings, three keys, key function, comparer, deleted rows and rank caches after an edit, each result checked against a reference ordering (D3906).
+data_tableview_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tableview/src/main.e" "$repo" x64 linux "$test_build/data-tableview-selfhost" --arena 256m)
+[ "$data_tableview_written" = 'executable written' ]
+chmod +x "$test_build/data-tableview-selfhost"
+"$test_build/data-tableview-selfhost"
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
 [ "$algo_rules_written" = 'executable written' ]
@@ -10939,6 +10949,26 @@ greeting"
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
         seed_disk="$test_build/shell-$fixture.disk"
         python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/report.docx=$office_dir/report.docx" "/deck.pptx=$office_dir/deck.pptx" "/zz.pdf=$office_dir/zz.pdf" "/zzcode.py=$office_dir/zzcode.py" "/zznotes.md=$office_dir/zznotes.md" "/zzzlong.txt=$office_dir/zzzlong.txt" "/otpauth.txt=$office_dir/otpauth.txt" "/zzzzodf.odt=$office_dir/zzzzodf.odt" "/zzzzzzzip.zip=$office_dir/zzzzzzzip.zip" > /dev/null
+        last_marker="${markers##*;;}"
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$seed_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
+    # The sheet fixtures (C172, C150): a disk of its own with a spreadsheet, a picture and a zip (from
+    # scripts/make_office_samples.py), so the Files list and Document's device list have the few entries the taps expect.
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = sheetfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        seed_disk="$test_build/shell-$fixture.disk"
+        python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/budget.xlsx=$office_dir/budget.xlsx" "/pic.png=$office_dir/pic.png" "/zbig.txt=$office_dir/zbig.txt" "/zpaint.pdf=$office_dir/zpaint.pdf" "/zrun=$office_dir/zrun" "/zzzzzzzip.zip=$office_dir/zzzzzzzip.zip" > /dev/null
         last_marker="${markers##*;;}"
         boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$seed_disk" 0 "$taps" 2>&1 < /dev/null)
         remaining="$boot"

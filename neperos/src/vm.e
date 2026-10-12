@@ -28,6 +28,7 @@ const PAGE: usize = 4096usize
 const ARENA_SIZE: usize = 65536usize
 const ARG_SIZE: usize = 131072usize
 const STACK_SIZE: usize = 524288usize
+const MIN_STACK: usize = 262144usize
 const L3_PAGES: usize = 512usize
 
 // The user gigabyte's level-1 index (VA bits 38:30), derived from USER_BASE so the two can
@@ -104,7 +105,16 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     let image_bytes = (image_len + PAGE - 1usize) & ~(PAGE - 1usize)
     let arena_off = image_bytes
     let arg_off = arena_off + ARENA_SIZE
-    let window = arg_off + ARG_SIZE + STACK_SIZE
+    // (D2470) The stack is STACK_SIZE unless the image leaves less of the 2 MB reach: a large program
+    // (Mail, 1.4 MB since the SVG and format modules grew) gets the room that is left, down to MIN_STACK,
+    // instead of being refused.
+    var stack_bytes = STACK_SIZE
+    let reach = (L3_PAGES - 1usize) * PAGE
+    if arg_off + ARG_SIZE + stack_bytes > reach {
+        if arg_off + ARG_SIZE + MIN_STACK > reach { ret (zero, NoSpace) }
+        stack_bytes = (reach - arg_off - ARG_SIZE) & ~(PAGE - 1usize)
+    }
+    let window = arg_off + ARG_SIZE + stack_bytes
     let pages = window / PAGE
     if pages > L3_PAGES - 1usize { ret (zero, NoSpace) }
     let (region, region_error) = mem.alloc[u8](a, window + PAGE)

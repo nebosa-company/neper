@@ -834,12 +834,14 @@ fn launch(frame: *a64.Frame) {
         // (C136) The Recorder (entry 34) keeps its recordings as WAV files in /Recordings.
         // (C138) The Steps app (entry 36) keeps today's count and the goal in /steps.
         // (C139) The Blocks app (entry 37) keeps the best score in /blocks.
-        if index == 38usize || index == 39usize || index == 19usize || index == 41usize || index == 32usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize {
+        // (C158) The Mail app (entry 26) saves an attachment into /Downloads.
+        if index == 38usize || index == 26usize || index == 39usize || index == 19usize || index == 41usize || index == 32usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
             }
-            if rng_present && (index == 38usize || index == 39usize) {
+            // (C154) The Wallet (entry 20) draws nonces for the cards it seals under the Secure vault's key.
+            if rng_present && (index == 38usize || index == 39usize || index == 20usize) {
                 thread.grant(child, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
                 thread.grant(child, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
             }

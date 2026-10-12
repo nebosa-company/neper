@@ -17,6 +17,8 @@ use e.text.layout
 use e.text.shape
 use e.data.graph as graph
 use e.algo.graph as algo
+use e.fmt.mvt as mvt
+use httpc
 use appkit
 use text
 use ui
@@ -67,6 +69,22 @@ type State = struct {
     route: bool,
     sheet: bool,
     started: bool,
+    // (C160) A vector tile from the network (OpenStreetMap data as OpenFreeMap serves it): its lines (roads and the
+    // outlines of water) as map points, 1100 units across the tile, with where each line starts and what it is (0 a
+    // street, 1 a main road, 2 water), and up to eight names of its points.
+    tile_tried: bool,
+    tile_ok: bool,
+    tile_x: [384]f32,
+    tile_y: [384]f32,
+    tile_points: usize,
+    tile_start: [48]usize,
+    tile_kind: [48]u8,
+    tile_lines: usize,
+    label_text: [160]u8,
+    label_len: [8]usize,
+    label_x: [8]f32,
+    label_y: [8]f32,
+    labels: usize,
     hits: ui.Hits,
 }
 
@@ -237,12 +255,168 @@ fn target_icon() -> str {
     ret "<svg viewBox='0 0 24 24'><circle cx='12' cy='12' r='4' fill='currentColor'/><path d='M12 2v4M12 18v4M2 12h4M18 12h4' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round'/><circle cx='12' cy='12' r='8' fill='none' stroke='currentColor' stroke-width='2'/></svg>"
 }
 
+// (C160) The value of tag `name` of a feature as text ("" when it has none or it is not a string).
+fn tag_text(layer: mvt.Layer, feature: mvt.Feature, name: str) -> str {
+    var t = 0usize
+    while t + 1usize < feature.tags.len {
+        let key_index = usize(feature.tags[t])
+        let value_index = usize(feature.tags[t + 1usize])
+        if key_index < layer.keys.len && value_index < layer.values.len && ui.same(layer.keys[key_index], name) {
+            if layer.values[value_index].kind == mvt.VALUE_STRING { ret layer.values[value_index].text }
+        }
+        t += 2usize
+    }
+    ret ""
+}
+
+fn main_road(class_name: str) -> bool {
+    ret ui.same(class_name, "motorway") || ui.same(class_name, "trunk") || ui.same(class_name, "primary") || ui.same(class_name, "secondary")
+}
+
+// (C160) The tile of the map's middle (zoom 14 over Oslo) from OpenFreeMap-style vector tiles over HTTPS, decoded
+// with e.fmt.mvt: the `transportation` and `water` lines and the names of the `poi` and `place` points are kept in
+// the state, scaled to the map's 1100 units. false when there is no network or the tile does not read.
+// ponytail: a tile over 96 KB (httpc's reply limit, a dense city centre) does not load, the tile set's version is
+// not fetched from its TileJSON (the path is a fixed one) and a single tile is the whole map; pyramid, panning
+// across tiles and offline regions are what is left of C160.
+fn fetch_tile(a: *mem.Arena, s: *State) -> bool {
+    let mark = mem.mark(a)
+    let (reply, get_error) = httpc.get(a, "tiles.openfreemap.org", "/planet/latest/14/8681/4769.pbf", "")
+    if get_error != ok || reply.status != 200usize {
+        mem.reset(a, mark)
+        ret false
+    }
+    let (layers, parse_error) = mvt.parse(a, reply.body)
+    if parse_error != ok {
+        mem.reset(a, mark)
+        ret false
+    }
+    s.tile_points = 0usize
+    s.tile_lines = 0usize
+    s.labels = 0usize
+    var label_at = 0usize
+    var l = 0usize
+    while l < layers.len {
+        let layer = layers[l]
+        let is_road = ui.same(layer.name, "transportation")
+        let is_water = ui.same(layer.name, "water")
+        let is_named = ui.same(layer.name, "poi") || ui.same(layer.name, "place")
+        var extent: f32 = 4096.0
+        if layer.extent > 0u32 { extent = f32(layer.extent) }
+        var f = 0usize
+        while f < layer.features.len {
+            let feature = layer.features[f]
+            if (is_road || is_water) && feature.kind != mvt.KIND_POINT {
+                var kind = 0u8
+                if is_water { kind = 2u8 }
+                if is_road && main_road(tag_text(layer, feature, "class")) { kind = 1u8 }
+                var p = 0usize
+                var from = 0usize
+                while p < feature.parts.len {
+                    let to = feature.parts[p]
+                    if s.tile_lines < 48usize && to > from && s.tile_points + (to - from) <= 384usize {
+                        s.tile_start[s.tile_lines] = s.tile_points
+                        s.tile_kind[s.tile_lines] = kind
+                        s.tile_lines += 1usize
+                        var q = from
+                        while q < to {
+                            s.tile_x[s.tile_points] = f32(feature.points[q].x) * 1100.0 / extent
+                            s.tile_y[s.tile_points] = f32(feature.points[q].y) * 1100.0 / extent
+                            s.tile_points += 1usize
+                            q += 1usize
+                        }
+                    }
+                    from = to
+                    p += 1usize
+                }
+            }
+            if is_named && feature.kind == mvt.KIND_POINT && feature.points.len > 0usize && s.labels < 8usize {
+                let name = tag_text(layer, feature, "name")
+                if name.len > 0usize && label_at + 20usize <= 160usize {
+                    var n = 0usize
+                    while n < name.len && n < 20usize {
+                        s.label_text[label_at + n] = name[n]
+                        n += 1usize
+                    }
+                    s.label_len[s.labels] = n
+                    s.label_x[s.labels] = f32(feature.points[0usize].x) * 1100.0 / extent
+                    s.label_y[s.labels] = f32(feature.points[0usize].y) * 1100.0 / extent
+                    s.labels += 1usize
+                    label_at += 20usize
+                }
+            }
+            f += 1usize
+        }
+        l += 1usize
+    }
+    let layer_count = layers.len
+    mem.reset(a, mark)
+    ui.say("maps tile ")
+    ui.say_num(layer_count)
+    ui.say(" layers ")
+    ui.say_num(s.tile_lines)
+    ui.say(" lines ")
+    ui.say_num(s.labels)
+    ui.say(" names\n")
+    ret s.tile_lines > 0usize
+}
+
+// (C160) The tile as the map: water and roads as strokes, the names of its points as labels.
+fn draw_tile(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    var line = 0usize
+    while line < s.tile_lines {
+        let from = s.tile_start[line]
+        var to = s.tile_points
+        if line + 1usize < s.tile_lines { to = s.tile_start[line + 1usize] }
+        var xs: [32]f32 = zero
+        var ys: [32]f32 = zero
+        var n = 0usize
+        while from + n < to && n < 32usize {
+            xs[n] = sx(s, s.tile_x[from + n])
+            ys[n] = sy(s, s.tile_y[from + n])
+            n += 1usize
+        }
+        var width: f32 = 4.0 * scale(s)
+        var colour = paint.Color { red: 0.78, green: 0.76, blue: 0.70, alpha: 1.0 }
+        if s.tile_kind[line] == 1u8 {
+            width = 8.0 * scale(s)
+            colour = paint.Color { red: 0.95, green: 0.72, blue: 0.30, alpha: 1.0 }
+        }
+        if s.tile_kind[line] == 2u8 {
+            width = 3.0 * scale(s)
+            colour = paint.Color { red: 0.50, green: 0.70, blue: 0.88, alpha: 1.0 }
+        }
+        try ui.polyline(a, builder, xs[0usize..n], ys[0usize..n], n, width, colour)
+        line += 1usize
+    }
+    var label = 0usize
+    while label < s.labels {
+        let px = sx(s, s.label_x[label])
+        let py = sy(s, s.label_y[label])
+        let name = ui.text_of(a, s.label_text[label * 20usize..], s.label_len[label])
+        let w = text.measure(a, faces.jost, 13.0, name)
+        try ui.disc(a, builder, px, py, 5.0, ui.amber_dark())
+        try ui.card(a, builder, px - w / 2.0 - 8.0, py + 8.0, w + 16.0, 22.0, 11.0, ui.cream())
+        try ui.centred(a, builder, faces.jost, 13.0, name, px, py + 11.0, ui.ink())
+        label += 1usize
+    }
+    try ui.put(a, builder, faces.grotesk, 11.0, "Map data OpenStreetMap contributors (ODbL)", 12.0, 804.0, ui.muted())
+    ui.say("maps tile drawn\n")
+    ret ok
+}
+
 fn draw_map(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     let save: scene.Command = .Save
     try scene.push(builder, save)
     try scene.push(builder, scene.Command { Clip: scene.Clip { Rect: geometry.rect(0.0, 84.0, 412.0, 742.0) } })
     // The ground is the road colour; blocks sit on it.
     try ui.card(a, builder, 0.0, 84.0, 412.0, 742.0, 0.0, paint.Color { red: 0.98, green: 0.97, blue: 0.94, alpha: 1.0 })
+    if s.tile_ok {
+        try draw_tile(a, builder, s, faces)
+        let restore_tile: scene.Command = .Restore
+        try scene.push(builder, restore_tile)
+        ret ok
+    }
     let k = scale(s)
     var bx = 0usize
     while bx < 5usize {
@@ -518,7 +692,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if tap.ended {
             running = false
         } else if tap.tick {
-            appkit.answer(appkit.ANSWER_NONE)
+            // (C160) The first idle moment fetches the tile; with no network the sample city stays.
+            if !s.tile_tried {
+                s.tile_tried = true
+                s.tile_ok = fetch_tile(a, &s)
+                if s.tile_ok {
+                    if !show(a, &kit, &s) {
+                        ui.say("maps present failed\n")
+                        appkit.answer(appkit.ANSWER_NONE)
+                    }
+                } else {
+                    appkit.answer(appkit.ANSWER_NONE)
+                }
+            } else {
+                appkit.answer(appkit.ANSWER_NONE)
+            }
         } else if tap.y >= 896.0 {
             ui.say("maps home\n")
             appkit.leave()

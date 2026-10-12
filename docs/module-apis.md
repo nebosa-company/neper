@@ -1897,6 +1897,101 @@ fn expire_waiters[T: type](p: *Pool[T], now: u64, max_wait: u64, out: []u32) -> 
 
 A generic object pool with idle eviction (commons-pool2 shape) as a state machine over caller storage or an arena: `acquire` reuses the newest or oldest idle object, reserves a slot the caller must create (`attach`), queues the requester FIFO under the wait policy or answers `Exhausted`; `release` hands the object to the head waiter, keeps it idle up to `max_idle` or destroys it; `evict` retires idle objects past `idle_ticks` oldest first down to `min_idle`; `leaks` and `reclaim` find and take back borrowed objects held past `leak_ticks`; `expire_waiters` drops stale waiters. Time is the caller's `now`.
 
+### `e.data.table`
+
+```neper
+type Kind = enum u8 { I32, I64, F64, Bool, Str, Dict }
+type Spec = struct { name: str, kind: Kind, heap_bytes: usize, dict_cap: usize }
+type Column = struct { name: str, kind: Kind, nulls: []u64, i32s: []i32, i64s: []i64, f64s: []f64, bits: []u64, starts: []u32, lens: []u32, ids: []u32, heap: []u8, heap_len: usize, heap_wasted: usize, entry_starts: []u32, entry_lens: []u32, entry_count: usize, hashes: []u32, rank_of_entry: []u32, ranks_valid: bool, version: u64 }
+type Table = struct { columns: []Column, capacity_rows: usize, row_total: usize, live: []u64, deleted: usize, version: u64, structure: u64, loading: bool, bytes: usize }
+error Full
+error BadKind
+
+fn create(a: *mem.Arena, specs: []const Spec, row_capacity: usize) -> (Table, err)
+fn column_count(t: *const Table) -> usize
+fn row_count(t: *const Table) -> usize
+fn live_count(t: *const Table) -> usize
+fn capacity(t: *const Table) -> usize
+fn memory_bytes(t: *const Table) -> usize
+fn column_name(t: *const Table, col: usize) -> str
+fn column_kind(t: *const Table, col: usize) -> Kind
+fn find_column(t: *const Table, name: str) -> (usize, bool)
+fn version(t: *const Table) -> u64
+fn column_version(t: *const Table, col: usize) -> u64
+fn structure_version(t: *const Table) -> u64
+fn changed_since(t: *const Table, col: usize, since: u64) -> bool
+fn clear(t: *Table)
+fn begin_load(t: *Table)
+fn end_load(t: *Table)
+fn append_row(t: *Table) -> (usize, err)
+fn is_live(t: *const Table, row: usize) -> bool
+fn delete_row(t: *Table, row: usize) -> bool
+fn is_null(t: *const Table, col: usize, row: usize) -> bool
+fn set_null(t: *Table, col: usize, row: usize)
+fn get_i32(t: *const Table, col: usize, row: usize) -> i32
+fn get_i64(t: *const Table, col: usize, row: usize) -> i64
+fn get_f64(t: *const Table, col: usize, row: usize) -> f64
+fn get_bool(t: *const Table, col: usize, row: usize) -> bool
+fn get_str(t: *const Table, col: usize, row: usize) -> str
+fn set_i32(t: *Table, col: usize, row: usize, value: i32)
+fn set_i64(t: *Table, col: usize, row: usize, value: i64)
+fn set_f64(t: *Table, col: usize, row: usize, value: f64)
+fn set_bool(t: *Table, col: usize, row: usize, value: bool)
+fn set_str(t: *Table, col: usize, row: usize, s: str) -> err
+fn fill_i32(t: *Table, col: usize, values: []const i32)
+fn fill_i64(t: *Table, col: usize, values: []const i64)
+fn fill_f64(t: *Table, col: usize, values: []const f64)
+fn dict_len(t: *const Table, col: usize) -> usize
+fn dict_capacity(t: *const Table, col: usize) -> usize
+fn dict_str(t: *const Table, col: usize, id: u32) -> str
+fn dict_id(t: *const Table, col: usize, row: usize) -> u32
+fn dict_find(t: *const Table, col: usize, s: str) -> (u32, bool)
+fn heap_used(t: *const Table, col: usize) -> usize
+fn heap_wasted(t: *const Table, col: usize) -> usize
+fn compare_fold(x: str, y: str) -> i32
+fn ranks(t: *Table, col: usize, scratch: *mem.Arena) -> ([]const u32, err)
+fn rank_of(t: *const Table, col: usize, row: usize) -> u32
+```
+
+A columnar record store for the data grid (`docs/grid.md` §5.3): typed contiguous columns over a
+caller arena, a null bitmap per column, strings as a heap (`Str`) or a dictionary with one `u32`
+id per row (`Dict`), tombstoned rows, a bulk load, and a change version per column so a view
+learns which stage a write reaches. Capacity (rows, string heap bytes, dictionary entries) is
+declared at `create`; `Full` answers an `append_row` or `set_str` past it. Writing a cell clears
+its null bit. `ranks` gives every dictionary entry its dense position in ASCII upper-case-folded
+byte order (the order of `CompareStr(UpperCase(a), UpperCase(b))`); entries have the same rank
+exactly when they are equal ignoring ASCII case. Replacing a `Str` cell leaves its old bytes in
+the heap (`heap_wasted`). Single writer; row compaction and a boxed value accessor are not here.
+
+### `e.data.tableview`
+
+```neper
+type KeyMode = enum u8 { Column, KeyFn, Compare }
+type Key = struct { mode: KeyMode, column: usize, descending: bool, fold: bool, key_fn: fn(*void, usize) -> u64, compare: fn(*void, u32, u32) -> i32, ctx: *void }
+type Cache = struct { ranks: []u32, version: u64, structure: u64, fold: bool, size: usize, valid: bool }
+type View = struct { t: *table.Table, order_rows: []u32, spare: []u32, keys: []u64, caches: []Cache, total: usize }
+
+fn column_key(col: usize, descending: bool, fold: bool) -> Key
+fn fn_key(f: fn(*void, usize) -> u64, ctx: *void, descending: bool) -> Key
+fn compare_key(f: fn(*void, u32, u32) -> i32, ctx: *void, descending: bool) -> Key
+fn create(a: *mem.Arena, t: *table.Table) -> (View, err)
+fn reset_order(v: *View)
+fn rows(v: *const View) -> []const u32
+fn len(v: *const View) -> usize
+fn row_at(v: *const View, position: usize) -> usize
+fn apply_sort(v: *View, keys: []const Key, scratch: *mem.Arena) -> err
+```
+
+The display order of an `e.data.table`'s live rows (`docs/grid.md` §5.4); this increment is the
+sort stage. `apply_sort` is a stable LSD multi-key sort: keys are applied last to first, each a
+stable pass, so ties on every key are in row order. A numeric, bool or dictionary column becomes
+an unsigned 64-bit key per row and takes one counting pass per significant key byte; a heap
+string column is ranked once (cached until the column or row set changes) by a comparison sort;
+`fn_key` is a derived key per row for an order the table cannot express; `compare_key` is the
+slow path, a stable merge stage. Nulls sort first ascending and last descending (descending
+reverses the whole order). Text order is ASCII upper-case folded (`fold: true`) or byte order.
+`scratch` supplies rank-building and merge storage; the caller may reset it afterwards.
+
 ### `e.data.slot_map`
 
 ```neper
@@ -28726,11 +28821,14 @@ type Source = struct { data: []const u8, off: usize }
 type Paragraph = struct { text: str, style: str, list: bool }
 type Slide = struct { paragraphs: []const str }
 type Collected = struct { texts: []str, styles: []str, lists: []bool }
+type Grid = struct { rows: usize, columns: usize, cells: []str, after: usize }
 
 const LIMIT_ENTRIES: usize = 512usize
 const LIMIT_NAME: usize = 256usize
 const LIMIT_ENTRY: u64 = 8388608u64
 const LIMIT_TOTAL: u64 = 33554432u64
+const LIMIT_GRID_ROWS: usize = 2000usize
+const LIMIT_GRID_COLUMNS: usize = 64usize
 
 fn source_read(ctx: *void, dst: []u8) -> (usize, err)
 fn source_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err)
@@ -28738,10 +28836,21 @@ fn local(name: str) -> str
 fn open_package(a: *mem.Arena, data: []const u8) -> (zip.Archive, err)
 fn find(archive: *zip.Archive, name: str) -> (usize, bool)
 fn collect(a: *mem.Arena, part: []const u8) -> (Collected, err)
+fn collect_of(a: *mem.Arena, part: []const u8, para: str) -> (Collected, err)
 fn paragraphs(a: *mem.Arena, data: []const u8) -> ([]Paragraph, err)
 fn slide_number(name: str) -> usize
 fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err)
+fn cell_at(reference: str) -> (usize, usize, bool)
+fn sheet_names(a: *mem.Arena, data: []const u8) -> ([]str, err)
+fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (Grid, err)
+fn tables(a: *mem.Arena, data: []const u8) -> ([]Grid, err)
+fn inside_cell(nodes: []const xml.Node, i: usize) -> bool
+fn cell_flags(a: *mem.Arena, data: []const u8) -> ([]bool, err)
 ```
+
+Word tables (C152, D3809): `tables` reads a `.docx`'s tables in document order as `Grid`s (rows, columns, `cells[row * columns + column]`): the paragraphs of a cell joined by a space, a short row padded with empty cells, a table nested in a cell contributing its text to that cell rather than a grid of its own, at most 2000 by 64. `Grid.after` is the number of paragraphs outside any table before the table (0 for a sheet), and `cell_flags` says for each paragraph `paragraphs` gives whether it sits in a cell, so a viewer can leave those out of the text and set the grids in between. `paragraphs` is unchanged (a cell's paragraphs are still paragraphs in order). Checked on a package made with Python's zipfile (`reference_table.py`).
+
+Spreadsheets (C172, D3800): `sheet_names` lists an `.xlsx`'s sheet names in workbook order and `sheet_grid` reads sheet N (`xl/worksheets/sheet<N>.xml`, assumed to follow workbook order) as a `Grid` of cell text (`cells[row * columns + column]`, `""` for an absent cell, at most 2000 rows by 64 columns): shared, inline and `str` strings as their characters, numbers as stored, booleans `TRUE`/`FALSE`, dates as serials (no number-format reading), a cell without an `r` reference skipped. Checked on a package made with Python's zipfile (`reference_xlsx.py`): a sparse sheet, column `AA`, an entity, a rich-text shared string, a second sheet and the refusals.
 
 The text of an Office Open XML package, read over `e.fmt.zip` and `e.fmt.xml` from a byte slice (C123): `paragraphs` gives a `.docx`'s paragraphs in order (the text of each, its style name such as `Heading1`, whether it is a list item, tabs and breaks as characters, entities decoded), `slides` a `.pptx`'s slides in slide-number order with each slide's text paragraphs. Namespace prefixes are ignored; runs, tables, images and shapes are not laid out, and the text of a table cell or a shape is a paragraph like any other. A zip with no main part is `NoMainPart`, bytes that are not a zip `NotAPackage`. Checked against packages made with Python's zipfile.
 
@@ -29160,8 +29269,32 @@ fn mem_read(ctx: *void, dst: []u8) -> (usize, err)
 fn put_latin1(out: []u8, at: usize, c: u8) -> usize
 fn newline(out: []u8, at: usize) -> usize
 fn text_of(a: *mem.Arena, content: []const u8) -> (str, err)
+type Tree = struct { table: []Object, count: usize, page_objects: []usize, page_count: usize }
+fn page_tree(a: *mem.Arena, data: []const u8) -> (Tree, err)
 fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err)
+type Shape = struct { kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, red: f64, green: f64, blue: f64, size: f64, text: str }
+type Painting = struct { width: f64, height: f64, shapes: []Shape }
+type Segment = struct { x0: f64, y0: f64, x1: f64, y1: f64 }
+const SHAPE_FILL: u8 = 0u8
+const SHAPE_LINE: u8 = 1u8
+const SHAPE_TEXT: u8 = 2u8
+const MAX_SHAPES: usize = 4000usize
+const MAX_SEGMENTS: usize = 256usize
+const STATE_DEPTH: usize = 8usize
+type Painter = struct { out: []Shape, n: usize, fill_r: f64, fill_g: f64, fill_b: f64, stroke_r: f64, stroke_g: f64, stroke_b: f64, line_width: f64, scale_x: f64, scale_y: f64, shift_x: f64, shift_y: f64, saved: [88]f64, depth: usize, segs: [256]Segment, seg_n: usize, rects: [64]Segment, rect_n: usize, cur_x: f64, cur_y: f64, start_x: f64, start_y: f64, tm_x: f64, tm_y: f64, line_x: f64, line_y: f64, leading: f64, font_size: f64, text_scale: f64 }
+fn paint_start(out: []Shape) -> Painter
+fn paint_push(p: *Painter, kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, red: f64, green: f64, blue: f64, size: f64, text: str)
+fn paint_path(p: *Painter, fill: bool, stroke: bool)
+fn paint_line_to(p: *Painter, x: f64, y: f64)
+fn paint_text(p: *Painter, text: str)
+fn paint_move_text(p: *Painter, tx: f64, ty: f64)
+fn operand_number(text: str) -> f64
+fn paint_content(a: *mem.Arena, p: *Painter, content: []const u8) -> err
+fn media_box(data: []const u8, from: usize, until: usize) -> (f64, f64, bool)
+fn page_painting(a: *mem.Arena, data: []const u8, page: usize) -> (Painting, err)
 ```
+
+A page painted (C152, C172, D3801): `page_painting` runs page N's content streams and gives the page's size (its MediaBox, or the first MediaBox of any page tree node, else 612 by 792) and the shapes in paint order: `SHAPE_FILL` (a rectangle filled by `re` then `f`, `F`, `f*`, `B`), `SHAPE_LINE` (a segment of `m`/`l`/`h`/`re` stroked by `S`, `s`, `B`, with the line width and the stroke colour) and `SHAPE_TEXT` (a `Tj`/`TJ`/`'`/`"` string at the text position, with the font size scaled by `Tm`), in user space (origin bottom left) after the `cm` scale and offset; colours from `g`, `rg`, `k` and their stroke forms, `q`/`Q` nest eight deep. Not a renderer: a `cm` rotation or shear is not followed, a curve is its chord, a filled path that is not a rectangle is not filled, clipping and images (`Do`) are ignored, and text is placed with no glyph metrics (half its size a character). Checked on a hand-written page with a red fill, a blue 3-unit line, text after `Td`, a `cm` scale and offset undone by `Q`, and a CMYK black kerned `TJ` (`reference_paint.py`).
 
 The text of a PDF held in a byte slice (C123): `pages` gives each page's text in page-tree order. The objects are found by scanning for `N G obj` (a file with its objects in object streams, or with an xref stream, is `NoPages`), the page order is the catalog's tree, a page's content streams are joined and `/FlateDecode` is undone through `e.fmt.zlib`, and the text operators `Tj`, `TJ` (a kern of -200 or more is a word space), `'`, `"`, `T*`, `Td`, `TD`, `Tm` and `ET` give the lines; literal strings keep their escapes and octal codes, hex strings are read, Latin-1 bytes are written as UTF-8. Not a renderer and not a font reader: an embedded font with its own encoding gives its codes. Checked against PDFs written by the fixture's generator.
 
