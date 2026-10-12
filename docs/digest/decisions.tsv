@@ -2353,4 +2353,5 @@ D3901	1173	The test root and server certificate cover the hosts the NeperOS apps
 D3902	1270	C156: Weather shows the alert in force for a place
 D3903	1276	C158: Mail keeps and saves the first attachment of a message
 D3904	1126	C160: Maps draws a vector tile from the network
-D2470	918	A large program gets the stack that is left, not a refusal
+D2470	919	A large program gets the stack that is left, not a refusal
+D3905	2522	G001: `e.data.table`, the columnar store of the data grid: fixed caller-funded capacity, typed columns, dictionary strings with fold-order ranks, a per-column version for a journal

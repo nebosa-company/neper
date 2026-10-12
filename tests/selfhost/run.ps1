@@ -2446,6 +2446,12 @@ $dataObjpoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $dataObjpoolWritten -ne 'executable written') { throw 'data_objpool emission failed' }
 & $dataObjpoolPath
 if ($LASTEXITCODE -ne 0) { throw "a data_objpool check failed: exit $LASTEXITCODE" }
+# `e.data.table`: a 150,000-row by 24-column columnar store (typed columns, null bitmaps, dictionary and heap strings) bulk loaded, read back cell by cell, ranked in ASCII-fold order, edited, versioned, tombstoned and bounded (D3905).
+$dataTablePath = Join-Path $testBuild 'data-table-selfhost.exe'
+$dataTableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_table\src\main.e') $repo 'x64' 'windows' $dataTablePath --arena 128m
+if ($LASTEXITCODE -ne 0 -or $dataTableWritten -ne 'executable written') { throw 'data_table emission failed' }
+& $dataTablePath
+if ($LASTEXITCODE -ne 0) { throw "a data_table check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath

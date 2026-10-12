@@ -2169,6 +2169,11 @@ data_objpool_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$data_objpool_written" = 'executable written' ]
 chmod +x "$test_build/data-objpool-selfhost"
 "$test_build/data-objpool-selfhost"
+# `e.data.table`: a 150,000-row by 24-column columnar store (typed columns, null bitmaps, dictionary and heap strings) bulk loaded, read back cell by cell, ranked in ASCII-fold order, edited, versioned, tombstoned and bounded (D3905).
+data_table_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_table/src/main.e" "$repo" x64 linux "$test_build/data-table-selfhost" --arena 128m)
+[ "$data_table_written" = 'executable written' ]
+chmod +x "$test_build/data-table-selfhost"
+"$test_build/data-table-selfhost"
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
 [ "$algo_rules_written" = 'executable written' ]
