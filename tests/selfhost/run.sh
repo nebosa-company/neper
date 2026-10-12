@@ -1162,11 +1162,26 @@ fmt_zip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_zip_written" = 'executable written' ]
 chmod +x "$test_build/fmt-zip-selfhost"
 "$test_build/fmt-zip-selfhost"
+# `e.fmt.xlsx.book` and `e.fmt.zip.write`: a workbook encoded byte for byte against an independent writer, decoded back, openpyxl and XlsxWriter files decoded, the refusals.
+fmt_xlsx_book_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xlsx_book/src/main.e" "$repo" x64 linux "$test_build/fmt-xlsx-book-selfhost")
+[ "$fmt_xlsx_book_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xlsx-book-selfhost"
+"$test_build/fmt-xlsx-book-selfhost"
 # `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
 fmt_ooxml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_ooxml/src/main.e" "$repo" x64 linux "$test_build/fmt-ooxml-selfhost")
 [ "$fmt_ooxml_written" = 'executable written' ]
 chmod +x "$test_build/fmt-ooxml-selfhost"
 "$test_build/fmt-ooxml-selfhost"
+# `e.fmt.docx`: a document with styles, runs, lists, a table, a PNG and a JPEG compared byte for byte with an independent writer, read back through e.fmt.ooxml, the refusals.
+fmt_docx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_docx/src/main.e" "$repo" x64 linux "$test_build/fmt-docx-selfhost")
+[ "$fmt_docx_written" = 'executable written' ]
+chmod +x "$test_build/fmt-docx-selfhost"
+"$test_build/fmt-docx-selfhost"
+# `e.fmt.extract`: a corpus from independent producers detected and extracted: text, title, author and parts per format, detection by content, binary refused.
+fmt_extract_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_extract/src/main.e" "$repo" x64 linux "$test_build/fmt-extract-selfhost")
+[ "$fmt_extract_written" = 'executable written' ]
+chmod +x "$test_build/fmt-extract-selfhost"
+"$test_build/fmt-extract-selfhost"
 # `e.fmt.odf`: an OpenDocument text file and presentation made with Python's zipfile read back, two refusals.
 fmt_odf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_odf/src/main.e" "$repo" x64 linux "$test_build/fmt-odf-selfhost")
 [ "$fmt_odf_written" = 'executable written' ]
@@ -1192,6 +1207,11 @@ fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_pdf_written" = 'executable written' ]
 chmod +x "$test_build/fmt-pdf-selfhost"
 "$test_build/fmt-pdf-selfhost"
+# `e.fmt.pdf.write`: a one-page and a two-page report compared byte for byte with an independent writer (reportlab metrics), read back through e.fmt.pdf, widths against reportlab, the state errors.
+fmt_pdf_write_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf_write/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-write-selfhost")
+[ "$fmt_pdf_write_written" = 'executable written' ]
+chmod +x "$test_build/fmt-pdf-write-selfhost"
+"$test_build/fmt-pdf-write-selfhost"
 # `e.fmt.vcard`: vCard texts parsed and compared with vobject, the cards written again and compared with a reference writer.
 fmt_vcard_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_vcard/src/main.e" "$repo" x64 linux "$test_build/fmt-vcard-selfhost")
 [ "$fmt_vcard_written" = 'executable written' ]
@@ -1335,6 +1355,16 @@ fmt_html_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_html_written" = 'executable written' ]
 chmod +x "$test_build/fmt-html-selfhost"
 "$test_build/fmt-html-selfhost"
+# `e.fmt.html.sanitize`: untrusted markup cleaned and compared byte for byte with nh3 (ammonia) over a corpus and four configurations, the style allowlist, attack inputs, idempotence, nesting.
+fmt_html_sanitize_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_html_sanitize/src/main.e" "$repo" x64 linux "$test_build/fmt-html-sanitize-selfhost")
+[ "$fmt_html_sanitize_written" = 'executable written' ]
+chmod +x "$test_build/fmt-html-sanitize-selfhost"
+"$test_build/fmt-html-sanitize-selfhost"
+# `e.fmt.graph`: NetworkX-written GraphML, GEXF and GML read, nested reference files read, a typed model written byte for byte and read back, to_csr, the refusals.
+fmt_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_graph/src/main.e" "$repo" x64 linux "$test_build/fmt-graph-selfhost")
+[ "$fmt_graph_written" = 'executable written' ]
+chmod +x "$test_build/fmt-graph-selfhost"
+"$test_build/fmt-graph-selfhost"
 # `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
 async_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/async/src/main.e" "$repo" x64 linux "$test_build/async-selfhost")
 [ "$async_written" = 'executable written' ]

@@ -2225,4 +2225,10 @@ D2683	1829	L118: e.test.mock, scripted expectations with matchers and ordered ve
 D2684	1936	L142: e.test.bdd, a Gherkin parser and a runner with e.meta step binding
 D2685	1912	L143: e.test.mutate, source mutants and suite kill/survive scoring
 D2686	1579	L144: e.test.arch, architecture rules over the module graph
-D2687	1829	L158: e.data.objpool, a generic object pool with eviction
+D2687	1830	L158: e.data.objpool, a generic object pool with eviction
+D2600	2763	L100: `e.fmt.xlsx.book` encodes and decodes workbooks over the `e.fmt.xlsx` model, on a new stored-zip writer `e.fmt.zip.write`
+D2601	2329	L145: `e.fmt.pdf.write`, a page model over the built-in Helvetica faces, byte-checked against an independent writer
+D2602	2357	L146: `e.fmt.docx` writes Word documents over the stored zip writer, byte-checked against an independent writer and opened by python-docx
+D2603	2856	L153: `e.fmt.extract` detects and extracts text, title, author and part count through the existing codecs
+D2604	2738	L155: `e.fmt.graph` reads and writes GraphML, GEXF and GML over one attributed, nestable model, and converts to `e.data.graph`
+D2605	2886	L132: `e.fmt.html.sanitize`, an allowlist sanitizer that matches nh3 (ammonia) byte for byte on its corpus

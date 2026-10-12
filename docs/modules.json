@@ -45,13 +45,17 @@
     "e.fmt.css.container",
     "e.fmt.css.match",
     "e.fmt.html.accessible",
+    "e.fmt.html.sanitize",
     "e.fmt.hcl",
     "e.fmt.mermaid",
     "e.fmt.elf",
     "e.fmt.pe",
     "e.fmt.ooxml",
+    "e.fmt.docx",
+    "e.fmt.extract",
     "e.fmt.odf",
     "e.fmt.pdf",
+    "e.fmt.pdf.write",
     "e.fmt.vcard",
     "e.text.highlight",
     "e.barcode",
@@ -148,6 +152,7 @@
     "e.fmt.lzw",
     "e.fmt.zlib",
     "e.fmt.zip",
+    "e.fmt.zip.write",
     "e.fmt.sevenzip",
     "e.fmt.rar",
     "e.fmt.tar",
@@ -156,6 +161,7 @@
     "e.fmt.woff",
     "x.migrate.typemaps",
     "e.fmt.xlsx",
+    "e.fmt.xlsx.book",
     "x.identity.jose",
     "x.identity.oidc",
     "x.identity.scim",
@@ -177,6 +183,7 @@
     "e.fmt.xslt",
     "e.fmt.soap",
     "e.fmt.html",
+    "e.fmt.graph",
     "e.fmt.html.template",
     "e.fmt.png",
     "e.fmt.jpeg",
@@ -6929,6 +6936,117 @@
     "e.mem",
     "e.meta",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.html.sanitize",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.html",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.docx",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.zip.write",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.extract",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.fmt.csv",
+    "e.fmt.html",
+    "e.fmt.json",
+    "e.fmt.mail",
+    "e.fmt.odf",
+    "e.fmt.ooxml",
+    "e.fmt.pdf",
+    "e.fmt.vcard",
+    "e.fmt.xlsx",
+    "e.fmt.xlsx.book",
+    "e.fmt.xml",
+    "e.fmt.zip",
+    "e.io",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.pdf.write",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.graph",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.data.graph",
+    "e.data.list",
+    "e.fmt.xml",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.xlsx.book",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.fmt.ooxml",
+    "e.fmt.xlsx",
+    "e.fmt.xml",
+    "e.fmt.zip",
+    "e.fmt.zip.write",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.zip.write",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.fmt.zip",
+    "e.mem"
    ],
    "blocked_by": []
   }

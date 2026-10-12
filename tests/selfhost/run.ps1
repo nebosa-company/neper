@@ -1252,12 +1252,30 @@ $fmtZipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtZipWritten -ne 'executable written') { throw 'fmt_zip emission failed' }
 & $fmtZipPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_zip check failed: exit $LASTEXITCODE" }
+# `e.fmt.xlsx.book` and `e.fmt.zip.write`: a workbook encoded byte for byte against an independent writer, decoded back, openpyxl and XlsxWriter files decoded, the refusals.
+$fmtXlsxBookPath = Join-Path $testBuild 'fmt-xlsx-book-selfhost.exe'
+$fmtXlsxBookWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xlsx_book\src\main.e') $repo 'x64' 'windows' $fmtXlsxBookPath
+if ($LASTEXITCODE -ne 0 -or $fmtXlsxBookWritten -ne 'executable written') { throw 'fmt_xlsx_book emission failed' }
+& $fmtXlsxBookPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_xlsx_book check failed: exit $LASTEXITCODE" }
 # `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
 $fmtOoxmlPath = Join-Path $testBuild 'fmt-ooxml-selfhost.exe'
 $fmtOoxmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_ooxml\src\main.e') $repo 'x64' 'windows' $fmtOoxmlPath
 if ($LASTEXITCODE -ne 0 -or $fmtOoxmlWritten -ne 'executable written') { throw 'fmt_ooxml emission failed' }
 & $fmtOoxmlPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_ooxml check failed: exit $LASTEXITCODE" }
+# `e.fmt.docx`: a document with styles, runs, lists, a table, a PNG and a JPEG compared byte for byte with an independent writer, read back through e.fmt.ooxml, the refusals.
+$fmtDocxPath = Join-Path $testBuild 'fmt-docx-selfhost.exe'
+$fmtDocxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_docx\src\main.e') $repo 'x64' 'windows' $fmtDocxPath
+if ($LASTEXITCODE -ne 0 -or $fmtDocxWritten -ne 'executable written') { throw 'fmt_docx emission failed' }
+& $fmtDocxPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_docx check failed: exit $LASTEXITCODE" }
+# `e.fmt.extract`: a corpus from independent producers detected and extracted: text, title, author and parts per format, detection by content, binary refused.
+$fmtExtractPath = Join-Path $testBuild 'fmt-extract-selfhost.exe'
+$fmtExtractWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_extract\src\main.e') $repo 'x64' 'windows' $fmtExtractPath
+if ($LASTEXITCODE -ne 0 -or $fmtExtractWritten -ne 'executable written') { throw 'fmt_extract emission failed' }
+& $fmtExtractPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_extract check failed: exit $LASTEXITCODE" }
 # `e.fmt.odf`: an OpenDocument text file and presentation made with Python's zipfile read back, two refusals.
 $fmtOdfPath = Join-Path $testBuild 'fmt-odf-selfhost.exe'
 $fmtOdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_odf\src\main.e') $repo 'x64' 'windows' $fmtOdfPath
@@ -1288,6 +1306,12 @@ $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtPdfWritten -ne 'executable written') { throw 'fmt_pdf emission failed' }
 & $fmtPdfPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_pdf check failed: exit $LASTEXITCODE" }
+# `e.fmt.pdf.write`: a one-page and a two-page report compared byte for byte with an independent writer (reportlab metrics), read back through e.fmt.pdf, widths against reportlab, the state errors.
+$fmtPdfWritePath = Join-Path $testBuild 'fmt-pdf-write-selfhost.exe'
+$fmtPdfWriteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf_write\src\main.e') $repo 'x64' 'windows' $fmtPdfWritePath
+if ($LASTEXITCODE -ne 0 -or $fmtPdfWriteWritten -ne 'executable written') { throw 'fmt_pdf_write emission failed' }
+& $fmtPdfWritePath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_pdf_write check failed: exit $LASTEXITCODE" }
 # `e.fmt.vcard`: vCard texts parsed and compared with vobject, the cards written again and compared with a reference writer.
 $fmtVcardPath = Join-Path $testBuild 'fmt-vcard-selfhost.exe'
 $fmtVcardWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_vcard\src\main.e') $repo 'x64' 'windows' $fmtVcardPath
@@ -1456,6 +1480,18 @@ $fmtHtmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtHtmlWritten -ne 'executable written') { throw 'fmt_html emission failed' }
 & $fmtHtmlPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_html check failed: exit $LASTEXITCODE" }
+# `e.fmt.html.sanitize`: untrusted markup cleaned and compared byte for byte with nh3 (ammonia) over a corpus and four configurations, the style allowlist, attack inputs, idempotence, nesting.
+$fmtHtmlSanitizePath = Join-Path $testBuild 'fmt-html-sanitize-selfhost.exe'
+$fmtHtmlSanitizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_html_sanitize\src\main.e') $repo 'x64' 'windows' $fmtHtmlSanitizePath
+if ($LASTEXITCODE -ne 0 -or $fmtHtmlSanitizeWritten -ne 'executable written') { throw 'fmt_html_sanitize emission failed' }
+& $fmtHtmlSanitizePath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_html_sanitize check failed: exit $LASTEXITCODE" }
+# `e.fmt.graph`: NetworkX-written GraphML, GEXF and GML read, nested reference files read, a typed model written byte for byte and read back, to_csr, the refusals.
+$fmtGraphPath = Join-Path $testBuild 'fmt-graph-selfhost.exe'
+$fmtGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_graph\src\main.e') $repo 'x64' 'windows' $fmtGraphPath
+if ($LASTEXITCODE -ne 0 -or $fmtGraphWritten -ne 'executable written') { throw 'fmt_graph emission failed' }
+& $fmtGraphPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_graph check failed: exit $LASTEXITCODE" }
 # `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
 $asyncPath = Join-Path $testBuild 'async-selfhost.exe'
 $asyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\async\src\main.e') $repo 'x64' 'windows' $asyncPath

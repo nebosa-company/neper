@@ -455,17 +455,6 @@
       "evidence": "Planning only (D1824). Signature/draw parity missing: ink stroke capture, pressure-aware polyline storage and timed replay over the existing pointer/pen gesture stream; pen input exists but ink storage does not. Minor. Fixtures for stroke bounds, replay timing and capacity refusal."
     },
     {
-      "id": "L100",
-      "category": "library",
-      "group": "Formats",
-      "order": 198,
-      "title": "XLSX worksheet encode for grid and report export",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1852). L044 covers XLSX decode only, leaving the cxExportGrid4Link parity gap: worksheet encode (values, shared strings, basic styles, column widths, merges) over the e.fmt.xlsx read model for DataGrid and L089 report export. Round-trip fixtures through L044 decode plus Excel-compat bounds; charts, pivots and PDF export stay out."
-    },
-    {
       "id": "L101",
       "category": "library",
       "group": "Drivers",
@@ -598,17 +587,6 @@
       "evidence": "Planning only (D1881). opendal parity at the portable layer: unified put/get/list/delete over L119 virtual FS, e.net.http clients and memory backends. Vendor clouds stay out per the cloud ruling. Fixtures run every backend through one conformance script."
     },
     {
-      "id": "L132",
-      "category": "library",
-      "group": "Formats",
-      "order": 230,
-      "title": "HTML sanitizer in e.fmt.html",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). ammonia parity missing: allowlist-based HTML sanitization with URL-scheme policy over the e.fmt.html parser. Complements L066 safe-viewer work on the viewer side. Fixtures incl. event-handler, style and nesting attacks."
-    },
-    {
       "id": "L134",
       "category": "library",
       "group": "UI",
@@ -686,28 +664,6 @@
       "evidence": "Planning only (D1890). Orleans/Akka parity missing: virtual actors with lifecycle, timers, reminders and persisted state over e.dist placement plus e.db storage. e.task covers tasks, not grains. Fixtures for activation, timer firing, reminder durability and reentrancy refusal."
     },
     {
-      "id": "L145",
-      "category": "library",
-      "group": "Formats",
-      "order": 243,
-      "title": "PDF document generation in e.fmt",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). QuestPDF/PdfSharp parity missing: fills the hole L089 itself names (no PDF writer in e.fmt). Page model with text layout, tables and vector drawing over e.text.layout. Fixtures byte-check minimal documents; extraction is a second slice."
-    },
-    {
-      "id": "L146",
-      "category": "library",
-      "group": "Formats",
-      "order": 244,
-      "title": "Word document generation over OOXML",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). DocX parity missing: friendly .docx generation (paragraphs, tables, styles, images) over the zip writer. L044/L100 cover spreadsheets only. Fixtures round-trip through document inspection; tracked changes stay out."
-    },
-    {
       "id": "L147",
       "category": "library",
       "group": "Algorithms",
@@ -774,17 +730,6 @@
       "evidence": "Planning only (D1890). Third small-completions item: CMS/PKCS#7 signing for S/MIME, json5 codec, TFTP client, singleflight call-dedup, MAC/hostname lookups and file-sink log rotation. Each lands with table or loopback fixtures; split out any that grows, mirroring L135."
     },
     {
-      "id": "L153",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 251,
-      "title": "Unified document text-extraction facade for search",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1891). Tika parity missing: unified detect, parse and text/metadata extraction over the e.fmt codecs, feeding the L034 indexing pipeline. Fixtures assert extracted text per format on a corpus sample; OCR and handwriting stay out."
-    },
-    {
       "id": "L154",
       "category": "library",
       "group": "Algorithms",
@@ -794,17 +739,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1891). SymPy/Symja parity missing: symbolic expression trees with differentiation, integration and equation solving over e.math numerics. Numeric solvers exist; nothing is symbolic. Fixtures against reference derivations; simplification heuristics stay minimal."
-    },
-    {
-      "id": "L155",
-      "category": "library",
-      "group": "Formats",
-      "order": 253,
-      "title": "Graph interchange formats: GraphML, GEXF, GML",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1891). Gephi/JGraphT-IO parity missing: GraphML, GEXF and GML read/write over e.data.graph with attribute round-trips. Fixtures on reference files incl. nested graphs; hypergraphs stay out."
     },
     {
       "id": "L156",

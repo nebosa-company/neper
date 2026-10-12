@@ -16862,6 +16862,44 @@ fn build_tree(a: *mem.Arena, doc: *const html.Document, root: html.NodeId) -> No
 
 The accessibility tree of an HTML document (L040), after Vaper's `a11y/accessibility_builder.dart`: each element's role (an explicit `role` from a known set first, else its native role), its accessible name in the order the standard fixes (`aria-labelledby` over `aria-label` over the native source -- `alt`, `<label>`, placeholder, caption, title -- over text content for the roles that name from content), its states, heading level, value range and link target, and the tree with `aria-hidden` subtrees dropped, a nameless stateless generic container flattened and the redundant text leaves of a name-from-content role removed (`build_tree`). Checked against Vaper's own builder over 220 random documents on both hosts (D2343).
 
+### `e.fmt.html.sanitize`
+
+```neper
+error Encoding
+error TooLarge
+error TooDeep
+
+type Policy = struct {
+    tags: str,
+    generic_attributes: str,
+    tag_attributes: str,
+    url_schemes: str,
+    remove_content: str,
+    css_properties: str,
+    link_rel: str,
+    allow_relative: bool,
+    max_depth: u16,
+}
+
+fn default_policy() -> Policy
+fn has_token(list: str, token: str) -> bool
+fn tag_attribute_allowed(policy: Policy, tag: str, name: str) -> bool
+fn is_url_attribute(name: str) -> bool
+fn lower(c: u8) -> u8
+fn url_allowed(value: str, policy: Policy) -> bool
+fn push_text(b: *str.Builder, s: str, attribute: bool) -> err
+fn is_void(name: str) -> bool
+fn style_walk(b: *str.Builder, value: str, policy: Policy, emit: bool) -> (bool, err)
+
+type Walk = struct { policy: Policy, a: *mem.Arena }
+
+fn walk(w: *Walk, doc: *const html.Document, id: html.NodeId, b: *str.Builder, depth: usize) -> err
+fn sanitize(a: *mem.Arena, source: str, policy: Policy) -> (str, err)
+```
+
+HTML sanitizer (L132), the ammonia model over the `e.fmt.html` parser: `sanitize(a, source, policy)` parses untrusted markup and writes it back from the tree, keeping only what a `Policy` names. An element off the `tags` list is dropped with its children kept; one on `remove_content` (`script`, `style` by default) goes with everything in it; an attribute survives only when the policy lists it for that tag (`tag:attribute` tokens) or for every tag (`generic_attributes`), never when its name starts with `on`, and, for the URL-carrying attributes (`href`, `src`, `cite`, `action`, `poster`, ...), only when the value's scheme, read the way a browser reads it (leading control characters and spaces trimmed, tab and newline ignored inside, entities already decoded), is on `url_schemes` or the URL is relative and `allow_relative` is set; `srcset` is always dropped; `style` is allowed only through the `css_properties` allowlist and a declaration with `url(`, `expression(`, `javascript:`, `@`, a backslash, a comment or `<` is dropped; comments and doctype are dropped; text and attribute values are re-escaped (`&`, `<`, `>`, no-break space, and `"` in attributes), so the output parses back to the tree it came from; `a` elements get `rel` from `link_rel`, replacing any `rel`. `default_policy()` is ammonia's list of tags, attributes and URL schemes. Errors: `Encoding` for input that is not UTF-8, `TooDeep` past `max_depth` (nesting is refused, not truncated), `TooLarge`. Differences from ammonia that are recorded rather than hidden: the parser has no adoption agency, foster parenting or `tbody` insertion (mis-nested formatting and a `table` with bare rows come out as the tree it builds, which is safe but not ammonia's), and `cite` is URL-checked here where ammonia passes it. Checked byte for byte against nh3 (ammonia) over a corpus and four configurations, with the property checks for the attack inputs and idempotence of every output (`scripts/gen_sanitize_test.py`).
+
+
 ### `e.fmt.hcl`
 
 ```neper
@@ -18370,6 +18408,26 @@ Version 1 reads stored and DEFLATE entries, ZIP64 sizes and UTF-8 names. It reje
 encrypted entries, absolute paths and names containing a `..` segment. CRC and all
 per-entry/aggregate limits are checked before successful extraction.
 
+### `e.fmt.zip.write`
+
+```neper
+error BadName
+error TooLarge
+
+type Part = struct { name: str, data: []const u8 }
+
+const MAX_PARTS: usize = 65535usize
+const MAX_TOTAL: usize = 4294967295usize
+
+fn put16(out: []u8, at: usize, v: u32)
+fn put32(out: []u8, at: usize, v: u32)
+fn put_bytes(out: []u8, at: usize, src: []const u8)
+fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err)
+```
+
+ZIP writing (L100): `store` lays named parts out as stored (method 0) entries, local headers then the central directory and end record, the layout `e.fmt.zip` reads and Python's zipfile writes for `ZIP_STORED`. The DOS date is fixed at 1980-01-01 so the same parts always give the same bytes. Limits are the classic ones (65535 parts, 4 GiB - 1, a 65535-byte name); a name `e.fmt.zip` would refuse is `BadName`, no parts or an over-size package `TooLarge`. Nothing is compressed; DEFLATE output is a later slice. Checked byte for byte against Python's zipfile and read back through `e.fmt.zip` in the `fmt_xlsx_book` fixture.
+
+
 ### `e.fmt.sevenzip`
 
 ```neper
@@ -18667,6 +18725,75 @@ fn describe_sheets(a: *mem.Arena, names_in: []const str, requested: str) -> (Des
 ```
 
 Spreadsheet sheet-to-table normalisation (L044), after Appdor's `src/io/xlsx.js`: a sheet already read into typed `Cell` values becomes headers and string rows (`sheet_to_table`, `workbook_to_tables`), with a zero kept as `0`, a boolean as `true`/`false`, a date as its local `YYYY-MM-DD` (and ` HH:MM:SS` off midnight), the header row found by `detect_header_row` (the first of the first ten rows filling more than half of the widest), blank and duplicate headings renamed by the CSV rule (`resolve_headers`), and the width taken from the last filled column. Also `parse_cell_ref`, `sheet_formulas` and `describe_sheets`. The OOXML container is not read: Appdor leaves that to SheetJS. Checked against Appdor's own functions over 700 cases (with `x.migrate.typemaps`) on both hosts (D2347).
+
+### `e.fmt.xlsx.book`
+
+```neper
+error BadSheetName
+error BadLayout
+error BadCell
+error BadText
+error TooLarge
+error NoWorkbook
+error BadWorkbook
+
+type Width = struct { column: u32, chars: f64 }
+type Merge = struct { row: u32, column: u32, rows: u32, columns: u32 }
+type Layout = struct { widths: []const Width, merges: []const Merge, bold_header: bool }
+type Shared = struct { slots: []u32, strings: []str, unique: usize, references: usize }
+
+const MAX_ROWS: usize = 1048576usize
+const MAX_COLUMNS: usize = 16384usize
+const MAX_TEXT_POINTS: usize = 32767usize
+const MAX_NAME_POINTS: usize = 31usize
+const MAX_SHEETS: usize = 255usize
+const FREE: u32 = 4294967295u32
+
+fn ns_main() -> str
+fn no_layout() -> Layout
+fn days_from_civil(year: i64, month: u32, day: u32) -> i64
+fn civil_from_days(days: i64) -> (i64, u32, u32)
+fn leap_year(year: i64) -> bool
+fn month_days(year: i64, month: u32) -> u32
+fn serial_days(year: i64, month: u32, day: u32) -> (i64, bool)
+fn push_escaped(b: *str.Builder, s: str, attribute: bool) -> err
+fn push_ref(b: *str.Builder, column: usize, row: usize) -> err
+fn push_number(b: *str.Builder, v: f64) -> err
+fn finite(v: f64) -> bool
+fn clean_text(s: str) -> bool
+fn valid_sheet_name(name: str) -> bool
+fn shared_index(s: *Shared, value: str) -> u32
+fn needs_preserve(value: str) -> bool
+fn check_sheet(sheet: xlsx.Sheet, layout: Layout) -> (usize, err)
+fn sheet_xml(a: *mem.Arena, sheet: xlsx.Sheet, layout: Layout, sst_table: *Shared) -> (str, err)
+fn styles_xml() -> str
+fn content_types_xml(a: *mem.Arena, sheet_count: usize) -> (str, err)
+fn root_rels_xml() -> str
+fn workbook_xml(a: *mem.Arena, sheets: []const xlsx.Sheet) -> (str, err)
+fn workbook_rels_xml(a: *mem.Arena, sheet_count: usize) -> (str, err)
+fn shared_strings_xml(a: *mem.Arena, sst_table: *const Shared) -> (str, err)
+fn encode(a: *mem.Arena, sheets: []const xlsx.Sheet, layouts: []const Layout) -> ([]u8, err)
+fn sheet_part_name(a: *mem.Arena, index: usize) -> (str, err)
+fn local(name: str) -> str
+fn is_element(nodes: []const xml.Node, n: usize, name: str) -> bool
+fn attr(node: *const xml.Node, name: str) -> (str, bool)
+fn parent_index(nodes: []const xml.Node, n: usize) -> usize
+fn code_is_date(code: str) -> bool
+fn builtin_date_format(id: u64) -> bool
+fn date_styles(a: *mem.Arena, nodes: []const xml.Node) -> ([]bool, err)
+fn shared_strings(a: *mem.Arena, nodes: []const xml.Node) -> ([]str, err)
+fn part_of(a: *mem.Arena, archive: *zip.Archive, name: str) -> ([]u8, bool, err)
+fn floor_f64(v: f64) -> f64
+fn date_from_serial(serial: f64) -> xlsx.Cell
+
+type Raw = struct { column: usize, row: usize, kind: str, style: usize, value: str, inline: str }
+
+fn read_sheet(a: *mem.Arena, part: []const u8, sst_table: []const str, dates: []const bool) -> ([]const []const xlsx.Cell, err)
+fn decode(a: *mem.Arena, data: []const u8) -> ([]xlsx.Sheet, err)
+```
+
+XLSX workbook encode and decode over the `e.fmt.xlsx` cell model (L100). `encode` turns `[]xlsx.Sheet` into a SpreadsheetML package for DataGrid and report export: text through a shared-strings table, numbers, booleans, dates (serials with a date number format, Excel's 1900 leap-year quirk kept, 1900-01-01 to 9999-12-31), an optional bold header row, column widths and merged ranges (`Layout` per sheet). `decode` reads such a package back to the same model and also what Excel, openpyxl and XlsxWriter write: shared, inline and formula-string cells, DEFLATE parts, date cells found by their number format; a formula cell decodes as its cached value. Bounds are Excel's (1,048,576 rows, 16,384 columns, a 31-character sheet name without `: \ / ? * [ ]`, unique ignoring case, 32,767 characters of text without XML-illegal control characters, merges inside the sheet and not overlapping): `BadSheetName`, `BadText`, `BadCell`, `BadLayout`, `TooLarge`. Charts, pivots, rich text runs, styles beyond the bold header and the date format, and compression of what is written are not here; a `BadDate` cell is written empty. Checked against an independent Python writer (byte equality, loaded back by openpyxl) and workbooks written by openpyxl and XlsxWriter (`scripts/gen_xlsx_book_test.py`).
+
 
 ### `x.identity.jose`
 
@@ -20116,6 +20243,97 @@ The module does not open files, fetch subresources, execute scripts, apply CSS,
 construct a browser DOM or expose mutable tree operations. A caller loads a file
 through `e.fs` or supplies an `e.io.Reader`. Legacy encoding sniffing and conversion
 must occur before parsing and are outside the version-1 surface.
+
+### `e.fmt.graph`
+
+```neper
+error Malformed
+error Dangling
+error Unsupported
+error TooLarge
+error BadName
+
+type AttrKind = enum u8 { String, Boolean, Int, Long, Float, Double }
+type Attr = struct { name: str, kind: AttrKind, value: str }
+type Node = struct { id: str, attrs: []const Attr, subgraph: u32 }
+type Edge = struct { id: str, source: str, target: str, directed: bool, attrs: []const Attr }
+type Graph = struct { id: str, directed: bool, nodes: []const Node, edges: []const Edge, attrs: []const Attr }
+type Document = struct { graphs: []const Graph }
+
+const NONE: u32 = 4294967295u32
+const MAX_GRAPHS: usize = 65536usize
+const MAX_DEPTH: usize = 64usize
+
+type Key = struct { id: str, domain: str, name: str, kind: AttrKind, default_value: str, has_default: bool }
+
+fn local(name: str) -> str
+fn attr_of(node: *const xml.Node, name: str) -> (str, bool)
+fn kind_from_name(name: str) -> AttrKind
+fn graphml_type(kind: AttrKind) -> str
+fn gexf_type(kind: AttrKind) -> str
+fn element_text(a: *mem.Arena, doc: *const xml.Document, id: usize) -> (str, err)
+fn is_element(doc: *const xml.Document, id: usize, name: str) -> bool
+
+type Reader = struct { a: *mem.Arena, graphs: list.List[Graph], keys: []Key, key_count: usize }
+
+fn blank_graph() -> Graph
+fn find_key(r: *const Reader, id: str, domain: str) -> (usize, bool)
+fn has_attr(attrs: []const Attr, name: str) -> bool
+fn validate(a: *mem.Arena, d: Document) -> err
+fn graphml_data(r: *Reader, doc: *const xml.Document, element: usize, domain: str, into: *list.List[Attr]) -> err
+fn graphml_graph(r: *Reader, doc: *const xml.Document, element: usize, depth: usize) -> (u32, err)
+fn try_list_attr(a: *mem.Arena) -> list.List[Attr]
+fn try_list_node(a: *mem.Arena) -> list.List[Node]
+fn try_list_edge(a: *mem.Arena) -> list.List[Edge]
+fn new_reader(a: *mem.Arena, nodes: usize) -> (Reader, err)
+fn read_graphml(a: *mem.Arena, source: str) -> (Document, err)
+
+type Def = struct { class: str, id: str, title: str, kind: AttrKind }
+
+fn gexf_values(a: *mem.Arena, doc: *const xml.Document, element: usize, defs: []const Def, count: usize, class: str, into: *list.List[Attr]) -> err
+fn gexf_nodes(r: *Reader, doc: *const xml.Document, container: usize, defs: []const Def, count: usize, directed: bool, depth: usize, into: *list.List[Node]) -> err
+fn read_gexf(a: *mem.Arena, source: str) -> (Document, err)
+
+type Item = struct { key: str, text: str, is_list: bool, is_string: bool, first: u32, next: u32 }
+type GmlParser = struct { a: *mem.Arena, source: str, at: usize, items: []Item, used: usize }
+
+fn gml_skip(p: *GmlParser)
+fn is_key_byte(c: u8) -> bool
+fn gml_unescape(a: *mem.Arena, raw: str) -> (str, err)
+fn gml_list(p: *GmlParser, top: bool, depth: usize) -> (u32, err)
+fn gml_kind_of(item: Item) -> AttrKind
+fn gml_graph(r: *Reader, p: *GmlParser, first: u32, depth: usize, names: []str, name_count: *usize, name_ids: []str) -> (u32, err)
+fn read_gml(a: *mem.Arena, source: str) -> (Document, err)
+fn push_escaped(b: *str.Builder, s: str, attribute: bool) -> err
+fn xml_clean(s: str) -> bool
+fn check_names(d: Document) -> err
+
+type OutKey = struct { domain: str, name: str, kind: AttrKind }
+
+fn out_key_index(keys: []const OutKey, count: usize, domain: str, name: str, kind: AttrKind) -> (usize, bool)
+fn add_out_keys(keys: []OutKey, count: *usize, domain: str, attrs: []const Attr)
+fn graphml_data_out(b: *str.Builder, keys: []const OutKey, count: usize, domain: str, attrs: []const Attr) -> err
+fn graphml_graph_out(b: *str.Builder, d: Document, index: usize, keys: []const OutKey, count: usize, depth: usize) -> err
+fn count_attrs(d: Document) -> usize
+fn write_graphml(a: *mem.Arena, d: Document) -> (str, err)
+fn attr_value(attrs: []const Attr, name: str) -> (str, bool)
+fn write_gexf(a: *mem.Arena, d: Document) -> (str, err)
+fn gexf_edge_values(b: *str.Builder, keys: []const OutKey, ids: []const usize, count: usize, attrs: []const Attr) -> err
+fn gexf_nodes_out(b: *str.Builder, d: Document, index: usize, keys: []const OutKey, ids: []const usize, count: usize, depth: usize) -> err
+fn push_gml_string(b: *str.Builder, s: str) -> err
+fn push_gml_value(b: *str.Builder, a: Attr) -> err
+fn gml_key_ok(name: str) -> bool
+fn push_spaces(b: *str.Builder, n: usize) -> err
+fn gml_attrs(b: *str.Builder, attrs: []const Attr, spaces: usize, skip_label: bool) -> err
+fn node_index(g: Graph, name: str) -> u32
+fn gml_base(d: Document, index: usize) -> u32
+fn gml_graph_out(b: *str.Builder, d: Document, index: usize, spaces: usize, depth: usize) -> err
+fn write_gml(a: *mem.Arena, d: Document) -> (str, err)
+fn to_csr(a: *mem.Arena, d: Document, index: usize) -> (graph.Graph[f64], err)
+```
+
+Graph interchange (L155): GraphML, GEXF and GML read and written over one model, and `to_csr` into `e.data.graph`. A `Document` is a list of `Graph`s, the first the root and the rest nested ones, each `Node` naming its subgraph by index (`NONE` for none); nodes and edges carry string identifiers and typed `Attr`s (name, `AttrKind` of String, Boolean, Int, Long, Float or Double, text), which is what round-trips: GraphML `key`/`data` with key defaults on read, GEXF `attributes`/`attvalues` with `label`, `weight` and the graph `name`, and the scalar key-value pairs of GML. `read_graphml`, `read_gexf` and `read_gml` take text and return the document (`Malformed`, `Dangling` for an edge naming no node or a duplicate id found by `validate`, `Unsupported` for hyperedges and ports, `TooLarge`); `write_graphml`, `write_gexf` and `write_gml` write it (`BadName` for a key GML cannot spell or a control character, `Unsupported` for edges in a GEXF hierarchy subgraph). GraphML keeps nested graphs in nodes and per-edge `directed`; GEXF keeps hierarchy as `nodes` nested in a node and a per-edge `type`; GML keeps a `graph` list nested in a node, writes a node's `id` as its index over all graphs and its identifier as `label` (the NetworkX and Gephi convention, so a node attribute called `label` is not written) and non-ASCII text as `&#N;`. `to_csr(a, d, i)` builds graph `i` as `e.data.graph.Graph[f64]` with node `n` the graph's n-th node and the `weight` attribute (default 1) as the edge value, an undirected edge becoming two directed ones. Not here: hypergraphs, ports, GEXF dynamics and viz data, layout and style, and a typed GML beyond integer, real and string. Checked on files written by NetworkX (types and values derived from the NetworkX graph), the GraphML primer's nested example, a GEXF hierarchy and a GML nested graph, and on writers compared byte for byte with independent ones that NetworkX read back (`scripts/gen_graph_test.py`).
+
 
 ### `e.fmt.html.template`
 
@@ -24451,6 +24669,136 @@ fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err)
 The text of an Office Open XML package, read over `e.fmt.zip` and `e.fmt.xml` from a byte slice (C123): `paragraphs` gives a `.docx`'s paragraphs in order (the text of each, its style name such as `Heading1`, whether it is a list item, tabs and breaks as characters, entities decoded), `slides` a `.pptx`'s slides in slide-number order with each slide's text paragraphs. Namespace prefixes are ignored; runs, tables, images and shapes are not laid out, and the text of a table cell or a shape is a paragraph like any other. A zip with no main part is `NoMainPart`, bytes that are not a zip `NotAPackage`. Checked against packages made with Python's zipfile.
 
 
+### `e.fmt.docx`
+
+```neper
+error BadText
+error BadColor
+error BadTable
+error BadImage
+error BadMeta
+error TooLarge
+
+type Style = enum u8 { Normal, Title, Heading1, Heading2, Heading3 }
+type Align = enum u8 { Left, Center, Right, Justify }
+type ListKind = enum u8 { None, Bullet, Number }
+type Page = enum u8 { A4, Letter }
+type Kind = enum u8 { Paragraph, Table, Image, PageBreak }
+type Run = struct { text: str, bold: bool, italic: bool, underline: bool, half_points: u32, color: str }
+type Para = struct { style: Style, align: Align, list: ListKind, list_id: u32, level: u32, runs: []const Run }
+type Cell = struct { paras: []const Para }
+type Row = struct { cells: []const Cell }
+type Table = struct { widths: []const u32, rows: []const Row, header: bool }
+type Image = struct { data: []const u8, width_emu: u32, height_emu: u32, alt: str }
+type Block = struct { kind: Kind, para: Para, table: Table, image: Image }
+type Meta = struct { title: str, creator: str, created: str, page: Page }
+
+const MAX_LISTS: u32 = 64u32
+const MAX_LEVEL: u32 = 8u32
+const MAX_HALF_POINTS: u32 = 1638u32
+const EMU_PER_PIXEL: u32 = 9525u32
+
+fn run(s: str) -> Run
+fn bold_run(s: str) -> Run
+fn para(style: Style, runs: []const Run) -> Para
+fn paragraph(p: Para) -> Block
+fn table(t: Table) -> Block
+fn image(i: Image) -> Block
+fn page_break() -> Block
+fn default_meta() -> Meta
+fn clean(s: str) -> bool
+fn hex_color(s: str) -> bool
+fn push_escaped(b: *str.Builder, s: str, attribute: bool) -> err
+fn style_id(style: Style) -> str
+fn image_info(data: []const u8) -> (u32, u32, bool, bool)
+fn push_run(b: *str.Builder, r: Run) -> err
+fn push_para(b: *str.Builder, p: Para) -> err
+fn push_image(b: *str.Builder, im: Image, number: usize, ext: str, cx: u32, cy: u32) -> err
+fn push_table(b: *str.Builder, t: Table) -> err
+fn check_para(p: Para) -> err
+fn styles_xml() -> str
+fn numbering_xml(a: *mem.Arena, numbered: u32) -> (str, err)
+fn core_xml(a: *mem.Arena, meta: Meta) -> (str, err)
+fn media_name(a: *mem.Arena, number: usize, ext: str) -> (str, err)
+fn encode(a: *mem.Arena, blocks: []const Block, meta: Meta) -> ([]u8, err)
+fn root_rels() -> str
+```
+
+Word document generation (L146), the writing half beside the `e.fmt.ooxml` reader: `encode` writes a `.docx` from `[]Block` and a `Meta` (title, creator, created, A4 or Letter). A block is a paragraph (`Style` Normal, Title, Heading1-3; `Align`; a bullet or numbered list item with a level, numbered lists restarting per `list_id`; `Run`s with bold, italic, underline, size in half points, an RGB colour, tabs and line breaks), a table (column widths in twips, rows of cells of paragraphs, an optional header row, a ruled `TableGrid`), an inline PNG or JPEG (sized in EMU or at 96 dpi from the pixel size, with alt text) or a page break. The package carries a styles part, a numbering part and core properties, so Word, LibreOffice and python-docx see named styles and real lists. Refusals: control characters `BadText`, a colour that is not six hex digits `BadColor`, a table with no widths or more cells than columns `BadTable`, bytes that are neither PNG nor JPEG `BadImage`, bad metadata `BadMeta`, a list id past 64, a level past 8 or a size past 1638 half points `TooLarge`. Not here: tracked changes, comments, fields and a contents table, headers and footers, footnotes, hyperlinks, run fonts, merged cells, section changes, GIF and other image types, compression of the package. Checked byte for byte against an independent Python writer, opened by python-docx (styles, runs, table, images, core properties, page size) when generated, and read back through `e.fmt.ooxml.paragraphs` (`scripts/gen_docx_test.py`).
+
+
+### `e.fmt.extract`
+
+```neper
+error Unsupported
+error Corrupt
+error TooLarge
+error Encoding
+
+type Format = enum u8 { Unknown, Text, Html, Xml, Json, Markdown, Csv, Pdf, Docx, Pptx, Xlsx, Odt, Odp, Ods, Mail, VCard }
+type Document = struct { format: Format, text: str, title: str, author: str, parts: usize }
+
+const MAX_INPUT: usize = 67108864usize
+
+fn empty_document(format: Format) -> Document
+fn fold(c: u8) -> u8
+fn starts_fold(s: str, at: usize, prefix: str) -> bool
+fn ends_fold(s: str, suffix: str) -> bool
+fn is_space(c: u8) -> bool
+fn skip_space(s: str, at: usize) -> usize
+fn valid_utf8(s: str) -> bool
+fn strip_bom(s: str) -> str
+fn latin1_to_utf8(a: *mem.Arena, s: str) -> (str, err)
+fn join(a: *mem.Arena, parts: []const str, sep: str) -> (str, err)
+fn has_extension(name: str, ext: str) -> bool
+fn find_entry(archive: *zip.Archive, name: str) -> bool
+fn has_slide(archive: *zip.Archive) -> bool
+fn detect_zip(a: *mem.Arena, data: []const u8) -> Format
+fn looks_like_mail(s: str) -> bool
+fn detect(a: *mem.Arena, data: []const u8, name: str) -> Format
+fn is_alpha(c: u8) -> bool
+fn media_type(format: Format) -> str
+fn xml_first_text(a: *mem.Arena, part: []const u8, name: str) -> (str, err)
+fn package_meta(a: *mem.Arena, data: []const u8, part_name: str, title_name: str, author_name: str) -> (str, str, err)
+fn paragraph_texts(a: *mem.Arena, ps: []const ooxml.Paragraph) -> ([]str, err)
+fn slides_text(a: *mem.Arena, slides: []const ooxml.Slide) -> (str, err)
+fn read_pdf_string(a: *mem.Arena, data: []const u8, key: str) -> (str, err)
+fn html_skipped(name: str) -> bool
+fn html_block(name: str) -> bool
+
+type Flow = struct { pending: u8, wrote: bool }
+
+fn flow_word(b: *str.Builder, f: *Flow, word: str) -> err
+fn flow_text(b: *str.Builder, f: *Flow, s: str) -> err
+fn html_walk(doc: *const html.Document, id: html.NodeId, b: *str.Builder, f: *Flow) -> err
+fn html_title(a: *mem.Arena, doc: *const html.Document) -> (str, err)
+fn html_extract(a: *mem.Arena, source: str) -> (Document, err)
+fn xml_extract(a: *mem.Arena, source: []const u8) -> (Document, err)
+fn markdown_line(b: *str.Builder, line: str) -> err
+fn markdown_extract(a: *mem.Arena, source: str) -> (Document, err)
+fn csv_extract(a: *mem.Arena, source: str) -> (Document, err)
+fn vcard_extract(a: *mem.Arena, source: []const u8) -> (Document, err)
+fn split_message(s: str) -> (str, str)
+fn header_value(a: *mem.Arena, block: str, name: str) -> (str, bool, err)
+fn hex_digit(c: u8) -> u32
+fn quoted_printable(a: *mem.Arena, s: str) -> (str, err)
+fn strip_spaces(a: *mem.Arena, s: str) -> (str, err)
+fn parameter_of(value: str, name: str) -> str
+fn decode_body(a: *mem.Arena, body: str, content_type: str, encoding: str) -> (str, err)
+fn entity_text(a: *mem.Arena, entity: str, depth: usize) -> (str, bool, err)
+fn part_text(a: *mem.Arena, part: str, depth: usize) -> (str, bool, err)
+fn mail_extract(a: *mem.Arena, source: str) -> (Document, err)
+fn text_extract(source: str) -> (Document, err)
+fn extract_as(a: *mem.Arena, data: []const u8, format: Format) -> (Document, err)
+fn json_extract_value(a: *mem.Arena, v: *const json.Value, size: usize) -> (Document, err)
+fn json_line(b: *str.Builder, lines: *usize, s: str) -> err
+fn json_emit(b: *str.Builder, v: *const json.Value, lines: *usize) -> err
+fn extract(a: *mem.Arena, data: []const u8, name: str) -> (Document, err)
+```
+
+The document text-extraction facade (L153): `detect(a, data, name)` names the `Format` of a byte slice from its content (PDF header, zip entries such as `word/document.xml`, `xl/workbook.xml`, `ppt/slides/`, the OpenDocument `mimetype` entry, HTML and XML declarations, `BEGIN:VCARD`, mail headers, a JSON that parses), with the file name's extension as the tie-break among text formats and for Markdown, CSV and plain text; `extract` detects and then `extract_as` reads the document through the codec that owns the format and returns `Document { format, text, title, author, parts }`. Text per format: PDF pages joined by a blank line with the Info dictionary's Title and Author (literal or UTF-16 hex strings); DOCX and PPTX paragraphs and slides with core properties; ODT, ODP and ODS the same from `meta.xml`; XLSX each sheet's name then its rows with tab-separated cells; HTML the visible text with script, style, head and template dropped, blocks on their own lines, table cells tab separated, and the `title` element; XML the character data one node per line; JSON the keys and string values, one per line; Markdown the text with block and inline markup removed line by line (not a CommonMark parse) and the first heading as the title; CSV and TSV rows by lines; mail the `text/plain` body (the HTML part reduced to text when there is none) with quoted-printable, base64, Latin-1 and RFC 2047 handled, the Subject as title and From as author; vCard one line per card. Errors: `Unsupported` for binary or unknown data, `Corrupt` for a document its codec refuses, `Encoding` for text that is not UTF-8, `TooLarge`. Not here: OCR and handwriting, encodings other than UTF-8 and Latin-1, PDFs with ASCII85 or object streams (`e.fmt.pdf` reads FlateDecode only, so a stock reportlab file with page compression gives no text), legacy binary Office formats, archives and images, and the wiring into the L034 indexing pipeline. Checked on a corpus from independent producers (reportlab and pypdf, python-docx, python-pptx, openpyxl, hand-built OpenDocument, Python's email package, the Neper PDF writer's generator) in `scripts/gen_extract_test.py`.
+
+
 ### `e.fmt.odf`
 
 ```neper
@@ -24627,6 +24975,55 @@ fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err)
 ```
 
 The text of a PDF held in a byte slice (C123): `pages` gives each page's text in page-tree order. The objects are found by scanning for `N G obj` (a file with its objects in object streams, or with an xref stream, is `NoPages`), the page order is the catalog's tree, a page's content streams are joined and `/FlateDecode` is undone through `e.fmt.zlib`, and the text operators `Tj`, `TJ` (a kern of -200 or more is a word space), `'`, `"`, `T*`, `Td`, `TD`, `Tm` and `ET` give the lines; literal strings keep their escapes and octal codes, hex strings are read, Latin-1 bytes are written as UTF-8. Not a renderer and not a font reader: an embedded font with its own encoding gives its codes. Checked against PDFs written by the fixture's generator.
+
+
+### `e.fmt.pdf.write`
+
+```neper
+error Invalid
+error Unsupported
+error TooLarge
+error NoPage
+error PageOpen
+
+type Font = enum u8 { Regular, Bold }
+type Color = struct { red: u8, green: u8, blue: u8 }
+type Document = struct { store: mem.Arena, pages: []str, count: usize, open: bool, content: str.Builder, width: f64, height: f64, title: str }
+
+fn black() -> Color
+fn rgb(red: u8, green: u8, blue: u8) -> Color
+fn winansi(code: u32) -> u8
+fn decode_at(s: str, at: usize) -> (u32, usize)
+fn width_units(font: Font, byte: u8) -> u32
+fn supported(s: str) -> bool
+fn span_units(s: str, from: usize, to: usize, font: Font) -> u64
+fn text_width(s: str, size: f64, font: Font) -> (f64, err)
+fn push_real(b: *str.Builder, v: f64, decimals: u32) -> err
+fn real(b: *str.Builder, v: f64) -> err
+fn finite(v: f64) -> bool
+fn color_op(b: *str.Builder, c: Color, stroke: bool) -> err
+fn literal(b: *str.Builder, s: str, from: usize, to: usize) -> err
+fn font_name(font: Font) -> str
+fn document(a: *mem.Arena, max_pages: usize, capacity: usize, width: f64, height: f64, title: str) -> (Document, err)
+fn begin_page(d: *Document) -> err
+fn end_page(d: *Document) -> err
+fn full(e: err) -> err
+fn put_text(d: *Document, x: f64, y: f64, size: f64, font: Font, ink: Color, s: str) -> err
+fn next_line(s: str, from: usize, limit: f64, size: f64, font: Font) -> (usize, usize, u64)
+fn count_lines(s: str, limit: f64, size: f64, font: Font) -> usize
+fn put_paragraph(d: *Document, x: f64, y: f64, width: f64, size: f64, leading: f64, font: Font, ink: Color, s: str) -> (f64, usize, err)
+fn fill_rect(d: *Document, x: f64, y: f64, w: f64, h: f64, ink: Color) -> err
+fn stroke_rect(d: *Document, x: f64, y: f64, w: f64, h: f64, line_width: f64, ink: Color) -> err
+fn draw_line(d: *Document, x1: f64, y1: f64, x2: f64, y2: f64, line_width: f64, ink: Color) -> err
+fn draw_path(d: *Document, xs: []const f64, ys: []const f64, filled: bool, line_width: f64, ink: Color) -> err
+fn fill_circle(d: *Document, cx: f64, cy: f64, r: f64, ink: Color) -> err
+fn put_table(d: *Document, x: f64, y: f64, widths: []const f64, rows: []const []const str, size: f64, leading: f64, pad: f64, header: bool, ink: Color, rule: Color) -> (f64, err)
+fn push_padded(b: *str.Builder, v: usize, digits: usize) -> err
+fn push_utf16_hex(b: *str.Builder, s: str) -> err
+fn finish(a: *mem.Arena, d: *Document) -> (str, err)
+```
+
+PDF document generation (L145), the writing half beside the `e.fmt.pdf` text reader: a page model in points (origin top left, y down, a text's `y` its baseline) over the built-in Helvetica and Helvetica-Bold in WinAnsi, nothing embedded. `document` fixes the page size, title, page limit and a private content region; `begin_page` / `end_page` bracket each page; `put_text`, `put_paragraph` (greedy word wrap at spaces and `\n`, returning the next baseline and the line count), `put_table` (column widths, wrapped cells, a ruled grid, a shaded bold header row, returning the bottom edge), `fill_rect`, `stroke_rect`, `draw_line`, `draw_path` (open polyline or closed filled polygon) and `fill_circle` draw in RGB; `finish` writes a PDF 1.4 file (catalog, page tree, two fonts, information dictionary with a UTF-16 title, pages with plain content streams, cross-reference table). `text_width` measures with the Adobe metrics, so a line that fits here fits in the viewer. A character outside WinAnsi is `Unsupported` (no font embedding, so no CJK or emoji), a call outside a page `NoPage`, a second `begin_page` `PageOpen`, an exhausted page region or page limit `TooLarge`, a non-finite or non-positive argument `Invalid`. Not here: embedded fonts, images, links, outlines, content compression, automatic page breaks (`put_table` reports where it stopped), tagged PDF, and `e.text.layout` shaping, which needs a font file this writer does not carry. Checked byte for byte against an independent Python writer that breaks lines with reportlab's metrics, accepted by pypdf (strict) and pdfminer when generated, and read back through `e.fmt.pdf.pages` (`scripts/gen_pdf_write_test.py`).
 
 
 ### `e.text.highlight`
