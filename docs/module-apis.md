@@ -12714,6 +12714,52 @@ fn no_responders(m: *const Message) -> bool
 
 The NATS core protocol client (L115) over caller buffers, in the shape of `e.net.mqtt`: no sockets, the caller moves the bytes. Encoders (`encode_connect`, `encode_pub`, `encode_hpub` with a NATS/1.0 header block, `encode_sub` with queue groups, `encode_unsub`, ping and pong) write into `dst` and answer the count; `parse` reads one server operation (INFO, MSG, HMSG, +OK, -ERR, PING, PONG, case-insensitive) from the front of a stream and answers the bytes it used, `Incomplete` until the rest has arrived (`needed` says how many a message is short of). `parse_info` reads the INFO document's top-level fields, `parse_headers` a header block with its inline status (503 no responders, 404, 100 idle heartbeat). `Client` keeps the subscriptions in caller storage (auto-unsubscribe after `max`, `Finished`), answers PING, and `reply_subject`/`reply_number` implement the one-wildcard-inbox request-reply pattern. Subjects are validated and matched by the NATS rules (`*` one token, a final `>` the tail). Checked against nats-py (its protocol Parser over the same streams at four chunk sizes, its command builders, CONNECT code and header parser) in 533 vectors plus a scripted session on both hosts (D2642). Not done: TLS upgrade and the socket loop, JetStream, reconnect and cluster failover, Kafka/AMQP (deferred by the queue).
 
+### `x.redis.resp`
+
+```neper
+error Incomplete
+error Invalid
+error TooLarge
+error TooSmall
+type Pair = struct { key: Value, value: Value }
+type Verbatim = struct { format: str, data: []const u8 }
+type Value = union enum u8 { Null, Simple: str, Error: str, Integer: i64, Bulk: []const u8, Array: []const Value, Bool: bool, Double: f64, Big: str, Map: []const Pair, Set: []const Value, Push: []const Value, Verbatim: Verbatim, BlobError: []const u8 }
+type Limits = struct { max_bulk: usize, max_elements: usize, max_depth: u16 }
+type ErrorKind = enum u8 { Generic, Moved, Ask, WrongType, NoAuth, ReadOnly, Loading, TryAgain, ClusterDown, MasterDown, NoScript, Busy }
+type Redirect = struct { ask: bool, slot: u16, host: str, port: u16 }
+type PubSubKind = enum u8 { Message, PMessage, Subscribe, Unsubscribe, PSubscribe, PUnsubscribe }
+type PubSub = struct { kind: PubSubKind, pattern: []const u8, channel: []const u8, payload: []const u8, count: i64 }
+type Session = struct { protocol: u8, pending: usize, subscriptions: usize }
+
+fn limits() -> Limits
+fn put_bytes(dst: []u8, at: *usize, src: []const u8) -> err
+fn put_decimal(dst: []u8, at: *usize, value: usize) -> err
+fn encode_command(dst: []u8, args: []const []const u8) -> (usize, err)
+fn encode_hello(dst: []u8, version: u8, user: str, password: str) -> (usize, err)
+fn line_end(buf: []const u8, at: usize) -> (usize, err)
+fn parse_integer(s: str) -> (i64, bool)
+fn parse_double(s: str) -> (f64, bool)
+fn element_slice(a: *mem.Arena, count: usize) -> ([]Value, err)
+fn pair_slice(a: *mem.Arena, count: usize) -> ([]Pair, err)
+fn read_value(a: *mem.Arena, buf: []const u8, at: *usize, lim: *const Limits, depth: u16) -> (Value, err)
+fn parse(a: *mem.Arena, buf: []const u8, lim: *const Limits) -> (Value, usize, err)
+fn crc16_step(crc: u16, byte: u8) -> u16
+fn key_slot(key: []const u8) -> u16
+fn starts(text: str, prefix: str) -> bool
+fn error_kind(text: str) -> ErrorKind
+fn parse_redirect(text: str) -> (Redirect, bool)
+fn bytes_of(v: Value) -> ([]const u8, bool)
+fn same_ascii(left: []const u8, right: str) -> bool
+fn pubsub_event(items: []const Value) -> (PubSub, bool)
+fn session(protocol: u8) -> Session
+fn is_reply(s: *const Session, v: Value) -> bool
+fn note(s: *Session, v: Value)
+fn apply(s: *Session, event: PubSub)
+fn send(s: *Session, dst: []u8, args: []const []const u8, replies: usize) -> (usize, err)
+```
+
+The Redis serialization protocol (L114), RESP2 and RESP3, over caller buffers (no sockets; the caller moves the bytes, as `e.net.mqtt` does). `encode_command` writes a command as an array of bulk strings and `encode_hello` the RESP3 switch with optional AUTH; `parse` reads one reply from the front of a stream and answers the bytes it used, `Incomplete` until the rest has arrived, `Invalid` for a frame that is not RESP and `TooLarge` past `Limits` (declared sizes are checked before anything is allocated; the arena is left as it was on any error). Reply types: simple string, error, integer, bulk, array and the RESP2 null forms, plus RESP3 null, boolean, double (inf, -inf, nan), big number, blob error, verbatim string, map, set and push; an attribute frame is skipped. Also `key_slot` (CRC-16/XMODEM with hash tags), `parse_redirect` for MOVED/ASK, `error_kind`, `pubsub_event` for RESP2 arrays and RESP3 pushes and a small `Session` that counts pending replies and subscriptions. Checked against redis-py's RESP2 and RESP3 parsers, `pack_command`, `key_slot` and `AskError`/`MovedError` over 381 vectors with every stream re-chunked, plus a scripted pub/sub session on both hosts (D2643). Not done: sockets and connection handling, cluster topology discovery and failover, Sentinel, client-side caching, Lua/script helpers, TLS.
+
 ### `e.net.packet`
 
 ```neper

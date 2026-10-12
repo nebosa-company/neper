@@ -2227,6 +2227,11 @@ net_nats_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$net_nats_written" = 'executable written' ]
 chmod +x "$test_build/net-nats-selfhost"
 "$test_build/net-nats-selfhost"
+# `x.redis.resp` against redis-py: RESP2/RESP3 streams, commands, slots, redirects (D2643).
+x_redis_resp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_redis_resp/src/main.e" "$repo" x64 linux "$test_build/x-redis-resp-selfhost")
+[ "$x_redis_resp_written" = 'executable written' ]
+chmod +x "$test_build/x-redis-resp-selfhost"
+"$test_build/x-redis-resp-selfhost"
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
 [ "$net_http_pool_written" = 'executable written' ]

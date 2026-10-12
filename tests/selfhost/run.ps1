@@ -2521,6 +2521,12 @@ $netNatsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netNatsWritten -ne 'executable written') { throw 'net_nats emission failed' }
 & $netNatsPath
 if ($LASTEXITCODE -ne 0) { throw "a net_nats check failed: exit $LASTEXITCODE" }
+# `x.redis.resp` against redis-py: RESP2/RESP3 streams, commands, slots, redirects (D2643).
+$xRedisRespPath = Join-Path $testBuild 'x-redis-resp-selfhost.exe'
+$xRedisRespWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_redis_resp\src\main.e') $repo 'x64' 'windows' $xRedisRespPath
+if ($LASTEXITCODE -ne 0 -or $xRedisRespWritten -ne 'executable written') { throw 'x_redis_resp emission failed' }
+& $xRedisRespPath
+if ($LASTEXITCODE -ne 0) { throw "a x_redis_resp check failed: exit $LASTEXITCODE" }
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 $netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
 $netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath

@@ -108,6 +108,7 @@
     "e.net.tls",
     "e.net.policy",
     "e.net.ssrf",
+    "x.redis.resp",
     "e.net.nats",
     "e.net.tls.roots",
     "e.net.tls.hoststore",
@@ -3509,6 +3510,18 @@
   {
    "name": "e.net.nats",
    "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.redis.resp",
+   "layer": 6,
    "surface": "source",
    "milestone": null,
    "schedule": "later",
