@@ -120,6 +120,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let streamed35 = hash.sha3_512_done(&s35)
     if !same(streamed35[0..], sha3_512_long[0..]) { os.exit(28) }
     if !hash.equal_constant_time(d1[0..], sha256_abc[0..]) || hash.equal_constant_time(d1[0..], d2[0..]) || hash.equal_constant_time(d1[0..], h1[0..]) { os.exit(29) }
+    // T021: SHA-256 of 1000 bytes (byte i is 7i + 3) fed in pieces of every size that matters to the
+    // partial-block top-up, the whole-block run and the remainder, against hashlib.
+    let want1000: [32]u8 = [32]u8{ 30, 155, 195, 140, 191, 134, 11, 158, 195, 25, 24, 176, 101, 249, 181, 36, 118, 197, 73, 167, 130, 224, 231, 153, 11, 237, 140, 227, 134, 141, 35, 113 }
+    var thousand: [1000]u8 = zero
+    var fill = 0usize
+    while fill < 1000usize {
+        thousand[fill] = u8((fill * 7usize + 3usize) % 256usize)
+        fill += 1usize
+    }
+    let pieces: [9]usize = [9]usize{ 1, 3, 63, 64, 65, 100, 128, 200, 1000 }
+    var piece = 0usize
+    while piece < 9usize {
+        var s256 = hash.sha256_init()
+        var at = 0usize
+        while at < 1000usize {
+            var stop = at + pieces[piece]
+            if stop > 1000usize { stop = 1000usize }
+            hash.sha256_update(&s256, thousand[at..stop])
+            at = stop
+        }
+        let split = hash.sha256_done(&s256)
+        if !same(split[0..], want1000[0..]) { os.exit(30) }
+        piece += 1usize
+    }
+    let whole1000 = hash.sha256(thousand[0..])
+    if !same(whole1000[0..], want1000[0..]) { os.exit(31) }
     os.exit(0)
     ret ok
 }
