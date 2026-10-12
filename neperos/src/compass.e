@@ -268,6 +268,15 @@ fn poll(s: *State) {
     if count > 0usize { s.dirty = true }
 }
 
+// The recording ends after its last checkpoint: back to the live heading.
+fn finish_replay(s: *State) {
+    if s.replay && s.replay_marks >= 4usize {
+        s.replay = false
+        let resumed = start_streams(s, sensorclient.SOURCE_LIVE, 10usize)
+        s.dirty = true
+    }
+}
+
 fn take_fix(s: *State) {
     let (status, lat, lon, accuracy, source) = sensorclient.fix(true)
     if status == sensorclient.STATUS_OK {
@@ -541,21 +550,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let touch = appkit.next_touch(&kit, wait)
         if touch.kind == appkit.TOUCH_TIMEOUT {
             poll(&s)
-            // The recording ends after eight seconds: back to the live heading.
-            if s.replay && s.replay_marks >= 4usize {
-                s.replay = false
-                let resumed = start_streams(&s, sensorclient.SOURCE_LIVE, 10usize)
-                s.dirty = true
-            }
+            finish_replay(&s)
         } else if touch.kind == appkit.TOUCH_END {
             running = false
         } else if touch.kind == appkit.TOUCH_TICK {
-            // The heading follows the ticks; the screen follows when the whole degrees change.
+            // The heading follows the ticks; the screen follows when the whole degrees change. The streams are read
+            // here too (a frame can take longer than the wait, and then only ticks arrive), and a figure eight or a
+            // replay in progress is not drawn: a frame would hold up the samples it shows.
             s.ticks += 1usize
-            if !s.calibrating && !s.replay { poll(&s) }
+            poll(&s)
+            finish_replay(&s)
             if s.ticks % FIX_EVERY == 1usize { take_fix(&s) }
             let now = usize(heading_of(&s) + 0.5)
-            if (!s.locked && now != s.shown_heading) || s.dirty {
+            if s.calibrating || s.replay {
+                appkit.answer(appkit.ANSWER_NONE)
+            } else if (!s.locked && now != s.shown_heading) || s.dirty {
                 s.shown_heading = now
                 if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
             } else {

@@ -451,22 +451,33 @@ fn judge_goal(s: *State) {
     if streak > s.best_streak { s.best_streak = streak }
 }
 
-// The recorded walk: every sample the server has, through the replay's own detector.
+// The recorded walk: the samples the server has, a few hundred at a call, through the replay's own detector.
 fn poll_replay(s: *State) {
-    var batch: [32]sensorclient.Reading = zero
-    let (count, first, denied) = sensorclient.read(sensorclient.KIND_ACCELEROMETER, batch[0usize..32usize])
-    if denied {
-        s.replaying = false
-        ui.say("steps replay denied\n")
-        ret
+    var rounds = 0usize
+    while s.replaying && rounds < 16usize {
+        var batch: [32]sensorclient.Reading = zero
+        let (count, first, denied) = sensorclient.read(sensorclient.KIND_ACCELEROMETER, batch[0usize..32usize])
+        if denied {
+            s.replaying = false
+            ui.say("steps replay denied\n")
+            ret
+        }
+        var i = 0usize
+        while i < count && s.replay_n < REPLAY_SAMPLES {
+            let magnitude = f64(batch[i].z) / 1000.0f64
+            let counted = ped.feed(&s.replay_ped, magnitude)
+            s.replay_n += 1usize
+            i += 1usize
+        }
+        if s.replay_n >= REPLAY_SAMPLES {
+            finish_replay(s)
+            ret
+        }
+        rounds += 1usize
     }
-    var i = 0usize
-    while i < count && s.replay_n < REPLAY_SAMPLES {
-        let magnitude = f64(batch[i].z) / 1000.0f64
-        let counted = ped.feed(&s.replay_ped, magnitude)
-        s.replay_n += 1usize
-        i += 1usize
-    }
+}
+
+fn finish_replay(s: *State) {
     if s.replay_n >= REPLAY_SAMPLES {
         let found = ped.steps(&s.replay_ped)
         s.replay_result = found
@@ -605,6 +616,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             read_hub(&s, false)
             if s.today != before { moved = true }
             judge_goal(&s)
+            if s.replaying { poll_replay(&s) }
             // (A replay in progress is not drawn: a frame takes longer than the samples it would hold up.)
             if (moved || s.dirty) && !s.replaying {
                 s.dirty = false

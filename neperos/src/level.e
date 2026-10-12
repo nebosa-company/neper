@@ -771,6 +771,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if !s.streamed {
                 s.ticks += 1usize
                 step_tick(&s)
+            } else {
+                // (A frame can take longer than the 20 ms wait, and then only ticks arrive: the samples are read here too.)
+                poll(&s)
             }
             if s.dirty && !s.held {
                 if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }

@@ -28,7 +28,6 @@ use ui
 use sysettings
 use vaultfs
 
-var tick_debug: usize = 0usize
 const NONE: usize = 99usize
 const STEADY_TAB: usize = 0usize
 const PATTERN_TAB: usize = 1usize
@@ -735,23 +734,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let now = now_ms()
             wait = 1usize
             if s.next_at > now { wait = s.next_at - now }
+        } else if s.steady_on && s.tab == STEADY_TAB && s.timer != 0usize {
+            // A steady light under a timer: look at the torch twice a second (the server turns it off by itself).
+            wait = 500usize
         }
         let touch = appkit.next_touch(&kit, wait)
         if touch.kind == appkit.TOUCH_TIMEOUT {
             // The compositor takes a frame only as the answer to an event it forwarded, so the screen follows a beat
             // at the next tick (and at the fast speeds only once the run has ended: a frame takes longer than a beat).
             if advance(&s) { s.dirty = true }
+            if !s.running && s.steady_on && s.tab == STEADY_TAB && s.timer != 0usize {
+                let (now_level, served) = sysettings.torch(99usize)
+                if served && now_level == 0usize {
+                    s.steady_on = false
+                    s.torch_sent = 0usize
+                    s.dirty = true
+                    ui.say("flashlight off timer\n")
+                }
+            }
         } else if touch.kind == appkit.TOUCH_END {
             running = false
         } else if touch.kind == appkit.TOUCH_TICK {
             // The half-second tick: a steady light the server turned off (the timer, the policy) is off here too.
             var changed = false
-            tick_debug += 1usize
-            if tick_debug % 6usize == 0usize {
-                ui.say("flashlight tick ")
-                ui.say_num(tick_debug)
-                ui.say("\n")
-            }
+
             if s.steady_on && s.tab == STEADY_TAB {
                 let (now_level, served) = sysettings.torch(99usize)
                 if served && now_level == 0usize {

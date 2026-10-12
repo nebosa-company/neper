@@ -376,6 +376,7 @@ fn exception(raw: *void) {
             if intid == timer.INTID {
                 timer.rearm(TICKS_PER_SECOND)
                 ticks += 1usize
+
                 // The timer interrupt is delivered to a user driver too (D2128): notification
                 // 0 is signalled, waking any thread waiting on it before the switch.
                 thread.signal_notification(0usize, 1usize)

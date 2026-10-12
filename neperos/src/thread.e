@@ -458,6 +458,7 @@ fn ep_remove(who: usize) {
     }
 }
 
+
 // Ready every thread whose receive deadline has passed, with TIMED_OUT as its received word.
 fn expire_deadlines() {
     var any = false
