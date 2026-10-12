@@ -9222,11 +9222,11 @@ const HEADING: u8 = 64u8
 const E_QUOTE: u8 = 1u8
 const E_LIST: u8 = 2u8
 const E_ITEM: u8 = 3u8
-type ItemKind = enum u8 { Word, Marker, Rule, QuoteBar, CodeBack, CodeLine }
-type NodeRole = enum u8 { Heading, Paragraph, List, ListItem, Quote, Code, Separator }
+type ItemKind = enum u8 { Word, Marker, Rule, QuoteBar, CodeBack, CodeLine, CellBack }
+type NodeRole = enum u8 { Heading, Paragraph, List, ListItem, Quote, Code, Separator, Table, Row, Cell, HeaderCell }
 type LinkPolicy = enum u8 { DisplayOnly, HostActivated }
 type Item = struct { kind: ItemKind, style: u8, x: f32, y: f32, w: f32, h: f32, start: usize, len: usize, link: u32, node: u32 }
-type Node = struct { role: NodeRole, level: u32, depth: u32, first: usize, count: usize, label_start: usize, label_len: usize }
+type Node = struct { role: NodeRole, level: u32, depth: u32, first: usize, count: usize, label_start: usize, label_len: usize, row: u32, column: u32 }
 type Link = struct { dest_start: usize, dest_len: usize, safe: bool, mail: bool }
 type Word = struct { start: usize, len: usize, cols: usize, style: u8, link: u32, glued: bool, hard: bool }
 type Metrics = struct { width: f32, char_w: f32, line_h: f32, gap: f32, indent: f32, pad: f32, bar: f32 }
@@ -9253,13 +9253,24 @@ fn leaf_gap(c: *Ctx) -> f32
 fn decimal(n: u32, out: []u8) -> usize
 fn begin_leaf(c: *Ctx, scale: f32) -> (f32, err)
 fn end_leaf(c: *Ctx, top: f32, height: f32) -> err
-fn join_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, usize, err)
+fn join_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, stop: usize) -> (usize, usize, err)
 type Words = struct { count: usize, after_space: bool, hard: bool }
 fn add_word(c: *Ctx, w: *Words, at: usize, bytes: str, style: u8, link: u32) -> err
 fn add_text(c: *Ctx, w: *Words, base: usize, seg: str, style: u8, link: u32) -> err
 fn collect_words(c: *Ctx, joined: str, nodes: []const markdown.Inline) -> (Words, err)
 fn place_words(c: *Ctx, count: usize, scale: f32, x0: f32, avail: f32, top: f32, node: usize, extra: u8) -> (usize, err)
+fn lines_end(blocks: []const markdown.Block, from: usize) -> usize
 fn text_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, heading: u32) -> (usize, err)
+fn leaf_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, stop: usize, heading: u32) -> err
+const MAX_COLS: usize = 16usize
+fn is_blank_byte(ch: u8) -> bool
+fn split_row(line: str, begins: []usize, ends: []usize) -> usize
+fn delimiter_row(line: str, aligns: []u32) -> usize
+fn has_pipe(line: str) -> bool
+fn line_text(src: str, b: markdown.Block) -> str
+fn cell_words(c: *Ctx, text: str, x: f32, y: f32, back_w: f32, inner: f32, header: bool, align: u32, row: u32, column: u32) -> (usize, err)
+fn table_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, stop: usize, columns: usize, aligns: []const u32) -> err
+fn find_table(src: str, blocks: []const markdown.Block, from: usize, stop: usize, aligns: []u32) -> (usize, usize)
 fn code_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, err)
 fn push_entry(c: *Ctx, e: Entry) -> err
 fn pop_entry(c: *Ctx) -> Entry
@@ -9288,8 +9299,10 @@ with `fallback` set. A link is display-only under `DisplayOnly`; under `HostActi
 `activation` answers the destination only if it is relative or http, https or mailto
 (`safe`), and never opens anything. `item_at` and `link_at` are the hit regions,
 `selected_text` the selectable text of an item range, and `rich_spans` a heading's or
-paragraph's words as `control.RichSpan`s for `control.paragraph`. Layout and queries are
-data, checked against a markdown-it-py oracle; a window-level check would still need a
+paragraph's (or a table cell's) words as `control.RichSpan`s for `control.paragraph`. GFM
+pipe tables (D3304) are read from paragraph lines into `Table`, `Row`, `Cell` and
+`HeaderCell` nodes with `CellBack` boxes, equal columns and per-column alignment.
+Layout and queries are data, checked against a markdown-it-py oracle; a window-level check would still need a
 shaped-text measure in place of the grid advance and the pointer and clipboard plumbing
 of a host.
 
@@ -9298,11 +9311,11 @@ of a host.
 ```neper
 const NONE: u32 = 4294967295u32
 type NodeKind = enum u8 { File, Folder, Loading, Failed }
-type DirState = enum u8 { Ready, Loading, Failed }
+type DirState = enum u8 { Ready, Loading, Failed, Unloaded }
 type Entry = struct { path: str, dir: bool, state: DirState }
 type Rename = struct { from: str, to: str }
-type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64 }
-type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize }
+type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool }
+type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize, lazy: bool }
 type Storage = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, order: []u32, scratch: []u8 }
 type Tree = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, count: usize, root_first: usize, root_count: usize, case_sensitive_paths: bool }
 error TooLarge
@@ -9312,12 +9325,18 @@ error NotDirectory
 error Invalid
 fn default_hash(s: str) -> u64
 fn policy(case_sensitive_paths: bool) -> Policy
+fn policy_unicode(case_sensitive_paths: bool) -> Policy
 fn fold_byte(ch: u8, sensitive: bool) -> u8
 fn id_cmp(x: str, y: str, sensitive: bool) -> i32
 type Ctx = struct { nodes: []Node, paths: []u8, policy: Policy }
 fn node_path(c: *const Ctx, i: usize) -> str
 fn node_name(c: *const Ctx, i: usize) -> str
 fn rank_of(c: *const Ctx, n: Node) -> u32
+const KEY_CAP: usize = 512usize
+fn fold_keys(name: str, fold: bool, all: []u32, base: []u32) -> (usize, usize)
+fn is_digit_scalar(s: u32) -> bool
+fn natural_scalars(x: []const u32, nx: usize, y: []const u32, ny: usize, numeric: bool) -> i32
+fn name_order(c: *const Ctx, a: str, b: str) -> i32
 fn before(c: *const Ctx, x: u32, y: u32, mode: u32) -> bool
 fn sort(c: *const Ctx, idx: []u32, tmp: []u32, n: usize, mode: u32)
 fn find_path(t: *const Tree, p: str) -> (u32, bool)
@@ -9338,6 +9357,8 @@ type Bridge = struct { tree: *const Tree, theme: *const control.Theme }
 fn bridge_count(ctx: *void, key: widget.Key) -> usize
 fn bridge_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key
 fn bridge_has_children(ctx: *void, key: widget.Key) -> bool
+fn is_lazy(t: *const Tree, key: widget.Key) -> bool
+fn pending(t: *const Tree, expanded: []const widget.Key, n: usize, out: []widget.Key) -> usize
 fn bridge_build(ctx: *void, a: *mem.Arena, key: widget.Key, out: *widget.Node) -> err
 fn source(b: *Bridge) -> collection.TreeSource
 fn visible(b: *Bridge, expanded: []const widget.Key, out: []collection.TreeRow) -> usize
@@ -9358,10 +9379,16 @@ the row at the viewport top under refresh. `Duplicate`, `MissingParent`, `NotDir
 `Invalid` and `TooLarge` refuse a snapshot that is not a tree. Enumeration, path
 resolution and mutation authorization stay with the host's filesystem services.
 
+D3305 adds `policy_unicode` (names by NFD, Unicode simple lowering, base letters first then
+accents) and lazy folders: `DirState.Unloaded` shows an expander with no children, `pending`
+lists the expanded `Unloaded` folders for the host to enumerate and `is_lazy` tests one.
+
 ### `e.ui.schedule`
 
 ```neper
 type Mode = enum u8 { Day, Week, Agenda }
+type Key = enum u8 { Left, Right, Up, Down, Home, End }
+type MonthHitKind = enum u8 { None, Header, Cell, Event, More }
 type Kind = enum u8 { Timed, AllDay }
 type RowKind = enum u8 { DayHeader, Event }
 type HitKind = enum u8 { None, Event, AllDay, Slot, DayHeader, Gutter }
@@ -9377,14 +9404,22 @@ type Span = struct { day: u32, start: calendar.DateTime, minutes: u32 }
 type Occ = struct { item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool }
 type Storage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, order: []u32, lane_end: []i64 }
 type Layout = struct { cfg: Config, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, placed_count: usize, column_count: usize, row_count: usize, node_count: usize, labels_len: usize, band_h: f32, grid_top: f32, height: f32, first_day: i64, days: i64, truncated: bool }
+type Names = struct { weekdays: [7]str, months: [12]str, all_day: str, to: str, repeats: str, day_schedule: str, week_schedule: str, agenda: str, month_schedule: str, no_events: str, one_event: str, events: str, more: str }
+type MonthConfig = struct { anchor: time.Date, week_start: calendar.Weekday, width: f32, header: f32, cell_h: f32, line_h: f32, lines: u32 }
+type MonthCell = struct { date: time.Date, count: i64, in_month: bool, x: f32, y: f32, w: f32, h: f32, first: u32, total: u32, shown: u32, more: u32 }
+type MonthStorage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Placed, cells: []MonthCell, order: []u32, nodes: []Access, labels: []u8 }
+type MonthLayout = struct { cfg: MonthConfig, placed: []Placed, cells: []MonthCell, nodes: []Access, labels: []u8, placed_count: usize, cell_count: usize, node_count: usize, labels_len: usize, weeks: u32, first_day: i64, height: f32, truncated: bool }
+type MonthHit = struct { kind: MonthHitKind, cell: u32, index: usize }
+type Bar = struct { item: u32, first: u32, last: u32, lane: u32, x: f32, y: f32, w: f32, h: f32, before: bool, after: bool, recurring: bool }
 error TooLarge
 error Invalid
+fn english() -> Names
 fn abs_minutes(d: calendar.DateTime) -> i64
 fn datetime_of(abs: i64) -> calendar.DateTime
 fn max_i64(a: i64, b: i64) -> i64
 fn min_i64(a: i64, b: i64) -> i64
 fn range_of(cfg: Config) -> (i64, i64)
-type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32 }
+type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names }
 fn push_occ(c: *Ctx, item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool) -> err
 fn collect(c: *Ctx, items: []const Item) -> err
 fn occ_before(c: *const Ctx, x: u32, y: u32) -> bool
@@ -9402,10 +9437,25 @@ fn put_node(c: *Ctx, role: accessibility.Role, x: f32, y: f32, w: f32, h: f32, l
 fn build_grid(c: *Ctx, items: []const Item) -> err
 fn build_agenda(c: *Ctx, items: []const Item) -> err
 fn build(items: []const Item, cfg: Config, st: Storage) -> (Layout, err)
+fn build_named(items: []const Item, cfg: Config, st: Storage, names: Names) -> (Layout, err)
 fn label_of(l: *const Layout, node: usize) -> str
 fn slot_at(l: *const Layout, x: f32, y: f32) -> (Slot, bool)
 fn drag_range(l: *const Layout, x0: f32, y0: f32, x1: f32, y1: f32) -> (Span, bool)
 fn hit(l: *const Layout, x: f32, y: f32) -> Hit
+fn month_first(cfg: MonthConfig) -> (i64, u32)
+fn put_cell_label(c: *Ctx, count: i64, total: usize) -> err
+fn build_month(items: []const Item, cfg: MonthConfig, ms: MonthStorage) -> (MonthLayout, err)
+fn build_month_named(items: []const Item, cfg: MonthConfig, ms: MonthStorage, names: Names) -> (MonthLayout, err)
+fn month_label_of(l: *const MonthLayout, node: usize) -> str
+fn more_top(l: *const MonthLayout, cell: usize) -> f32
+fn hit_month(l: *const MonthLayout, x: f32, y: f32) -> MonthHit
+fn month_move(l: *const MonthLayout, cell: u32, key: Key) -> u32
+fn bar_before(a: Bar, b: Bar) -> bool
+fn all_day_bars(l: *const Layout, out: []Bar) -> (usize, u32, err)
+fn column_at(l: *const Layout, x: f32) -> (usize, bool)
+fn move_target(l: *const Layout, items: []const Item, index: usize, grab_x: f32, grab_y: f32, x: f32, y: f32) -> (Span, bool)
+fn resize_target(l: *const Layout, index: usize, y: f32) -> (u32, bool)
+fn focus_next(l: *const Layout, current: usize, key: Key) -> usize
 ```
 
 Scheduler control model (L148, D2882): `build(items, cfg, storage)` lays appointments out
@@ -9420,7 +9470,14 @@ each with its label and row and column position, over `e.ui.accessibility.Role`)
 `hit` answers what is under a point, `slot_at` the snapped day and minute and
 `drag_range` the snapped, window-clamped range of a drag-to-create gesture.
 `truncated` says an endless rule was cut at the occurrence scratch. Layout is data; the
-painting, pointer capture and keyboard model of a window are the host's.
+painting and pointer capture of a window are the host's.
+
+D3303 adds `build_month` (the weeks of a month as 7-column cells with one line per occurrence
+and a "+N more" line past `lines`, `hit_month`, `month_move`), `all_day_bars` (one bar per
+all-day occurrence over its columns, in lanes), `move_target` and `resize_target` (a drag of a
+placed occurrence to its new start and length), `focus_next` (arrow-key focus among
+occurrences) and `Names` (`english()`; `build_named`/`build_month_named` take another set of
+words for the labels). Not here: zones and DST (items are floating times).
 
 ### `e.ui.undo`
 
@@ -20701,6 +20758,36 @@ Snappy raw format (`encode` as the reference encoder over 64 KiB blocks, strict 
 `decoded_length`, `bound`) and the framing format (`encode_framed`, `decode_framed` with
 masked CRC32C chunks) with `crc32c`.
 
+### `e.fmt.s2`
+
+```neper
+error Invalid
+error TooSmall
+error Checksum
+
+fn block_size() -> usize
+fn max_chunk() -> usize
+fn table_required() -> usize
+fn bound(n: usize) -> usize
+fn bound_framed(n: usize) -> usize
+fn emit_repeat(dst: []u8, d: usize, length: usize) -> (usize, err)
+fn emit_copy2(dst: []u8, d: usize, offset: usize, length: usize) -> (usize, err)
+fn emit_copy(dst: []u8, d: usize, offset: usize, length: usize, last: usize) -> (usize, err)
+fn encode_block(src: []const u8, dst: []u8, d0: usize, table: []u16) -> (usize, err)
+fn encode(src: []const u8, dst: []u8, table: []u16) -> (usize, err)
+fn decoded_length(src: []const u8) -> (usize, err)
+fn decode(src: []const u8, dst: []u8) -> (usize, err)
+fn encode_framed(src: []const u8, dst: []u8, table: []u16) -> (usize, err)
+fn decode_framed(src: []const u8, dst: []u8) -> (usize, err)
+```
+
+S2 (klauspost/compress) blocks and framing over caller storage, reusing `e.fmt.snappy`'s
+helpers. The decoder reads every S2 element (literals, copies with 1-, 2- and 4-byte
+offsets, repeats with the 1-, 2- and 3-byte length extensions) strictly, and the framed
+reader also takes a Snappy stream. The encoder is Snappy's matcher over 64 KiB blocks
+writing a match at the previous offset as a repeat; it is the plain level, not S2's
+better or best.
+
 ### `e.fmt.tar`
 
 ```neper
@@ -23289,7 +23376,7 @@ after the year 9999 or 4,000,000 sub-daily steps. Zones belong to `e.tz`.
 ```neper
 error Invalid
 
-type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic, ThaiBuddhist }
+type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic, ThaiBuddhist, Persian, UmmAlQura }
 type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
 
 const RD_UNIX: i64 = 719163i64
@@ -23298,6 +23385,10 @@ const ISLAMIC_EPOCH: i64 = 227015i64
 const COPTIC_EPOCH: i64 = 103605i64
 const ETHIOPIC_EPOCH: i64 = 2796i64
 const BUDDHIST_OFFSET: i64 = 543i64
+const PERSIAN_EPOCH: i64 = 226895i64
+const UQ_START: i64 = -16589i64
+const UQ_FIRST: i64 = 1343i64
+const UQ_LAST: i64 = 1500i64
 const JULIAN_DAY_UNIX: i64 = 2440588i64
 const ERA_COUNT: u8 = 5u8
 
@@ -23318,6 +23409,18 @@ fn civil_month(year: i32, scriptural: u8) -> u8
 fn hebrew_civil_length(year: i64, civil: i64) -> i64
 fn hebrew_to_days(year: i64, month: i64, day: i64) -> i64
 fn hebrew_from_days(count: i64) -> (i64, i64, i64)
+fn persian_leap(year: i64) -> bool
+fn persian_leaps_before(n: i64) -> i64
+fn persian_to_days(year: i64, month: i64, day: i64) -> i64
+fn persian_from_days(count: i64) -> (i64, i64, i64)
+fn hex_value(b: u8) -> i64
+fn uq_year_bits(year: i64) -> i64
+fn uq_month_length(year: i64, month: i64) -> i64
+fn uq_year_length(year: i64) -> i64
+fn uq_year_start(year: i64) -> i64
+fn uq_to_days(year: i64, month: i64, day: i64) -> i64
+fn uq_in_range(count: i64) -> bool
+fn uq_from_days(count: i64) -> (i64, i64, i64)
 fn african_epoch(cal: Calendar) -> i64
 fn african_to_days(cal: Calendar, year: i64, month: i64, day: i64) -> i64
 fn african_from_days(cal: Calendar, count: i64) -> (i64, i64, i64)
@@ -23344,9 +23447,10 @@ fn era_start(era: u8) -> time.Date
 fn iso_count(date: time.Date) -> i64
 fn japanese_from_iso(date: time.Date) -> (JapaneseDate, err)
 fn japanese_to_iso(j: JapaneseDate) -> (time.Date, err)
+fn uq_table() -> str
 ```
 
-Non-ISO calendars over `e.time`'s day count (days from 1970-01-01): a date in any calendar is a `time.Date` read in that calendar, and every conversion goes through the one count. `Julian` is proleptic with astronomical year numbering; `IslamicCivil` is the tabular civil calendar (Friday epoch, 30-year cycle); `Hebrew` is the fixed-rule calendar with civil month numbers (Tishri 1; in a leap year Adar I is 6 and Adar II is 7), `scriptural_month`/`civil_month` converting to Nisan-is-1. Hebrew and Islamic years start at 1 and earlier counts answer `Invalid`. Month arithmetic walks real months (13 in a Hebrew leap year) and clamps the day; `add_years` keeps the month number, clamped to the year's last month. Japanese eras ride the Gregorian year/month/day with the .NET table (Meiji from 1868-09-08, Taisho, Showa, Heisei, Reiwa as indexes 0..4); earlier dates are refused. Not here: observational and Umm al-Qura Islamic calendars, Persian, Coptic, Thai/Buddhist and Chinese calendars, and week-of-year rules per calendar.
+Non-ISO calendars over `e.time`'s day count (days from 1970-01-01): a date in any calendar is a `time.Date` read in that calendar, and every conversion goes through the one count. `Persian` is the Solar Hijri calendar by its 33-year arithmetic rule (leap when the year mod 33 is 1 5 9 13 17 22 26 30; months 1-6 have 31 days, 7-11 have 30, the 12th 29 or 30), anchored so it matches the astronomical calendar for 1278..1502 AP; `UmmAlQura` is the published table, 1343..1500 AH (1924-08-01 to 2077-11-16), and a count outside the table answers `Invalid`, its months being 28 to 31 days as published. `Julian` is proleptic with astronomical year numbering; `IslamicCivil` is the tabular civil calendar (Friday epoch, 30-year cycle); `Hebrew` is the fixed-rule calendar with civil month numbers (Tishri 1; in a leap year Adar I is 6 and Adar II is 7), `scriptural_month`/`civil_month` converting to Nisan-is-1. Hebrew and Islamic years start at 1 and earlier counts answer `Invalid`. Month arithmetic walks real months (13 in a Hebrew leap year) and clamps the day; `add_years` keeps the month number, clamped to the year's last month. Japanese eras ride the Gregorian year/month/day with the .NET table (Meiji from 1868-09-08, Taisho, Showa, Heisei, Reiwa as indexes 0..4); earlier dates are refused. Not here: the observational Islamic calendar, the Chinese calendar, and week-of-year rules per calendar.
 
 ### `e.time.pattern`
 
@@ -23533,9 +23637,10 @@ fn hostname(a: *mem.Arena) -> (str, err)
 fn user_name(a: *mem.Arena) -> (str, err)
 fn locale_name(a: *mem.Arena) -> (str, err)
 fn time_zone_id(a: *mem.Arena) -> (str, err)
+fn mac_address(a: *mem.Arena) -> (str, err)
 ```
 
-Who and where this process is: `hostname`, `user_name`, `locale_name` (a BCP 47 tag) and `time_zone_id`, per-target variants only (`ident.windows.e`, `ident.linux.e`). Windows reads kernel32/advapi32 (`GetComputerNameExW` DNS host name, `GetUserNameW`, `GetUserDefaultLocaleName`, `GetDynamicTimeZoneInformation`'s `TimeZoneKeyName`, a Windows id that `e.tz.winzones` maps to IANA); Linux reads `/proc/sys/kernel/hostname` and the environment (`USER`/`LOGNAME`; `LC_ALL`/`LC_MESSAGES`/`LANG` rewritten `de_DE.UTF-8` to `de-DE`, `C`/`POSIX` unset; `TZ` then `/etc/timezone`), so the user, locale and zone may answer `NotFound` there. Results are arena-owned. Not here: MAC addresses, the user database (`getpwuid`), or the full locale-variable cascade.
+Who and where this process is: `hostname`, `user_name`, `locale_name` (a BCP 47 tag) and `time_zone_id`, per-target variants only (`ident.windows.e`, `ident.linux.e`). Windows reads kernel32/advapi32 (`GetComputerNameExW` DNS host name, `GetUserNameW`, `GetUserDefaultLocaleName`, `GetDynamicTimeZoneInformation`'s `TimeZoneKeyName`, a Windows id that `e.tz.winzones` maps to IANA); Linux reads `/proc/sys/kernel/hostname` and the environment (`USER`/`LOGNAME`; `LC_ALL`/`LC_MESSAGES`/`LANG` rewritten `de_DE.UTF-8` to `de-DE`, `C`/`POSIX` unset; `TZ` then `/etc/timezone`), so the user, locale and zone may answer `NotFound` there. `mac_address` is the hardware address of the uplink as `aa:bb:cc:dd:ee:ff` (Windows: `GetAdaptersInfo`, the first IPv4 adapter with a gateway, else with an address, else any, loopback and tunnels skipped; Linux: the first non-loopback interface of `/proc/net/dev` with a non-zero `/sys/class/net/<name>/address`), `NotFound` when none. Results are arena-owned. Not here: the user database (`getpwuid`), or the full locale-variable cascade.
 
 ### `e.fmt.json5`
 

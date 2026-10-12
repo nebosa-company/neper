@@ -1227,6 +1227,26 @@ time_calendars_african_written=$($test_build/neper-self emit-executable "$repo/t
 [ "$time_calendars_african_written" = 'executable written' ]
 chmod +x "$test_build/time-calendars-african-selfhost"
 "$test_build/time-calendars-african-selfhost"
+# `e.time.calendars` Persian and Umm al-Qura against convertdate and hijridate (L150).
+time_calendars_persian_uq_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_calendars_persian_uq/src/main.e" "$repo" x64 linux "$test_build/time-calendars-persian-uq-selfhost")
+[ "$time_calendars_persian_uq_written" = 'executable written' ]
+chmod +x "$test_build/time-calendars-persian-uq-selfhost"
+"$test_build/time-calendars-persian-uq-selfhost"
+# `e.fmt.s2` against klauspost/compress/s2 blocks and streams (L135).
+fmt_s2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_s2/src/main.e" "$repo" x64 linux "$test_build/fmt-s2-selfhost")
+[ "$fmt_s2_written" = 'executable written' ]
+chmod +x "$test_build/fmt-s2-selfhost"
+"$test_build/fmt-s2-selfhost"
+# `e.ui.schedule` month view, bars, move/resize, focus and locale names against the independent model (L148).
+ui_schedule_month_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_month/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-month-selfhost")
+[ "$ui_schedule_month_written" = 'executable written' ]
+chmod +x "$test_build/ui-schedule-month-selfhost"
+"$test_build/ui-schedule-month-selfhost"
+# `e.ui.tree_adapter` Unicode name order and lazily loaded folders (L067).
+ui_tree_adapter_unicode_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_tree_adapter_unicode/src/main.e" "$repo" x64 linux "$test_build/ui-tree-adapter-unicode-selfhost")
+[ "$ui_tree_adapter_unicode_written" = 'executable written' ]
+chmod +x "$test_build/ui-tree-adapter-unicode-selfhost"
+"$test_build/ui-tree-adapter-unicode-selfhost"
 # `e.fmt.cap`: Common Alerting Protocol alerts against an ElementTree walk (C156).
 fmt_cap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_cap/src/main.e" "$repo" x64 linux "$test_build/fmt-cap-selfhost")
 [ "$fmt_cap_written" = 'executable written' ]

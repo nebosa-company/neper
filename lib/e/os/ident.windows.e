@@ -109,3 +109,73 @@ fn time_zone_id(a: *mem.Arena) -> (str, err) {
     if name_error != ok { ret ("", name_error) }
     ret (name, ok)
 }
+
+@import("iphlpapi.dll", "GetAdaptersInfo")
+extern fn raw_adapters(info: *u8, size: *u32) -> u32
+
+fn hex_digit(v: u8) -> u8 {
+    if v < 10u8 { ret 48u8 + v }
+    ret 87u8 + v
+}
+
+// The offset of the first IP_ADAPTER_INFO record in `info` that has a six-byte, non-zero hardware address
+// and is neither the loopback nor a tunnel, and at `level` 1 a first IPv4 address other than 0.0.0.0, at 2 a
+// first gateway as well; `info.len` when none does. Records are 704 bytes, one after another: Next at 0,
+// AddressLength at 404, Address at 408, Type at 420, the first IpAddress string at 448, the first gateway at 496.
+fn pick_adapter(info: []const u8, level: u32) -> usize {
+    var at = 0usize
+    while at + 704usize <= info.len {
+        var linked = 0u8
+        var k = 0usize
+        while k < 8usize {
+            linked = linked | info[at + k]
+            k += 1usize
+        }
+        let kind = u32(info[at + 420usize]) | (u32(info[at + 421usize]) << 8u32)
+        let length = u32(info[at + 404usize])
+        var nonzero = false
+        k = 0usize
+        while k < 6usize {
+            if info[at + 408usize + k] != 0u8 { nonzero = true }
+            k += 1usize
+        }
+        var addressed = true
+        if level > 0u32 {
+            // "0.0.0.0" or an empty string means no address yet.
+            var text = at + 448usize
+            if level > 1u32 { text = at + 496usize }
+            addressed = info[text] != 0u8 && !(info[text] == 48u8 && info[text + 1usize] == 46u8)
+        }
+        if length == 6u32 && nonzero && kind != 24u32 && kind != 131u32 && addressed { ret at }
+        if linked == 0u8 { break }
+        at += 704usize
+    }
+    ret info.len
+}
+
+// The hardware (MAC) address of an IPv4-enabled adapter as `aa:bb:cc:dd:ee:ff`: the first one with a gateway
+// (the uplink), else the first with an address, else the first with a hardware address at all; `NotFound`
+// when none qualifies.
+// `GetAdaptersInfo` is read for the list; adapters without IPv4 are not in it.
+fn mac_address(a: *mem.Arena) -> (str, err) {
+    var info: [32768]u8 = zero
+    var size = 32768u32
+    let status = raw_adapters(&info[0usize], &size)
+    if status == 232u32 { ret ("", os.NotFound) }
+    if status != 0u32 { ret ("", os.Failed) }
+    var at = pick_adapter(info[0usize..32768usize], 2u32)
+    if at >= info.len { at = pick_adapter(info[0usize..32768usize], 1u32) }
+    if at >= info.len { at = pick_adapter(info[0usize..32768usize], 0u32) }
+    if at >= info.len { ret ("", os.NotFound) }
+    let (out, alloc_error) = mem.alloc[u8](a, 17usize)
+    if alloc_error != ok { ret ("", alloc_error) }
+    var k = 0usize
+    while k < 6usize {
+        let b = info[at + 408usize + k]
+        out[k * 3usize] = hex_digit(b / 16u8)
+        out[k * 3usize + 1usize] = hex_digit(b % 16u8)
+        if k < 5usize { out[k * 3usize + 2usize] = 58u8 }
+        k += 1usize
+    }
+    ret (out[0usize..17usize], ok)
+}

@@ -33,11 +33,19 @@ DOCS = [
     ("short supercalifragilisticexpialidocious end foo**bar**baz `code` x", 96),
     # 7 deeper nesting and a heading in a quote in a list
     ("1. > ## Heading in quote\n   > text\n\n- - nested bullets\n  - second", 240),
+    # 8 a table with alignments, inline styles in cells, a wrapped cell, a short and a long row
+    ("Before the table\n| Name | Qty | Note |\n|:-----|:---:|-----:|\n| apple | 3 | **fresh** and *sweet* fruit from the market |\n| fig | 12 |\n| `code` | 7 | a | extra | cells |\n\nafter the table", 240),
+    # 9 a table inside a list item and a quote, pipes at the edges optional, an escaped pipe
+    ("- item\n\n  a | b\n  --|--\n  1 | 2\n\n> | x | y |\n> |---|---|\n> | left \\| pipe | z |\n", 240),
+    # 10 narrow width: a table whose cells are narrower than their words
+    ("| alpha | beta |\n|---|---|\n| supercalifragilistic | b |\n| c | d |", 120),
+    # 11 not tables: a delimiter row of another width, no delimiter row, a heading and a list after a table
+    ("a | b | c\n--|--\n\n| a | b |\n| c | d |\n\n| h1 | h2 |\n|----|----|\n| 1 | 2 |\n# heading\n\n| h |\n|---|\n| only |\n- list", 240),
 ]
 
-SPAN_NODE = {0: 1, 4: 0, 6: 0}
+SPAN_NODE = {0: 1, 4: 0, 6: 0, 8: 3}
 
-md = MarkdownIt("commonmark", {"html": False})
+md = MarkdownIt("commonmark", {"html": False}).enable("table")
 # the viewer parses every destination as a link and decides at activation time
 md.validateLink = lambda url: True
 
@@ -80,6 +88,7 @@ class Layout:
         self.nodes = []  # [role, level, depth, first, count, label]
         self.links = []  # (dest, safe)
         self.hard = set()  # item indexes that follow a hard break
+        self.cell_of = {}  # item index -> (cell node, row) for the items of a table cell
         self.y = 0.0
         self.any = False
         self.fresh = False
@@ -238,6 +247,66 @@ class Layout:
         self.end_leaf(top, lines * LINE_H * scale)
         self.close(n)
 
+    def leaf_table(self, rows):
+        """A table: equal columns of the available width, a cell is PAD inside its box, the
+        header row bold, alignment by shifting each line of a cell, rows as tall as their
+        tallest cell."""
+        columns = len(rows[0])
+        table = self.node("A", columns)
+        top = self.begin_leaf(1.0)
+        x0 = self.levels * INDENT
+        col_w = self.avail(x0) / columns
+        inner = max(col_w - 2 * PAD, CHAR_W)
+        y = top
+        for r, row in enumerate(rows):
+            row_node = self.node("O", r)
+            backs, most = [], 1
+            for c, (header, align, children) in enumerate(row):
+                cell = self.node("E" if header else "D", align)
+                x = x0 + c * col_w
+                self.items.append(("T", 0, x, y, col_w, 0.0, "", 0))
+                backs.append(len(self.items) - 1)
+                self.cell_of[len(self.items) - 1] = (cell, r)
+                words = self.words_of(children)
+                first = len(self.items)
+                lines = self.place(words, 1.0, x + PAD, y + PAD, cell, BOLD if header else 0)
+                for k in range(first, len(self.items)):
+                    self.cell_of[k] = (cell, r)
+                if align >= 2 and lines:
+                    k = first
+                    while k < len(self.items):
+                        j = k + 1
+                        while j < len(self.items) and self.items[j][3] == self.items[k][3]:
+                            j += 1
+                        left = self.items[k][2]
+                        right = self.items[j - 1][2] + self.items[j - 1][4]
+                        shift = inner - (right - left)
+                        if align == 2:
+                            shift = shift / 2.0
+                        if shift > 0:
+                            for m in range(k, j):
+                                it = list(self.items[m])
+                                it[2] += shift
+                                self.items[m] = tuple(it)
+                        k = j
+                label = ""
+                for i, w in enumerate(words):
+                    if i:
+                        label += "\n" if w[4] else ("" if w[3] else " ")
+                    label += w[0]
+                self.nodes[cell][5] = label
+                self.close(cell)
+                most = max(most, lines)
+            row_h = most * LINE_H + 2 * PAD
+            for b in backs:
+                it = list(self.items[b])
+                it[5] = float(row_h)
+                self.items[b] = tuple(it)
+            self.close(row_node)
+            y += row_h
+        self.end_leaf(top, y - top)
+        self.close(table)
+
     def leaf_code(self, content, info):
         n = self.node("C", 0)
         top = self.begin_leaf(1.0)
@@ -272,8 +341,11 @@ def layout(src, width):
     lay = Layout(width)
     tokens = md.parse(src)
     pending = None
+    skip_to = -1
     for i, tok in enumerate(tokens):
         t = tok.type
+        if i <= skip_to:
+            continue
         if t == "heading_open":
             pending = int(tok.tag[1])
         elif t == "paragraph_open":
@@ -284,6 +356,23 @@ def layout(src, width):
             lay.leaf_code(tok.content, tok.info.strip())
         elif t == "code_block":
             lay.leaf_code(tok.content, "")
+        elif t == "table_open":
+            rows, row, j = [], None, i + 1
+            while tokens[j].type != "table_close":
+                tk = tokens[j]
+                if tk.type == "tr_open":
+                    row = []
+                elif tk.type in ("th_open", "td_open"):
+                    style = tk.attrGet("style") or ""
+                    align = {"text-align:left": 1, "text-align:center": 2, "text-align:right": 3}.get(style, 0)
+                    row.append([tk.type == "th_open", align, None])
+                elif tk.type == "inline":
+                    row[-1][2] = tk.children
+                elif tk.type == "tr_close":
+                    rows.append([tuple(c) for c in row])
+                j += 1
+            skip_to = j
+            lay.leaf_table(rows)
         elif t == "hr":
             n = lay.node("S", 0)
             top = lay.begin_leaf(1.0)
@@ -338,17 +427,21 @@ def render(lay):
 
 
 def selection(lay):
-    out, have, prev = "", False, 0
-    for (k, st, x, y, w, h, t, ln) in lay.items:
+    out, have, prev, prev_cell = "", False, 0, None
+    for idx, (k, st, x, y, w, h, t, ln) in enumerate(lay.items):
         if k in ("W", "L"):
+            cell = lay.cell_of.get(idx)
             if have:
-                if y != prev:
+                if cell and prev_cell and cell[0] != prev_cell[0]:
+                    out += "\t" if cell[1] == prev_cell[1] else "\n"
+                elif y != prev:
                     out += "\n"
                 elif not (k == "W" and st & GLUED):
                     out += " "
             out += t
             have = True
             prev = y
+            prev_cell = cell
     return out
 
 
@@ -388,7 +481,7 @@ def probes(lay):
 
 
 def nlit(s):
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t") + '"'
 
 
 def chain(name, ret, rows, conv):

@@ -445,6 +445,7 @@
     "e.crypto.secret",
     "e.fmt.lz4",
     "e.fmt.snappy",
+    "e.fmt.s2",
     "e.algo.egraph",
     "e.algo.findings",
     "e.algo.formula",
@@ -6633,6 +6634,17 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.s2",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.snappy"
+   ],
    "blocked_by": []
   },
   {

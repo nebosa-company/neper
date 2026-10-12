@@ -3083,6 +3083,7 @@
     "time_calendar",
     "time_calendars",
     "time_calendars_african",
+    "time_calendars_persian_uq",
     "time_cron",
     "time_pattern",
     "time_recur",
@@ -3154,6 +3155,7 @@
     "ui_ribbon",
     "ui_ripple_v2",
     "ui_schedule",
+    "ui_schedule_month",
     "ui_scroll_view",
     "ui_selection",
     "ui_selection2_v2",
@@ -3198,7 +3200,8 @@
     "time_calendar_iso",
     "time_pattern",
     "time_recur",
-    "ui_schedule"
+    "ui_schedule",
+    "ui_schedule_month"
    ]
   },
   {
@@ -3307,6 +3310,7 @@
     "ui_property",
     "ui_ribbon",
     "ui_schedule",
+    "ui_schedule_month",
     "ui_selection",
     "ui_semantics",
     "ui_sheet",
@@ -3423,6 +3427,7 @@
     "ui_title_bar",
     "ui_transient",
     "ui_tree_adapter",
+    "ui_tree_adapter_unicode",
     "ui_workspace"
    ]
   },
@@ -3503,7 +3508,8 @@
     "ui_property",
     "ui_ripple_v2",
     "ui_tabular",
-    "ui_tree_adapter"
+    "ui_tree_adapter",
+    "ui_tree_adapter_unicode"
    ]
   },
   {
@@ -4149,6 +4155,7 @@
     "ui_title_bar",
     "ui_transient",
     "ui_tree_adapter",
+    "ui_tree_adapter_unicode",
     "ui_widget",
     "ui_workspace"
    ]

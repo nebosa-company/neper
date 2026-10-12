@@ -13,6 +13,10 @@
 //   Months are numbered civil, NodaTime's default: Tishri is 1, and in a leap year
 //   Adar I is 6 and Adar II is 7, so Nisan is 7 in an ordinary year and 8 in a leap one.
 //   `scriptural_month` / `civil_month` convert to the Nisan-is-1 numbering.
+// - `Persian`: the Solar Hijri calendar by its 33-year arithmetic rule (months 1-6 of 31
+//   days, 7-11 of 30, the 12th 29 or 30), matching the astronomical calendar 1278..1502 AP.
+// - `UmmAlQura`: the published month table for 1343..1500 AH, refused outside it.
+//   The Coptic, Ethiopic and Thai Buddhist calendars follow the same surface.
 //
 // Japanese eras ride the Gregorian year, month and day: an era is a start date, the year
 // of the era is the Gregorian year minus the era's start year plus one. The first era
@@ -24,7 +28,7 @@
 
 use e.time
 
-type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic, ThaiBuddhist }
+type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic, ThaiBuddhist, Persian, UmmAlQura }
 type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
 error Invalid
 
@@ -37,6 +41,13 @@ const COPTIC_EPOCH: i64 = 103605i64
 const ETHIOPIC_EPOCH: i64 = 2796i64
 // The Thai solar (Buddhist Era) calendar since 1941: the Gregorian year plus 543, the months and days the Gregorian ones.
 const BUDDHIST_OFFSET: i64 = 543i64
+// The Persian (Solar Hijri) calendar by its 33-year arithmetic rule: year 1 begins on this R.D. day, so that the
+// rule agrees with the astronomical calendar from 1278 AP (1899) on; before that the astronomy differs by a day.
+const PERSIAN_EPOCH: i64 = 226895i64
+// Umm al-Qura: the table covers 1343..1500 AH; 1 Muharram 1343 is this day count from 1970-01-01.
+const UQ_START: i64 = -16589i64
+const UQ_FIRST: i64 = 1343i64
+const UQ_LAST: i64 = 1500i64
 const JULIAN_DAY_UNIX: i64 = 2440588i64
 const ERA_COUNT: u8 = 5u8
 
@@ -170,6 +181,137 @@ fn hebrew_from_days(count: i64) -> (i64, i64, i64) {
     ret (year, month, left + 1i64)
 }
 
+// ---- Persian (33-year arithmetic) ----
+
+// Leap years are those whose year mod 33 is 1 5 9 13 17 22 26 or 30.
+fn persian_leap(year: i64) -> bool {
+    let r = time.floor_mod(year, 33i64)
+    if r < 1i64 { ret false }
+    if r <= 17i64 { ret time.floor_mod(r - 1i64, 4i64) == 0i64 }
+    if r < 22i64 { ret false }
+    ret time.floor_mod(r - 22i64, 4i64) == 0i64 && r <= 30i64
+}
+
+// Leap years among the years 1 .. n.
+fn persian_leaps_before(n: i64) -> i64 {
+    let r = time.floor_mod(n, 33i64)
+    var part = 0i64
+    if r >= 22i64 {
+        part = 6i64 + time.floor_div(r - 22i64, 4i64)
+    } else if r >= 18i64 {
+        part = 5i64
+    } else {
+        part = time.floor_div(r + 3i64, 4i64)
+    }
+    ret time.floor_div(n, 33i64) * 8i64 + part
+}
+
+fn persian_to_days(year: i64, month: i64, day: i64) -> i64 {
+    var offset = 0i64
+    if month <= 7i64 {
+        offset = (month - 1i64) * 31i64
+    } else {
+        offset = 186i64 + (month - 7i64) * 30i64
+    }
+    ret PERSIAN_EPOCH + 365i64 * (year - 1i64) + persian_leaps_before(year - 1i64) + offset + day - 1i64 - RD_UNIX
+}
+
+fn persian_from_days(count: i64) -> (i64, i64, i64) {
+    var year = time.floor_div((count + RD_UNIX - PERSIAN_EPOCH) * 33i64, 12053i64) + 1i64
+    while persian_to_days(year + 1i64, 1i64, 1i64) <= count { year += 1i64 }
+    while persian_to_days(year, 1i64, 1i64) > count { year -= 1i64 }
+    let left = count - persian_to_days(year, 1i64, 1i64)
+    if left < 186i64 { ret (year, left / 31i64 + 1i64, left - left / 31i64 * 31i64 + 1i64) }
+    let rest = left - 186i64
+    let month = 7i64 + rest / 30i64
+    ret (year, month, rest - rest / 30i64 * 30i64 + 1i64)
+}
+
+// ---- Umm al-Qura (the published table) ----
+
+fn hex_value(b: u8) -> i64 {
+    if b >= 97u8 { ret i64(b) - 87i64 }
+    ret i64(b) - 48i64
+}
+
+// The six hex digits of `year` as one number: twelve 2-bit lengths, month 1 on top.
+fn uq_year_bits(year: i64) -> i64 {
+    let digits = uq_table()
+    let base = usize(year - UQ_FIRST) * 6usize
+    var bits = 0i64
+    var k = 0usize
+    while k < 6usize {
+        bits = bits * 16i64 + hex_value(digits[base + k])
+        k += 1usize
+    }
+    ret bits
+}
+
+fn uq_month_length(year: i64, month: i64) -> i64 {
+    var bits = uq_year_bits(year)
+    var skip = 12i64 - month
+    while skip > 0i64 {
+        bits = time.floor_div(bits, 4i64)
+        skip -= 1i64
+    }
+    ret 28i64 + time.floor_mod(bits, 4i64)
+}
+
+fn uq_year_length(year: i64) -> i64 {
+    var total = 0i64
+    var m = 1i64
+    while m <= 12i64 {
+        total += uq_month_length(year, m)
+        m += 1i64
+    }
+    ret total
+}
+
+fn uq_year_start(year: i64) -> i64 {
+    var day = UQ_START
+    var y = UQ_FIRST
+    while y < year {
+        day += uq_year_length(y)
+        y += 1i64
+    }
+    ret day
+}
+
+fn uq_to_days(year: i64, month: i64, day: i64) -> i64 {
+    var days = uq_year_start(year) + day - 1i64
+    var m = 1i64
+    while m < month {
+        days += uq_month_length(year, m)
+        m += 1i64
+    }
+    ret days
+}
+
+// `count` is inside the table: 1343-01-01 up to the end of 1500.
+fn uq_in_range(count: i64) -> bool {
+    ret count >= UQ_START && count < uq_year_start(UQ_LAST + 1i64)
+}
+
+fn uq_from_days(count: i64) -> (i64, i64, i64) {
+    var year = UQ_FIRST
+    var start = UQ_START
+    while year < UQ_LAST {
+        let length = uq_year_length(year)
+        if count < start + length { break }
+        start += length
+        year += 1i64
+    }
+    var left = count - start
+    var month = 1i64
+    while month < 12i64 {
+        let length = uq_month_length(year, month)
+        if left < length { break }
+        left -= length
+        month += 1i64
+    }
+    ret (year, month, left + 1i64)
+}
+
 // ---- the shared surface ----
 
 fn african_epoch(cal: Calendar) -> i64 {
@@ -192,6 +334,8 @@ fn african_from_days(cal: Calendar, count: i64) -> (i64, i64, i64) {
 
 fn is_leap_year(cal: Calendar, year: i32) -> bool {
     if cal == .ThaiBuddhist { ret time.is_leap(i64(year) - BUDDHIST_OFFSET) }
+    if cal == .Persian { ret persian_leap(i64(year)) }
+    if cal == .UmmAlQura { ret year_ok(cal, year) && uq_year_length(i64(year)) > 354i64 }
     if cal == .Coptic || cal == .Ethiopic { ret time.floor_mod(i64(year), 4i64) == 3i64 }
     if cal == .Julian { ret time.floor_mod(i64(year), 4i64) == 0i64 }
     if cal == .IslamicCivil { ret islamic_leap(i64(year)) }
@@ -206,6 +350,7 @@ fn months_in_year(cal: Calendar, year: i32) -> u8 {
 
 fn year_ok(cal: Calendar, year: i32) -> bool {
     if cal == .Julian { ret true }
+    if cal == .UmmAlQura { ret i64(year) >= UQ_FIRST && i64(year) <= UQ_LAST }
     ret year >= 1i32
 }
 
@@ -223,6 +368,12 @@ fn days_in_month(cal: Calendar, year: i32, month: u8) -> (u8, err) {
         ret (31u8, ok)
     }
     if cal == .ThaiBuddhist { ret (u8(time.days_in_month(y - BUDDHIST_OFFSET, m)), ok) }
+    if cal == .UmmAlQura { ret (u8(uq_month_length(y, m)), ok) }
+    if cal == .Persian {
+        if m <= 6i64 { ret (31u8, ok) }
+        if m <= 11i64 || persian_leap(y) { ret (30u8, ok) }
+        ret (29u8, ok)
+    }
     if cal == .Coptic || cal == .Ethiopic {
         if m == 13i64 {
             if time.floor_mod(y, 4i64) == 3i64 { ret (6u8, ok) }
@@ -253,6 +404,8 @@ fn to_days(cal: Calendar, date: time.Date) -> (i64, err) {
     if cal == .IslamicCivil { ret (islamic_to_days(y, m, d), ok) }
     if cal == .Coptic || cal == .Ethiopic { ret (african_to_days(cal, y, m, d), ok) }
     if cal == .ThaiBuddhist { ret (time.days_from_civil(y - BUDDHIST_OFFSET, m, d), ok) }
+    if cal == .Persian { ret (persian_to_days(y, m, d), ok) }
+    if cal == .UmmAlQura { ret (uq_to_days(y, m, d), ok) }
     ret (hebrew_to_days(y, m, d), ok)
 }
 
@@ -273,6 +426,16 @@ fn from_days(cal: Calendar, count: i64) -> (time.Date, err) {
     if cal == .IslamicCivil {
         if count < islamic_to_days(1i64, 1i64, 1i64) { ret (zero, Invalid) }
         let (y, m, d) = islamic_from_days(count)
+        ret (make_date(y, m, d), ok)
+    }
+    if cal == .Persian {
+        if count < persian_to_days(1i64, 1i64, 1i64) { ret (zero, Invalid) }
+        let (y, m, d) = persian_from_days(count)
+        ret (make_date(y, m, d), ok)
+    }
+    if cal == .UmmAlQura {
+        if !uq_in_range(count) { ret (zero, Invalid) }
+        let (y, m, d) = uq_from_days(count)
         ret (make_date(y, m, d), ok)
     }
     if cal == .ThaiBuddhist {
@@ -448,4 +611,11 @@ fn japanese_to_iso(j: JapaneseDate) -> (time.Date, err) {
         if count >= iso_count(era_start(j.era + 1u8)) { ret (zero, Invalid) }
     }
     ret (date, ok)
+}
+
+// The Umm al-Qura month lengths, years 1343..1500 AH (1924-08-01 to 2077-11-16): six hex digits a year, two bits a
+// month (length - 28), month 1 in the top bits. Generated from the hijri-converter / hijridate table by
+// `scripts/gen_persian_uq_test.py --table`.
+fn uq_table() -> str {
+    ret "9a6a2a59999999d8a65a69695a69a5999a5c999a8e6659a69995a69999999a66966669999999a6599a5999999aa65969a9965999999a99999999999999999a9998a999999a99999999999999999a999a6999999999666a66659a666666999a5a99996965a99996669a9999996666669999999a65999a69666699999999999a59a9a5999a59999a69999999999a999a6599999a59999a99599a9999699a65999a9966669999999a66666669a6599a666599a999666a665969a9965a69999999a66666669999669a66599a9996669a65969a9965a69a5966a66659a699996699a66599a9996669a6659aa6595aa69656a69996669a65999a66996669a6599a69965a9a65969a6966666999966a66659a69996669a59999a66666669a59969a96599a999666a66599a69966669999999a6696666a65966a69659a9999669a66599a69996669a65999a996666a59996a66665a66999666a665969a9965a6a65969a6665a6699999999a6659a6999666a66596a9996669a65999a66665a69a59699a9659a699996699a6599a6996666a65966a69659a6a59669a66599a669666669a6599a69965a6a65969a6965a66a59999a66659a6999666a66599a699666699a5999a69665a6a59666a66599a9996669a59999a666666669a5966a"
 }

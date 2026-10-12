@@ -1330,6 +1330,30 @@ $timeCalendarsAfricanWritten = & $compiler emit-executable (Join-Path $PSScriptR
 if ($LASTEXITCODE -ne 0 -or $timeCalendarsAfricanWritten -ne 'executable written') { throw 'time_calendars_african emission failed' }
 & $timeCalendarsAfricanPath
 if ($LASTEXITCODE -ne 0) { throw "a time_calendars_african check failed: exit $LASTEXITCODE" }
+# `e.time.calendars` Persian and Umm al-Qura against convertdate and hijridate (L150).
+$time_calendars_persian_uqPath = Join-Path $testBuild 'time-calendars-persian-uq-selfhost.exe'
+$time_calendars_persian_uqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_calendars_persian_uq\src\main.e') $repo 'x64' 'windows' $time_calendars_persian_uqPath
+if ($LASTEXITCODE -ne 0 -or $time_calendars_persian_uqWritten -ne 'executable written') { throw 'time_calendars_persian_uq emission failed' }
+& $time_calendars_persian_uqPath
+if ($LASTEXITCODE -ne 0) { throw "a time_calendars_persian_uq check failed: exit $LASTEXITCODE" }
+# `e.fmt.s2` against klauspost/compress/s2 blocks and streams (L135).
+$fmt_s2Path = Join-Path $testBuild 'fmt-s2-selfhost.exe'
+$fmt_s2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_s2\src\main.e') $repo 'x64' 'windows' $fmt_s2Path
+if ($LASTEXITCODE -ne 0 -or $fmt_s2Written -ne 'executable written') { throw 'fmt_s2 emission failed' }
+& $fmt_s2Path
+if ($LASTEXITCODE -ne 0) { throw "a fmt_s2 check failed: exit $LASTEXITCODE" }
+# `e.ui.schedule` month view, bars, move/resize, focus and locale names against the independent model (L148).
+$ui_schedule_monthPath = Join-Path $testBuild 'ui-schedule-month-selfhost.exe'
+$ui_schedule_monthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule_month\src\main.e') $repo 'x64' 'windows' $ui_schedule_monthPath
+if ($LASTEXITCODE -ne 0 -or $ui_schedule_monthWritten -ne 'executable written') { throw 'ui_schedule_month emission failed' }
+& $ui_schedule_monthPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_schedule_month check failed: exit $LASTEXITCODE" }
+# `e.ui.tree_adapter` Unicode name order and lazily loaded folders (L067).
+$ui_tree_adapter_unicodePath = Join-Path $testBuild 'ui-tree-adapter-unicode-selfhost.exe'
+$ui_tree_adapter_unicodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_tree_adapter_unicode\src\main.e') $repo 'x64' 'windows' $ui_tree_adapter_unicodePath
+if ($LASTEXITCODE -ne 0 -or $ui_tree_adapter_unicodeWritten -ne 'executable written') { throw 'ui_tree_adapter_unicode emission failed' }
+& $ui_tree_adapter_unicodePath
+if ($LASTEXITCODE -ne 0) { throw "a ui_tree_adapter_unicode check failed: exit $LASTEXITCODE" }
 # `e.fmt.cap`: Common Alerting Protocol alerts against an ElementTree walk (C156).
 $fmtCapPath = Join-Path $testBuild 'fmt-cap-selfhost.exe'
 $fmtCapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_cap\src\main.e') $repo 'x64' 'windows' $fmtCapPath
