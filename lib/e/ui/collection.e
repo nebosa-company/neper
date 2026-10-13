@@ -2357,7 +2357,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         var cell_style = control.sized_style(control.max_zero(width), extent)
         cell_style.overflow = .Clip
         // a group row's label runs on over the cells beside it, with no column lines
-        let group_row = look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8
+        let group_row = look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8
         if group_row { cell_style.overflow = .Visible }
         cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
         // a picture column's cells have no side padding
@@ -2399,6 +2399,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         fill = look.even
         if index % 2usize == 1usize { fill = look.odd }
         if mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8 { fill = look.group }
+        // a group footer: the footer band's yellow
+        if mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 2u8 { fill = look.footer_fill }
         if selected { fill = look.selected }
     }
     var row_style = style.defaults()
@@ -2413,7 +2415,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     var content_look = style.defaults()
     if disabled { content_look.opacity = t.tokens.states.disabled_content }
     lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, content_look, boxed[0usize..n])
-    if look.on && look.horizontal_on && !(mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8) {
+    if look.on && look.horizontal_on && !(mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8) {
         // v3's horizontal grid lines: a 1 px line along the bottom of the row
         let (with_line, with_line_error) = mem.alloc[widget.Node](a, 3usize)
         if with_line_error != ok { ret (zero, TooLarge) }
@@ -2486,7 +2488,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
