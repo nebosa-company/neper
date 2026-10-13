@@ -4212,8 +4212,8 @@
    "module": "e.ui.widget",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 119,
-   "delivered": 119,
+   "catalogue": 120,
+   "delivered": 120,
    "pending": [],
    "fixtures": [
     "gfx_chart_widget",
