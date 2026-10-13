@@ -24,6 +24,7 @@ use e.text.shape
 use appkit
 use text
 use ui
+use bgclient
 
 const NONE: usize = 99usize
 const MAX_RECS: usize = 10usize
@@ -48,6 +49,10 @@ type State = struct {
     live: [48]u8,
     playing: bool,
     head: usize,
+    // (C166) The recording in progress is the services process's (its microphone, its buffer); `server` says this
+    // screen is following it. `denied` is the note after a refused start (Microphone access is off).
+    server: bool,
+    denied: bool,
     hits: ui.Hits,
 }
 
@@ -163,22 +168,22 @@ fn next_number(a: *mem.Arena) -> usize {
     ret n
 }
 
-// Record `seconds` from the scripted microphone and keep them as a WAV file: the file number, or 0.
-fn save_recording(a: *mem.Arena, s: *State, seconds: usize) -> usize {
-    var length = seconds
-    if length > 20usize { length = 20usize }
-    let data_len = length * RATE * 2usize
-    let (pcm, pcm_error) = mem.alloc[u8](a, data_len)
-    if pcm_error != ok { ret 0usize }
-    scripted_mic(s.rec_total + 3usize, length, pcm)
-    let frames = audio.Frames { bytes: pcm, format: audio.Format { rate: u32(RATE), channels: 1u8, sample: .I16 }, count: length * RATE }
+// Keep `count` frames of 16-bit mono PCM as a WAV file and put it first in the list: the file number, or 0.
+fn store_recording(a: *mem.Arena, s: *State, pcm: []u8, count: usize) -> usize {
+    let length = (count + RATE - 1usize) / RATE
+    let frames = audio.Frames { bytes: pcm, format: audio.Format { rate: u32(RATE), channels: 1u8, sample: .I16 }, count: count }
     let (file, encode_error) = wav.encode(a, frames)
     if encode_error != ok { ret 0usize }
     let made = vaultfs.mkdir("/Recordings")
     let number = next_number(a)
     if !vaultfs.write_big(file_path(a, number), mem.address_of(&file[0usize]), file.len) { ret 0usize }
     var peaks: [48]u8 = zero
-    let checksum = analyse(pcm, length * RATE, peaks[0usize..48usize])
+    let checksum = analyse(pcm, count, peaks[0usize..48usize])
+    ui.say("recorder captured ")
+    ui.say_text(ui.number(a, count))
+    ui.say(" frames checksum ")
+    ui.say_text(ui.number(a, checksum))
+    ui.say("\n")
     add_rec(s, ui.join(a, "Recording ", ui.number(a, number), ""), length, 0usize, number, false)
     s.recs[0usize].real = true
     s.recs[0usize].file_no = number
@@ -189,6 +194,54 @@ fn save_recording(a: *mem.Arena, s: *State, seconds: usize) -> usize {
         p += 1usize
     }
     ret number
+}
+
+// Record `seconds` from the scripted microphone of this process (no services process) and keep them as a WAV file.
+fn save_recording(a: *mem.Arena, s: *State, seconds: usize) -> usize {
+    var length = seconds
+    if length > 20usize { length = 20usize }
+    let (pcm, pcm_error) = mem.alloc[u8](a, length * RATE * 2usize)
+    if pcm_error != ok { ret 0usize }
+    scripted_mic(s.rec_total + 3usize, length, pcm)
+    ret store_recording(a, s, pcm, length * RATE)
+}
+
+// The recording the services process holds, taken from its buffer and kept as a WAV file; `frames` it says it has.
+fn save_from_server(a: *mem.Arena, s: *State, frames: usize) -> usize {
+    if frames == 0usize { ret 0usize }
+    let (pcm, pcm_error) = mem.alloc[u8](a, frames * 2usize)
+    if pcm_error != ok { ret 0usize }
+    var at = 0usize
+    while at < frames {
+        let got = bgclient.rec_read(at, 256usize, mem.address_of(&pcm[at * 2usize]))
+        if got == 0usize { ret 0usize }
+        at += got
+    }
+    ret store_recording(a, s, pcm, frames)
+}
+
+// Play a kept recording at the speaker through the services process and check that the bytes that reached the sink
+// are the file's: its frames, and its byte sum against the one taken when it was recorded.
+fn play_at_speaker(a: *mem.Arena, s: *State, i: usize) {
+    if !s.recs[i].real { ret }
+    let path = file_path(a, s.recs[i].file_no)
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size <= 44usize || size > 400000usize { ret }
+    let (raw, raw_error) = mem.alloc[u8](a, size)
+    if raw_error != ok { ret }
+    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+    if !read_ok || got != size { ret }
+    let (decoder, open_error) = wav.open(a, raw[0usize..got])
+    if open_error != ok { ret }
+    let frames = wav.frame_count(decoder)
+    let taken = bgclient.spk_write(mem.address_of(&raw[decoder.data_start]), frames, true)
+    let (device_frames, device_sum, device_peak) = bgclient.spk_stats()
+    if device_frames == 0usize { ret }
+    ui.say("recorder device frames ")
+    ui.say_text(ui.number(a, device_frames))
+    ui.say(" checksum ")
+    ui.say_text(ui.number(a, device_sum))
+    if device_frames == frames && device_sum == s.recs[i].checksum { ui.say(" match\n") } else { ui.say(" differ\n") }
 }
 
 // The files already in /Recordings, newest numbers first: their length and wave from the WAV itself.
@@ -369,7 +422,16 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 110usize {
             var seconds = s.ticks / 2usize
             if seconds < 1usize { seconds = 1usize }
-            let number = save_recording(a, s, seconds)
+            var number = 0usize
+            if s.server {
+                // The services process's recording: stop it and take its frames.
+                let frames = bgclient.rec_stop()
+                number = save_from_server(a, s, frames)
+                s.server = false
+                seconds = (frames + RATE - 1usize) / RATE
+            } else {
+                number = save_recording(a, s, seconds)
+            }
             if number == 0usize {
                 add_rec(s, ui.join(a, "Recording ", ui.number(a, s.rec_total + 1usize), ""), seconds, 0usize, s.rec_total * 7usize + 3usize, false)
             } else {
@@ -400,6 +462,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                     ui.say("recorder bytes ")
                     ui.say_text(ui.number(a, s.recs[s.open].checksum))
                     ui.say("\n")
+                    play_at_speaker(a, s, s.open)
                 }
             } else {
                 ui.say("recorder paused\n")
@@ -433,6 +496,16 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret false
     }
     if id == 100usize {
+        // The microphone is the services process's, behind Settings' Microphone access switch; without the process
+        // (an older boot) the scripted microphone of this app is used as before.
+        let started = bgclient.rec_start((s.rec_total + 3usize) % 16usize)
+        if started == bgclient.REC_DENIED {
+            s.denied = true
+            ui.say("recorder microphone denied\n")
+            ret true
+        }
+        s.denied = false
+        s.server = started == bgclient.REC_OK
         s.screen = RECORD_SCREEN
         s.ticks = 0usize
         var i = 0usize
@@ -488,6 +561,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ui.say_text(ui.number(a, kept))
         ui.say("\n")
     }
+    // (C166) A recording the services process went on with while this app was closed: this screen follows it again.
+    let (was_running, was_frames, was_level, was_unwatched) = bgclient.rec_state(false)
+    if was_unwatched || (was_running && was_frames > 0usize) {
+        s.server = true
+        s.screen = RECORD_SCREEN
+        s.ticks = was_frames / 4000usize
+        var b = 0usize
+        while b < WAVE {
+            s.live[b] = 6u8
+            b += 1usize
+        }
+        ui.say("recorder resumed ")
+        ui.say_text(ui.number(a, was_frames))
+        ui.say("\n")
+    }
     if !show(a, &kit, &s) {
         ui.say("recorder present failed\n")
         ret ok
@@ -508,6 +596,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     k += 1usize
                 }
                 s.live[WAVE - 1usize] = u8(wave_at(s.ticks, 3usize))
+                if s.server {
+                    // The level meter is the microphone's: the newest 100 ms of what the process captured, and the
+                    // time is its frames (a tick is half a second, 4,000 frames).
+                    let (capturing, frames, level, unwatched) = bgclient.rec_state(false)
+                    var bar = level
+                    if bar < 6usize { bar = 6usize }
+                    s.live[WAVE - 1usize] = u8(bar)
+                    s.ticks = frames / 4000usize
+                    if !capturing && frames > 0usize {
+                        // The buffer filled: the recording is over, taken when the user presses Stop.
+                        s.ticks = frames / 4000usize
+                    }
+                }
                 if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
             } else if s.screen == PLAY_SCREEN && s.playing {
                 s.ticks += 1usize
@@ -522,6 +623,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 appkit.answer(appkit.ANSWER_NONE)
             }
         } else if tap.y >= 896.0 {
+            // A recording in progress is the services process's: it goes on (and says so in a notification).
+            if s.screen == RECORD_SCREEN && s.server {
+                let (still, held, left_level, left_flag) = bgclient.rec_state(true)
+            }
             ui.say("recorder home\n")
             appkit.leave()
             running = false

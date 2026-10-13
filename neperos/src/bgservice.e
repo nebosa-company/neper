@@ -200,6 +200,72 @@ fn timer_end(sc: *Schedule) -> usize {
     ret usize(sc.raw[38usize]) + usize(sc.raw[39usize]) * 256usize + usize(sc.raw[40usize]) * 65536usize + usize(sc.raw[41usize]) * 16777216usize
 }
 
+// ----------------------------------------------------------------------------------------------
+// (C166) The microphone and the speaker.
+//
+// The capture buffer: ten seconds of 8 kHz mono 16-bit little-endian, filled as the scripted microphone "hears" it (by the
+// monotonic clock, eight frames a millisecond) whether or not an app is looking; the speaker's sink counts what reaches
+// it. The scripted microphone is a triangle wave whose period follows the recording's seed under a four-step swell, all in
+// integers, so an independent oracle (scripts/neperos_mic_oracle.py) can produce the same bytes.
+var capture: [160000]u8 = zero
+var rec_running: bool = false
+var rec_start_ms: usize = 0usize
+var rec_frames: usize = 0usize
+var rec_seed: usize = 0usize
+var rec_watched_ms: usize = 0usize
+var rec_unwatched: bool = false
+var mic_allowed: bool = true
+var spk_frames: usize = 0usize
+var spk_sum: usize = 0usize
+var spk_peak: usize = 0usize
+
+fn mic_sample(seed: usize, n: usize) -> i32 {
+    let period = 36usize + 4usize * (seed % 7usize)
+    let half = period / 2usize
+    let phase = n % period
+    var v = phase
+    if phase >= half { v = period - phase }
+    let base = (i32(v) * 2i32 - i32(half)) * 9000i32 / i32(half)
+    let swell = 1i32 + i32((n / 4000usize) % 4usize)
+    ret base * swell / 4i32
+}
+
+// Bring the buffer up to the frames the clock says have arrived; the buffer filling ends the recording.
+fn capture_fill(now: usize) {
+    if !rec_running { ret }
+    var want = (now - rec_start_ms) * 8usize
+    if want >= 80000usize { want = 80000usize }
+    while rec_frames < want {
+        let v = mic_sample(rec_seed, rec_frames)
+        let u = usize(v + 65536i32) & 65535usize
+        capture[rec_frames * 2usize] = u8(u & 255usize)
+        capture[rec_frames * 2usize + 1usize] = u8(u >> 8usize)
+        rec_frames += 1usize
+    }
+    if rec_frames >= 80000usize {
+        rec_running = false
+        say("services recording full\n")
+    }
+}
+
+// The newest 100 ms of the buffer as a level 0..100 (the loudest sample against the swell's top, 9000).
+fn capture_level() -> usize {
+    var from = 0usize
+    if rec_frames > 800usize { from = rec_frames - 800usize }
+    var top = 0usize
+    var n = from
+    while n < rec_frames {
+        let u = usize(capture[n * 2usize]) | (usize(capture[n * 2usize + 1usize]) << 8usize)
+        var m = u
+        if u >= 32768usize { m = 65536usize - u }
+        if m > top { top = m }
+        n += 1usize
+    }
+    var level = top * 100usize / 9000usize
+    if level > 100usize { level = 100usize }
+    ret level
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var sc: Schedule = zero
     // The volumes (media, ring, alarm) and Vibrate as Settings starts them, until the settings server says.
@@ -310,6 +376,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     volumes[1usize] = (payload >> 8usize) & 255usize
                     volumes[2usize] = (payload >> 16usize) & 255usize
                     vibrate = ((payload >> 24usize) & 255usize) != 0usize
+                    // (C166) Microphone access (Settings' switch), bits 32-39.
+                    mic_allowed = ((payload >> 32usize) & 255usize) != 0usize
                     say("services volumes ")
                     say_num(volumes[0usize])
                     say(" ")
@@ -318,6 +386,109 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     say_num(volumes[2usize])
                     if vibrate { say(" vibrate on\n") } else { say(" vibrate off\n") }
                 }
+            } else if op == bgclient.OP_REC_START {
+                var started = bgclient.REC_OK
+                if !mic_allowed {
+                    started = bgclient.REC_DENIED
+                    say("services recording denied app ")
+                    say_num(app)
+                    say("\n")
+                } else if !rec_running {
+                    rec_running = true
+                    rec_start_ms = now
+                    rec_frames = 0usize
+                    rec_seed = kind
+                    rec_watched_ms = now
+                    rec_unwatched = false
+                    say("services recording started seed ")
+                    say_num(kind)
+                    say("\n")
+                }
+                let sent_started = os.send(REP, started, NO_SLOT)
+            } else if op == bgclient.OP_REC_STATE {
+                capture_fill(now)
+                rec_watched_ms = now
+                if kind == 1usize && rec_running && !rec_unwatched {
+                    // The app says it is leaving with the recording running: it goes on, and the notification says so.
+                    rec_unwatched = true
+                    let leave_told = os.send(STATUS_REQ, OP_POST_QUIET, NO_SLOT)
+                    posted += 1usize
+                    say("services recording in background\n")
+                }
+                var state = 0usize
+                if rec_running { state = 1usize }
+                state = state | (rec_frames << 8usize) | (capture_level() << 40usize)
+                if rec_unwatched { state = state | (1usize << 48usize) }
+                let sent_state = os.send(REP, state, NO_SLOT)
+            } else if op == bgclient.OP_REC_STOP {
+                capture_fill(now)
+                // The app that watches has it: a recording it stops is no longer an unwatched one.
+                rec_unwatched = false
+                if rec_running {
+                    rec_running = false
+                    say("services recording stopped frames ")
+                    say_num(rec_frames)
+                    say("\n")
+                }
+                let sent_frames = os.send(REP, rec_frames, NO_SLOT)
+            } else if op == bgclient.OP_REC_READ {
+                let offset = payload & 4294967295usize
+                var want = (payload >> 32usize) & 65535usize
+                var from = offset
+                if from > rec_frames { from = rec_frames }
+                if want > 256usize { want = 256usize }
+                var count = rec_frames - from
+                if count > want { count = want }
+                let sent_count = os.send(REP, count, NO_SLOT)
+                var w = 0usize
+                while w * 4usize < count {
+                    var out_word = 0usize
+                    var j = 0usize
+                    while j < 4usize && w * 4usize + j < count {
+                        let at = (from + w * 4usize + j) * 2usize
+                        let frame = usize(capture[at]) | (usize(capture[at + 1usize]) << 8usize)
+                        out_word = out_word | (frame << (16usize * j))
+                        j += 1usize
+                    }
+                    let sent_word = os.send(REP, out_word, NO_SLOT)
+                    w += 1usize
+                }
+            } else if op == bgclient.OP_SPK_WRITE {
+                // The words follow at once, three 16-bit frames each; the first block of a stream resets the counts.
+                var words = payload & 65535usize
+                let block_frames = (payload >> 16usize) & 65535usize
+                var counted = 0usize
+                if words > 32usize { words = 32usize }
+                if kind == 1usize {
+                    spk_frames = 0usize
+                    spk_sum = 0usize
+                    spk_peak = 0usize
+                }
+                let gain = gain_of(volumes[0usize])
+                var w = 0usize
+                while w < words {
+                    let packed = os.recv(REQ, NO_SLOT)
+                    var j = 0usize
+                    while j < 3usize {
+                        if counted < block_frames {
+                            let frame = (packed >> (16usize * j)) & 65535usize
+                            spk_sum = (spk_sum + (frame & 255usize) + (frame >> 8usize)) % 65521usize
+                            var magnitude = frame
+                            if frame >= 32768usize { magnitude = 65536usize - frame }
+                            let heard = magnitude * usize(gain) / 65536usize
+                            if heard > spk_peak { spk_peak = heard }
+                            spk_frames += 1usize
+                            counted += 1usize
+                        }
+                        j += 1usize
+                    }
+                    w += 1usize
+                }
+                let sent_taken = os.send(REP, counted, NO_SLOT)
+            } else if op == bgclient.OP_SPK_STATS {
+                let sent_spk_frames = os.send(REP, spk_frames, NO_SLOT)
+                let sent_spk_sum = os.send(REP, spk_sum, NO_SLOT)
+                let sent_spk_peak = os.send(REP, spk_peak, NO_SLOT)
             } else if op == bgclient.OP_STATS {
                 let sent_beeps = os.send(REP, beeps, NO_SLOT)
                 let sent_peak = os.send(REP, last_peak, NO_SLOT)
@@ -334,6 +505,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // (C176) The battery provider: the scripted fuel gauge (power.e) against the wall clock. The level and the
             // charging state go to the status service when either changed; the low and critical levels are the
             // system's own notifications, once each while the charger is out.
+            // (C166) The recording goes on without its app: the app says so when it leaves (REC_STATE with the leaving flag); an app
+            // that died without saying is found by nobody having looked for twenty seconds. Either way it is "unwatched",
+            // and the system's notification says a recording is running (once for this recording).
+            if rec_running {
+                capture_fill(now)
+                if !rec_unwatched && now >= rec_watched_ms + 20000usize {
+                    rec_unwatched = true
+                    let rec_told = os.send(STATUS_REQ, OP_POST_QUIET, NO_SLOT)
+                    posted += 1usize
+                    say("services recording in background\n")
+                }
+            }
             let clock_now = wall_seconds()
             if clock_now != 0usize {
                 let (level, charging) = power.level_at(clock_now % 86400usize)

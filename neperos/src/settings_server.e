@@ -198,7 +198,8 @@ fn push_notify_mask(store: *Store) {
 const SERVICES_REQ: usize = 11usize
 
 fn push_volumes(store: *Store) {
-    let payload = usize(store.v[9usize]) | (usize(store.v[10usize]) << 8usize) | (usize(store.v[11usize]) << 16usize) | (usize(store.v[13usize]) << 24usize)
+    // (C166) The Microphone access switch (setting 17) rides in bits 32-39: the process's capture refuses while it is off.
+    let payload = usize(store.v[9usize]) | (usize(store.v[10usize]) << 8usize) | (usize(store.v[11usize]) << 16usize) | (usize(store.v[13usize]) << 24usize) | (usize(store.v[17usize]) << 32usize)
     let sent = os.send(SERVICES_REQ, 7usize | (payload << 8usize), sysettings.NO_SLOT)
 }
 
@@ -314,7 +315,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     push_links(links)
                 }
                 if index >= 26usize && index < 34usize { push_notify_mask(&store) }
-                if index == 9usize || index == 10usize || index == 11usize || index == 13usize { push_volumes(&store) }
+                if index == 9usize || index == 10usize || index == 11usize || index == 13usize || index == 17usize { push_volumes(&store) }
             }
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_BATTERY {
