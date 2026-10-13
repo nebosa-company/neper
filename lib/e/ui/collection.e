@@ -1966,6 +1966,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if has_lifted && lifted == i {
             head_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
             head_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
+            // v3: the dragged header stays in place, pressed, in light blue
+            if look.on {
+                head_style.background = paint.Brush { Solid: paint.rgba(0.737, 0.863, 0.957, 1.0) }
+                head_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 0.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+            }
         }
         let sides = style.Length { Px: pad }
         let flat = style.Length { Px: 0.0 }
@@ -2055,13 +2060,15 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             mark.background = paint.Brush { Solid: look.line }
             mark.margin = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: flat, right: flat, bottom: flat }
         }
-        if active {
+        if active && !(look.on && has_lifted_column) {
             mark = control.sized_style(3.0, inner)
             mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
             mark.margin = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: flat, right: flat, bottom: flat }
         }
         if lands_here {
             landing_grip = grip_key
+        }
+        if lands_here && !look.on {
             mark = control.sized_style(2.0, inner)
             mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
             mark.margin = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: flat, right: flat, bottom: flat }
@@ -2106,7 +2113,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     band.height = style.Length { Px: inner }
     band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
     if look.on { band.background = paint.Brush { Solid: look.header } }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, band, cells[0usize..n])
     var rule = style.defaults()
@@ -2124,6 +2131,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             var ghost_look = control.sized_style(lifted_box.width, lifted_box.height)
             ghost_look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
             ghost_look.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
+            // v3: a see-through white copy of the header that follows the pointer
+            if look.on {
+                ghost_look.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.7) }
+                ghost_look.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 0.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+            }
             var ghost_words = control.text_options()
             ghost_words.role = .TitleSmall
             ghost_words.wrap = .None
@@ -2145,7 +2157,20 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 line_anchor = key + 1u64
                 line_x = 0.0
             }
-            if line_anchor != 0u64 {
+            if line_anchor != 0u64 && look.on {
+                // v3: a green arrow above the header row and one below it, at the landing edge
+                let (down_arrow, down_error) = gl.mark(a, .ArrowDown, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
+                if down_error != ok { ret (zero, down_error) }
+                let (up_arrow, up_error) = gl.mark(a, .ArrowUp, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
+                if up_error != ok { ret (zero, up_error) }
+                let (arrow_nodes, arrow_nodes_error) = mem.alloc[widget.Node](a, 2usize)
+                if arrow_nodes_error != ok { ret (zero, TooLarge) }
+                arrow_nodes[0usize] = down_arrow
+                arrow_nodes[1usize] = up_arrow
+                parts[3usize] = widget.overlay(key + 1048601u64, widget.Overlay { anchor: line_anchor, placement: .Below, offset: geometry.Point { x: line_x - 4.0, y: 0.0 - inner - 11.0 }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[0usize..1usize])
+                parts[4usize] = widget.overlay(key + 1048602u64, widget.Overlay { anchor: line_anchor, placement: .Below, offset: geometry.Point { x: line_x - 4.0, y: 0.0 }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[1usize..2usize])
+                part_count = 5usize
+            } else if line_anchor != 0u64 {
                 var over_mark = control.sized_style(2.0, inner)
                 over_mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
                 let (line_node, line_node_error) = mem.alloc[widget.Node](a, 1usize)

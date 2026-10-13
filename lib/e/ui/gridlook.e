@@ -116,7 +116,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape }
 
@@ -188,6 +188,43 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             let (hole, hole_error) = star_path(m.arena, cx, cy, side * 0.5 * 0.6)
             if hole_error != ok { ret hole_error }
             try scene.push(b, scene.Command { FillPath: scene.FillPath { path: hole, brush: paint.Brush { Solid: m.inner } } })
+        }
+        ret ok
+    }
+    if m.shape == Shape.ArrowDown || m.shape == Shape.ArrowUp {
+        // v3's drop marker: a fat arrow, black outline, `color` fill (bright green)
+        var pass = 0usize
+        while pass < 2usize {
+            var inset: f32 = 0.0
+            var brush = paint.rgba(0.0, 0.0, 0.0, 1.0)
+            if pass == 1usize {
+                inset = 1.0
+                brush = m.color
+            }
+            let w = area.width - 2.0 * inset
+            let h = area.height - 2.0 * inset
+            let left = area.x + inset
+            var top = area.y + inset
+            var tip = top + h
+            var neck = top + h * 0.5
+            if m.shape == Shape.ArrowUp {
+                tip = top
+                top = top + h
+                neck = tip + h * 0.5
+            }
+            let (pb, pb_error) = geometry.path_builder(m.arena, 8usize, 8usize)
+            if pb_error != ok { ret pb_error }
+            var builder = pb
+            try geometry.move_to(&builder, geometry.Point { x: left + w * 0.3, y: top })
+            try geometry.line_to(&builder, geometry.Point { x: left + w * 0.7, y: top })
+            try geometry.line_to(&builder, geometry.Point { x: left + w * 0.7, y: neck })
+            try geometry.line_to(&builder, geometry.Point { x: left + w, y: neck })
+            try geometry.line_to(&builder, geometry.Point { x: left + w * 0.5, y: tip })
+            try geometry.line_to(&builder, geometry.Point { x: left, y: neck })
+            try geometry.line_to(&builder, geometry.Point { x: left + w * 0.3, y: neck })
+            try geometry.close_path(&builder)
+            try scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: brush } } })
+            pass += 1usize
         }
         ret ok
     }

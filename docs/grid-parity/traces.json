@@ -128,6 +128,18 @@
    "replayed": "ui_datagrid section 26; live in the sample (M1-multi-select-v5.png)"
   },
   {
+   "id": "D1",
+   "name": "dragging a column header",
+   "steps": [
+    "press and drag a header: it stays in place in light blue (#BCDCF4) and a see-through white copy follows the pointer",
+    "over another column: a green arrow above the header row and another below it mark the edge it would land at",
+    "over the group box: the arrows stand at the left of the box, and a drop makes a chip there"
+   ],
+   "v3": "recorded: docs/grid-parity/D1-header-drag-v3.png",
+   "neper": "collection header drag in the v3 look: lifted fill, translucent ghost, gl.Shape.ArrowDown/ArrowUp overlays",
+   "replayed": "live in the sample (D1-header-drag-v5.png); the group-box drop highlight is still to do"
+  },
+  {
    "id": "F1",
    "name": "filter",
    "v3": "the card pool has no filter row: the toolbar box is a Find box (typing does nothing until the binoculars or Enter) and the funnel opens the 'Filter Card Pool' dialog with OK/Apply, so there is no delayed apply to record in this view",

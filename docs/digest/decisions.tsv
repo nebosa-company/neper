@@ -2150,4 +2150,5 @@ D2386	939	G012: the collection and deck views
 D2387	904	G012: collection editing traces (immediate edit, Enter keeps the row, Tab order)
 D2388	596	G012: pixel probes for the selected-row border, column lines and header fill
 D2389	843	G012: the cell editor's caret follows the tap
-D2390	967	G012: selecting several rows (trace M1)
+D2390	968	G012: selecting several rows (trace M1)
+D2391	868	G012: header drag in the v3 look (trace D1)
