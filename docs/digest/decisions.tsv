@@ -2404,4 +2404,7 @@ D3913	3955	G006: datagrid in-place editors and layout persistence
 D3914	2426	G006: datagrid preview row and pixel probes
 D3915	3378	G006: datagrid Tab navigation, column visibility and order
 D3916	1982	G007: single-row reposition, editors by kind, lock, old/new text and batches
-D2472	432	The kernel's fs-grant list after the lane C merge is one condition
+D2472	433	The kernel's fs-grant list after the lane C merge is one condition
+D2473	630	The SSH GCM invocation counter carries without overflowing a byte
+D2474	651	A kernel body edit keeps `main` when the kernel's signature holds
+D3917	2302	G008: conditional formatting rules (e.ui.gridrules) and their grid rendering

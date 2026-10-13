@@ -2121,7 +2121,7 @@ type Band = struct { title: str, first: usize, count: usize }
 type Nav = enum u8 { First, Prev, Next, Last }
 type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool, choice: bool }
 type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, cell_edited: fn(*void, usize, usize) -> err, value_changed: fn(*void, usize, usize, str, str) -> err, can_edit: fn(*void, usize, usize) -> bool, batch_done: fn(*void, usize) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
-type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, edit_old: [64]u8, edit_old_len: usize, select_open: bool, batch_depth: usize, batch_count: usize, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
+type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, edit_old: [64]u8, edit_old_len: usize, select_open: bool, batch_depth: usize, batch_count: usize, rule_set: *rules.Rules, has_rules: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
 error TooManyColumns
 error NotEditable
 error Locked
@@ -2133,6 +2133,8 @@ fn show_sort(grid: *Grid, spec: usize, descending: bool)
 fn clear_selection(grid: *Grid)
 fn relayout(grid: *Grid)
 fn display_of(grid: *const Grid, spec: usize) -> (usize, bool)
+fn set_rules(grid: *Grid, set: *rules.Rules)
+fn clear_rules(grid: *Grid)
 fn set_hidden(grid: *Grid, spec: usize, hide: bool)
 fn is_hidden(grid: *const Grid, spec: usize) -> bool
 fn move_column(grid: *Grid, spec: usize, to: usize)
@@ -2200,8 +2202,46 @@ filter row and navigator flags and the filter texts as small text; `load_layout`
 widths for columns the grid does not have and sorts out of range (`BadLayout` for text without the
 version line). A grid owns the widget keys from `key` to
 `key + KEY_BASE + row capacity + group capacity` (the table's own header cells use the keys just
-above `key`; the filter fields use `key + FILTER_KEY + spec`). Not yet: a column chooser
+above `key`; the filter fields use `key + FILTER_KEY + spec`). `set_rules` attaches an `e.ui.gridrules` rule set (`clear_rules` detaches it): each data cell asks it for
+its look by the column's table column and the storage row, and draws the ink, bold, a fill, a data bar
+behind the text and an icon glyph (`v`, `-`, `^`) before it. Not yet: a column chooser
 window; the filter row stands above the header, not below.
+
+### `e.ui.gridrules`
+
+```neper
+type Kind = enum u8 { CellIs, Text, Blank, Above, Below, Top, Bottom, Duplicate, Unique, Scale, Bar, Icons }
+type Op = enum u8 { Eq, Ne, Lt, Le, Gt, Ge, Between, Contains, Begins, Ends }
+type Rule = struct { column: usize, kind: Kind, op: Op, a: f64, b: f64, text: str, fold: bool, count: usize, percent: bool, ink: style.ColorRole, has_ink: bool, fill: paint.Color, has_fill: bool, bold: bool, whole_row: bool, low: paint.Color, mid: paint.Color, high: paint.Color, three: bool, buckets: u8 }
+type Format = struct { has_ink: bool, ink: style.ColorRole, has_fill: bool, fill: paint.Color, bold: bool, has_bar: bool, bar: f32, bar_color: paint.Color, icon: u8, buckets: u8 }
+type Stat = struct { built: u64, structure: u64, ready: bool, low: f64, high: f64, average: f64, threshold: f64, sorted: []f64, sorted_len: usize, entries: []u32 }
+type Rules = struct { t: *const table.Table, rules: []Rule, stats: []Stat, total: usize }
+type Order = struct { unused: u8 }
+error TooMany
+error BadColumn
+error BadRule
+
+fn rule(column: usize, kind: Kind) -> Rule
+fn create(a: *mem.Arena, t: *const table.Table, capacity: usize) -> (Rules, err)
+fn count(rs: *const Rules) -> usize
+fn add(a: *mem.Arena, rs: *Rules, r: Rule) -> (usize, err)
+fn remove_all(rs: *Rules)
+fn refresh(rs: *Rules, scratch: *mem.Arena) -> err
+fn format(rs: *const Rules, row: usize, column: usize) -> Format
+```
+
+Conditional formatting rules of the data grid (`docs/grid.md` section 5.5). `rule(column, kind)` is a rule with
+defaults, set by assigning fields: `CellIs` compares a number with `a` (and `b` for `Between`, bounds in either
+order) or a text column's text with `text` for `Eq` / `Ne`; `Text` is `Contains` / `Begins` / `Ends` on a text column;
+`Blank` is a null cell; `Above` / `Below` the column average; `Top` / `Bottom` take `count` rows (or `count` percent,
+rounded up, at least one) with ties kept; `Duplicate` / `Unique` count equal values (numbers, or dictionary entries);
+`Scale` blends `low` to `high` (through `mid` when `three`) by the value's place between the column's minimum and
+maximum; `Bar` is that place as a bar fraction in `fill`; `Icons` puts the value in one of `buckets` (2 to 5) equal
+ranges. Text matching is ASCII upper-case folded unless `fold` is false. `add` appends at the lowest priority
+(`BadRule` for a kind the column cannot take, `BadColumn`, `TooMany` past `capacity`); `refresh` computes the
+statistics over the table's live rows and only for rules whose column or row set changed; `format` answers the look
+of one cell and takes, field by field, the first rule that sets the field; a `whole_row` rule formats every cell of
+the row it holds for. Statistics are not recomputed by `format`, so call `refresh` after the table changes.
 
 ### `e.data.slot_map`
 
