@@ -2482,4 +2482,29 @@ D5103	1517	C173, C151: many installed apps, removal, update, roll back, a hand-w
 D5104	519	The test root and server certificate cover the three model providers
 D5105	1403	C164: accounts, ids, reactions and threads on the server, search, a second client
 D5106	424	C175: the clipboard holds 128 bytes
-D5107	679	C173: a prompt prefix and readable diagnostics on the build server
+D5107	680	C173: a prompt prefix and readable diagnostics on the build server
+D4900	1634	C158: Mail lists the server's mailboxes and shows an HTML message with its inline image
+D4901	763	C158: threads
+D4902	939	C158: accounts
+D4903	1050	C158: compose with an attachment, checked on the server
+D4904	872	C158: search, mark unread and archive are done on the server
+D4905	725	C158: new mail is found by polling and counted as a notification
+D4906	518	C158: Open in Document
+D4910	896	C159: POST forms and fields edited on the page
+D4911	725	C159: PNG and JPEG images
+D4912	408	C159: a cache by ETag
+D4913	848	C159: stylesheets through the cascade
+D4914	479	C159: the tabs survive a restart
+D4920	959	C160: the tile pyramid, panning across tiles and zoom levels
+D4921	487	C160: offline regions in Files
+D4922	1163	C160: search over Nominatim-shaped JSON and routing over an OSRM-shaped route
+D4923	420	C160: your place from the location service
+D4930	876	C156: other national feeds and the notification
+D4931	450	The test server certificate covers api.weather.gov
+D4932	688	C156: the current location as a place
+D4915	498	C159: bookmarks
+D4916	510	C159: a download is opened in Document
+D4917	605	Eight texture slots for an app, and Maps keeps tiles in Files
+D4918	268	httpc keeps the Content-Type a caller names
+D4919	746	Fixtures wait on the idle ticks, on a quiet machine
+D4933	450	Mail opens a saved picture in Photos
