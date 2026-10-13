@@ -1396,9 +1396,15 @@ fn stroke_flattener(s: *RendererState, t: geometry.Transform, stroke: paint.Stro
     ret f
 }
 
+// A font-unit point (x right, y up) in pixel space: `(a, c)` is where the glyph's x axis goes, `(b, d)` its y
+// axis, `(ox, oy)` the origin (D4504: the whole 2 x 2, so a rotated or skewed run is drawn as such).
+fn glyph_point(ox: f32, oy: f32, a: f32, b: f32, c: f32, d: f32, x: f32, y: f32) -> geometry.Point {
+    ret geometry.Point { x: ox + a * x + b * y, y: oy + c * x + d * y }
+}
+
 // The glyph's outline from `glyf`, offset and scaled into pixel space, into the
 // flattener as quadratic contours; a composite glyph places its components.
-fn glyph_outline(f: *Flattener, font: *const FontEntry, glyph: u32, ox: f32, oy: f32, sx: f32, sy: f32, depth: usize) -> err {
+fn glyph_outline(f: *Flattener, font: *const FontEntry, glyph: u32, ox: f32, oy: f32, ma: f32, mb: f32, mc: f32, md: f32, depth: usize) -> err {
     if usize(glyph) >= font.glyph_count || depth > 4usize { ret ok }
     var start = 0usize
     var end = 0usize
@@ -1413,7 +1419,7 @@ fn glyph_outline(f: *Flattener, font: *const FontEntry, glyph: u32, ox: f32, oy:
     let d = font.data
     let g = font.glyf + start
     let contours = be16(d, g)
-    if contours >= 32768u32 { ret composite_outline(f, font, g, end - start, ox, oy, sx, sy, depth) }
+    if contours >= 32768u32 { ret composite_outline(f, font, g, end - start, ox, oy, ma, mb, mc, md, depth) }
     let count = usize(contours)
     var end_points: [64]usize = zero
     if count > 64usize { ret TooLarge }
@@ -1497,15 +1503,15 @@ fn glyph_outline(f: *Flattener, font: *const FontEntry, glyph: u32, ox: f32, oy:
             let n = last - first + 1usize
             // The start: the first on-curve point, or the midpoint of the first two.
             var start_index = first
-            var start_point = geometry.Point { x: ox + xs[first] * sx, y: oy - ys[first] * sy }
+            var start_point = glyph_point(ox, oy, ma, mb, mc, md, xs[first], ys[first])
             var start_on = flags[first] & 1u8 != 0u8
             if !start_on {
                 let next = first + 1usize
                 if n > 1usize && flags[next] & 1u8 != 0u8 {
                     start_index = next
-                    start_point = geometry.Point { x: ox + xs[next] * sx, y: oy - ys[next] * sy }
+                    start_point = glyph_point(ox, oy, ma, mb, mc, md, xs[next], ys[next])
                 } else {
-                    start_point = geometry.Point { x: ox + (xs[first] + xs[first + (1usize % n)]) * 0.5 * sx, y: oy - (ys[first] + ys[first + (1usize % n)]) * 0.5 * sy }
+                    start_point = glyph_point(ox, oy, ma, mb, mc, md, (xs[first] + xs[first + (1usize % n)]) * 0.5, (ys[first] + ys[first + (1usize % n)]) * 0.5)
                 }
             }
             try flat_end(f)
@@ -1517,7 +1523,7 @@ fn glyph_outline(f: *Flattener, font: *const FontEntry, glyph: u32, ox: f32, oy:
             var k = 1usize
             while k <= n {
                 let index = first + (start_index - first + k) % n
-                let p = geometry.Point { x: ox + xs[index] * sx, y: oy - ys[index] * sy }
+                let p = glyph_point(ox, oy, ma, mb, mc, md, xs[index], ys[index])
                 let on = flags[index] & 1u8 != 0u8
                 if on {
                     if has_control { try flat_quad(f, control, p) } else { try flat_line(f, p) }
@@ -1541,7 +1547,7 @@ fn glyph_outline(f: *Flattener, font: *const FontEntry, glyph: u32, ox: f32, oy:
     ret ok
 }
 
-fn composite_outline(f: *Flattener, font: *const FontEntry, g: usize, len: usize, ox: f32, oy: f32, sx: f32, sy: f32, depth: usize) -> err {
+fn composite_outline(f: *Flattener, font: *const FontEntry, g: usize, len: usize, ox: f32, oy: f32, ma: f32, mb: f32, mc: f32, md: f32, depth: usize) -> err {
     let d = font.data
     var at = g + 10usize
     var more = true
@@ -1582,7 +1588,8 @@ fn composite_outline(f: *Flattener, font: *const FontEntry, g: usize, len: usize
             dx = 0.0
             dy = 0.0
         }
-        try glyph_outline(f, font, component, ox + dx * sx, oy - dy * sy, sx * scale_x, sy * scale_y, depth + 1usize)
+        let placed = glyph_point(ox, oy, ma, mb, mc, md, dx, dy)
+        try glyph_outline(f, font, component, placed.x, placed.y, ma * scale_x, mb * scale_y, mc * scale_x, md * scale_y, depth + 1usize)
         more = flags & 32u32 != 0u32
     }
     ret ok
@@ -1619,8 +1626,8 @@ fn text_edges(s: *RendererState, f: *Flattener, text: DrawText) -> err {
                 while g < run.run.glyphs.len {
                     let glyph = run.run.glyphs[g]
                     let origin = geometry.transform_point(f.t, geometry.Point { x: pen + glyph.offset_x * run.size, y: baseline - glyph.offset_y * run.size })
-                    // The glyph's own scale under the transform's axes.
-                    try glyph_outline(f, font, glyph.id, origin.x, origin.y, scale * f.t.m00, scale * f.t.m11, 0usize)
+                    // The glyph's own scale under the whole linear part of the transform (D4504: a rotated run).
+                    try glyph_outline(f, font, glyph.id, origin.x, origin.y, scale * f.t.m00, 0.0 - scale * f.t.m01, scale * f.t.m10, 0.0 - scale * f.t.m11, 0usize)
                     pen = pen + glyph.advance_x * run.size
                     g += 1usize
                 }

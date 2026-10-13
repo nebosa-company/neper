@@ -97,24 +97,28 @@ fn set16(table: []u8, index: usize, value: u32) {
     table[index * 2usize + 1usize] = u8((value >> 8u32) & 255u32)
 }
 
+// RFC 1951's length and distance tables follow one pattern, two bits of mantissa and a
+// power of two, so each entry is arithmetic instead of a table built on every call.
+// `index` is 0..28 for a length symbol and 0..29 for a distance symbol.
 fn length_base(index: usize) -> u32 {
-    let table: [29]u32 = [29]u32{ 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 }
-    ret table[index]
+    if index < 8usize { ret u32(index) + 3u32 }
+    if index >= 28usize { ret 258u32 }
+    ret ((4u32 + u32(index & 3usize)) << u32((index >> 2u32) - 1usize)) + 3u32
 }
 
 fn length_extra(index: usize) -> u32 {
-    let table: [29]u32 = [29]u32{ 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 }
-    ret table[index]
+    if index < 8usize || index >= 28usize { ret 0u32 }
+    ret u32((index >> 2u32) - 1usize)
 }
 
 fn dist_base(index: usize) -> u32 {
-    let table: [30]u32 = [30]u32{ 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 }
-    ret table[index]
+    if index < 4usize { ret u32(index) + 1u32 }
+    ret ((2u32 + u32(index & 1usize)) << u32((index >> 1u32) - 1usize)) + 1u32
 }
 
 fn dist_extra(index: usize) -> u32 {
-    let table: [30]u32 = [30]u32{ 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 }
-    ret table[index]
+    if index < 4usize { ret 0u32 }
+    ret u32((index >> 1u32) - 1usize)
 }
 
 fn code_length_order(index: usize) -> usize {
@@ -571,9 +575,10 @@ fn encoder(storage: []u8, level: Level) -> (Encoder, err) {
         at += HASH_SIZE * 2usize
         s.prev = storage[at..at + HASH_SIZE * 2usize]
         at += HASH_SIZE * 2usize
-        s.tok_len = storage[at..at + TOKMAX]
-        at += TOKMAX
+        // Distances first: they are read as 16-bit words, so they sit on an even offset.
         s.tok_dist = storage[at..at + TOKMAX * 2usize]
+        at += TOKMAX * 2usize
+        s.tok_len = storage[at..at + TOKMAX]
         var h = 0usize
         while h < HASH_SIZE / 4usize {
             let hp = mem.cast[*u64](&s.head[h * 8usize])
@@ -606,6 +611,26 @@ fn put_bits(s: *EncoderState, value: u32, n: u32) {
     }
 }
 
+// dst[dst_at..dst_at + n] = src[src_at..src_at + n], eight bytes at a time. A forward copy,
+// so a destination before an overlapping source is safe when they are 8 or more apart.
+fn move_bytes(dst: []u8, dst_at: usize, src: []const u8, src_at: usize, n: usize) {
+    if n == 0usize { ret }
+    // The one bounds check: the last byte of each side.
+    let tail_dst = dst[dst_at + n - 1usize]
+    let tail_src = src[src_at + n - 1usize]
+    var i = 0usize
+    @nocheck {
+    while i + 8usize <= n {
+        *mem.cast[*u64](&dst[dst_at + i]) = *mem.cast[*u64](&src[src_at + i])
+        i += 8usize
+    }
+    while i < n {
+        dst[dst_at + i] = src[src_at + i]
+        i += 1usize
+    }
+    }
+}
+
 // Huffman codes go out most significant bit first.
 fn reversed(code: u32, n: u32) -> u32 {
     var out = 0u32
@@ -627,12 +652,8 @@ fn put_stored(s: *EncoderState, from: usize, n: usize, final: bool) {
     if s.bit_count > 0u32 { put_bits(s, 0u32, 8u32 - s.bit_count) }
     put_bits(s, u32(n) & 65535u32, 16u32)
     put_bits(s, (u32(n) ^ 65535u32) & 65535u32, 16u32)
-    var i = 0usize
-    while i < n {
-        s.staging[s.staging_len] = s.buffer[from + i]
-        s.staging_len += 1usize
-        i += 1usize
-    }
+    move_bytes(s.staging, s.staging_len, s.buffer, from, n)
+    s.staging_len += n
 }
 
 // Length symbol index (0..28) of a match length 3..258, and distance symbol (0..29).
@@ -651,6 +672,23 @@ fn enc_dist_code(distance: u32) -> usize {
     var hb = 2u32
     while (m >> (hb + 1u32)) != 0u32 { hb += 1u32 }
     ret usize(2u32 * hb + ((m >> (hb - 1u32)) & 1u32))
+}
+
+// Symbol lookups for a block: `lcode[length - 3]` is the length symbol index, and the
+// distance symbol of `d` is `dcode[m]` for m = d - 1 under 256 and `dcode[256 + (m >> 7)]`
+// above (every symbol boundary past 256 is a multiple of 128).
+fn enc_tables(lcode: []u8, dcode: []u8) {
+    var i = 0usize
+    while i < 256usize {
+        lcode[i] = u8(enc_len_code(u32(i) + 3u32))
+        dcode[i] = u8(enc_dist_code(u32(i) + 1u32))
+        i += 1usize
+    }
+    i = 2usize
+    while i < 256usize {
+        dcode[256usize + i] = u8(enc_dist_code(u32(i << 7u32) + 1u32))
+        i += 1usize
+    }
 }
 
 // Length-limited Huffman lengths for `n` weights: sorted leaves, a two-queue merge,
@@ -784,26 +822,91 @@ fn enc_codes(lens: []const u8, n: usize, codes: []u32) {
     }
 }
 
-fn enc_tokens(s: *EncoderState, lit_len: []const u8, lit_code: []const u32, dist_len: []const u8, dist_code: []const u32) {
+// The block's tokens, Huffman coded. The bits gather in a local 64-bit accumulator and go
+// out four bytes at a time; each token adds at most 20 bits (a length symbol and its
+// extra bits) and then at most 28 (a distance symbol and its extra bits) to under 32
+// held, so the accumulator never overflows. A length's extra bits are its low bits
+// (`length - 3` is the symbol's base plus the extra, the base a multiple of 2^extra), and
+// a distance's are the low bits of `distance - 1`, so no base table is read.
+fn enc_tokens(s: *EncoderState, lit_len: []const u8, lit_code: []const u32, dist_len: []const u8, dist_code: []const u32, lcode: []const u8, dcode: []const u8) {
+    var acc = s.bits
+    var nb = s.bit_count
+    var at = s.staging_len
+    let cap = s.staging.len
+    let staging = s.staging
+    let tok_len = s.tok_len
+    let tok_dist = s.tok_dist
+    let count = s.tok_count
     var t = 0usize
-    while t < s.tok_count {
-        let dd = get16(s.tok_dist, t)
-        if dd == 0u32 {
-            let b = usize(s.tok_len[t])
-            put_bits(s, lit_code[b], u32(lit_len[b]))
+    @nocheck {
+    while t < count {
+        let dd = usize(*mem.cast[*u16](&tok_dist[t << 1u32]))
+        let ln = usize(tok_len[t])
+        if dd == 0usize {
+            acc = acc | (u64(lit_code[ln]) << nb)
+            nb += u32(lit_len[ln])
         } else {
-            let length = u32(s.tok_len[t]) + 3u32
-            let lc = enc_len_code(length)
+            let lc = usize(lcode[ln])
             let sym = 257usize + lc
-            put_bits(s, lit_code[sym], u32(lit_len[sym]))
-            if length_extra(lc) > 0u32 { put_bits(s, length - length_base(lc), length_extra(lc)) }
-            let dc = enc_dist_code(dd)
-            put_bits(s, dist_code[dc], u32(dist_len[dc]))
-            if dist_extra(dc) > 0u32 { put_bits(s, dd - dist_base(dc), dist_extra(dc)) }
+            var le = 0u32
+            if lc >= 8usize && lc < 28usize { le = u32(lc >> 2u32) - 1u32 }
+            let ll = u32(lit_len[sym])
+            acc = acc | ((u64(lit_code[sym]) | (u64(u32(ln) & ((1u32 << le) - 1u32)) << ll)) << nb)
+            nb += ll + le
+            if nb >= 32u32 {
+                if at + 4usize <= cap {
+                    *mem.cast[*u32](&staging[at]) = u32(acc & 4294967295u64)
+                    at += 4usize
+                } else {
+                    var k = 0usize
+                    while k < 4usize {
+                        staging[at] = u8((acc >> u32(k * 8usize)) & 255u64)
+                        at += 1usize
+                        k += 1usize
+                    }
+                }
+                acc = acc >> 32u32
+                nb -= 32u32
+            }
+            let m = dd - 1usize
+            var di = m
+            if m >= 256usize { di = 256usize + (m >> 7u32) }
+            let dc = usize(dcode[di])
+            var de = 0u32
+            if dc >= 4usize { de = u32(dc >> 1u32) - 1u32 }
+            let dl = u32(dist_len[dc])
+            acc = acc | ((u64(dist_code[dc]) | (u64(u32(m) & ((1u32 << de) - 1u32)) << dl)) << nb)
+            nb += dl + de
+        }
+        if nb >= 32u32 {
+            if at + 4usize <= cap {
+                *mem.cast[*u32](&staging[at]) = u32(acc & 4294967295u64)
+                at += 4usize
+            } else {
+                var k = 0usize
+                while k < 4usize {
+                    staging[at] = u8((acc >> u32(k * 8usize)) & 255u64)
+                    at += 1usize
+                    k += 1usize
+                }
+            }
+            acc = acc >> 32u32
+            nb -= 32u32
         }
         t += 1usize
     }
-    put_bits(s, lit_code[256], u32(lit_len[256]))
+    }
+    acc = acc | (u64(lit_code[256]) << nb)
+    nb += u32(lit_len[256])
+    while nb >= 8u32 {
+        staging[at] = u8(acc & 255u64)
+        at += 1usize
+        acc = acc >> 8u32
+        nb -= 8u32
+    }
+    s.bits = acc
+    s.bit_count = nb
+    s.staging_len = at
 }
 
 // Writes the buffered tokens as one block: the smallest of stored, fixed and dynamic.
@@ -813,20 +916,38 @@ fn enc_flush(s: *EncoderState, final: bool) {
     var extra_bits = 0u32
     var dist_total = 0u32
     let span = s.tok_pos - s.block_start
+    var lcode: [256]u8 = zero
+    var dcode: [512]u8 = zero
+    enc_tables(lcode[0..], dcode[0..])
+    let tok_len = s.tok_len
+    let tok_dist = s.tok_dist
     var t = 0usize
+    @nocheck {
     while t < s.tok_count {
-        let dd = get16(s.tok_dist, t)
-        if dd == 0u32 {
-            lit_freq[usize(s.tok_len[t])] += 1u32
+        let dd = usize(*mem.cast[*u16](&tok_dist[t << 1u32]))
+        let ln = usize(tok_len[t])
+        if dd == 0usize {
+            lit_freq[ln] += 1u32
         } else {
-            let length = u32(s.tok_len[t]) + 3u32
-            let lc = enc_len_code(length)
-            let dc = enc_dist_code(dd)
-            lit_freq[257usize + lc] += 1u32
-            dist_freq[dc] += 1u32
-            dist_total += 1u32
-            extra_bits += length_extra(lc) + dist_extra(dc)
+            let m = dd - 1usize
+            var di = m
+            if m >= 256usize { di = 256usize + (m >> 7u32) }
+            lit_freq[257usize + usize(lcode[ln])] += 1u32
+            dist_freq[usize(dcode[di])] += 1u32
         }
+        t += 1usize
+    }
+    }
+    // The extra bits follow from the symbol counts.
+    t = 0usize
+    while t < 29usize {
+        extra_bits += lit_freq[257usize + t] * length_extra(t)
+        t += 1usize
+    }
+    t = 0usize
+    while t < 30usize {
+        extra_bits += dist_freq[t] * dist_extra(t)
+        dist_total += dist_freq[t]
         t += 1usize
     }
     lit_freq[256] = 1u32
@@ -989,7 +1110,7 @@ fn enc_flush(s: *EncoderState, final: bool) {
             enc_codes(lit_len[0..], 286usize, lit_code[0..])
             enc_codes(dist_len[0..], 30usize, dist_code[0..])
         }
-        enc_tokens(s, lit_len[0..], lit_code[0..], dist_len[0..], dist_code[0..])
+        enc_tokens(s, lit_len[0..], lit_code[0..], dist_len[0..], dist_code[0..], lcode[0..], dcode[0..])
     }
     s.block_start = s.tok_pos
     s.block_lost = false
@@ -1025,37 +1146,41 @@ fn enc_run(s: *EncoderState, finish: bool) -> u32 {
     var prev_dist = s.prev_dist
     var pending = s.match_avail
     var status = 0u32
+    // Every index below is inside the buffer by construction: a position is under
+    // `buffer_len` (at most CAP), a candidate is a position before it, a hash slot is a
+    // 15-bit value times two, and a token index is under TOKMAX. The block is the
+    // matcher's whole cost, so the per-access checks go.
+    @nocheck {
     while true {
         if count >= TOKMAX {
             status = 1u32
             break
         }
-        let avail = blen - scan
+        let i = scan
+        let avail = blen - i
         if avail < LOOKAHEAD && !finish { break }
         if avail == 0usize {
             if pending {
-                tok_len[count] = buf[scan - 1usize]
-                tok_dist[count * 2usize] = 0u8
-                tok_dist[count * 2usize + 1usize] = 0u8
+                tok_len[count] = buf[i - 1usize]
+                *mem.cast[*u16](&tok_dist[count << 1u32]) = 0u16
                 count += 1usize
-                tok_pos = scan
+                tok_pos = i
                 pending = false
             }
             status = 2u32
             break
         }
-        let i = scan
         var cur_len = 2usize
         var cur_dist = 0usize
-        if i + 3usize <= blen {
-            let hi2 = usize(((u32(buf[i]) << 10u32) ^ (u32(buf[i + 1usize]) << 5u32) ^ u32(buf[i + 2usize])) & 32767u32) * 2usize
-            let pi2 = (i & (HASH_SIZE - 1usize)) * 2usize
-            let first = usize(head[hi2]) | (usize(head[hi2 + 1usize]) << 8u32)
-            prev[pi2] = head[hi2]
-            prev[pi2 + 1usize] = head[hi2 + 1usize]
-            head[hi2] = u8(i & 255usize)
-            head[hi2 + 1usize] = u8((i >> 8u32) & 255usize)
-            var limit_len = blen - i
+        if avail >= 3usize {
+            // zlib's hash of the three bytes, ((a << 10) ^ (b << 5) ^ c) & 32767, taken from
+            // one four-byte load and scaled by two for the 16-bit slot.
+            let w = usize(*mem.cast[*u32](&buf[i]))
+            let hslot = mem.cast[*u16](&head[(((w & 255usize) << 11u32) ^ ((w & 65280usize) >> 2u32) ^ ((w >> 15u32) & 510usize)) & 65534usize])
+            let first = usize(*hslot)
+            *mem.cast[*u16](&prev[(i & 32767usize) << 1u32]) = *hslot
+            *hslot = u16(i)
+            var limit_len = avail
             if limit_len > 258usize { limit_len = 258usize }
             if first != 65535usize && prev_len < max_lazy && prev_len < limit_len && i - first <= WINDOW_SIZE {
                 var steps = chain
@@ -1068,16 +1193,12 @@ fn enc_run(s: *EncoderState, finish: bool) -> u32 {
                 let first_byte = buf[i]
                 let end_at = i + limit_len
                 while true {
-                    let distance = i - candidate
-                    if distance > WINDOW_SIZE { break }
                     if buf[candidate + best_len] == buf[i + best_len] && buf[candidate] == first_byte {
                         var ca = candidate + 1usize
                         var cb = i + 1usize
                         // Eight bytes at a time while they agree, then bytewise.
                         while cb + 8usize <= end_at {
-                            let wa = mem.cast[*u64](&buf[ca])
-                            let wb = mem.cast[*u64](&buf[cb])
-                            if *wa != *wb { break }
+                            if *mem.cast[*u64](&buf[ca]) != *mem.cast[*u64](&buf[cb]) { break }
                             ca += 8usize
                             cb += 8usize
                         }
@@ -1088,15 +1209,14 @@ fn enc_run(s: *EncoderState, finish: bool) -> u32 {
                         let length = cb - i
                         if length > best_len {
                             best_len = length
-                            best_dist = distance
+                            best_dist = i - candidate
                             if length >= nice_len { break }
                         }
                     }
                     steps -= 1usize
                     if steps == 0usize { break }
-                    let pc2 = (candidate & (HASH_SIZE - 1usize)) * 2usize
-                    let next = usize(prev[pc2]) | (usize(prev[pc2 + 1usize]) << 8u32)
-                    if next == 65535usize || next >= candidate { break }
+                    let next = usize(*mem.cast[*u16](&prev[(candidate & 32767usize) << 1u32]))
+                    if next == 65535usize || next >= candidate || i - next > WINDOW_SIZE { break }
                     candidate = next
                 }
                 if best_dist != 0usize && !(best_len == 3usize && best_dist > 4096usize) {
@@ -1107,8 +1227,7 @@ fn enc_run(s: *EncoderState, finish: bool) -> u32 {
         }
         if prev_len >= 3usize && cur_len <= prev_len {
             tok_len[count] = u8(prev_len - 3usize)
-            tok_dist[count * 2usize] = u8(prev_dist & 255usize)
-            tok_dist[count * 2usize + 1usize] = u8((prev_dist >> 8u32) & 255usize)
+            *mem.cast[*u16](&tok_dist[count << 1u32]) = u16(prev_dist)
             count += 1usize
             let end = i - 1usize + prev_len
             tok_pos = end
@@ -1117,12 +1236,11 @@ fn enc_run(s: *EncoderState, finish: bool) -> u32 {
             if stop > blen - 2usize { stop = blen - 2usize }
             if k < stop {
                 // Rolling hash: each step brings in one byte.
-                var roll = ((u32(buf[k]) << 5u32) ^ u32(buf[k + 1usize])) & 32767u32
+                var roll = ((usize(buf[k]) << 5u32) ^ usize(buf[k + 1usize])) & 32767usize
                 while k < stop {
-                    roll = ((roll << 5u32) ^ u32(buf[k + 2usize])) & 32767u32
-                    let head_slot = mem.cast[*u16](&head[usize(roll) * 2usize])
-                    let prev_slot = mem.cast[*u16](&prev[(k & (HASH_SIZE - 1usize)) * 2usize])
-                    *prev_slot = *head_slot
+                    roll = ((roll << 5u32) ^ usize(buf[k + 2usize])) & 32767usize
+                    let head_slot = mem.cast[*u16](&head[roll << 1u32])
+                    *mem.cast[*u16](&prev[(k & 32767usize) << 1u32]) = *head_slot
                     *head_slot = u16(k)
                     k += 1usize
                 }
@@ -1133,8 +1251,7 @@ fn enc_run(s: *EncoderState, finish: bool) -> u32 {
         } else {
             if pending {
                 tok_len[count] = buf[i - 1usize]
-                tok_dist[count * 2usize] = 0u8
-                tok_dist[count * 2usize + 1usize] = 0u8
+                *mem.cast[*u16](&tok_dist[count << 1u32]) = 0u16
                 count += 1usize
                 tok_pos = i
             }
@@ -1143,6 +1260,7 @@ fn enc_run(s: *EncoderState, finish: bool) -> u32 {
             prev_dist = cur_dist
             scan = i + 1usize
         }
+    }
     }
     s.scan = scan
     s.tok_count = count
@@ -1164,16 +1282,30 @@ fn enc_slide(s: *EncoderState) {
         kept = shift
     }
     // The halves of the buffer do not overlap: shift is half of it.
-    mem.copy[u8](s.buffer[0..s.buffer_len - shift], s.buffer[shift..s.buffer_len])
+    move_bytes(s.buffer, 0usize, s.buffer, shift, s.buffer_len - shift)
+    // Every 16-bit slot v becomes v - 32768 when it is a position in the kept half
+    // (v >= 32768, v != 65535) and 65535 (none) otherwise, four slots to a word:
+    // `m` is v without its top bit, `ff` marks m == 32767, and a slot is kept when its
+    // top bit is set and it is not 65535.
+    let ones = 281479271743489u64
+    let low15 = 9223231297218904063u64
     var i = 0usize
-    while i < HASH_SIZE {
-        let hp = mem.cast[*u16](&s.head[i * 2usize])
+    @nocheck {
+    while i < HASH_SIZE / 4usize {
+        let hp = mem.cast[*u64](&s.head[i * 8usize])
         let hv = *hp
-        if hv >= 32768u16 && hv != 65535u16 { *hp = hv - 32768u16 } else { *hp = 65535u16 }
-        let pp = mem.cast[*u16](&s.prev[i * 2usize])
+        let hm = hv & low15
+        let hk = ((hv >> 15u32) & ones) & (ones ^ (((hm + ones) >> 15u32) & ones))
+        let hmask = hk * 65535u64
+        *hp = (hm & hmask) | (18446744073709551615u64 ^ hmask)
+        let pp = mem.cast[*u64](&s.prev[i * 8usize])
         let pv = *pp
-        if pv >= 32768u16 && pv != 65535u16 { *pp = pv - 32768u16 } else { *pp = 65535u16 }
+        let pm = pv & low15
+        let pk = ((pv >> 15u32) & ones) & (ones ^ (((pm + ones) >> 15u32) & ones))
+        let pmask = pk * 65535u64
+        *pp = (pm & pmask) | (18446744073709551615u64 ^ pmask)
         i += 1usize
+    }
     }
     s.buffer_len -= shift
     s.scan -= shift
@@ -1188,12 +1320,11 @@ fn compress_block(s: *EncoderState, final: bool) {
 }
 
 fn drain(s: *EncoderState, output: []u8, written: usize) -> usize {
-    var count = written
-    while s.staging_at < s.staging_len && count < output.len {
-        output[count] = s.staging[s.staging_at]
-        s.staging_at += 1usize
-        count += 1usize
-    }
+    var take = s.staging_len - s.staging_at
+    if output.len - written < take { take = output.len - written }
+    move_bytes(output, written, s.staging, s.staging_at, take)
+    s.staging_at += take
+    let count = written + take
     if s.staging_at == s.staging_len {
         s.staging_at = 0usize
         s.staging_len = 0usize
@@ -1217,7 +1348,7 @@ fn encode(e: *Encoder, input: []const u8, output: []u8, finish: bool) -> (usize,
             if consumed < input.len {
                 var take = BLOCK - s.buffer_len
                 if input.len - consumed < take { take = input.len - consumed }
-                mem.copy[u8](s.buffer[s.buffer_len..s.buffer_len + take], input[consumed..consumed + take])
+                move_bytes(s.buffer, s.buffer_len, input, consumed, take)
                 s.buffer_len += take
                 consumed += take
                 continue
@@ -1233,7 +1364,7 @@ fn encode(e: *Encoder, input: []const u8, output: []u8, finish: bool) -> (usize,
         if consumed < input.len && s.buffer_len < CAP {
             var take = CAP - s.buffer_len
             if input.len - consumed < take { take = input.len - consumed }
-            mem.copy[u8](s.buffer[s.buffer_len..s.buffer_len + take], input[consumed..consumed + take])
+            move_bytes(s.buffer, s.buffer_len, input, consumed, take)
             s.buffer_len += take
             consumed += take
             continue

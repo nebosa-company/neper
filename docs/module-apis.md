@@ -2121,7 +2121,7 @@ type Band = struct { title: str, first: usize, count: usize }
 type Nav = enum u8 { First, Prev, Next, Last }
 type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool, choice: bool }
 type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, cell_edited: fn(*void, usize, usize) -> err, value_changed: fn(*void, usize, usize, str, str) -> err, can_edit: fn(*void, usize, usize) -> bool, batch_done: fn(*void, usize) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
-type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, edit_old: [64]u8, edit_old_len: usize, select_open: bool, batch_depth: usize, batch_count: usize, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
+type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, edit_old: [64]u8, edit_old_len: usize, select_open: bool, batch_depth: usize, batch_count: usize, rule_set: *rules.Rules, has_rules: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
 error TooManyColumns
 error NotEditable
 error Locked
@@ -2133,6 +2133,8 @@ fn show_sort(grid: *Grid, spec: usize, descending: bool)
 fn clear_selection(grid: *Grid)
 fn relayout(grid: *Grid)
 fn display_of(grid: *const Grid, spec: usize) -> (usize, bool)
+fn set_rules(grid: *Grid, set: *rules.Rules)
+fn clear_rules(grid: *Grid)
 fn set_hidden(grid: *Grid, spec: usize, hide: bool)
 fn is_hidden(grid: *const Grid, spec: usize) -> bool
 fn move_column(grid: *Grid, spec: usize, to: usize)
@@ -2200,8 +2202,46 @@ filter row and navigator flags and the filter texts as small text; `load_layout`
 widths for columns the grid does not have and sorts out of range (`BadLayout` for text without the
 version line). A grid owns the widget keys from `key` to
 `key + KEY_BASE + row capacity + group capacity` (the table's own header cells use the keys just
-above `key`; the filter fields use `key + FILTER_KEY + spec`). Not yet: a column chooser
+above `key`; the filter fields use `key + FILTER_KEY + spec`). `set_rules` attaches an `e.ui.gridrules` rule set (`clear_rules` detaches it): each data cell asks it for
+its look by the column's table column and the storage row, and draws the ink, bold, a fill, a data bar
+behind the text and an icon glyph (`v`, `-`, `^`) before it. Not yet: a column chooser
 window; the filter row stands above the header, not below.
+
+### `e.ui.gridrules`
+
+```neper
+type Kind = enum u8 { CellIs, Text, Blank, Above, Below, Top, Bottom, Duplicate, Unique, Scale, Bar, Icons }
+type Op = enum u8 { Eq, Ne, Lt, Le, Gt, Ge, Between, Contains, Begins, Ends }
+type Rule = struct { column: usize, kind: Kind, op: Op, a: f64, b: f64, text: str, fold: bool, count: usize, percent: bool, ink: style.ColorRole, has_ink: bool, fill: paint.Color, has_fill: bool, bold: bool, whole_row: bool, low: paint.Color, mid: paint.Color, high: paint.Color, three: bool, buckets: u8 }
+type Format = struct { has_ink: bool, ink: style.ColorRole, has_fill: bool, fill: paint.Color, bold: bool, has_bar: bool, bar: f32, bar_color: paint.Color, icon: u8, buckets: u8 }
+type Stat = struct { built: u64, structure: u64, ready: bool, low: f64, high: f64, average: f64, threshold: f64, sorted: []f64, sorted_len: usize, entries: []u32 }
+type Rules = struct { t: *const table.Table, rules: []Rule, stats: []Stat, total: usize }
+type Order = struct { unused: u8 }
+error TooMany
+error BadColumn
+error BadRule
+
+fn rule(column: usize, kind: Kind) -> Rule
+fn create(a: *mem.Arena, t: *const table.Table, capacity: usize) -> (Rules, err)
+fn count(rs: *const Rules) -> usize
+fn add(a: *mem.Arena, rs: *Rules, r: Rule) -> (usize, err)
+fn remove_all(rs: *Rules)
+fn refresh(rs: *Rules, scratch: *mem.Arena) -> err
+fn format(rs: *const Rules, row: usize, column: usize) -> Format
+```
+
+Conditional formatting rules of the data grid (`docs/grid.md` section 5.5). `rule(column, kind)` is a rule with
+defaults, set by assigning fields: `CellIs` compares a number with `a` (and `b` for `Between`, bounds in either
+order) or a text column's text with `text` for `Eq` / `Ne`; `Text` is `Contains` / `Begins` / `Ends` on a text column;
+`Blank` is a null cell; `Above` / `Below` the column average; `Top` / `Bottom` take `count` rows (or `count` percent,
+rounded up, at least one) with ties kept; `Duplicate` / `Unique` count equal values (numbers, or dictionary entries);
+`Scale` blends `low` to `high` (through `mid` when `three`) by the value's place between the column's minimum and
+maximum; `Bar` is that place as a bar fraction in `fill`; `Icons` puts the value in one of `buckets` (2 to 5) equal
+ranges. Text matching is ASCII upper-case folded unless `fold` is false. `add` appends at the lowest priority
+(`BadRule` for a kind the column cannot take, `BadColumn`, `TooMany` past `capacity`); `refresh` computes the
+statistics over the table's live rows and only for rules whose column or row set changed; `format` answers the look
+of one cell and takes, field by field, the first rule that sets the field; a `whole_row` rule formats every cell of
+the row it holds for. Statistics are not recomputed by `format`, so call `refresh` after the table changes.
 
 ### `e.data.slot_map`
 
@@ -8264,7 +8304,7 @@ const CLASS_SPACE: u8 = 8u8
 const STYLE_CRAMPED: u32 = 4u32
 type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool, stretch: bool }
 type Consts = struct { axis: f32, rule: f32, script: f32, scriptscript: f32, num_display: f32, num_text: f32, den_display: f32, den_text: f32, num_gap: f32, num_gap_display: f32, den_gap: f32, den_gap_display: f32, sup_display: f32, sup_text: f32, sup_cramped: f32, sub_only: f32, sub_both: f32, sub_top_max: f32, sup_bottom_min: f32, sup_max_with_sub: f32, sub_sup_gap: f32, sup_drop: f32, sub_drop: f32, script_space: f32, upper_gap: f32, lower_gap: f32, rad_rule: f32, rad_gap: f32, rad_gap_display: f32, rad_extra: f32, rad_before: f32, rad_after: f32, rad_raise: f32, delim_min: f32, op_min: f32, accent_base: f32, over_gap: f32, over_rule: f32, over_extra: f32, under_gap: f32, under_rule: f32, under_extra: f32, stretch_above: f32, stretch_below: f32 }
-type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, alphabet: u8, k: Consts }
+type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, alphabet: u8, tag_at: usize, tag_len: usize, tag_star: bool, k: Consts }
 fn maxf(x: f32, y: f32) -> f32
 fn minf(x: f32, y: f32) -> f32
 fn be16(d: []const u8, at: usize) -> u32
@@ -8348,6 +8388,14 @@ fn lay_brace(c: *Ctx, style: u32, over: bool) -> Atom
 fn font_ready(c: *Ctx) -> bool
 fn context(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Ctx, bool)
 fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
+fn typeset_numbered(a: *mem.Arena, source: str, options: Options, line_width: f32, items: []Item) -> (Equation, err)
+type RowTag = struct { at: usize, len: usize, star: bool, row: usize }
+fn lay_tag(c: *Ctx) -> Atom
+fn number_atom(c: *Ctx, raw: str, star: bool) -> Atom
+fn lay_substack(c: *Ctx, style: u32) -> Atom
+fn big_scale(word: str) -> f32
+fn big_class(word: str) -> u8
+fn glyph_run(c: *Ctx, a: Atom) -> bool
 fn to_layout(a: *mem.Arena, eq: Equation, font: shape.Font) -> (layout.Layout, err)
 type Ml = struct { src: str, pos: usize, out: str.Builder, status: err, depth: usize }
 fn ml_fail(m: *Ml, why: err)
@@ -8401,7 +8449,14 @@ glyph's `y` is its baseline, a rule's its top. `to_layout` turns the glyph items
 `e.text.layout.Layout` (one run of one glyph each) that `e.gfx.scene` draws as a
 `DrawText`; the rule items are rectangles to fill. `typeset`, `typeset_mathml`,
 `to_layout`, `Options`, `Item`, `Equation`, `Kind` and the four errors are the interface;
-the rest of the fence is the module's internals. Checked against fontTools metrics, a
+the rest of the fence is the module's internals. D4505 adds `\substack{a\\b}` (rows centred,
+a 1.2 em skip of the style, centred on the axis), `\big` `\Big` `\bigg` `\Bigg` with `l`, `r`
+or `m` (a delimiter 1.2, 1.8, 2.4 and 3 em tall whatever the style, centred on the axis;
+open, close, relation or ordinary), `\tag{n}` and `\tag*{n}` with `typeset_numbered` (the
+equation centred in a line `line_width` wide, `(n)` flush right, the equation moved left to
+clear it by an em, the line growing when there is no room; an `align` or `gather` row's tag
+goes in a right-aligned column an em right of the table; a second tag is `Invalid`), and
+MathKernInfo kerning of a base that is a run of glyphs on one baseline by its last glyph. Checked against fontTools metrics, a
 separate Python model of the rules over a generated MATH font, and Pillow renderings
 (`scripts/gen_math_font.py`, `scripts/gen_math_render_test.py`, `scripts/gen_math_test.py`).
 
@@ -10456,16 +10511,17 @@ type Batch = struct { edit_first: usize, edit_n: usize, text_first: usize, text_
 type Entry = struct { batch_first: usize, batch_n: usize, sel_first: usize, sel_n: usize, id_before: u64, kind: u32 }
 type Stack = struct { entries: []Entry, nent: usize, batches: []Batch, nbat: usize, edits: []Edit, ned: usize, text: []u8, ntext: usize, sels: []Range, nsel: usize }
 type Token = struct { start: usize, end: usize, kind: u32 }
-type Language = struct { keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str }
+type Language = struct { keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str, fold_case: bool, line_comment2: str, nested: bool, block2_open: str, block2_close: str }
 type SearchOpts = struct { case_sensitive: bool, whole_word: bool }
-type Fold = struct { from: usize, to: usize }
-type Editor = struct { buf: []u8, gap_start: usize, gap_end: usize, lines: []usize, nlines: usize, line_state: []u8, first_dirty: usize, sels: []Range, nsel: usize, primary: usize, undo: Stack, redo: Stack, content_id: u64, next_id: u64, saved_id: u64, revision: u64, can_merge: bool, merge_kind: u32, lang: Language, use_tabs: bool, tab_width: usize, indent_unit: usize, scratch_edits: []Edit, scratch_text: []u8, scratch_sels: []Range }
+type Editor = struct { buf: []u8, gap_start: usize, gap_end: usize, lines: []usize, nlines: usize, line_state: []u8, first_dirty: usize, sels: []Range, nsel: usize, primary: usize, undo: Stack, redo: Stack, content_id: u64, next_id: u64, saved_id: u64, revision: u64, can_merge: bool, merge_kind: u32, lang: Language, use_tabs: bool, tab_width: usize, indent_unit: usize, scratch_edits: []Edit, scratch_text: []u8, scratch_sels: []Range, views: []FoldView, diag: DiagSet }
 error Invalid
 error TooLarge
 error TooManyLines
 error TooManySelections
 error NotBoundary
 error BadEdits
+error NoFold
+error Stale
 const NO_GOAL: usize = 18446744073709551615usize
 const NO_DIRTY: usize = 18446744073709551615usize
 const KIND_OTHER: u32 = 0u32
@@ -10510,6 +10566,43 @@ fn lang_yaml() -> Language
 fn lang_toml() -> Language
 fn lang_lua() -> Language
 fn same_bytes(x: []const u8, y: str) -> bool
+fn pack(keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str) -> Language
+fn lang_jsonc() -> Language
+fn lang_c_dialect() -> Language
+fn lang_csharp() -> Language
+fn lang_kotlin() -> Language
+fn lang_swift() -> Language
+fn lang_dart() -> Language
+fn lang_r() -> Language
+fn lang_protobuf() -> Language
+fn lang_assembly() -> Language
+fn lang_intelasm() -> Language
+fn lang_markdown() -> Language
+fn lang_sql_dialect(extra: str, hash_comments: bool) -> Language
+fn lang_objectpascal() -> Language
+fn lang_powershell() -> Language
+fn lang_terraform() -> Language
+fn lang_batch() -> Language
+fn lang_vbnet() -> Language
+fn lang_vbclassic() -> Language
+fn lang_fortran() -> Language
+fn lang_php() -> Language
+fn lang_ada() -> Language
+fn lang_objectivec() -> Language
+fn lang_cobol() -> Language
+fn lang_julia() -> Language
+fn lang_ruby() -> Language
+fn lang_perl() -> Language
+fn lang_sas() -> Language
+fn lang_matlab() -> Language
+fn lang_caml() -> Language
+fn lang_prolog() -> Language
+fn lang_gml() -> Language
+fn lang_by_id(id: str) -> Language
+fn suffix_in(s: []const u8, list: str) -> bool
+fn lang_id_for_suffix(suffix: str) -> str
+fn lang_suffix_ambiguous(suffix: str) -> bool
+fn lang_id_for_file_name(name: str) -> str
 fn lang_for_suffix(suffix: str) -> Language
 fn len(e: *const Editor) -> usize
 fn byte_at(e: *const Editor, i: usize) -> u8
@@ -10530,9 +10623,18 @@ fn column_of(e: *const Editor, pos: usize) -> usize
 fn pos_at_column(e: *const Editor, ln: usize, col: usize) -> usize
 fn lines_splice(e: *Editor, at: usize, rem: usize, src: []const u8, off: usize, n: usize)
 fn is_word_byte(c: u8) -> bool
-fn has_word(set: str, e: *const Editor, from: usize, to: usize) -> bool
+fn lower_byte(c: u8) -> u8
+fn has_word(set: str, e: *const Editor, from: usize, to: usize, fold: bool) -> bool
 fn at_prefix(e: *const Editor, p: usize, end: usize, s: str) -> bool
+fn at_prefix_fold(e: *const Editor, p: usize, end: usize, s: str, fold: bool) -> bool
 fn quote_index(set: str, c: u8) -> usize
+const ST_BLOCK: u8 = 1u8
+const ST_QUOTE0: u8 = 2u8
+const ST_BLOCK2: u8 = 10u8
+const ST_DEEP0: u8 = 11u8
+const ST_MAX: u8 = 127u8
+fn comment_scan(e: *const Editor, lg: *const Language, p_in: usize, end: usize, pair: u8, depth_in: usize) -> (usize, usize)
+fn state_of_block(pair: u8, depth: usize) -> u8
 fn scan_probe(e: *const Editor, ln: usize, state_in: u8, out: []Token, probe: usize) -> (usize, u8, bool)
 fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize, u8)
 fn ensure_states(e: *Editor, upto: usize)
@@ -10594,6 +10696,7 @@ fn find_regex(e: *Editor, prog: *const rx.Regex, from: usize, forward: bool) -> 
 fn count_regex(e: *Editor, prog: *const rx.Regex, limit: usize) -> (usize, bool)
 fn expand_replacement(text: str, whole: rx.Match, groups: []const rx.Match, repl: str, dst: []u8, off_in: usize) -> usize
 fn replace_regex_all(a: *mem.Arena, e: *Editor, prog: *const rx.Regex, repl: str) -> (usize, err)
+type Fold = struct { from: usize, to: usize }
 fn bracket_partner(c: u8) -> u8
 fn in_skipped(e: *Editor, pos: usize) -> bool
 fn match_at_bracket(e: *Editor, at: usize) -> (usize, bool)
@@ -10613,6 +10716,81 @@ fn word_bounds(e: *const Editor, pos: usize) -> (usize, usize)
 fn select_next_occurrence(e: *Editor, o: SearchOpts) -> err
 fn select_all_occurrences(e: *Editor, o: SearchOpts) -> err
 fn split_selection_by_line(e: *Editor) -> err
+type FoldView = struct { folds: []Fold, n: usize }
+fn attach_views(e: *Editor, a: *mem.Arena, nviews: usize, cap: usize) -> err
+fn view_count(e: *const Editor) -> usize
+fn fold_count(e: *const Editor, view: usize) -> usize
+fn fold_get(e: *const Editor, view: usize, i: usize) -> Fold
+fn fold_index(e: *const Editor, view: usize, ln: usize) -> usize
+fn fold_is_collapsed(e: *const Editor, view: usize, ln: usize) -> bool
+fn fold_insert(fv: *FoldView, f: Fold)
+fn fold_collapse(e: *Editor, view: usize, ln: usize) -> err
+fn fold_expand(e: *Editor, view: usize, ln: usize) -> bool
+fn fold_toggle(e: *Editor, view: usize, ln: usize) -> err
+fn fold_expand_all(e: *Editor, view: usize)
+fn fold_collapse_all(e: *Editor, view: usize) -> err
+fn line_hidden(e: *const Editor, view: usize, ln: usize) -> bool
+fn visible_line_count(e: *const Editor, view: usize) -> usize
+fn next_visible_line(e: *const Editor, view: usize, ln: usize) -> usize
+fn prev_visible_line(e: *const Editor, view: usize, ln: usize) -> usize
+fn fold_refresh(e: *Editor, view: usize) -> usize
+const MOVE_ROW_START: u32 = 11u32
+const MOVE_ROW_END: u32 = 12u32
+fn wrap_row_span(e: *const Editor, ln: usize, pos: usize, width: usize) -> (usize, usize)
+fn wrap_pos_in_row(e: *const Editor, ln: usize, rs: usize, re: usize, goal: usize) -> usize
+fn move_wrapped(e: *Editor, dir: u32, extend: bool, width: usize, view: usize) -> err
+const COMP_KEYWORD: u32 = 1u32
+const COMP_TYPE: u32 = 2u32
+const COMP_WORD: u32 = 3u32
+const COMP_SNIPPET: u32 = 4u32
+const COMP_SYMBOL: u32 = 5u32
+const RANK_KEYWORD: u32 = 1000u32
+const RANK_TYPE: u32 = 1001u32
+const RANK_WORD: u32 = 2000u32
+type CompSource = struct { kind: u32, rank: u32, words: str }
+type Candidate = struct { off: usize, len: usize, kind: u32, rank: u32, score: u32 }
+type CompletionSet = struct { items: []Candidate, n: usize, text: []u8, ntext: usize, from: usize, to: usize, revision: u64, incomplete: bool, valid: bool }
+fn completion_open(a: *mem.Arena, items: usize, text_bytes: usize) -> (CompletionSet, err)
+fn completion_label(s: *const CompletionSet, i: usize) -> []const u8
+fn comp_score(e: *const Editor, label: []const u8, pf: usize, pt: usize) -> u32
+fn comp_before(s: *const CompletionSet, score: u32, rank: u32, label: []const u8, b: usize) -> bool
+fn comp_add(s: *CompletionSet, e: *const Editor, label: []const u8, kind: u32, rank: u32, pf: usize, pt: usize)
+fn comp_sort(s: *CompletionSet)
+fn comp_add_words(s: *CompletionSet, e: *const Editor, words: str, kind: u32, rank: u32, pf: usize, pt: usize)
+fn complete(e: *Editor, s: *CompletionSet, pos: usize, sources: []const CompSource, triggers: str, manual: bool) -> err
+fn completion_refine(e: *const Editor, s: *CompletionSet, pos: usize) -> bool
+const SEV_ERROR: u32 = 1u32
+const SEV_WARNING: u32 = 2u32
+const SEV_INFO: u32 = 3u32
+const SEV_HINT: u32 = 4u32
+const NO_SOURCE: u32 = 4294967295u32
+const SRC_BRACKETS: u32 = 1u32
+const SRC_JSON: u32 = 2u32
+type Diagnostic = struct { from: usize, to: usize, severity: u32, code: u32, source: u32, msg_off: usize, msg_len: usize }
+type DiagSet = struct { items: []Diagnostic, n: usize, text: []u8, ntext: usize }
+fn attach_diagnostics(e: *Editor, a: *mem.Arena, cap: usize, text_cap: usize) -> err
+fn diag_count(e: *const Editor) -> usize
+fn diag_get(e: *const Editor, i: usize) -> Diagnostic
+fn diag_message(e: *const Editor, i: usize) -> []const u8
+fn diag_counts(e: *const Editor) -> (usize, usize, usize)
+fn diag_before(a: Diagnostic, b: Diagnostic) -> bool
+fn diag_clear(e: *Editor, source: u32) -> usize
+fn diag_publish(e: *Editor, source: u32, revision: u64, items: []const Diagnostic, text: []const u8) -> err
+fn diag_at(e: *const Editor, pos: usize) -> usize
+fn diag_next(e: *const Editor, pos: usize, forward: bool, wrap: bool) -> usize
+fn map_marks(e: *Editor, edits: []const Edit)
+const LINT_UNMATCHED_CLOSE: u32 = 1u32
+const LINT_MISMATCHED: u32 = 2u32
+const LINT_UNCLOSED: u32 = 3u32
+const LINT_JSON: u32 = 10u32
+fn lint_brackets(e: *Editor, out: []Diagnostic) -> usize
+fn json_ws(e: *const Editor, p_in: usize) -> usize
+fn json_digit(e: *const Editor, p: usize) -> bool
+fn json_hex(e: *const Editor, p: usize) -> bool
+fn json_string(e: *const Editor, p: usize) -> (usize, u32)
+fn json_number(e: *const Editor, p: usize) -> usize
+fn json_literal(e: *const Editor, p: usize, word: str) -> bool
+fn lint_json(e: *const Editor) -> (usize, bool)
 ```
 
 D3500 adds regular-expression `find_regex`/`count_regex`/`replace_regex_all` over a compiled `e.text.regex` program (the non-empty matches left to right; `$0`..`$9` and `$$` in replacements; one transaction), `match_bracket` (string and comment tokens neither match nor count), `fold_at`/`fold_all` (bracket folds, plus indentation folds in `#`-comment languages), soft-wrap rows (`wrap_rows`, `wrap_row_start`, `wrap_locate`, `wrap_total_rows`: a row breaks after the last blank it holds, else at the overflowing caret stop), `add_cursor_vertical`, `select_rect`, `select_next_occurrence`, `select_all_occurrences`, `split_selection_by_line`, and the language packs `lang_c`, `lang_rust`, `lang_go`, `lang_java`, `lang_typescript`, `lang_json`, `lang_shell`, `lang_sql`, `lang_css`, `lang_html`, `lang_yaml`, `lang_toml`, `lang_lua` behind `lang_for_suffix`.
@@ -10624,7 +10802,7 @@ The model and engine layer of the native code editor (L065, D3201); the widget, 
 ```neper
 type Cell = struct { ch: u32, fg: u32, bg: u32, attr: u32 }
 type Selection = struct { mode: u32, a_line: usize, a_col: usize, h_line: usize, h_col: usize }
-type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32 }
+type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32, app_keypad: bool, mouse_utf8: bool, mouse_urxvt: bool, modify_other: u32, kitty: [32]u32, kitty_n: [2]usize, sb_dropped: usize }
 error Invalid
 const BOLD: u32 = 1u32
 const DIM: u32 = 2u32
@@ -10772,9 +10950,70 @@ fn selection_range(t: *const Term, sel: *const Selection) -> (usize, usize, usiz
 fn selection_contains(t: *const Term, sel: *const Selection, line: usize, col: usize) -> bool
 fn selection_text(t: *const Term, sel: *const Selection, dst: []u8) -> usize
 fn selection_adjust(sel: *Selection, dropped: usize) -> bool
+fn kitty_flags(t: *const Term) -> u32
+fn kitty_push(t: *Term, flags: u32)
+fn kitty_set(t: *Term, flags: u32, mode: u32)
+fn dispatch_csi_keys(t: *Term, f: u32)
+const MOD_HYPER: u32 = 16u32
+const MOD_CAPS_LOCK: u32 = 64u32
+const MOD_NUM_LOCK: u32 = 128u32
+const KEY_KP_0: u32 = 57399u32
+const KEY_KP_9: u32 = 57408u32
+const KEY_KP_DECIMAL: u32 = 57409u32
+const KEY_KP_DIVIDE: u32 = 57410u32
+const KEY_KP_MULTIPLY: u32 = 57411u32
+const KEY_KP_SUBTRACT: u32 = 57412u32
+const KEY_KP_ADD: u32 = 57413u32
+const KEY_KP_ENTER: u32 = 57414u32
+const KEY_KP_EQUAL: u32 = 57415u32
+const KEY_KP_SEPARATOR: u32 = 57416u32
+const KEY_LEFT_SHIFT: u32 = 57441u32
+const KEY_LEFT_CONTROL: u32 = 57442u32
+const KEY_LEFT_ALT: u32 = 57443u32
+const KEY_LEFT_SUPER: u32 = 57444u32
+const EVENT_PRESS: u32 = 1u32
+const EVENT_REPEAT: u32 = 2u32
+const EVENT_RELEASE: u32 = 3u32
+const KITTY_DISAMBIGUATE: u32 = 1u32
+const KITTY_EVENT_TYPES: u32 = 2u32
+const KITTY_ALTERNATE_KEYS: u32 = 4u32
+const KITTY_ALL_KEYS: u32 = 8u32
+const KITTY_TEXT: u32 = 16u32
+fn other_keys(code: u32, m: usize, dst: []u8) -> usize
+fn encode_keypad(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize
+fn encode_legacy(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize
+fn kitty_u(code: u32, shifted: u32, base: u32, mods: u32, event: u32, text: u32, dst: []u8) -> usize
+fn kitty_func(key: u32, mods: u32, event: u32, dst: []u8) -> usize
+fn encode_kitty(t: *const Term, key: u32, mods_in: u32, event_in: u32, shifted: u32, base: u32, text: u32, flags: u32, dst: []u8) -> usize
+fn encode_key_event(t: *const Term, key: u32, mods: u32, event: u32, shifted: u32, base: u32, text: u32, dst: []u8) -> usize
+fn wrap_filler(t: *const Term, line: usize, col: usize) -> bool
 ```
 
-A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering. D3501 adds `resize_reflow` (LINE_WRAPPED-joined logical lines re-wrapped at the new width through a caller-sized scratch; cursor kept; alternate screen and unchanged width fall to `resize`), `encode_key`/`encode_mouse`/`encode_focus`/`paste_begin`/`paste_filter`/`paste_end` (xterm defaults: cursor-key mode, modifier parameters, X10/1000/1002/1003 with legacy or SGR encoding, mode 1004, bracketed paste) and a `Selection` (character, word, line and block) with `selection_range`, `selection_contains`, `selection_text` and `selection_adjust`.
+A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering. D3501 adds `resize_reflow` (LINE_WRAPPED-joined logical lines re-wrapped at the new width through a caller-sized scratch; cursor kept; alternate screen and unchanged width fall to `resize`), `encode_key`/`encode_mouse`/`encode_focus`/`paste_begin`/`paste_filter`/`paste_end` (xterm defaults: cursor-key mode, modifier parameters, X10/1000/1002/1003 with legacy or SGR encoding, mode 1004, bracketed paste) and a `Selection` (character, word, line and block) with `selection_range`, `selection_contains`, `selection_text` and `selection_adjust`. D4500 adds keypad application mode (ESC =, ESC >, ?66; `KEY_KP_*` are kitty's code points), xterm's modifyOtherKeys (`CSI > 4 ; n m`, query `CSI ? 4 m`, form `CSI 27 ; mods ; code ~`), the kitty keyboard protocol (a 16-deep flag stack per screen driven by `CSI > n u`, `CSI < n u`, `CSI = n ; m u`, answered by `CSI ? u`; `encode_key_event` takes the event type, shifted and base-layout alternates and the produced text), mouse formats 1005 (UTF-8) and 1015 (urxvt), a selection word that continues over a wrapped row, and a selection copy that skips the blank padding a wrapped wide character. `sb_dropped` counts lines that left the history, so a line's key (`sb_dropped` + index) is stable for `e.ui.terminal_view`.
+
+### `e.ui.terminal_view`
+
+```neper
+type Viewport = struct { t: *const tm.Term, theme: *const control.Theme }
+const ALT_KEY_BIT: u64 = 4611686018427387904u64
+fn viewport(t: *const tm.Term, theme: *const control.Theme) -> Viewport
+fn base_line(v: *const Viewport) -> usize
+fn line_total(v: *const Viewport) -> usize
+fn buffer_line(v: *const Viewport, index: usize) -> usize
+fn line_key(v: *const Viewport, index: usize) -> widget.Key
+fn count_of(ctx: *void) -> usize
+fn key_of(ctx: *void, index: usize) -> widget.Key
+fn build_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err
+fn source(v: *Viewport) -> collection.Source
+fn list(a: *mem.Arena, key: widget.Key, v: *Viewport, label: str, selected: []const widget.Key, extent: f32, offset: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err)
+fn bottom_offset(v: *const Viewport, extent: f32, height: f32) -> f32
+fn at_bottom(v: *const Viewport, offset: f32, extent: f32, height: f32) -> bool
+fn follow(v: *const Viewport, offset: f32, extent: f32, height: f32, was_at_bottom: bool, dropped_before: usize) -> f32
+fn cell_at(v: *const Viewport, offset: f32, extent: f32, cell_width: f32, x: f32, y: f32) -> (usize, usize)
+fn selected_keys(v: *const Viewport, sel: *const tm.Selection, first: usize, count: usize, out: []widget.Key) -> usize
+```
+
+The terminal's scrollback as a virtual list (L136, D4500): `source`/`list` hand the buffer's lines (scrollback then live rows; the live rows alone on the alternate screen) to `e.ui.collection.virtual_list`, so only the lines in view are built, each its trimmed text in the monospace face. A line's key is `sb_dropped + buffer line + 1` (alternate rows in a separate range), stable while the line scrolls into history and while older lines are evicted; `follow` keeps a view pinned to the newest output or on the same text as the history drops lines, `cell_at` maps a point to buffer line and column, `selected_keys` names the list rows a `Selection` touches. Over `e.ui.collection` only: nothing in `e.ui.control` changes.
 
 ### `e.ui.style`
 
@@ -17883,6 +18122,10 @@ error TooComplex
 fn size(text: str) -> (f32, f32, bool)
 fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color) -> err
 fn draw_with_font(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font) -> err
+type Face = struct { family: str, weight: u32, italic: bool, font: fonts.Font }
+fn draw_with_faces(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, faces: []const Face) -> err
+fn draw_filtered(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool, host: *sf.Host) -> err
+fn draw_filtered_faces(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, faces: []const Face, host: *sf.Host) -> err
 ```
 
 `draw` fits the document's viewBox (meet, centred) into `dest` and pushes balanced
@@ -17910,10 +18153,50 @@ in the mask add nothing, overlapping mask shapes add their pieces; masks inside 
 pattern are ignored). `draw_with_font` also sets `<text>` through `e.text.layout` in the
 given font (the caller registers it with the renderer): `x`, `y`, `dx`, `dy` (first value),
 `font-size`, `text-anchor`, `fill`, folded whitespace, entities, and `tspan` with its own
-`x`/`y` as a new chunk; `font-family`, `font-weight`, `text-decoration`, text on a path and
-per-glyph position lists are not read, and `draw` leaves `<text>` undrawn. Filters, an
-object-bounding-box mask or mask region, and a focal radial gradient with translucent stops
-are not drawn as specified.
+`x`/`y` as a new chunk; `text-decoration` and per-glyph position lists are not read, and `draw`
+leaves `<text>` undrawn. Since D4503: `draw_filtered` also draws an element with
+`filter="url(#id)"` through the `<filter>` element's primitives -- `feGaussianBlur`, `feOffset`,
+`feFlood`, `feBlend` (all sixteen modes), `feComposite` (over, in, out, atop, xor, arithmetic),
+`feColorMatrix`, `feMerge` and `feDropShadow`, with filter and primitive units, the filter region
+and primitive subregions, `color-interpolation-filters` (linearRGB by default) -- by rendering the
+element into a scratch target as big as its filter region, clipped to the host's target
+(`e.gfx.svg_filter.Host`), running the primitives over those pixels and drawing the result as an
+image of the host's renderer, before its clip, mask and opacity apply. An unknown filter draws
+nothing; filtered content inside a filtered element, a pattern, a marker or a mask replay is drawn
+unfiltered; `dest` must be in target pixels. Since D4504: `mask` honours `maskUnits`, `maskContentUnits`
+and `x`/`y`/`width`/`height` (box units measure the element), `draw_with_faces` and
+`draw_filtered_faces` choose a `Face` by `font-family` (a list, case-insensitive, quotes optional),
+nearest `font-weight` and `font-style`, and `<textPath>` sets its characters along the first subpath
+of the path its `href` names (`startOffset` in units or percent, `text-anchor`; a character whose middle
+is off the path is dropped). `e.gfx.scene` text now follows the whole linear part of a transform, so
+rotated runs draw. A focal radial gradient with translucent stops is not drawn as specified.
+
+### `e.gfx.svg_filter`
+
+```neper
+type Prim = struct { kind: u32, mode: u32, in1: i32, in2: i32, merge: [8]i32, merge_n: usize, linear: bool, x0: i32, y0: i32, x1: i32, y1: i32, p: [20]f32 }
+type Host = struct { renderer: *scene.Renderer, width: u32, height: u32, max_pixels: usize, textures: [16]scene.TextureId, texture_count: usize }
+type Slot = struct { id: scene.TextureId, bytes: []u8 }
+error TooComplex
+fn host(renderer: *scene.Renderer, width: u32, height: u32, max_pixels: usize) -> Host
+fn release(h: *Host) -> err
+fn run(a: *mem.Arena, prims: []const Prim, source: []const f32, w: usize, h: usize, out: []f32) -> err
+fn render_pixels(a: *mem.Arena, hst: *const Host, list: scene.DisplayList, w: usize, h: usize, registered: []const fonts.Font, out: []f32) -> err
+fn reserve(a: *mem.Arena, hst: *Host, w: usize, h: usize) -> (Slot, err)
+fn fill(hst: *const Host, slot: Slot, pixels: []const f32, w: usize, h: usize) -> err
+```
+
+The pixel half of SVG filter effects (L125, D4503). `e.gfx.svg` parses a `<filter>` into a program of
+`Prim`s (blur, offset, flood, blend, composite, colour matrix, merge, drop shadow, or a pass-through for a
+primitive it does not know) and renders the source graphic into a scratch target; `run` executes the program
+over premultiplied RGBA f32 buffers (linear light when `linear`, the three-box blur of the SVG text for a
+deviation of 2 pixels or more and an exact kernel below, transparent outside the region, results cut to their
+subregion). `Host` names the renderer a result texture is uploaded to (`reserve` takes the texture before the
+scratch so its pixels sit below what is reset; `fill` writes the result) and the scratch's pixel limit;
+`render_pixels` draws a display list into a target of its own renderer on the same device, so the caller's
+renderer and its damage tracking are untouched; `release` frees the host's textures after the scene using them
+has been rendered. Checked by `gfx_svg_filter` (33 documents against a numpy model over cairosvg's raster of
+the source graphic, mean difference at most 0.3 of 255).
 
 ### `e.gfx.curve`
 

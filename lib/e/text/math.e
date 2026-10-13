@@ -57,6 +57,15 @@
 // StretchStack gap away, an operator with limits so `^` and `_` set a label beyond);
 // and MathKernInfo cut-ins between a one-glyph base and a one-glyph script.
 //
+// Also (L098, D4505): `\substack{a\\b}` (rows centred, one 1.2 em skip of the style apart, the block
+// on the axis); `\big` `\Big` `\bigg` `\Bigg` and their `l`, `r`, `m` forms (a delimiter 1.2, 1.8, 2.4
+// and 3 em of the equation's size tall in any style, centred on the axis; open, close, relation or
+// ordinary); `\tag{n}` and `\tag*{n}` (`typeset_numbered`: the equation centred in a line of the
+// given width, its number flush right and an em clear of it, the line growing when there is no
+// room; an `align` or `gather` row's tag is set in a right-aligned column an em past the table); and
+// MathKernInfo kerning of a base that is a run of glyphs on one baseline by its last glyph, at that
+// glyph's own height and depth (a fraction or any other structure as a base is not kerned).
+//
 // `to_layout` turns the glyph items into an `e.text.layout.Layout` of one run per
 // glyph, which `e.gfx.scene` draws as a `DrawText`; the rule items are rectangles the
 // caller fills.
@@ -168,6 +177,9 @@ type Ctx = struct {
     info_at: usize,
     variants_at: usize,
     alphabet: u8,
+    tag_at: usize,
+    tag_len: usize,
+    tag_star: bool,
     k: Consts,
 }
 
@@ -988,6 +1000,19 @@ fn parse_argument(c: *Ctx, style: u32) -> Atom {
     ret parse_nucleus(c, style)
 }
 
+// Two or more glyphs, all one size on one baseline: a run of letters, which scripts kern against its last.
+fn glyph_run(c: *Ctx, a: Atom) -> bool {
+    if a.last < a.first + 2usize { ret false }
+    let size = c.items[a.last - 1usize].size
+    var i = a.first
+    while i < a.last {
+        let it = c.items[i]
+        if it.kind != .Glyph || it.y != 0.0 || it.size != size { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn parse_atom(c: *Ctx, style: u32) -> Atom {
     var nucleus = parse_nucleus(c, style)
     if c.status != ok || nucleus.class == CLASS_SPACE { ret nucleus }
@@ -1088,21 +1113,33 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
     // script's corner at the height of the base's near edge above the script's baseline.
     var sup_kern: f32 = 0.0
     var sub_kern: f32 = 0.0
-    let base_glyph = nucleus.simple && nucleus.last == nucleus.first + 1usize && c.items[nucleus.first].kind == .Glyph
-    if base_glyph {
-        let base_item = c.items[nucleus.first]
+    // D4505: a base that is a run of glyphs on one baseline (`{ab}`, `\mathrm{ab}`) is kerned as its last
+    // glyph alone: that glyph's corners at its own height and depth.
+    var base_index = NONE
+    var base_height = nucleus.height
+    var base_depth = nucleus.depth
+    if nucleus.simple && nucleus.last == nucleus.first + 1usize && c.items[nucleus.first].kind == .Glyph {
+        base_index = nucleus.first
+    } else if glyph_run(c, nucleus) {
+        base_index = nucleus.last - 1usize
+        let (run_low, run_high) = glyph_extent(c, c.items[base_index].glyph)
+        base_height = maxf(run_high * c.items[base_index].size, 0.0)
+        base_depth = maxf(0.0 - run_low * c.items[base_index].size, 0.0)
+    }
+    if base_index != NONE {
+        let base_item = c.items[base_index]
         if has_sup {
             sup_kern = kern_at(c, base_item.glyph, 0usize, up_shift - sup.depth, base_item.size)
             if sup.simple && sup.last == sup.first + 1usize && c.items[sup.first].kind == .Glyph {
                 let script_item = c.items[sup.first]
-                sup_kern += kern_at(c, script_item.glyph, 3usize, nucleus.height - up_shift, script_item.size)
+                sup_kern += kern_at(c, script_item.glyph, 3usize, base_height - up_shift, script_item.size)
             }
         }
         if has_sub {
             sub_kern = kern_at(c, base_item.glyph, 2usize, sub.height - down_shift, base_item.size)
             if sub.simple && sub.last == sub.first + 1usize && c.items[sub.first].kind == .Glyph {
                 let script_item = c.items[sub.first]
-                sub_kern += kern_at(c, script_item.glyph, 1usize, down_shift - nucleus.depth, script_item.size)
+                sub_kern += kern_at(c, script_item.glyph, 1usize, down_shift - base_depth, script_item.size)
             }
         }
     }
@@ -1545,6 +1582,9 @@ fn parse_row_until_bracket(c: *Ctx, style: u32) -> Atom {
 
 type Cell = struct { atom: Atom, row: usize, col: usize }
 
+// A row's `\tag` of an `align` or `gather` (D4505): where its text is in the source, and the row.
+type RowTag = struct { at: usize, len: usize, star: bool, row: usize }
+
 fn lay_environment(c: *Ctx, style: u32) -> Atom {
     var out: Atom = zero
     out.class = CLASS_INNER
@@ -1560,6 +1600,8 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
     var left_align = false
     // 1: columns alternate right and left aligned, pairs one em apart; 2: rows centred.
     var aligned_kind = 0u32
+    // `align` and `gather` (not their nested forms) number a row by its `\tag` in a column on the right.
+    var numbered = false
     if word_is(name, "pmatrix") {
         left = 40u32
         right = 41u32
@@ -1577,8 +1619,10 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
         left_align = true
     } else if word_is(name, "align") || word_is(name, "align*") || word_is(name, "aligned") {
         aligned_kind = 1u32
+        numbered = !word_is(name, "aligned")
     } else if word_is(name, "gather") || word_is(name, "gather*") || word_is(name, "gathered") {
         aligned_kind = 2u32
+        numbered = !word_is(name, "gathered")
     } else if !word_is(name, "matrix") {
         fail(c, Invalid)
         ret out
@@ -1601,6 +1645,13 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
     var columns = 0usize
     var cell_style = 1u32
     if aligned_kind != 0u32 && c.display { cell_style = 0u32 }
+    let (tags, tags_error) = mem.alloc[RowTag](c.a, c.src.len - c.pos + 2usize)
+    if tags_error != ok {
+        fail(c, Invalid)
+        c.nest -= 1usize
+        ret out
+    }
+    var tag_count = 0usize
     while c.status == ok {
         let cell = parse_row(c, cell_style)
         if c.status != ok { break }
@@ -1613,12 +1664,22 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
             col += 1usize
         } else if byte_at(c, c.pos) == 92u8 && byte_at(c, c.pos + 1usize) == 92u8 {
             c.pos += 2usize
+            if numbered && c.tag_at != NONE {
+                tags[tag_count] = RowTag { at: c.tag_at, len: c.tag_len, star: c.tag_star, row: row }
+                tag_count += 1usize
+                c.tag_at = NONE
+            }
             row += 1usize
             col = 0usize
             skip_space(c)
             // A trailing row separator before \end adds no row.
             if at_command(c, "end") { break }
         } else if at_command(c, "end") {
+            if numbered && c.tag_at != NONE {
+                tags[tag_count] = RowTag { at: c.tag_at, len: c.tag_len, star: c.tag_star, row: row }
+                tag_count += 1usize
+                c.tag_at = NONE
+            }
             break
         } else {
             fail(c, Invalid)
@@ -1711,10 +1772,41 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
         shift_range(c, cells[i].atom.first, cells[i].atom.last, x, 0.0 - above)
         i += 1usize
     }
+    // Row numbers: a right-aligned column an em right of the table.
+    var body_width = total_w
+    if tag_count > 0usize {
+        let (numbers, numbers_error) = mem.alloc[Atom](c.a, tag_count)
+        if numbers_error != ok {
+            mem.reset(c.a, m)
+            c.nest -= 1usize
+            fail(c, Invalid)
+            ret out
+        }
+        var widest: f32 = 0.0
+        var t = 0usize
+        while t < tag_count {
+            numbers[t] = number_atom(c, c.src[tags[t].at..tags[t].at + tags[t].len], tags[t].star)
+            widest = maxf(widest, numbers[t].width)
+            t += 1usize
+        }
+        t = 0usize
+        while t < tag_count {
+            var above = top
+            var j = 0usize
+            while j < tags[t].row {
+                above -= row_h[j] + row_d[j]
+                j += 1usize
+            }
+            above -= row_h[tags[t].row]
+            shift_range(c, numbers[t].first, numbers[t].last, total_w + s + (widest - numbers[t].width), 0.0 - above)
+            t += 1usize
+        }
+        body_width = total_w + s + widest
+    }
     var body: Atom = zero
     body.first = out.first
     body.last = c.count
-    body.width = total_w
+    body.width = body_width
     body.height = top
     body.depth = total_h - top
     mem.reset(c.a, m)
@@ -1747,6 +1839,173 @@ fn space_atom(c: *Ctx, em18: f32, style: u32) -> Atom {
     out.last = c.count
     out.width = em18 * c.size * style_scale(c, style) / 18.0
     ret out
+}
+
+// `\tag{text}` and `\tag*{text}` (L098, D4505): the equation's number, remembered for the end of the row
+// (`typeset_numbered`, or an `align` row's right column); in the row itself it is a zero-width space.
+fn lay_tag(c: *Ctx) -> Atom {
+    var out: Atom = zero
+    out.class = CLASS_SPACE
+    out.first = c.count
+    out.last = c.count
+    var star = false
+    if byte_at(c, c.pos) == 42u8 {
+        star = true
+        c.pos += 1usize
+    }
+    expect_byte(c, 123u8)
+    let start = c.pos
+    while c.pos < c.src.len && c.src[c.pos] != 125u8 { c.pos += 1usize }
+    let len = c.pos - start
+    expect_byte(c, 125u8)
+    if c.status != ok { ret out }
+    if c.tag_at != NONE {
+        fail(c, Invalid)
+        ret out
+    }
+    c.tag_at = start
+    c.tag_len = len
+    c.tag_star = star
+    ret out
+}
+
+// The number `(text)`, or `text` for a starred tag, upright at the equation's size, at its own origin.
+fn number_atom(c: *Ctx, raw: str, star: bool) -> Atom {
+    var out: Atom = zero
+    out.class = CLASS_ORD
+    out.first = c.count
+    out.last = c.count
+    if c.status != ok { ret out }
+    var x: f32 = 0.0
+    var height: f32 = 0.0
+    var depth: f32 = 0.0
+    if !star {
+        let open = glyph_atom(c, 40u32, c.size, CLASS_ORD)
+        if c.status != ok { ret out }
+        x = open.width
+        height = open.height
+        depth = open.depth
+    }
+    let body = text_atom(c, raw, c.size, CLASS_ORD)
+    if c.status != ok { ret out }
+    shift_range(c, body.first, body.last, x, 0.0)
+    x += body.width
+    height = maxf(height, body.height)
+    depth = maxf(depth, body.depth)
+    if !star {
+        let close = glyph_atom(c, 41u32, c.size, CLASS_ORD)
+        if c.status != ok { ret out }
+        shift_range(c, close.first, close.last, x, 0.0)
+        x += close.width
+        height = maxf(height, close.height)
+        depth = maxf(depth, close.depth)
+    }
+    out.last = c.count
+    out.width = x
+    out.height = height
+    out.depth = depth
+    ret out
+}
+
+// `\substack{a \\ b}` (L098, D4505): the rows, each centred, one baseline skip of 1.2 em of the style apart,
+// the block centred on the axis. It is meant for a script or limit, so its rows take the style it is parsed in.
+fn lay_substack(c: *Ctx, style: u32) -> Atom {
+    var out: Atom = zero
+    out.class = CLASS_ORD
+    out.first = c.count
+    out.last = c.count
+    expect_byte(c, 123u8)
+    if c.status != ok { ret out }
+    if c.nest >= MAX_NEST {
+        fail(c, TooDeep)
+        ret out
+    }
+    c.nest += 1usize
+    let m = mem.mark(c.a)
+    let (cells, cells_error) = mem.alloc[Atom](c.a, c.src.len - c.pos + 2usize)
+    if cells_error != ok {
+        fail(c, Invalid)
+        c.nest -= 1usize
+        ret out
+    }
+    var n = 0usize
+    var more = true
+    while more && c.status == ok {
+        let cell = parse_row(c, style)
+        if c.status != ok { break }
+        cells[n] = cell
+        n += 1usize
+        skip_space(c)
+        if byte_at(c, c.pos) == 92u8 && byte_at(c, c.pos + 1usize) == 92u8 {
+            c.pos += 2usize
+            skip_space(c)
+            if byte_at(c, c.pos) == 125u8 {
+                c.pos += 1usize
+                more = false
+            }
+        } else if byte_at(c, c.pos) == 125u8 {
+            c.pos += 1usize
+            more = false
+        } else {
+            fail(c, Invalid)
+        }
+    }
+    if c.status != ok {
+        mem.reset(c.a, m)
+        c.nest -= 1usize
+        ret out
+    }
+    let s = c.size * style_scale(c, style)
+    var width: f32 = 0.0
+    var total: f32 = 0.0
+    var i = 0usize
+    while i < n {
+        width = maxf(width, cells[i].width)
+        total += maxf(0.84 * s, cells[i].height) + maxf(0.36 * s, cells[i].depth)
+        i += 1usize
+    }
+    let top = c.k.axis * s + total / 2.0
+    var used: f32 = 0.0
+    i = 0usize
+    while i < n {
+        let h = maxf(0.84 * s, cells[i].height)
+        let d = maxf(0.36 * s, cells[i].depth)
+        // The row's baseline sits `used + h` below the top.
+        shift_range(c, cells[i].first, cells[i].last, (width - cells[i].width) / 2.0, used + h - top)
+        used += h + d
+        i += 1usize
+    }
+    mem.reset(c.a, m)
+    c.nest -= 1usize
+    out.last = c.count
+    out.width = width
+    out.height = top
+    out.depth = total - top
+    ret out
+}
+
+// `\big` `\Big` `\bigg` `\Bigg` with an `l`, `r` or `m` for the class (open, close, relation; none: ordinary):
+// the delimiter's size in ems of the equation's size, else 0.
+fn big_scale(word: str) -> f32 {
+    if word.len < 3usize || word.len > 5usize { ret 0.0 }
+    var root = word
+    if word[word.len - 1usize] == 108u8 || word[word.len - 1usize] == 114u8 || word[word.len - 1usize] == 109u8 {
+        // Only l, r and m are suffixes (`bigg` ends in g).
+        root = word[0usize..word.len - 1usize]
+    }
+    if word_is(root, "big") { ret 1.2 }
+    if word_is(root, "Big") { ret 1.8 }
+    if word_is(root, "bigg") { ret 2.4 }
+    if word_is(root, "Bigg") { ret 3.0 }
+    ret 0.0
+}
+
+fn big_class(word: str) -> u8 {
+    let last = word[word.len - 1usize]
+    if last == 108u8 { ret CLASS_OPEN }
+    if last == 114u8 { ret CLASS_CLOSE }
+    if last == 109u8 { ret CLASS_REL }
+    ret CLASS_ORD
 }
 
 fn parse_nucleus(c: *Ctx, style: u32) -> Atom {
@@ -1785,6 +2044,18 @@ fn parse_nucleus(c: *Ctx, style: u32) -> Atom {
     }
     if word_is(word, "frac") { ret lay_fraction(c, style) }
     if word_is(word, "sqrt") { ret lay_radical(c, style) }
+    if word_is(word, "tag") { ret lay_tag(c) }
+    if word_is(word, "notag") || word_is(word, "nonumber") { ret space_atom(c, 0.0, style) }
+    if word_is(word, "substack") { ret lay_substack(c, style) }
+    let big_factor = big_scale(word)
+    if big_factor > 0.0 {
+        // `\big(`: the delimiter at a fixed multiple of the equation's size, whatever the style.
+        let scalar = delimiter_scalar(c)
+        if c.status != ok { ret out }
+        var sized = delimiter(c, scalar, big_factor * c.size, c.size, big_class(word))
+        sized.simple = false
+        ret sized
+    }
     let alpha = alphabet_of(word)
     if alpha != 255u8 {
         // `\mathbf{...}` and the like: the group's letters and digits in that alphabet.
@@ -2059,6 +2330,7 @@ fn context(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Ctx,
     c.display = options.display
     c.notdef = options.notdef
     c.status = ok
+    c.tag_at = NONE
     if !font_ready(&c) { ret (c, false) }
     // The x-height from the font's own "x".
     c.x_height = 0.5
@@ -2076,6 +2348,16 @@ fn context(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Ctx,
 
 // Typesets `source` at `options.size` into `items`.
 fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err) {
+    let (eq, eq_error) = typeset_numbered(a, source, options, 0.0, items)
+    ret (eq, eq_error)
+}
+
+// As `typeset`, in a line `line_width` wide (0: as wide as the equation) (L098, D4505). The equation is centred
+// in the line; a `\tag{n}` puts `(n)` flush right (`\tag*{n}` without the parentheses), the equation moved
+// left if it would come within an em of it, and past the equation by an em when the line has no room. Without
+// a tag and with no line width the result is `typeset`'s. `width` is the line's, or the equation's and its
+// number's together.
+fn typeset_numbered(a: *mem.Arena, source: str, options: Options, line_width: f32, items: []Item) -> (Equation, err) {
     if options.size <= 0.0 || source.len == 0usize { ret (zero, Invalid) }
     let (made_value, ready) = context(a, source, options, items)
     if !ready { ret (zero, Invalid) }
@@ -2086,10 +2368,37 @@ fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equa
     if made.status == ok && made.pos < made.src.len { made.status = Invalid }
     if made.status != ok { ret (zero, made.status) }
     var eq: Equation = zero
+    var width = row.width
+    var ascent = row.height
+    var descent = row.depth
+    var eq_x: f32 = 0.0
+    if made.tag_at != NONE {
+        let number = number_atom(&made, source[made.tag_at..made.tag_at + made.tag_len], made.tag_star)
+        if made.status != ok { ret (zero, made.status) }
+        let gap = options.size
+        var number_x = row.width + gap
+        if line_width > 0.0 {
+            number_x = line_width - number.width
+            eq_x = (line_width - row.width) / 2.0
+            if eq_x + row.width + gap > number_x {
+                eq_x = maxf(0.0, number_x - gap - row.width)
+                if eq_x + row.width + gap > number_x { number_x = eq_x + row.width + gap }
+            }
+        }
+        shift_range(&made, row.first, row.last, eq_x, 0.0)
+        shift_range(&made, number.first, number.last, number_x, 0.0)
+        width = maxf(line_width, number_x + number.width)
+        ascent = maxf(ascent, number.height)
+        descent = maxf(descent, number.depth)
+    } else if line_width > row.width {
+        eq_x = (line_width - row.width) / 2.0
+        shift_range(&made, row.first, row.last, eq_x, 0.0)
+        width = line_width
+    }
     eq.items = items[..made.count]
-    eq.width = row.width
-    eq.ascent = row.height
-    eq.descent = row.depth
+    eq.width = width
+    eq.ascent = ascent
+    eq.descent = descent
     ret (eq, ok)
 }
 

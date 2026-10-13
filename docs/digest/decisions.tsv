@@ -2404,4 +2404,18 @@ D3913	3955	G006: datagrid in-place editors and layout persistence
 D3914	2426	G006: datagrid preview row and pixel probes
 D3915	3378	G006: datagrid Tab navigation, column visibility and order
 D3916	1982	G007: single-row reposition, editors by kind, lock, old/new text and batches
-D2472	432	The kernel's fs-grant list after the lane C merge is one condition
+D2472	433	The kernel's fs-grant list after the lane C merge is one condition
+D2473	630	The SSH GCM invocation counter carries without overflowing a byte
+D4500	2925	e.ui.terminal speaks keypad application mode, modifyOtherKeys and the kitty keyboard protocol
+D4501	1291	A selected word runs over a wrap and a wrapped wide character's padding blank is not text
+D4502	1377	The scrollback viewport is a separate module over e.ui.collection
+D4503	3012	SVG filter effects run over a scratch target, not as scene commands
+D4504	2144	Mask units, font faces and text on a path; the scene backend draws rotated text
+D4505	2285	\substack, \big sizes, equation numbers and composite-base kerning in e.text.math
+D2474	651	A kernel body edit keeps `main` when the kernel's signature holds
+D3917	2303	G008: conditional formatting rules (e.ui.gridrules) and their grid rendering
+D2475	451	The cross-host changed-input check joins the tool's lines
+D4400	1914	The deflate matcher and the PNG row filters run unchecked and in words
+D4401	2414	Language packs by registry ID, nested and second block comments, case-folded keywords
+D4402	1271	Per-view fold state through edits, and wrap-aware vertical motion
+D4403	1878	Completion source model, revisioned diagnostics, bracket and JSON lints
