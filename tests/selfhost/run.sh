@@ -3864,6 +3864,12 @@ x_cloud_awssig_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/x-cloud-awssig-selfhost"
 x_cloud_awssig_output=$("$test_build/x-cloud-awssig-selfhost")
 [ "$x_cloud_awssig_output" = 'x cloud awssig ok' ]
+# `x.cloud.awsreq`: query, ec2 and json request bodies against botocore's serializers (300 parameter sets over 50 operations, D4609)
+x_cloud_awsreq_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_cloud_awsreq/src/main.e" "$repo" x64 linux "$test_build/x-cloud-awsreq-selfhost" -j 2)
+[ "$x_cloud_awsreq_written" = 'executable written' ]
+chmod +x "$test_build/x-cloud-awsreq-selfhost"
+x_cloud_awsreq_output=$("$test_build/x-cloud-awsreq-selfhost")
+[ "$x_cloud_awsreq_output" = 'x cloud awsreq ok' ]
 # `e.net.grpcstub`: typed gRPC stubs generated from descriptors, round-tripped against Python's protobuf wire bytes
 # # (242 serialised instances, fixed messages, the generator's own output, D3006).
 net_grpcstub_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpcstub/src/main.e" "$repo" x64 linux "$test_build/net-grpcstub-selfhost" -j 2)

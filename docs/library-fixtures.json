@@ -545,6 +545,7 @@
     "x_agent_task",
     "x_api_protocols",
     "x_cloud_aws",
+    "x_cloud_awsreq",
     "x_cloud_awssig",
     "x_cloud_drivers",
     "x_cloud_manifest",

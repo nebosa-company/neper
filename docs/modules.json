@@ -8251,6 +8251,23 @@
    "blocked_by": []
   },
   {
+   "name": "x.cloud.awsreq",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.bytes",
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "x.cloud.awssdk",
    "layer": 6,
    "surface": "source",

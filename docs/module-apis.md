@@ -22706,6 +22706,41 @@ fn headers_of(a: *mem.Arena, v: json.Value) -> []const Header
 fn sign_json(a: *mem.Arena, v: json.Value) -> json.Value
 ```
 
+### `x.cloud.awsreq`
+
+```neper
+type Pair = struct { key: str, value: str }
+type Out = struct { a: *mem.Arena, pairs: list.List[Pair], ec2: bool, shapes: json.Value, bad: bool }
+fn cat2(a: *mem.Arena, x: str, y: str) -> str
+fn text_of(v: json.Value, key: str) -> str
+fn flag_of(v: json.Value, key: str) -> bool
+fn attr_text(o: *const Out, ref: json.Value, key: str) -> (str, bool)
+fn attr_flag(o: *const Out, ref: json.Value, key: str) -> bool
+fn shape_of(o: *const Out, ref: json.Value) -> json.Value
+fn type_of(o: *const Out, ref: json.Value) -> str
+fn put(o: *Out, key: str, value: str)
+fn capitalize(a: *mem.Arena, s: str) -> str
+fn wire_name(o: *Out, ref: json.Value, default_name: str) -> str
+fn scalar_text(a: *mem.Arena, v: json.Value) -> str
+fn base64_text(a: *mem.Arena, s: str) -> str
+fn pad2(b: *str.Builder, n: i64)
+fn iso8601(a: *mem.Arena, secs: i64) -> str
+fn number_i64(v: json.Value) -> i64
+fn query_value(o: *Out, v: json.Value, ref: json.Value, prefix: str)
+fn index_text(a: *mem.Arena, n: usize) -> str
+fn quote_plus(a: *mem.Arena, s: str) -> str
+fn form_body(a: *mem.Arena, pairs: []const Pair) -> str
+type Buf = struct { data: []u8, n: usize }
+fn bput(b: *Buf, s: str)
+fn bbyte(b: *Buf, c: u8)
+fn bint(b: *Buf, v: i64)
+fn dump_string(b: *Buf, s: str)
+fn dump_u16(b: *Buf, v: u32)
+fn dump_value(o: *Out, b: *Buf, v: json.Value, ref: json.Value)
+fn header(a: *mem.Arena, name: str, value: str) -> json.Value
+fn build(a: *mem.Arena, call: json.Value, params: json.Value) -> (json.Value, bool)
+```
+
 ### `x.cloud.awssdk`
 
 ```neper

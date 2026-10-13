@@ -4366,6 +4366,12 @@ $xCloudAwssigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $xCloudAwssigWritten -ne 'executable written') { throw 'x_cloud_awssig emission failed' }
 $xCloudAwssigOutput = & $xCloudAwssigPath
 if ($LASTEXITCODE -ne 0 -or $xCloudAwssigOutput -ne 'x cloud awssig ok') { throw "x_cloud_awssig answered wrongly: exit $LASTEXITCODE" }
+# `x.cloud.awsreq`: query, ec2 and json request bodies against botocore's serializers (300 parameter sets over 50 operations, D4609)
+$xCloudAwsreqPath = Join-Path $testBuild 'x-cloud-awsreq-selfhost.exe'
+$xCloudAwsreqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_cloud_awsreq\src\main.e') $repo 'x64' 'windows' $xCloudAwsreqPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xCloudAwsreqWritten -ne 'executable written') { throw 'x_cloud_awsreq emission failed' }
+$xCloudAwsreqOutput = & $xCloudAwsreqPath
+if ($LASTEXITCODE -ne 0 -or $xCloudAwsreqOutput -ne 'x cloud awsreq ok') { throw "x_cloud_awsreq answered wrongly: exit $LASTEXITCODE" }
 # `e.net.grpcstub`: typed gRPC stubs generated from descriptors, round-tripped against Python's protobuf wire bytes
 # # (242 serialised instances, fixed messages, the generator's own output, D3006).
 $netGrpcstubPath = Join-Path $testBuild 'net-grpcstub-selfhost.exe'
