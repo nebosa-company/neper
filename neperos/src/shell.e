@@ -998,11 +998,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // (C126) The Screen timeout setting, from the settings server (index 7), and the ticks since the last touch.
     var (timeout_step, timeout_known) = sysettings.get(7usize)
     if !timeout_known { timeout_step = 1usize }
-    // The tick's value is the input server's monotonic milliseconds: the idle time and the widget's refresh are
-    // measured on it, so ticks a slow frame made the server drop do not stretch them. `*_fresh` says the base is
-    // taken from the next tick (after a touch, after an app was in front, after the lock screen came back).
-    var idle_base = 0usize
-    var idle_fresh = true
+    // The ticks since the last touch count the Screen timeout (as they always did: a slow frame drops ticks, so it is
+    // a timeout of delivered ticks). The widget's refresh is measured on the tick's own value, the input server's
+    // monotonic milliseconds; `widget_fresh` says its base is taken from the next tick.
+    var idle_ticks = 0usize
     var widget_base = 0usize
     var widget_fresh = true
     var listening = true
@@ -1024,13 +1023,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if code != BTN_LEFT { by_key = true }
             }
             var framed = false
-            if tapped { idle_fresh = true }
+            if tapped { idle_ticks = 0usize }
             if etype == 241usize && home_shown && theme.screen_lock() != 0usize {
-                if idle_fresh {
-                    idle_base = value
-                    idle_fresh = false
-                }
-                if ((value + 4294967296usize - idle_base) & LOW32) >= timeout_ticks(timeout_step) * 500usize {
+                idle_ticks += 1usize
+                if idle_ticks >= timeout_ticks(timeout_step) {
                     // Everything the home screen drew since the last reset goes first, as when an app returns.
                     if has_last_scene {
                         let released_home = scene.release_scene(&renderer, last_scene)
@@ -1040,20 +1036,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     if show_lock(a, &renderer, &w, drawable, faces, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale, hour, minute, seconds) {
                         home_shown = false
                         framed = true
-                        idle_fresh = true
+                        idle_ticks = 0usize
                         say("shell screen timeout\n")
                     }
                 }
             }
-            // (C168) The step widget follows the count: read every five seconds and redrawn, from a
+            // (C168) The step widget follows the count: read every thirty seconds and redrawn, from a
             // cleared arena like every return to Home, only when the number moved.
             if etype == 241usize && home_shown && !prompting && !framed {
                 if widget_fresh {
-                    // The first tick on the home screen reads at once; then every five seconds.
-                    widget_base = (value + 4294967296usize - 5000usize) & LOW32
+                    // The first tick on the home screen reads at once; then every half minute.
+                    widget_base = (value + 4294967296usize - 30000usize) & LOW32
                     widget_fresh = false
                 }
-                if ((value + 4294967296usize - widget_base) & LOW32) >= 5000usize {
+                if ((value + 4294967296usize - widget_base) & LOW32) >= 30000usize {
                     widget_base = value
                     if read_widget(utc_seconds / 86400usize) && widget_known && steps_icon() != 99usize {
                         if has_last_scene {
@@ -1202,7 +1198,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say("shell app code ")
                         say_num(code_app)
                         say("\n")
-                        idle_fresh = true
+                        idle_ticks = 0usize
                         widget_fresh = true
                         let (step_now, step_known) = sysettings.get(7usize)
                         if step_known { timeout_step = step_now }
