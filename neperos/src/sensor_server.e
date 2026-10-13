@@ -78,7 +78,7 @@ fn default_mask(app: usize) -> usize {
     if app == sensorclient.APP_WEATHER { ret 8usize }
     // The camera belongs to the Camera app (entry 21); storage to the apps that were granted the filesystem's ends.
     if app == 21usize { ret 64usize | 128usize }
-    if app == 14usize || app == 15usize || app == 18usize || app == 20usize || app == 22usize || app == 23usize || app == 24usize || app == 25usize || app == 27usize || app == 31usize || app == 34usize || app == 37usize || app == 38usize || app == 40usize { ret 128usize }
+    if app == 14usize || app == 15usize || app == 18usize || app == 20usize || app == 22usize || app == 23usize || app == 24usize || app == 25usize || app == 27usize || app == 31usize || app == 34usize || app == 35usize || app == 37usize || app == 38usize || app == 40usize { ret 128usize }
     ret 0usize
 }
 
