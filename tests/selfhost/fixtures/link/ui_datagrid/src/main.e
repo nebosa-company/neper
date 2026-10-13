@@ -1119,6 +1119,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot_l, px(b0.x + 300.0, b0.y + 9.0), gl.rgb(0xFFFFFFu32)) { os.exit(367) }
     if !is_color(shot_l, px(b1.x + 300.0, b1.y + 9.0), gl.rgb(0xA6D2FFu32)) { os.exit(368) }
     if !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xFFFFFFu32)) && !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xEFEFEFu32)) { os.exit(369) }
+    // P006: the selected row carries a 1 px dark border on its top and bottom edge
+    if !is_color(shot_l, px(b1.x + 300.0, b1.y + 0.5), gl.rgb(0x83878Bu32)) { os.exit(495) }
+    if !is_color(shot_l, px(b1.x + 300.0, b1.y + b1.height - 0.5), gl.rgb(0x83878Bu32)) { os.exit(496) }
+    // P007: an unselected body row has full-height column lines (#E6E6E6) between its cells
+    var line_seen = false
+    var line_x: f32 = 0.0
+    while line_x < 300.0 {
+        if is_color(shot_l, px(b0.x + line_x, b0.y + 9.0), gl.rgb(0xE6E6E6u32)) { line_seen = true }
+        line_x += 1.0
+    }
+    if !line_seen { os.exit(497) }
+    // P008: the header cell above the first row is white
+    if !is_color(shot_l, px(b0.x + 300.0, b0.y - 8.0), gl.rgb(0xFFFFFFu32)) { os.exit(498) }
     // two neighbouring unselected rows differ (the zebra)
     dg.clear_selection(&grid11)
     mem.reset(&f, 0usize)

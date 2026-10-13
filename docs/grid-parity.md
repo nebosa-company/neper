@@ -42,9 +42,9 @@ no-data, drag, conditional formatting and the deck and collection views are stil
 | P003 | Text is larger than v3's (Segoe UI 9 pt in v3) | v5 glyphs ~1.35x taller | closed by D2378: size 10.35 logical, header ink widths equal v3 ("Name" 38, "Edition" 44); body strings to be re-checked on the deck/collection views |
 | P004 | v3 stripes rows (#FFFFFF / #EFEFEF); v5 does not | | closed by D2376 (pixel-probed, ui_datagrid s15) |
 | P005 | v5 draws 2 px row separators; v3 has none between rows | | closed by D2376 (pixel-probed, ui_datagrid s15) |
-| P006 | Selected row: v3 #A6D2FF with a dark 1 px border and gradient ends; v5 flat tint, no border | | look applied (D2376); fixture probe pending |
-| P007 | v3 has full-height vertical column lines in header and body; v5 only short header dividers | | look applied (D2376); fixture probe pending |
-| P008 | Header look: v3 white cell with the sort triangle right-aligned in the cell; v5 tinted header with the arrow after the text | | look applied (D2376); fixture probe pending |
+| P006 | Selected row: v3 #A6D2FF with a dark 1 px border and gradient ends; v5 flat tint, no border | | closed by D2388 (pixel-probed: #A6D2FF fill, #83878B top and bottom border, ui_datagrid s15) |
+| P007 | v3 has full-height vertical column lines in header and body; v5 only short header dividers | | closed by D2388 (pixel-probed: #E6E6E6 column lines in body rows, ui_datagrid s15) |
+| P008 | Header look: v3 white cell with the sort triangle right-aligned in the cell; v5 tinted header with the arrow after the text | | header fill (white) pixel-probed by D2388; the right-aligned sort triangle is checked on the recordings only |
 | P009 | Left columns: v3 has the customization glyph, favourite star, "ES" icon and the row indicator arrow, each ~18-20 px / 13 logical; v5 has one 28 px indicator | | closed by D2382: indicator 11.3, Favorite 23, ES 21 (v3 edition symbols fitted to their ink) |
 | P010 | Cell text inset: v3 ~6 px / 4; v5 ~16 px | | open |
 | P011 | v3 frames the grid with a 1 px border; v5 has none | | closed by D2377: 1 px #828790 frame, parts touch (screenshot S01-compare-after-text-frame.png) |
