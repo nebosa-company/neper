@@ -4366,7 +4366,7 @@ $xCloudAwssigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $xCloudAwssigWritten -ne 'executable written') { throw 'x_cloud_awssig emission failed' }
 $xCloudAwssigOutput = & $xCloudAwssigPath
 if ($LASTEXITCODE -ne 0 -or $xCloudAwssigOutput -ne 'x cloud awssig ok') { throw "x_cloud_awssig answered wrongly: exit $LASTEXITCODE" }
-# `x.cloud.awsreq`: query, ec2 and json request bodies against botocore's serializers (300 parameter sets over 50 operations, D4609)
+# `x.cloud.awsreq`: query, ec2, json and rest-xml request bodies against botocore's serializers (450 parameter sets over 75 operations, query, ec2, json and rest-xml, D4609, D4610)
 $xCloudAwsreqPath = Join-Path $testBuild 'x-cloud-awsreq-selfhost.exe'
 $xCloudAwsreqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_cloud_awsreq\src\main.e') $repo 'x64' 'windows' $xCloudAwsreqPath -j 2
 if ($LASTEXITCODE -ne 0 -or $xCloudAwsreqWritten -ne 'executable written') { throw 'x_cloud_awsreq emission failed' }

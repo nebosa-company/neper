@@ -3864,7 +3864,7 @@ x_cloud_awssig_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/x-cloud-awssig-selfhost"
 x_cloud_awssig_output=$("$test_build/x-cloud-awssig-selfhost")
 [ "$x_cloud_awssig_output" = 'x cloud awssig ok' ]
-# `x.cloud.awsreq`: query, ec2 and json request bodies against botocore's serializers (300 parameter sets over 50 operations, D4609)
+# `x.cloud.awsreq`: query, ec2, json and rest-xml request bodies against botocore's serializers (450 parameter sets over 75 operations, query, ec2, json and rest-xml, D4609, D4610)
 x_cloud_awsreq_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_cloud_awsreq/src/main.e" "$repo" x64 linux "$test_build/x-cloud-awsreq-selfhost" -j 2)
 [ "$x_cloud_awsreq_written" = 'executable written' ]
 chmod +x "$test_build/x-cloud-awsreq-selfhost"

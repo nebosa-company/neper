@@ -31,6 +31,10 @@ OPS = {
             'AuthorizeSecurityGroupIngress', 'CreateSecurityGroup', 'DescribeVolumes', 'ModifyInstanceAttribute', 'CreateVolume'],
     'lightsail': ['CreateInstances', 'GetInstances', 'CreateDomain', 'TagResource', 'DeleteInstance', 'GetInstance', 'CreateDisk',
                   'AttachDisk', 'PutInstancePublicPorts', 'CreateDatabase'],
+    's3': ['CreateBucket', 'DeleteBucket', 'HeadBucket', 'PutBucketTagging', 'GetBucketTagging', 'PutBucketVersioning', 'PutBucketPolicy',
+           'PutObject', 'GetObject', 'ListObjectsV2', 'DeleteObject', 'DeleteObjects', 'CopyObject', 'PutBucketAcl', 'ListObjects',
+           'PutBucketLifecycleConfiguration', 'PutBucketWebsite', 'PutObjectTagging', 'HeadObject', 'PutBucketCors'],
+    'route53': ['ChangeResourceRecordSets', 'CreateHostedZone', 'ListResourceRecordSets', 'ChangeTagsForResource', 'GetHostedZone'],
 }
 WORDS = ['alpha', 'beta', 'Gamma Delta', 'a&b=c', 'x/y+z', 'café', '日本語', 'with space', 'q?r#s', '100%', '~tilde_', 'emoji \U0001f600',
          'line\nbreak', 'tab\there', 'quote"s', 'back\\slash', '', 'arn:aws:iam::123456789012:role/Role', 'i-0abcdef1234567890', '{"Version":"2012-10-17"}']
@@ -131,10 +135,11 @@ def main():
                 continue
             input_name = om.input_shape.name
             sub = closure(shapes, input_name)
-            call = {'protocol': 'ec2' if protocol == 'ec2' else ('json' if protocol == 'json' else 'query'), 'name': om.name,
+            call = {'protocol': protocol if protocol in ('ec2', 'json', 'rest-xml') else 'query', 'name': om.name,
                     'method': om.http.get('method', 'POST'), 'apiVersion': model.metadata.get('apiVersion', ''),
                     'targetPrefix': model.metadata.get('targetPrefix', ''), 'jsonVersion': model.metadata.get('jsonVersion', ''),
-                    'input': input_name, 'shapes': sub}
+                    'input': input_name, 'shapes': sub, 'requestUri': om.http.get('requestUri', '/'),
+                    'inputRef': dict(om._operation_model['input'])}
             lines = [json.dumps(call, sort_keys=True, separators=(',', ':'))]
             for _ in range(6):
                 params = draw(shapes, input_name)
@@ -145,6 +150,8 @@ def main():
                 else:
                     body = body.decode('utf-8')
                 e = {'method': req['method'], 'path': req['url_path'], 'headers': [[k, v] for k, v in req['headers'].items()], 'body': body}
+                if protocol == 'rest-xml':
+                    e['query'] = urllib.parse.urlencode(req['query_string'], doseq=True)
                 lines.append(json.dumps({'params': params, 'e': e}, sort_keys=False, separators=(',', ':'), ensure_ascii=True))
                 cases += 1
             chunks.append(lines)

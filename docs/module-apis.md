@@ -22731,6 +22731,19 @@ fn index_text(a: *mem.Arena, n: usize) -> str
 fn quote_plus(a: *mem.Arena, s: str) -> str
 fn form_body(a: *mem.Arena, pairs: []const Pair) -> str
 type Buf = struct { data: []u8, n: usize }
+fn pct(a: *mem.Arena, s: str, safe: str) -> str
+fn rfc822(a: *mem.Arena, secs: i64) -> str
+fn located_text(o: *Out, v: json.Value, ref: json.Value, ts_default: str) -> str
+fn xml_text(b: *Buf, s: str, attribute: bool)
+fn xml_namespace(o: *Out, b: *Buf, ref: json.Value)
+fn attr_value(o: *const Out, ref: json.Value, key: str) -> (json.Value, bool)
+fn xml_scalar(o: *Out, b: *Buf, name: str, ref: json.Value, text: str)
+fn xml_value(o: *Out, b: *Buf, v: json.Value, ref: json.Value, name: str)
+fn render_uri(a: *mem.Arena, template: str, uri: []const Pair) -> str
+fn escape_header_item(a: *mem.Arena, s: str) -> str
+fn join_commas(a: *mem.Arena, parts: []const str) -> str
+fn header_value(o: *Out, v: json.Value, ref: json.Value) -> str
+fn rest_xml(o: *Out, call: json.Value, params: json.Value, out: *ir.Obj) -> bool
 fn bput(b: *Buf, s: str)
 fn bbyte(b: *Buf, c: u8)
 fn bint(b: *Buf, v: i64)
