@@ -2218,6 +2218,11 @@ chmod +x "$test_build/data-tablerow-selfhost"
 ui_datagrid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_datagrid/src/main.e" "$repo" x64 linux "$test_build/ui-datagrid-selfhost" --arena 768m)
 [ "$ui_datagrid_written" = 'executable written' ]
 chmod +x "$test_build/ui-datagrid-selfhost"
+# `e.ui.gridrules`: conditional formatting rules over a table: cell-is, text, blank, above / below, top / bottom with ties, duplicate / unique, scale, bar, icons, priority, whole row, refresh, refusals, 150,000 rows against a count of the fixture's own (D3917).
+ui_gridrules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_gridrules/src/main.e" "$repo" x64 linux "$test_build/ui-gridrules-selfhost" --arena 256m)
+[ "$ui_gridrules_written" = 'executable written' ]
+chmod +x "$test_build/ui-gridrules-selfhost"
+"$test_build/ui-gridrules-selfhost"
 "$test_build/ui-datagrid-selfhost"
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
@@ -2593,6 +2598,17 @@ ui_terminal_ext_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$ui_terminal_ext_written" = 'executable written' ]
 chmod +x "$test_build/ui-terminal-ext-selfhost"
 "$test_build/ui-terminal-ext-selfhost"
+# `e.ui.terminal` protocol additions: 6964 generated cases (keypad application mode, modifyOtherKeys, the kitty keyboard protocol flag stack and its five flags, mouse 1005/1015, word and wrap-filler selection edge cases, truncation) equal to an independent Python table model of the protocol texts (D4500).
+ui_terminal_proto_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_terminal_proto/src/main.e" "$repo" x64 linux "$test_build/ui-terminal-proto-selfhost")
+[ "$ui_terminal_proto_written" = 'executable written' ]
+chmod +x "$test_build/ui-terminal-proto-selfhost"
+"$test_build/ui-terminal-proto-selfhost"
+# `e.ui.terminal_view`: the scrollback as a virtual list (D4500): only the lines in view are built, keys stable across scrolling and eviction, follow-bottom and anchored offsets, selection marking, the alternate screen, cell mapping.
+ui_terminal_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_terminal_view/src/main.e" "$repo" x64 linux "$test_build/ui-terminal-view-selfhost")
+[ "$ui_terminal_view_written" = 'executable written' ]
+chmod +x "$test_build/ui-terminal-view-selfhost"
+ui_terminal_view_output=$("$test_build/ui-terminal-view-selfhost")
+[ "$ui_terminal_view_output" = 'ui terminal view ok' ]
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 ui_code_editor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_code_editor/src/main.e" "$repo" x64 linux "$test_build/ui-code-editor-selfhost")
 [ "$ui_code_editor_written" = 'executable written' ]
@@ -2603,6 +2619,11 @@ ui_code_editor_ext_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$ui_code_editor_ext_written" = 'executable written' ]
 chmod +x "$test_build/ui-code-editor-ext-selfhost"
 "$test_build/ui-code-editor-ext-selfhost"
+# `e.ui.code_editor` services: 1,098 generated cases (registry-ID language packs against Pygments, suffix map read from the plan, wrap-aware motion over collapsed folds, per-view fold state through edits and undo, completion sources and refinement, revisioned diagnostics, bracket and JSON lints against Python's json) (D4401).
+ui_code_editor_svc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_code_editor_svc/src/main.e" "$repo" x64 linux "$test_build/ui-code-editor-svc-selfhost")
+[ "$ui_code_editor_svc_written" = 'executable written' ]
+chmod +x "$test_build/ui-code-editor-svc-selfhost"
+"$test_build/ui-code-editor-svc-selfhost"
 # `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
 fmt_lzma_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_lzma/src/main.e" "$repo" x64 linux "$test_build/fmt-lzma-selfhost")
 [ "$fmt_lzma_written" = 'executable written' ]
@@ -4155,6 +4176,16 @@ gfx_svg_text_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$gfx_svg_text_written" = 'executable written' ]
 chmod +x "$test_build/gfx-svg-text-selfhost"
 "$test_build/gfx-svg-text-selfhost"
+# e.gfx.svg filter effects (D4503): 33 documents (blur, offset, flood, blend modes, composite operators, colour matrices, merge, drop shadow, units, regions, transform, clip and opacity) against a numpy model over cairosvg's raster of the source graphic.
+gfx_svg_filter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_filter/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-filter-selfhost" -j 2)
+[ "$gfx_svg_filter_written" = 'executable written' ]
+chmod +x "$test_build/gfx-svg-filter-selfhost"
+"$test_build/gfx-svg-filter-selfhost"
+# e.gfx.svg font selection and text on a path (D4504): family lists, nearest weight, textPath on a line, a semicircle and a quadratic, against Pillow's FreeType over Jost and Exo 2 at 8x.
+gfx_svg_text_faces_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_text_faces/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-text-faces-selfhost" -j 2)
+[ "$gfx_svg_text_faces_written" = 'executable written' ]
+chmod +x "$test_build/gfx-svg-text-faces-selfhost"
+"$test_build/gfx-svg-text-faces-selfhost"
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 text_math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_math/src/main.e" "$repo" x64 linux "$test_build/text-math-selfhost" -j 2)
 [ "$text_math_written" = 'executable written' ]
@@ -7279,7 +7310,7 @@ for hot_mode in --release --time; do
     shape_status=0
     "$test_build/gpushape$hot_mode" || shape_status=$?
     [ "$shape_status" -eq 50 ]
-    for shape_step in 'main main.e main=rebuilt:source-changed k=kept:stable 50' 'body k.e main=rebuilt:edge-changed k=rebuilt:source-changed 50' 'size k.e main=rebuilt:edge-changed k=rebuilt:source-changed 82'; do
+    for shape_step in 'main main.e main=rebuilt:source-changed k=kept:stable 50' 'body k.e main=kept:edges-hold k=rebuilt:source-changed 50' 'size k.e main=rebuilt:edge-changed k=rebuilt:source-changed 82'; do
         set -- $shape_step
         cp "$shape_scratch/edits/$1.e" "$shape_scratch/src/$2"
         [ "$("$test_build/neper-self" emit-executable "$shape_scratch/src/main.e" "$repo" x64 linux "$test_build/gpushape$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]

@@ -2506,6 +2506,12 @@ $uiDatagridWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiDatagridWritten -ne 'executable written') { throw 'ui_datagrid emission failed' }
 & $uiDatagridPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_datagrid check failed: exit $LASTEXITCODE" }
+# `e.ui.gridrules`: conditional formatting rules over a table: cell-is, text, blank, above / below, top / bottom with ties, duplicate / unique, scale, bar, icons, priority, whole row, refresh, refusals, 150,000 rows against a count of the fixture's own (D3917).
+$uiGridrulesPath = Join-Path $testBuild 'ui-gridrules-selfhost.exe'
+$uiGridrulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_gridrules\src\main.e') $repo 'x64' 'windows' $uiGridrulesPath --arena 256m
+if ($LASTEXITCODE -ne 0 -or $uiGridrulesWritten -ne 'executable written') { throw 'ui_gridrules emission failed' }
+& $uiGridrulesPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_gridrules check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath
@@ -2950,6 +2956,18 @@ $uiTerminalExtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $uiTerminalExtWritten -ne 'executable written') { throw 'ui_terminal_ext emission failed' }
 & $uiTerminalExtPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_terminal_ext check failed: exit $LASTEXITCODE" }
+# `e.ui.terminal` protocol additions: 6964 generated cases (keypad application mode, modifyOtherKeys, the kitty keyboard protocol flag stack and its five flags, mouse 1005/1015, word and wrap-filler selection edge cases, truncation) equal to an independent Python table model of the protocol texts (D4500).
+$uiTerminalProtoPath = Join-Path $testBuild 'ui-terminal-proto-selfhost.exe'
+$uiTerminalProtoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_terminal_proto\src\main.e') $repo 'x64' 'windows' $uiTerminalProtoPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalProtoWritten -ne 'executable written') { throw 'ui_terminal_proto emission failed' }
+& $uiTerminalProtoPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_terminal_proto check failed: exit $LASTEXITCODE" }
+# `e.ui.terminal_view`: the scrollback as a virtual list (D4500): only the lines in view are built, keys stable across scrolling and eviction, follow-bottom and anchored offsets, selection marking, the alternate screen, cell mapping.
+$uiTerminalViewPath = Join-Path $testBuild 'ui-terminal-view-selfhost.exe'
+$uiTerminalViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_terminal_view\src\main.e') $repo 'x64' 'windows' $uiTerminalViewPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalViewWritten -ne 'executable written') { throw 'ui_terminal_view emission failed' }
+$uiTerminalViewOutput = & $uiTerminalViewPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalViewOutput -ne 'ui terminal view ok') { throw "ui_terminal_view answered wrongly: exit $LASTEXITCODE" }
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 $uiCodeEditorPath = Join-Path $testBuild 'ui-code-editor-selfhost.exe'
 $uiCodeEditorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_code_editor\src\main.e') $repo 'x64' 'windows' $uiCodeEditorPath
@@ -2962,6 +2980,12 @@ $uiCodeEditorExtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $uiCodeEditorExtWritten -ne 'executable written') { throw 'ui_code_editor_ext emission failed' }
 & $uiCodeEditorExtPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_code_editor_ext check failed: exit $LASTEXITCODE" }
+# `e.ui.code_editor` services: 1,098 generated cases (registry-ID language packs against Pygments, suffix map read from the plan, wrap-aware motion over collapsed folds, per-view fold state through edits and undo, completion sources and refinement, revisioned diagnostics, bracket and JSON lints against Python's json) (D4401).
+$uiCodeEditorSvcPath = Join-Path $testBuild 'ui-code-editor-svc-selfhost.exe'
+$uiCodeEditorSvcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_code_editor_svc\src\main.e') $repo 'x64' 'windows' $uiCodeEditorSvcPath
+if ($LASTEXITCODE -ne 0 -or $uiCodeEditorSvcWritten -ne 'executable written') { throw 'ui_code_editor_svc emission failed' }
+& $uiCodeEditorSvcPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_code_editor_svc check failed: exit $LASTEXITCODE" }
 # `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
 $fmtLzmaPath = Join-Path $testBuild 'fmt-lzma-selfhost.exe'
 $fmtLzmaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_lzma\src\main.e') $repo 'x64' 'windows' $fmtLzmaPath
@@ -4659,6 +4683,18 @@ $gfxSvgTextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gfxSvgTextWritten -ne 'executable written') { throw 'gfx_svg_text emission failed' }
 & $gfxSvgTextPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_text check failed: exit $LASTEXITCODE" }
+# e.gfx.svg filter effects (D4503): 33 documents (blur, offset, flood, blend modes, composite operators, colour matrices, merge, drop shadow, units, regions, transform, clip and opacity) against a numpy model over cairosvg's raster of the source graphic.
+$gfxSvgFilterPath = Join-Path $testBuild 'gfx-svg-filter-selfhost.exe'
+$gfxSvgFilterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_filter\src\main.e') $repo 'x64' 'windows' $gfxSvgFilterPath -j 2
+if ($LASTEXITCODE -ne 0 -or $gfxSvgFilterWritten -ne 'executable written') { throw 'gfx_svg_filter emission failed' }
+& $gfxSvgFilterPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_filter check failed: exit $LASTEXITCODE" }
+# e.gfx.svg font selection and text on a path (D4504): family lists, nearest weight, textPath on a line, a semicircle and a quadratic, against Pillow's FreeType over Jost and Exo 2 at 8x.
+$gfxSvgTextFacesPath = Join-Path $testBuild 'gfx-svg-text-faces-selfhost.exe'
+$gfxSvgTextFacesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_text_faces\src\main.e') $repo 'x64' 'windows' $gfxSvgTextFacesPath -j 2
+if ($LASTEXITCODE -ne 0 -or $gfxSvgTextFacesWritten -ne 'executable written') { throw 'gfx_svg_text_faces emission failed' }
+& $gfxSvgTextFacesPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_text_faces check failed: exit $LASTEXITCODE" }
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 $textMathPath = Join-Path $testBuild 'text-math-selfhost.exe'
 $textMathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_math\src\main.e') $repo 'x64' 'windows' $textMathPath -j 2
@@ -7447,7 +7483,7 @@ foreach ($hotMode in @('--release', '--time')) {
     if ($LASTEXITCODE -ne 0 -or $shapeFirst -ne 'executable written') { throw "the cold build of the gpu_reshape fixture failed ($hotMode)" }
     & $shapeExe
     if ($LASTEXITCODE -ne 50) { throw "the gpu_reshape fixture did not exit 50 before the edits ($hotMode): $LASTEXITCODE" }
-    foreach ($shapeStep in @(@('main', 'main.e', 'main=rebuilt:source-changed', 'k=kept:stable', 50), @('body', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 50), @('size', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 82))) {
+    foreach ($shapeStep in @(@('main', 'main.e', 'main=rebuilt:source-changed', 'k=kept:stable', 50), @('body', 'k.e', 'main=kept:edges-hold', 'k=rebuilt:source-changed', 50), @('size', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 82))) {
         $shapeEdit = $shapeStep[0]
         Copy-Item (Join-Path $shapeScratch "edits\$shapeEdit.e") (Join-Path $shapeScratch "src\$($shapeStep[1])") -Force
         $shapeWarm = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeExe $hotMode --incremental -j 1 2>$null
@@ -8297,7 +8333,7 @@ $crossAltered = Join-Path $testBuild 'manifest-cross-linux-altered.json'
 $crossText = [IO.File]::ReadAllText($crossLinux)
 [IO.File]::WriteAllText($crossAltered, [regex]::Replace($crossText, '("path":"run_args\.e"\},"sha256":")[0-9a-f]{64}', '${1}0000000000000000000000000000000000000000000000000000000000000000'))
 $crossChanged = & $compiler compare-manifests $crossWindows $crossAltered --cross-host
-if ($LASTEXITCODE -ne 1 -or $crossChanged -notmatch 'input run_args\.e: ') { throw "a changed input is not named across hosts: $crossChanged" }
+if ($LASTEXITCODE -ne 1 -or (($crossChanged | ForEach-Object { "$_" }) -join "`n") -notmatch 'input run_args\.e: ') { throw "a changed input is not named across hosts: $crossChanged" }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
 $shortRoot = Join-Path $repo 'build\windows\short'

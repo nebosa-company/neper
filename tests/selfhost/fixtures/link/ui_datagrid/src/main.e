@@ -28,6 +28,7 @@ use e.ui.control
 use e.ui.input
 use e.gfx.paint
 use e.ui.datagrid as dg
+use e.ui.gridrules as gr
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -992,6 +993,84 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !tap_text(&harness, &runtime, "Mythic") { os.exit(335) }
     if grid9.editing || app.edit_calls != choices_before + 1usize { os.exit(336) }
     if !str.eq(table.get_str(&app.tbl, C_RARITY, 40usize), "Mythic") { os.exit(337) }
+    // 14. conditional formatting: a cell-is rule fills a cell, a data bar fills a fraction of it
+    var rule_specs: [3]dg.ColumnSpec = zero
+    rule_specs[0usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    rule_specs[1usize] = dg.ColumnSpec { title: "Rarity", width: 160.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    rule_specs[2usize] = dg.ColumnSpec { title: "Cmc", width: 120.0, column: C_CMC, kind: dg.CellKind.Int, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    let (made10, grid10_error) = dg.create(a, &app.tbl, &app.grouping, rule_specs[0..], events, 9800u64)
+    if grid10_error != ok { os.exit(340) }
+    var grid10 = made10
+    let (rset_made, rset_error) = gr.create(a, &app.tbl, 4usize)
+    if rset_error != ok { os.exit(341) }
+    var rset = rset_made
+    let rule_fill = paint.rgba(0.2, 0.7, 0.3, 1.0)
+    var big = gr.rule(C_RARITY, gr.Kind.CellIs)
+    big.op = gr.Op.Eq
+    big.text = "Mythic"
+    big.has_fill = true
+    big.fill = rule_fill
+    let (_r1, r1_error) = gr.add(a, &rset, big)
+    var price_bar = gr.rule(C_CMC, gr.Kind.Bar)
+    price_bar.fill = paint.rgba(0.1, 0.2, 0.9, 1.0)
+    let (_r2, r2_error) = gr.add(a, &rset, price_bar)
+    if r1_error != ok || r2_error != ok || gr.refresh(&rset, a) != ok { os.exit(342) }
+    dg.set_rules(&grid10, &rset)
+    grid10.offset = 0.0
+    mem.reset(&f, 0usize)
+    let (root26, build26_error) = dg.build(&f, &grid10, &theme, 400.0)
+    if build26_error != ok { os.exit(343) }
+    var rules_clock = 70000000000i64
+    if settle(&harness, root26, rules_clock) != ok { os.exit(344) }
+    let (shot_r, shot_r_error) = testing.snapshot(&harness, a)
+    if shot_r_error != ok { os.exit(345) }
+    // the first visible data rows: a Mythic one and another, the largest Cmc and the smallest
+    var hi_row = ROWS
+    var lo_row = ROWS
+    var wide_row = ROWS
+    var short_row = ROWS
+    var probe_at = 0usize
+    while probe_at < 16usize && probe_at < grp.visible_len(&app.grouping) {
+        if !grp.visible_is_group(&app.grouping, probe_at) {
+            let candidate = grp.visible_row(&app.grouping, probe_at)
+            let mythic = str.eq(table.get_str(&app.tbl, C_RARITY, candidate), "Mythic")
+            if mythic && hi_row == ROWS { hi_row = candidate }
+            if !mythic && lo_row == ROWS { lo_row = candidate }
+            if wide_row == ROWS || table.get_i32(&app.tbl, C_CMC, candidate) > table.get_i32(&app.tbl, C_CMC, wide_row) { wide_row = candidate }
+            if short_row == ROWS || table.get_i32(&app.tbl, C_CMC, candidate) < table.get_i32(&app.tbl, C_CMC, short_row) { short_row = candidate }
+        }
+        probe_at += 1usize
+    }
+    if hi_row == ROWS || lo_row == ROWS { os.exit(346) }
+    let (hi_bounds, hi_found) = bounds(&harness, &runtime, dg.row_key(&grid10, hi_row))
+    let (lo_bounds, lo_found) = bounds(&harness, &runtime, dg.row_key(&grid10, lo_row))
+    if !hi_found || !lo_found { os.exit(347) }
+    // inside the Rarity cell (x 200..360), clear of its text
+    if !is_color(shot_r, px(hi_bounds.x + 330.0, hi_bounds.y + hi_bounds.height * 0.5), rule_fill) { os.exit(348) }
+    if is_color(shot_r, px(lo_bounds.x + 330.0, lo_bounds.y + lo_bounds.height * 0.5), rule_fill) { os.exit(349) }
+    // the bar: the row with the largest Cmc shows more of it than the smallest
+    let (wide_bounds, wide_found) = bounds(&harness, &runtime, dg.row_key(&grid10, wide_row))
+    let (short_bounds, short_found) = bounds(&harness, &runtime, dg.row_key(&grid10, short_row))
+    if !wide_found || !short_found { os.exit(350) }
+    var wide_blue = 0usize
+    var short_blue = 0usize
+    var across: f32 = 364.0
+    while across < 476.0 {
+        if is_color(shot_r, px(wide_bounds.x + across, wide_bounds.y + wide_bounds.height * 0.5), paint.rgba(0.1, 0.2, 0.9, 1.0)) { wide_blue += 1usize }
+        if is_color(shot_r, px(short_bounds.x + across, short_bounds.y + short_bounds.height * 0.5), paint.rgba(0.1, 0.2, 0.9, 1.0)) { short_blue += 1usize }
+        across += 4.0
+    }
+    if wide_blue == 0usize || wide_blue <= short_blue { os.exit(351) }
+    // detaching the rules takes the fill away
+    dg.clear_rules(&grid10)
+    mem.reset(&f, 0usize)
+    let (root27, build27_error) = dg.build(&f, &grid10, &theme, 400.0)
+    if build27_error != ok { os.exit(352) }
+    rules_clock += 2000000000i64
+    if settle(&harness, root27, rules_clock) != ok { os.exit(353) }
+    let (shot_n, shot_n_error) = testing.snapshot(&harness, a)
+    if shot_n_error != ok { os.exit(354) }
+    if is_color(shot_n, px(hi_bounds.x + 330.0, hi_bounds.y + hi_bounds.height * 0.5), rule_fill) { os.exit(355) }
     os.exit(0)
     ret ok
 }

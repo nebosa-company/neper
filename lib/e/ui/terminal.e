@@ -24,7 +24,8 @@ type Term = struct {
     state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32,
     utf_cp: u32, utf_need: u32, last_ch: u32,
     osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize,
-    out: [256]u8, out_len: usize, bells: u32
+    out: [256]u8, out_len: usize, bells: u32,
+    app_keypad: bool, mouse_utf8: bool, mouse_urxvt: bool, modify_other: u32, kitty: [32]u32, kitty_n: [2]usize, sb_dropped: usize
 }
 error Invalid
 
@@ -210,6 +211,7 @@ fn push_scrollback(t: *Term, r: usize) {
     } else {
         slot = t.sb_head
         t.sb_head = (t.sb_head + 1usize) % t.sb_cap
+        t.sb_dropped += 1usize
     }
     let db = (2usize * t.max_rows + slot) * t.max_cols
     let sb = live_base(t, r)
@@ -514,6 +516,7 @@ fn reset(t: *Term) {
     clear_screen_rows(t, 0u32)
     t.alt = false
     clear_screen_rows(t, 0u32)
+    t.sb_dropped += t.sb_len + t.rows
     t.sb_head = 0usize
     t.sb_len = 0usize
     t.cx = 0usize
@@ -535,6 +538,12 @@ fn reset(t: *Term) {
     t.mouse_mode = 0u32
     t.mouse_sgr = false
     t.focus_events = false
+    t.app_keypad = false
+    t.mouse_utf8 = false
+    t.mouse_urxvt = false
+    t.modify_other = 0u32
+    t.kitty_n[0usize] = 0usize
+    t.kitty_n[1usize] = 0usize
     t.state = S_GROUND
     t.utf_need = 0u32
     t.saved_x = 0usize
@@ -581,6 +590,7 @@ fn new(a: *mem.Arena, cols: usize, rows: usize, max_cols: usize, max_rows: usize
         j += 1usize
     }
     reset(&t)
+    t.sb_dropped = 0usize
     ret (t, ok)
 }
 
@@ -589,6 +599,7 @@ fn set_alt(t: *Term, on: bool, save: bool) {
     if on {
         if save { save_cursor(t) }
         t.alt = true
+        t.kitty_n[1usize] = 0usize
         var r = 0usize
         while r < t.max_rows {
             clear_row(t, r, 0u32)
@@ -610,7 +621,19 @@ fn set_mode(t: *Term, private: bool, mode: u32, on: bool) {
     if mode == 1u32 { t.app_cursor = on } else if mode == 6u32 {
         t.origin = on
         move_to(t, 0usize, 0usize)
-    } else if mode == 7u32 { t.autowrap = on } else if mode == 25u32 { t.cursor_visible = on } else if mode == 47u32 || mode == 1047u32 { set_alt(t, on, false) } else if mode == 1049u32 { set_alt(t, on, true) } else if mode == 2004u32 { t.bracketed_paste = on } else if mode == 1006u32 { t.mouse_sgr = on } else if mode == 1004u32 { t.focus_events = on } else if mode == 9u32 || mode == 1000u32 || mode == 1002u32 || mode == 1003u32 {
+    } else if mode == 7u32 { t.autowrap = on } else if mode == 25u32 { t.cursor_visible = on } else if mode == 47u32 || mode == 1047u32 { set_alt(t, on, false) } else if mode == 1049u32 { set_alt(t, on, true) } else if mode == 2004u32 { t.bracketed_paste = on } else if mode == 66u32 { t.app_keypad = on } else if mode == 1005u32 {
+        t.mouse_utf8 = on
+        t.mouse_sgr = false
+        t.mouse_urxvt = false
+    } else if mode == 1006u32 {
+        t.mouse_sgr = on
+        t.mouse_utf8 = false
+        t.mouse_urxvt = false
+    } else if mode == 1015u32 {
+        t.mouse_urxvt = on
+        t.mouse_utf8 = false
+        t.mouse_sgr = false
+    } else if mode == 1004u32 { t.focus_events = on } else if mode == 9u32 || mode == 1000u32 || mode == 1002u32 || mode == 1003u32 {
         if on { t.mouse_mode = mode } else { t.mouse_mode = 0u32 }
     }
 }
@@ -700,8 +723,78 @@ fn prev_tab(t: *const Term, x: usize) -> usize {
     ret 0usize
 }
 
+// Kitty keyboard protocol flags (one stack per screen, 16 deep; the oldest entry is evicted by a push on a full
+// stack) and xterm's modifyOtherKeys level, set by CSI > ... u / CSI < ... u / CSI = ... u / CSI > 4 ; n m and
+// answered by CSI ? u / CSI ? 4 m.
+fn kitty_flags(t: *const Term) -> u32 {
+    var s = 0usize
+    if t.alt { s = 1usize }
+    if t.kitty_n[s] == 0usize { ret 0u32 }
+    ret t.kitty[s * 16usize + t.kitty_n[s] - 1usize]
+}
+
+fn kitty_push(t: *Term, flags: u32) {
+    var s = 0usize
+    if t.alt { s = 1usize }
+    let base = s * 16usize
+    if t.kitty_n[s] == 16usize {
+        var i = 1usize
+        while i < 16usize {
+            t.kitty[base + i - 1usize] = t.kitty[base + i]
+            i += 1usize
+        }
+        t.kitty_n[s] = 15usize
+    }
+    t.kitty[base + t.kitty_n[s]] = flags & 31u32
+    t.kitty_n[s] += 1usize
+}
+
+fn kitty_set(t: *Term, flags: u32, mode: u32) {
+    var s = 0usize
+    if t.alt { s = 1usize }
+    if t.kitty_n[s] == 0usize { kitty_push(t, 0u32) }
+    let at = s * 16usize + t.kitty_n[s] - 1usize
+    let f = flags & 31u32
+    if mode == 1u32 { t.kitty[at] = f } else if mode == 2u32 { t.kitty[at] = t.kitty[at] | f } else if mode == 3u32 { t.kitty[at] = t.kitty[at] & (31u32 - f) }
+}
+
+fn dispatch_csi_keys(t: *Term, f: u32) {
+    if f == 117u32 {
+        if t.private == 63u32 {
+            queue_str(t, "\x1b[?")
+            queue_num(t, usize(kitty_flags(t)))
+            queue_byte(t, 117u8)
+        } else if t.private == 62u32 {
+            kitty_push(t, param(t, 0usize, 0u32))
+        } else if t.private == 60u32 {
+            var s = 0usize
+            if t.alt { s = 1usize }
+            let n = usize(param(t, 0usize, 1u32))
+            if n >= t.kitty_n[s] { t.kitty_n[s] = 0usize } else { t.kitty_n[s] -= n }
+        } else if t.private == 61u32 {
+            kitty_set(t, param(t, 0usize, 0u32), param(t, 1usize, 1u32))
+        }
+    } else if t.private == 62u32 {
+        if param(t, 0usize, 0u32) == 4u32 {
+            var lv = param(t, 1usize, 0u32)
+            if lv > 2u32 { lv = 0u32 }
+            t.modify_other = lv
+        }
+    } else if t.private == 63u32 {
+        if param(t, 0usize, 0u32) == 4u32 {
+            queue_str(t, "\x1b[>4;")
+            queue_num(t, usize(t.modify_other))
+            queue_byte(t, 109u8)
+        }
+    }
+}
+
 fn dispatch_csi(t: *Term, f: u32) {
     let priv = t.private == 63u32
+    if t.private != 0u32 && (f == 109u32 || f == 117u32) {
+        dispatch_csi_keys(t, f)
+        ret
+    }
     if t.private != 0u32 && !priv {
         if f != 99u32 { ret }
     }
@@ -805,7 +898,7 @@ fn dispatch_esc(t: *Term, f: u32) {
             t.cx = 0usize
             t.wrap_pending = false
         } else if f == 77u32 { reverse_index(t)
-            t.wrap_pending = false } else if f == 72u32 { t.tabs[t.cx] = true } else if f == 99u32 { reset(t) }
+            t.wrap_pending = false } else if f == 72u32 { t.tabs[t.cx] = true } else if f == 99u32 { reset(t) } else if f == 61u32 { t.app_keypad = true } else if f == 62u32 { t.app_keypad = false }
     } else if t.inter == 40u32 {
         t.graphics = f == 48u32
     } else if t.inter == 35u32 {
@@ -1351,6 +1444,7 @@ fn resize_reflow(a: *mem.Arena, t: *Term, cols: usize, rows: usize, max_lines: u
     if filled > rows { top = min_usize(filled - rows, cur_rel) }
     var sb_n = top
     if sb_n > t.sb_cap { sb_n = t.sb_cap }
+    t.sb_dropped += total
     t.sb_head = 0usize
     t.sb_len = sb_n
     var i = 0usize
@@ -1426,6 +1520,33 @@ const MOD_SHIFT: u32 = 1u32
 const MOD_ALT: u32 = 2u32
 const MOD_CTRL: u32 = 4u32
 const MOD_META: u32 = 8u32
+const MOD_HYPER: u32 = 16u32
+const MOD_CAPS_LOCK: u32 = 64u32
+const MOD_NUM_LOCK: u32 = 128u32
+// Keypad keys carry kitty's code points (functional-key private use area 57344..57454); the rest of that area is
+// modifier and media keys, reported only by the kitty protocol with "report all keys" set.
+const KEY_KP_0: u32 = 57399u32
+const KEY_KP_9: u32 = 57408u32
+const KEY_KP_DECIMAL: u32 = 57409u32
+const KEY_KP_DIVIDE: u32 = 57410u32
+const KEY_KP_MULTIPLY: u32 = 57411u32
+const KEY_KP_SUBTRACT: u32 = 57412u32
+const KEY_KP_ADD: u32 = 57413u32
+const KEY_KP_ENTER: u32 = 57414u32
+const KEY_KP_EQUAL: u32 = 57415u32
+const KEY_KP_SEPARATOR: u32 = 57416u32
+const KEY_LEFT_SHIFT: u32 = 57441u32
+const KEY_LEFT_CONTROL: u32 = 57442u32
+const KEY_LEFT_ALT: u32 = 57443u32
+const KEY_LEFT_SUPER: u32 = 57444u32
+const EVENT_PRESS: u32 = 1u32
+const EVENT_REPEAT: u32 = 2u32
+const EVENT_RELEASE: u32 = 3u32
+const KITTY_DISAMBIGUATE: u32 = 1u32
+const KITTY_EVENT_TYPES: u32 = 2u32
+const KITTY_ALTERNATE_KEYS: u32 = 4u32
+const KITTY_ALL_KEYS: u32 = 8u32
+const KITTY_TEXT: u32 = 16u32
 const MOUSE_PRESS: u32 = 0u32
 const MOUSE_RELEASE: u32 = 1u32
 const MOUSE_MOVE: u32 = 2u32
@@ -1471,13 +1592,51 @@ fn emit_bytes(tmp: []const u8, n: usize, dst: []u8) -> usize {
     ret n
 }
 
-fn encode_key(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize {
+// xterm's modifyOtherKeys form of a key: ESC [ 27 ; mods ; code ~
+fn other_keys(code: u32, m: usize, dst: []u8) -> usize {
+    var b: [24]u8 = zero
+    b[0usize] = 27u8
+    b[1usize] = 91u8
+    b[2usize] = 50u8
+    b[3usize] = 55u8
+    b[4usize] = 59u8
+    var n = put_dec(b[..], 5usize, m)
+    b[n] = 59u8
+    n = put_dec(b[..], n + 1usize, usize(code))
+    b[n] = 126u8
+    ret emit_bytes(b[..], n + 1usize, dst)
+}
+
+// The keypad (kitty's code points). Numeric mode sends what the key types; application mode (DECKPAM, ?66) sends
+// SS3 and a final letter, `ESC O <mods> <final>` with modifiers.
+fn encode_keypad(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize {
+    let idx = key - KEY_KP_0
+    if !t.app_keypad {
+        var ch = 44u32
+        if idx <= 9u32 { ch = 48u32 + idx } else if idx == 10u32 { ch = 46u32 } else if idx == 11u32 { ch = 47u32 } else if idx == 12u32 { ch = 42u32 } else if idx == 13u32 { ch = 45u32 } else if idx == 14u32 { ch = 43u32 } else if idx == 16u32 { ch = 61u32 }
+        if idx == 15u32 { ret encode_legacy(t, KEY_ENTER, mods, dst) }
+        ret encode_legacy(t, ch, mods, dst)
+    }
+    var f = 108u8
+    if idx <= 9u32 { f = 112u8 + u8(idx) } else if idx == 10u32 { f = 110u8 } else if idx == 11u32 { f = 111u8 } else if idx == 12u32 { f = 106u8 } else if idx == 13u32 { f = 109u8 } else if idx == 14u32 { f = 107u8 } else if idx == 15u32 { f = 77u8 } else if idx == 16u32 { f = 88u8 }
+    var b: [8]u8 = zero
+    b[0usize] = 27u8
+    b[1usize] = 79u8
+    var n = 2usize
+    if (mods & 15u32) != 0u32 { n = put_dec(b[..], n, 1usize + usize(mods & 15u32)) }
+    b[n] = f
+    ret emit_bytes(b[..], n + 1usize, dst)
+}
+
+fn encode_legacy(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize {
     var b: [40]u8 = zero
     var n = 0usize
     let m = 1usize + usize(mods & 15u32)
     let alt = (mods & (MOD_ALT | MOD_META)) != 0u32
     let ctrl = (mods & MOD_CTRL) != 0u32
     let shift = (mods & MOD_SHIFT) != 0u32
+    if key >= KEY_KP_0 && key <= KEY_KP_SEPARATOR { ret encode_keypad(t, key, mods, dst) }
+    if key >= 57344u32 && key <= 57454u32 { ret 0usize }
     if key < 1114112u32 {
         var c = key
         var as_control = false
@@ -1511,6 +1670,15 @@ fn encode_key(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize {
                 as_control = true
             }
         }
+        if t.modify_other != 0u32 {
+            var other = false
+            if t.modify_other >= 2u32 {
+                if (mods & (MOD_ALT | MOD_CTRL | MOD_META)) != 0u32 { other = true }
+            } else if ctrl && (!as_control || (shift && ((key >= 97u32 && key <= 122u32) || (key >= 65u32 && key <= 90u32)))) {
+                other = true
+            }
+            if other { ret other_keys(key, m, dst) }
+        }
         if alt {
             b[n] = 27u8
             n += 1usize
@@ -1524,6 +1692,21 @@ fn encode_key(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize {
         ret emit_bytes(b[..], n, dst)
     }
     if key == KEY_ENTER || key == KEY_TAB || key == KEY_BACKSPACE || key == KEY_ESCAPE {
+        if t.modify_other != 0u32 {
+            var other = false
+            if t.modify_other >= 2u32 {
+                if (mods & 15u32) != 0u32 { other = true }
+            } else if key == KEY_ENTER {
+                if (mods & (MOD_SHIFT | MOD_CTRL)) != 0u32 { other = true }
+            } else if key == KEY_TAB {
+                if ctrl { other = true }
+            }
+            if other {
+                var code = 27u32
+                if key == KEY_ENTER { code = 13u32 } else if key == KEY_TAB { code = 9u32 } else if key == KEY_BACKSPACE { code = 127u32 }
+                ret other_keys(code, m, dst)
+            }
+        }
         if alt {
             b[n] = 27u8
             n += 1usize
@@ -1621,10 +1804,174 @@ fn encode_key(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize {
     ret emit_bytes(b[..], n, dst)
 }
 
+// ---- kitty keyboard protocol (D4500) ----------------------------------------------------------------------
+// With any flag pushed (CSI > flags u) a key goes through the progressive-enhancement encoding of
+// https://sw.kovidgoyal.net/kitty/keyboard-protocol/: flag 1 sends everything legacy bytes cannot say as
+// ESC [ code ; mods u (Esc, and any key with alt, ctrl, super or hyper; Enter, Tab and Backspace keep their bytes
+// until they carry a modifier), flag 2 adds `:event` (1 press, 2 repeat, 3 release; a release of a key that is
+// still sent as text or a control byte is not reported), flag 4 the shifted and base-layout alternates
+// (`code:shifted:base`), flag 8 sends every key as an escape code (modifier keys included), flag 16 the text a key
+// produced as the third field. Modifier field = 1 + bits (shift 1, alt 2, ctrl 4, super 8, hyper 16, caps 64,
+// num 128). The key code of a letter is its lower case; an upper-case letter given with MOD_SHIFT is the shifted
+// alternate.
+
+fn kitty_u(code: u32, shifted: u32, base: u32, mods: u32, event: u32, text: u32, dst: []u8) -> usize {
+    var b: [48]u8 = zero
+    b[0usize] = 27u8
+    b[1usize] = 91u8
+    var n = put_dec(b[..], 2usize, usize(code))
+    if shifted != 0u32 || base != 0u32 {
+        b[n] = 58u8
+        n += 1usize
+        if shifted != 0u32 { n = put_dec(b[..], n, usize(shifted)) }
+        if base != 0u32 {
+            b[n] = 58u8
+            n = put_dec(b[..], n + 1usize, usize(base))
+        }
+    }
+    if mods != 0u32 || event != 1u32 || text != 0u32 {
+        b[n] = 59u8
+        n += 1usize
+        if mods != 0u32 || event != 1u32 {
+            n = put_dec(b[..], n, 1usize + usize(mods))
+            if event != 1u32 {
+                b[n] = 58u8
+                n = put_dec(b[..], n + 1usize, usize(event))
+            }
+        }
+        if text != 0u32 {
+            b[n] = 59u8
+            n = put_dec(b[..], n + 1usize, usize(text))
+        }
+    }
+    b[n] = 117u8
+    ret emit_bytes(b[..], n + 1usize, dst)
+}
+
+// Cursor, editing and function keys in kitty's CSI form (F3 is CSI 13 ~ because CSI R is a cursor report).
+fn kitty_func(key: u32, mods: u32, event: u32, dst: []u8) -> usize {
+    var letter = 0u8
+    var tilde = 0usize
+    if key == KEY_UP { letter = 65u8 } else if key == KEY_DOWN { letter = 66u8 } else if key == KEY_RIGHT { letter = 67u8 } else if key == KEY_LEFT { letter = 68u8 } else if key == KEY_HOME { letter = 72u8 } else if key == KEY_END { letter = 70u8 } else if key == KEY_INSERT { tilde = 2usize } else if key == KEY_DELETE { tilde = 3usize } else if key == KEY_PAGE_UP { tilde = 5usize } else if key == KEY_PAGE_DOWN { tilde = 6usize } else if key >= KEY_F1 && key <= KEY_F12 {
+        let f = usize(key - KEY_F1) + 1usize
+        if f == 1usize { letter = 80u8 } else if f == 2usize { letter = 81u8 } else if f == 4usize { letter = 83u8 } else if f == 3usize { tilde = 13usize } else if f == 5usize { tilde = 15usize } else if f == 6usize { tilde = 17usize } else if f == 7usize { tilde = 18usize } else if f == 8usize { tilde = 19usize } else if f == 9usize { tilde = 20usize } else if f == 10usize { tilde = 21usize } else if f == 11usize { tilde = 23usize } else { tilde = 24usize }
+    }
+    if letter == 0u8 && tilde == 0usize { ret 0usize }
+    var b: [32]u8 = zero
+    b[0usize] = 27u8
+    b[1usize] = 91u8
+    var n = 2usize
+    let has = mods != 0u32 || event != 1u32
+    if tilde > 0usize {
+        n = put_dec(b[..], n, tilde)
+    } else if has {
+        b[n] = 49u8
+        n += 1usize
+    }
+    if has {
+        b[n] = 59u8
+        n = put_dec(b[..], n + 1usize, 1usize + usize(mods))
+        if event != 1u32 {
+            b[n] = 58u8
+            n = put_dec(b[..], n + 1usize, usize(event))
+        }
+    }
+    if tilde > 0usize { b[n] = 126u8 } else { b[n] = letter }
+    ret emit_bytes(b[..], n + 1usize, dst)
+}
+
+fn encode_kitty(t: *const Term, key: u32, mods_in: u32, event_in: u32, shifted: u32, base: u32, text: u32, flags: u32, dst: []u8) -> usize {
+    let disamb = (flags & KITTY_DISAMBIGUATE) != 0u32
+    let evt_on = (flags & KITTY_EVENT_TYPES) != 0u32
+    let alt_on = (flags & KITTY_ALTERNATE_KEYS) != 0u32
+    let all = (flags & KITTY_ALL_KEYS) != 0u32
+    let txt_on = (flags & KITTY_TEXT) != 0u32
+    var event = event_in
+    if event == 0u32 || event > 3u32 { event = 1u32 }
+    if event == 3u32 && !evt_on { ret 0usize }
+    if event == 2u32 && !evt_on { event = 1u32 }
+    let mods = mods_in & 255u32
+    let plain = (mods & 31u32) == 0u32
+    let mod_eff = mods & 30u32
+    if key == KEY_ESCAPE {
+        if all || disamb { ret kitty_u(27u32, 0u32, 0u32, mods, event, 0u32, dst) }
+        if event == 3u32 { ret 0usize }
+        ret encode_legacy(t, key, mods_in, dst)
+    }
+    if key == KEY_ENTER || key == KEY_TAB || key == KEY_BACKSPACE {
+        var code = 127u32
+        if key == KEY_ENTER { code = 13u32 } else if key == KEY_TAB { code = 9u32 }
+        if all { ret kitty_u(code, 0u32, 0u32, mods, event, 0u32, dst) }
+        if event == 3u32 { ret 0usize }
+        if disamb && !plain { ret kitty_u(code, 0u32, 0u32, mods, event, 0u32, dst) }
+        ret encode_legacy(t, key, mods_in, dst)
+    }
+    if key >= KEY_UP && key <= KEY_F12 {
+        if !all && event == 1u32 && plain { ret encode_legacy(t, key, mods_in, dst) }
+        ret kitty_func(key, mods, event, dst)
+    }
+    if key >= KEY_KP_0 && key <= KEY_KP_SEPARATOR {
+        if !all && mod_eff == 0u32 {
+            if event == 3u32 { ret 0usize }
+            ret encode_legacy(t, key, mods_in, dst)
+        }
+        var kp_text = 0u32
+        let idx = key - KEY_KP_0
+        if txt_on && all && event != 3u32 && mod_eff == 0u32 {
+            if idx <= 9u32 { kp_text = 48u32 + idx } else if idx == 10u32 { kp_text = 46u32 } else if idx == 11u32 { kp_text = 47u32 } else if idx == 12u32 { kp_text = 42u32 } else if idx == 13u32 { kp_text = 45u32 } else if idx == 14u32 { kp_text = 43u32 } else if idx == 16u32 { kp_text = 61u32 } else if idx == 17u32 { kp_text = 44u32 }
+        }
+        ret kitty_u(key, 0u32, 0u32, mods, event, kp_text, dst)
+    }
+    if key >= 57344u32 && key <= 57454u32 {
+        if !all { ret 0usize }
+        ret kitty_u(key, 0u32, 0u32, mods, event, 0u32, dst)
+    }
+    if key >= 1114112u32 { ret 0usize }
+    var code = key
+    var shf = shifted
+    if key >= 65u32 && key <= 90u32 {
+        code = key + 32u32
+        if shf == 0u32 { shf = key }
+    }
+    var sh = 0u32
+    if alt_on && (mods & MOD_SHIFT) != 0u32 && shf != 0u32 && shf != code { sh = shf }
+    var bs = 0u32
+    if alt_on && base != 0u32 && base != code { bs = base }
+    if all {
+        var txt = 0u32
+        if txt_on && event != 3u32 && mod_eff == 0u32 {
+            txt = text
+            if txt == 0u32 && key >= 32u32 && key != 127u32 { txt = key }
+        }
+        ret kitty_u(code, sh, bs, mods, event, txt, dst)
+    }
+    if event == 3u32 { ret 0usize }
+    if disamb && mod_eff != 0u32 { ret kitty_u(code, sh, bs, mods, event, 0u32, dst) }
+    if text != 0u32 && mod_eff == 0u32 { ret encode_legacy(t, text, mods_in, dst) }
+    ret encode_legacy(t, key, mods_in, dst)
+}
+
+// A key event with its type (EVENT_PRESS / REPEAT / RELEASE) and, for the kitty protocol, the shifted and
+// base-layout alternates and the text the key produced (0 for none). Without kitty flags a release sends
+// nothing and a repeat is a press.
+fn encode_key_event(t: *const Term, key: u32, mods: u32, event: u32, shifted: u32, base: u32, text: u32, dst: []u8) -> usize {
+    let kf = kitty_flags(t)
+    if kf != 0u32 { ret encode_kitty(t, key, mods, event, shifted, base, text, kf, dst) }
+    if event == EVENT_RELEASE { ret 0usize }
+    ret encode_legacy(t, key, mods, dst)
+}
+
+fn encode_key(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize {
+    ret encode_key_event(t, key, mods, EVENT_PRESS, 0u32, 0u32, 0u32, dst)
+}
+
 // A mouse report for the mode the program set: 9 (X10, press only, no modifiers), 1000 (press and release,
 // wheel), 1002 (plus motion with a button held, `button` naming it) and 1003 (all motion, BUTTON_NONE when no
-// button is held); SGR (1006) encoding when set, else the legacy single-byte one, which cannot name a cell past
-// column or row 222 and then sends nothing. `x` and `y` are 0-based cells; wheel events are presses.
+// button is held); SGR (1006) encoding when set, else urxvt's decimal one (1015: ESC [ Cb ; Cx ; Cy M, Cb the
+// legacy byte value, a release Cb 3), else the UTF-8 extension (1005: the legacy bytes, each value above 127 as a
+// two-byte UTF-8 character; nothing past column or row 2014), else the legacy single-byte one, which cannot name a
+// cell past column or row 222 and then sends nothing. Setting one of 1005/1006/1015 replaces the other two and
+// resetting any returns to legacy. `x` and `y` are 0-based cells; wheel events are presses.
 fn encode_mouse(t: *const Term, button: u32, action: u32, mods: u32, x: usize, y: usize, dst: []u8) -> usize {
     let mode = t.mouse_mode
     if mode == 0u32 || button > 7u32 || action > 2u32 { ret 0usize }
@@ -1659,6 +2006,21 @@ fn encode_mouse(t: *const Term, button: u32, action: u32, mods: u32, x: usize, y
         n = put_dec(b[..], n + 1usize, y + 1usize)
         if release { b[n] = 109u8 } else { b[n] = 77u8 }
         n += 1usize
+    } else if t.mouse_urxvt && mode != 9u32 {
+        n = put_dec(b[..], 2usize, cb + 32usize)
+        b[n] = 59u8
+        n = put_dec(b[..], n + 1usize, x + 1usize)
+        b[n] = 59u8
+        n = put_dec(b[..], n + 1usize, y + 1usize)
+        b[n] = 77u8
+        n += 1usize
+    } else if t.mouse_utf8 && mode != 9u32 {
+        if x > 2014usize || y > 2014usize { ret 0usize }
+        b[2usize] = 77u8
+        n = 3usize
+        n += encoding.write_utf8(u32(cb + 32usize), b[..], n)
+        n += encoding.write_utf8(u32(x + 33usize), b[..], n)
+        n += encoding.write_utf8(u32(y + 33usize), b[..], n)
     } else {
         if x > 222usize || y > 222usize { ret 0usize }
         b[2usize] = 77u8
@@ -1738,7 +2100,8 @@ fn paste_filter(t: *const Term, src: []const u8, dst: []u8) -> usize {
 // ---- selection (D3501) ------------------------------------------------------------------------------------
 // A selection is in buffer coordinates (line = scrollback index or sb_len + row, column in cells). Character
 // mode takes both end cells; word mode widens each end to the run of same-class cells (blank, word, other) on
-// its line; line mode takes whole logical lines (rows joined by LINE_WRAPPED); block mode a rectangle. A click
+// its line, continuing over a wrapped row into the next (or back into the previous) when the run reaches the
+// margin and the cell across has the same class; line mode takes whole logical lines (rows joined by LINE_WRAPPED); block mode a rectangle. A click
 // on the second half of a wide character selects the character.
 
 const SEL_NONE: u32 = 0u32
@@ -1832,8 +2195,26 @@ fn selection_range(t: *const Term, sel: *const Selection) -> (usize, usize, usiz
     }
     var end_col = h_col + 1usize
     if sel.mode == SEL_WORD {
-        let (ws, _) = word_bounds(t, a_first, a_col)
-        let (_, we) = word_bounds(t, h_first, h_col)
+        let (ws0, _) = word_bounds(t, a_first, a_col)
+        let (_, we0) = word_bounds(t, h_first, h_col)
+        var ws = ws0
+        var we = we0
+        // A word that runs off the end of a wrapped row goes on at the start of the next one.
+        let cls_a = cell_class(line_cell(t, a_first, snap_col(t, a_first, a_col)))
+        while ws == 0usize && a_first > 0usize && line_wrapped(t, a_first - 1usize) {
+            let pc = snap_col(t, a_first - 1usize, t.cols - 1usize)
+            if cell_class(line_cell(t, a_first - 1usize, pc)) != cls_a { break }
+            a_first -= 1usize
+            let (ps, _) = word_bounds(t, a_first, pc)
+            ws = ps
+        }
+        let cls_h = cell_class(line_cell(t, h_first, snap_col(t, h_first, h_col)))
+        while we >= t.cols && h_first + 1usize < line_count(t) && line_wrapped(t, h_first) {
+            if cell_class(line_cell(t, h_first + 1usize, 0usize)) != cls_h { break }
+            h_first += 1usize
+            let (_, fe) = word_bounds(t, h_first, 0usize)
+            we = fe
+        }
         a_col = ws
         end_col = we
     }
@@ -1851,8 +2232,18 @@ fn selection_contains(t: *const Term, sel: *const Selection, line: usize, col: u
     ret true
 }
 
-// The selected text as UTF-8 into dst (truncated at dst.len); returns the bytes written. Rows joined by
-// LINE_WRAPPED have no break between them; any other break is one LF. A row that the selection runs to the
+// The blank that pads the last column of a wrapped row whose next row starts with a wide character (the same
+// cell `resize_reflow` drops when it joins): it is layout, not text, so a selection never copies it.
+fn wrap_filler(t: *const Term, line: usize, col: usize) -> bool {
+    if col + 1usize != t.cols || !line_wrapped(t, line) || line + 1usize >= line_count(t) { ret false }
+    let cl = line_cell(t, line, col)
+    if (cl.ch != 32u32 && cl.ch != 0u32) || cl.attr != 0u32 { ret false }
+    ret (line_cell(t, line + 1usize, 0usize).attr & WIDE) != 0u32
+}
+
+// The selected text as UTF-8 into dst (truncated at dst.len, never inside a character); returns the bytes
+// written. Rows joined by LINE_WRAPPED have no break between them (nor does the blank that pads a wide
+// character moved to the next row); any other break is one LF. A row that the selection runs to the
 // right edge of loses its trailing blanks unless it continues on the next row; block rows always do.
 fn selection_text(t: *const Term, sel: *const Selection, dst: []u8) -> usize {
     if sel.mode == SEL_NONE { ret 0usize }
@@ -1883,7 +2274,7 @@ fn selection_text(t: *const Term, sel: *const Selection, dst: []u8) -> usize {
         var c = c0
         while c < last {
             let cl = line_cell(t, l, c)
-            if (cl.attr & CONT) == 0u32 {
+            if (cl.attr & CONT) == 0u32 && !wrap_filler(t, l, c) {
                 var ch = cl.ch
                 if ch == 0u32 { ch = 32u32 }
                 if n + encoding.utf8_length(ch) > dst.len { ret n }

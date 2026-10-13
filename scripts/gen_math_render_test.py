@@ -340,16 +340,26 @@ def scripts(face, S, nucleus, sup, sub, style, display, sub_first=False):
     # corner read at the script's near edge above the base's baseline, the script's at the base's
     # near edge above the script's baseline.
     sup_kern = sub_kern = 0.0
+    # D4505: a base that is a run of two or more glyphs on one baseline, one size, is kerned as its last glyph
+    # alone, at that glyph's own height and depth.
+    b = None
+    base_h, base_d = nucleus.h, nucleus.d
     if nucleus.simple and len(nucleus.items) == 1 and nucleus.items[0]["kind"] == "glyph":
         b = nucleus.items[0]
+    elif (len(nucleus.items) >= 2 and all(i["kind"] == "glyph" and i["y"] == 0.0 for i in nucleus.items)
+          and len({i["size"] for i in nucleus.items}) == 1):
+        b = nucleus.items[-1]
+        lo, hi = face.ext(b["name"])
+        base_h, base_d = max(hi * b["size"], 0.0), max(-lo * b["size"], 0.0)
+    if b is not None:
         if sup:
             sup_kern = kern_value(face, b["name"], "tr", up_shift - sup.d, b["size"])
             if sup.simple and len(sup.items) == 1 and sup.items[0]["kind"] == "glyph":
-                sup_kern += kern_value(face, sup.items[0]["name"], "bl", nucleus.h - up_shift, sup.items[0]["size"])
+                sup_kern += kern_value(face, sup.items[0]["name"], "bl", base_h - up_shift, sup.items[0]["size"])
         if sub:
             sub_kern = kern_value(face, b["name"], "br", sub.h - down_shift, b["size"])
             if sub.simple and len(sub.items) == 1 and sub.items[0]["kind"] == "glyph":
-                sub_kern += kern_value(face, sub.items[0]["name"], "tl", down_shift - nucleus.d, sub.items[0]["size"])
+                sub_kern += kern_value(face, sub.items[0]["name"], "tl", down_shift - base_d, sub.items[0]["size"])
     w, h, d = nucleus.w, nucleus.h, nucleus.d
     sp = k.script_space * s
     items = list(nucleus.items)
@@ -685,7 +695,41 @@ def tuple_row(face, S, atoms, style):
 
 # ---- the cases ---------------------------------------------------------------------------------
 
-def align_env(face, S, rows, style):
+def number_model(face, S, text, star=False):
+    """D4505: `(text)` upright at S, or `text` for a starred tag: the opening glyph, the text, the closing glyph."""
+    out = Atom()
+    x = 0.0
+    parts = ([] if star else [chr(40)]) + list(text) + ([] if star else [chr(41)])
+    for ch in parts:
+        a = glyph(face, ord(ch), S, CLS_ORD, italic=False)
+        a.shift(x, 0.0)
+        out.items += a.items
+        x += a.w
+        out.h = max(out.h, a.h)
+        out.d = max(out.d, a.d)
+    out.w = x
+    return out
+
+
+def substack_env(face, S, rows, style):
+    """D4505 `\\substack`: rows centred, one 1.2 em baseline skip of the style apart, centred on the axis."""
+    s = S * scale(face, style)
+    width = max(r.w for r in rows)
+    hs = [max(0.84 * s, r.h) for r in rows]
+    ds = [max(0.36 * s, r.d) for r in rows]
+    total = sum(h + d for h, d in zip(hs, ds))
+    top = face.k.axis * s + total / 2
+    out = Atom()
+    used = 0.0
+    for r, h, d in zip(rows, hs, ds):
+        r.shift((width - r.w) / 2, used + h - top)
+        out.items += r.items
+        used += h + d
+    out.w, out.h, out.d = width, top, total - top
+    return out
+
+
+def align_env(face, S, rows, style, numbers=None):
     """`align`: columns alternate right and left, pairs an em apart; cells are atoms."""
     s = S * scale(face, style)
     cols = max(len(r) for r in rows)
@@ -713,6 +757,15 @@ def align_env(face, S, rows, style):
             px = col_x[c] + ((col_w[c] - a.w) if c % 2 == 0 else 0.0)
             a.shift(px, -above)
             out.items += a.items
+    if numbers:
+        widest = max(n.w for n in numbers if n is not None)
+        for r, n in enumerate(numbers):
+            if n is None:
+                continue
+            above = top - sum(row_h[i] + row_d[i] for i in range(r)) - row_h[r]
+            n.shift(x + s + (widest - n.w), -above)
+            out.items += n.items
+        x += s + widest
     out.w = x
     out.h = top
     out.d = total_h - top
@@ -808,6 +861,82 @@ def model_cases(M, P):
     ]
     cases.append(dict(label="align, two rows", face=P, mode="D", src=r"\begin{align}a&=b\\cc&=d\end{align}",
                       result=finish(align_env(P, S, rows, 0)), size=S))
+    # D4505: composite-base kerning, \substack, \big sizes, equation numbers.
+    run_ax = lambda: row(M, S, [g(M, "a", S, t), g(M, "x", S, t)], t)
+    add("a run of glyphs as a base: its last glyph's top right corner kerns the superscript", M, "L", r"{ax}^y",
+        scripts(M, S, run_ax(), g(M, "y", S, 2), None, t, False))
+    add("a run of glyphs as a base: its last glyph's bottom right corner kerns the subscript", M, "L", r"{ax}_y",
+        scripts(M, S, run_ax(), None, g(M, "y", S, 6), t, False))
+    add("a fraction as a base is not kerned", M, "L", r"{\frac{a}{x}}^y",
+        scripts(M, S, row(M, S, [frac(M, S, g(M, "a", S, 2), g(M, "x", S, 6), t, False)], t), g(M, "y", S, 2), None, t, False))
+    op = big_op(M, S, 0x2211, 0, True)
+    stack = row(M, S, [substack_env(M, S, [row(M, S, [g(M, "a", S, 6)], 6), row(M, S, [g(M, "b", S, 6)], 6)], 6)], 6)
+    add("\\substack as a lower limit", M, "D", r"\sum_{\substack{a\\b}}", scripts(M, S, op, None, stack, 0, True))
+    stack3 = row(M, S, [substack_env(M, S, [row(M, S, [g(M, "a", S, 6), g(M, "x", S, 6)], 6), row(M, S, [g(M, "b", S, 6)], 6),
+                                            row(M, S, [g(M, "y", S, 6)], 6)], 6)], 6)
+    add("\\substack of three rows, the widest centring the others", M, "D", r"\sum_{\substack{ax\\b\\y}}",
+        scripts(M, S, big_op(M, S, 0x2211, 0, True), None, stack3, 0, True))
+    d = lambda ch, f, cls: delimiter(M, ord(ch), f * S, S, cls)
+    add("\\bigl and \\bigr, 1.2 em", M, "L", r"\bigl(x\bigr)",
+        row(M, S, [d("(", 1.2, CLS_OPEN), g(M, "x", S, t), d(")", 1.2, CLS_CLOSE)], t))
+    add("\\Bigl and \\Bigr, 1.8 em", M, "L", r"\Bigl(x\Bigr)",
+        row(M, S, [d("(", 1.8, CLS_OPEN), g(M, "x", S, t), d(")", 1.8, CLS_CLOSE)], t))
+    add("\\biggl and \\biggr, 2.4 em", M, "L", r"\biggl(x\biggr)",
+        row(M, S, [d("(", 2.4, CLS_OPEN), g(M, "x", S, t), d(")", 2.4, CLS_CLOSE)], t))
+    add("\\Biggl and \\Biggr, 3 em", M, "L", r"\Biggl(x\Biggr)",
+        row(M, S, [d("(", 3.0, CLS_OPEN), g(M, "x", S, t), d(")", 3.0, CLS_CLOSE)], t))
+    add("\\big alone is an ordinary atom, in a script style it keeps its size", M, "L", r"x^{\big(}",
+        scripts(M, S, g(M, "x", S, t), row(M, S, [d("(", 1.2, CLS_ORD)], 2), None, t, False))
+    eq = row(M, S, [scripts(M, S, g(M, "x", S, t), g(M, "2", S, 2), None, t, False)], t)
+    num = number_model(M, S, "1")
+    num.shift(eq.w + S, 0.0)
+    both = Atom()
+    both.items = eq.items + num.items
+    both.w, both.h, both.d = eq.w + S + num.w, max(eq.h, num.h), max(eq.d, num.d)
+    add("a tag follows the equation by an em", M, "L", r"x^2\tag{1}", both)
+    def numbered(eq, num, line):
+        """The equation centred in `line`, its number flush right, the equation moved left of an em's clearance."""
+        num_x = line - num.w
+        eq_x = (line - eq.w) / 2
+        if eq_x + eq.w + S > num_x:
+            eq_x = max(0.0, num_x - S - eq.w)
+            if eq_x + eq.w + S > num_x:
+                num_x = eq_x + eq.w + S
+        eq.shift(eq_x, 0.0)
+        num.shift(num_x, 0.0)
+        both = Atom()
+        both.items = eq.items + num.items
+        both.w, both.h, both.d = max(line, num_x + num.w), max(eq.h, num.h), max(eq.d, num.d)
+        return both
+    eq = row(M, S, [g(M, "a", S, t), g(M, "+", S, t), g(M, "b", S, t)], t)
+    cases.append(dict(label="a tag flush right, the equation centred when it clears the number by an em", face=M, mode="L",
+                      src=r"a+b\tag{1}", result=finish(numbered(eq, number_model(M, S, "1"), 200.0)), size=S, line_width=200.0))
+    eq = row(M, S, [g(M, "a", S, t), g(M, "+", S, t), g(M, "b", S, t)], t)
+    cases.append(dict(label="an equation too near its number moves left", face=M, mode="L",
+                      src=r"a+b\tag{12}", result=finish(numbered(eq, number_model(M, S, "12"), 120.0)), size=S, line_width=120.0))
+    eq = row(M, S, [g(M, "a", S, t), g(M, "+", S, t), g(M, "b", S, t), g(M, "+", S, t), g(M, "x", S, t), g(M, "+", S, t), g(M, "a", S, t)], t)
+    cases.append(dict(label="a long equation is pushed left of its number, the line grows when there is no room", face=M, mode="L",
+                      src=r"a+b+x+a\tag{12}", result=finish(numbered(eq, number_model(M, S, "12"), 100.0)), size=S, line_width=100.0))
+    eq = row(M, S, [g(M, "a", S, t), g(M, "=", S, t), g(M, "b", S, t)], t)
+    num = number_model(M, S, "ok", star=True)
+    num.shift(eq.w + S, 0.0)
+    both = Atom()
+    both.items = eq.items + num.items
+    both.w, both.h, both.d = eq.w + S + num.w, max(eq.h, num.h), max(eq.d, num.d)
+    add("a starred tag has no parentheses", M, "L", r"a=b\tag*{ok}", both)
+    eq = row(M, S, [g(M, "a", S, t), g(M, "+", S, t), g(M, "b", S, t)], t)
+    eq.shift((90.0 - eq.w) / 2, 0.0)
+    eq.w = 90.0
+    cases.append(dict(label="without a tag the equation is centred in the line", face=M, mode="L", src=r"a+b",
+                      result=finish(eq), size=S, line_width=90.0))
+    rows = [
+        [row(P, S, [a("a")], 0), row(P, S, [a("="), a("b")], 0)],
+        [row(P, S, [a("c"), a("c")], 0), row(P, S, [a("="), a("d")], 0)],
+    ]
+    nums = [number_model(P, S, "1"), number_model(P, S, "2")]
+    cases.append(dict(label="align rows are numbered in a right column", face=P, mode="D",
+                      src=r"\begin{align}a&=b\tag{1}\\cc&=d\tag{2}\end{align}",
+                      result=finish(align_env(P, S, rows, 0, numbers=nums)), size=S))
     return cases
 
 
@@ -822,7 +951,10 @@ def check_code(cases, first_code):
                  "fn %s(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {" % fn]
         lines.append("    let options = math.Options { font: font, size: %s, display: %s, notdef: false }" % (fnum(case["size"]), "true" if case["mode"] == "D" else "false"))
         src = case["src"].replace("\\", "\\\\")
-        lines.append("    let (eq, eq_error) = math.typeset(a, \"%s\", options, items)" % src)
+        if case.get("line_width") is not None:
+            lines.append("    let (eq, eq_error) = math.typeset_numbered(a, \"%s\", options, %s, items)" % (src, fnum(case["line_width"])))
+        else:
+            lines.append("    let (eq, eq_error) = math.typeset(a, \"%s\", options, items)" % src)
         # One code a case (an exit status may keep eight bits); `bad` says which check on stdout.
         why = "check %d (%s): " % (code, case["src"].replace("\\", "\\\\"))
         lines.append("    if eq_error != ok { ret bad(%di32, \"%stypeset refused\\n\") }" % (code, why))
