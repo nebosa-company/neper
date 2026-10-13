@@ -62,6 +62,7 @@ use e.str
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
+use e.gfx.svg_filter as sf
 use e.text.layout
 use e.text.shape as fonts
 
@@ -70,7 +71,7 @@ error TooComplex
 
 const MAX_DEPTH: usize = 16usize
 
-type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color, fill_ref: str, stroke_ref: str, clip_ref: str, clip_ctm: geometry.Transform, dash: str, dash_offset: f32, even_odd: bool, marker_start: str, marker_mid: str, marker_end: str, mask_skip: bool, font_size: f32, anchor: usize }
+type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color, fill_ref: str, stroke_ref: str, clip_ref: str, clip_ctm: geometry.Transform, dash: str, dash_offset: f32, even_odd: bool, marker_start: str, marker_mid: str, marker_end: str, mask_skip: bool, filter_skip: bool, font_size: f32, anchor: usize }
 // `layers` counts the opacity layers open around the frame's content (a frame that may open no
 // more has 4); `opens` says this frame's own element opened one, closed with its end tag.
 type Frame = struct { style: Style, ctm: geometry.Transform, layers: usize, opens: bool }
@@ -753,7 +754,7 @@ type Job = struct { text: str, frame: Frame, dest: geometry.Rect, level: usize, 
 // The document: its text and the viewport a percentage is taken of; `view` is the viewBox in the
 // root user space (what an opacity layer's bounds are), `job` is set while a mask's content is
 // walked, and `font` is what `<text>` is set in when the caller gave one.
-type Doc = struct { text: str, vw: f32, vh: f32, view: geometry.Rect, job: *Job, has_job: bool, font: fonts.Font, has_font: bool, base_anc: []const str }
+type Doc = struct { text: str, vw: f32, vh: f32, view: geometry.Rect, job: *Job, has_job: bool, font: fonts.Font, has_font: bool, base_anc: []const str, fit: *geometry.Transform, host: *sf.Host, has_host: bool }
 // An element found by its `id`: its opening tag, its whole text and its body.
 type Found = struct { tag: str, start: usize, end: usize, body_start: usize, body_end: usize, found: bool }
 
@@ -2458,14 +2459,507 @@ fn emit(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, path: geometry
     ret ok
 }
 
+// ---- filter effects (L125, D4503) --------------------------------------------------------------------
+
+// The bounds of the geometry in a display list in the space it was drawn in: fills and the paths of strokes
+// (without their widths), text boxes and images. False for a list that draws nothing.
+fn list_bounds(list: scene.DisplayList) -> (geometry.Rect, bool) {
+    var stack: [32]geometry.Transform = zero
+    var depth = 0usize
+    var t = geometry.transform_identity()
+    var x0 = 0.0f32
+    var y0 = 0.0f32
+    var x1 = 0.0f32
+    var y1 = 0.0f32
+    var any = false
+    var i = 0usize
+    while i < list.commands.len {
+        let c = list.commands[i]
+        var box = geometry.rect(0.0, 0.0, 0.0, 0.0)
+        var has = false
+        if c.tag == .Save || c.tag == .OpacityLayer {
+            if depth < 32usize {
+                stack[depth] = t
+                depth += 1usize
+            }
+        } else if c.tag == .Restore {
+            if depth > 0usize {
+                depth -= 1usize
+                t = stack[depth]
+            }
+        } else {
+            switch c {
+            case .Transform as m:
+                t = geometry.transform_multiply(t, m)
+            case .FillRect as fill:
+                box = fill.rect
+                has = true
+            case .FillPath as fill:
+                box = path_bounds(fill.path)
+                has = true
+            case .StrokePath as stroke:
+                box = path_bounds(stroke.path)
+                has = true
+            case .Image as picture:
+                box = picture.destination
+                has = true
+            case .Text as text:
+                let tb = text.layout.bounds
+                box = geometry.rect(text.origin.x + tb.x, text.origin.y + tb.y, tb.width, tb.height)
+                has = true
+            default:
+                has = false
+            }
+        }
+        if has {
+            let r = scene.transform_rect(t, box)
+            if !any {
+                x0 = r.x
+                y0 = r.y
+                x1 = r.x + r.width
+                y1 = r.y + r.height
+                any = true
+            } else {
+                if r.x < x0 { x0 = r.x }
+                if r.y < y0 { y0 = r.y }
+                if r.x + r.width > x1 { x1 = r.x + r.width }
+                if r.y + r.height > y1 { y1 = r.y + r.height }
+            }
+        }
+        i += 1usize
+    }
+    ret (geometry.rect(x0, y0, x1 - x0, y1 - y0), any)
+}
+
+// A fraction: a number, or a percentage as hundredths.
+fn fraction_of(value: str, fallback: f32) -> f32 {
+    var at = 0usize
+    var v = fallback
+    if !read_number(value, &at, &v) { ret fallback }
+    if at < value.len && value[at] == 37u8 { ret v / 100.0 }
+    ret v
+}
+
+// An input reference of a primitive: the source, its alpha, nothing, or the index of an earlier result.
+fn input_ref(raw: str, name: str, n: usize, names: []const str) -> i32 {
+    let (value, has) = attr(raw, name)
+    var fallback = sf.in_source()
+    if n > 0usize { fallback = i32(n - 1usize) }
+    if !has { ret fallback }
+    let v = trim(value)
+    if same(v, "SourceGraphic") { ret sf.in_source() }
+    if same(v, "SourceAlpha") { ret sf.in_alpha() }
+    if same(v, "BackgroundImage") || same(v, "BackgroundAlpha") || same(v, "FillPaint") || same(v, "StrokePaint") { ret sf.in_empty() }
+    var k = n
+    while k > 0usize {
+        k -= 1usize
+        if names[k].len > 0usize && same(names[k], v) { ret i32(k) }
+    }
+    ret fallback
+}
+
+fn blend_mode_of(value: str) -> u32 {
+    let v = trim(value)
+    if same(v, "multiply") { ret 1u32 }
+    if same(v, "screen") { ret 2u32 }
+    if same(v, "darken") { ret 3u32 }
+    if same(v, "lighten") { ret 4u32 }
+    if same(v, "overlay") { ret 5u32 }
+    if same(v, "color-dodge") { ret 6u32 }
+    if same(v, "color-burn") { ret 7u32 }
+    if same(v, "hard-light") { ret 8u32 }
+    if same(v, "soft-light") { ret 9u32 }
+    if same(v, "difference") { ret 10u32 }
+    if same(v, "exclusion") { ret 11u32 }
+    if same(v, "hue") { ret 12u32 }
+    if same(v, "saturation") { ret 13u32 }
+    if same(v, "color") { ret 14u32 }
+    if same(v, "luminosity") { ret 15u32 }
+    ret 0u32
+}
+
+fn composite_op_of(value: str) -> u32 {
+    let v = trim(value)
+    if same(v, "in") { ret 1u32 }
+    if same(v, "out") { ret 2u32 }
+    if same(v, "atop") { ret 3u32 }
+    if same(v, "xor") { ret 4u32 }
+    if same(v, "arithmetic") { ret 5u32 }
+    ret 0u32
+}
+
+// `flood-color` and `flood-opacity` of a primitive as straight RGBA.
+fn flood_into(raw: str, current: paint.Color, p: []f32, at: usize) {
+    var c = paint.rgba(0.0, 0.0, 0.0, 1.0)
+    let (color, has_color) = prop(raw, "flood-color")
+    if has_color {
+        let (parsed, kind) = parse_paint(color, current)
+        if kind == 1u8 { c = parsed } else { c = paint.rgba(0.0, 0.0, 0.0, 0.0) }
+    }
+    var o = 1.0f32
+    let (opacity, has_opacity) = prop(raw, "flood-opacity")
+    if has_opacity { o = unit_value(number_of(opacity, 1.0)) }
+    p[at] = c.red
+    p[at + 1usize] = c.green
+    p[at + 2usize] = c.blue
+    p[at + 3usize] = c.alpha * o
+}
+
+// `stdDeviation`-style pair: "x" or "x y".
+fn pair_of(value: str, fallback: f32) -> (f32, f32) {
+    var at = 0usize
+    var x = fallback
+    var y = fallback
+    if !read_number(value, &at, &x) { ret (fallback, fallback) }
+    y = x
+    let got = read_number(value, &at, &y)
+    ret (x, y)
+}
+
+// A filter element's primitives as a program over `w` x `h` pixels whose origin is device pixel (px0, py0).
+// `region` is the filter region and `box` the element's bounding box, both in user space, `device` the
+// user-to-device transform, `prim_obb` whether primitive units are the bounding box's fractions.
+fn filter_prims(doc: Doc, f: Found, region: geometry.Rect, box: geometry.Rect, prim_obb: bool, device: geometry.Transform, current: paint.Color, px0: i64, py0: i64, w: usize, h: usize, out: []sf.Prim) -> usize {
+    let text = doc.text
+    var names: [16]str = zero
+    var n = 0usize
+    let scale_x = math.sqrt[f32](device.m00 * device.m00 + device.m10 * device.m10)
+    let scale_y = math.sqrt[f32](device.m01 * device.m01 + device.m11 * device.m11)
+    var linear = true
+    let (own_space, has_space) = prop(f.tag, "color-interpolation-filters")
+    if has_space && (same(trim(own_space), "sRGB") || same(trim(own_space), "auto")) { linear = false }
+    var i = f.body_start
+    while i < f.body_end && n < sf.MAX_PRIMS {
+        if text[i] != 60u8 {
+            i += 1usize
+            continue
+        }
+        if begins(text, i, "<!--") {
+            i = find(text, i + 4usize, "-->") + 3usize
+            continue
+        }
+        let end = tag_end(text, i)
+        if i + 1usize < text.len && (text[i + 1usize] == 47u8 || text[i + 1usize] == 33u8 || text[i + 1usize] == 63u8) {
+            i = end + 1usize
+            continue
+        }
+        let raw = text[i + 1usize..end]
+        let name = name_of(raw)
+        let self_closing = raw.len > 0usize && raw[raw.len - 1usize] == 47u8
+        var next = end + 1usize
+        if !self_closing { next = element_end(text, end, name, false) }
+        if begins(name, 0usize, "fe") && !same(name, "feMergeNode") {
+            var p: sf.Prim = zero
+            p.x0 = 0i32
+            p.y0 = 0i32
+            p.x1 = i32(w)
+            p.y1 = i32(h)
+            p.in1 = input_ref(raw, "in", n, names[0usize..16usize])
+            p.in2 = input_ref(raw, "in2", n, names[0usize..16usize])
+            p.linear = linear
+            let (space, has_prim_space) = prop(raw, "color-interpolation-filters")
+            if has_prim_space { p.linear = !(same(trim(space), "sRGB") || same(trim(space), "auto")) }
+            // Lengths in primitive units, as user-space numbers: fractions of the box when asked.
+            var unit_x = 1.0f32
+            var unit_y = 1.0f32
+            if prim_obb {
+                unit_x = box.width
+                unit_y = box.height
+            }
+            if same(name, "feGaussianBlur") {
+                p.kind = sf.KIND_BLUR
+                let (dev, has_dev) = attr(raw, "stdDeviation")
+                var sx = 0.0f32
+                var sy = 0.0f32
+                if has_dev {
+                    let (px, py) = pair_of(dev, 0.0)
+                    sx = px
+                    sy = py
+                }
+                if sx < 0.0 { sx = 0.0 }
+                if sy < 0.0 { sy = 0.0 }
+                p.p[0usize] = sx * unit_x * scale_x
+                p.p[1usize] = sy * unit_y * scale_y
+            } else if same(name, "feOffset") {
+                p.kind = sf.KIND_OFFSET
+                let dx = first_number(raw, "dx", 0.0) * unit_x
+                let dy = first_number(raw, "dy", 0.0) * unit_y
+                p.p[0usize] = device.m00 * dx + device.m01 * dy
+                p.p[1usize] = device.m10 * dx + device.m11 * dy
+            } else if same(name, "feFlood") {
+                p.kind = sf.KIND_FLOOD
+                flood_into(raw, current, p.p[0usize..20usize], 0usize)
+            } else if same(name, "feBlend") {
+                p.kind = sf.KIND_BLEND
+                let (mode, has_mode) = attr(raw, "mode")
+                if has_mode { p.mode = blend_mode_of(mode) }
+            } else if same(name, "feComposite") {
+                p.kind = sf.KIND_COMPOSITE
+                let (op, has_op) = attr(raw, "operator")
+                if has_op { p.mode = composite_op_of(op) }
+                p.p[0usize] = first_number(raw, "k1", 0.0)
+                p.p[1usize] = first_number(raw, "k2", 0.0)
+                p.p[2usize] = first_number(raw, "k3", 0.0)
+                p.p[3usize] = first_number(raw, "k4", 0.0)
+            } else if same(name, "feColorMatrix") {
+                p.kind = sf.KIND_MATRIX
+                let (kind, has_kind) = attr(raw, "type")
+                let (values, has_values) = attr(raw, "values")
+                var m = 0u32
+                if has_kind {
+                    let k = trim(kind)
+                    if same(k, "saturate") { m = 1u32 } else if same(k, "hueRotate") { m = 2u32 } else if same(k, "luminanceToAlpha") { m = 3u32 }
+                }
+                p.mode = m
+                if m == 1u32 { p.p[0usize] = 1.0 }
+                if has_values {
+                    if m == 0u32 {
+                        var at = 0usize
+                        var count = 0usize
+                        var v = 0.0f32
+                        while count < 20usize && read_number(values, &at, &v) {
+                            p.p[count] = v
+                            count += 1usize
+                        }
+                        if count != 20usize {
+                            // Not twenty numbers: the identity.
+                            var z = 0usize
+                            while z < 20usize {
+                                p.p[z] = 0.0
+                                z += 1usize
+                            }
+                            p.p[0usize] = 1.0
+                            p.p[6usize] = 1.0
+                            p.p[12usize] = 1.0
+                            p.p[18usize] = 1.0
+                        }
+                    } else {
+                        p.p[0usize] = number_of(values, p.p[0usize])
+                    }
+                } else if m == 0u32 {
+                    p.p[0usize] = 1.0
+                    p.p[6usize] = 1.0
+                    p.p[12usize] = 1.0
+                    p.p[18usize] = 1.0
+                }
+            } else if same(name, "feMerge") {
+                p.kind = sf.KIND_MERGE
+                var j = end + 1usize
+                while j < next && p.merge_n < 8usize {
+                    if text[j] != 60u8 {
+                        j += 1usize
+                        continue
+                    }
+                    let inner_end = tag_end(text, j)
+                    let inner = text[j + 1usize..inner_end]
+                    if begins(inner, 0usize, "feMergeNode") {
+                        p.merge[p.merge_n] = input_ref(inner, "in", n, names[0usize..16usize])
+                        p.merge_n += 1usize
+                    }
+                    j = inner_end + 1usize
+                }
+            } else if same(name, "feDropShadow") {
+                p.kind = sf.KIND_SHADOW
+                let dx = first_number(raw, "dx", 2.0) * unit_x
+                let dy = first_number(raw, "dy", 2.0) * unit_y
+                p.p[0usize] = device.m00 * dx + device.m01 * dy
+                p.p[1usize] = device.m10 * dx + device.m11 * dy
+                let (dev, has_dev) = attr(raw, "stdDeviation")
+                var sx = 2.0f32
+                var sy = 2.0f32
+                if has_dev {
+                    let (px, py) = pair_of(dev, 2.0)
+                    sx = px
+                    sy = py
+                }
+                if sx < 0.0 { sx = 0.0 }
+                if sy < 0.0 { sy = 0.0 }
+                p.p[2usize] = sx * unit_x * scale_x
+                p.p[3usize] = sy * unit_y * scale_y
+                flood_into(raw, current, p.p[0usize..20usize], 4usize)
+            } else {
+                p.kind = sf.KIND_PASS
+            }
+            // The subregion: x, y, width and height override the filter region's.
+            let (xs, has_x) = attr(raw, "x")
+            let (ys, has_y) = attr(raw, "y")
+            let (ws, has_w) = attr(raw, "width")
+            let (hs, has_h) = attr(raw, "height")
+            if has_x || has_y || has_w || has_h {
+                var sr = region
+                if prim_obb {
+                    if has_x { sr.x = box.x + fraction_of(xs, 0.0) * box.width }
+                    if has_y { sr.y = box.y + fraction_of(ys, 0.0) * box.height }
+                    if has_w { sr.width = fraction_of(ws, 1.0) * box.width }
+                    if has_h { sr.height = fraction_of(hs, 1.0) * box.height }
+                } else {
+                    if has_x { sr.x = length_value(xs, sr.x, doc.vw) }
+                    if has_y { sr.y = length_value(ys, sr.y, doc.vh) }
+                    if has_w { sr.width = length_value(ws, sr.width, doc.vw) }
+                    if has_h { sr.height = length_value(hs, sr.height, doc.vh) }
+                }
+                let dr = scene.transform_rect(device, sr)
+                p.x0 = i32(i64(math.floor[f32](dr.x)) - px0)
+                p.y0 = i32(i64(math.floor[f32](dr.y)) - py0)
+                p.x1 = i32(i64(math.ceil[f32](dr.x + dr.width)) - px0)
+                p.y1 = i32(i64(math.ceil[f32](dr.y + dr.height)) - py0)
+            }
+            let (result, has_result) = attr(raw, "result")
+            if has_result { names[n] = trim(result) }
+            out[n] = p
+            n += 1usize
+        }
+        i = next
+    }
+    ret n
+}
+
+// Draw the element at `source` (its tag and everything inside it) through the filter `filter_id`. The first
+// answer is false when it cannot be filtered here (a replay, no host, no room) and the caller draws it plain; an
+// unknown filter, or an empty box for box units, draws nothing, as the specification says.
+fn draw_filtered_element(a: *mem.Arena, b: *scene.Builder, doc: Doc, parent: Frame, frame: Frame, tag: str, filter_id: str, source: str, dest: geometry.Rect, level: usize) -> (bool, err) {
+    if !doc.has_host || doc.has_job || level + 1usize >= 8usize || frame.layers >= MAX_LAYERS_SVG || !(doc.view.width > 0.0) { ret (false, ok) }
+    let f = find_by_id(doc.text, filter_id)
+    if !f.found || !same(name_of(f.tag), "filter") { ret (true, ok) }
+    let host = doc.host
+    let device = geometry.transform_multiply(*doc.fit, frame.ctm)
+    let (fit_inverse, fit_ok) = invert(*doc.fit)
+    if !fit_ok { ret (true, ok) }
+    let mark = mem.mark(a)
+    // The element's geometry in the user space it establishes: measured under the inverse of its own transform.
+    var local = geometry.transform_identity()
+    let (own_transform, has_own) = attr(tag, "transform")
+    if has_own {
+        let (inverse, invertible) = invert(parse_transform(own_transform))
+        if !invertible { ret (true, ok) }
+        local = inverse
+    }
+    var plain = doc
+    plain.has_host = false
+    var measure = parent
+    measure.ctm = local
+    measure.layers = MAX_LAYERS_SVG
+    measure.style.filter_skip = true
+    measure.style.opacity = 1.0
+    let (measured, measured_error) = scene.builder(a, 4096usize)
+    if measured_error != ok { ret (false, measured_error) }
+    var mb = measured
+    try walk(a, &mb, plain, source, measure, false, dest, level + 1usize)
+    let (box, has_box) = list_bounds(scene.finish(&mb))
+    var obb = true
+    let (units, has_units) = attr(f.tag, "filterUnits")
+    if has_units && same(trim(units), "userSpaceOnUse") { obb = false }
+    var region = geometry.rect(0.0, 0.0, 0.0, 0.0)
+    let (rxs, has_rx) = attr(f.tag, "x")
+    let (rys, has_ry) = attr(f.tag, "y")
+    let (rws, has_rw) = attr(f.tag, "width")
+    let (rhs, has_rh) = attr(f.tag, "height")
+    if obb {
+        if !has_box || !(box.width > 0.0) || !(box.height > 0.0) {
+            mem.reset(a, mark)
+            ret (true, ok)
+        }
+        var fx = 0.0f32 - 0.1
+        var fy = 0.0f32 - 0.1
+        var fw = 1.2f32
+        var fh = 1.2f32
+        if has_rx { fx = fraction_of(rxs, fx) }
+        if has_ry { fy = fraction_of(rys, fy) }
+        if has_rw { fw = fraction_of(rws, fw) }
+        if has_rh { fh = fraction_of(rhs, fh) }
+        region = geometry.rect(box.x + fx * box.width, box.y + fy * box.height, fw * box.width, fh * box.height)
+    } else {
+        var rx = 0.0f32 - 0.1 * doc.vw
+        var ry = 0.0f32 - 0.1 * doc.vh
+        var rw = 1.2f32 * doc.vw
+        var rh = 1.2f32 * doc.vh
+        if has_rx { rx = length_value(rxs, rx, doc.vw) }
+        if has_ry { ry = length_value(rys, ry, doc.vh) }
+        if has_rw { rw = length_value(rws, rw, doc.vw) }
+        if has_rh { rh = length_value(rhs, rh, doc.vh) }
+        region = geometry.rect(rx, ry, rw, rh)
+    }
+    if !(region.width > 0.0) || !(region.height > 0.0) {
+        mem.reset(a, mark)
+        ret (true, ok)
+    }
+    // The region in device pixels, clipped to the target.
+    let dev = scene.transform_rect(device, region)
+    var px0 = i64(math.floor[f32](dev.x))
+    var py0 = i64(math.floor[f32](dev.y))
+    var px1 = i64(math.ceil[f32](dev.x + dev.width))
+    var py1 = i64(math.ceil[f32](dev.y + dev.height))
+    if px0 < 0i64 { px0 = 0i64 }
+    if py0 < 0i64 { py0 = 0i64 }
+    if px1 > i64(host.width) { px1 = i64(host.width) }
+    if py1 > i64(host.height) { py1 = i64(host.height) }
+    if px1 <= px0 || py1 <= py0 {
+        mem.reset(a, mark)
+        ret (true, ok)
+    }
+    let w = usize(px1 - px0)
+    let h = usize(py1 - py0)
+    if w * h > host.max_pixels {
+        mem.reset(a, mark)
+        ret (true, TooComplex)
+    }
+    // The result's texture first, so its pixels sit below the scratch that is reset when this is done.
+    mem.reset(a, mark)
+    let (slot, slot_error) = sf.reserve(a, host, w, h)
+    if slot_error != ok { ret (true, slot_error) }
+    let scratch_mark = mem.mark(a)
+    // The source graphic into a scratch target of that size.
+    let (made, made_error) = scene.builder(a, 4096usize)
+    if made_error != ok { ret (false, made_error) }
+    var sb = made
+    let save: scene.Command = .Save
+    let restore: scene.Command = .Restore
+    try scene.push(&sb, save)
+    try scene.push(&sb, scene.Command { Transform: geometry.transform_multiply(geometry.transform_translate(f32(0i64 - px0), f32(0i64 - py0)), *doc.fit) })
+    var content = parent
+    content.style.filter_skip = true
+    content.style.opacity = 1.0
+    try walk(a, &sb, plain, source, content, false, dest, level + 1usize)
+    try scene.push(&sb, restore)
+    let (pixels, pixels_error) = mem.alloc[f32](a, w * h * 4usize)
+    if pixels_error != ok { ret (false, pixels_error) }
+    try sf.render_pixels(a, host, scene.finish(&sb), w, h, doc.font, doc.has_font, pixels)
+    var prim_obb = false
+    let (prim_units, has_prim_units) = attr(f.tag, "primitiveUnits")
+    if has_prim_units && same(trim(prim_units), "objectBoundingBox") { prim_obb = true }
+    var prims: [16]sf.Prim = zero
+    let count = filter_prims(doc, f, region, box, prim_obb, device, frame.style.current, px0, py0, w, h, prims[0usize..16usize])
+    let (result, result_error) = mem.alloc[f32](a, w * h * 4usize)
+    if result_error != ok { ret (false, result_error) }
+    try sf.run(a, prims[0usize..count], pixels, w, h, result)
+    let fill_error = sf.fill(host, slot, result, w, h)
+    if fill_error != ok { ret (true, fill_error) }
+    mem.reset(a, scratch_mark)
+    // Drawn in device space, then clipped by the element's own clip path.
+    try scene.push(b, save)
+    let (clip_text, has_clip_prop) = prop(tag, "clip-path")
+    if has_clip_prop && url_id(clip_text).len > 0usize {
+        let (clip, has_clip, clip_error) = clip_path(a, doc, url_id(clip_text), frame.ctm)
+        if clip_error != ok { ret (true, clip_error) }
+        if has_clip { try scene.push(b, scene.Command { Clip: scene.Clip { Path: clip } }) }
+    }
+    try scene.push(b, scene.Command { Transform: fit_inverse })
+    try scene.push(b, scene.Command { Image: scene.DrawImage { texture: slot.id, source: geometry.rect(0.0, 0.0, f32(w), f32(h)), destination: geometry.rect(f32(px0), f32(py0), f32(w), f32(h)), opacity: frame.style.opacity } })
+    try scene.push(b, restore)
+    ret (true, ok)
+}
+
 fn child_of(tag: str, parent: Frame) -> Frame {
     let (value, found) = attr(tag, "transform")
     var ctm = parent.ctm
     if found { ctm = geometry.transform_multiply(parent.ctm, parse_transform(value)) }
     var style = apply_style(tag, parent.style)
     style.mask_skip = false
+    style.filter_skip = false
+    // The element being filtered: its own opacity and clip apply to the filter's result, not its source.
+    if parent.style.filter_skip { style.opacity = parent.style.opacity }
     let (clip, has_clip) = prop(tag, "clip-path")
-    if has_clip {
+    if has_clip && !parent.style.filter_skip {
         // The clip is in the user space of the element that names it.
         style.clip_ref = url_id(clip)
         style.clip_ctm = ctm
@@ -2480,7 +2974,7 @@ fn open_layer(b: *scene.Builder, doc: Doc, tag: str, parent: Frame, frame: *Fram
     let (value, has_value) = prop(tag, "opacity")
     if !has_value { ret ok }
     let own = unit_value(number_of(value, 1.0))
-    if own >= 1.0 || frame.layers >= MAX_LAYERS_SVG || !(doc.view.width > 0.0) || doc.has_job { ret ok }
+    if own >= 1.0 || frame.layers >= MAX_LAYERS_SVG || !(doc.view.width > 0.0) || doc.has_job || parent.style.filter_skip { ret ok }
     // A shape with one paint needs no layer: its opacity multiplies into that paint's alpha exactly
     // as the layer would (the NeperOS shell's icons carry such opacities, and a full-view layer per
     // element costs a render target the guest's arena does not have).
@@ -2526,7 +3020,7 @@ fn size(text: str) -> (f32, f32, bool) {
 }
 
 fn default_style(current: paint.Color) -> Style {
-    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity(), dash: "", dash_offset: 0.0, even_odd: false, marker_start: "", marker_mid: "", marker_end: "", mask_skip: false, font_size: 16.0, anchor: 0usize }
+    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity(), dash: "", dash_offset: 0.0, even_odd: false, marker_start: "", marker_mid: "", marker_end: "", mask_skip: false, filter_skip: false, font_size: 16.0, anchor: 0usize }
 }
 
 // Draw `text` into `b`, fitted to `dest`. `current` is what `currentColor` and an unset
@@ -2544,11 +3038,29 @@ fn draw_with_font(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Re
     ret draw_with(a, b, text, dest, current, font, true)
 }
 
+// As `draw_with_font`, with filter effects (L125, D4503): an element naming `filter="url(#id)"` is drawn
+// through the `<filter>` element's primitives -- `feGaussianBlur`, `feOffset`, `feFlood`, `feBlend`,
+// `feComposite`, `feColorMatrix`, `feMerge` and `feDropShadow` -- by rendering it into a scratch target as
+// big as its filter region (clipped to the host's target), running the primitives over those pixels
+// (`e.gfx.svg_filter`) and drawing the result as an image of the host's renderer. `dest` must be in target
+// pixels (nothing pushed around the call); the host's renderer needs a texture slot per filtered element,
+// freed by `svg_filter.release` after the scene has been rendered. Each filtered element takes working
+// memory from `a` only while it is processed.
+fn draw_filtered(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool, host: *sf.Host) -> err {
+    ret draw_core(a, b, text, dest, current, font, has_font, host, true)
+}
+
 fn draw_with(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool) -> err {
+    var nowhere: sf.Host = zero
+    ret draw_core(a, b, text, dest, current, font, has_font, &nowhere, false)
+}
+
+fn draw_core(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool, host: *sf.Host, has_host: bool) -> err {
     let (vw, vh, has_size) = size(text)
     var nothing: [1]str = zero
     var blank: Job = zero
-    let doc = Doc { text: text, vw: vw, vh: vh, view: view_of(text), job: &blank, has_job: false, font: font, has_font: has_font, base_anc: nothing[0usize..0usize] }
+    var fit = geometry.transform_identity()
+    let doc = Doc { text: text, vw: vw, vh: vh, view: view_of(text), job: &blank, has_job: false, font: font, has_font: has_font, base_anc: nothing[0usize..0usize], fit: &fit, host: host, has_host: has_host }
     let first = Frame { style: default_style(current), ctm: geometry.transform_identity(), layers: 0usize, opens: false }
     ret walk(a, b, doc, text, first, true, dest, 0usize)
 }
@@ -2848,6 +3360,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
                     scale_y = scale
                 }
                 let fit = geometry.transform_multiply(geometry.transform_translate(dest.x + (dest.width - vw * scale_x) * fx, dest.y + (dest.height - vh * scale_y) * fy), geometry.transform_multiply(geometry.transform_scale(scale_x, scale_y), geometry.transform_translate(0.0 - vx, 0.0 - vy)))
+                *doc.fit = fit
                 let save: scene.Command = .Save
                 try scene.push(b, save)
                 if slice { try scene.push(b, scene.Command { Clip: scene.Clip { Rect: dest } }) }
@@ -2868,6 +3381,17 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
         if !opened { continue }
         sib_push(sib[depth][0usize..8usize], &sib_n[depth], raw)
         var frame = child_of(tag, frames[depth])
+        // A filter draws the element's whole source through its primitives, before clip, mask and opacity.
+        let (filter_text, has_filter) = prop(tag, "filter")
+        if has_filter && !frames[depth].style.filter_skip && url_id(filter_text).len > 0usize {
+            let filter_end = element_end(text, end, name, self_closing)
+            let (filtered, filter_error) = draw_filtered_element(a, b, doc, frames[depth], frame, tag, url_id(filter_text), text[tag_start..filter_end], dest, level)
+            if filter_error != ok { ret filter_error }
+            if filtered {
+                i = filter_end
+                continue
+            }
+        }
         // A mask replays the element (its whole source) under each piece of the mask's content.
         let (mask_text, has_mask) = prop(tag, "mask")
         if has_mask && !frames[depth].style.mask_skip && url_id(mask_text).len > 0usize {
