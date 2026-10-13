@@ -2121,7 +2121,7 @@ type Band = struct { title: str, first: usize, count: usize }
 type Nav = enum u8 { First, Prev, Next, Last }
 type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool, choice: bool }
 type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, cell_edited: fn(*void, usize, usize) -> err, value_changed: fn(*void, usize, usize, str, str) -> err, can_edit: fn(*void, usize, usize) -> bool, batch_done: fn(*void, usize) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
-type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, edit_old: [64]u8, edit_old_len: usize, select_open: bool, batch_depth: usize, batch_count: usize, rule_set: *rules.Rules, has_rules: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
+type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, edit_old: [64]u8, edit_old_len: usize, select_open: bool, batch_depth: usize, batch_count: usize, look: gl.Look, rule_set: *rules.Rules, has_rules: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
 error TooManyColumns
 error NotEditable
 error Locked
@@ -2133,6 +2133,7 @@ fn show_sort(grid: *Grid, spec: usize, descending: bool)
 fn clear_selection(grid: *Grid)
 fn relayout(grid: *Grid)
 fn display_of(grid: *const Grid, spec: usize) -> (usize, bool)
+fn set_look(grid: *Grid, look: gl.Look)
 fn set_rules(grid: *Grid, set: *rules.Rules)
 fn clear_rules(grid: *Grid)
 fn set_hidden(grid: *Grid, spec: usize, hide: bool)
@@ -2204,8 +2205,33 @@ version line). A grid owns the widget keys from `key` to
 `key + KEY_BASE + row capacity + group capacity` (the table's own header cells use the keys just
 above `key`; the filter fields use `key + FILTER_KEY + spec`). `set_rules` attaches an `e.ui.gridrules` rule set (`clear_rules` detaches it): each data cell asks it for
 its look by the column's table column and the storage row, and draws the ink, bold, a fill, a data bar
-behind the text and an icon glyph (`v`, `-`, `^`) before it. Not yet: a column chooser
+behind the text and an icon glyph (`v`, `-`, `^`) before it. `set_look` (an `e.ui.gridlook.Look`, `v3()` is MTG Studio v3's measured one) sets the row and header heights, text size, zebra,
+selection, header, group-row and footer colours and column lines; with `on` false the theme's look stays. Not yet: a column chooser
 window; the filter row stands above the header, not below.
+
+### `e.ui.gridlook`
+
+```neper
+type Look = struct { on: bool, row_height: f32, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group_row: paint.Color, footer_band: paint.Color, footer_cell: paint.Color, frame: paint.Color, track: paint.Color, thumb: paint.Color, scroll_width: f32 }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight }
+error BadPicture
+
+fn rgb(value: u32) -> paint.Color
+fn v3() -> Look
+fn theme() -> Look
+fn mark(a: *mem.Arena, shape: Shape, color: paint.Color, inner: paint.Color, width: f32, height: f32) -> (widget.Node, err)
+fn load_picture(a: *mem.Arena, r: *scene.Renderer, path: str) -> (scene.TextureId, err)
+fn svg_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height: f32) -> (widget.Node, err)
+fn svg_fit_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height: f32) -> (widget.Node, err)
+fn svg_ink(text: str) -> (Ink, f32, f32)
+```
+
+The measured look of the data grid (`docs/grid-parity/tokens.json`, G012): `v3()` is MTG Studio v3's grid in logical pixels
+and colours (row 19, header 21, text 10.35, zebra #FFFFFF / #EFEFEF, selected #A6D2FF with a #83878B edge, group row
+#F0F0F0, footer band #FFFFDD with #E7EAEA cells, frame #828790, a 16 wide #F0F0F0 scroll track with a slim #858585
+thumb); `theme()` is the unset look. `mark` draws the grid's own marks (favourite star, navigator arrows, group
+expander box, group chip triangle). `load_picture` decodes a .png or .bmp file (v3's `bin/data` symbols and legality
+letters) and uploads it; the pixels are copied, so the arena may be reset afterwards. Read by `e.ui.datagrid.set_look`.
 
 ### `e.ui.gridrules`
 
@@ -18795,7 +18821,7 @@ error Invalid
 error TooLarge
 error OutOfMemory
 error Lost
-const SCENE_BYTES: usize = 262144usize
+const SCENE_BYTES: usize = 1048576usize
 const MAX_EDGES: usize = 65536usize
 const MAX_MASKS: usize = 8usize
 const MAX_LAYERS: usize = 4usize
@@ -24682,6 +24708,8 @@ fn inspect(source: io.Reader) -> (image.Info, err)
 fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
 fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
 fn encode_adaptive(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
+fn quantize(dst: []u8, value: image.ConstImage, max_colors: usize) -> (image.ConstImage, usize, err)
+fn encode_quantized(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, max_colors: usize, scratch: []u8) -> err
 ```
 
 PNG decoding supports the standard grayscale, RGB, indexed and alpha color types and
@@ -24691,6 +24719,12 @@ pixels and options. `encode` writes filter `None` for every row; `encode_adaptiv
 tRNS when an alpha is below 255, 1, 2, 4 or 8 bits by color count, filter `None`) and
 any other image with libpng's per-row filter heuristic (least sum of signed-absolute
 filtered bytes, ties to the lower filter). The pixels decode identically either way.
+`quantize` (D2482) is the one lossy step: it writes an `Rgba8` copy of an `Rgba8`/`Bgra8` image with at most
+`max_colors` colors by keeping the most frequent ones (ties to the smaller r | g << 8 | b << 16 | a << 24 value) and
+mapping every other color to the nearest kept one (squared distance over four channels, ties to the smaller value),
+refusing an image with more than 3,072 distinct colors (`TooLarge`); `encode_quantized` follows it with
+`encode_adaptive`, so the result is an indexed PNG. On an anti-aliased 360x240 chart (961 colors) 256 colors gave
+6,004 B against 11,334 B lossless at a largest channel error of 17.
 For PNG, JPEG and WebP, each zero dimension limit selects 16,384 and a zero pixel
 limit selects 16,777,216. Explicit nonzero limits can raise or lower these bounds;
 raising one field does not disable defaults in the others. Encoded input buffering

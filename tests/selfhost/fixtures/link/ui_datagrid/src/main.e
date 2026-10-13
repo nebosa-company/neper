@@ -15,6 +15,7 @@ use e.algo.hash as hash
 use e.gpu
 use e.mem
 use e.os
+use e.fs
 use e.str
 use e.time
 use e.data.table as table
@@ -24,11 +25,13 @@ use e.gfx.geometry
 use e.gfx.image
 use e.text.shape
 use e.gfx.scene
+use e.ui.collection
 use e.ui.control
 use e.ui.input
 use e.gfx.paint
 use e.ui.datagrid as dg
 use e.ui.gridrules as gr
+use e.ui.gridlook as gl
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -1071,6 +1074,353 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (shot_n, shot_n_error) = testing.snapshot(&harness, a)
     if shot_n_error != ok { os.exit(354) }
     if is_color(shot_n, px(hi_bounds.x + 330.0, hi_bounds.y + hi_bounds.height * 0.5), rule_fill) { os.exit(355) }
+    // 15. the measured v3 look: row pitch 19, zebra #FFFFFF / #EFEFEF, the selected row #A6D2FF
+    var look_specs: [2]dg.ColumnSpec = zero
+    look_specs[0usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    look_specs[1usize] = dg.ColumnSpec { title: "Cmc", width: 120.0, column: C_CMC, kind: dg.CellKind.Int, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    let (made11, grid11_error) = dg.create(a, &app.tbl, &app.grouping, look_specs[0..], events, 9900u64)
+    if grid11_error != ok { os.exit(360) }
+    var grid11 = made11
+    dg.set_look(&grid11, gl.v3())
+    grid11.offset = 0.0
+    var first_look = ROWS
+    var second_look = ROWS
+    var third_look = ROWS
+    var look_at = 0usize
+    while look_at < 8usize && look_at < grp.visible_len(&app.grouping) {
+        if !grp.visible_is_group(&app.grouping, look_at) {
+            let candidate_row = grp.visible_row(&app.grouping, look_at)
+            if first_look == ROWS {
+                first_look = candidate_row
+            } else if second_look == ROWS {
+                second_look = candidate_row
+            } else if third_look == ROWS {
+                third_look = candidate_row
+            }
+        }
+        look_at += 1usize
+    }
+    if third_look == ROWS { os.exit(361) }
+    grid11.has_selection = true
+    grid11.selected_row = second_look
+    mem.reset(&f, 0usize)
+    let (root28, build28_error) = dg.build(&f, &grid11, &theme, 400.0)
+    if build28_error != ok { os.exit(362) }
+    if settle(&harness, root28, 80000000000i64) != ok { os.exit(363) }
+    let (shot_l, shot_l_error) = testing.snapshot(&harness, a)
+    if shot_l_error != ok { os.exit(364) }
+    let (b0, f0) = bounds(&harness, &runtime, dg.row_key(&grid11, first_look))
+    let (b1, f1) = bounds(&harness, &runtime, dg.row_key(&grid11, second_look))
+    let (b2, f2) = bounds(&harness, &runtime, dg.row_key(&grid11, third_look))
+    if !f0 || !f1 || !f2 { os.exit(365) }
+    // the pitch of a row (its height with no line between rows)
+    if b0.height < 18.9 || b0.height > 19.1 || b1.y - b0.y < 18.9 || b1.y - b0.y > 19.1 { os.exit(366) }
+    // inside the Cmc cell, clear of its digit: even row, selected row, odd row
+    if !is_color(shot_l, px(b0.x + 300.0, b0.y + 9.0), gl.rgb(0xFFFFFFu32)) { os.exit(367) }
+    if !is_color(shot_l, px(b1.x + 300.0, b1.y + 9.0), gl.rgb(0xA6D2FFu32)) { os.exit(368) }
+    if !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xFFFFFFu32)) && !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xEFEFEFu32)) { os.exit(369) }
+    // two neighbouring unselected rows differ (the zebra)
+    dg.clear_selection(&grid11)
+    mem.reset(&f, 0usize)
+    let (root29, build29_error) = dg.build(&f, &grid11, &theme, 400.0)
+    if build29_error != ok { os.exit(370) }
+    if settle(&harness, root29, 82000000000i64) != ok { os.exit(371) }
+    let (shot_z, shot_z_error) = testing.snapshot(&harness, a)
+    if shot_z_error != ok { os.exit(372) }
+    let (z0, zf0) = bounds(&harness, &runtime, dg.row_key(&grid11, first_look))
+    let (z1, zf1) = bounds(&harness, &runtime, dg.row_key(&grid11, second_look))
+    if !zf0 || !zf1 { os.exit(373) }
+    let upper = is_color(shot_z, px(z0.x + 300.0, z0.y + 9.0), gl.rgb(0xFFFFFFu32)) || is_color(shot_z, px(z0.x + 300.0, z0.y + 9.0), gl.rgb(0xEFEFEFu32))
+    let lower_same = is_color(shot_z, px(z1.x + 300.0, z1.y + 9.0), gl.rgb(0xFFFFFFu32)) == is_color(shot_z, px(z0.x + 300.0, z0.y + 9.0), gl.rgb(0xFFFFFFu32))
+    if !upper || lower_same { os.exit(374) }
+    // 16. the favourite star: a Star column shows it in its header and, set, in its cells; the
+    // navigator of the measured look is drawn with arrow marks
+    var nine: [9]dg.ColumnSpec = zero
+    var ni = 0usize
+    while ni < 9usize {
+        nine[ni] = dg.ColumnSpec { title: "C", width: 80.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+        ni += 1usize
+    }
+    let (made13, grid13_error) = dg.create(a, &app.tbl, &app.grouping, nine[0..], events, 10100u64)
+    if grid13_error != ok { os.exit(390) }
+    var grid13 = made13
+    dg.set_look(&grid13, gl.v3())
+    mem.reset(&f, 0usize)
+    let (root31, build31_error) = dg.build(&f, &grid13, &theme, 400.0)
+    if build31_error != ok { os.exit(391) }
+    if settle(&harness, root31, 89000000000i64) != ok { os.exit(392) }
+    var star_specs: [2]dg.ColumnSpec = zero
+    star_specs[0usize] = dg.ColumnSpec { title: "Fav", width: 40.0, column: C_FOIL, kind: dg.CellKind.Star, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: true, choice: false }
+    star_specs[1usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    let (made12, grid12_error) = dg.create(a, &app.tbl, &app.grouping, star_specs[0..], events, 10000u64)
+    if grid12_error != ok { os.exit(380) }
+    var grid12 = made12
+    dg.set_look(&grid12, gl.v3())
+    dg.show_navigator(&grid12, true)
+    mem.reset(&f, 0usize)
+    let (root30, build30_error) = dg.build(&f, &grid12, &theme, 400.0)
+    if build30_error != ok { os.exit(381) }
+    if settle(&harness, root30, 90000000000i64) != ok { os.exit(382) }
+    // the four navigator buttons exist under their keys
+    if testing.by_key(&harness, dg.navigator_key(&grid12) + 1u64).count == 0usize { os.exit(383) }
+    if testing.by_key(&harness, dg.navigator_key(&grid12) + 4u64).count == 0usize { os.exit(384) }
+    // 17. the group box and the drawn expanders of the measured look, with the grid grouped
+    let (made14, grid14_error) = dg.create(a, &app.tbl, &app.grouping, look_specs[0..], events, 10200u64)
+    if grid14_error != ok { os.exit(395) }
+    var grid14 = made14
+    dg.set_look(&grid14, gl.v3())
+    dg.show_group_box(&grid14, true)
+    app.group_rarity = true
+    if rebuild(app, 5usize, false) != ok { os.exit(396) }
+    mem.reset(&f, 0usize)
+    let (root32, build32_error) = dg.build(&f, &grid14, &theme, 400.0)
+    if build32_error != ok { os.exit(397) }
+    if settle(&harness, root32, 91000000000i64) != ok { os.exit(398) }
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(399) }
+    // 18. a picture of v3's data folder drawn by an image node keeps its pixels (skipped when absent)
+    let (symbol, symbol_error) = gl.load_picture(a, widget.renderer_of(&runtime), "D:/repos/mtg.studio.src/version-3/bin/data/png/symbols/2.png")
+    if symbol_error == gl.BadPicture { os.exit(400) }
+    if symbol_error == ok {
+        mem.reset(&f, 0usize)
+        let (picture, picture_error) = control.image(&f, 10300u64, symbol, 36.0, 36.0, .Fill, "")
+        if picture_error != ok { os.exit(401) }
+        if settle(&harness, picture, 92000000000i64) != ok { os.exit(402) }
+        let (shot_p, shot_p_error) = testing.snapshot(&harness, a)
+        if shot_p_error != ok { os.exit(403) }
+        let (pic_b, pic_f) = bounds(&harness, &runtime, 10300u64)
+        if !pic_f { os.exit(404) }
+        // an image node draws the whole picture, not one texel: the symbol's middle (dark grey ring and
+        // numeral) differs from its transparent corner
+        let centre = px(pic_b.x + 18.0, pic_b.y + 18.0)
+        let corner = px(pic_b.x + 1.0, pic_b.y + 1.0)
+        var distinct = 0usize
+        var channel = 0usize
+        while channel < 3usize {
+            if shot_p.pixels[centre + channel] != shot_p.pixels[corner + channel] { distinct += 1usize }
+            channel += 1usize
+        }
+        if distinct == 0usize { os.exit(405) }
+        // and its left and right halves differ somewhere along the middle row
+        var varied = false
+        var pic_x: f32 = 2.0
+        while pic_x < 34.0 {
+            let at = px(pic_b.x + pic_x, pic_b.y + 18.0)
+            if shot_p.pixels[at] != shot_p.pixels[centre] { varied = true }
+            pic_x += 1.0
+        }
+        if !varied { os.exit(406) }
+    }
+    // 19. an SVG mark (v3's edition symbol, dark blue-black fill) is drawn at the size of its box
+    let (svg_text, svg_error) = fs.read_file(a, "D:/repos/mtg.studio.src/v5/cardgrid/symbols/ed_10e.svg", 65536usize)
+    if svg_error != ok { os.exit(409) }
+    if true {
+        mem.reset(&f, 0usize)
+        let (drawing, drawing_error) = gl.svg_mark(&f, svg_text, paint.rgba(1.0, 1.0, 1.0, 1.0), 64.0, 64.0)
+        if drawing_error != ok { os.exit(410) }
+        var holder: [1]widget.Node = zero
+        holder[0usize] = drawing
+        let boxed = widget.box(10400u64, style.defaults(), holder[0usize..1usize])
+        if settle(&harness, boxed, 93000000000i64) != ok { os.exit(411) }
+        let (shot_s, shot_s_error) = testing.snapshot(&harness, a)
+        if shot_s_error != ok { os.exit(412) }
+        let (svg_b, svg_f) = bounds(&harness, &runtime, 10400u64)
+        if !svg_f { os.exit(413) }
+        var svg_min_x = 9999usize
+        var svg_max_x = 0usize
+        var svg_min_y = 9999usize
+        var svg_max_y = 0usize
+        var yy: f32 = 0.0
+        while yy < 70.0 {
+            var xx: f32 = 0.0
+            while xx < 70.0 {
+                let at = px(svg_b.x + xx, svg_b.y + yy)
+                if shot_s.pixels[at + 2usize] > 8u8 {
+                    let ix = usize(xx)
+                    let iy = usize(yy)
+                    if ix < svg_min_x { svg_min_x = ix }
+                    if ix > svg_max_x { svg_max_x = ix }
+                    if iy < svg_min_y { svg_min_y = iy }
+                    if iy > svg_max_y { svg_max_y = iy }
+                }
+                xx += 1.0
+            }
+            yy += 1.0
+        }
+        // the symbol's ink spans 20 of its 32 units: 40 of the 64 high box
+        let ink_height = svg_max_y - svg_min_y + 1usize
+        if ink_height < 38usize || ink_height > 42usize { os.exit(414) }
+    }
+    // 19b. a fitted SVG mark (v3's edition symbol, dark blue-black fill) is drawn at the size of its box
+    let (fit_text, fit_error) = fs.read_file(a, "D:/repos/mtg.studio.src/v5/cardgrid/symbols/ed_10e.svg", 65536usize)
+    if fit_error != ok { os.exit(409) }
+    if true {
+        mem.reset(&f, 0usize)
+        let (fit_drawing, fit_drawing_error) = gl.svg_fit_mark(&f, fit_text, paint.rgba(1.0, 1.0, 1.0, 1.0), 64.0, 64.0)
+        if fit_drawing_error != ok { os.exit(410) }
+        var fit_holder: [1]widget.Node = zero
+        fit_holder[0usize] = fit_drawing
+        let fit_boxed = widget.box(10450u64, style.defaults(), fit_holder[0usize..1usize])
+        if settle(&harness, fit_boxed, 93500000000i64) != ok { os.exit(411) }
+        let (shot_fit, shot_fit_error) = testing.snapshot(&harness, a)
+        if shot_fit_error != ok { os.exit(412) }
+        let (fit_b, fit_f) = bounds(&harness, &runtime, 10450u64)
+        if !fit_f { os.exit(413) }
+        var fit_min_x = 9999usize
+        var fit_max_x = 0usize
+        var fit_min_y = 9999usize
+        var fit_max_y = 0usize
+        var yy: f32 = 0.0
+        while yy < 70.0 {
+            var xx: f32 = 0.0
+            while xx < 70.0 {
+                let at = px(fit_b.x + xx, fit_b.y + yy)
+                if shot_fit.pixels[at + 2usize] > 8u8 {
+                    let ix = usize(xx)
+                    let iy = usize(yy)
+                    if ix < fit_min_x { fit_min_x = ix }
+                    if ix > fit_max_x { fit_max_x = ix }
+                    if iy < fit_min_y { fit_min_y = iy }
+                    if iy > fit_max_y { fit_max_y = iy }
+                }
+                xx += 1.0
+            }
+            yy += 1.0
+        }
+        // the symbol's ink spans 20 of its 32 units: 40 of the 64 high box
+        let fit_ink_width = fit_max_x - fit_min_x + 1usize
+        if fit_ink_width < 60usize || fit_ink_width > 66usize { os.exit(415) }
+    }
+    // 20. the keyboard trace recorded from v3 (docs/grid-parity/traces.json): a tap makes a row current,
+    // Down moves it one row each, Up one back, End goes to the last row and Home to the first
+    var key_specs: [1]dg.ColumnSpec = zero
+    key_specs[0usize] = dg.ColumnSpec { title: "Name", width: 300.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    let (made15, grid15_error) = dg.create(a, &app.tbl, &app.grouping, key_specs[0..], events, 10500u64)
+    if grid15_error != ok { os.exit(420) }
+    var grid15 = made15
+    dg.set_look(&grid15, gl.v3())
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(421) }
+    mem.reset(&f, 0usize)
+    let (root33, build33_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build33_error != ok { os.exit(422) }
+    if settle(&harness, root33, 94000000000i64) != ok { os.exit(423) }
+    let first_data = grp.visible_row(&app.grouping, 0usize)
+    if !tap_key(&harness, &runtime, dg.row_key(&grid15, first_data)) { os.exit(424) }
+    let (start_at, start_has) = dg.current_position(&grid15)
+    if !start_has || start_at != 0usize { os.exit(425) }
+    var trace_clock = 95000000000i64
+    var presses = 0usize
+    while presses < 3usize {
+        if testing.press_key(&harness, 40u32, zero) != ok { os.exit(426) }
+        mem.reset(&f, 0usize)
+        let (root34, build34_error) = dg.build(&f, &grid15, &theme, 400.0)
+        if build34_error != ok { os.exit(436) }
+        if settle(&harness, root34, trace_clock) != ok { os.exit(437) }
+        trace_clock += 2000000000i64
+        presses += 1usize
+    }
+    let (down_at, down_has) = dg.current_position(&grid15)
+    if !down_has || down_at != 3usize { os.exit(427) }
+    if testing.press_key(&harness, 38u32, zero) != ok { os.exit(428) }
+    mem.reset(&f, 0usize)
+    let (root35, build35_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build35_error != ok { os.exit(438) }
+    if settle(&harness, root35, trace_clock) != ok { os.exit(439) }
+    trace_clock += 2000000000i64
+    let (up_at, up_has) = dg.current_position(&grid15)
+    if !up_has || up_at != 2usize { os.exit(429) }
+    if testing.press_key(&harness, 35u32, zero) != ok { os.exit(430) }
+    mem.reset(&f, 0usize)
+    let (root36, build36_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build36_error != ok { os.exit(440) }
+    if settle(&harness, root36, trace_clock) != ok { os.exit(441) }
+    trace_clock += 2000000000i64
+    var again = 0usize
+    while again < 3usize {
+        mem.reset(&f, 0usize)
+        let (root38, build38_error) = dg.build(&f, &grid15, &theme, 400.0)
+        if build38_error != ok { os.exit(444) }
+        if settle(&harness, root38, trace_clock) != ok { os.exit(445) }
+        trace_clock += 2000000000i64
+        again += 1usize
+    }
+    let (end_at, end_has) = dg.current_position(&grid15)
+    if !end_has || end_at != grp.visible_len(&app.grouping) - 1usize { os.exit(431) }
+    if testing.press_key(&harness, 36u32, zero) != ok { os.exit(432) }
+    mem.reset(&f, 0usize)
+    let (root37, build37_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build37_error != ok { os.exit(442) }
+    if settle(&harness, root37, trace_clock) != ok { os.exit(443) }
+    trace_clock += 2000000000i64
+    again = 0usize
+    while again < 3usize {
+        mem.reset(&f, 0usize)
+        let (root39, build39_error) = dg.build(&f, &grid15, &theme, 400.0)
+        if build39_error != ok { os.exit(446) }
+        if settle(&harness, root39, trace_clock) != ok { os.exit(447) }
+        trace_clock += 2000000000i64
+        again += 1usize
+    }
+    let (home_at, home_has) = dg.current_position(&grid15)
+    if !home_has || home_at != 0usize { os.exit(433) }
+    // 21. the extent of a drawing is measured from its path data (the 10th Edition symbol:
+    // x 0.03 to 26.4, y 5.87 to 26.13 of a 27 by 32 view box)
+    let (ink_text, ink_error) = fs.read_file(a, "D:/repos/mtg.studio.src/v5/cardgrid/symbols/ed_10e.svg", 65536usize)
+    if ink_error != ok { os.exit(449) }
+    let (ink, ink_w, ink_h) = gl.svg_ink(ink_text)
+    if !ink.any { os.exit(450) }
+    if ink_w != 27.0 || ink_h != 32.0 { os.exit(451) }
+    if ink.x0 > 0.1 || ink.x1 < 26.3 || ink.x1 > 26.5 { os.exit(452) }
+    if ink.y0 < 5.8 || ink.y0 > 5.95 || ink.y1 < 26.0 || ink.y1 > 26.2 { os.exit(453) }
+    // 22. the v3 trace of a sort: the current card stays current and the view moves the least that
+    // shows it (docs/grid-parity/traces.json S2)
+    if rebuild(app, 5usize, false) != ok { os.exit(460) }
+    mem.reset(&f, 0usize)
+    let (root40, build40_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build40_error != ok { os.exit(461) }
+    if settle(&harness, root40, trace_clock) != ok { os.exit(462) }
+    trace_clock += 2000000000i64
+    let kept_row = grid15.selected_row
+    let old_at = grid15.position
+    // a different order: by the second column, descending
+    if rebuild(app, 3usize, true) != ok { os.exit(463) }
+    mem.reset(&f, 0usize)
+    let (root41, build41_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build41_error != ok { os.exit(464) }
+    if settle(&harness, root41, trace_clock) != ok { os.exit(465) }
+    if !grid15.has_selection || grid15.selected_row != kept_row { os.exit(466) }
+    if !grid15.has_position || grp.visible_row(&app.grouping, grid15.position) != kept_row { os.exit(467) }
+    // the view shows it
+    let shown_top = usize(grid15.offset / grid15.row_height)
+    if grid15.position < shown_top || grid15.position >= shown_top + grid15.page_rows + 1usize { os.exit(468) }
+    // 23. a double tap on a column's resize handle asks for its best fit (v3 trace A1): the width becomes
+    // the content's, here far under the 300 given (the harness has no fonts, so the least)
+    let before_fit = dg.column_width(&grid15, 0usize)
+    if dg.on_resize(mem.cast[*void](&grid15), collection.ColumnResize { column: 0usize, width: -1.0 }) != ok { os.exit(470) }
+    mem.reset(&f, 0usize)
+    let (root42, build42_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build42_error != ok { os.exit(471) }
+    if dg.column_width(&grid15, 0usize) >= before_fit { os.exit(472) }
+    // 24. v3 trace G1: grouping keeps the current card current and opens the group that holds it
+    let grouped_row = grid15.selected_row
+    app.group_rarity = true
+    if rebuild(app, 5usize, false) != ok { os.exit(480) }
+    dg.reveal_current(&grid15)
+    mem.reset(&f, 0usize)
+    let (root43, build43_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build43_error != ok { os.exit(481) }
+    if settle(&harness, root43, trace_clock) != ok { os.exit(482) }
+    trace_clock += 2000000000i64
+    if !grid15.has_position || grid15.selected_row != grouped_row { os.exit(483) }
+    if grp.visible_is_group(&app.grouping, grid15.position) || grp.visible_row(&app.grouping, grid15.position) != grouped_row { os.exit(484) }
+    // and removing the grouping again keeps it current too
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(485) }
+    mem.reset(&f, 0usize)
+    let (root44, build44_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build44_error != ok { os.exit(486) }
+    if !grid15.has_position || grp.visible_row(&app.grouping, grid15.position) != grouped_row { os.exit(487) }
     os.exit(0)
     ret ok
 }

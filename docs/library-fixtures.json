@@ -643,12 +643,13 @@
    "module": "e.fmt.png",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 10,
-   "delivered": 10,
+   "catalogue": 12,
+   "delivered": 12,
    "pending": [],
    "fixtures": [
     "fmt_png",
     "fmt_png_adaptive",
+    "fmt_png_quant",
     "gfx_chart_png"
    ]
   },
@@ -841,6 +842,7 @@
     "test_snapshot",
     "text_math",
     "ui_activation",
+    "ui_datagrid",
     "ui_drag_drop",
     "ui_file_access",
     "ui_print",
@@ -1813,6 +1815,7 @@
     "fmt_jpeg",
     "fmt_png",
     "fmt_png_adaptive",
+    "fmt_png_quant",
     "fmt_webp",
     "gfx_core",
     "gfx_paint_plan",
@@ -3624,8 +3627,19 @@
    "module": "e.ui.datagrid",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 53,
-   "delivered": 53,
+   "catalogue": 54,
+   "delivered": 54,
+   "pending": [],
+   "fixtures": [
+    "ui_datagrid"
+   ]
+  },
+  {
+   "module": "e.ui.gridlook",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 8,
+   "delivered": 8,
    "pending": [],
    "fixtures": [
     "ui_datagrid"
