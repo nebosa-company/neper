@@ -429,8 +429,12 @@ fn send_packet(s: *Session, payload: []const u8) {
         var carry = true
         var c = 11usize
         while carry && c >= 4usize {
-            s.gcm_out_iv[c] = s.gcm_out_iv[c] + 1u8
-            carry = s.gcm_out_iv[c] == 0u8
+            if s.gcm_out_iv[c] == 255u8 {
+                s.gcm_out_iv[c] = 0u8
+            } else {
+                s.gcm_out_iv[c] = s.gcm_out_iv[c] + 1u8
+                carry = false
+            }
             if c == 4usize { carry = false }
             c -= 1usize
         }
@@ -1348,8 +1352,12 @@ fn take_packet(s: *Session) -> bool {
         var carry_in = true
         var c_in = 11usize
         while carry_in && c_in >= 4usize {
-            s.gcm_in_iv[c_in] = s.gcm_in_iv[c_in] + 1u8
-            carry_in = s.gcm_in_iv[c_in] == 0u8
+            if s.gcm_in_iv[c_in] == 255u8 {
+                s.gcm_in_iv[c_in] = 0u8
+            } else {
+                s.gcm_in_iv[c_in] = s.gcm_in_iv[c_in] + 1u8
+                carry_in = false
+            }
             if c_in == 4usize { carry_in = false }
             c_in -= 1usize
         }

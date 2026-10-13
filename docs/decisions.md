@@ -40252,3 +40252,6 @@ Grouping is a pass over the displayed rows, which `group_by` first sorts by the 
 
 ## D2472 — The kernel's fs-grant list after the lane C merge is one condition
 Merging lane C's grant line (the Flashlight, entry 31) onto master's (Mail, Wallet, Secure and the later entries) left two consecutive `if index == ... {` lines in `neperos/src/main.e`, one body; the file compiled only as a nested condition. The two are now one condition holding the union of the entries (master's list plus 31). No grant was removed.
+
+## D2473 — The SSH GCM invocation counter carries without overflowing a byte
+`e.net.ssh` kept the AES-GCM invocation counter (the big-endian u64 in bytes 4..12 of the IV, RFC 5647) by adding one to a byte and testing for zero, which traps `u8 + overflows` on the 256th packet in each direction: `net_ssh gcm256` and `rekey` exited 134 against asyncssh once a session sent enough packets. Both directions now set a 255 byte to zero and carry, or add one and stop. `net_ssh` passes all seven checks (password, key, badpass, badhost, gcm256, gcm128, rekey). The NeperOS SSH app shares the code, so a long session no longer traps.
