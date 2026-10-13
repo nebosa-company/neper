@@ -10780,6 +10780,17 @@ greeting"
         *'hello from e.io on neperos'*'e.io writer runs at EL0'*'io roundtrip ok'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS e.io did not run the portable surface and buffer round-trip: $neperos_io" >&2; exit 1 ;;
     esac
+    # (D4704, C107) e.data.map and os.args on NeperOS: map_test hashes u64 and str keys through the
+    # program runtime's `neper_hash_bytes` and reads `os.args` through `neper_os_args`, both new.
+    map_test_img="$test_build/map_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/map_test.e" "$repo" aarch64 neperos "$map_test_img")" = 'executable written' ]
+    map_archive="$test_build/map-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$map_archive" "$map_test_img"
+    neperos_map=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$map_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_map" in
+        *'map u64 ok 200'*'map str ok'*'args 0'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.data.map or os.args did not run: $neperos_map" >&2; exit 1 ;;
+    esac
     # (D2155, C107) e.time on NeperOS: time_test reads os.clock through e.time -- monotonic (the
     # virtual counter) and wall (the PL031 RTC) -- lowered to the kernel's clock system call.
     time_test_img="$test_build/time_test.img"
