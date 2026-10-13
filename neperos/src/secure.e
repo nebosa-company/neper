@@ -18,6 +18,9 @@ use e.crypto.mac as mac
 use e.crypto.otp as otp
 use e.crypto.hash as hash
 use e.barcode
+use e.io
+use e.gfx.image
+use e.fmt.png
 use httpc
 use vault
 use vaultfs
@@ -239,7 +242,13 @@ fn import_uri(a: *mem.Arena, s: *State, line: usize) -> usize {
     if start >= n { ret NONE }
     var end = start
     while end < n && buf[end] != 10u8 && buf[end] != 13u8 { end += 1usize }
-    let (p, parse_error) = otp.parse_uri(ui.text_of(a, buf[start..], end - start))
+    ret import_text(a, s, ui.text_of(a, buf[start..], end - start))
+}
+
+// (C170) An otpauth URI (a line of /otpauth.txt, or the payload of a QR symbol the camera saw) as an entry: its
+// index, or NONE when it is not one.
+fn import_text(a: *mem.Arena, s: *State, uri: str) -> usize {
+    let (p, parse_error) = otp.parse_uri(uri)
     if parse_error != ok { ret NONE }
     // The label is "Issuer:account" or "account", percent-encoded; the issuer parameter wins.
     var label: [64]u8 = zero
@@ -273,6 +282,85 @@ fn import_uri(a: *mem.Arena, s: *State, line: usize) -> usize {
         s.codes[index].counter = usize(p.counter)
     }
     ret index
+}
+
+// (C170) The QR symbol in one of the Camera's frames: the PNG at `path` decoded, reduced to luminance and scanned.
+// The otpauth URI it holds as an entry (its index), or NONE.
+fn scan_frame(a: *mem.Arena, s: *State, path: str) -> usize {
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size == 0usize || size > 262144usize { ui.say("secure scan stage 1\n")
+        ret NONE }
+    let (raw, raw_error) = mem.alloc[u8](a, size)
+    if raw_error != ok { ui.say("secure scan stage 2\n")
+        ret NONE }
+    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+    if !read_ok || got != size { ui.say("secure scan stage 3\n")
+        ret NONE }
+    var reader_state: io.SliceReader = zero
+    reader_state.data = raw[0usize..got]
+    reader_state.off = 0usize
+    let (decoded, decode_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
+    if decode_error != ok { ui.say("secure scan stage 4\n")
+        ret NONE }
+    let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+    if view_error != ok { ui.say("secure scan stage 5\n")
+        ret NONE }
+    let width = usize(decoded.width)
+    let height = usize(decoded.height)
+    if width < 21usize || height < 21usize || width * height > 1048576usize { ui.say("secure scan stage 6\n")
+        ret NONE }
+    let (grey, grey_error) = mem.alloc[u8](a, width * height)
+    if grey_error != ok { ui.say("secure scan stage 7\n")
+        ret NONE }
+    var y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            grey[y * width + x] = u8(image.luma(view, x, y))
+            x += 1usize
+        }
+        y += 1usize
+    }
+    let (payload, scan_error) = barcode.qr_scan(a, grey, width, height)
+    if scan_error != ok { ui.say("secure scan stage 8\n")
+        ret NONE }
+    ui.say("secure scan symbol bytes ")
+    ui.say_num(payload.len)
+    ui.say("\n")
+    ret import_text(a, s, ui.text_of(a, payload, payload.len))
+}
+
+// (C170) Scan: the Camera's frames in /DCIM, the newest few first, until one holds a symbol with an otpauth URI.
+// Returns the new entry, or NONE.
+fn scan_camera(a: *mem.Arena, s: *State) -> usize {
+    var names: [512]u8 = zero
+    let (name_bytes, listed) = vaultfs.list("/DCIM", mem.address_of(&names[0usize]), 512usize)
+    if !listed { ret NONE }
+    var starts: [16]usize = zero
+    var ends: [16]usize = zero
+    var total = 0usize
+    var start = 0usize
+    var pos = 0usize
+    while pos < name_bytes && total < 16usize {
+        if names[pos] == 10u8 {
+            if pos > start {
+                starts[total] = start
+                ends[total] = pos
+                total += 1usize
+            }
+            start = pos + 1usize
+        }
+        pos += 1usize
+    }
+    var tried = 0usize
+    while total > 0usize && tried < 4usize {
+        total -= 1usize
+        tried += 1usize
+        let path = ui.join(a, "/DCIM/", ui.text_of(a, names[starts[total]..], ends[total] - starts[total]), "")
+        let index = scan_frame(a, s, path)
+        if index != NONE { ret index }
+    }
+    ret NONE
 }
 
 fn code_text(a: *mem.Arena, code: usize) -> str {
@@ -1108,6 +1196,8 @@ fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         try ui.pill(a, builder, &s.hits, faces, 410usize, 16.0, 820.0, 76.0, 56.0, "Import", ui.soft(), 14.0)
         try ui.pill(a, builder, &s.hits, faces, 411usize, 96.0, 820.0, 76.0, 56.0, "Export", ui.soft(), 14.0)
         try ui.pill(a, builder, &s.hits, faces, 412usize, 176.0, 820.0, 70.0, 56.0, "Plain", ui.soft(), 14.0)
+        // (C170) Scan: a symbol in the Camera's frames.
+        try ui.pill(a, builder, &s.hits, faces, 413usize, 16.0, 740.0, 90.0, 44.0, "Scan", ui.soft(), 14.0)
     }
     if s.note_len > 0usize { try ui.put(a, builder, faces.grotesk, 12.0, s.note[0usize..s.note_len], 20.0, 796.0, ui.light_muted()) }
     ret ok
@@ -1708,6 +1798,24 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ui.say("secure import failed\n")
             ret false
         }
+        ret true
+    }
+    if id == 413usize {
+        // (C170) The otpauth URI of a QR symbol in a Camera frame becomes an entry, sealed like any other.
+        let index = scan_camera(a, s)
+        s.now = clock_now()
+        if index == NONE {
+            ui.say("secure scan found nothing\n")
+            ret false
+        }
+        save_record(a, s, true, index)
+        ui.say("secure scanned ")
+        ui.say_text(issuer_of(a, s, index))
+        ui.say(" digits ")
+        ui.say_num(entry_digits(s, index))
+        ui.say(" period ")
+        ui.say_num(entry_period(s, index))
+        ui.say("\n")
         ret true
     }
     if id == 400usize {

@@ -25,6 +25,8 @@ import sys
 import threading
 
 here = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(here))
+import ai_services
 BODY = b'hello from the neper test server\n'
 # (C151) The Dynamic build server (dynamic_services.py needs `cryptography`, as scripts/make_package.py does).
 sys.path.insert(0, str(here))
@@ -120,6 +122,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(url.query)
         # (C151) The Dynamic build server's package and revocation list.
         if DYNAMIC is not None and DYNAMIC.get(self, host, url.path):
+            return
+        # (C171) The AI providers' model lists (the key check).
+        if ai_services.get(self, host, self.path):
             return
         if host == 'api.exchange.coinbase.com' and url.path == '/products':
             # Public, no key: the curated pair list the Add sheet's crypto Find searches.
@@ -305,6 +310,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # (C151) The Dynamic build server's routes (dynamic_services.py).
         if DYNAMIC is not None and DYNAMIC.post(self, host, self.path, raw):
             return
+        # (C171) The AI app's providers (ai_services.py): the local model's OpenAI shape and the hosted three.
+        if ai_services.post(self, host, self.path, raw):
+            return
         if host == 'neper.test' and self.path == '/v1/chat/completions':
             if self.headers.get('Authorization') == 'Bearer bad':
                 self.reply(401, b'{"error":{"message":"bad key"}}', 'application/json')
@@ -368,11 +376,38 @@ def ssh_server():
         return
 
     class Server(asyncssh.SSHServer):
+        def begin_auth(self, username):
+            return True
+
         def password_auth_supported(self):
             return True
 
         def validate_password(self, username, password):
             return username == 'neper' and password == 'secret'
+
+        # (C155) Any ed25519 key the user `neper` signs with is accepted: asyncssh checks the signature against the
+        # key offered, so a login that gets through proves the client signed with the key it sent. The key itself is
+        # said by the app on its console (ssh key public ...).
+        def public_key_auth_supported(self):
+            return True
+
+        def validate_public_key(self, username, key):
+            return username == 'neper'
+
+    # (C155) The SFTP subsystem's root: a file and a folder with one in it, in a directory of its own.
+    import tempfile
+    sftp_root = tempfile.mkdtemp(prefix='neper-sftp-')
+    with open(os.path.join(sftp_root, 'hello.txt'), 'wb') as f:
+        f.write(b'hello from the sftp server\n')
+    os.makedirs(os.path.join(sftp_root, 'docs'), exist_ok=True)
+    with open(os.path.join(sftp_root, 'docs', 'readme.txt'), 'wb') as f:
+        f.write(b'inside docs\n')
+
+    class SortedSFTP(asyncssh.SFTPServer):
+        """A listing in name order, so a fixture's taps do not depend on the host's directory order."""
+
+        def listdir(self, path):
+            return sorted(super().listdir(path))
 
     async def handle(process):
         process.stdout.write('ready\r\n$ ')
@@ -398,6 +433,7 @@ def ssh_server():
         fixed = here / 'ssh_host_ed25519'
         key = asyncssh.read_private_key(str(fixed)) if fixed.exists() else asyncssh.generate_private_key('ssh-ed25519')
         await asyncssh.create_server(Server, '127.0.0.1', 8022, server_host_keys=[key], process_factory=handle,
+                                     sftp_factory=lambda chan: SortedSFTP(chan, chroot=os.fsencode(sftp_root)),
                                      encoding='utf-8', line_editor=False, kex_algs=['curve25519-sha256'],
                                      encryption_algs=['chacha20-poly1305@openssh.com'], mac_algs=['hmac-sha2-256'])
         await asyncio.Event().wait()

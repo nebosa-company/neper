@@ -8,9 +8,19 @@
 // screen: a small shell of sample commands (help, ls, pwd, whoami, hostname, date, uname, uptime, echo,
 // clear, exit) that never leaves the process. The real client (key exchange, authentication, channels,
 // keys kept in Secure, SFTP, port forwarding) is queued as C120. The hosts live in the process too.
+// (C155) Beyond that: the Keys screen keeps ed25519 keys sealed in the Secure vault (a record /v/s<slot> next to
+// Secure's own, opened with the master password), makes new ones or imports a seed from /ssh/import, and shows each
+// one's public line; a host set to sign in with a key asks for the master password, takes its slot's key out of the
+// vault and authenticates with it. Files on a host row opens an SFTP session (the `sftp` subsystem of a connection
+// of its own, e.net.sftp): browse, download into /Downloads, upload a file of the device. The terminal has an Esc,
+// Tab, Ctrl and arrow row and a symbol row, and PgUp/PgDn walk the scrollback the terminal keeps (200 lines).
 use e.mem
 use e.os
 use e.time
+use e.bytes as codec
+use e.crypto.sign as sign
+use e.net.sftp as sftp
+use vault
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -29,11 +39,17 @@ use vaultfs
 const NONE: usize = 99usize
 const MAX_HOSTS: usize = 8usize
 const MAX_LINES: usize = 64usize
-const VISIBLE: usize = 18usize
+const VISIBLE: usize = 16usize
 const MAX_HITS: usize = 96usize
 const HOSTS_SCREEN: usize = 0usize
 const FORM_SCREEN: usize = 1usize
 const TERMINAL_SCREEN: usize = 2usize
+const KEYS_SCREEN: usize = 3usize
+const SFTP_SCREEN: usize = 4usize
+// How many keys the Keys screen holds, and how many entries and local files the SFTP screen lists.
+const MAX_KEYS: usize = 3usize
+const MAX_ENTRIES: usize = 10usize
+const MAX_PICKS: usize = 5usize
 // A live session's phases: the password, the host key question, running, over.
 const PHASE_PASSWORD: usize = 1usize
 const PHASE_HOST_KEY: usize = 2usize
@@ -157,9 +173,18 @@ fn date_text(a: *mem.Arena) -> str {
 // ----------------------------------------------------------------------------------------------
 // State.
 
-type Host = struct { alias: [16]u8, alias_len: usize, addr: [24]u8, addr_len: usize, user: [12]u8, user_len: usize, port: usize, key_auth: bool, seen: bool, used: bool }
+// `key_slot` is the Keys-screen key (0 to 2) a host signs in with when `key_auth` is set.
+type Host = struct { alias: [16]u8, alias_len: usize, addr: [24]u8, addr_len: usize, user: [12]u8, user_len: usize, port: usize, key_auth: bool, seen: bool, used: bool, key_slot: usize }
 
 type Line = struct { body: [48]u8, length: usize, kind: usize }
+
+// (C155) A key of the Keys screen: its public key (the private seed stays sealed in the vault).
+type KeyRec = struct { used: bool, pubkey: [32]u8 }
+
+// (C155) One line of an SFTP directory listing, and one local file that can be uploaded.
+type Entry = struct { name: [28]u8, name_len: usize, dir: bool, size: usize }
+
+type Pick = struct { path: [40]u8, path_len: usize }
 
 type Hit = struct { id: usize, x: f32, y: f32, w: f32, h: f32 }
 
@@ -196,6 +221,41 @@ type State = struct {
     known: [8]bool,
     hits: [96]Hit,
     hit_total: usize,
+    // (C155) The terminal's Ctrl modifier (the next letter goes as its control byte) and how many lines it is
+    // scrolled back into its history.
+    ctrl: bool,
+    scroll: usize,
+    // (C155) The Secure vault: whether it is open here, its key, and the master password being typed (on the Keys
+    // screen, or on the terminal's prompt for a host that signs in with a key). `want_master` says the password
+    // prompt of the terminal is the master password, not the host's.
+    vault_open: bool,
+    vault_key: [32]u8,
+    master: [64]u8,
+    master_len: usize,
+    want_master: bool,
+    keys: [3]KeyRec,
+    key_note: [48]u8,
+    key_note_len: usize,
+    // The key a key-auth session signs with, between the unlock and the session's start.
+    seed: [32]u8,
+    have_seed: bool,
+    // (C155) SFTP: the session is a subsystem's (no terminal), the reply bytes not yet decoded, the request id, the
+    // folder shown and its entries, the local files offered for an upload, and the last result.
+    sftp_mode: bool,
+    sftp_started: bool,
+    sftp_acc: [8192]u8,
+    sftp_len: usize,
+    sftp_drop: usize,
+    sftp_id: u32,
+    cwd: [64]u8,
+    cwd_len: usize,
+    entries: [10]Entry,
+    entry_total: usize,
+    picking: bool,
+    picks: [5]Pick,
+    pick_total: usize,
+    sftp_note: [64]u8,
+    sftp_note_len: usize,
 }
 
 fn make_host(alias: str, addr: str, user: str, port: usize, key_auth: bool, seen: bool) -> Host {
@@ -280,6 +340,8 @@ fn save_hosts(s: *State) {
         var flags = 0u8
         if h.key_auth { flags = flags | 1u8 }
         if h.seen { flags = flags | 2u8 }
+        // (C155) Bits 2 and 3: the key a host signs in with.
+        flags = flags | u8((h.key_slot & 3usize) << 2usize)
         buf[at + 2usize] = flags
         at += 3usize
         i += 1usize
@@ -326,6 +388,8 @@ fn load_hosts(s: *State) -> bool {
         h.port = usize(buf[at]) | (usize(buf[at + 1usize]) << 8usize)
         h.key_auth = (buf[at + 2usize] & 1u8) != 0u8
         h.seen = (buf[at + 2usize] & 2u8) != 0u8
+        h.key_slot = usize((buf[at + 2usize] >> 2u8) & 3u8)
+        if h.key_slot >= MAX_KEYS { h.key_slot = 0usize }
         at += 3usize
         s.hosts[i] = h
         i += 1usize
@@ -364,6 +428,196 @@ fn load_known(s: *State) -> bool {
         i += 1usize
     }
     ret true
+}
+
+// ----------------------------------------------------------------------------------------------
+// (C155) Keys sealed in the Secure vault: the seed of key N is the record /v/s<N> (a tag byte 5 and the 32-byte
+// ed25519 seed), under the key the master password derives; the public keys are derived when the vault opens.
+
+fn say_long(value: str) {
+    var buffer: [128]u8 = zero
+    var n = 0usize
+    while n < value.len && n < 128usize {
+        buffer[n] = value[n]
+        n += 1usize
+    }
+    say(buffer[0usize..n])
+}
+
+fn key_name(a: *mem.Arena, slot: usize) -> str {
+    ret join(a, "s", number(a, slot), "")
+}
+
+fn set_key_note(s: *State, line: str) {
+    var n = 0usize
+    while n < line.len && n < 48usize {
+        s.key_note[n] = line[n]
+        n += 1usize
+    }
+    s.key_note_len = n
+}
+
+// The vault's key from the master password in s.master: 0 opened, 1 wrong password, 2 no vault on this disk.
+fn unlock_vault(a: *mem.Arena, s: *State) -> usize {
+    var meta: [80]u8 = zero
+    let (count, found) = vaultfs.read("/vmeta", mem.address_of(&meta[0usize]), 80usize)
+    if !found { ret 2usize }
+    let (key, unlock_error) = vault.meta_unlock(meta[0usize..count], s.master[0usize..s.master_len])
+    if unlock_error == vault.WrongPassword { ret 1usize }
+    if unlock_error != ok { ret 2usize }
+    s.vault_key = key
+    s.vault_open = true
+    ret 0usize
+}
+
+// The seed of the key in `slot`, and whether there is one.
+fn read_seed(a: *mem.Arena, s: *State, slot: usize) -> ([32]u8, bool) {
+    var seed: [32]u8 = zero
+    if !s.vault_open { ret (seed, false) }
+    var record: [96]u8 = zero
+    var plain: [48]u8 = zero
+    let name = key_name(a, slot)
+    let (count, found) = vaultfs.read(join(a, "/v/", name, ""), mem.address_of(&record[0usize]), 96usize)
+    if !found { ret (seed, false) }
+    let (n, open_error) = vault.open(s.vault_key, name, record[0usize..count], plain[0usize..])
+    if open_error != ok || n != 33usize || plain[0usize] != 5u8 { ret (seed, false) }
+    var i = 0usize
+    while i < 32usize {
+        seed[i] = plain[1usize + i]
+        i += 1usize
+    }
+    ret (seed, true)
+}
+
+// Seal `seed` as the record of `slot`; whether the disk took it.
+fn store_seed(a: *mem.Arena, s: *State, slot: usize, seed: [32]u8) -> bool {
+    if !s.vault_open { ret false }
+    var plain: [48]u8 = zero
+    plain[0usize] = 5u8
+    var i = 0usize
+    while i < 32usize {
+        plain[1usize + i] = seed[i]
+        i += 1usize
+    }
+    var nonce: [16]u8 = zero
+    if !vaultfs.random(mem.address_of(&nonce[0usize]), 2usize) { ret false }
+    var record: [96]u8 = zero
+    let name = key_name(a, slot)
+    let (length, seal_error) = vault.seal(s.vault_key, nonce[0usize..], name, plain[0usize..33usize], record[0usize..])
+    if seal_error != ok { ret false }
+    let made = vaultfs.mkdir("/v")
+    ret vaultfs.write(join(a, "/v/", name, ""), mem.address_of(&record[0usize]), length)
+}
+
+fn public_of(seed: [32]u8) -> ([32]u8, bool) {
+    var none: [32]u8 = zero
+    let (pubkey, public_error) = sign.ed25519_public_from_secret(sign.Ed25519SecretKey { bytes: seed })
+    if public_error != ok { ret (none, false) }
+    ret (pubkey.bytes, true)
+}
+
+// An authorized_keys line for a public key: ssh-ed25519 and the base64 of its wire blob.
+fn public_line(a: *mem.Arena, pubkey: [32]u8) -> str {
+    var blob: [51]u8 = zero
+    blob[3usize] = 11u8
+    let kind = "ssh-ed25519"
+    var i = 0usize
+    while i < 11usize {
+        blob[4usize + i] = kind[i]
+        i += 1usize
+    }
+    blob[18usize] = 32u8
+    i = 0usize
+    while i < 32usize {
+        blob[19usize + i] = pubkey[i]
+        i += 1usize
+    }
+    let (out, out_error) = mem.alloc[u8](a, 96usize)
+    if out_error != ok { ret "ssh-ed25519" }
+    let (encoded, encode_error) = codec.base64_encode(out[0usize..], blob[0usize..51usize], .Standard, true)
+    if encode_error != ok { ret "ssh-ed25519" }
+    ret join(a, "ssh-ed25519 ", encoded, "")
+}
+
+// The public keys of the slots that hold a key.
+fn refresh_keys(a: *mem.Arena, s: *State) {
+    var slot = 0usize
+    while slot < MAX_KEYS {
+        s.keys[slot].used = false
+        let (seed, have) = read_seed(a, s, slot)
+        if have {
+            let (pubkey, derived) = public_of(seed)
+            if derived {
+                s.keys[slot].used = true
+                s.keys[slot].pubkey = pubkey
+            }
+        }
+        slot += 1usize
+    }
+}
+
+fn free_key_slot(s: *State) -> usize {
+    var slot = 0usize
+    while slot < MAX_KEYS {
+        if !s.keys[slot].used { ret slot }
+        slot += 1usize
+    }
+    ret NONE
+}
+
+// A key from `seed` into a free slot; its slot or NONE.
+fn add_key(a: *mem.Arena, s: *State, seed: [32]u8) -> usize {
+    let slot = free_key_slot(s)
+    if slot == NONE {
+        set_key_note(s, "The keychain is full")
+        ret NONE
+    }
+    if !store_seed(a, s, slot, seed) {
+        set_key_note(s, "The disk would not take the key")
+        ret NONE
+    }
+    refresh_keys(a, s)
+    ret slot
+}
+
+fn hex_digit(c: u8) -> usize {
+    if c >= 48u8 && c <= 57u8 { ret usize(c - 48u8) }
+    if c >= 97u8 && c <= 102u8 { ret usize(c - 87u8) }
+    if c >= 65u8 && c <= 70u8 { ret usize(c - 55u8) }
+    ret 99usize
+}
+
+// A new key from random bytes.
+fn new_key(a: *mem.Arena, s: *State) -> usize {
+    var seed: [32]u8 = zero
+    if !vaultfs.random(mem.address_of(&seed[0usize]), 4usize) {
+        set_key_note(s, "No random source")
+        ret NONE
+    }
+    ret add_key(a, s, seed)
+}
+
+// A key from /ssh/import: 64 hex digits (the seed of an ed25519 key).
+fn import_key(a: *mem.Arena, s: *State) -> usize {
+    var text_in: [96]u8 = zero
+    let (n, found) = vaultfs.read("/ssh/import", mem.address_of(&text_in[0usize]), 96usize)
+    if !found || n < 64usize {
+        set_key_note(s, "Put 64 hex digits in /ssh/import")
+        ret NONE
+    }
+    var seed: [32]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        let hi = hex_digit(text_in[2usize * i])
+        let lo = hex_digit(text_in[2usize * i + 1usize])
+        if hi == 99usize || lo == 99usize {
+            set_key_note(s, "That is not hex")
+            ret NONE
+        }
+        seed[i] = u8(hi * 16usize + lo)
+        i += 1usize
+    }
+    ret add_key(a, s, seed)
 }
 
 fn alias_of(a: *mem.Arena, h: Host) -> str {
@@ -551,10 +805,20 @@ fn live_settle(a: *mem.Arena, s: *State) {
         s.announced = true
         s.phase = PHASE_RUNNING
         say("ssh live ready\n")
+        if s.sftp_mode {
+            // The subsystem is open: the SFTP screen takes over, and the protocol starts (sftp_begin).
+            s.screen = SFTP_SCREEN
+            s.sftp_len = 0usize
+            s.sftp_drop = 0usize
+        }
     }
     if status == sshc.FAILED {
         if s.session.failure == sshc.FAIL_AUTH {
-            live_end(s, "Permission denied (wrong password)")
+            if s.want_master {
+                live_end(s, "Permission denied (the key was not accepted)")
+            } else {
+                live_end(s, "Permission denied (wrong password)")
+            }
         } else {
             live_end(s, "The session failed")
         }
@@ -572,7 +836,19 @@ fn live_settle(a: *mem.Arena, s: *State) {
     var more = true
     while more {
         let n = sshc.read(&s.session, chunk[0usize..512usize])
-        if n == 0usize { more = false } else { term.feed(&s.tm, chunk[0usize..n]) }
+        if n == 0usize {
+            more = false
+        } else if s.sftp_mode {
+            // (C155) An SFTP session's bytes are the server's packets.
+            var k = 0usize
+            while k < n && s.sftp_len < 8192usize {
+                s.sftp_acc[s.sftp_len] = chunk[k]
+                s.sftp_len += 1usize
+                k += 1usize
+            }
+        } else {
+            term.feed(&s.tm, chunk[0usize..n])
+        }
     }
 }
 
@@ -609,12 +885,25 @@ fn live_start(a: *mem.Arena, s: *State) {
         ret
     }
     let h = s.hosts[s.current]
-    let (opened, open_error) = sshc.open(&s.live_arena, random[0usize..64usize], user_of(a, h), text_of(a, s.password[0usize..], s.pw_len), u32(TERM_COLS), u32(TERM_ROWS))
+    // (C155) A host that signs in with a key sends no password: the seed the vault gave is the credential.
+    var secret = text_of(a, s.password[0usize..], s.pw_len)
+    if s.have_seed { secret = "" }
+    let (opened, open_error) = sshc.open(&s.live_arena, random[0usize..64usize], user_of(a, h), secret, u32(TERM_COLS), u32(TERM_ROWS))
     if open_error != ok {
         live_end(s, "Could not start the session")
         ret
     }
     s.session = opened
+    if s.have_seed {
+        sshc.use_key(&s.session, s.seed)
+        var wipe = 0usize
+        while wipe < 32usize {
+            s.seed[wipe] = 0u8
+            wipe += 1usize
+        }
+        s.have_seed = false
+    }
+    if s.sftp_mode { sshc.set_subsystem(&s.session, "sftp") }
     s.pw_len = 0usize
     s.announced = false
     if !live_flush(s) {
@@ -652,7 +941,7 @@ fn live_close(s: *State) {
     s.phase = 0usize
 }
 
-fn connect(a: *mem.Arena, s: *State, index: usize) {
+fn connect(a: *mem.Arena, s: *State, index: usize, sftp_session: bool) {
     s.current = index
     s.hosts[index].seen = true
     s.screen = TERMINAL_SCREEN
@@ -661,7 +950,15 @@ fn connect(a: *mem.Arena, s: *State, index: usize) {
     s.history_at = 0usize
     s.live = false
     s.phase = 0usize
+    s.sftp_mode = sftp_session
+    s.sftp_started = false
+    s.ctrl = false
+    s.scroll = 0usize
+    s.have_seed = false
+    s.picking = false
+    s.sftp_note_len = 0usize
     let h = s.hosts[index]
+    s.want_master = h.key_auth
     let r = netclient.connect(addr_of(a, h), u16(h.port), false)
     if r == netproto.R_OK {
         // The session and the terminal live outside the per-frame arena: their memory is reserved at start.
@@ -673,7 +970,12 @@ fn connect(a: *mem.Arena, s: *State, index: usize) {
             s.phase = PHASE_PASSWORD
             s.pw_len = 0usize
             push_line(s, join(a, "Connected to ", addr_of(a, h), ""), 2usize)
-            push_line(s, join(a, user_of(a, h), "'s password:", ""), 2usize)
+            if h.key_auth {
+                push_line(s, join(a, join(a, "Key ", number(a, h.key_slot + 1usize), " of the keychain."), "", ""), 2usize)
+                push_line(s, "Master password (Secure):", 2usize)
+            } else {
+                push_line(s, join(a, user_of(a, h), "'s password:", ""), 2usize)
+            }
             say("ssh connected ")
             say_text(alias_of(a, h))
             say("\n")
@@ -688,6 +990,343 @@ fn connect(a: *mem.Arena, s: *State, index: usize) {
     say("ssh connected ")
     say_text(alias_of(a, h))
     say("\n")
+}
+
+// ----------------------------------------------------------------------------------------------
+// (C155) SFTP: version 3 packets (e.net.sftp) over the subsystem channel of a connection of its own. Each call waits
+// for its reply (polling the network a moment at a time, bounded), so a listing, a download or an upload is done when
+// the call returns.
+
+fn set_sftp_note(s: *State, line: str) {
+    var n = 0usize
+    while n < line.len && n < 64usize {
+        s.sftp_note[n] = line[n]
+        n += 1usize
+    }
+    s.sftp_note_len = n
+}
+
+// An SFTP packet onto the channel (the window may take it in pieces).
+fn sftp_send(a: *mem.Arena, s: *State, packet: []const u8) -> bool {
+    var at = 0usize
+    var tries = 0usize
+    while at < packet.len && tries < 100usize {
+        let taken = sshc.write(&s.session, packet[at..])
+        at += taken
+        tries += 1usize
+        if !live_flush(s) { ret false }
+        if at < packet.len { live_poll(a, s, 2usize) }
+    }
+    ret at == packet.len
+}
+
+// The next whole reply (its slices point into the receive buffer and hold until the next call).
+fn sftp_reply(a: *mem.Arena, s: *State, names: []sftp.Name) -> (sftp.Response, bool) {
+    var none: sftp.Response = zero
+    if s.sftp_drop > 0usize {
+        var k = s.sftp_drop
+        while k < s.sftp_len {
+            s.sftp_acc[k - s.sftp_drop] = s.sftp_acc[k]
+            k += 1usize
+        }
+        s.sftp_len -= s.sftp_drop
+        s.sftp_drop = 0usize
+    }
+    var rounds = 0usize
+    while rounds < 150usize && s.phase != PHASE_OVER {
+        if s.sftp_len > 0usize {
+            let (used, response, decode_error) = sftp.decode(s.sftp_acc[0usize..s.sftp_len], names)
+            if decode_error == ok {
+                s.sftp_drop = used
+                ret (response, true)
+            }
+            if decode_error != sftp.Incomplete { ret (none, false) }
+        }
+        live_poll(a, s, 2usize)
+        rounds += 1usize
+    }
+    ret (none, false)
+}
+
+fn sftp_next_id(s: *State) -> u32 {
+    s.sftp_id += 1u32
+    ret s.sftp_id
+}
+
+// The folder path and `name` as one path.
+fn sftp_join(a: *mem.Arena, s: *State, name: str) -> str {
+    let folder = text_of(a, s.cwd[0usize..], s.cwd_len)
+    if folder.len == 1usize { ret join(a, "/", name, "") }
+    ret join(a, folder, "/", name)
+}
+
+// The protocol's start: INIT and VERSION, then the folder the server calls ".".
+fn sftp_begin(a: *mem.Arena, s: *State) -> bool {
+    var req: [256]u8 = zero
+    var names: [4]sftp.Name = zero
+    let (n0, e0) = sftp.encode_init(req[0usize..256usize], 3u32)
+    if e0 != ok || !sftp_send(a, s, req[0usize..n0]) { ret false }
+    let (r0, ok0) = sftp_reply(a, s, names[0usize..4usize])
+    if !ok0 || r0.kind != sftp.FXP_VERSION || r0.version != 3u32 { ret false }
+    let (n1, e1) = sftp.encode_path(req[0usize..256usize], sftp.FXP_REALPATH, sftp_next_id(s), ".")
+    if e1 != ok || !sftp_send(a, s, req[0usize..n1]) { ret false }
+    let (r1, ok1) = sftp_reply(a, s, names[0usize..4usize])
+    if !ok1 || r1.kind != sftp.FXP_NAME || r1.count < 1usize { ret false }
+    var k = 0usize
+    while k < names[0].filename.len && k < 64usize {
+        s.cwd[k] = names[0].filename[k]
+        k += 1usize
+    }
+    s.cwd_len = k
+    say("ssh sftp ready ")
+    say_text(text_of(a, s.cwd[0usize..], s.cwd_len))
+    say("\n")
+    ret true
+}
+
+// The folder in s.cwd as entries.
+fn sftp_list(a: *mem.Arena, s: *State) -> bool {
+    var req: [512]u8 = zero
+    var names: [16]sftp.Name = zero
+    s.entry_total = 0usize
+    let (n0, e0) = sftp.encode_path(req[0usize..512usize], sftp.FXP_OPENDIR, sftp_next_id(s), text_of(a, s.cwd[0usize..], s.cwd_len))
+    if e0 != ok || !sftp_send(a, s, req[0usize..n0]) { ret false }
+    let (r0, ok0) = sftp_reply(a, s, names[0usize..16usize])
+    if !ok0 || r0.kind != sftp.FXP_HANDLE || r0.handle.len > 64usize {
+        set_sftp_note(s, "The folder cannot be opened")
+        ret false
+    }
+    var handle: [64]u8 = zero
+    let handle_len = r0.handle.len
+    var h = 0usize
+    while h < handle_len {
+        handle[h] = r0.handle[h]
+        h += 1usize
+    }
+    var rounds = 0usize
+    var more = true
+    while more && rounds < 4usize {
+        rounds += 1usize
+        let (n1, e1) = sftp.encode_handle(req[0usize..512usize], sftp.FXP_READDIR, sftp_next_id(s), handle[0usize..handle_len])
+        if e1 != ok || !sftp_send(a, s, req[0usize..n1]) { ret false }
+        let (r1, ok1) = sftp_reply(a, s, names[0usize..16usize])
+        if !ok1 { ret false }
+        if r1.kind != sftp.FXP_NAME {
+            more = false
+        } else {
+            var i = 0usize
+            while i < r1.count {
+                let name = names[i].filename
+                let skip = name.len == 0usize || (name.len == 1usize && name[0usize] == 46u8) || (name.len == 2usize && name[0usize] == 46u8 && name[1usize] == 46u8)
+                if !skip && s.entry_total < MAX_ENTRIES {
+                    var e: Entry = zero
+                    var c = 0usize
+                    while c < name.len && c < 28usize {
+                        e.name[c] = name[c]
+                        c += 1usize
+                    }
+                    e.name_len = c
+                    let a_flags = names[i].attrs.flags
+                    if (a_flags & sftp.ATTR_PERMISSIONS) != 0u32 && (names[i].attrs.permissions & 61440u32) == 16384u32 { e.dir = true }
+                    if (a_flags & sftp.ATTR_SIZE) != 0u32 { e.size = usize(names[i].attrs.size) }
+                    s.entries[s.entry_total] = e
+                    s.entry_total += 1usize
+                }
+                i += 1usize
+            }
+        }
+    }
+    let (n2, e2) = sftp.encode_handle(req[0usize..512usize], sftp.FXP_CLOSE, sftp_next_id(s), handle[0usize..handle_len])
+    if e2 == ok && sftp_send(a, s, req[0usize..n2]) {
+        let (r2, ok2) = sftp_reply(a, s, names[0usize..16usize])
+    }
+    say("ssh sftp listed ")
+    say_text(number(a, s.entry_total))
+    say("\n")
+    ret true
+}
+
+// The entry's file into /Downloads (up to 24 KB).
+fn sftp_download(a: *mem.Arena, s: *State, index: usize) -> bool {
+    if index >= s.entry_total || s.entries[index].dir { ret false }
+    var req: [512]u8 = zero
+    var names: [4]sftp.Name = zero
+    let name = text_of(a, s.entries[index].name[0usize..], s.entries[index].name_len)
+    let path = sftp_join(a, s, name)
+    let (n0, e0) = sftp.encode_open(req[0usize..512usize], sftp_next_id(s), path, sftp.OPEN_READ, sftp.no_attrs())
+    if e0 != ok || !sftp_send(a, s, req[0usize..n0]) { ret false }
+    let (r0, ok0) = sftp_reply(a, s, names[0usize..4usize])
+    if !ok0 || r0.kind != sftp.FXP_HANDLE || r0.handle.len > 64usize {
+        set_sftp_note(s, "The file cannot be opened")
+        ret false
+    }
+    var handle: [64]u8 = zero
+    let handle_len = r0.handle.len
+    var h = 0usize
+    while h < handle_len {
+        handle[h] = r0.handle[h]
+        h += 1usize
+    }
+    let (store, store_error) = mem.alloc[u8](a, 24576usize)
+    if store_error != ok { ret false }
+    var total = 0usize
+    var reading = true
+    while reading && total < 24576usize {
+        var want = 24576usize - total
+        if want > 2048usize { want = 2048usize }
+        let (n1, e1) = sftp.encode_read(req[0usize..512usize], sftp_next_id(s), handle[0usize..handle_len], u64(total), u32(want))
+        if e1 != ok || !sftp_send(a, s, req[0usize..n1]) { ret false }
+        let (r1, ok1) = sftp_reply(a, s, names[0usize..4usize])
+        if !ok1 { ret false }
+        if r1.kind != sftp.FXP_DATA {
+            reading = false
+        } else {
+            var c = 0usize
+            while c < r1.data.len && total + c < 24576usize {
+                store[total + c] = r1.data[c]
+                c += 1usize
+            }
+            total += c
+            if r1.data.len == 0usize { reading = false }
+        }
+    }
+    let (n2, e2) = sftp.encode_handle(req[0usize..512usize], sftp.FXP_CLOSE, sftp_next_id(s), handle[0usize..handle_len])
+    if e2 == ok && sftp_send(a, s, req[0usize..n2]) {
+        let (r2, ok2) = sftp_reply(a, s, names[0usize..4usize])
+    }
+    let made = vaultfs.mkdir("/Downloads")
+    if !vaultfs.write_big(join(a, "/Downloads/", name, ""), mem.address_of(&store[0usize]), total) {
+        set_sftp_note(s, "The device would not take the file")
+        ret false
+    }
+    say("ssh sftp downloaded ")
+    say_text(name)
+    say(" ")
+    say_text(number(a, total))
+    say("\n")
+    set_sftp_note(s, join(a, "Saved in Downloads: ", name, ""))
+    ret true
+}
+
+// The local file at `path` into the folder shown, as `name` (up to 8 KB).
+fn sftp_upload(a: *mem.Arena, s: *State, path: str, name: str) -> bool {
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size == 0usize || size > 8192usize { ret false }
+    let (data, data_error) = mem.alloc[u8](a, size)
+    if data_error != ok { ret false }
+    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&data[0usize]), size)
+    if !read_ok || got != size { ret false }
+    var req: [3072]u8 = zero
+    var names: [4]sftp.Name = zero
+    let remote = sftp_join(a, s, name)
+    let (n0, e0) = sftp.encode_open(req[0usize..3072usize], sftp_next_id(s), remote, sftp.OPEN_WRITE | sftp.OPEN_CREAT | sftp.OPEN_TRUNC, sftp.no_attrs())
+    if e0 != ok || !sftp_send(a, s, req[0usize..n0]) { ret false }
+    let (r0, ok0) = sftp_reply(a, s, names[0usize..4usize])
+    if !ok0 || r0.kind != sftp.FXP_HANDLE || r0.handle.len > 64usize {
+        set_sftp_note(s, "The file cannot be created")
+        ret false
+    }
+    var handle: [64]u8 = zero
+    let handle_len = r0.handle.len
+    var h = 0usize
+    while h < handle_len {
+        handle[h] = r0.handle[h]
+        h += 1usize
+    }
+    var at = 0usize
+    var good = true
+    while at < size && good {
+        var piece = size - at
+        if piece > 2048usize { piece = 2048usize }
+        let (n1, e1) = sftp.encode_write(req[0usize..3072usize], sftp_next_id(s), handle[0usize..handle_len], u64(at), data[at..at + piece])
+        if e1 != ok || !sftp_send(a, s, req[0usize..n1]) { ret false }
+        let (r1, ok1) = sftp_reply(a, s, names[0usize..4usize])
+        if !ok1 || r1.kind != sftp.FXP_STATUS || r1.status != sftp.FX_OK { good = false }
+        at += piece
+    }
+    let (n2, e2) = sftp.encode_handle(req[0usize..3072usize], sftp.FXP_CLOSE, sftp_next_id(s), handle[0usize..handle_len])
+    if e2 == ok && sftp_send(a, s, req[0usize..n2]) {
+        let (r2, ok2) = sftp_reply(a, s, names[0usize..4usize])
+    }
+    if !good {
+        set_sftp_note(s, "The upload failed")
+        ret false
+    }
+    say("ssh sftp uploaded ")
+    say_text(name)
+    say(" ")
+    say_text(number(a, size))
+    say("\n")
+    set_sftp_note(s, join(a, "Uploaded: ", name, ""))
+    ret true
+}
+
+// One more local file to offer for an upload: `dir`/`name`.
+fn add_pick(s: *State, dir: str, names: []const u8, from: usize, to: usize) {
+    if s.pick_total >= MAX_PICKS || dir.len + (to - from) > 39usize { ret }
+    var p: Pick = zero
+    var n = 0usize
+    while n < dir.len {
+        p.path[n] = dir[n]
+        n += 1usize
+    }
+    var i = from
+    while i < to {
+        p.path[n] = names[i]
+        n += 1usize
+        i += 1usize
+    }
+    p.path_len = n
+    s.picks[s.pick_total] = p
+    s.pick_total += 1usize
+}
+
+// The files of /Downloads and of the root folder (names with a dot), for Upload.
+fn list_picks(a: *mem.Arena, s: *State) {
+    s.pick_total = 0usize
+    var names: [512]u8 = zero
+    let (dl_bytes, dl_listed) = vaultfs.list("/Downloads", mem.address_of(&names[0usize]), 512usize)
+    if dl_listed {
+        var start = 0usize
+        var pos = 0usize
+        while pos < dl_bytes {
+            if names[pos] == 10u8 {
+                if pos > start { add_pick(s, "/Downloads/", names[0usize..], start, pos) }
+                start = pos + 1usize
+            }
+            pos += 1usize
+        }
+    }
+    var root: [512]u8 = zero
+    let (root_bytes, root_listed) = vaultfs.list("/", mem.address_of(&root[0usize]), 512usize)
+    if root_listed {
+        var start = 0usize
+        var pos = 0usize
+        while pos < root_bytes {
+            if root[pos] == 10u8 {
+                var dotted = false
+                var d = start
+                while d < pos {
+                    if root[d] == 46u8 { dotted = true }
+                    d += 1usize
+                }
+                if dotted { add_pick(s, "/", root[0usize..], start, pos) }
+                start = pos + 1usize
+            }
+            pos += 1usize
+        }
+    }
+}
+
+// The SFTP screen's first fill once the subsystem is open: the protocol's start and the first folder.
+fn sftp_enter(a: *mem.Arena, s: *State) {
+    s.sftp_started = true
+    if !sftp_begin(a, s) {
+        set_sftp_note(s, "The server did not start SFTP")
+        say("ssh sftp failed to start\n")
+        ret
+    }
+    let listed = sftp_list(a, s)
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -848,6 +1487,7 @@ fn draw_keyboard(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
 
 fn draw_hosts(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try put(a, builder, faces.jost_bold, 34.0, "Hosts", 24.0, 40.0, light())
+    try pill(a, builder, s, faces, 160usize, 300.0, 44.0, 96.0, 38.0, "Keys", soft(), 15.0)
     try put(a, builder, faces.grotesk, 12.0, "Saved hosts: a live SSH session, or a local demo", 24.0, 86.0, light_muted())
     var row = 0usize
     var i = 0usize
@@ -864,7 +1504,10 @@ fn draw_hosts(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
             if h.seen { dot = paint.Color { red: 0.13, green: 0.52, blue: 0.28, alpha: 1.0 } }
             try disc(a, builder, 370.0, y + 22.0, 5.0, dot)
             try put(a, builder, faces.grotesk, 11.0, "edit", 356.0 - 8.0, y + 44.0, muted())
-            hit(s, 100usize + i, 16.0, y, 300.0, 68.0)
+            // (C155) Files opens an SFTP session on the host.
+            try put(a, builder, faces.grotesk, 11.0, "files", 270.0, y + 44.0, muted())
+            hit(s, 100usize + i, 16.0, y, 240.0, 68.0)
+            hit(s, 400usize + i, 256.0, y, 60.0, 68.0)
             hit(s, 300usize + i, 316.0, y, 80.0, 68.0)
             row += 1usize
         }
@@ -914,7 +1557,8 @@ fn draw_form(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     if s.draft.key_auth { key_fill = amber() } else { password_fill = amber() }
     try put(a, builder, faces.grotesk, 12.0, "Sign in with", 180.0, 284.0, light_muted())
     try pill(a, builder, s, faces, 1330usize, 180.0, 304.0, 120.0, 36.0, "Password", password_fill, 15.0)
-    try pill(a, builder, s, faces, 1331usize, 308.0, 304.0, 88.0, 36.0, "Key", key_fill, 15.0)
+    // (C155) A second tap on Key moves to the next key of the keychain.
+    try pill(a, builder, s, faces, 1331usize, 308.0, 304.0, 88.0, 36.0, join(a, "Key ", number(a, s.draft.key_slot + 1usize), ""), key_fill, 15.0)
     // Save, Connect and Cancel or Delete.
     try pill(a, builder, s, faces, 1300usize, 16.0, 366.0, 120.0, 48.0, "Save", amber(), 17.0)
     try pill(a, builder, s, faces, 1303usize, 146.0, 366.0, 120.0, 48.0, "Connect", soft(), 17.0)
@@ -927,6 +1571,91 @@ fn draw_form(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     ret ok
 }
 
+// ---- (C155) the keys and the files.
+
+fn draw_keys(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), light())
+    hit(s, 800usize, 0.0, 10.0, 66.0, 56.0)
+    try put(a, builder, faces.jost_bold, 28.0, "Keys", 64.0, 18.0, light())
+    try put(a, builder, faces.grotesk, 12.0, "ed25519 keys, sealed in the Secure vault", 24.0, 66.0, light_muted())
+    if !s.vault_open {
+        try put(a, builder, faces.grotesk, 12.0, "Master password of the Secure vault", 20.0, 100.0, light_muted())
+        try card(a, builder, 14.0, 118.0, 384.0, 52.0, 18.0, amber())
+        try card(a, builder, 16.0, 120.0, 380.0, 48.0, 16.0, cream())
+        var dots: [64]u8 = zero
+        var d = 0usize
+        while d < s.master_len && d < 64usize {
+            dots[d] = 42u8
+            d += 1usize
+        }
+        try put(a, builder, faces.jost, 19.0, text_of(a, dots[0usize..], s.master_len), 32.0, 132.0, ink())
+        if s.key_note_len > 0usize { try put(a, builder, faces.jost, 14.0, text_of(a, s.key_note[0usize..], s.key_note_len), 20.0, 184.0, light()) }
+        try draw_keyboard(a, builder, s, faces)
+        ret ok
+    }
+    var slot = 0usize
+    while slot < MAX_KEYS {
+        let y: f32 = 100.0 + f32(slot) * 84.0
+        try card(a, builder, 16.0, y, 380.0, 76.0, 18.0, cream())
+        if s.keys[slot].used {
+            let line = public_line(a, s.keys[slot].pubkey)
+            try put(a, builder, faces.jost_bold, 17.0, join(a, "Key ", number(a, slot + 1usize), ""), 32.0, y + 10.0, ink())
+            try clipped(a, builder, faces.grotesk, 11.0, line, 32.0, y + 40.0, 250.0, muted())
+            try pill(a, builder, s, faces, 810usize + slot, 316.0, y + 18.0, 64.0, 40.0, "Del", soft(), 14.0)
+        } else {
+            try put(a, builder, faces.jost, 17.0, join(a, "Slot ", number(a, slot + 1usize), " is empty"), 32.0, y + 26.0, muted())
+        }
+        slot += 1usize
+    }
+    try pill(a, builder, s, faces, 820usize, 16.0, 366.0, 180.0, 48.0, "New key", amber(), 17.0)
+    try pill(a, builder, s, faces, 821usize, 216.0, 366.0, 180.0, 48.0, "Import", soft(), 17.0)
+    try put(a, builder, faces.grotesk, 12.0, "Import reads 64 hex digits from /ssh/import.", 20.0, 428.0, light_muted())
+    if s.key_note_len > 0usize { try put(a, builder, faces.jost, 14.0, text_of(a, s.key_note[0usize..], s.key_note_len), 20.0, 452.0, light()) }
+    ret ok
+}
+
+fn draw_sftp(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    let h = s.hosts[s.current]
+    try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), light())
+    hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
+    try put(a, builder, faces.jost_bold, 22.0, alias_of(a, h), 64.0, 14.0, light())
+    try clipped(a, builder, faces.grotesk, 12.0, join(a, "files  ", text_of(a, s.cwd[0usize..], s.cwd_len), ""), 64.0, 46.0, 330.0, light_muted())
+    if s.picking {
+        try put(a, builder, faces.jost, 17.0, "Upload which file?", 24.0, 84.0, light())
+        var i = 0usize
+        while i < s.pick_total {
+            let y: f32 = 120.0 + f32(i) * 52.0
+            try card(a, builder, 16.0, y, 380.0, 44.0, 14.0, cream())
+            try clipped(a, builder, faces.jost, 16.0, text_of(a, s.picks[i].path[0usize..], s.picks[i].path_len), 30.0, y + 12.0, 350.0, ink())
+            hit(s, 700usize + i, 16.0, y, 380.0, 44.0)
+            i += 1usize
+        }
+        if s.pick_total == 0usize { try put(a, builder, faces.jost, 16.0, "No files on this device to upload", 24.0, 130.0, light_muted()) }
+        try pill(a, builder, s, faces, 710usize, 16.0, 420.0, 120.0, 44.0, "Cancel", soft(), 16.0)
+        ret ok
+    }
+    var i = 0usize
+    while i < s.entry_total {
+        let y: f32 = 84.0 + f32(i) * 46.0
+        try card(a, builder, 16.0, y, 380.0, 40.0, 12.0, cream())
+        var label = text_of(a, s.entries[i].name[0usize..], s.entries[i].name_len)
+        if s.entries[i].dir { label = join(a, label, "/", "") }
+        try clipped(a, builder, faces.jost, 16.0, label, 30.0, y + 10.0, 250.0, ink())
+        if !s.entries[i].dir {
+            try put(a, builder, faces.grotesk, 12.0, join(a, number(a, s.entries[i].size), " B", ""), 310.0, y + 12.0, muted())
+        }
+        hit(s, 600usize + i, 16.0, y, 380.0, 40.0)
+        i += 1usize
+    }
+    if s.entry_total == 0usize { try put(a, builder, faces.jost, 16.0, "This folder is empty", 24.0, 100.0, light_muted()) }
+    try pill(a, builder, s, faces, 630usize, 16.0, 560.0, 112.0, 46.0, "Up", soft(), 16.0)
+    try pill(a, builder, s, faces, 631usize, 150.0, 560.0, 112.0, 46.0, "Upload", amber(), 16.0)
+    try pill(a, builder, s, faces, 632usize, 284.0, 560.0, 112.0, 46.0, "Refresh", soft(), 16.0)
+    if s.sftp_note_len > 0usize { try put(a, builder, faces.jost, 14.0, text_of(a, s.sftp_note[0usize..], s.sftp_note_len), 20.0, 624.0, light()) }
+    if s.phase == PHASE_OVER { try put(a, builder, faces.grotesk, 12.0, "The connection is closed", 20.0, 654.0, light_muted()) }
+    ret ok
+}
+
 // ---- the terminal.
 
 fn line_color(kind: usize) -> paint.Color {
@@ -935,10 +1664,10 @@ fn line_color(kind: usize) -> paint.Color {
     ret paint.Color { red: 0.86, green: 0.88, blue: 0.86, alpha: 1.0 }
 }
 
-fn extra_key(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, id: usize, x: f32, w: f32, label: str) -> err {
-    try card(a, builder, x, 454.0, w, 36.0, 10.0, soft())
-    try centred(a, builder, faces.grotesk, 15.0, label, x + w / 2.0, 454.0 + 18.0 - 10.0, ink())
-    hit(s, id, x, 454.0, w, 36.0)
+fn extra_key(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, id: usize, x: f32, y: f32, w: f32, label: str, fill: paint.Color) -> err {
+    try card(a, builder, x, y, w, 36.0, 10.0, fill)
+    try centred(a, builder, faces.grotesk, 13.0, label, x + w / 2.0, y + 18.0 - 9.0, ink())
+    hit(s, id, x, y, w, 36.0)
     ret ok
 }
 
@@ -951,7 +1680,10 @@ fn draw_terminal(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
     var mode_label = "demo session"
     if s.live { mode_label = "live session" }
     try put(a, builder, faces.grotesk, 12.0, mode_label, 82.0, 49.0, light_muted())
-    try card(a, builder, 16.0, 80.0, 380.0, 362.0, 16.0, paint.Color { red: 0.04, green: 0.05, blue: 0.06, alpha: 1.0 })
+    try card(a, builder, 16.0, 80.0, 380.0, 322.0, 16.0, paint.Color { red: 0.04, green: 0.05, blue: 0.06, alpha: 1.0 })
+    if s.scroll > 0usize {
+        try put(a, builder, faces.grotesk, 12.0, join(a, "scrollback ", number(a, s.scroll), " lines up"), 250.0, 56.0, amber())
+    }
     if s.live && (s.phase == PHASE_RUNNING || (s.phase == PHASE_OVER && s.announced)) {
         try draw_grid(a, builder, s, faces)
         try draw_extra_keys(a, builder, s, faces)
@@ -987,12 +1719,27 @@ fn draw_terminal(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
     ret ok
 }
 
+// (C155) Two rows above the keyboard: the control keys (Esc, Tab, Ctrl as a modifier for the next letter, the four
+// arrows, Clear) and the symbols a phone keyboard buries, with PgUp and PgDn for the scrollback.
 fn draw_extra_keys(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
-    try extra_key(a, builder, s, faces, 1211usize, 16.0, 56.0, "~")
-    try extra_key(a, builder, s, faces, 1212usize, 78.0, 56.0, "Up")
-    try extra_key(a, builder, s, faces, 1213usize, 140.0, 56.0, "Down")
-    try extra_key(a, builder, s, faces, 1214usize, 202.0, 92.0, "Ctrl-C")
-    try extra_key(a, builder, s, faces, 1215usize, 300.0, 96.0, "Clear")
+    var ctrl_fill = soft()
+    if s.ctrl { ctrl_fill = amber() }
+    try extra_key(a, builder, s, faces, 1216usize, 16.0, 408.0, 44.0, "Esc", soft())
+    try extra_key(a, builder, s, faces, 1217usize, 64.0, 408.0, 44.0, "Tab", soft())
+    try extra_key(a, builder, s, faces, 1218usize, 112.0, 408.0, 44.0, "Ctrl", ctrl_fill)
+    try extra_key(a, builder, s, faces, 1219usize, 160.0, 408.0, 44.0, "Left", soft())
+    try extra_key(a, builder, s, faces, 1213usize, 208.0, 408.0, 44.0, "Down", soft())
+    try extra_key(a, builder, s, faces, 1212usize, 256.0, 408.0, 44.0, "Up", soft())
+    try extra_key(a, builder, s, faces, 1220usize, 304.0, 408.0, 44.0, "Right", soft())
+    try extra_key(a, builder, s, faces, 1215usize, 352.0, 408.0, 44.0, "Clr", soft())
+    try extra_key(a, builder, s, faces, 1211usize, 16.0, 452.0, 44.0, "~", soft())
+    try extra_key(a, builder, s, faces, 1230usize, 64.0, 452.0, 44.0, "|", soft())
+    try extra_key(a, builder, s, faces, 1231usize, 112.0, 452.0, 44.0, "_", soft())
+    try extra_key(a, builder, s, faces, 1232usize, 160.0, 452.0, 44.0, ":", soft())
+    try extra_key(a, builder, s, faces, 1233usize, 208.0, 452.0, 44.0, ";", soft())
+    try extra_key(a, builder, s, faces, 1234usize, 256.0, 452.0, 44.0, "\\", soft())
+    try extra_key(a, builder, s, faces, 1221usize, 304.0, 452.0, 44.0, "PgUp", soft())
+    try extra_key(a, builder, s, faces, 1222usize, 352.0, 452.0, 44.0, "PgDn", soft())
     try draw_keyboard(a, builder, s, faces)
     ret ok
 }
@@ -1058,12 +1805,19 @@ fn char_text(a: *mem.Arena, cp: u32) -> str {
 // The terminal's cells, one at a time on a fixed grid, with its cursor.
 fn draw_grid(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     let cell_w: f32 = 7.7
-    let cell_h: f32 = 19.0
+    let cell_h: f32 = 17.0
     var y = 0usize
     while y < s.tm.rows {
         var x = 0usize
         while x < s.tm.cols {
-            let c = term.cell(&s.tm, x, y)
+            // (C155) Scrolled back by `scroll` lines: the rows above the screen come from the history (line 0 the
+            // newest), the rest of the screen moves down.
+            var c = term.blank_cell()
+            if y >= s.scroll {
+                c = term.cell(&s.tm, x, y - s.scroll)
+            } else {
+                c = term.history_cell(&s.tm, s.scroll - y - 1usize, x)
+            }
             var fg = term_colour(c.fg, paint.Color { red: 0.86, green: 0.88, blue: 0.86, alpha: 1.0 })
             var bg = term_colour(c.bg, paint.Color { red: 0.04, green: 0.05, blue: 0.06, alpha: 1.0 })
             if (c.attrs & term.REVERSE) != 0u32 {
@@ -1083,8 +1837,8 @@ fn draw_grid(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         }
         y += 1usize
     }
-    if s.tm.cursor_visible && s.phase == PHASE_RUNNING {
-        try card(a, builder, 26.0 + f32(s.tm.cx) * cell_w, 88.0 + f32(s.tm.cy) * cell_h + 14.0, cell_w, 3.0, 1.0, amber())
+    if s.tm.cursor_visible && s.phase == PHASE_RUNNING && s.scroll == 0usize {
+        try card(a, builder, 26.0 + f32(s.tm.cx) * cell_w, 88.0 + f32(s.tm.cy) * cell_h + 13.0, cell_w, 3.0, 1.0, amber())
     }
     ret ok
 }
@@ -1099,6 +1853,10 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         try draw_hosts(a, builder, s, faces)
     } else if s.screen == FORM_SCREEN {
         try draw_form(a, builder, s, faces)
+    } else if s.screen == KEYS_SCREEN {
+        try draw_keys(a, builder, s, faces)
+    } else if s.screen == SFTP_SCREEN {
+        try draw_sftp(a, builder, s, faces)
     } else {
         try draw_terminal(a, builder, s, faces)
     }
@@ -1123,6 +1881,14 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 
 // A character from the keyboard goes to the command in the terminal, or to the field in focus.
 fn type_byte(s: *State, byte: u8) {
+    // (C155) The Keys screen's only field is the vault's master password.
+    if s.screen == KEYS_SCREEN {
+        if s.master_len < 64usize {
+            s.master[s.master_len] = byte
+            s.master_len += 1usize
+        }
+        ret
+    }
     if s.screen == TERMINAL_SCREEN && s.live {
         if s.phase == PHASE_PASSWORD && s.pw_len < 64usize {
             s.password[s.pw_len] = byte
@@ -1155,6 +1921,10 @@ fn type_byte(s: *State, byte: u8) {
 }
 
 fn backspace(s: *State) {
+    if s.screen == KEYS_SCREEN {
+        if s.master_len > 0usize { s.master_len -= 1usize }
+        ret
+    }
     if s.screen == TERMINAL_SCREEN && s.live {
         if s.phase == PHASE_PASSWORD && s.pw_len > 0usize { s.pw_len -= 1usize }
         if s.phase == PHASE_HOST_KEY && s.cmd_len > 0usize { s.cmd_len -= 1usize }
@@ -1221,7 +1991,15 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == HOSTS_SCREEN {
         if id >= 100usize && id < 108usize {
             if s.hosts[id - 100usize].used {
-                connect(a, s, id - 100usize)
+                connect(a, s, id - 100usize, false)
+                ret true
+            }
+            ret false
+        }
+        // (C155) Files: an SFTP session on the host.
+        if id >= 400usize && id < 408usize {
+            if s.hosts[id - 400usize].used {
+                connect(a, s, id - 400usize, true)
                 ret true
             }
             ret false
@@ -1234,6 +2012,93 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             if count_hosts(s) < MAX_HOSTS { open_form(s, NONE) }
             ret true
         }
+        // (C155) Keys.
+        if id == 160usize {
+            s.screen = KEYS_SCREEN
+            s.key_note_len = 0usize
+            s.master_len = 0usize
+            if s.vault_open { refresh_keys(a, s) }
+            say("ssh keys shown\n")
+            ret true
+        }
+        ret false
+    }
+    // (C155) The Keys screen: the master password opens the vault, then keys are made, imported and deleted.
+    if s.screen == KEYS_SCREEN {
+        if id == 800usize {
+            s.screen = HOSTS_SCREEN
+            ret true
+        }
+        if !s.vault_open {
+            if id == 1205usize {
+                let opened = unlock_vault(a, s)
+                s.master_len = 0usize
+                if opened == 0usize {
+                    s.key_note_len = 0usize
+                    refresh_keys(a, s)
+                    say("ssh keys unlocked\n")
+                } else if opened == 1usize {
+                    set_key_note(s, "Wrong master password")
+                    say("ssh keys wrong password\n")
+                } else {
+                    set_key_note(s, "No vault: make one in Secure first")
+                    say("ssh keys no vault\n")
+                }
+                ret true
+            }
+            if id == 1201usize {
+                backspace(s)
+                ret true
+            }
+            if id >= 1000usize && id < 1026usize {
+                type_byte(s, u8(97usize + id - 1000usize))
+                ret true
+            }
+            if id >= 1100usize && id < 1110usize {
+                type_byte(s, u8(48usize + (id - 1100usize + 1usize) % 10usize))
+                ret true
+            }
+            if id == 1200usize {
+                type_byte(s, 32u8)
+                ret true
+            }
+            if id == 1202usize {
+                type_byte(s, 46u8)
+                ret true
+            }
+            if id == 1203usize {
+                type_byte(s, 45u8)
+                ret true
+            }
+            if id == 1204usize {
+                type_byte(s, 47u8)
+                ret true
+            }
+            ret false
+        }
+        if id == 820usize || id == 821usize {
+            var slot = NONE
+            if id == 820usize { slot = new_key(a, s) } else { slot = import_key(a, s) }
+            if slot != NONE {
+                set_key_note(s, join(a, "Key ", number(a, slot + 1usize), " added"))
+                say("ssh key created slot ")
+                say_text(number(a, slot))
+                say("\n")
+                say("ssh key public ")
+                say_long(public_line(a, s.keys[slot].pubkey))
+                say("\n")
+            }
+            ret true
+        }
+        if id >= 810usize && id < 810usize + MAX_KEYS {
+            let gone = vaultfs.remove(join(a, "/v/", key_name(a, id - 810usize), ""))
+            refresh_keys(a, s)
+            set_key_note(s, "Key deleted")
+            say("ssh key deleted slot ")
+            say_text(number(a, id - 810usize))
+            say("\n")
+            ret true
+        }
         ret false
     }
     // The back arrow.
@@ -1243,16 +2108,106 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             live_close(s)
             say("ssh live closed\n")
         }
+        s.sftp_mode = false
         if s.line_total > 0usize || s.cmd_len > 0usize { say("ssh closed\n") }
         ret true
     }
+    // (C155) The SFTP screen: a folder's entries (a tap opens a folder or downloads a file), Up, Upload, Refresh.
+    if s.screen == SFTP_SCREEN {
+        if s.picking {
+            if id == 710usize {
+                s.picking = false
+                ret true
+            }
+            if id >= 700usize && id < 700usize + MAX_PICKS {
+                let index = id - 700usize
+                s.picking = false
+                if index < s.pick_total {
+                    let path = text_of(a, s.picks[index].path[0usize..], s.picks[index].path_len)
+                    var leaf = 0usize
+                    var k = 0usize
+                    while k < s.picks[index].path_len {
+                        if s.picks[index].path[k] == 47u8 { leaf = k + 1usize }
+                        k += 1usize
+                    }
+                    let name = text_of(a, s.picks[index].path[leaf..], s.picks[index].path_len - leaf)
+                    if sftp_upload(a, s, path, name) { let relisted = sftp_list(a, s) }
+                }
+                ret true
+            }
+            ret false
+        }
+        if id >= 600usize && id < 600usize + MAX_ENTRIES {
+            let index = id - 600usize
+            if index >= s.entry_total { ret false }
+            if s.entries[index].dir {
+                let subfolder = sftp_join(a, s, text_of(a, s.entries[index].name[0usize..], s.entries[index].name_len))
+                var n = 0usize
+                while n < subfolder.len && n < 64usize {
+                    s.cwd[n] = subfolder[n]
+                    n += 1usize
+                }
+                s.cwd_len = n
+                let listed = sftp_list(a, s)
+            } else {
+                let got = sftp_download(a, s, index)
+            }
+            ret true
+        }
+        if id == 630usize {
+            // Up: the folder above, `/` at the top.
+            var n = s.cwd_len
+            while n > 1usize && s.cwd[n - 1usize] != 47u8 { n -= 1usize }
+            if n > 1usize { n -= 1usize }
+            s.cwd_len = n
+            let listed = sftp_list(a, s)
+            ret true
+        }
+        if id == 631usize {
+            list_picks(a, s)
+            s.picking = true
+            ret true
+        }
+        if id == 632usize {
+            let listed = sftp_list(a, s)
+            ret true
+        }
+        ret false
+    }
+    // (C155) Esc, Tab, Ctrl, PgUp and PgDn, which no program but a live session answers to.
+    if s.screen == TERMINAL_SCREEN && id == 1218usize {
+        s.ctrl = !s.ctrl
+        ret true
+    }
+    if s.screen == TERMINAL_SCREEN && (id == 1221usize || id == 1222usize) {
+        if s.live {
+            let history = term.history_lines(&s.tm)
+            if id == 1221usize {
+                s.scroll += 9usize
+                if s.scroll > history { s.scroll = history }
+            } else if s.scroll >= 9usize {
+                s.scroll -= 9usize
+            } else {
+                s.scroll = 0usize
+            }
+            say("ssh scrollback ")
+            say_text(number(a, s.scroll))
+            say("\n")
+        }
+        ret true
+    }
     // A live session sends its keys to the host as they are tapped.
-    if s.screen == TERMINAL_SCREEN && s.live && s.phase == PHASE_RUNNING {
+    if s.screen == TERMINAL_SCREEN && s.live && s.phase == PHASE_RUNNING && !s.sftp_mode {
         var one: [3]u8 = zero
         var n = 0usize
         if id >= 1000usize && id < 1026usize {
             one[0usize] = u8(97usize + id - 1000usize)
             n = 1usize
+            // Ctrl then a letter is the control byte (Ctrl-C is 3).
+            if s.ctrl {
+                one[0usize] = u8(1usize + id - 1000usize)
+                s.ctrl = false
+            }
         } else if id >= 1100usize && id < 1110usize {
             one[0usize] = u8(48usize + (id - 1100usize + 1usize) % 10usize)
             n = 1usize
@@ -1293,8 +2248,30 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         } else if id == 1215usize {
             one[0usize] = 12u8
             n = 1usize
+        } else if id == 1216usize {
+            one[0usize] = 27u8
+            n = 1usize
+        } else if id == 1217usize {
+            one[0usize] = 9u8
+            n = 1usize
+        } else if id == 1219usize {
+            one[0usize] = 27u8
+            one[1usize] = 91u8
+            one[2usize] = 68u8
+            n = 3usize
+        } else if id == 1220usize {
+            one[0usize] = 27u8
+            one[1usize] = 91u8
+            one[2usize] = 67u8
+            n = 3usize
+        } else if id >= 1230usize && id <= 1234usize {
+            // | _ : ; and the backslash.
+            let symbols = "|_:;\\"
+            one[0usize] = symbols[id - 1230usize]
+            n = 1usize
         }
         if n > 0usize {
+            s.scroll = 0usize
             live_send(a, s, one[0usize..n])
             if id == 1205usize { live_say_above(a, s) }
             ret true
@@ -1303,6 +2280,38 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     }
     if s.screen == TERMINAL_SCREEN && s.live && id == 1205usize {
         if s.phase == PHASE_PASSWORD {
+            if s.want_master {
+                // (C155) The prompt is the vault's master password; the host never sees it. The key of the slot
+                // the host is set to comes out of the vault and signs the login.
+                var i = 0usize
+                s.master_len = s.pw_len
+                while i < s.pw_len {
+                    s.master[i] = s.password[i]
+                    i += 1usize
+                }
+                s.pw_len = 0usize
+                let opened = unlock_vault(a, s)
+                s.master_len = 0usize
+                if opened != 0usize {
+                    if opened == 1usize {
+                        push_line(s, "Wrong master password. Try again.", 2usize)
+                        say("ssh key wrong password\n")
+                    } else {
+                        live_end(s, "No vault on this device: make one in Secure")
+                        say("ssh key no vault\n")
+                    }
+                    ret true
+                }
+                let (seed, have) = read_seed(a, s, s.hosts[s.current].key_slot)
+                if !have {
+                    live_end(s, join(a, "There is no key in slot ", number(a, s.hosts[s.current].key_slot + 1usize), ""))
+                    say("ssh key missing\n")
+                    ret true
+                }
+                s.seed = seed
+                s.have_seed = true
+                say("ssh key from secure\n")
+            }
             live_start(a, s)
             ret true
         }
@@ -1336,7 +2345,22 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret true
     }
     if id >= 1000usize && id < 1026usize {
+        if s.screen == TERMINAL_SCREEN && s.ctrl {
+            // The demo shell: Ctrl-C abandons the line, Ctrl-L clears the screen.
+            s.ctrl = false
+            if id == 1002usize {
+                push_line(s, join(a, prompt_text(a, s), text_of(a, s.cmd[0usize..], s.cmd_len), "^C"), 1usize)
+                s.cmd_len = 0usize
+            }
+            if id == 1011usize { s.line_total = 0usize }
+            ret true
+        }
         type_byte(s, u8(97usize + id - 1000usize))
+        ret true
+    }
+    if s.screen == TERMINAL_SCREEN && id >= 1230usize && id <= 1234usize {
+        let symbols = "|_:;\\"
+        type_byte(s, symbols[id - 1230usize])
         ret true
     }
     if id >= 1100usize && id < 1110usize {
@@ -1422,6 +2446,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret true
     }
     if id == 1331usize {
+        if s.draft.key_auth { s.draft.key_slot = (s.draft.key_slot + 1usize) % MAX_KEYS }
         s.draft.key_auth = true
         ret true
     }
@@ -1436,7 +2461,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                 index = 0usize
                 while index < MAX_HOSTS && !(s.hosts[index].used && s.hosts[index].alias_len == s.draft.alias_len && s.hosts[index].addr_len == s.draft.addr_len) { index += 1usize }
             }
-            if index < MAX_HOSTS { connect(a, s, index) } else { s.screen = HOSTS_SCREEN }
+            if index < MAX_HOSTS { connect(a, s, index, false) } else { s.screen = HOSTS_SCREEN }
         }
         ret true
     }
@@ -1535,6 +2560,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // A live shell's output arrives when the host sends it.
             if s.live && s.phase == PHASE_RUNNING && s.screen == TERMINAL_SCREEN {
                 live_poll(a, &s, 2usize)
+                if s.sftp_mode && s.screen == SFTP_SCREEN && !s.sftp_started { sftp_enter(a, &s) }
                 if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
             } else {
                 appkit.answer(appkit.ANSWER_NONE)
@@ -1546,6 +2572,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let id = hit_at(&s, tap.x, tap.y)
             if id != NONE && act(a, &s, id) {
+                if s.sftp_mode && s.screen == SFTP_SCREEN && !s.sftp_started && s.live { sftp_enter(a, &s) }
                 if !show(a, &kit, &s) {
                     say("ssh present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)

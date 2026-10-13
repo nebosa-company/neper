@@ -14,8 +14,14 @@
 // next to the logins and codes), is read for one request and wiped once it is sent, and is checked with the
 // provider's model list before it is saved. Conversations are kept in /ai (a title and the messages), listed,
 // searched, renamed and deleted from the Chats screen; the system prompt, the temperature, the token limit and the
-// local server's host are Options. Left (C171): images and files as inputs, highlighted code blocks, tools.
+// local server's host are Options. Left (C171): highlighted code blocks.
+// (C171) Inputs: Attach lists the Camera's PNG frames in /DCIM and the text files in the root folder; a picture goes to
+// the provider as an image part (base64, in each provider's own shape) and a text file is quoted into the message.
+// Tools: with Tools on (Options) an OpenAI-compatible provider is offered `battery`, `clock` and `files`; a tool call
+// in the reply stops the stream and asks "Allow?" -- Allow runs it through the settings server or the filesystem
+// server and sends its result back for the next round (at most three), Deny sends that the person declined.
 use e.mem
+use e.bytes
 use e.os
 use e.gfx.geometry
 use e.gfx.paint
@@ -51,7 +57,19 @@ const BODY_CAP: usize = 24576usize
 // Ticks (500 ms each) without a byte before a reply is given up.
 const SILENT_LIMIT: usize = 120usize
 
-type Msg = struct { mine: bool, body: [400]u8, body_len: usize }
+const ATTACH_SCREEN: usize = 5usize
+const ATT_NONE: usize = 0usize
+const ATT_IMAGE: usize = 1usize
+const ATT_TEXT: usize = 2usize
+// The largest picture sent (PNG bytes; the request carries it as base64), and the most of a text file quoted.
+const ATT_CAP: usize = 24576usize
+const ATT_TEXT_CAP: usize = 3000usize
+const MAX_TOOL_ROUNDS: usize = 3usize
+
+// `tool` 0 an ordinary message, 1 the model's call of a tool (body `<id>:<name>`), 2 the tool's result (`<id>:<text>`).
+type Msg = struct { mine: bool, body: [400]u8, body_len: usize, tool: usize }
+
+type Pick = struct { path: [32]u8, path_len: usize, image: bool }
 
 type Conv = struct { used: bool, title: [32]u8, title_len: usize, count: usize, hit: bool }
 
@@ -101,6 +119,24 @@ type State = struct {
     renaming: bool,
     query: ui.Field,
     seed: usize,
+    // (C171) The attachment for the next message (a picture or a text file), its name and its bytes, and what the
+    // Attach screen offers.
+    att_kind: usize,
+    att_name: [24]u8,
+    att_name_len: usize,
+    att: []u8,
+    att_len: usize,
+    picks: [6]Pick,
+    pick_total: usize,
+    // (C171) Tools: whether they are offered, the call the model made and is waiting on (name and id), and the
+    // rounds taken for this message.
+    tools_on: bool,
+    tool_pending: bool,
+    tool_name: [16]u8,
+    tool_name_len: usize,
+    tool_id: [24]u8,
+    tool_id_len: usize,
+    tool_rounds: usize,
 }
 
 fn provider_name(p: usize) -> str {
@@ -178,6 +214,56 @@ fn add_msg(s: *State, mine: bool, body: str) {
     m.mine = mine
     s.msgs[s.msg_total] = m
     s.msg_total += 1usize
+}
+
+// (C171) A tool turn in the conversation: `kind` 1 is the model's call (`text` the tool's name), 2 its result; the
+// body is `<id>:<text>`.
+fn add_tool_msg(s: *State, kind: usize, id: str, text_in: str) {
+    if s.msg_total == MAX_MSGS {
+        var k = 1usize
+        while k < MAX_MSGS {
+            s.msgs[k - 1usize] = s.msgs[k]
+            k += 1usize
+        }
+        s.msg_total -= 1usize
+    }
+    var m: Msg = zero
+    var i = 0usize
+    var j = 0usize
+    while j < id.len && i < MSG_BYTES {
+        m.body[i] = id[j]
+        i += 1usize
+        j += 1usize
+    }
+    if i < MSG_BYTES {
+        m.body[i] = 58u8
+        i += 1usize
+    }
+    j = 0usize
+    while j < text_in.len && i < MSG_BYTES {
+        m.body[i] = text_in[j]
+        i += 1usize
+        j += 1usize
+    }
+    m.body_len = i
+    m.tool = kind
+    s.msgs[s.msg_total] = m
+    s.msg_total += 1usize
+}
+
+// The part of a tool turn's body after the first colon (the name or the result).
+fn tool_text(a: *mem.Arena, m: *Msg) -> str {
+    var k = 0usize
+    while k < m.body_len && m.body[k] != 58u8 { k += 1usize }
+    if k < m.body_len { k += 1usize }
+    ret ui.text_of(a, m.body[k..], m.body_len - k)
+}
+
+// The id of a tool turn: the body up to the first colon.
+fn tool_id_of(a: *mem.Arena, m: *Msg) -> str {
+    var k = 0usize
+    while k < m.body_len && m.body[k] != 58u8 { k += 1usize }
+    ret ui.text_of(a, m.body[0usize..], k)
 }
 
 fn say_message(s: *State, line: str) {
@@ -270,28 +356,100 @@ fn build_body(a: *mem.Arena, s: *State, buf: []u8) -> usize {
         n = httpstream.put(buf, n, "\"}")
         first = false
     }
+    let tools = tools_offered(s)
     var k = 0usize
     while k < s.msg_total {
-        if !first { n = httpstream.put(buf, n, ",") }
-        first = false
-        var role = "assistant"
-        if s.msgs[k].mine { role = "user" }
-        if google {
-            if !s.msgs[k].mine { role = "model" }
-            n = httpstream.put(buf, n, "{\"role\":\"")
-            n = httpstream.put(buf, n, role)
-            n = httpstream.put(buf, n, "\",\"parts\":[{\"text\":\"")
-        } else {
-            n = httpstream.put(buf, n, "{\"role\":\"")
-            n = httpstream.put(buf, n, role)
-            n = httpstream.put(buf, n, "\",\"content\":\"")
+        // Tool turns exist only for the OpenAI-shaped providers.
+        if s.msgs[k].tool == 0usize || tools {
+            if !first { n = httpstream.put(buf, n, ",") }
+            first = false
+            n = put_message(a, s, buf, n, k, google)
         }
-        n = put_escaped(buf, n, s.msgs[k].body[0usize..], s.msgs[k].body_len)
-        if google { n = httpstream.put(buf, n, "\"}]}") } else { n = httpstream.put(buf, n, "\"}") }
         k += 1usize
     }
-    n = httpstream.put(buf, n, "]}")
+    n = httpstream.put(buf, n, "]")
+    if tools { n = httpstream.put(buf, n, ",\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"battery\",\"description\":\"The battery level of this device in percent\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"clock\",\"description\":\"The current time of day\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"files\",\"description\":\"The names of the files in the root folder of this device\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}}]") }
+    n = httpstream.put(buf, n, "}")
     ret n
+}
+
+// (C171) Whether this request offers the tools: switched on in Options, and a provider that takes the OpenAI shape.
+fn tools_offered(s: *State) -> bool {
+    ret s.tools_on && (s.provider == 1usize || s.provider == 3usize)
+}
+
+// (C171) Message `k` of the conversation in the provider's shape. The last message of the person carries the
+// attachment when there is one: a picture as an image part (base64) in each provider's own form, a text file quoted
+// after the text. Returns the new end.
+fn put_message(a: *mem.Arena, s: *State, buf: []u8, at: usize, k: usize, google: bool) -> usize {
+    var n = at
+    let m = &s.msgs[k]
+    if m.tool == 1usize {
+        n = httpstream.put(buf, n, "{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"")
+        n = put_escaped(buf, n, tool_id_of(a, m), tool_id_of(a, m).len)
+        n = httpstream.put(buf, n, "\",\"type\":\"function\",\"function\":{\"name\":\"")
+        n = put_escaped(buf, n, tool_text(a, m), tool_text(a, m).len)
+        n = httpstream.put(buf, n, "\",\"arguments\":\"{}\"}}]}")
+        ret n
+    }
+    if m.tool == 2usize {
+        n = httpstream.put(buf, n, "{\"role\":\"tool\",\"tool_call_id\":\"")
+        n = put_escaped(buf, n, tool_id_of(a, m), tool_id_of(a, m).len)
+        n = httpstream.put(buf, n, "\",\"content\":\"")
+        n = put_escaped(buf, n, tool_text(a, m), tool_text(a, m).len)
+        n = httpstream.put(buf, n, "\"}")
+        ret n
+    }
+    var role = "assistant"
+    if m.mine { role = "user" }
+    if google && !m.mine { role = "model" }
+    let attached = s.att_kind != ATT_NONE && m.mine && k + 1usize == s.msg_total && s.att_len > 0usize
+    let image = attached && s.att_kind == ATT_IMAGE
+    n = httpstream.put(buf, n, "{\"role\":\"")
+    n = httpstream.put(buf, n, role)
+    if google {
+        n = httpstream.put(buf, n, "\",\"parts\":[")
+        if image {
+            n = httpstream.put(buf, n, "{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"")
+            n = put_base64(buf, n, s.att[0usize..], s.att_len)
+            n = httpstream.put(buf, n, "\"}},")
+        }
+        n = httpstream.put(buf, n, "{\"text\":\"")
+    } else if image && s.provider == 0usize {
+        n = httpstream.put(buf, n, "\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"")
+        n = put_base64(buf, n, s.att[0usize..], s.att_len)
+        n = httpstream.put(buf, n, "\"}},{\"type\":\"text\",\"text\":\"")
+    } else if image {
+        n = httpstream.put(buf, n, "\",\"content\":[{\"type\":\"text\",\"text\":\"")
+    } else {
+        n = httpstream.put(buf, n, "\",\"content\":\"")
+    }
+    n = put_escaped(buf, n, m.body[0usize..], m.body_len)
+    if attached && !image {
+        n = httpstream.put(buf, n, "\\n\\n[File ")
+        n = put_escaped(buf, n, s.att_name[0usize..], s.att_name_len)
+        n = httpstream.put(buf, n, "]\\n")
+        n = put_escaped(buf, n, s.att[0usize..], s.att_len)
+    }
+    if google {
+        n = httpstream.put(buf, n, "\"}]}")
+    } else if image && s.provider == 0usize {
+        n = httpstream.put(buf, n, "\"}]}")
+    } else if image {
+        n = httpstream.put(buf, n, "\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,")
+        n = put_base64(buf, n, s.att[0usize..], s.att_len)
+        n = httpstream.put(buf, n, "\"}}]}")
+    } else {
+        n = httpstream.put(buf, n, "\"}")
+    }
+    ret n
+}
+
+// `data` as base64 into `buf` at `at`; the new end.
+fn put_base64(buf: []u8, at: usize, data: []const u8, length: usize) -> usize {
+    let (text_out, encode_error) = bytes.base64_encode(buf[at..], data[0usize..length], .Standard, true)
+    if encode_error != ok { ret at }
+    ret at + text_out.len
 }
 
 fn hex4(body_text: str, at: usize) -> usize {
@@ -316,6 +474,22 @@ fn key_at(body_text: str, at: usize, key: str) -> bool {
         i += 1usize
     }
     ret true
+}
+
+// Where `needle` first stands in `hay` (case-sensitive), or `hay.len` when it does not.
+fn find_text(hay: str, needle: str) -> usize {
+    var at = 0usize
+    while at + needle.len <= hay.len {
+        var same = true
+        var i = 0usize
+        while same && i < needle.len {
+            if hay[at + i] != needle[i] { same = false }
+            i += 1usize
+        }
+        if same { ret at }
+        at += 1usize
+    }
+    ret hay.len
 }
 
 // The first JSON string value of `key` in `body_text` into `out`; its length (0 when the key is absent).
@@ -393,6 +567,12 @@ fn status_words(a: *mem.Arena, s: *State, status: usize) -> str {
     if status == 401usize || status == 403usize { ret "The provider refused the key. Check it in setup." }
     if status == 429usize { ret "The rate limit was reached. Try again in a moment." }
     if status == 404usize { ret "The provider does not know this model." }
+    // (C171) Each provider's own overload and bad-request codes: Anthropic's 529 and 400, Google's 400 for a key it does
+    // not know and 503 UNAVAILABLE, OpenAI's 503 and 500.
+    if status == 529usize || status == 503usize { ret "The provider is overloaded. Try again in a moment." }
+    if status == 400usize && s.provider == 2usize { ret "Google did not accept the request or the key." }
+    if status == 400usize { ret "The provider did not accept this request." }
+    if status >= 500usize && status < 600usize { ret ui.join(a, ui.join(a, "The provider had a problem (status ", ui.number(a, status), ")."), "", "") }
     ret ui.join(a, ui.join(a, "The provider answered with status ", ui.number(a, status), "."), "", "")
 }
 
@@ -525,7 +705,9 @@ fn key_headers(a: *mem.Arena, s: *State, key: str) -> str {
 // Start the request for the conversation so far: the request goes out and the key is wiped. True when a reply is
 // coming; false with the plain-words reason in s.reply.
 fn start_request(a: *mem.Arena, s: *State) -> bool {
-    let (buf, buf_error) = mem.alloc[u8](a, 12288usize)
+    // (C171) Room for the conversation, the tool list and an attachment (base64 and JSON escapes triple a picture or a
+    // file at the most).
+    let (buf, buf_error) = mem.alloc[u8](a, 14336usize + s.att_len * 3usize)
     if buf_error != ok {
         set_reply(s, "I ran out of memory.")
         ret false
@@ -546,6 +728,8 @@ fn start_request(a: *mem.Arena, s: *State) -> bool {
     s.pieces = 0usize
     s.events = 0usize
     s.reply_len = 0usize
+    s.tool_name_len = 0usize
+    s.tool_id_len = 0usize
     ret true
 }
 
@@ -567,6 +751,8 @@ fn check_key(a: *mem.Arena, s: *State) -> usize {
     httpstream.abort(&s.net)
     if s.net.phase != httpstream.PH_DONE || status == 0usize { ret 2usize }
     if status == 401usize || status == 403usize { ret 1usize }
+    // Google answers a key it does not know with 400 (API_KEY_INVALID).
+    if status == 400usize && s.provider == 2usize { ret 1usize }
     if status >= 200usize && status < 300usize { ret 0usize }
     ret 2usize
 }
@@ -630,7 +816,9 @@ fn save_conv(a: *mem.Arena, s: *State) {
     n += 1usize
     k = 0usize
     while k < s.msg_total {
+        // Bit 0 is "mine", the tool kind (0, 1, 2) rides in bits 1 and 2.
         if s.msgs[k].mine { buf[n] = 1u8 } else { buf[n] = 0u8 }
+        buf[n] = buf[n] | u8(s.msgs[k].tool << 1usize)
         buf[n + 1usize] = u8(s.msgs[k].body_len & 255usize)
         buf[n + 2usize] = u8(s.msgs[k].body_len >> 8usize)
         n += 3usize
@@ -671,11 +859,13 @@ fn read_conv(a: *mem.Arena, s: *State, i: usize, into_chat: bool) -> bool {
     var at = 2usize + title_len
     var m = 0usize
     while m < count && at + 3usize <= n {
-        let mine = buf[at] == 1u8
+        let mine = (buf[at] & 1u8) == 1u8
+        let tool_kind = usize((buf[at] >> 1u8) & 3u8)
         let length = usize(buf[at + 1usize]) | (usize(buf[at + 2usize]) << 8usize)
         at += 3usize
         if at + length > n { ret true }
         add_msg(s, mine, ui.text_of(a, buf[at..], length))
+        s.msgs[s.msg_total - 1usize].tool = tool_kind
         at += length
         m += 1usize
     }
@@ -809,6 +999,133 @@ fn load_settings(a: *mem.Arena, s: *State) {
 // ----------------------------------------------------------------------------------------------
 // Drawing.
 
+// ----------------------------------------------------------------------------------------------
+// (C171) Attachments: the pictures and text files on the device.
+
+// Whether the name (bytes `at..end` of `names`) ends in one of the suffixes, ignoring case.
+fn name_ends(names: []const u8, at: usize, end: usize, suffix: str) -> bool {
+    if end - at < suffix.len + 1usize { ret false }
+    var i = 0usize
+    while i < suffix.len {
+        var c = names[end - suffix.len + i]
+        if c >= 65u8 && c <= 90u8 { c = c + 32u8 }
+        if c != suffix[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn add_pick(s: *State, dir: str, names: []const u8, at: usize, end: usize, image: bool) {
+    if s.pick_total >= 6usize || dir.len + (end - at) > 31usize { ret }
+    var p: Pick = zero
+    var n = 0usize
+    while n < dir.len {
+        p.path[n] = dir[n]
+        n += 1usize
+    }
+    var i = at
+    while i < end {
+        p.path[n] = names[i]
+        n += 1usize
+        i += 1usize
+    }
+    p.path_len = n
+    p.image = image
+    s.picks[s.pick_total] = p
+    s.pick_total += 1usize
+}
+
+// What Attach offers: up to three PNG pictures from /DCIM (the Camera's frames and scans) and up to three text files
+// (.txt, .md, .csv, .json) from the root folder.
+fn list_picks(a: *mem.Arena, s: *State) {
+    s.pick_total = 0usize
+    var names: [512]u8 = zero
+    let (name_bytes, listed) = vaultfs.list("/DCIM", mem.address_of(&names[0usize]), 512usize)
+    if listed {
+        var start = 0usize
+        var pos = 0usize
+        var found = 0usize
+        while pos < name_bytes && found < 3usize {
+            if names[pos] == 10u8 {
+                if name_ends(names[0usize..], start, pos, ".png") {
+                    add_pick(s, "/DCIM/", names[0usize..], start, pos, true)
+                    found += 1usize
+                }
+                start = pos + 1usize
+            }
+            pos += 1usize
+        }
+    }
+    var root: [512]u8 = zero
+    let (root_bytes, root_listed) = vaultfs.list("/", mem.address_of(&root[0usize]), 512usize)
+    if root_listed {
+        var start = 0usize
+        var pos = 0usize
+        var found = 0usize
+        while pos < root_bytes && found < 3usize {
+            if root[pos] == 10u8 {
+                if name_ends(root[0usize..], start, pos, ".txt") || name_ends(root[0usize..], start, pos, ".md") || name_ends(root[0usize..], start, pos, ".csv") || name_ends(root[0usize..], start, pos, ".json") {
+                    add_pick(s, "/", root[0usize..], start, pos, false)
+                    found += 1usize
+                }
+                start = pos + 1usize
+            }
+            pos += 1usize
+        }
+    }
+}
+
+// Attach pick `i`: its bytes into the attachment buffer, its name kept for the bubble.
+fn attach_pick(a: *mem.Arena, s: *State, i: usize) -> bool {
+    if i >= s.pick_total { ret false }
+    let path = ui.text_of(a, s.picks[i].path[0usize..], s.picks[i].path_len)
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size == 0usize { ret false }
+    var want = size
+    if s.picks[i].image {
+        if size > ATT_CAP { ret false }
+    } else if want > ATT_TEXT_CAP {
+        want = ATT_TEXT_CAP
+    }
+    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&s.att[0usize]), want)
+    if !read_ok || got == 0usize { ret false }
+    s.att_len = got
+    if s.picks[i].image { s.att_kind = ATT_IMAGE } else { s.att_kind = ATT_TEXT }
+    // The name is what follows the last slash.
+    var start = 0usize
+    var k = 0usize
+    while k < s.picks[i].path_len {
+        if s.picks[i].path[k] == 47u8 { start = k + 1usize }
+        k += 1usize
+    }
+    var n = 0usize
+    while start + n < s.picks[i].path_len && n < 24usize {
+        s.att_name[n] = s.picks[i].path[start + n]
+        n += 1usize
+    }
+    s.att_name_len = n
+    ret true
+}
+
+fn draw_attach(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
+    ui.hit(&s.hits, 230usize, 0.0, 10.0, 66.0, 56.0)
+    try ui.put(a, builder, faces.jost_bold, 24.0, "Attach", 62.0, 20.0, ui.light())
+    try ui.put(a, builder, faces.grotesk, 12.0, "Pictures from the Camera and text files on this device", 24.0, 66.0, ui.light_muted())
+    var i = 0usize
+    while i < s.pick_total {
+        let y: f32 = 96.0 + f32(i) * 64.0
+        var tag = "File  "
+        if s.picks[i].image { tag = "Picture  " }
+        try ui.card(a, builder, 16.0, y, 380.0, 56.0, 16.0, ui.cream())
+        try ui.put(a, builder, faces.jost, 17.0, ui.join(a, tag, ui.text_of(a, s.picks[i].path[0usize..], s.picks[i].path_len), ""), 32.0, y + 16.0, ui.ink())
+        ui.hit(&s.hits, 300usize + i, 16.0, y, 380.0, 56.0)
+        i += 1usize
+    }
+    if s.pick_total == 0usize { try ui.centred(a, builder, faces.jost, 18.0, "Nothing to attach yet", 206.0, 240.0, ui.light_muted()) }
+    ret ok
+}
+
 fn star_icon() -> str {
     ret "<svg viewBox='0 0 24 24'><path d='M12 2c1 6 4 9 10 10-6 1-9 4-10 10-1-6-4-9-10-10 6-1 9-4 10-10z' fill='currentColor'/></svg>"
 }
@@ -894,6 +1211,13 @@ fn draw_options(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
     try ui.pill(a, builder, &s.hits, faces, 133usize, 228.0, 234.0, 56.0, 40.0, "+", ui.soft(), 18.0)
     try ui.pill(a, builder, &s.hits, faces, 134usize, 16.0, 290.0, 240.0, 40.0, ui.join(a, "Up to ", ui.number(a, token_limit(s.tokens)), " tokens"), ui.soft(), 15.0)
     try ui.pill(a, builder, &s.hits, faces, 135usize, 268.0, 290.0, 128.0, 40.0, "Done", ui.amber(), 16.0)
+    var tools_label = "Tools: off"
+    var tools_fill = ui.soft()
+    if s.tools_on {
+        tools_label = "Tools: on"
+        tools_fill = ui.amber()
+    }
+    try ui.pill(a, builder, &s.hits, faces, 136usize, 16.0, 344.0, 240.0, 40.0, tools_label, tools_fill, 15.0)
     try ui.keyboard(a, builder, &s.hits, faces, "Next")
     ret ok
 }
@@ -967,8 +1291,10 @@ fn draw_chat(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     }
     while room && k > 0usize {
         k -= 1usize
-        let m = s.msgs[k]
-        let body_text = ui.text_of(a, m.body[0usize..], m.body_len)
+        var m = s.msgs[k]
+        var body_text = ui.text_of(a, m.body[0usize..], m.body_len)
+        if m.tool == 1usize { body_text = ui.join(a, "Used the tool ", tool_text(a, &m), "") }
+        if m.tool == 2usize { body_text = ui.join(a, "Tool result: ", tool_text(a, &m), "") }
         let (placed, placed_error) = text.lay_out(a, faces.jost, 16.0, body_text, 270.0, 0u32, layout.Align.Start)
         var h: f32 = 24.0
         var w: f32 = 270.0
@@ -997,6 +1323,19 @@ fn draw_chat(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     var box_y: f32 = 800.0
     if s.typing { box_y = 446.0 }
     if s.clip_len > 0usize { try ui.pill(a, builder, &s.hits, faces, 212usize, 16.0, box_y - 44.0, 96.0, 36.0, "Paste", ui.soft(), 14.0) }
+    // (C171) Attach opens the picker; an attached file shows as a chip that a tap drops.
+    try ui.pill(a, builder, &s.hits, faces, 203usize, 120.0, box_y - 44.0, 96.0, 36.0, "Attach", ui.soft(), 14.0)
+    if s.att_kind != ATT_NONE {
+        try ui.pill(a, builder, &s.hits, faces, 204usize, 224.0, box_y - 44.0, 172.0, 36.0, ui.join(a, ui.text_of(a, s.att_name[0usize..], s.att_name_len), "  x", ""), ui.amber(), 13.0)
+    }
+    // (C171) A tool the model asked for waits for the person.
+    if s.tool_pending {
+        try ui.card(a, builder, 16.0, 92.0, 380.0, 112.0, 18.0, ui.cream())
+        try ui.put(a, builder, faces.jost, 17.0, ui.join(a, "Allow the tool ", ui.text_of(a, s.tool_name[0usize..], s.tool_name_len), "?"), 32.0, 104.0, ui.ink())
+        try ui.put(a, builder, faces.grotesk, 12.0, "It runs on this device and its answer goes to the model.", 32.0, 134.0, ui.muted())
+        try ui.pill(a, builder, &s.hits, faces, 220usize, 32.0, 154.0, 160.0, 40.0, "Allow", ui.amber(), 16.0)
+        try ui.pill(a, builder, &s.hits, faces, 221usize, 204.0, 154.0, 160.0, 40.0, "Deny", ui.soft(), 16.0)
+    }
     try ui.card(a, builder, 16.0, box_y, 322.0, 46.0, 23.0, ui.cream())
     if s.draft.len == 0usize { try ui.put(a, builder, faces.jost, 16.0, "Message", 34.0, box_y + 13.0, ui.muted()) } else { try ui.clipped(a, builder, faces.jost, 16.0, ui.field_text(a, &s.draft), 34.0, box_y + 13.0, 290.0, ui.ink()) }
     ui.hit(&s.hits, 210usize, 16.0, box_y, 322.0, 46.0)
@@ -1018,7 +1357,7 @@ fn wall_seconds() -> usize {
 
 fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
     s.hits.total = 0usize
-    var clip_bytes: [32]u8 = zero
+    var clip_bytes: [128]u8 = zero
     let (clip_length, clip_owner) = sysettings.clip_get(wall_seconds(), clip_bytes[0usize..])
     s.clip_len = clip_length
     let faces = kit.faces
@@ -1028,6 +1367,7 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     if s.screen == LOCK_SCREEN { try draw_lock(a, builder, s, faces) }
     if s.screen == HISTORY_SCREEN { try draw_history(a, builder, s, faces) }
     if s.screen == OPTIONS_SCREEN { try draw_options(a, builder, s, faces) }
+    if s.screen == ATTACH_SCREEN { try draw_attach(a, builder, s, faces) }
     try ui.handle(a, builder)
     ret ok
 }
@@ -1082,8 +1422,23 @@ fn stream_step(a: *mem.Arena, s: *State) -> bool {
     if got_any { s.silent = 0usize } else { s.silent += 1usize }
     // A status other than 200 ends the reply at once.
     if s.net.phase != httpstream.PH_HEAD && s.net.status != 200usize && s.net.status != 0usize {
+        // (C171) The provider's own words are in the error body: take what is on its way (a short document) and
+        // add the message it carries after the plain words.
+        var drained = 0usize
+        while s.net.phase != httpstream.PH_DONE && drained < 40usize {
+            let more_bytes = httpstream.pump(&s.net)
+            drained += 1usize
+            if more_bytes != netproto.R_OK && more_bytes != netproto.R_EMPTY { drained = 40usize }
+        }
+        var detail: [160]u8 = zero
+        let detail_len = extract_text(ui.text_of(a, s.body[0usize..], s.net.body_len), "message", detail[0usize..])
+        let words = status_words(a, s, s.net.status)
         httpstream.abort(&s.net)
-        set_reply(s, status_words(a, s, s.net.status))
+        if detail_len > 0usize {
+            set_reply(s, ui.join(a, ui.join(a, words, " (", ""), ui.text_of(a, detail[0usize..], detail_len), ")"))
+        } else {
+            set_reply(s, words)
+        }
         finish_reply(a, s, false)
         ret true
     }
@@ -1113,6 +1468,13 @@ fn stream_step(a: *mem.Arena, s: *State) -> bool {
                 done = true
             } else {
                 var piece: [400]u8 = zero
+                // (C171) A tool call: the delta that names it (`"tool_calls":[{"id":...,"function":{"name":...`).
+                let call_at = find_text(event.data, "\"tool_calls\"")
+                if call_at < event.data.len && s.tool_name_len == 0usize {
+                    let tail = ui.text_of(a, event.data[call_at..], event.data.len - call_at)
+                    s.tool_name_len = extract_text(tail, "name", s.tool_name[0usize..])
+                    s.tool_id_len = extract_text(tail, "id", s.tool_id[0usize..])
+                }
                 let n = extract_text(event.data, key, piece[0usize..])
                 if n > 0usize {
                     append_reply(s, piece[0usize..], n)
@@ -1129,6 +1491,17 @@ fn stream_step(a: *mem.Arena, s: *State) -> bool {
         httpstream.abort(&s.net)
         set_reply(s, "The provider reported an error.")
         finish_reply(a, s, false)
+        ret true
+    }
+    if (done || s.net.phase == httpstream.PH_DONE) && s.tool_name_len > 0usize && s.reply_len == 0usize {
+        // (C171) The model asked for a tool: nothing runs until the person allows it.
+        httpstream.abort(&s.net)
+        s.streaming = false
+        s.replying = false
+        s.tool_pending = true
+        ui.say("ai tool requested ")
+        ui.say_text(ui.text_of(a, s.tool_name[0usize..], s.tool_name_len))
+        ui.say("\n")
         ret true
     }
     if done || s.net.phase == httpstream.PH_DONE {
@@ -1158,8 +1531,87 @@ fn stream_step(a: *mem.Arena, s: *State) -> bool {
 fn send(a: *mem.Arena, s: *State) {
     if s.draft.len == 0usize || s.streaming { ret }
     let message = ui.field_text(a, &s.draft)
-    add_msg(s, true, message)
+    if s.att_kind != ATT_NONE {
+        var kind_word = "[file "
+        if s.att_kind == ATT_IMAGE { kind_word = "[picture " }
+        add_msg(s, true, ui.join(a, ui.join(a, message, " ", kind_word), ui.text_of(a, s.att_name[0usize..], s.att_name_len), "]"))
+        ui.say("ai attached ")
+        ui.say_num(s.att_kind)
+        ui.say(" ")
+        ui.say_num(s.att_len)
+        ui.say("\n")
+    } else {
+        add_msg(s, true, message)
+    }
     s.draft.len = 0usize
+    s.tool_rounds = 0usize
+    let started = start_request(a, s)
+    s.att_kind = ATT_NONE
+    s.att_len = 0usize
+    if started {
+        s.streaming = true
+        s.replying = true
+        ui.say("ai stream start\n")
+    } else {
+        finish_reply(a, s, false)
+    }
+}
+
+// (C171) The tool the model asked for, run now that the person allowed it: the answer as a line of text.
+fn run_tool(a: *mem.Arena, s: *State, name: str) -> str {
+    if ui.same(name, "battery") {
+        ret ui.join(a, "Battery level ", ui.number(a, sysettings.battery()), " percent")
+    }
+    if ui.same(name, "clock") {
+        let seconds = wall_seconds() % 86400usize
+        ret ui.join(a, ui.join(a, "The time is ", ui.two(a, seconds / 3600usize), ":"), ui.two(a, (seconds / 60usize) % 60usize), " UTC")
+    }
+    if ui.same(name, "files") {
+        var names: [512]u8 = zero
+        let (name_bytes, listed) = vaultfs.list("/", mem.address_of(&names[0usize]), 512usize)
+        if !listed || name_bytes == 0usize { ret "The root folder is empty." }
+        var line: [256]u8 = zero
+        var n = 0usize
+        var i = 0usize
+        while i < name_bytes && n < 250usize {
+            if names[i] == 10u8 { line[n] = 44u8 } else { line[n] = names[i] }
+            n += 1usize
+            i += 1usize
+        }
+        ret ui.join(a, "Files: ", ui.text_of(a, line[0usize..], n), "")
+    }
+    ret "That tool is not available."
+}
+
+// (C171) The person's answer to a tool call: the call and its result join the conversation and the next round goes
+// out (at most three a message).
+fn answer_tool(a: *mem.Arena, s: *State, allow: bool) {
+    let name = ui.text_of(a, s.tool_name[0usize..], s.tool_name_len)
+    var id = ui.text_of(a, s.tool_id[0usize..], s.tool_id_len)
+    if id.len == 0usize { id = "call_1" }
+    s.tool_pending = false
+    var result = "The person did not allow this tool."
+    if allow {
+        result = run_tool(a, s, name)
+        ui.say("ai tool allowed ")
+    } else {
+        ui.say("ai tool denied ")
+    }
+    ui.say_text(name)
+    ui.say("\n")
+    add_tool_msg(s, 1usize, id, name)
+    add_tool_msg(s, 2usize, id, result)
+    if allow {
+        ui.say("ai tool result ")
+        ui.say_text(result)
+        ui.say("\n")
+    }
+    s.tool_rounds += 1usize
+    if s.tool_rounds > MAX_TOOL_ROUNDS {
+        set_reply(s, "Too many tool calls for one message.")
+        finish_reply(a, s, false)
+        ret
+    }
     if start_request(a, s) {
         s.streaming = true
         s.replying = true
@@ -1260,6 +1712,29 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 135usize {
             save_settings(a, s)
             s.screen = SETUP_SCREEN
+            ret true
+        }
+        if id == 136usize {
+            s.tools_on = !s.tools_on
+            if s.tools_on { ui.say("ai tools on\n") } else { ui.say("ai tools off\n") }
+            ret true
+        }
+        ret false
+    }
+    if s.screen == ATTACH_SCREEN {
+        if id == 230usize {
+            s.screen = CHAT_SCREEN
+            ret true
+        }
+        if id >= 300usize && id < 306usize {
+            if attach_pick(a, s, id - 300usize) {
+                ui.say("ai attach picked ")
+                ui.say_text(ui.text_of(a, s.att_name[0usize..], s.att_name_len))
+                ui.say("\n")
+                s.screen = CHAT_SCREEN
+            } else {
+                ui.say("ai attach failed\n")
+            }
             ret true
         }
         ret false
@@ -1366,6 +1841,29 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         ret false
     }
+    if s.tool_pending {
+        // A tool call waits: only the answer counts.
+        if id == 220usize || id == 221usize {
+            answer_tool(a, s, id == 220usize)
+            ret true
+        }
+        ret false
+    }
+    if id == 203usize {
+        list_picks(a, s)
+        s.screen = ATTACH_SCREEN
+        s.typing = false
+        ui.say("ai attach list ")
+        ui.say_num(s.pick_total)
+        ui.say("\n")
+        ret true
+    }
+    if id == 204usize {
+        s.att_kind = ATT_NONE
+        s.att_len = 0usize
+        ui.say("ai attach dropped\n")
+        ret true
+    }
     if id == 200usize {
         s.screen = SETUP_SCREEN
         ret true
@@ -1386,7 +1884,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret true
     }
     if id == 212usize {
-        var clip_bytes: [32]u8 = zero
+        var clip_bytes: [128]u8 = zero
         let (clip_length, clip_owner) = sysettings.clip_get(wall_seconds(), clip_bytes[0usize..])
         if clip_length == 0usize { ret true }
         let pasted = ui.field_paste(&s.draft, clip_bytes[0usize..], clip_length)
@@ -1448,6 +1946,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ui.say("ai open failed\n")
         ret ok
     }
+    let (att_store, att_error) = mem.alloc[u8](a, ATT_CAP)
+    if att_error != ok {
+        ui.say("ai open failed\n")
+        ret ok
+    }
     let (kit_value, kit_error) = appkit.open(a, args, 1usize, "ai")
     if kit_error != ok {
         ui.say("ai open failed\n")
@@ -1459,6 +1962,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var s: State = zero
+    s.att = att_store
     s.screen = SETUP_SCREEN
     s.conv = NONE
     s.temperature = 7usize

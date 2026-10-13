@@ -30465,7 +30465,7 @@ const METHOD_KEY: u32 = 1u32
 const CIPHER_CHACHA: u32 = 0u32
 const CIPHER_AES256_GCM: u32 = 1u32
 const CIPHER_AES128_GCM: u32 = 2u32
-type Session = struct { status: u32, failure: u32, inbuf: []u8, in_len: usize, outbuf: []u8, out_len: usize, chan_in: []u8, chan_len: usize, seq_in: u32, seq_out: u32, encrypted_in: bool, encrypted_out: bool, key_in_main: [32]u8, key_in_len: [32]u8, key_out_main: [32]u8, key_out_len: [32]u8, rng: [64]u8, server_version: [256]u8, server_version_len: usize, client_kexinit: [512]u8, client_kexinit_len: usize, server_kexinit: [2048]u8, server_kexinit_len: usize, ephemeral: [32]u8, ephemeral_public: [32]u8, server_public: [32]u8, kex_k: [32]u8, host_key: [32]u8, host_blob: [64]u8, host_blob_len: usize, host_sig: [64]u8, host_sig_ok: bool, exchange_hash: [32]u8, session_id: [32]u8, have_session_id: bool, user: [64]u8, user_len: usize, password: [128]u8, password_len: usize, key_seed: [32]u8, method: u32, term: [32]u8, term_len: usize, cols: u32, rows: u32, command: [128]u8, command_len: usize, channel_remote: u32, channel_open: bool, window_out: u32, window_in: u32, max_packet: u32, pty_done: bool, eof_seen: bool, exit_status: u32, has_exit_status: bool, banner: [256]u8, banner_len: usize, sent_newkeys: bool, got_newkeys: bool, cipher_next: u32, cipher_out: u32, cipher_in: u32, gcm_out_key: [32]u8, gcm_in_key: [32]u8, gcm_out_iv: [12]u8, gcm_in_iv: [12]u8, next_in_main: [32]u8, next_in_len: [32]u8, next_gcm_key: [32]u8, next_gcm_iv: [12]u8, scratch: []u8, rekeying: bool, rekeys: u32, deferred_window: u32 }
+type Session = struct { status: u32, failure: u32, inbuf: []u8, in_len: usize, outbuf: []u8, out_len: usize, chan_in: []u8, chan_len: usize, seq_in: u32, seq_out: u32, encrypted_in: bool, encrypted_out: bool, key_in_main: [32]u8, key_in_len: [32]u8, key_out_main: [32]u8, key_out_len: [32]u8, rng: [64]u8, server_version: [256]u8, server_version_len: usize, client_kexinit: [512]u8, client_kexinit_len: usize, server_kexinit: [2048]u8, server_kexinit_len: usize, ephemeral: [32]u8, ephemeral_public: [32]u8, server_public: [32]u8, kex_k: [32]u8, host_key: [32]u8, host_blob: [64]u8, host_blob_len: usize, host_sig: [64]u8, host_sig_ok: bool, exchange_hash: [32]u8, session_id: [32]u8, have_session_id: bool, user: [64]u8, user_len: usize, password: [128]u8, password_len: usize, key_seed: [32]u8, method: u32, term: [32]u8, term_len: usize, cols: u32, rows: u32, command: [128]u8, command_len: usize, channel_remote: u32, channel_open: bool, window_out: u32, window_in: u32, max_packet: u32, pty_done: bool, eof_seen: bool, exit_status: u32, has_exit_status: bool, banner: [256]u8, banner_len: usize, sent_newkeys: bool, got_newkeys: bool, cipher_next: u32, cipher_out: u32, cipher_in: u32, gcm_out_key: [32]u8, gcm_in_key: [32]u8, gcm_out_iv: [12]u8, gcm_in_iv: [12]u8, next_in_main: [32]u8, next_in_len: [32]u8, next_gcm_key: [32]u8, next_gcm_iv: [12]u8, scratch: []u8, rekeying: bool, rekeys: u32, deferred_window: u32, channel_kind: u32, fwd_port: u32 }
 fn put_u32(buf: []u8, at: usize, value: u32)
 fn get_u32(buf: []const u8, at: usize) -> u32
 type Writer = struct { buf: []u8, len: usize, over: bool }
@@ -30483,6 +30483,8 @@ fn in_list(list: []const u8, name: str) -> bool
 fn open(a: *mem.Arena, random: []const u8, user: str, password: str, cols: u32, rows: u32) -> (Session, err)
 fn use_key(s: *Session, seed: [32]u8)
 fn set_command(s: *Session, command: str)
+fn set_subsystem(s: *Session, name: str)
+fn set_forward(s: *Session, host: str, port: u32)
 fn fail(s: *Session, code: u32)
 fn chacha_nonce(seq: u32) -> [12]u8
 fn send_packet(s: *Session, payload: []const u8)
@@ -30501,6 +30503,7 @@ fn host_fingerprint(s: *Session, out: []u8) -> usize
 fn start_auth(s: *Session)
 fn send_userauth(s: *Session)
 fn open_channel(s: *Session)
+fn request_subsystem(s: *Session)
 fn channel_request(s: *Session, kind: str, want_reply: bool, extra: []const u8)
 fn request_pty(s: *Session)
 fn request_shell(s: *Session)
@@ -30517,7 +30520,7 @@ fn sent(s: *Session, n: usize)
 fn status(s: *Session) -> u32
 ```
 
-An SSH-2 client, sans-IO (C120): `open` makes a session for a user and password (or `use_key` an ed25519 seed), `outgoing` and `sent` move the bytes to send, `feed` takes the bytes received, `status` follows the connection (version, key exchange, host key pending, authentication, channel, ready, closed, failed). It speaks curve25519-sha256 with an ssh-ed25519 host key, chacha20-poly1305@openssh.com, password and public-key authentication, one session channel with a pty and a shell or an exec command, flow control and exit status. At `HOST_KEY_PENDING` the caller reads `host_key` and `host_fingerprint` and calls `trust`. Nothing else: no other algorithms, rekeying, forwarding, SFTP. Checked against a real server (asyncssh) on loopback: password and key login, a shell, resize, exit status, a wrong password and a wrong host key.
+An SSH-2 client, sans-IO (C120): `open` makes a session for a user and password (or `use_key` an ed25519 seed), `outgoing` and `sent` move the bytes to send, `feed` takes the bytes received, `status` follows the connection (version, key exchange, host key pending, authentication, channel, ready, closed, failed). It speaks curve25519-sha256 with an ssh-ed25519 host key, chacha20-poly1305@openssh.com, password and public-key authentication, one session channel with a pty and a shell or an exec command, flow control and exit status. At `HOST_KEY_PENDING` the caller reads `host_key` and `host_fingerprint` and calls `trust`. Nothing else: one channel at a time, no other algorithms than curve25519, ed25519 and the three ciphers. Checked against a real server (asyncssh) on loopback: password and key login, a shell, resize, exit status, a wrong password and a wrong host key. (C155) `set_subsystem` (`sftp`, no pty; READY when the server accepts it) and `set_forward` (a `direct-tcpip` channel to a host and port as the server reaches it; READY once the server has connected, `FAIL_CHANNEL` when it refuses) make the one channel something other than a shell; `read` and `write` then carry the SFTP packets of `e.net.sftp` or the TCP stream. Checked against asyncssh's sftp server over a chroot (realpath, listing, read, write, stat, a missing file) and its forwarding to an echo server and to a closed port.
 
 
 ### `e.fmt.vcard`

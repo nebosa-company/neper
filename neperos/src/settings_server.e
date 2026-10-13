@@ -264,7 +264,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var torch_last = 5usize
     var torch_until = 0usize
     // (C148) The clipboard: the text as four words, its length, owner and the second it was put.
-    var clip: [4]usize = zero
+    var clip: [16]usize = zero
     var clip_len = 0usize
     var clip_owner = 0usize
     var clip_stamp = 0usize
@@ -433,7 +433,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             clip_len = os.recv(REQ, sysettings.NO_SLOT)
             if clip_len > sysettings.CLIP_BYTES { clip_len = sysettings.CLIP_BYTES }
             var cw = 0usize
-            while cw < 4usize {
+            while cw < 16usize {
                 clip[cw] = os.recv(REQ, sysettings.NO_SLOT)
                 cw += 1usize
             }
@@ -448,16 +448,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let asked_at = os.recv(REQ, sysettings.NO_SLOT)
             if clip_len > 0usize && asked_at >= clip_stamp && asked_at - clip_stamp > clip_lifetime(usize(store.v[sysettings.CLIP_LIFETIME_SETTING])) {
                 clip_len = 0usize
-                clip[0usize] = 0usize
-                clip[1usize] = 0usize
-                clip[2usize] = 0usize
-                clip[3usize] = 0usize
+                var zeroed = 0usize
+                while zeroed < 16usize {
+                    clip[zeroed] = 0usize
+                    zeroed += 1usize
+                }
                 say("clipboard cleared\n")
             }
             let sent_length = os.send(REP, clip_len, sysettings.NO_SLOT)
             let sent_owner = os.send(REP, clip_owner, sysettings.NO_SLOT)
             var gw = 0usize
-            while gw < 4usize {
+            while gw < 16usize {
                 let sent_word = os.send(REP, clip[gw], sysettings.NO_SLOT)
                 gw += 1usize
             }
@@ -466,10 +467,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var cleared = 0usize
             if clip_len > 0usize && clip_owner == owner {
                 clip_len = 0usize
-                clip[0usize] = 0usize
-                clip[1usize] = 0usize
-                clip[2usize] = 0usize
-                clip[3usize] = 0usize
+                var zeroed = 0usize
+                while zeroed < 16usize {
+                    clip[zeroed] = 0usize
+                    zeroed += 1usize
+                }
                 cleared = 1usize
                 say("clipboard cleared by owner ")
                 say_num(owner)

@@ -64,7 +64,9 @@ const CIPHER_AES128_GCM: u32 = 2u32
 // direction; AES-GCM's keys and nonces (a fixed part and an invocation counter that each packet moves on); the keys of
 // the exchange in progress for what the server sends, held until its NEWKEYS arrives; `scratch` for sealing and
 // opening; and `rekeying` (a key exchange the server began after the session was up), `rekeys` (how many have
-// finished) and the window credit given back while an exchange held packets.
+// finished) and the window credit given back while an exchange held packets. `channel_kind` and `fwd_port` (C155) say what
+// the one channel is: 0 a session (a shell, or `command`), 1 the subsystem named in `command` (sftp), 2 a `direct-tcpip`
+// forward to the host in `command` and port `fwd_port`; only a session gets a pty.
 type Session = struct {
     status: u32,
     failure: u32,
@@ -141,6 +143,8 @@ type Session = struct {
     rekeying: bool,
     rekeys: u32,
     deferred_window: u32,
+    channel_kind: u32,
+    fwd_port: u32,
 }
 
 // ---- byte helpers ---------------------------------------------------------------------------------
@@ -291,7 +295,7 @@ fn open(a: *mem.Arena, random: []const u8, user: str, password: str, cols: u32, 
     if chan_error != ok { ret (none, chan_error) }
     let (scratch, scratch_error) = mem.alloc[u8](a, 35200usize)
     if scratch_error != ok { ret (none, scratch_error) }
-    var s = Session { status: VERSION, failure: FAIL_NONE, inbuf: inbuf, in_len: 0usize, outbuf: outbuf, out_len: 0usize, chan_in: chan_in, chan_len: 0usize, seq_in: 0u32, seq_out: 0u32, encrypted_in: false, encrypted_out: false, key_in_main: zero, key_in_len: zero, key_out_main: zero, key_out_len: zero, rng: zero, server_version: zero, server_version_len: 0usize, client_kexinit: zero, client_kexinit_len: 0usize, server_kexinit: zero, server_kexinit_len: 0usize, ephemeral: zero, ephemeral_public: zero, server_public: zero, kex_k: zero, host_key: zero, host_blob: zero, host_blob_len: 0usize, host_sig: zero, host_sig_ok: false, exchange_hash: zero, session_id: zero, have_session_id: false, user: zero, user_len: user.len, password: zero, password_len: password.len, key_seed: zero, method: METHOD_PASSWORD, term: zero, term_len: 0usize, cols: cols, rows: rows, command: zero, command_len: 0usize, channel_remote: 0u32, channel_open: false, window_out: 0u32, window_in: 2097152u32, max_packet: 0u32, pty_done: false, eof_seen: false, exit_status: 0u32, has_exit_status: false, banner: zero, banner_len: 0usize, sent_newkeys: false, got_newkeys: false, cipher_next: CIPHER_CHACHA, cipher_out: CIPHER_CHACHA, cipher_in: CIPHER_CHACHA, gcm_out_key: zero, gcm_in_key: zero, gcm_out_iv: zero, gcm_in_iv: zero, next_in_main: zero, next_in_len: zero, next_gcm_key: zero, next_gcm_iv: zero, scratch: scratch, rekeying: false, rekeys: 0u32, deferred_window: 0u32 }
+    var s = Session { status: VERSION, failure: FAIL_NONE, inbuf: inbuf, in_len: 0usize, outbuf: outbuf, out_len: 0usize, chan_in: chan_in, chan_len: 0usize, seq_in: 0u32, seq_out: 0u32, encrypted_in: false, encrypted_out: false, key_in_main: zero, key_in_len: zero, key_out_main: zero, key_out_len: zero, rng: zero, server_version: zero, server_version_len: 0usize, client_kexinit: zero, client_kexinit_len: 0usize, server_kexinit: zero, server_kexinit_len: 0usize, ephemeral: zero, ephemeral_public: zero, server_public: zero, kex_k: zero, host_key: zero, host_blob: zero, host_blob_len: 0usize, host_sig: zero, host_sig_ok: false, exchange_hash: zero, session_id: zero, have_session_id: false, user: zero, user_len: user.len, password: zero, password_len: password.len, key_seed: zero, method: METHOD_PASSWORD, term: zero, term_len: 0usize, cols: cols, rows: rows, command: zero, command_len: 0usize, channel_remote: 0u32, channel_open: false, window_out: 0u32, window_in: 2097152u32, max_packet: 0u32, pty_done: false, eof_seen: false, exit_status: 0u32, has_exit_status: false, banner: zero, banner_len: 0usize, sent_newkeys: false, got_newkeys: false, cipher_next: CIPHER_CHACHA, cipher_out: CIPHER_CHACHA, cipher_in: CIPHER_CHACHA, gcm_out_key: zero, gcm_in_key: zero, gcm_out_iv: zero, gcm_in_iv: zero, next_in_main: zero, next_in_len: zero, next_gcm_key: zero, next_gcm_iv: zero, scratch: scratch, rekeying: false, rekeys: 0u32, deferred_window: 0u32, channel_kind: 0u32, fwd_port: 0u32 }
     var i = 0usize
     while i < 64usize {
         s.rng[i] = random[i]
@@ -341,6 +345,22 @@ fn set_command(s: *Session, command: str) {
         i += 1usize
     }
     s.command_len = n
+}
+
+// (C155) Open the subsystem `name` (`sftp`) on the channel instead of a shell: no pty is asked for, and the session is
+// READY once the server accepts the subsystem. `read` and `write` then carry the subsystem's own protocol.
+fn set_subsystem(s: *Session, name: str) {
+    set_command(s, name)
+    s.channel_kind = 1u32
+}
+
+// (C155) Open a `direct-tcpip` channel to `host`:`port` (as reached from the server) instead of a session: the
+// session is READY once the server has connected, and `read` and `write` are the TCP stream. One forward is one
+// connection of its own.
+fn set_forward(s: *Session, host: str, port: u32) {
+    set_command(s, host)
+    s.fwd_port = port
+    s.channel_kind = 2u32
 }
 
 fn fail(s: *Session, code: u32) {
@@ -896,15 +916,34 @@ fn send_userauth(s: *Session) {
 }
 
 fn open_channel(s: *Session) {
-    var msg: [64]u8 = zero
-    var w = Writer { buf: msg[0usize..64usize], len: 0usize, over: false }
+    var msg: [256]u8 = zero
+    var w = Writer { buf: msg[0usize..256usize], len: 0usize, over: false }
     w_byte(&w, 90u8)
-    w_string(&w, "session")
+    if s.channel_kind == 2u32 {
+        w_string(&w, "direct-tcpip")
+    } else {
+        w_string(&w, "session")
+    }
     w_u32(&w, 0u32)
     w_u32(&w, s.window_in)
     w_u32(&w, 32768u32)
+    if s.channel_kind == 2u32 {
+        // RFC 4254 7.2: the host and port to connect to, then the originator's address and port.
+        w_string(&w, s.command[0usize..s.command_len])
+        w_u32(&w, s.fwd_port)
+        w_string(&w, "127.0.0.1")
+        w_u32(&w, 0u32)
+    }
     send_packet(s, msg[0usize..w.len])
     s.status = CHANNEL
+}
+
+// The subsystem request (RFC 4254 6.5): the name is in `command`.
+fn request_subsystem(s: *Session) {
+    var extra: [140]u8 = zero
+    var w = Writer { buf: extra[0usize..140usize], len: 0usize, over: false }
+    w_string(&w, s.command[0usize..s.command_len])
+    channel_request(s, "subsystem", true, extra[0usize..w.len])
 }
 
 fn channel_request(s: *Session, kind: str, want_reply: bool, extra: []const u8) {
@@ -1133,7 +1172,16 @@ fn dispatch(s: *Session, payload: []const u8) {
         s.window_out = window
         s.max_packet = max
         s.channel_open = true
-        request_pty(s)
+        if s.channel_kind == 2u32 {
+            // A forwarded connection is up as soon as the server has made it.
+            s.status = READY
+        } else if s.channel_kind == 1u32 {
+            // A subsystem has no pty: its reply is the READY.
+            s.pty_done = true
+            request_subsystem(s)
+        } else {
+            request_pty(s)
+        }
         ret
     }
     if kind == 92u8 {

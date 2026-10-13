@@ -774,7 +774,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret true
         }
         if id == 550usize {
-            // (C175) Copy: the start of the message (the clipboard holds 32 bytes) goes to the clipboard.
+            // (C175) Copy: the start of the message (the clipboard holds 128 bytes) goes to the clipboard.
             let (wall, wall_error) = time.now()
             var now_s = 0usize
             if wall_error == ok { now_s = usize(wall.nanos / 1000000000i64) }

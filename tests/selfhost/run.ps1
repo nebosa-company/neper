@@ -11497,12 +11497,14 @@ if ($neperosQemu) {
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }
     # The scan fixtures (D4812): a disk holding /DCIM/SCAN_0001.png, a page of a passport's two machine-readable lines.
+    # The scan fixtures (C170): a disk whose /DCIM holds one frame the Camera might have saved, a QR symbol of an otpauth
+    # URI (tests/selfhost/fixtures/neperos/qr_frame.png, made by qr_frame/src/main.e), for Secure's Scan.
     foreach ($row in $appsTable) {
         $fields = $row.Split('|', 7)
         if ($fields[0] -ne 'scanfixture') { continue }
         $fixture = $fields[1]
         $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
-        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 2 ('/DCIM/SCAN_0001.png=' + (Join-Path $repo 'tests\selfhost\fixtures\neperos\mrz_scan.png')) | Out-Null
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/DCIM/SCAN_0001.png=' + (Join-Path $repo 'tests\selfhost\fixtures\neperos\mrz_scan.png')) ('/DCIM/IMG_0001.png=' + (Join-Path $repo 'tests\selfhost\fixtures\neperos\qr_frame.png')) | Out-Null
         if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
         $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
@@ -11555,6 +11557,45 @@ if ($neperosQemu) {
         & python (Join-Path $repo 'scripts\make_fs_image.py') $revokedDisk 8 ('/revoked=' + $revokedList) | Out-Null
         if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
         $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $packageArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $revokedDisk 0 $fields[4] 2>&1) -join "`n"
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
+    # Many installed apps, removal, update and roll back (C173, C151): Hello, a hand-written app (neperos/src/hello.e),
+    # is signed and put on the disk as /apps/hello.npkg, or Lab level at version 1 is, and the archive carries Lab level
+    # (version 1, or 2 for install_update). A row named <base>_again boots the plain archive on the disk its base left.
+    $helloImage = Join-Path $testBuild 'neperos-app-hello.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\hello.e') $repo aarch64 neperos $helloImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the hello app did not build' }
+    $helloPackage = Join-Path $testBuild 'hello.npkg'
+    & python (Join-Path $repo 'scripts\make_package.py') pack $helloImage $helloPackage 'Hello' 'none' 1 | Out-Null
+    $helloApi2 = Join-Path $testBuild 'hello-api2.npkg'
+    & python (Join-Path $repo 'scripts\make_package.py') pack $helloImage $helloApi2 'Hello' 'none' 1 2 | Out-Null
+    $levelV2 = Join-Path $testBuild 'level2.npkg'
+    & python (Join-Path $repo 'scripts\make_package.py') pack (Join-Path $testBuild 'neperos-app-level.img') $levelV2 'Lab level' storage 2 | Out-Null
+    $updateArchive = Join-Path $testBuild 'shell-update-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $updateArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $settingsServer (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') @appImages (Join-Path $assets 'roots\mozilla.der') $levelV2 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS update archive did not assemble' }
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'installappsfixture') { continue }
+        $fixture = $fields[1]
+        $appsBase = $fixture -replace '_again$', ''
+        $appsDisk = Join-Path $testBuild "shell-$appsBase.disk"
+        $appsArchive = $packageArchive
+        if ($appsBase -eq 'install_update') { $appsArchive = $updateArchive }
+        if ($fixture -eq $appsBase) {
+            if ($appsBase -eq 'install_update') {
+                & python (Join-Path $repo 'scripts\make_fs_image.py') $appsDisk 8 ('/apps/lablevel.npkg=' + $packagePath) | Out-Null
+            } elseif ($appsBase -eq 'install_api') {
+                & python (Join-Path $repo 'scripts\make_fs_image.py') $appsDisk 8 ('/apps/hello.npkg=' + $helloApi2) | Out-Null
+            } else {
+                & python (Join-Path $repo 'scripts\make_fs_image.py') $appsDisk 8 ('/apps/hello.npkg=' + $helloPackage) | Out-Null
+            }
+        } else {
+            $appsArchive = $craterArchive
+        }
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $appsArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $appsDisk 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }

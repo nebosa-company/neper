@@ -3,7 +3,7 @@
 
   make_package.py key                         write neperos/src/server_key.e (the development server's Ed25519
                                               public key, from a fixed seed: the device's trust anchor)
-  make_package.py pack IMAGE OUT NAME [CAPS]  build and sign a package of an app image
+  make_package.py pack IMAGE OUT NAME [CAPS [VERSION [API]]]  build and sign a package of an app image
 
 The signing key is the development server's, from a fixed seed; the real server's key replaces
 neperos/src/server_key.e. A package is "NPKG", a version byte, a two-byte manifest length, the manifest,
@@ -46,7 +46,11 @@ def main() -> int:
     if len(sys.argv) >= 5 and sys.argv[1] == "pack":
         image = Path(sys.argv[2]).read_bytes()
         caps = sys.argv[5] if len(sys.argv) > 5 else "storage"
-        manifest = f"name={sys.argv[4]}\nversion=1\napi=1\nentry=main\ncapabilities={caps}".encode()
+        # (C173) The manifest's version: a package of a name already installed replaces it when this is higher.
+        version = sys.argv[6] if len(sys.argv) > 6 else "1"
+        # The app kit level the package was written for (the device's is package.e's API_LEVEL).
+        api = sys.argv[7] if len(sys.argv) > 7 else "1"
+        manifest = f"name={sys.argv[4]}\nversion={version}\napi={api}\nentry=main\ncapabilities={caps}".encode()
         Path(sys.argv[3]).write_bytes(package(manifest, image))
         print("wrote", sys.argv[3])
         return 0
