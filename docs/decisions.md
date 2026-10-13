@@ -40439,3 +40439,6 @@ The chat server is a hub (chat_services.py): `JOIN|name|secret` is an account (s
 
 ## D5106 — C175: the clipboard holds 128 bytes
 The settings server's clipboard is sixteen words (128 bytes) instead of four: `sysettings.clip_set` and `clip_get` move sixteen words, the callers' buffers (ui.e, ai.e) are 128 bytes, and a message copied in Mail is 128 of its 155 bytes at the other end (fixture clipboard_long). The protocol changes for every app that draws the keyboard: all of them are rebuilt together.
+
+## D5107 — C173: a prompt prefix and readable diagnostics on the build server
+`dynamic_services.py` composes the request a real model would get as the card of traps (`docs/llm-neper-card.md`) and the app kit's level in front of the prompt, followed by the last attempt's diagnostics rewritten as `CODE at line L, column C: message` one to a line (`readable`); the canned model ignores it, the audit log records its size and the kit level. Not done in C173: the scanner is still the token-level one of scan.e (the NIR walk needs the compiler to hand a built program's calls over, which `emit-executable` does not expose), and the signed revocation list is unchanged from D4107.
