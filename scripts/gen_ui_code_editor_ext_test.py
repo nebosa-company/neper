@@ -40,7 +40,7 @@ CSS = L('important', '', '', '/*', '*/', '"\'', '')
 HTML = L('', '', '', '<!--', '-->', '"\'', '')
 YAML = L('true false null yes no on off', '', '#', '', '', '"\'', '')
 TOML = L('true false', '', '#', '', '', '"\'', '')
-LUA = L('and break do else elseif end false for function goto if in local nil not or repeat return then true until while', '', '--', '', '', '"\'', '')
+LUA = L('and break do else elseif end false for function goto if in local nil not or repeat return then true until while', '', '--', '--[[', ']]', '"\'', '')
 PY = L('and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield', '', '#', '', '', '"\'', '')
 JS = L('async await break case catch class const continue debugger default delete do else export extends false finally for function if import in instanceof let new null of return static super switch this throw true try typeof var void while with yield', '', '//', '/*', '*/', '"\'`', '`')
 PLAIN = L('', '', '', '', '', '', '')
@@ -85,14 +85,14 @@ def scan(doc, lang):
             else:
                 c = doc[p]
                 if c in (32, 9, 13): p += 1
-                elif lang['lc'] and doc.startswith(lang['lc'].encode(), p, e):
-                    p = e; toks.append((TOK_COMMENT, t0, p))
                 elif lang['bo'] and doc.startswith(lang['bo'].encode(), p, e):
                     p += len(lang['bo'])
                     j = doc.find(lang['bc'].encode(), p, e)
                     if j >= 0: p = j + len(lang['bc'])
                     else: p = e; state = ('b',)
                     toks.append((TOK_COMMENT, t0, p))
+                elif lang['lc'] and doc.startswith(lang['lc'].encode(), p, e):
+                    p = e; toks.append((TOK_COMMENT, t0, p))
                 elif chr(c) in lang['q']:
                     p += 1
                     closed = False

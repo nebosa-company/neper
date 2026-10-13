@@ -18,7 +18,7 @@ type Batch = struct { edit_first: usize, edit_n: usize, text_first: usize, text_
 type Entry = struct { batch_first: usize, batch_n: usize, sel_first: usize, sel_n: usize, id_before: u64, kind: u32 }
 type Stack = struct { entries: []Entry, nent: usize, batches: []Batch, nbat: usize, edits: []Edit, ned: usize, text: []u8, ntext: usize, sels: []Range, nsel: usize }
 type Token = struct { start: usize, end: usize, kind: u32 }
-type Language = struct { keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str }
+type Language = struct { keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str, fold_case: bool, line_comment2: str, nested: bool, block2_open: str, block2_close: str }
 type SearchOpts = struct { case_sensitive: bool, whole_word: bool }
 type Editor = struct {
     buf: []u8, gap_start: usize, gap_end: usize,
@@ -27,7 +27,8 @@ type Editor = struct {
     undo: Stack, redo: Stack,
     content_id: u64, next_id: u64, saved_id: u64, revision: u64, can_merge: bool, merge_kind: u32,
     lang: Language, use_tabs: bool, tab_width: usize, indent_unit: usize,
-    scratch_edits: []Edit, scratch_text: []u8, scratch_sels: []Range
+    scratch_edits: []Edit, scratch_text: []u8, scratch_sels: []Range,
+    views: []FoldView, diag: DiagSet
 }
 error Invalid
 error TooLarge
@@ -35,6 +36,8 @@ error TooManyLines
 error TooManySelections
 error NotBoundary
 error BadEdits
+error NoFold
+error Stale
 
 const NO_GOAL: usize = 18446744073709551615usize
 const NO_DIRTY: usize = 18446744073709551615usize
@@ -74,7 +77,7 @@ fn max_of(x: usize, y: usize) -> usize {
 // ---- languages --------------------------------------------------------------------------------------------
 
 fn lang_plain() -> Language {
-    ret Language { keywords: "", types: "", line_comment: "", block_open: "", block_close: "", quotes: "", multiline_quotes: "" }
+    ret Language { keywords: "", types: "", line_comment: "", block_open: "", block_close: "", quotes: "", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 // Neper: `//` comments, the keywords of grammar revision 3 and the builtin type names.
@@ -82,21 +85,21 @@ fn lang_neper() -> Language {
     ret Language {
         keywords: " as break case const continue default defer else enum error extern false fn for if in let nil nocheck ok own resource ret shared struct switch true try type undef union unreachable use var when while zero ",
         types: " bool u8 u16 u32 u64 i8 i16 i32 i64 usize isize f32 f64 str err ",
-        line_comment: "//", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "" }
+        line_comment: "//", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 fn lang_javascript() -> Language {
     ret Language {
         keywords: " async await break case catch class const continue debugger default delete do else export extends false finally for function if import in instanceof let new null of return static super switch this throw true try typeof var void while with yield ",
         types: "",
-        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "`" }
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "`", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 fn lang_python() -> Language {
     ret Language {
         keywords: " and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield ",
         types: "",
-        line_comment: "#", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "" }
+        line_comment: "#", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 // C and C++ share one pack: `//` and `/* */`, both quote kinds, the C and C++ keywords and the fixed-width types.
@@ -104,7 +107,7 @@ fn lang_c() -> Language {
     ret Language {
         keywords: " auto break case catch class const constexpr continue default delete do else enum explicit extern false for friend goto if inline namespace new noexcept nullptr operator private protected public register return sizeof static struct switch template this throw true try typedef typename union using virtual volatile while ",
         types: " bool char double float int int8_t int16_t int32_t int64_t long short signed size_t uint8_t uint16_t uint32_t uint64_t unsigned void wchar_t ",
-        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'", multiline_quotes: "" }
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 // Rust: a lone `'` is a lifetime as often as a character literal, so only `"` opens a string here.
@@ -112,39 +115,39 @@ fn lang_rust() -> Language {
     ret Language {
         keywords: " as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while ",
         types: " bool char f32 f64 i8 i16 i32 i64 i128 isize str u8 u16 u32 u64 u128 usize String Vec Option Result Box ",
-        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"", multiline_quotes: "\"" }
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"", multiline_quotes: "\"", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 fn lang_go() -> Language {
     ret Language {
         keywords: " break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var true false nil ",
         types: " bool byte complex64 complex128 error float32 float64 int int8 int16 int32 int64 rune string uint uint8 uint16 uint32 uint64 uintptr ",
-        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "`" }
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "`", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 fn lang_java() -> Language {
     ret Language {
         keywords: " abstract assert break case catch class const continue default do else enum extends final finally for goto if implements import instanceof interface native new package private protected public return static strictfp super switch synchronized this throw throws transient try volatile while true false null ",
         types: " boolean byte char double float int long short void String ",
-        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'", multiline_quotes: "" }
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 fn lang_typescript() -> Language {
     ret Language {
         keywords: " abstract as async await break case catch class const continue debugger declare default delete do else enum export extends false finally for from function if implements import in instanceof interface is keyof let namespace new null of private protected public readonly return static super switch this throw true try type typeof var void while with yield ",
         types: " any bigint boolean never number object string symbol undefined unknown ",
-        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "`" }
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "`", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 // JSON has no comments; its three literals are keywords so they colour apart from strings and numbers.
 fn lang_json() -> Language {
-    ret Language { keywords: " true false null ", types: "", line_comment: "", block_open: "", block_close: "", quotes: "\"", multiline_quotes: "" }
+    ret Language { keywords: " true false null ", types: "", line_comment: "", block_open: "", block_close: "", quotes: "\"", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 fn lang_shell() -> Language {
     ret Language {
         keywords: " if then else elif fi case esac for select while until do done in function time return exit break continue export local readonly declare unset shift source alias echo ",
-        types: "", line_comment: "#", block_open: "", block_close: "", quotes: "\"'`", multiline_quotes: "\"'" }
+        types: "", line_comment: "#", block_open: "", block_close: "", quotes: "\"'`", multiline_quotes: "\"'", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 // SQL keywords are matched as written, so both the upper and lower case spellings of each are listed.
@@ -152,32 +155,32 @@ fn lang_sql() -> Language {
     ret Language {
         keywords: " select SELECT from FROM where WHERE insert INSERT into INTO values VALUES update UPDATE set SET delete DELETE create CREATE table TABLE drop DROP alter ALTER index INDEX join JOIN left LEFT right RIGHT inner INNER outer OUTER on ON group GROUP by BY order ORDER having HAVING limit LIMIT union UNION and AND or OR not NOT null NULL as AS distinct DISTINCT primary PRIMARY key KEY foreign FOREIGN references REFERENCES ",
         types: " int INT integer INTEGER text TEXT varchar VARCHAR char CHAR date DATE timestamp TIMESTAMP boolean BOOLEAN real REAL numeric NUMERIC ",
-        line_comment: "--", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "" }
+        line_comment: "--", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 // CSS: block comments only; at-rules and property names are plain identifiers here (no keyword list).
 fn lang_css() -> Language {
-    ret Language { keywords: " important ", types: "", line_comment: "", block_open: "/*", block_close: "*/", quotes: "\"'", multiline_quotes: "" }
+    ret Language { keywords: " important ", types: "", line_comment: "", block_open: "/*", block_close: "*/", quotes: "\"'", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 // HTML and XML: `<!-- -->` comments and attribute quotes; tag names stay identifiers.
 fn lang_html() -> Language {
-    ret Language { keywords: "", types: "", line_comment: "", block_open: "<!--", block_close: "-->", quotes: "\"'", multiline_quotes: "" }
+    ret Language { keywords: "", types: "", line_comment: "", block_open: "<!--", block_close: "-->", quotes: "\"'", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 fn lang_yaml() -> Language {
-    ret Language { keywords: " true false null yes no on off ", types: "", line_comment: "#", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "" }
+    ret Language { keywords: " true false null yes no on off ", types: "", line_comment: "#", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 fn lang_toml() -> Language {
-    ret Language { keywords: " true false ", types: "", line_comment: "#", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "" }
+    ret Language { keywords: " true false ", types: "", line_comment: "#", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
-// `--[[ ]]` would need the block opener tested before the line comment; the scanner tests the line comment first.
+// Long comments `--[[ ]]` (level 0); the scanner tests a block opener before a line comment so `--[[` wins over `--`.
 fn lang_lua() -> Language {
     ret Language {
         keywords: " and break do else elseif end false for function goto if in local nil not or repeat return then true until while ",
-        types: "", line_comment: "--", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "" }
+        types: "", line_comment: "--", block_open: "--[[", block_close: "]]", quotes: "\"'", multiline_quotes: "", fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
 }
 
 fn same_bytes(x: []const u8, y: str) -> bool {
@@ -190,35 +193,437 @@ fn same_bytes(x: []const u8, y: str) -> bool {
     ret true
 }
 
-// Language for a file name suffix without the dot (ASCII case-insensitive); unknown suffixes are plain text.
-fn lang_for_suffix(suffix: str) -> Language {
+// A pack with the plain defaults for the case, nesting and second-comment fields.
+fn pack(keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str) -> Language {
+    ret Language { keywords: keywords, types: types, line_comment: line_comment, block_open: block_open, block_close: block_close, quotes: quotes, multiline_quotes: multiline_quotes, fold_case: false, line_comment2: "", nested: false, block2_open: "", block2_close: "" }
+}
+
+// JSON with comments (`.jsonc`): the JSON literals, `//` and `/* */`.
+fn lang_jsonc() -> Language {
+    ret pack(" true false null ", "", "//", "/*", "*/", "\"", "")
+}
+
+// C proper (C23 spellings): the keywords C++ added are not keywords here, so `class` and `new` stay identifiers.
+fn lang_c_dialect() -> Language {
+    ret pack(
+        " alignas alignof auto break case const constexpr continue default do else enum extern false for goto if inline nullptr register restrict return sizeof static static_assert struct switch thread_local true typedef typeof union volatile while ",
+        " bool char double float int int8_t int16_t int32_t int64_t long short signed size_t uint8_t uint16_t uint32_t uint64_t unsigned void wchar_t ",
+        "//", "/*", "*/", "\"'", "")
+}
+
+fn lang_csharp() -> Language {
+    ret pack(
+        " abstract as async await base break case catch checked class const continue default delegate do else enum event explicit extern false finally fixed for foreach goto if implicit in interface internal is lock namespace new null operator out override params private protected public readonly ref return sealed sizeof stackalloc static struct switch this throw true try typeof unchecked unsafe using virtual volatile while var ",
+        " bool byte char decimal double dynamic float int long object sbyte short string uint ulong ushort void ",
+        "//", "/*", "*/", "\"'", "")
+}
+
+fn lang_kotlin() -> Language {
+    var l = pack(
+        " as break class continue do else false for fun if in interface is null object package return super this throw true try typealias typeof val var when while by catch constructor delegate dynamic field file finally get import init param property receiver set setparam where abstract actual annotation companion const crossinline data enum expect external final infix inline inner internal lateinit noinline open operator out override private protected public reified sealed suspend tailrec vararg ",
+        " Any Boolean Byte Char Double Float Int Long Nothing Short String Unit ",
+        "//", "/*", "*/", "\"'", "\"")
+    l.nested = true
+    ret l
+}
+
+fn lang_swift() -> Language {
+    var l = pack(
+        " associatedtype class deinit enum extension fileprivate func import init inout internal let open operator private precedencegroup protocol public rethrows static struct subscript typealias var break case catch continue default defer do else fallthrough for guard if in repeat return throw switch where while Any as await false is nil self Self super throws true try ",
+        " Bool Character Double Float Int Int8 Int16 Int32 Int64 String UInt UInt8 UInt16 UInt32 UInt64 Void ",
+        "//", "/*", "*/", "\"", "\"")
+    l.nested = true
+    ret l
+}
+
+fn lang_dart() -> Language {
+    var l = pack(
+        " abstract as assert async await break case catch class const continue covariant default deferred do dynamic else enum export extends extension external factory false final finally for Function get hide if implements import in interface is late library mixin new null on operator part required rethrow return set show static super switch sync this throw true try typedef var void while with yield ",
+        " bool double int num Object String List Map Set dynamic ",
+        "//", "/*", "*/", "\"'", "\"'")
+    l.nested = true
+    ret l
+}
+
+fn lang_r() -> Language {
+    ret pack(
+        " if else repeat while function for in next break TRUE FALSE NULL Inf NaN NA NA_integer_ NA_real_ NA_character_ ",
+        "", "#", "", "", "\"'`", "")
+}
+
+fn lang_protobuf() -> Language {
+    ret pack(
+        " syntax import weak public package option message enum service rpc returns stream oneof map reserved extensions extend repeated optional required group to max true false ",
+        " double float int32 int64 uint32 uint64 sint32 sint64 fixed32 fixed64 sfixed32 sfixed64 bool string bytes ",
+        "//", "/*", "*/", "\"'", "")
+}
+
+// GNU as: `#` and `@` start a comment to the end of the line (x86 and Arm), `/* */` a block.
+fn lang_assembly() -> Language {
+    var l = pack(
+        " .text .data .bss .section .global .globl .align .byte .word .long .quad .ascii .asciz .string .equ .set .type .size .file .ident .macro .endm .if .else .endif .include ",
+        "", "#", "/*", "*/", "\"'", "")
+    l.line_comment2 = "@"
+    ret l
+}
+
+// NASM and MASM: `;` comments, case-insensitive mnemonics and directives.
+fn lang_intelasm() -> Language {
+    var l = pack(
+        " mov add sub mul imul div idiv inc dec and or xor not neg shl shr sar rol ror cmp test jmp je jne jz jnz jl jle jg jge ja jae jb jbe call ret push pop lea nop int syscall loop section segment global extern bits org equ db dw dd dq resb resw resd resq times proc endp assume include macro endm ",
+        " byte word dword qword ptr near far short rax rbx rcx rdx rsi rdi rsp rbp eax ebx ecx edx esi edi esp ebp ax bx cx dx al bl cl dl ",
+        ";", "", "", "\"'", "")
+    l.fold_case = true
+    ret l
+}
+
+fn lang_markdown() -> Language {
+    ret pack("", "", "", "<!--", "-->", "`", "")
+}
+
+// Dialects of SQL: keyword case is folded (the tables are lower case) and the comment forms differ.
+fn lang_sql_dialect(extra: str, hash_comments: bool) -> Language {
+    var l = pack(
+        " select from where insert into values update set delete create table drop alter index join left right inner outer on group by order having limit union and or not null as distinct primary key foreign references view begin commit rollback with case when then else end in like between exists ",
+        " int integer text varchar char date timestamp boolean real numeric blob float double decimal ",
+        "--", "/*", "*/", "\"'`", "")
+    l.fold_case = true
+    if hash_comments { l.line_comment2 = "#" }
+    if extra.len > 0usize { l.types = extra }
+    ret l
+}
+
+// Object Pascal: case-insensitive, `//`, `{ }` and `(* *)` comments, strings in single quotes.
+fn lang_objectpascal() -> Language {
+    var l = pack(
+        " and array as asm begin case class const constructor destructor div do downto else end except exports file finally for function goto if implementation in inherited initialization inline interface is label library mod nil not object of on or out packed procedure program property raise record repeat set shl shr string then threadvar to try type unit until uses var while with xor private protected public published override virtual abstract ",
+        " integer cardinal byte word longint int64 boolean char string double single real extended pointer widestring ",
+        "//", "{", "}", "'", "")
+    l.fold_case = true
+    l.block2_open = "(*"
+    l.block2_close = "*)"
+    ret l
+}
+
+fn lang_powershell() -> Language {
+    var l = pack(
+        " begin break catch class continue data do dynamicparam else elseif end enum exit filter finally for foreach from function if in param process return switch throw trap try until using var while workflow ",
+        "", "#", "<#", "#>", "\"'", "\"'")
+    l.fold_case = true
+    ret l
+}
+
+fn lang_terraform() -> Language {
+    var l = pack(
+        " resource data variable output module provider locals terraform for in if true false null ",
+        "", "#", "/*", "*/", "\"", "")
+    l.line_comment2 = "//"
+    ret l
+}
+
+// Batch: `REM` and `::` comments, case-insensitive commands.
+fn lang_batch() -> Language {
+    var l = pack(
+        " echo set if else for in do goto call exit rem pause cd dir copy move del type cls start setlocal endlocal shift not exist defined errorlevel equ neq lss leq gtr geq ",
+        "", "::", "", "", "\"", "")
+    l.fold_case = true
+    l.line_comment2 = "rem "
+    ret l
+}
+
+fn lang_vbnet() -> Language {
+    var l = pack(
+        " addhandler addressof alias and andalso as byref byval call case catch class const continue declare default delegate dim directcast do each else elseif end endif enum erase error event exit false finally for friend function get gettype global gosub goto handles if implements imports in inherits interface is isnot let lib like loop me mod module mustinherit mustoverride mybase myclass namespace narrowing new next not nothing notinheritable notoverridable of on operator option optional or orelse overloads overridable overrides paramarray partial private property protected public raiseevent readonly redim rem removehandler resume return select set shadows shared static step stop structure sub synclock then throw to true try trycast typeof using when while widening with withevents writeonly xor ",
+        " boolean byte char date decimal double integer long object sbyte short single string uinteger ulong ushort ",
+        "'", "", "", "\"", "")
+    l.fold_case = true
+    l.line_comment2 = "rem "
+    ret l
+}
+
+fn lang_vbclassic() -> Language {
+    var l = pack(
+        " and as byref byval call case const declare dim do each else elseif end enum exit false for function get goto if imports in is let loop me mod new next not nothing on option or private property public redim rem resume select set static step stop sub then to true type until wend while with xor ",
+        " boolean byte currency date double integer long object single string variant ",
+        "'", "", "", "\"", "")
+    l.fold_case = true
+    l.line_comment2 = "rem "
+    ret l
+}
+
+fn lang_fortran() -> Language {
+    var l = pack(
+        " program end subroutine function module use implicit none integer real double precision complex logical character dimension parameter allocatable pointer target intent in out inout if then else elseif endif do while enddo continue cycle exit stop return call select case where forall contains interface public private save data common equivalence write read print open close format ",
+        "", "!", "", "", "\"'", "")
+    l.fold_case = true
+    ret l
+}
+
+fn lang_php() -> Language {
+    var l = pack(
+        " abstract and array as break callable case catch class clone const continue declare default do echo else elseif empty enddeclare endfor endforeach endif endswitch endwhile extends final finally fn for foreach function global goto if implements include include_once instanceof insteadof interface isset list match namespace new or print private protected public readonly require require_once return static switch throw trait try unset use var while xor yield true false null ",
+        " int float string bool array object mixed void iterable callable self parent ",
+        "//", "/*", "*/", "\"'`", "")
+    l.fold_case = true
+    l.line_comment2 = "#"
+    ret l
+}
+
+fn lang_ada() -> Language {
+    var l = pack(
+        " abort abs abstract accept access aliased all and array at begin body case constant declare delay delta digits do else elsif end entry exception exit for function generic goto if in interface is limited loop mod new not null of or others out overriding package pragma private procedure protected raise range record rem renames requires return reverse select separate some subtype synchronized tagged task terminate then type until use when while with xor ",
+        " boolean character integer natural positive float string duration ",
+        "--", "", "", "\"", "")
+    l.fold_case = true
+    ret l
+}
+
+fn lang_objectivec() -> Language {
+    ret pack(
+        " auto break case catch class const continue default do else enum extern for goto if inline nil NO YES return self super sizeof static struct switch typedef union volatile while @interface @implementation @end @protocol @property @synthesize @selector @class @try @catch @finally @throw @autoreleasepool @public @private @protected ",
+        " BOOL id SEL IMP Class int long short char float double void unsigned signed NSObject NSString NSArray NSDictionary NSInteger NSUInteger CGFloat ",
+        "//", "/*", "*/", "\"'", "")
+}
+
+fn lang_cobol() -> Language {
+    var l = pack(
+        " accept add call cancel close compute continue delete display divide else end-if end-perform end-read evaluate exit go goback if initialize inspect move multiply open perform read return rewrite search set sort start stop string subtract unstring write identification division environment data procedure section program-id working-storage file-control file linkage copy replace using giving returning varying until times thru through when other also ",
+        " pic picture usage comp comp-3 binary display value occurs redefines ",
+        "*>", "", "", "\"'", "")
+    l.fold_case = true
+    ret l
+}
+
+fn lang_julia() -> Language {
+    var l = pack(
+        " abstract baremodule begin break catch const continue do else elseif end export false finally for function global if import in isa let local macro module mutable nothing primitive quote return struct true try using where while ",
+        " Int Int8 Int16 Int32 Int64 UInt Float32 Float64 Bool Char String Any Nothing Vector Matrix Array Dict Set ",
+        "#", "#=", "=#", "\"", "\"")
+    l.nested = true
+    ret l
+}
+
+fn lang_ruby() -> Language {
+    ret pack(
+        " alias and begin break case class def defined? do else elsif end ensure false for if in module next nil not or redo rescue retry return self super then true undef unless until when while yield ",
+        "", "#", "", "", "\"'`", "")
+}
+
+fn lang_perl() -> Language {
+    ret pack(
+        " if elsif else unless while until for foreach do last next redo goto return sub my our local use no package require BEGIN END print say die warn eval and or not xor lt gt le ge eq ne cmp x ",
+        "", "#", "", "", "\"'`", "")
+}
+
+fn lang_sas() -> Language {
+    var l = pack(
+        " data set merge by if then else do end output run proc quit libname filename options format informat input put keep drop where retain array macro mend let sql select from group order create table ",
+        "", "", "/*", "*/", "\"'", "")
+    l.fold_case = true
+    ret l
+}
+
+// MATLAB: `%` comments and `%{ %}` blocks; `'` is the transpose operator as often as a string, so only `"` quotes.
+fn lang_matlab() -> Language {
+    ret pack(
+        " break case catch classdef continue else elseif end for function global if otherwise parfor persistent return spmd switch try while properties methods events enumeration ",
+        "", "%", "%{", "%}", "\"", "")
+}
+
+// Caml: nested `(* *)` comments, no line comment, `'` marks type variables and characters.
+fn lang_caml() -> Language {
+    var l = pack(
+        " and as assert begin class constraint do done downto else end exception external false for fun function functor if in include inherit initializer lazy let match method module mutable new nonrec object of open or private rec sig struct then to true try type val virtual when while with ",
+        " int float string char bool unit list array option ref exn ",
+        "", "(*", "*)", "\"", "\"")
+    l.nested = true
+    ret l
+}
+
+fn lang_prolog() -> Language {
+    ret pack(
+        " is mod rem div xor not dynamic discontiguous module use_module ensure_loaded initialization table ",
+        "", "%", "/*", "*/", "\"'`", "")
+}
+
+fn lang_gml() -> Language {
+    ret pack(
+        " var globalvar if else for while do until repeat switch case default break continue exit return with enum function constructor new static delete true false undefined self other all noone global ",
+        "", "//", "/*", "*/", "\"'", "")
+}
+
+// The pack of a registry ID (`docs/code-editor-plan.md`); an unknown ID is plain text. `json` is strict JSON,
+// `jsonc` its comment-carrying association, and `c` is C proper while `cpp` is C and C++.
+fn lang_by_id(id: str) -> Language {
+    if same_bytes(id, "neper") { ret lang_neper() }
+    if same_bytes(id, "javascript") || same_bytes(id, "jsx") { ret lang_javascript() }
+    if same_bytes(id, "typescript") || same_bytes(id, "tsx") { ret lang_typescript() }
+    if same_bytes(id, "python") { ret lang_python() }
+    if same_bytes(id, "cpp") { ret lang_c() }
+    if same_bytes(id, "c") { ret lang_c_dialect() }
+    if same_bytes(id, "rust") { ret lang_rust() }
+    if same_bytes(id, "go") { ret lang_go() }
+    if same_bytes(id, "java") { ret lang_java() }
+    if same_bytes(id, "json") { ret lang_json() }
+    if same_bytes(id, "jsonc") { ret lang_jsonc() }
+    if same_bytes(id, "shell") { ret lang_shell() }
+    if same_bytes(id, "sql") { ret lang_sql() }
+    if same_bytes(id, "css") { ret lang_css() }
+    if same_bytes(id, "html") || same_bytes(id, "xml") { ret lang_html() }
+    if same_bytes(id, "yaml") { ret lang_yaml() }
+    if same_bytes(id, "toml") { ret lang_toml() }
+    if same_bytes(id, "lua") { ret lang_lua() }
+    if same_bytes(id, "csharp") { ret lang_csharp() }
+    if same_bytes(id, "kotlin") { ret lang_kotlin() }
+    if same_bytes(id, "swift") { ret lang_swift() }
+    if same_bytes(id, "dart") { ret lang_dart() }
+    if same_bytes(id, "r") { ret lang_r() }
+    if same_bytes(id, "protobuf") { ret lang_protobuf() }
+    if same_bytes(id, "assembly") { ret lang_assembly() }
+    if same_bytes(id, "intelasm") { ret lang_intelasm() }
+    if same_bytes(id, "markdown") { ret lang_markdown() }
+    if same_bytes(id, "sqlite") { ret lang_sql_dialect(" integer text real blob numeric ", false) }
+    if same_bytes(id, "mysql") { ret lang_sql_dialect(" int tinyint smallint bigint varchar char text datetime timestamp decimal float double blob enum ", true) }
+    if same_bytes(id, "postgresql") { ret lang_sql_dialect(" integer bigint smallint serial varchar char text boolean timestamp timestamptz date numeric real jsonb uuid bytea ", false) }
+    if same_bytes(id, "objectpascal") { ret lang_objectpascal() }
+    if same_bytes(id, "powershell") { ret lang_powershell() }
+    if same_bytes(id, "terraform") { ret lang_terraform() }
+    if same_bytes(id, "batch") { ret lang_batch() }
+    if same_bytes(id, "vbnet") { ret lang_vbnet() }
+    if same_bytes(id, "vbclassic") { ret lang_vbclassic() }
+    if same_bytes(id, "fortran") { ret lang_fortran() }
+    if same_bytes(id, "php") { ret lang_php() }
+    if same_bytes(id, "ada") { ret lang_ada() }
+    if same_bytes(id, "objectivec") { ret lang_objectivec() }
+    if same_bytes(id, "cobol") { ret lang_cobol() }
+    if same_bytes(id, "julia") { ret lang_julia() }
+    if same_bytes(id, "ruby") { ret lang_ruby() }
+    if same_bytes(id, "perl") { ret lang_perl() }
+    if same_bytes(id, "sas") { ret lang_sas() }
+    if same_bytes(id, "matlab") { ret lang_matlab() }
+    if same_bytes(id, "caml") { ret lang_caml() }
+    if same_bytes(id, "prolog") { ret lang_prolog() }
+    if same_bytes(id, "gml") { ret lang_gml() }
+    ret lang_plain()
+}
+
+fn suffix_in(s: []const u8, list: str) -> bool {
+    // `list` is space-separated suffixes with a space at both ends.
+    if s.len == 0usize || list.len < s.len + 2usize { ret false }
+    var i = 0usize
+    while i + s.len + 2usize <= list.len {
+        if list[i] == 32u8 && list[i + s.len + 1usize] == 32u8 {
+            var k = 0usize
+            var good = true
+            while k < s.len && good {
+                if list[i + 1usize + k] != s[k] { good = false }
+                k += 1usize
+            }
+            if good { ret true }
+        }
+        i += 1usize
+    }
+    ret false
+}
+
+// The registry ID for a file name suffix without the dot (ASCII case-insensitive); "" for an unknown suffix.
+// Suffixes shared by two languages map to the default the plan names: `.h` C/C++ (`cpp`), `.m` Objective-C,
+// `.pl` Perl, `.ml` OCaml-family Caml, `.inc` Object Pascal; `lang_suffix_ambiguous` reports them so a host
+// can ask the user instead of guessing.
+fn lang_id_for_suffix(suffix: str) -> str {
     var lower: [16]u8 = zero
-    if suffix.len > 16usize { ret lang_plain() }
+    if suffix.len > 16usize || suffix.len == 0usize { ret "" }
     var i = 0usize
     while i < suffix.len {
-        var c = suffix[i]
-        if c >= 65u8 && c <= 90u8 { c += 32u8 }
-        lower[i] = c
+        lower[i] = lower_byte(suffix[i])
         i += 1usize
     }
     let s = lower[0usize..suffix.len]
-    if same_bytes(s, "e") { ret lang_neper() }
-    if same_bytes(s, "js") || same_bytes(s, "mjs") || same_bytes(s, "cjs") { ret lang_javascript() }
-    if same_bytes(s, "py") || same_bytes(s, "pyw") { ret lang_python() }
-    if same_bytes(s, "c") || same_bytes(s, "h") || same_bytes(s, "cc") || same_bytes(s, "cpp") || same_bytes(s, "cxx") || same_bytes(s, "hpp") { ret lang_c() }
-    if same_bytes(s, "rs") { ret lang_rust() }
-    if same_bytes(s, "go") { ret lang_go() }
-    if same_bytes(s, "java") { ret lang_java() }
-    if same_bytes(s, "ts") || same_bytes(s, "tsx") { ret lang_typescript() }
-    if same_bytes(s, "json") { ret lang_json() }
-    if same_bytes(s, "sh") || same_bytes(s, "bash") { ret lang_shell() }
-    if same_bytes(s, "sql") { ret lang_sql() }
-    if same_bytes(s, "css") { ret lang_css() }
-    if same_bytes(s, "html") || same_bytes(s, "htm") || same_bytes(s, "xml") { ret lang_html() }
-    if same_bytes(s, "yaml") || same_bytes(s, "yml") { ret lang_yaml() }
-    if same_bytes(s, "toml") { ret lang_toml() }
-    if same_bytes(s, "lua") { ret lang_lua() }
-    ret lang_plain()
+    if same_bytes(s, "e") { ret "neper" }
+    if suffix_in(s, " js mjs cjs ") { ret "javascript" }
+    if suffix_in(s, " jsx ") { ret "jsx" }
+    if suffix_in(s, " ts mts cts ") { ret "typescript" }
+    if suffix_in(s, " tsx ") { ret "tsx" }
+    if suffix_in(s, " py pyw pyi ") { ret "python" }
+    if suffix_in(s, " c ") { ret "c" }
+    if suffix_in(s, " cc cpp cxx h hpp hh hxx ") { ret "cpp" }
+    if suffix_in(s, " rs ") { ret "rust" }
+    if suffix_in(s, " go ") { ret "go" }
+    if suffix_in(s, " java ") { ret "java" }
+    if suffix_in(s, " json webmanifest ") { ret "json" }
+    if suffix_in(s, " jsonc ") { ret "jsonc" }
+    if suffix_in(s, " sh bash zsh ksh ") { ret "shell" }
+    if suffix_in(s, " sql ") { ret "sql" }
+    if suffix_in(s, " sqlite sqlite3 ") { ret "sqlite" }
+    if suffix_in(s, " mysql ") { ret "mysql" }
+    if suffix_in(s, " pgsql psql ") { ret "postgresql" }
+    if suffix_in(s, " css ") { ret "css" }
+    if suffix_in(s, " html htm xhtml ") { ret "html" }
+    if suffix_in(s, " xml dproj xsd xsl xslt ") { ret "xml" }
+    if suffix_in(s, " yaml yml ") { ret "yaml" }
+    if suffix_in(s, " toml ") { ret "toml" }
+    if suffix_in(s, " lua ") { ret "lua" }
+    if suffix_in(s, " cs csx ") { ret "csharp" }
+    if suffix_in(s, " kt kts ") { ret "kotlin" }
+    if suffix_in(s, " swift ") { ret "swift" }
+    if suffix_in(s, " dart ") { ret "dart" }
+    if suffix_in(s, " r ") { ret "r" }
+    if suffix_in(s, " proto ") { ret "protobuf" }
+    if suffix_in(s, " s ") { ret "assembly" }
+    if suffix_in(s, " asm nasm ") { ret "intelasm" }
+    if suffix_in(s, " md markdown mdown mkd ") { ret "markdown" }
+    if suffix_in(s, " pas pp dpr dpk lpr inc ") { ret "objectpascal" }
+    if suffix_in(s, " ps1 psm1 psd1 ") { ret "powershell" }
+    if suffix_in(s, " tf tfvars hcl ") { ret "terraform" }
+    if suffix_in(s, " bat cmd ") { ret "batch" }
+    if suffix_in(s, " txt log csv ") { ret "text" }
+    if suffix_in(s, " vb ") { ret "vbnet" }
+    if suffix_in(s, " bas cls frm ") { ret "vbclassic" }
+    if suffix_in(s, " f for f77 f90 f95 f03 f08 ") { ret "fortran" }
+    if suffix_in(s, " php phtml php3 php4 php5 phps ") { ret "php" }
+    if suffix_in(s, " adb ads ada ") { ret "ada" }
+    if suffix_in(s, " m mm ") { ret "objectivec" }
+    if suffix_in(s, " cob cbl cpy ") { ret "cobol" }
+    if suffix_in(s, " jl ") { ret "julia" }
+    if suffix_in(s, " rb rake gemspec ") { ret "ruby" }
+    if suffix_in(s, " pl pm t ") { ret "perl" }
+    if suffix_in(s, " sas ") { ret "sas" }
+    if suffix_in(s, " ml mli ") { ret "caml" }
+    if suffix_in(s, " pro ") { ret "prolog" }
+    if suffix_in(s, " gml ") { ret "gml" }
+    ret ""
+}
+
+// True for a suffix more than one registered language claims; the default `lang_id_for_suffix` returns is only
+// a default, and the host should let the user choose.
+fn lang_suffix_ambiguous(suffix: str) -> bool {
+    var lower: [16]u8 = zero
+    if suffix.len > 16usize || suffix.len == 0usize { ret false }
+    var i = 0usize
+    while i < suffix.len {
+        lower[i] = lower_byte(suffix[i])
+        i += 1usize
+    }
+    ret suffix_in(lower[0usize..suffix.len], " h m pl ml mli inc ")
+}
+
+// The registry ID for a file name: whole-name conventions first (`Gemfile`, `Rakefile`, `Makefile`-free), then the
+// text after the last dot; "" when neither is known.
+fn lang_id_for_file_name(name: str) -> str {
+    if same_bytes(name, "Gemfile") || same_bytes(name, "Rakefile") || same_bytes(name, "Guardfile") { ret "ruby" }
+    var dot = name.len
+    var i = 0usize
+    while i < name.len {
+        if name[i] == 46u8 { dot = i }
+        i += 1usize
+    }
+    if dot >= name.len { ret "" }
+    ret lang_id_for_suffix(name[dot + 1usize..name.len])
+}
+
+// Language for a file name suffix without the dot (ASCII case-insensitive); unknown suffixes are plain text.
+fn lang_for_suffix(suffix: str) -> Language {
+    ret lang_by_id(lang_id_for_suffix(suffix))
 }
 
 // ---- document ---------------------------------------------------------------------------------------------
@@ -492,7 +897,13 @@ fn is_word_byte(c: u8) -> bool {
     ret (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 95u8 || c >= 128u8
 }
 
-fn has_word(set: str, e: *const Editor, from: usize, to: usize) -> bool {
+// Case-folding for the keyword tables of case-insensitive languages: the tables are written in lower case.
+fn lower_byte(c: u8) -> u8 {
+    if c >= 65u8 && c <= 90u8 { ret c + 32u8 }
+    ret c
+}
+
+fn has_word(set: str, e: *const Editor, from: usize, to: usize, fold: bool) -> bool {
     let n = to - from
     if n == 0usize || set.len < n + 2usize { ret false }
     var i = 0usize
@@ -501,7 +912,9 @@ fn has_word(set: str, e: *const Editor, from: usize, to: usize) -> bool {
             var k = 0usize
             var good = true
             while k < n && good {
-                if set[i + 1usize + k] != byte_at(e, from + k) { good = false }
+                var c = byte_at(e, from + k)
+                if fold { c = lower_byte(c) }
+                if set[i + 1usize + k] != c { good = false }
                 k += 1usize
             }
             if good { ret true }
@@ -521,6 +934,19 @@ fn at_prefix(e: *const Editor, p: usize, end: usize, s: str) -> bool {
     ret true
 }
 
+// at_prefix with ASCII case folded on the document side (`s` is lower case) when `fold` is set.
+fn at_prefix_fold(e: *const Editor, p: usize, end: usize, s: str, fold: bool) -> bool {
+    if s.len == 0usize || p + s.len > end { ret false }
+    var i = 0usize
+    while i < s.len {
+        var c = byte_at(e, p + i)
+        if fold { c = lower_byte(c) }
+        if c != s[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn quote_index(set: str, c: u8) -> usize {
     var i = 0usize
     while i < set.len {
@@ -530,7 +956,50 @@ fn quote_index(set: str, c: u8) -> usize {
     ret NO_GOAL
 }
 
-// Scan line `ln` from `state_in` (0 normal, 1 inside a block comment, 2+i inside the i-th multiline quote).
+// Line states (low seven bits of line_state): 0 normal, 1 inside the first block-comment pair at depth 1, 2..9
+// inside the i-th multiline quote (state - 2), 10 inside the second pair, 11.. the first pair at depth 2 and more
+// (nested languages; deeper than the table saturates).
+const ST_BLOCK: u8 = 1u8
+const ST_QUOTE0: u8 = 2u8
+const ST_BLOCK2: u8 = 10u8
+const ST_DEEP0: u8 = 11u8
+const ST_MAX: u8 = 127u8
+
+// Scans a block comment from `p` inside pair `pair` (1 or 2) at `depth`: the position after the closing
+// delimiter, or `end` when the line ends first, and the depth left (0 when closed).
+fn comment_scan(e: *const Editor, lg: *const Language, p_in: usize, end: usize, pair: u8, depth_in: usize) -> (usize, usize) {
+    var p = p_in
+    var depth = depth_in
+    var close = lg.block_close
+    var opener = lg.block_open
+    if pair == 2u8 {
+        close = lg.block2_close
+        opener = lg.block2_open
+    }
+    while p < end && depth > 0usize {
+        if at_prefix(e, p, end, close) {
+            p += close.len
+            depth -= 1usize
+        } else if lg.nested && pair == 1u8 && at_prefix(e, p, end, opener) {
+            p += opener.len
+            depth += 1usize
+        } else {
+            p += 1usize
+        }
+    }
+    ret (p, depth)
+}
+
+fn state_of_block(pair: u8, depth: usize) -> u8 {
+    if depth == 0usize { ret 0u8 }
+    if pair == 2u8 { ret ST_BLOCK2 }
+    if depth == 1usize { ret ST_BLOCK }
+    var s = usize(ST_DEEP0) + depth - 2usize
+    if s > usize(ST_MAX) { s = usize(ST_MAX) }
+    ret u8(s)
+}
+
+// Scan line `ln` from `state_in` (see the ST_ constants).
 // Tokens go to `out` while there is room; returns (tokens written, state at the end of the line, whether byte
 // offset `probe` lies inside a comment or string token -- pass NO_GOAL for none).
 fn scan_probe(e: *const Editor, ln: usize, state_in: u8, out: []Token, probe: usize) -> (usize, u8, bool) {
@@ -539,24 +1008,21 @@ fn scan_probe(e: *const Editor, ln: usize, state_in: u8, out: []Token, probe: us
     var p = line_start(e, ln)
     var nt = 0usize
     var st = state_in
-    let lg = e.lang
+    let lg = &e.lang
     while p < end {
         let t0 = p
-        if st == 1u8 {
-            var closed = false
-            while p < end && !closed {
-                if at_prefix(e, p, end, lg.block_close) {
-                    p += lg.block_close.len
-                    closed = true
-                } else {
-                    p += 1usize
-                }
-            }
-            if closed { st = 0u8 }
+        if st == ST_BLOCK || st == ST_BLOCK2 || st >= ST_DEEP0 {
+            var pair = 1u8
+            var depth = 1usize
+            if st == ST_BLOCK2 { pair = 2u8 }
+            if st >= ST_DEEP0 { depth = 2usize + usize(st - ST_DEEP0) }
+            let (np, nd) = comment_scan(e, lg, p, end, pair, depth)
+            p = np
+            st = state_of_block(pair, nd)
             if nt < out.len { out[nt] = Token { start: t0, end: p, kind: TOK_COMMENT } }
             if probe >= t0 && probe < p { hit = true }
             nt += 1usize
-        } else if st >= 2u8 {
+        } else if st >= ST_QUOTE0 {
             let q = lg.multiline_quotes[usize(st) - 2usize]
             var closed = false
             while p < end && !closed {
@@ -578,23 +1044,22 @@ fn scan_probe(e: *const Editor, ln: usize, state_in: u8, out: []Token, probe: us
             let c = byte_at(e, p)
             if c == 32u8 || c == 9u8 || c == 13u8 {
                 p += 1usize
-            } else if at_prefix(e, p, end, lg.line_comment) {
-                p = end
+            } else if at_prefix(e, p, end, lg.block_open) || at_prefix(e, p, end, lg.block2_open) {
+                var pair = 1u8
+                var opener = lg.block_open
+                if !at_prefix(e, p, end, lg.block_open) {
+                    pair = 2u8
+                    opener = lg.block2_open
+                }
+                p += opener.len
+                let (np, nd) = comment_scan(e, lg, p, end, pair, 1usize)
+                p = np
+                st = state_of_block(pair, nd)
                 if nt < out.len { out[nt] = Token { start: t0, end: p, kind: TOK_COMMENT } }
                 if probe >= t0 && probe < p { hit = true }
                 nt += 1usize
-            } else if at_prefix(e, p, end, lg.block_open) {
-                p += lg.block_open.len
-                var closed = false
-                while p < end && !closed {
-                    if at_prefix(e, p, end, lg.block_close) {
-                        p += lg.block_close.len
-                        closed = true
-                    } else {
-                        p += 1usize
-                    }
-                }
-                if !closed { st = 1u8 }
+            } else if at_prefix(e, p, end, lg.line_comment) || at_prefix_fold(e, p, end, lg.line_comment2, lg.fold_case) {
+                p = end
                 if nt < out.len { out[nt] = Token { start: t0, end: p, kind: TOK_COMMENT } }
                 if probe >= t0 && probe < p { hit = true }
                 nt += 1usize
@@ -622,7 +1087,7 @@ fn scan_probe(e: *const Editor, ln: usize, state_in: u8, out: []Token, probe: us
             } else if is_word_byte(c) && !(c >= 48u8 && c <= 57u8) {
                 while p < end && is_word_byte(byte_at(e, p)) { p += 1usize }
                 var kind = TOK_IDENT
-                if has_word(lg.keywords, e, t0, p) { kind = TOK_KEYWORD } else if has_word(lg.types, e, t0, p) { kind = TOK_TYPE }
+                if has_word(lg.keywords, e, t0, p, lg.fold_case) { kind = TOK_KEYWORD } else if has_word(lg.types, e, t0, p, lg.fold_case) { kind = TOK_TYPE }
                 if nt < out.len { out[nt] = Token { start: t0, end: p, kind: kind } }
                 nt += 1usize
             } else if c >= 48u8 && c <= 57u8 {
@@ -944,6 +1409,7 @@ fn apply_raw(e: *Editor, edits: []const Edit, text: []const u8, to: *Stack) {
         }
         e.gap_start += ed.text_len
     }
+    map_marks(e, edits)
     e.revision += 1u64
 }
 
@@ -1232,6 +1698,13 @@ fn load(e: *Editor, text: []const u8) -> err {
     e.saved_id = e.content_id
     e.revision += 1u64
     e.can_merge = false
+    var v = 0usize
+    while v < e.views.len {
+        e.views[v].n = 0usize
+        v += 1usize
+    }
+    e.diag.n = 0usize
+    e.diag.ntext = 0usize
     ret ok
 }
 
@@ -2268,4 +2741,1039 @@ fn split_selection_by_line(e: *Editor) -> err {
         i += 1usize
     }
     ret set_selection(e, e.scratch_sels[0usize..n], primary)
+}
+
+// ---- per-view fold state (D4401) -------------------------------------------------------------------------
+// A view is a set of collapsed folds, each the byte range hidden between a fold header and its end. Views
+// belong to the document's editor but not to each other: several can be attached, each with its own set, and
+// every edit (typing, programmatic, undo, redo) maps all of them through the batch so a collapsed region keeps
+// covering the same text. A line is hidden in a view when it lies after the line holding a collapsed fold's
+// start and not after the line holding its end; the header line stays visible.
+
+type FoldView = struct { folds: []Fold, n: usize }
+
+// Allocates `nviews` views of up to `cap` collapsed folds each from `a`. Nothing changes on failure.
+fn attach_views(e: *Editor, a: *mem.Arena, nviews: usize, cap: usize) -> err {
+    if nviews == 0usize || cap == 0usize { ret Invalid }
+    let (vs, e1) = mem.alloc[FoldView](a, nviews)
+    if e1 != ok { ret e1 }
+    var v = 0usize
+    while v < nviews {
+        let (fs, e2) = mem.alloc[Fold](a, cap)
+        if e2 != ok { ret e2 }
+        vs[v] = FoldView { folds: fs, n: 0usize }
+        v += 1usize
+    }
+    e.views = vs
+    ret ok
+}
+
+fn view_count(e: *const Editor) -> usize { ret e.views.len }
+
+fn fold_count(e: *const Editor, view: usize) -> usize {
+    if view >= e.views.len { ret 0usize }
+    ret e.views[view].n
+}
+
+// The i-th collapsed fold of a view, in start order.
+fn fold_get(e: *const Editor, view: usize, i: usize) -> Fold {
+    if view >= e.views.len || i >= e.views[view].n { ret Fold { from: 0usize, to: 0usize } }
+    ret e.views[view].folds[i]
+}
+
+fn fold_index(e: *const Editor, view: usize, ln: usize) -> usize {
+    if view >= e.views.len { ret NO_GOAL }
+    let fv = &e.views[view]
+    var k = 0usize
+    while k < fv.n {
+        if line_of(e, fv.folds[k].from) == ln { ret k }
+        k += 1usize
+    }
+    ret NO_GOAL
+}
+
+fn fold_is_collapsed(e: *const Editor, view: usize, ln: usize) -> bool {
+    ret fold_index(e, view, ln) != NO_GOAL
+}
+
+fn fold_insert(fv: *FoldView, f: Fold) {
+    var k = fv.n
+    while k > 0usize && fv.folds[k - 1usize].from > f.from {
+        fv.folds[k] = fv.folds[k - 1usize]
+        k -= 1usize
+    }
+    fv.folds[k] = f
+    fv.n += 1usize
+}
+
+// Collapses the fold headed by line `ln` in `view`; a fold already collapsed there is refreshed in place.
+fn fold_collapse(e: *Editor, view: usize, ln: usize) -> err {
+    if view >= e.views.len { ret Invalid }
+    let (f, t, found) = fold_at(e, ln)
+    if !found { ret NoFold }
+    let fv = &e.views[view]
+    let k = fold_index(e, view, ln)
+    if k != NO_GOAL {
+        fv.folds[k] = Fold { from: f, to: t }
+        ret ok
+    }
+    if fv.n >= fv.folds.len { ret TooLarge }
+    fold_insert(fv, Fold { from: f, to: t })
+    ret ok
+}
+
+// Expands the collapsed fold headed by `ln`; whether there was one.
+fn fold_expand(e: *Editor, view: usize, ln: usize) -> bool {
+    let k = fold_index(e, view, ln)
+    if k == NO_GOAL { ret false }
+    let fv = &e.views[view]
+    var i = k
+    while i + 1usize < fv.n {
+        fv.folds[i] = fv.folds[i + 1usize]
+        i += 1usize
+    }
+    fv.n -= 1usize
+    ret true
+}
+
+fn fold_toggle(e: *Editor, view: usize, ln: usize) -> err {
+    if fold_expand(e, view, ln) { ret ok }
+    ret fold_collapse(e, view, ln)
+}
+
+fn fold_expand_all(e: *Editor, view: usize) {
+    if view < e.views.len { e.views[view].n = 0usize }
+}
+
+// Collapses every fold of the document in `view`; refused whole when they would not fit.
+fn fold_collapse_all(e: *Editor, view: usize) -> err {
+    if view >= e.views.len { ret Invalid }
+    let fv = &e.views[view]
+    var total = 0usize
+    var ln = 0usize
+    while ln < e.nlines {
+        let (f, t, found) = fold_at(e, ln)
+        if found { total += 1usize }
+        ln += 1usize
+    }
+    if total > fv.folds.len { ret TooLarge }
+    fv.n = 0usize
+    ln = 0usize
+    while ln < e.nlines {
+        let (f2, t2, found2) = fold_at(e, ln)
+        if found2 { fold_insert(fv, Fold { from: f2, to: t2 }) }
+        ln += 1usize
+    }
+    ret ok
+}
+
+// Whether line `ln` is hidden inside a collapsed fold of `view`.
+fn line_hidden(e: *const Editor, view: usize, ln: usize) -> bool {
+    if view >= e.views.len { ret false }
+    let fv = &e.views[view]
+    var k = 0usize
+    while k < fv.n {
+        if line_of(e, fv.folds[k].from) < ln && ln <= line_of(e, fv.folds[k].to) { ret true }
+        k += 1usize
+    }
+    ret false
+}
+
+fn visible_line_count(e: *const Editor, view: usize) -> usize {
+    var n = 0usize
+    var ln = 0usize
+    while ln < e.nlines {
+        if !line_hidden(e, view, ln) { n += 1usize }
+        ln += 1usize
+    }
+    ret n
+}
+
+// The first visible line after `ln`, NO_GOAL when there is none.
+fn next_visible_line(e: *const Editor, view: usize, ln: usize) -> usize {
+    var l = ln + 1usize
+    while l < e.nlines {
+        if !line_hidden(e, view, l) { ret l }
+        l += 1usize
+    }
+    ret NO_GOAL
+}
+
+// The last visible line before `ln`, NO_GOAL when there is none.
+fn prev_visible_line(e: *const Editor, view: usize, ln: usize) -> usize {
+    var l = ln
+    while l > 0usize {
+        l -= 1usize
+        if !line_hidden(e, view, l) { ret l }
+    }
+    ret NO_GOAL
+}
+
+// Drops the collapsed folds that are no longer folds (their header was edited so `fold_at` answers another
+// range); how many went. Edits keep a fold's range mapped, so this is for after a structural edit.
+fn fold_refresh(e: *Editor, view: usize) -> usize {
+    if view >= e.views.len { ret 0usize }
+    let fv = &e.views[view]
+    var kept = 0usize
+    var k = 0usize
+    while k < fv.n {
+        let f = fv.folds[k]
+        let (nf, nt, found) = fold_at(e, line_of(e, f.from))
+        if found && nf == f.from && nt == f.to {
+            fv.folds[kept] = f
+            kept += 1usize
+        }
+        k += 1usize
+    }
+    let dropped = fv.n - kept
+    fv.n = kept
+    ret dropped
+}
+
+// ---- wrap-aware motion (D4401) ---------------------------------------------------------------------------
+// Motion by visual rows under the soft-wrap model above. The goal is a display column within the row (a tab
+// counts to the next multiple of tab_width), kept across consecutive vertical moves. A caret never rests at a
+// row break: on every row but the last of its line the end is the stop before the break. Hidden lines of
+// `view` (NO_GOAL for none) are skipped.
+
+const MOVE_ROW_START: u32 = 11u32
+const MOVE_ROW_END: u32 = 12u32
+
+// Start of the row of line `ln` that holds `pos` and the start of the next row (the line end for the last).
+fn wrap_row_span(e: *const Editor, ln: usize, pos: usize, width: usize) -> (usize, usize) {
+    let end = line_end(e, ln)
+    var rs = line_start(e, ln)
+    var go = true
+    var re = wrap_next_row(e, rs, end, width)
+    while go {
+        if pos < re || re >= end {
+            go = false
+        } else {
+            rs = re
+            re = wrap_next_row(e, rs, end, width)
+        }
+    }
+    ret (rs, re)
+}
+
+// The stop of the row [rs, re) of line `ln` nearest to `goal` columns without passing it; the row's last stop is
+// the line end for the last row and the stop before the break otherwise.
+fn wrap_pos_in_row(e: *const Editor, ln: usize, rs: usize, re: usize, goal: usize) -> usize {
+    let end = line_end(e, ln)
+    var last = re
+    if re < end { last = prev_boundary(e, re) }
+    var p = rs
+    var col = 0usize
+    var best = rs
+    var go = true
+    while go {
+        if col <= goal { best = p }
+        if p >= last {
+            go = false
+        } else {
+            if byte_at(e, p) == 9u8 { col += e.tab_width - col % e.tab_width } else { col += 1usize }
+            p = next_boundary(e, p)
+        }
+    }
+    ret best
+}
+
+// Move or extend every range by visual rows and row edges; other directions are `move_selection`'s. A `width` of
+// 0 means no wrapping, which leaves the line-based motion.
+fn move_wrapped(e: *Editor, dir: u32, extend: bool, width: usize, view: usize) -> err {
+    let vertical = dir == MOVE_UP || dir == MOVE_DOWN
+    if width == 0usize || (!vertical && dir != MOVE_ROW_START && dir != MOVE_ROW_END) { ret move_selection(e, dir, extend) }
+    var i = 0usize
+    while i < e.nsel {
+        let r = e.sels[i]
+        let ln = line_of(e, r.head)
+        let (rs, re) = wrap_row_span(e, ln, r.head, width)
+        let end = line_end(e, ln)
+        var h = r.head
+        var goal = r.goal
+        if dir == MOVE_ROW_START {
+            h = rs
+            goal = NO_GOAL
+        } else if dir == MOVE_ROW_END {
+            h = re
+            if re < end { h = prev_boundary(e, re) }
+            goal = NO_GOAL
+        } else {
+            if goal == NO_GOAL {
+                let (_, c) = wrap_locate(e, r.head, width)
+                goal = c
+            }
+            if dir == MOVE_UP {
+                if rs > line_start(e, ln) {
+                    let (prs, pre) = wrap_row_span(e, ln, rs - 1usize, width)
+                    h = wrap_pos_in_row(e, ln, prs, pre, goal)
+                } else {
+                    let pl = prev_visible_line(e, view, ln)
+                    if pl == NO_GOAL {
+                        h = 0usize
+                    } else {
+                        let (prs2, pre2) = wrap_row_span(e, pl, line_end(e, pl), width)
+                        h = wrap_pos_in_row(e, pl, prs2, pre2, goal)
+                    }
+                }
+            } else {
+                if re < end {
+                    let (nrs, nre) = wrap_row_span(e, ln, re, width)
+                    h = wrap_pos_in_row(e, ln, nrs, nre, goal)
+                } else {
+                    let nl = next_visible_line(e, view, ln)
+                    if nl == NO_GOAL {
+                        h = len(e)
+                    } else {
+                        let (nrs2, nre2) = wrap_row_span(e, nl, line_start(e, nl), width)
+                        h = wrap_pos_in_row(e, nl, nrs2, nre2, goal)
+                    }
+                }
+            }
+        }
+        var a = h
+        if extend { a = r.anchor }
+        e.sels[i] = Range { anchor: a, head: h, goal: goal }
+        i += 1usize
+    }
+    let (n, pi) = normalize(e.sels, e.nsel, e.primary)
+    e.nsel = n
+    e.primary = pi
+    e.can_merge = false
+    ret ok
+}
+
+// ---- completion source model (D4401) ---------------------------------------------------------------------
+// The list a completion popup shows, from sources that need no server: the language's keywords and types, the
+// document's own words, and caller-supplied lists (snippet labels, schema tables and columns, members). Matching
+// is by the identifier prefix before the caret: score 3 for a prefix match with the same case (and for an
+// empty prefix), 2 for one ignoring ASCII case, 1 for the prefix's bytes in order inside the label (ASCII case
+// ignored). Candidates are gathered in the order supplied sources (as given), keywords, types, document words
+// (document order, words of at least two bytes, not starting with a digit, and not the word the caret is in);
+// a label appearing twice keeps its better (score, rank) entry; the list sorts by score descending, rank
+// ascending, length ascending, then bytes. A source's `rank` orders sources that match equally.
+
+const COMP_KEYWORD: u32 = 1u32
+const COMP_TYPE: u32 = 2u32
+const COMP_WORD: u32 = 3u32
+const COMP_SNIPPET: u32 = 4u32
+const COMP_SYMBOL: u32 = 5u32
+const RANK_KEYWORD: u32 = 1000u32
+const RANK_TYPE: u32 = 1001u32
+const RANK_WORD: u32 = 2000u32
+
+type CompSource = struct { kind: u32, rank: u32, words: str }
+type Candidate = struct { off: usize, len: usize, kind: u32, rank: u32, score: u32 }
+type CompletionSet = struct { items: []Candidate, n: usize, text: []u8, ntext: usize, from: usize, to: usize, revision: u64, incomplete: bool, valid: bool }
+
+fn completion_open(a: *mem.Arena, items: usize, text_bytes: usize) -> (CompletionSet, err) {
+    if items == 0usize || text_bytes == 0usize { ret (zero, Invalid) }
+    let (it, e1) = mem.alloc[Candidate](a, items)
+    if e1 != ok { ret (zero, e1) }
+    let (tx, e2) = mem.alloc[u8](a, text_bytes)
+    if e2 != ok { ret (zero, e2) }
+    var s: CompletionSet = zero
+    s.items = it
+    s.text = tx
+    ret (s, ok)
+}
+
+// The label of item `i`.
+fn completion_label(s: *const CompletionSet, i: usize) -> []const u8 {
+    let c = s.items[i]
+    ret s.text[c.off..c.off + c.len]
+}
+
+// Match score of `label` against the bytes [pf, pt) of the document (0 when it does not match).
+fn comp_score(e: *const Editor, label: []const u8, pf: usize, pt: usize) -> u32 {
+    let n = pt - pf
+    if n == 0usize { ret 3u32 }
+    if label.len >= n {
+        var same = true
+        var folded = true
+        var k = 0usize
+        while k < n {
+            let pc = byte_at(e, pf + k)
+            if pc != label[k] { same = false }
+            if lower_byte(pc) != lower_byte(label[k]) { folded = false }
+            k += 1usize
+        }
+        if same { ret 3u32 }
+        if folded { ret 2u32 }
+    }
+    var at = 0usize
+    var j = 0usize
+    while j < label.len && at < n {
+        if lower_byte(label[j]) == lower_byte(byte_at(e, pf + at)) { at += 1usize }
+        j += 1usize
+    }
+    if at == n { ret 1u32 }
+    ret 0u32
+}
+
+// Whether candidate (score, rank) with `label` sorts before item `b`.
+fn comp_before(s: *const CompletionSet, score: u32, rank: u32, label: []const u8, b: usize) -> bool {
+    let c = s.items[b]
+    if score != c.score { ret score > c.score }
+    if rank != c.rank { ret rank < c.rank }
+    if label.len != c.len { ret label.len < c.len }
+    var k = 0usize
+    while k < label.len {
+        let x = label[k]
+        let y = s.text[c.off + k]
+        if x != y { ret x < y }
+        k += 1usize
+    }
+    ret false
+}
+
+// Adds a candidate unless it does not match or is a worse duplicate; records `incomplete` when it does not fit.
+fn comp_add(s: *CompletionSet, e: *const Editor, label: []const u8, kind: u32, rank: u32, pf: usize, pt: usize) {
+    if label.len == 0usize { ret }
+    let score = comp_score(e, label, pf, pt)
+    if score == 0u32 { ret }
+    var i = 0usize
+    while i < s.n {
+        let c = s.items[i]
+        if c.len == label.len {
+            var same = true
+            var k = 0usize
+            while k < label.len && same {
+                if s.text[c.off + k] != label[k] { same = false }
+                k += 1usize
+            }
+            if same {
+                if score > c.score || (score == c.score && rank < c.rank) {
+                    s.items[i].score = score
+                    s.items[i].rank = rank
+                    s.items[i].kind = kind
+                }
+                ret
+            }
+        }
+        i += 1usize
+    }
+    if s.n >= s.items.len || s.ntext + label.len > s.text.len {
+        s.incomplete = true
+        ret
+    }
+    var k2 = 0usize
+    while k2 < label.len {
+        s.text[s.ntext + k2] = label[k2]
+        k2 += 1usize
+    }
+    s.items[s.n] = Candidate { off: s.ntext, len: label.len, kind: kind, rank: rank, score: score }
+    s.ntext += label.len
+    s.n += 1usize
+}
+
+fn comp_sort(s: *CompletionSet) {
+    var i = 1usize
+    while i < s.n {
+        let cur = s.items[i]
+        var j = i
+        var go = true
+        while go && j > 0usize {
+            // compare cur with items[j - 1]
+            let label = s.text[cur.off..cur.off + cur.len]
+            if comp_before(s, cur.score, cur.rank, label, j - 1usize) {
+                s.items[j] = s.items[j - 1usize]
+                j -= 1usize
+            } else {
+                go = false
+            }
+        }
+        s.items[j] = cur
+        i += 1usize
+    }
+}
+
+// Words of the space-separated `words` into the set.
+fn comp_add_words(s: *CompletionSet, e: *const Editor, words: str, kind: u32, rank: u32, pf: usize, pt: usize) {
+    var i = 0usize
+    while i < words.len {
+        if words[i] == 32u8 {
+            i += 1usize
+        } else {
+            var j = i
+            while j < words.len && words[j] != 32u8 { j += 1usize }
+            let w = words[i..j]
+            comp_add(s, e, w, kind, rank, pf, pt)
+            i = j
+        }
+    }
+}
+
+// Builds the list for a caret at `pos`. Without a prefix the list is empty unless `manual` is set or the byte
+// before the caret is one of `triggers`. `sources` are gathered first, in order.
+fn complete(e: *Editor, s: *CompletionSet, pos: usize, sources: []const CompSource, triggers: str, manual: bool) -> err {
+    if pos > len(e) || !is_boundary(e, pos) { ret Invalid }
+    s.n = 0usize
+    s.ntext = 0usize
+    s.incomplete = false
+    s.valid = false
+    s.revision = e.revision
+    var from = pos
+    while from > 0usize && is_word_byte(byte_at(e, from - 1usize)) { from -= 1usize }
+    s.from = from
+    s.to = pos
+    if from == pos && !manual {
+        var trig = false
+        if pos > 0usize {
+            var t = 0usize
+            while t < triggers.len {
+                if triggers[t] == byte_at(e, pos - 1usize) { trig = true }
+                t += 1usize
+            }
+        }
+        if !trig { ret ok }
+    }
+    var si = 0usize
+    while si < sources.len {
+        comp_add_words(s, e, sources[si].words, sources[si].kind, sources[si].rank, from, pos)
+        si += 1usize
+    }
+    comp_add_words(s, e, e.lang.keywords, COMP_KEYWORD, RANK_KEYWORD, from, pos)
+    comp_add_words(s, e, e.lang.types, COMP_TYPE, RANK_TYPE, from, pos)
+    // The caret's own word, so a half-typed identifier does not suggest itself.
+    var ws = pos
+    while ws > 0usize && is_word_byte(byte_at(e, ws - 1usize)) { ws -= 1usize }
+    var we = pos
+    while we < len(e) && is_word_byte(byte_at(e, we)) { we += 1usize }
+    var p = 0usize
+    let total = len(e)
+    var buf_len = 0usize
+    while p < total {
+        if is_word_byte(byte_at(e, p)) {
+            var q = p
+            while q < total && is_word_byte(byte_at(e, q)) { q += 1usize }
+            let first = byte_at(e, p)
+            let is_num = first >= 48u8 && first <= 57u8
+            let own = p == ws && q == we
+            if !is_num && !own && q - p >= 2usize && q - p <= 128usize {
+                buf_len = q - p
+                var k = 0usize
+                while k < buf_len {
+                    e.scratch_text[k] = byte_at(e, p + k)
+                    k += 1usize
+                }
+                comp_add(s, e, e.scratch_text[0usize..buf_len], COMP_WORD, RANK_WORD, from, pos)
+            }
+            p = q
+        } else {
+            p += 1usize
+        }
+    }
+    comp_sort(s)
+    s.valid = true
+    ret ok
+}
+
+// Narrows a list for more typing without a new request: the caret at `pos` must still be in the same word,
+// at or past where the list was built. False (and the list invalid) when it must be rebuilt.
+fn completion_refine(e: *const Editor, s: *CompletionSet, pos: usize) -> bool {
+    if !s.valid || s.incomplete || pos < s.to || pos > len(e) || s.from > pos { ret false }
+    var k = s.from
+    while k < pos {
+        if !is_word_byte(byte_at(e, k)) {
+            s.valid = false
+            ret false
+        }
+        k += 1usize
+    }
+    var w = 0usize
+    var i = 0usize
+    while i < s.n {
+        let c = s.items[i]
+        let label = s.text[c.off..c.off + c.len]
+        let score = comp_score(e, label, s.from, pos)
+        if score > 0u32 {
+            s.items[w] = Candidate { off: c.off, len: c.len, kind: c.kind, rank: c.rank, score: score }
+            w += 1usize
+        }
+        i += 1usize
+    }
+    s.n = w
+    s.to = pos
+    comp_sort(s)
+    ret true
+}
+
+// ---- diagnostics model (D4401) ---------------------------------------------------------------------------
+// Revisioned problem markers over the document. A provider (a linter, a spell checker, a language server
+// adapter) publishes the whole list for its `source` against the revision it analysed; a list for any other
+// revision is refused as stale, and publishing replaces only that source's markers. Markers map through every
+// edit with the start staying after text inserted at it and the end staying before text inserted at it, and a
+// marker whose whole range was deleted goes away; a zero-width marker stays.
+
+const SEV_ERROR: u32 = 1u32
+const SEV_WARNING: u32 = 2u32
+const SEV_INFO: u32 = 3u32
+const SEV_HINT: u32 = 4u32
+const NO_SOURCE: u32 = 4294967295u32
+const SRC_BRACKETS: u32 = 1u32
+const SRC_JSON: u32 = 2u32
+
+type Diagnostic = struct { from: usize, to: usize, severity: u32, code: u32, source: u32, msg_off: usize, msg_len: usize }
+type DiagSet = struct { items: []Diagnostic, n: usize, text: []u8, ntext: usize }
+
+fn attach_diagnostics(e: *Editor, a: *mem.Arena, cap: usize, text_cap: usize) -> err {
+    if cap == 0usize || text_cap == 0usize || text_cap > e.scratch_text.len { ret Invalid }
+    let (it, e1) = mem.alloc[Diagnostic](a, cap)
+    if e1 != ok { ret e1 }
+    let (tx, e2) = mem.alloc[u8](a, text_cap)
+    if e2 != ok { ret e2 }
+    e.diag = DiagSet { items: it, n: 0usize, text: tx, ntext: 0usize }
+    ret ok
+}
+
+fn diag_count(e: *const Editor) -> usize { ret e.diag.n }
+fn diag_get(e: *const Editor, i: usize) -> Diagnostic {
+    if i >= e.diag.n { ret zero }
+    ret e.diag.items[i]
+}
+
+fn diag_message(e: *const Editor, i: usize) -> []const u8 {
+    if i >= e.diag.n { ret e.diag.text[0usize..0usize] }
+    let d = e.diag.items[i]
+    ret e.diag.text[d.msg_off..d.msg_off + d.msg_len]
+}
+
+// (errors, warnings, the rest).
+fn diag_counts(e: *const Editor) -> (usize, usize, usize) {
+    var er = 0usize
+    var wa = 0usize
+    var ot = 0usize
+    var i = 0usize
+    while i < e.diag.n {
+        let sv = e.diag.items[i].severity
+        if sv == SEV_ERROR { er += 1usize } else if sv == SEV_WARNING { wa += 1usize } else { ot += 1usize }
+        i += 1usize
+    }
+    ret (er, wa, ot)
+}
+
+fn diag_before(a: Diagnostic, b: Diagnostic) -> bool {
+    if a.from != b.from { ret a.from < b.from }
+    if a.to != b.to { ret a.to < b.to }
+    if a.severity != b.severity { ret a.severity < b.severity }
+    if a.source != b.source { ret a.source < b.source }
+    ret a.code < b.code
+}
+
+// Drops the markers of `source` (every one for NO_SOURCE), repacking the messages; how many went.
+fn diag_clear(e: *Editor, source: u32) -> usize {
+    var kept = 0usize
+    var w = 0usize
+    var i = 0usize
+    while i < e.diag.n {
+        let d = e.diag.items[i]
+        if source != NO_SOURCE && d.source != source {
+            var k = 0usize
+            while k < d.msg_len {
+                e.scratch_text[w + k] = e.diag.text[d.msg_off + k]
+                k += 1usize
+            }
+            e.diag.items[kept] = Diagnostic { from: d.from, to: d.to, severity: d.severity, code: d.code, source: d.source, msg_off: w, msg_len: d.msg_len }
+            w += d.msg_len
+            kept += 1usize
+        }
+        i += 1usize
+    }
+    var c = 0usize
+    while c < w {
+        e.diag.text[c] = e.scratch_text[c]
+        c += 1usize
+    }
+    let removed = e.diag.n - kept
+    e.diag.n = kept
+    e.diag.ntext = w
+    ret removed
+}
+
+// Replaces `source`'s markers with `items` (their messages are slices of `text`) computed for `revision`.
+// Atomic: a stale revision, a range outside the document or off a character boundary, or no room leaves the
+// current markers untouched.
+fn diag_publish(e: *Editor, source: u32, revision: u64, items: []const Diagnostic, text: []const u8) -> err {
+    if e.diag.items.len == 0usize { ret Invalid }
+    if revision != e.revision { ret Stale }
+    var new_bytes = 0usize
+    var i = 0usize
+    while i < items.len {
+        let d = items[i]
+        if d.from > d.to || d.to > len(e) { ret BadEdits }
+        if !is_boundary(e, d.from) || !is_boundary(e, d.to) { ret NotBoundary }
+        if d.msg_off > text.len || d.msg_len > text.len - d.msg_off { ret BadEdits }
+        new_bytes += d.msg_len
+        i += 1usize
+    }
+    var kept_n = 0usize
+    var kept_bytes = 0usize
+    var j = 0usize
+    while j < e.diag.n {
+        if e.diag.items[j].source != source {
+            kept_n += 1usize
+            kept_bytes += e.diag.items[j].msg_len
+        }
+        j += 1usize
+    }
+    if kept_n + items.len > e.diag.items.len || kept_bytes + new_bytes > e.diag.text.len { ret TooLarge }
+    let _ = diag_clear(e, source)
+    var n = e.diag.n
+    var t = e.diag.ntext
+    var k = 0usize
+    while k < items.len {
+        let d = items[k]
+        var m = 0usize
+        while m < d.msg_len {
+            e.diag.text[t + m] = text[d.msg_off + m]
+            m += 1usize
+        }
+        e.diag.items[n] = Diagnostic { from: d.from, to: d.to, severity: d.severity, code: d.code, source: source, msg_off: t, msg_len: d.msg_len }
+        t += d.msg_len
+        n += 1usize
+        k += 1usize
+    }
+    e.diag.n = n
+    e.diag.ntext = t
+    // insertion sort by position
+    var x = 1usize
+    while x < n {
+        let cur = e.diag.items[x]
+        var y = x
+        while y > 0usize && diag_before(cur, e.diag.items[y - 1usize]) {
+            e.diag.items[y] = e.diag.items[y - 1usize]
+            y -= 1usize
+        }
+        e.diag.items[y] = cur
+        x += 1usize
+    }
+    ret ok
+}
+
+// The first marker holding byte `pos` (a zero-width marker holds only its own position), NO_GOAL for none.
+fn diag_at(e: *const Editor, pos: usize) -> usize {
+    var i = 0usize
+    while i < e.diag.n {
+        let d = e.diag.items[i]
+        if d.from <= pos && (pos < d.to || (d.from == d.to && pos == d.from)) { ret i }
+        i += 1usize
+    }
+    ret NO_GOAL
+}
+
+// Problems navigation: the next (or previous) marker starting after (before) `pos`, wrapping when `wrap` is set.
+fn diag_next(e: *const Editor, pos: usize, forward: bool, wrap: bool) -> usize {
+    if e.diag.n == 0usize { ret NO_GOAL }
+    if forward {
+        var i = 0usize
+        while i < e.diag.n {
+            if e.diag.items[i].from > pos { ret i }
+            i += 1usize
+        }
+        if wrap { ret 0usize }
+        ret NO_GOAL
+    }
+    var j = e.diag.n
+    while j > 0usize {
+        j -= 1usize
+        if e.diag.items[j].from < pos { ret j }
+    }
+    if wrap { ret e.diag.n - 1usize }
+    ret NO_GOAL
+}
+
+// Maps markers and collapsed folds through one sorted batch; called from apply_raw for every content change.
+fn map_marks(e: *Editor, edits: []const Edit) {
+    var v = 0usize
+    while v < e.views.len {
+        let fv = &e.views[v]
+        var w = 0usize
+        var k = 0usize
+        while k < fv.n {
+            let f = fv.folds[k]
+            let nf = map_pos(edits, f.from, 1i32)
+            let nt = map_pos(edits, f.to, -1i32)
+            if nt > nf {
+                fv.folds[w] = Fold { from: nf, to: nt }
+                w += 1usize
+            }
+            k += 1usize
+        }
+        fv.n = w
+        v += 1usize
+    }
+    var i = 0usize
+    var kept = 0usize
+    let had = e.diag.n
+    while i < had {
+        let d = e.diag.items[i]
+        let nf = map_pos(edits, d.from, 1i32)
+        var nt = nf
+        var keep = true
+        if d.to > d.from {
+            nt = map_pos(edits, d.to, -1i32)
+            if nt <= nf { keep = false }
+        }
+        if keep {
+            e.diag.items[kept] = Diagnostic { from: nf, to: nt, severity: d.severity, code: d.code, source: d.source, msg_off: d.msg_off, msg_len: d.msg_len }
+            kept += 1usize
+        }
+        i += 1usize
+    }
+    e.diag.n = kept
+}
+
+// ---- baseline lints (D4401) ------------------------------------------------------------------------------
+
+const LINT_UNMATCHED_CLOSE: u32 = 1u32
+const LINT_MISMATCHED: u32 = 2u32
+const LINT_UNCLOSED: u32 = 3u32
+const LINT_JSON: u32 = 10u32
+
+// Bracket balance outside comments and strings: a closer with no opener, a closer of the wrong kind (the
+// innermost opener is dropped with it) and each opener never closed. Markers go to `out` in document order;
+// returns how many there are (more than out.len when it did not fit). An opener stack deeper than 256 is cut.
+fn lint_brackets(e: *Editor, out: []Diagnostic) -> usize {
+    var stack: [256]usize = zero
+    var depth = 0usize
+    var n = 0usize
+    var p = 0usize
+    let total = len(e)
+    while p < total {
+        let c = byte_at(e, p)
+        if bracket_partner(c) != 0u8 && !in_skipped(e, p) {
+            if is_open_bracket(c) {
+                if depth < 256usize {
+                    stack[depth] = p
+                    depth += 1usize
+                }
+            } else if depth == 0usize {
+                if n < out.len { out[n] = Diagnostic { from: p, to: p + 1usize, severity: SEV_ERROR, code: LINT_UNMATCHED_CLOSE, source: SRC_BRACKETS, msg_off: 0usize, msg_len: 0usize } }
+                n += 1usize
+            } else {
+                let o = stack[depth - 1usize]
+                depth -= 1usize
+                if bracket_partner(byte_at(e, o)) != c {
+                    if n < out.len { out[n] = Diagnostic { from: p, to: p + 1usize, severity: SEV_ERROR, code: LINT_MISMATCHED, source: SRC_BRACKETS, msg_off: 0usize, msg_len: 0usize } }
+                    n += 1usize
+                }
+            }
+        }
+        p += 1usize
+    }
+    var k = 0usize
+    while k < depth {
+        if n < out.len { out[n] = Diagnostic { from: stack[k], to: stack[k] + 1usize, severity: SEV_ERROR, code: LINT_UNCLOSED, source: SRC_BRACKETS, msg_off: 0usize, msg_len: 0usize } }
+        n += 1usize
+        k += 1usize
+    }
+    // unmatched closers and openers interleave by position: order them
+    var lim = n
+    if lim > out.len { lim = out.len }
+    var x = 1usize
+    while x < lim {
+        let cur = out[x]
+        var y = x
+        while y > 0usize && out[y - 1usize].from > cur.from {
+            out[y] = out[y - 1usize]
+            y -= 1usize
+        }
+        out[y] = cur
+        x += 1usize
+    }
+    ret n
+}
+
+fn json_ws(e: *const Editor, p_in: usize) -> usize {
+    var p = p_in
+    let n = len(e)
+    while p < n {
+        let c = byte_at(e, p)
+        if c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 { p += 1usize } else { ret p }
+    }
+    ret p
+}
+
+fn json_digit(e: *const Editor, p: usize) -> bool {
+    if p >= len(e) { ret false }
+    let c = byte_at(e, p)
+    ret c >= 48u8 && c <= 57u8
+}
+
+fn json_hex(e: *const Editor, p: usize) -> bool {
+    if p >= len(e) { ret false }
+    let c = byte_at(e, p)
+    ret (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 70u8) || (c >= 97u8 && c <= 102u8)
+}
+
+// A string starting at its opening quote `p`: (offset after it, 0), or (offset of the error, 1).
+fn json_string(e: *const Editor, p: usize) -> (usize, u32) {
+    let n = len(e)
+    var q = p + 1usize
+    while true {
+        if q >= n { ret (p, 1u32) }
+        let c = byte_at(e, q)
+        if c == 34u8 { ret (q + 1usize, 0u32) }
+        if c < 32u8 { ret (q, 1u32) }
+        if c == 92u8 {
+            if q + 1usize >= n { ret (p, 1u32) }
+            let d = byte_at(e, q + 1usize)
+            if d == 34u8 || d == 92u8 || d == 47u8 || d == 98u8 || d == 102u8 || d == 110u8 || d == 114u8 || d == 116u8 {
+                q += 2usize
+            } else if d == 117u8 {
+                if json_hex(e, q + 2usize) && json_hex(e, q + 3usize) && json_hex(e, q + 4usize) && json_hex(e, q + 5usize) {
+                    q += 6usize
+                } else {
+                    ret (q + 1usize, 1u32)
+                }
+            } else {
+                ret (q, 1u32)
+            }
+        } else {
+            q += 1usize
+        }
+    }
+    ret (p, 1u32)
+}
+
+// The end of the number at `p`, or `p` when there is none (RFC 8259 grammar).
+fn json_number(e: *const Editor, p: usize) -> usize {
+    let n = len(e)
+    var q = p
+    if q < n && byte_at(e, q) == 45u8 { q += 1usize }
+    if q >= n { ret p }
+    let c = byte_at(e, q)
+    if c == 48u8 {
+        q += 1usize
+    } else if c >= 49u8 && c <= 57u8 {
+        while json_digit(e, q) { q += 1usize }
+    } else {
+        ret p
+    }
+    if q < n && byte_at(e, q) == 46u8 && json_digit(e, q + 1usize) {
+        q += 1usize
+        while json_digit(e, q) { q += 1usize }
+    }
+    if q < n && (byte_at(e, q) == 101u8 || byte_at(e, q) == 69u8) {
+        var r = q + 1usize
+        if r < n && (byte_at(e, r) == 43u8 || byte_at(e, r) == 45u8) { r += 1usize }
+        if json_digit(e, r) {
+            while json_digit(e, r) { r += 1usize }
+            q = r
+        }
+    }
+    ret q
+}
+
+fn json_literal(e: *const Editor, p: usize, word: str) -> bool {
+    if p + word.len > len(e) { ret false }
+    var k = 0usize
+    while k < word.len {
+        if byte_at(e, p + k) != word[k] { ret false }
+        k += 1usize
+    }
+    ret true
+}
+
+// Strict JSON (RFC 8259) validity: (offset of the first error, true), or (0, false) for a valid document. The
+// offset is where a standard parser reports it (the unexpected byte, the opening quote of an unterminated
+// string, the byte after the document for trailing data). Nesting deeper than 64 is an error at the bracket.
+fn lint_json(e: *const Editor) -> (usize, bool) {
+    let n = len(e)
+    var stack: [64]u8 = zero
+    var depth = 0usize
+    var p = json_ws(e, 0usize)
+    var want_value = true
+    while true {
+        if want_value {
+            if p >= n { ret (p, true) }
+            let c = byte_at(e, p)
+            if c == 34u8 {
+                let (q, bad) = json_string(e, p)
+                if bad == 1u32 { ret (q, true) }
+                p = q
+                want_value = false
+            } else if c == 123u8 {
+                if depth >= 64usize { ret (p, true) }
+                p = json_ws(e, p + 1usize)
+                if p < n && byte_at(e, p) == 125u8 {
+                    p += 1usize
+                    want_value = false
+                } else if p >= n || byte_at(e, p) != 34u8 {
+                    ret (p, true)
+                } else {
+                    stack[depth] = 2u8
+                    depth += 1usize
+                    let (q2, bad2) = json_string(e, p)
+                    if bad2 == 1u32 { ret (q2, true) }
+                    p = json_ws(e, q2)
+                    if p >= n || byte_at(e, p) != 58u8 { ret (p, true) }
+                    p = json_ws(e, p + 1usize)
+                }
+            } else if c == 91u8 {
+                if depth >= 64usize { ret (p, true) }
+                p = json_ws(e, p + 1usize)
+                if p < n && byte_at(e, p) == 93u8 {
+                    p += 1usize
+                    want_value = false
+                } else {
+                    stack[depth] = 1u8
+                    depth += 1usize
+                }
+            } else if c == 110u8 && json_literal(e, p, "null") {
+                p += 4usize
+                want_value = false
+            } else if c == 116u8 && json_literal(e, p, "true") {
+                p += 4usize
+                want_value = false
+            } else if c == 102u8 && json_literal(e, p, "false") {
+                p += 5usize
+                want_value = false
+            } else {
+                let q3 = json_number(e, p)
+                if q3 == p { ret (p, true) }
+                p = q3
+                want_value = false
+            }
+        } else {
+            p = json_ws(e, p)
+            if depth == 0usize {
+                if p != n { ret (p, true) }
+                ret (0usize, false)
+            }
+            let top = stack[depth - 1usize]
+            var c2 = 0u8
+            if p < n { c2 = byte_at(e, p) }
+            if p >= n { ret (p, true) }
+            if top == 1u8 {
+                if c2 == 93u8 {
+                    depth -= 1usize
+                    p += 1usize
+                } else if c2 == 44u8 {
+                    p = json_ws(e, p + 1usize)
+                    want_value = true
+                } else {
+                    ret (p, true)
+                }
+            } else {
+                if c2 == 125u8 {
+                    depth -= 1usize
+                    p += 1usize
+                } else if c2 == 44u8 {
+                    p = json_ws(e, p + 1usize)
+                    if p >= n || byte_at(e, p) != 34u8 { ret (p, true) }
+                    let (q4, bad4) = json_string(e, p)
+                    if bad4 == 1u32 { ret (q4, true) }
+                    p = json_ws(e, q4)
+                    if p >= n || byte_at(e, p) != 58u8 { ret (p, true) }
+                    p = json_ws(e, p + 1usize)
+                    want_value = true
+                } else {
+                    ret (p, true)
+                }
+            }
+        }
+    }
+    ret (0usize, false)
 }
