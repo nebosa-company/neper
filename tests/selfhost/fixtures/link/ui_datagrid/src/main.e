@@ -1568,7 +1568,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if is_color(shot_h, at_px, gl.rgb(0xE7EAEAu32)) { cell_seen = true }
         foot_x += 2.0
     }
-    if !band_seen || !cell_seen { os.exit(528) }
+    if !band_seen { os.exit(528) }
+    if !cell_seen { os.exit(530) }
     // 30. incremental search and the bookmark
     dg.set_search_column(&grid15, 0usize, false)
     if dg.navigate(&grid15, dg.Nav.First) != ok { os.exit(529) }

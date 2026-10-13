@@ -140,6 +140,7 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    hints: []const str,
     footer_label: str,
     quick_x: f32,
     quick_y: f32,
@@ -760,6 +761,10 @@ fn set_header_menu_icons(grid: *Grid, icons: [9]scene.TextureId) {
 
 // The word before the count in the footer (v3: "Count" in the pool, "Rows" in the collection).
 fn set_footer_label(grid: *Grid, label: str) { grid.footer_label = label }
+
+// A hint per column (by the column's index in the specs given to `create`), shown after the pointer
+// rests on its header (v3's HeaderHint: "Name - the card's name appears in the upper left corner.").
+fn set_header_hints(grid: *Grid, hints: []const str) { grid.hints = hints }
 
 fn set_cell_menu(grid: *Grid, commands: []const overlay.MenuCommand) {
     grid.cell_menu = commands
@@ -1464,12 +1469,62 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
     shows[1usize] = widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss }
     let (aimed, aimed_error) = overlay.context_target(a, grid.key + MENU_KEY, theme, .Grid, "Data grid", grid.key + MENU_KEY + 1u64, grid.menu_open, &shows[0usize], inner)
     if aimed_error != ok { ret (zero, aimed_error) }
-    if !grid.menu_open && !grid.chooser_open { ret (aimed, ok) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    // a header the pointer rests on shows its hint
+    var hint_node: widget.Node = zero
+    var has_hint = false
+    if !grid.menu_open && grid.hints.len != 0usize {
+        var shown = 0usize
+        while shown < grid.specs.len && !has_hint {
+            let spec = grid.origin[shown]
+            if spec < grid.hints.len && grid.hints[spec].len != 0usize {
+                let header_key = grid.key + 1u64 + 2u64 * u64(shown)
+                if overlay.tooltip_wanted(theme, header_key) {
+                    let (head_rect, has_head) = control.keyed_bounds(theme.runtime, header_key)
+                    if has_head {
+                        var words = control.text_options()
+                        words.wrap = .Word
+                        words.size = grid.look.text_size
+                        words.max_lines = 4u32
+                        let full_len = grid.specs[shown].title.len + 3usize + grid.hints[spec].len
+                        let (hb, hb_error) = str.builder(a, full_len + 8usize)
+                        if hb_error != ok { ret (zero, hb_error) }
+                        var hsb = hb
+                        if str.push(&hsb, grid.specs[shown].title) != ok || str.push(&hsb, " - ") != ok || str.push(&hsb, grid.hints[spec]) != ok { ret (zero, control.TooLarge) }
+                        let (words_node, words_error) = control.colored_text(a, 0u64, str.done(&hsb), theme, words, gl.rgb(0x000000u32))
+                        if words_error != ok { ret (zero, words_error) }
+                        var box = style.defaults()
+                        box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+                        box.border = style.Border { width: 1.0, color: gl.rgb(0x767676u32) }
+                        // one line while it fits 340, else wrapped at 340
+                        var hint_w = f32(full_len) * 6.4 + 14.0
+                        if hint_w > 340.0 { hint_w = 340.0 }
+                        box.width = style.Length { Px: hint_w }
+                        let (holder, holder_error) = mem.alloc[widget.Node](a, 1usize)
+                        if holder_error != ok { ret (zero, control.TooLarge) }
+                        holder[0usize] = words_node
+                        let padded_hint = widget.padded(0u64, 5.0, 3.0, 5.0, 3.0, box, holder[0usize..1usize])
+                        let (overlay_nodes, overlay_error) = mem.alloc[widget.Node](a, 1usize)
+                        if overlay_error != ok { ret (zero, control.TooLarge) }
+                        overlay_nodes[0usize] = padded_hint
+                        let pointer = widget.pointer_position(theme.runtime)
+                        hint_node = widget.overlay(grid.key + MENU_KEY + 40u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: pointer.x + 12.0, y: head_rect.y + head_rect.height + 6.0 }, modal: false, dismiss: zero }, style.defaults(), overlay_nodes[0usize..1usize])
+                        has_hint = true
+                    }
+                }
+            }
+            shown += 1usize
+        }
+    }
+    if !grid.menu_open && !grid.chooser_open && !has_hint { ret (aimed, ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     parts[n] = aimed
     n += 1usize
+    if has_hint {
+        parts[n] = hint_node
+        n += 1usize
+    }
     if grid.menu_open && grid.menu_kind == MENU_QUICK {
         let (quick, quick_error) = quick_panel(a, grid)
         if quick_error != ok { ret (zero, quick_error) }
@@ -3157,6 +3212,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
             if centred_error != ok { ret (zero, control.TooLarge) }
             centred[0usize] = inner
+            cell_style.height = style.Length { Px: grid.look.row_height + 4.0 }
             cells[at] = widget.aligned(0u64, .Center, .Center, cell_style, centred[0usize..1usize])
         } else {
             cells[at] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
