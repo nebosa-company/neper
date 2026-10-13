@@ -148,7 +148,7 @@
     "Show Indicator off: the row-indicator column goes",
     "Columns Auto Width: the columns share the grid's width in proportion"
    ],
-   "v3": "docs/grid.md section 2.5 (View menu); not recorded from mtgstudio.exe: the line colours are the measured #E6E6E6",
+   "v3": "recorded from mtgstudio.exe's View > Show Grid Lines: docs/grid-parity/V1-grid-lines-v3.png (Both, Horizontal, Vertical, None, top to bottom); both the horizontal and the vertical lines are #DEDEDE",
    "neper": "set_grid_lines, show_header, show_indicator, set_auto_width; TableLook header_hidden / vertical_off / horizontal_on",
    "replayed": "ui_datagrid section 28; live in the sample (V1-view-toggles-v5.png)"
   },

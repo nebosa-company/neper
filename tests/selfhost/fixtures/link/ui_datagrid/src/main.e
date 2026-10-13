@@ -1122,11 +1122,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // P006: the selected row carries a 1 px dark border on its top and bottom edge
     if !is_color(shot_l, px(b1.x + 300.0, b1.y + 0.5), gl.rgb(0x83878Bu32)) { os.exit(495) }
     if !is_color(shot_l, px(b1.x + 300.0, b1.y + b1.height - 0.5), gl.rgb(0x83878Bu32)) { os.exit(496) }
-    // P007: an unselected body row has full-height column lines (#E6E6E6) between its cells
+    // P007: an unselected body row has full-height column lines (#DEDEDE) between its cells
     var line_seen = false
     var line_x: f32 = 0.0
     while line_x < 300.0 {
-        if is_color(shot_l, px(b0.x + line_x, b0.y + 9.0), gl.rgb(0xE6E6E6u32)) { line_seen = true }
+        if is_color(shot_l, px(b0.x + line_x, b0.y + 9.0), gl.rgb(0xDEDEDEu32)) { line_seen = true }
         line_x += 1.0
     }
     if !line_seen { os.exit(497) }

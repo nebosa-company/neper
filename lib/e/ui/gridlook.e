@@ -71,7 +71,7 @@ fn v3() -> Look {
         odd: rgb(0xEFEFEFu32),
         selected: rgb(0xA6D2FFu32),
         selected_line: rgb(0x83878Bu32),
-        line: rgb(0xE6E6E6u32),
+        line: rgb(0xDEDEDEu32),
         group_row: rgb(0xF0F0F0u32),
         footer_band: rgb(0xFFFFDDu32),
         footer_cell: rgb(0xE7EAEAu32),
