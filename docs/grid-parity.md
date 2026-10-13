@@ -52,10 +52,10 @@ no-data, drag, conditional formatting and the deck and collection views are stil
 | P013 | Footer: v3 shows summaries in a tinted band only when the footer is on ("Rows: 8" in the collection grid); v5 "Total" row styled differently | | footer band and cells closed by D3920/D3923; labels differ (v3 shows "Count: n" under Name) |
 | P014 | Row ink by rarity: v3 orange (mythic) and red (rare) with the exact palette of the app; v5 uses theme data colours | | closed by D3928: rows in the card colour palette of card_color.pas (S01-v5-card-ink.png) |
 | P015 | Scrollbar: v3 native thin vertical bar; v5 draws none in the capture | | closed by D3923: 16 dp #F0F0F0 track, slim #858585 thumb 16 dp in from each end (S01-compare-scrollbar.png) |
-| P017 | Header hover: v3 turns the cell #D9EBF9 and shows a filter drop-down glyph; v5 has no hover look | | look applied (D3919); fixture probe pending |
+| P017 | Header hover: v3 turns the cell #D9EBF9 and shows a filter drop-down glyph; v5 has no hover look | | closed by D3939: the hovered header cell is #D9EBF9 (pixel-probed, ui_datagrid s29); the filter drop-down glyph is not drawn |
 | P018 | Group rows: v3 `[+]` box, "Field : value (Count: n)" on #F0F0F0 with a dotted focus rectangle; v5 `[+]` text prefix | | closed by D3923: drawn +/- box, "Field : value (Count: n)", label runs over the neighbouring cells, no column lines |
 | P019 | Group box: v3 shows a panel with a draggable chip (field name + sort triangle) above the header; v5 has a button row | | closed by D3923: #F0F0F0 panel with a white chip (field, triangle) per grouping level (S01-compare-group-box-rows.png) |
-| P020 | Footer: v3 #FFFFDD band with #E7EAEA summary cells under their columns ("Count: 120239"); v5 plain row | | look applied (D3919); fixture probe pending |
+| P020 | Footer: v3 #FFFFDD band with #E7EAEA summary cells under their columns ("Count: 120239"); v5 plain row | | closed by D3939: #FFFFDD band with #E7EAEA summary cells (pixel-probed, ui_datagrid s29) |
 | P021 | Text advances: v3 draws with GDI-hinted, integer advances ("Ach! Hans, Run!" ~133 px ink at 16 px em; linear advance 124 px); Neper shapes with linear advances, so strings are 0-8 % narrower | measured on S01 | withdrawn (D3921): the hinted-advance theory came from a mismeasured string; linear advances at the right size match within 1 px |
 | P016 | Legality cell: v3 paints five coloured "S M E L V" badges; v5 shows no legality column | | closed in the sample by D3923: v3 legality letters (bmp/legality/letters) in a Legal column |
 
