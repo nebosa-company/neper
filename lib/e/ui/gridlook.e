@@ -16,7 +16,6 @@ use e.io
 use e.mem
 use e.str
 use e.fmt.png as png
-use e.fmt.bmp as bmp
 use e.gfx.image
 use e.gfx.geometry
 use e.gfx.paint
@@ -263,23 +262,64 @@ fn ends_with_bmp(path: str) -> bool {
     ret (path[n - 3usize] == 98u8 || path[n - 3usize] == 66u8) && (path[n - 2usize] == 109u8 || path[n - 2usize] == 77u8) && (path[n - 1usize] == 112u8 || path[n - 1usize] == 80u8)
 }
 
+fn le32(b: []const u8, at: usize) -> u32 {
+    ret u32(b[at]) | (u32(b[at + 1usize]) << 8u32) | (u32(b[at + 2usize]) << 16u32) | (u32(b[at + 3usize]) << 24u32)
+}
+
+// An uncompressed 24-bit Windows bitmap (what v3's legality letters are) as straight RGBA.
+fn bmp24(a: *mem.Arena, bytes: []const u8) -> (image.ConstImage, err) {
+    if bytes.len < 54usize || bytes[0usize] != 66u8 || bytes[1usize] != 77u8 { ret (zero, BadPicture) }
+    let data_at = usize(le32(bytes, 10usize))
+    let width = usize(le32(bytes, 18usize))
+    let height_raw = le32(bytes, 22usize)
+    var height = usize(height_raw)
+    var bottom_up = true
+    if height_raw >= 2147483648u32 {
+        height = usize(0u32 - height_raw)
+        bottom_up = false
+    }
+    let bits = u32(bytes[28usize]) | (u32(bytes[29usize]) << 8u32)
+    if bits != 24u32 || le32(bytes, 30usize) != 0u32 || width == 0usize || height == 0usize || width > 4096usize || height > 4096usize { ret (zero, BadPicture) }
+    let stride_in = ((width * 3usize + 3usize) / 4usize) * 4usize
+    if data_at + stride_in * height > bytes.len { ret (zero, BadPicture) }
+    let (px, px_error) = mem.alloc[u8](a, width * height * 4usize)
+    if px_error != ok { ret (zero, px_error) }
+    var y = 0usize
+    while y < height {
+        var src_row = y
+        if bottom_up { src_row = height - 1usize - y }
+        var x = 0usize
+        while x < width {
+            let from = data_at + src_row * stride_in + x * 3usize
+            let to = (y * width + x) * 4usize
+            px[to] = bytes[from + 2usize]
+            px[to + 1usize] = bytes[from + 1usize]
+            px[to + 2usize] = bytes[from]
+            px[to + 3usize] = 255u8
+            x += 1usize
+        }
+        y += 1usize
+    }
+    let (view, view_error) = image.make_const(px, u32(width), u32(height), width * 4usize, .Rgba8, .Straight)
+    if view_error != ok { ret (zero, BadPicture) }
+    ret (view, ok)
+}
+
 // One .png or .bmp file decoded and uploaded to the renderer (`a` may be reset afterwards).
 fn load_picture(a: *mem.Arena, r: *scene.Renderer, path: str) -> (scene.TextureId, err) {
     let (bytes, read_error) = fs.read_file(a, path, 1048576usize)
     if read_error != ok { ret (zero, read_error) }
+    if ends_with_bmp(path) {
+        let (bitmap, bitmap_error) = bmp24(a, bytes)
+        if bitmap_error != ok { ret (zero, BadPicture) }
+        let (bitmap_texture, bitmap_upload_error) = scene.upload_image(r, bitmap)
+        ret (bitmap_texture, bitmap_upload_error)
+    }
     var state: io.SliceReader = zero
     state.data = bytes
     state.off = 0usize
-    var decoded: image.Image = zero
-    if ends_with_bmp(path) {
-        let (bitmap, bitmap_error) = bmp.decode(a, io.slice_reader(&state), bmp.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64 })
-        if bitmap_error != ok { ret (zero, BadPicture) }
-        decoded = bitmap
-    } else {
-        let (picture, picture_error) = png.decode(a, io.slice_reader(&state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
-        if picture_error != ok { ret (zero, BadPicture) }
-        decoded = picture
-    }
+    let (decoded, decode_error) = png.decode(a, io.slice_reader(&state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
+    if decode_error != ok { ret (zero, BadPicture) }
     let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
     if view_error != ok { ret (zero, BadPicture) }
     let (texture, upload_error) = scene.upload_image(r, view)
