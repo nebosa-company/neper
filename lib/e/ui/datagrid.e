@@ -2777,6 +2777,48 @@ fn group_cell(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: *widge
     ret text_node(a, grid, "", true, .Text, out)
 }
 
+// v3 shows the editors' buttons in the current row of an in-place editing grid: a spin editor its
+// step arrows either side, a button editor its three dots.
+fn decorate_editors(a: *mem.Arena, grid: *Grid, column: usize, row: usize, plain: widget.Node) -> (widget.Node, err) {
+    var node = plain
+    if grid.immediate_edit && grid.look.on && grid.has_selection && row == grid.selected_row && !grid.read_only && grid.origin[column] < grid.editors.len && grid.specs[column].editable {
+        let editor_kind = grid.editors[grid.origin[column]]
+        if editor_kind == EDITOR_SPIN {
+            let ink = gl.rgb(0x000000u32)
+            let (left_mark, left_mark_error) = gl.mark(a, .Left, ink, ink, 5.0, 8.0)
+            if left_mark_error != ok { ret (zero, left_mark_error) }
+            let (right_mark, right_mark_error) = gl.mark(a, .Right, ink, ink, 5.0, 8.0)
+            if right_mark_error != ok { ret (zero, right_mark_error) }
+            let (spin_parts, spin_parts_error) = mem.alloc[widget.Node](a, 3usize)
+            if spin_parts_error != ok { ret (zero, spin_parts_error) }
+            spin_parts[0usize] = left_mark
+            spin_parts[1usize] = node
+            spin_parts[2usize] = right_mark
+            var spin_style = style.defaults()
+            spin_style.width = style.Length { Percent: 100.0 }
+            node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 2.0 }, spin_style, spin_parts[0usize..3usize])
+        } else if editor_kind == EDITOR_BUTTON {
+            var dots: widget.Node = zero
+            let dots_error = text_node(a, grid, "...", false, .Text, &dots)
+            if dots_error != ok { ret (zero, dots_error) }
+            var dots_style = control.sized_style(18.0, 15.0)
+            dots_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+            dots_style.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+            let (dots_box, dots_box_error) = mem.alloc[widget.Node](a, 1usize)
+            if dots_box_error != ok { ret (zero, dots_box_error) }
+            dots_box[0usize] = dots
+            let (button_parts, button_parts_error) = mem.alloc[widget.Node](a, 2usize)
+            if button_parts_error != ok { ret (zero, button_parts_error) }
+            button_parts[0usize] = node
+            button_parts[1usize] = widget.aligned(0u64, .Center, .Center, dots_style, dots_box[0usize..1usize])
+            var button_style = style.defaults()
+            button_style.width = style.Length { Percent: 100.0 }
+            node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 2.0 }, button_style, button_parts[0usize..2usize])
+        }
+    }
+    ret (node, ok)
+}
+
 fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *widget.Node) -> err {
     let grid = mem.cast[*Grid](ctx)
     if column >= grid.specs.len { ret control.TooLarge }
@@ -2949,7 +2991,14 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     var role = grid.events.row_role(grid.events.ctx, row)
     let (text, text_error) = cell_text(a, grid, column, row)
     if text_error != ok { ret text_error }
-    if !grid.has_rules { ret cell_text_node(a, grid, text, false, role, row, out) }
+    if !grid.has_rules {
+        var plain_node: widget.Node = zero
+        try cell_text_node(a, grid, text, false, role, row, &plain_node)
+        let (decorated_plain, decorate_plain_error) = decorate_editors(a, grid, column, row, plain_node)
+        if decorate_plain_error != ok { ret decorate_plain_error }
+        *out = decorated_plain
+        ret ok
+    }
     let look = rules.format(grid.rule_set, row, grid.specs[column].column)
     if look.has_ink { role = look.ink }
     var shown = text
@@ -2966,6 +3015,9 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     }
     var node: widget.Node = zero
     try cell_text_node(a, grid, shown, look.bold, role, row, &node)
+    let (decorated_node, decorate_error) = decorate_editors(a, grid, column, row, node)
+    if decorate_error != ok { ret decorate_error }
+    node = decorated_node
     if !look.has_fill && !look.has_bar {
         *out = node
         ret ok

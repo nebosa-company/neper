@@ -40805,3 +40805,7 @@ v3's collection grid (editors shown in place) marks its current row with a long 
 ## D3956 — G012: fixture coverage of the Column window's drag in and out
 
 ui_datagrid section 33 replays the two halves of the Column window without a pointer: a header payload dropped on the window (`on_chooser_drop`) hides that column, and the Reorder a chooser item's drop makes (`from` = CHOOSER_FROM + the grid and column it carries, `to` = the header's column) shows it again before that header. The hint tooltip's timing stays live-only (it depends on the runtime's 500 ms hover clock).
+
+## D3957 — G012: the current row of an in-place editing grid shows its editors' buttons
+
+In v3's collection grid the current row shows its editable cells' buttons without an editor open: a step arrow either side of a spin cell's number and the three dots at the end of a button cell. `decorate_editors` does that for the current row of a grid with `set_immediate_edit` (any row's plain or rule-formatted cell), from the column's `set_editor` kind (B8-current-row-editors-v5.png: Qty and Used with arrows, Buy at and Sell at with dots). The decorations are drawings; the editors open on a tap as before.
