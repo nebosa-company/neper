@@ -157,6 +157,26 @@ fn push_radio(allowed: bool) {
     let result = os.recv(NET_REP, sysettings.NO_SLOT)
 }
 
+// (C176) The links beside the uplink, gated like the radios by Airplane mode: bit 0 Bluetooth (setting 24), bit 1 Hotspot
+// (setting 3). The network server starts with Bluetooth up and the Hotspot down, which is the settings' default (1), so
+// nothing is sent at start unless the stored values differ.
+const LINKS_DEFAULT: usize = 1usize
+
+fn links_mask(store: *Store) -> usize {
+    if store.v[2usize] != 0u8 { ret 0usize }
+    var mask = 0usize
+    if store.v[24usize] != 0u8 { mask = mask | 1usize }
+    if store.v[3usize] != 0u8 { mask = mask | 2usize }
+    ret mask
+}
+
+fn push_links(mask: usize) {
+    let sent = os.send(NET_REQ, 10usize, sysettings.NO_SLOT)
+    if sent == REFUSED { ret }
+    let mask_sent = os.send(NET_REQ, mask, sysettings.NO_SLOT)
+    let result = os.recv(NET_REP, sysettings.NO_SLOT)
+}
+
 // (C149) The notification switches (settings 26 to 33, the order of Settings' notification list) as a mask, one bit
 // per app, sent to the status service, which counts a notification only from an app whose bit is set.
 fn push_notify_mask(store: *Store) {
@@ -178,7 +198,8 @@ fn push_notify_mask(store: *Store) {
 const SERVICES_REQ: usize = 11usize
 
 fn push_volumes(store: *Store) {
-    let payload = usize(store.v[9usize]) | (usize(store.v[10usize]) << 8usize) | (usize(store.v[11usize]) << 16usize) | (usize(store.v[13usize]) << 24usize)
+    // (C166) The Microphone access switch (setting 17) rides in bits 32-39: the process's capture refuses while it is off.
+    let payload = usize(store.v[9usize]) | (usize(store.v[10usize]) << 8usize) | (usize(store.v[11usize]) << 16usize) | (usize(store.v[13usize]) << 24usize) | (usize(store.v[17usize]) << 32usize)
     let sent = os.send(SERVICES_REQ, 7usize | (payload << 8usize), sysettings.NO_SLOT)
 }
 
@@ -249,6 +270,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var clip_stamp = 0usize
     var radios = radios_allowed(&store)
     if !radios { push_radio(false) }
+    var links = links_mask(&store)
+    if links != LINKS_DEFAULT { push_links(links) }
     push_notify_mask(&store)
     push_volumes(&store)
     push_clock()
@@ -287,8 +310,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     radios = radios_allowed(&store)
                     push_radio(radios)
                 }
+                if (index == 2usize || index == 3usize || index == 24usize) && links_mask(&store) != links {
+                    links = links_mask(&store)
+                    push_links(links)
+                }
                 if index >= 26usize && index < 34usize { push_notify_mask(&store) }
-                if index == 9usize || index == 10usize || index == 11usize || index == 13usize { push_volumes(&store) }
+                if index == 9usize || index == 10usize || index == 11usize || index == 13usize || index == 17usize { push_volumes(&store) }
             }
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_BATTERY {
@@ -465,6 +492,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if radios_allowed(&store) != radios {
                 radios = radios_allowed(&store)
                 push_radio(radios)
+            }
+            if links_mask(&store) != links {
+                links = links_mask(&store)
+                push_links(links)
             }
             push_notify_mask(&store)
             push_volumes(&store)

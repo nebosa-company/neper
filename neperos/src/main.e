@@ -880,7 +880,8 @@ fn launch(frame: *a64.Frame) {
             thread.grant(child, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 23usize)
         }
         // (C158) The Mail app (entry 26) saves an attachment into /Downloads.
-        if index == 38usize || index == 26usize || index == 39usize || index == 19usize || index == 41usize || index == 32usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize || index == 31usize {
+        // (C167) The Translate app (entry 35) keeps its history and saved phrases in /translate.
+        if index == 38usize || index == 26usize || index == 39usize || index == 19usize || index == 41usize || index == 32usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize || index == 31usize || index == 35usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)

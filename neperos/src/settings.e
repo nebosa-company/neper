@@ -26,6 +26,7 @@ use theme
 use sysettings
 use sensorclient
 use netproto
+use netclient
 
 const NONE: usize = 99usize
 const MAX_HITS: usize = 96usize
@@ -366,6 +367,30 @@ fn scan_networks(s: *State) {
     say("\n")
 }
 
+// (C176) Ask the network server for the Bluetooth and Hotspot links and the devices in range. A machine without a
+// network server refuses the first send and shows no captions.
+fn refresh_links(s: *State) {
+    let (state, stations, bonded, answered) = netclient.link_state()
+    s.link_known = answered
+    s.link_state = state
+    s.link_stations = stations
+    s.bt_len = 0usize
+    if answered && (state & 2usize) != 0usize {
+        let (heard, written) = netclient.bluetooth_devices(mem.address_of(&s.bt_names[0usize]), 96usize)
+        s.bt_len = written
+    }
+    if !answered { ret }
+    say("settings links bluetooth ")
+    if (state & 2usize) != 0usize { say("up") } else { say("down") }
+    say(" hotspot ")
+    if (state & 4usize) != 0usize { say("up") } else if (state & 8usize) != 0usize { say("waiting") } else { say("down") }
+    say(" stations ")
+    say_num(stations)
+    say(" devices ")
+    say_num(bonded)
+    say("\n")
+}
+
 // The first network with its connected flag, or 99.
 fn connected_net(s: *State) -> usize {
     var i = 0usize
@@ -423,6 +448,13 @@ type State = struct {
     net_signal: [8]usize,
     net_total: usize,
     net_ok: bool,
+    // (C176) The links beside the uplink, as the network server last said: its state bits (1 Bluetooth up, 2 Hotspot up,
+    // 3 Hotspot waiting for an uplink), the stations on the hotspot, and the Bluetooth devices heard, "A, B".
+    link_known: bool,
+    link_state: usize,
+    link_stations: usize,
+    bt_names: [96]u8,
+    bt_len: usize,
     sheet: usize,
     pass: ui.Field,
     join_note: usize,
@@ -774,9 +806,17 @@ fn draw_network(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
     y += 68.0
     try toggle_row(a, builder, s, faces, AIRPLANE, "", y)
     y += 68.0
-    try toggle_row(a, builder, s, faces, HOTSPOT, "", y)
+    var hotspot_caption = ""
+    if s.link_known && (s.link_state & 4usize) != 0usize { hotspot_caption = join(a, "Sharing with ", number(a, s.link_stations), " device") }
+    if s.link_known && (s.link_state & 8usize) != 0usize { hotspot_caption = "Waiting for Wi-Fi or Mobile data" }
+    try toggle_row(a, builder, s, faces, HOTSPOT, hotspot_caption, y)
     y += 68.0
-    try toggle_row(a, builder, s, faces, BLUETOOTH, "", y)
+    var bluetooth_caption = ""
+    if s.link_known && (s.link_state & 2usize) != 0usize {
+        bluetooth_caption = "No devices nearby"
+        if s.bt_len > 0usize { bluetooth_caption = ui.text_of(a, s.bt_names[0usize..], s.bt_len) }
+    }
+    try toggle_row(a, builder, s, faces, BLUETOOTH, bluetooth_caption, y)
     ret ok
 }
 
@@ -1419,6 +1459,7 @@ fn act(s: *State, id: usize, x: f32) -> bool {
             say(page_name(s.page))
             say("\n")
             if s.page == 0usize && s.values[WIFI] != 0usize { scan_networks(s) }
+            if s.page == 0usize { refresh_links(s) }
             if s.page == 6usize {
                 s.hidden = sysettings.hidden()
                 load_dynamic(s)
@@ -1437,6 +1478,7 @@ fn act(s: *State, id: usize, x: f32) -> bool {
                 if (s.battery & 2147483648usize) != 0usize {
                     say("settings battery ")
                     say_num(s.battery & 255usize)
+                    if (s.battery & 256usize) != 0usize { say(" charging") }
                     say("\n")
                 } else {
                     say("settings battery unavailable\n")
@@ -1643,7 +1685,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             }
                             index += 1usize
                         }
-                        if changed { say("settings saved\n") }
+                        if changed {
+                            say("settings saved\n")
+                            if s.page == 0usize { refresh_links(&s) }
+                        }
                     } else {
                         save(&s)
                     }

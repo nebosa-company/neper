@@ -195,6 +195,37 @@ fn air_password(index: usize) -> str {
 // Whether the radios may carry traffic (the settings server's word: Airplane mode and the Wi-Fi and Mobile switches).
 var radio_on: bool = true
 
+// (C176) The Bluetooth and Hotspot links, as the settings server last asked (its word is already gated by Airplane
+// mode). Bluetooth needs no uplink; a hotspot shares one, so it is up only while the radios may carry traffic.
+var bt_wanted: bool = true
+var hotspot_wanted: bool = false
+
+fn bt_up() -> bool {
+    ret bt_wanted
+}
+
+fn hotspot_up() -> bool {
+    ret hotspot_wanted && radio_on
+}
+
+// The hotspot: 0 down, 1 asked for and waiting for an uplink, 2 up.
+fn hotspot_state() -> usize {
+    if !hotspot_wanted { ret 0usize }
+    if radio_on { ret 2usize }
+    ret 1usize
+}
+
+// Say what changed in the links since `was_bt` and the hotspot state `was_hotspot`.
+fn link_report(was_bt: bool, was_hotspot: usize) {
+    if bt_up() != was_bt {
+        if bt_up() { say("net server bluetooth up\n") } else { say("net server bluetooth down\n") }
+    }
+    let now = hotspot_state()
+    if now != was_hotspot {
+        if now == 2usize { say("net server hotspot up\n") } else if now == 1usize { say("net server hotspot waiting\n") } else { say("net server hotspot down\n") }
+    }
+}
+
 fn air_count(s: *Session) -> usize {
     if !radio_on { ret 0usize }
     if s.test { ret 4usize }
@@ -255,9 +286,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
             running = false
         } else if op == netproto.OP_RADIO {
             let flag = os.recv(REQ, netproto.NO_SLOT)
+            let was_hotspot_state = hotspot_state()
             radio_on = flag != 0usize
             if radio_on { say("net server radio on\n") } else { say("net server radio off\n") }
+            link_report(bt_up(), was_hotspot_state)
             reply(netproto.R_OK)
+        } else if op == netproto.OP_LINKS {
+            let mask = os.recv(REQ, netproto.NO_SLOT)
+            let was_bt = bt_up()
+            let was_state = hotspot_state()
+            bt_wanted = (mask & 1usize) != 0usize
+            hotspot_wanted = (mask & 2usize) != 0usize
+            link_report(was_bt, was_state)
+            reply(netproto.R_OK)
+        } else if op == netproto.OP_LINK_STATE {
+            reply(netproto.R_OK)
+            var state = 0usize
+            if radio_on { state = state | 1usize }
+            if bt_up() { state = state | 2usize }
+            if hotspot_state() == 2usize { state = state | 4usize }
+            if hotspot_state() == 1usize { state = state | 8usize }
+            let state_sent = os.send(REP, state, netproto.NO_SLOT)
+            // (The test boots record one station on the hotspot and two bonded devices; a real link layer counts.)
+            var stations = 0usize
+            if s.test && hotspot_state() == 2usize { stations = 1usize }
+            let stations_sent = os.send(REP, stations, netproto.NO_SLOT)
+            var bonded = 0usize
+            if s.test && bt_up() { bonded = 2usize }
+            let bonded_sent = os.send(REP, bonded, netproto.NO_SLOT)
+        } else if op == netproto.OP_BT_SCAN {
+            reply(netproto.R_OK)
+            var heard = 0usize
+            if s.test && bt_up() { heard = 2usize }
+            let heard_sent = os.send(REP, heard, netproto.NO_SLOT)
+            var d = 0usize
+            while d < heard {
+                var device_name = "Neper Buds"
+                var strength = 71usize
+                if d != 0usize {
+                    device_name = "Lab Car Kit"
+                    strength = 48usize
+                }
+                netproto.send_text(REP, device_name)
+                let strength_sent = os.send(REP, strength, netproto.NO_SLOT)
+                d += 1usize
+            }
         } else if op == netproto.OP_SCAN {
             reply(netproto.R_OK)
             let count = air_count(&s)

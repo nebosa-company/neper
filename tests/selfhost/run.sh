@@ -11441,7 +11441,8 @@ greeting"
         fixture_base="${fixture%_again}"; fixture_base="${fixture_base%_more}"; fixture_base="${fixture_base%_later}"
         # A row named <base>_later boots with the guest clock forty days on (the Trash keeps thirty).
         # A row named <name>_ring boots with the guest clock at 06:29:30 on a Tuesday, half a minute before the Clock's first alarm.
-        case "$fixture" in *_later) export NEPEROS_RTC="$(date -d "+40 days" +%F)" ;; *_ring) export NEPEROS_RTC="2026-10-13T06:29:30" ;; *) unset NEPEROS_RTC ;; esac
+        # <name>_low boots at 21:09:30, thirty seconds before the scripted battery (power.e) reaches 15%; <name>_night at 23:30, on the charger.
+        case "$fixture" in *_later) export NEPEROS_RTC="$(date -d "+40 days" +%F)" ;; *_ring) export NEPEROS_RTC="2026-10-13T06:29:30" ;; *_low) export NEPEROS_RTC="2026-10-13T21:09:30" ;; *_night) export NEPEROS_RTC="2026-10-13T23:30:00" ;; *) unset NEPEROS_RTC ;; esac
         fixture_disk="$test_build/shell-$fixture_base.disk"
         if [ "$fixture" = "$fixture_base" ]; then dd if=/dev/zero of="$fixture_disk" bs=1M count=1 status=none; fi
         last_marker="${markers##*;;}"

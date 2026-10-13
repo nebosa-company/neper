@@ -2,6 +2,7 @@
 // endpoint capabilities the kernel grants an app that may use the network (slot 3 sends requests, slot
 // 4 receives replies). An app that was granted neither cannot reach the server -- the kernel refuses
 // its send -- so the capability is the only switch. The protocol is netproto.e.
+use e.mem
 use e.os
 use netproto
 
@@ -73,4 +74,47 @@ fn set_dns(address: u32, port: u16) -> usize {
 
 fn quit() {
     let op = os.send(REQ, netproto.OP_QUIT, netproto.NO_SLOT)
+}
+
+// (C176) The links beside the uplink: the state bits (0 uplink radios, 1 Bluetooth up, 2 Hotspot up, 3 Hotspot waiting
+// for an uplink), the stations on the hotspot, the Bluetooth devices bonded, and whether the server answered at all.
+fn link_state() -> (usize, usize, usize, bool) {
+    let sent = os.send(REQ, netproto.OP_LINK_STATE, netproto.NO_SLOT)
+    if sent == 18446744073709551615usize { ret (0usize, 0usize, 0usize, false) }
+    let status = result()
+    let state = os.recv(REP, netproto.NO_SLOT)
+    let stations = os.recv(REP, netproto.NO_SLOT)
+    let bonded = os.recv(REP, netproto.NO_SLOT)
+    ret (state, stations, bonded, status == netproto.R_OK)
+}
+
+// The Bluetooth devices in range, their names written at `dst` ("A, B", at most `cap` bytes): how many were heard and
+// how many bytes were written.
+fn bluetooth_devices(dst: usize, cap: usize) -> (usize, usize) {
+    let sent = os.send(REQ, netproto.OP_BT_SCAN, netproto.NO_SLOT)
+    if sent == 18446744073709551615usize { ret (0usize, 0usize) }
+    let status = result()
+    let count = os.recv(REP, netproto.NO_SLOT)
+    var written = 0usize
+    var name: [32]u8 = zero
+    var i = 0usize
+    while i < count {
+        let length = netproto.recv_bytes(REP, mem.address_of(&name[0usize]), 24usize)
+        let strength = os.recv(REP, netproto.NO_SLOT)
+        if written + length + 2usize <= cap {
+            if i > 0usize {
+                os.store8(dst + written, 44u8)
+                os.store8(dst + written + 1usize, 32u8)
+                written += 2usize
+            }
+            var k = 0usize
+            while k < length {
+                os.store8(dst + written + k, name[k])
+                k += 1usize
+            }
+            written += length
+        }
+        i += 1usize
+    }
+    ret (count, written)
 }

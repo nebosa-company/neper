@@ -20,14 +20,24 @@ use appkit
 use text
 use ui
 use httpc
+use vaultfs
+use sysettings
+use e.time
 
 const NONE: usize = 99usize
-const LANGS: usize = 6usize
+const LANGS: usize = 8usize
 const PHRASES: usize = 8usize
 const MAIN_SCREEN: usize = 0usize
 const PICK_SCREEN: usize = 1usize
+const HISTORY_SCREEN: usize = 2usize
+// (C167) The history keeps the last eight translations; a saved one stays when the list scrolls.
+const HISTORY: usize = 8usize
+
+type Entry = struct { src: [32]u8, src_len: usize, dst: [48]u8, dst_len: usize, from: usize, to: usize, saved: bool }
 
 type State = struct {
+    hist: [8]Entry,
+    hist_total: usize,
     from: usize,
     to: usize,
     typed: ui.Field,
@@ -49,7 +59,9 @@ fn lang_name(index: usize) -> str {
     if index == 2usize { ret "French" }
     if index == 3usize { ret "German" }
     if index == 4usize { ret "Italian" }
-    ret "Portuguese"
+    if index == 5usize { ret "Portuguese" }
+    if index == 6usize { ret "Russian" }
+    ret "Greek"
 }
 
 // Phrase `p` of the book in language `lang`.
@@ -104,6 +116,26 @@ fn phrase(lang: usize, p: usize) -> str {
         if p == 6usize { ret "a domani" }
         ret "buonanotte"
     }
+    if lang == 6usize {
+        if p == 0usize { ret "\xD0\xBF\xD1\x80\xD0\xB8\xD0\xB2\xD0\xB5\xD1\x82" }
+        if p == 1usize { ret "\xD0\xB4\xD0\xBE\xD0\xB1\xD1\x80\xD0\xBE\xD0\xB5 \xD1\x83\xD1\x82\xD1\x80\xD0\xBE" }
+        if p == 2usize { ret "\xD1\x81\xD0\xBF\xD0\xB0\xD1\x81\xD0\xB8\xD0\xB1\xD0\xBE" }
+        if p == 3usize { ret "\xD0\xBA\xD0\xB0\xD0\xBA \xD0\xB4\xD0\xB5\xD0\xBB\xD0\xB0" }
+        if p == 4usize { ret "\xD0\xB3\xD0\xB4\xD0\xB5 \xD0\xB1\xD0\xB8\xD0\xB1\xD0\xBB\xD0\xB8\xD0\xBE\xD1\x82\xD0\xB5\xD0\xBA\xD0\xB0" }
+        if p == 5usize { ret "\xD1\x8F \xD1\x85\xD0\xBE\xD1\x82\xD0\xB5\xD0\xBB \xD0\xB1\xD1\x8B \xD0\xBA\xD0\xBE\xD1\x84\xD0\xB5" }
+        if p == 6usize { ret "\xD1\x83\xD0\xB2\xD0\xB8\xD0\xB4\xD0\xB8\xD0\xBC\xD1\x81\xD1\x8F \xD0\xB7\xD0\xB0\xD0\xB2\xD1\x82\xD1\x80\xD0\xB0" }
+        ret "\xD1\x81\xD0\xBF\xD0\xBE\xD0\xBA\xD0\xBE\xD0\xB9\xD0\xBD\xD0\xBE\xD0\xB9 \xD0\xBD\xD0\xBE\xD1\x87\xD0\xB8"
+    }
+    if lang == 7usize {
+        if p == 0usize { ret "\xCE\xB3\xCE\xB5\xCE\xB9\xCE\xB1 \xCF\x83\xCE\xBF\xCF\x85" }
+        if p == 1usize { ret "\xCE\xBA\xCE\xB1\xCE\xBB\xCE\xB7\xCE\xBC\xCE\xAD\xCF\x81\xCE\xB1" }
+        if p == 2usize { ret "\xCE\xB5\xCF\x85\xCF\x87\xCE\xB1\xCF\x81\xCE\xB9\xCF\x83\xCF\x84\xCF\x8E" }
+        if p == 3usize { ret "\xCF\x84\xCE\xB9 \xCE\xBA\xCE\xAC\xCE\xBD\xCE\xB5\xCE\xB9\xCF\x82" }
+        if p == 4usize { ret "\xCF\x80\xCE\xBF\xCF\x8D \xCE\xB5\xCE\xAF\xCE\xBD\xCE\xB1\xCE\xB9 \xCE\xB7 \xCE\xB2\xCE\xB9\xCE\xB2\xCE\xBB\xCE\xB9\xCE\xBF\xCE\xB8\xCE\xAE\xCE\xBA\xCE\xB7" }
+        if p == 5usize { ret "\xCE\xB8\xCE\xB1 \xCE\xAE\xCE\xB8\xCE\xB5\xCE\xBB\xCE\xB1 \xCE\xAD\xCE\xBD\xCE\xB1\xCE\xBD \xCE\xBA\xCE\xB1\xCF\x86\xCE\xAD" }
+        if p == 6usize { ret "\xCF\x84\xCE\xB1 \xCE\xBB\xCE\xAD\xCE\xBC\xCE\xB5 \xCE\xB1\xCF\x8D\xCF\x81\xCE\xB9\xCE\xBF" }
+        ret "\xCE\xBA\xCE\xB1\xCE\xBB\xCE\xB7\xCE\xBD\xCF\x8D\xCF\x87\xCF\x84\xCE\xB1"
+    }
     if p == 0usize { ret "ol\xC3\xA1" }
     if p == 1usize { ret "bom dia" }
     if p == 2usize { ret "obrigado" }
@@ -135,7 +167,9 @@ fn lang_code(index: usize) -> str {
     if index == 2usize { ret "fr" }
     if index == 3usize { ret "de" }
     if index == 4usize { ret "it" }
-    ret "pt"
+    if index == 5usize { ret "pt" }
+    if index == 6usize { ret "ru" }
+    ret "el"
 }
 
 // Ask the server to translate the typed text (spaces as %20; only letters and spaces are sent): true when it did.
@@ -182,7 +216,7 @@ fn ask_server(a: *mem.Arena, s: *State) -> bool {
     s.remote_from = s.from
     s.remote_to = s.to
     ui.say("translate server ")
-    ui.say_text(ui.text_of(a, s.remote[0usize..], s.remote_len))
+    say_safe(ui.text_of(a, s.remote[0usize..], s.remote_len))
     ui.say("\n")
     ret true
 }
@@ -196,6 +230,23 @@ fn remote_answer(a: *mem.Arena, s: *State) -> str {
     ret ""
 }
 
+// The serial log is ASCII (the harness decodes it as text): a text with bytes above 127 is logged as its length.
+fn say_safe(value: str) {
+    var plain = true
+    var i = 0usize
+    while i < value.len {
+        if value[i] >= 128u8 { plain = false }
+        i += 1usize
+    }
+    if plain {
+        ui.say_text(value)
+    } else {
+        ui.say("(")
+        ui.say_num(value.len)
+        ui.say(" bytes)")
+    }
+}
+
 // The phrase of the book that `value` is in language `lang`, or NONE.
 fn find(a: *mem.Arena, lang: usize, value: str) -> usize {
     let probe = lowered(a, value)
@@ -205,6 +256,144 @@ fn find(a: *mem.Arena, lang: usize, value: str) -> usize {
         p += 1usize
     }
     ret NONE
+}
+
+// ----------------------------------------------------------------------------------------------
+// (C167) The history and the saved phrases, kept in /translate: eight entries of 88 bytes (from, to, saved, the two
+// lengths, then the text and its translation).
+const ENTRY_BYTES: usize = 88usize
+
+fn same_entry(e: *Entry, src: str, from: usize, to: usize) -> bool {
+    if e.src_len != src.len || e.from != from || e.to != to { ret false }
+    var i = 0usize
+    while i < src.len {
+        if e.src[i] != src[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn save_history(s: *State) {
+    var raw: [704]u8 = zero
+    var i = 0usize
+    while i < s.hist_total {
+        let at = i * ENTRY_BYTES
+        raw[at] = u8(s.hist[i].from)
+        raw[at + 1usize] = u8(s.hist[i].to)
+        if s.hist[i].saved { raw[at + 2usize] = 1u8 }
+        raw[at + 3usize] = u8(s.hist[i].src_len)
+        raw[at + 4usize] = u8(s.hist[i].dst_len)
+        var k = 0usize
+        while k < s.hist[i].src_len {
+            raw[at + 8usize + k] = s.hist[i].src[k]
+            k += 1usize
+        }
+        k = 0usize
+        while k < s.hist[i].dst_len {
+            raw[at + 40usize + k] = s.hist[i].dst[k]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let kept = vaultfs.write_big("/translate", mem.address_of(&raw[0usize]), s.hist_total * ENTRY_BYTES)
+}
+
+fn load_history(s: *State) -> usize {
+    var raw: [704]u8 = zero
+    let (got, found) = vaultfs.read_big("/translate", mem.address_of(&raw[0usize]), 704usize)
+    if !found { ret 0usize }
+    let count = got / ENTRY_BYTES
+    var i = 0usize
+    while i < count && i < HISTORY {
+        let at = i * ENTRY_BYTES
+        let src_len = usize(raw[at + 3usize])
+        let dst_len = usize(raw[at + 4usize])
+        if src_len <= 32usize && dst_len <= 48usize && usize(raw[at]) < LANGS && usize(raw[at + 1usize]) < LANGS {
+            s.hist[i].from = usize(raw[at])
+            s.hist[i].to = usize(raw[at + 1usize])
+            s.hist[i].saved = raw[at + 2usize] != 0u8
+            s.hist[i].src_len = src_len
+            s.hist[i].dst_len = dst_len
+            var k = 0usize
+            while k < src_len {
+                s.hist[i].src[k] = raw[at + 8usize + k]
+                k += 1usize
+            }
+            k = 0usize
+            while k < dst_len {
+                s.hist[i].dst[k] = raw[at + 40usize + k]
+                k += 1usize
+            }
+            s.hist_total += 1usize
+        }
+        i += 1usize
+    }
+    ret s.hist_total
+}
+
+// Put a translation first in the history (a repeat moves to the front and keeps its star); when the list is full the
+// oldest entry that is not saved falls off (the last one when all are saved).
+fn remember(s: *State, src: str, dst: str) {
+    if src.len == 0usize || src.len > 32usize || dst.len == 0usize || dst.len > 48usize { ret }
+    var found = HISTORY
+    var i = 0usize
+    while i < s.hist_total {
+        if same_entry(&s.hist[i], src, s.from, s.to) { found = i }
+        i += 1usize
+    }
+    var entry: Entry = zero
+    var from_slot = 0usize
+    if found < HISTORY {
+        entry = s.hist[found]
+        from_slot = found
+    } else {
+        var n = 0usize
+        while n < src.len {
+            entry.src[n] = src[n]
+            n += 1usize
+        }
+        entry.src_len = src.len
+        n = 0usize
+        while n < dst.len {
+            entry.dst[n] = dst[n]
+            n += 1usize
+        }
+        entry.dst_len = dst.len
+        entry.from = s.from
+        entry.to = s.to
+        entry.saved = false
+        if s.hist_total < HISTORY {
+            from_slot = s.hist_total
+            s.hist_total += 1usize
+        } else {
+            from_slot = HISTORY - 1usize
+            var j = HISTORY - 1usize
+            var picked = false
+            while j > 0usize && !picked {
+                if !s.hist[j].saved {
+                    from_slot = j
+                    picked = true
+                }
+                j -= 1usize
+            }
+        }
+    }
+    var k = from_slot
+    while k > 0usize {
+        s.hist[k] = s.hist[k - 1usize]
+        k -= 1usize
+    }
+    s.hist[0usize] = entry
+    save_history(s)
+}
+
+// The translation shown for the text now typed: the phrase book's, else the server's answer for exactly this text.
+fn current_output(a: *mem.Arena, s: *State) -> str {
+    let value = ui.field_text(a, &s.typed)
+    if value.len == 0usize { ret "" }
+    let at = find(a, s.from, value)
+    if at != NONE { ret phrase(s.to, at) }
+    ret remote_answer(a, s)
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -240,23 +429,45 @@ fn draw_main(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     // The translation.
     try ui.card(a, builder, 16.0, 252.0, 380.0, 150.0, 20.0, paint.Color { red: 0.16, green: 0.17, blue: 0.20, alpha: 1.0 })
     try ui.put(a, builder, faces.grotesk, 12.0, lang_name(s.to), 32.0, 264.0, ui.light_muted())
-    var out = ""
-    if value.len > 0usize {
-        let at = find(a, s.from, value)
-        if at != NONE {
-            out = phrase(s.to, at)
-        } else {
-            out = remote_answer(a, s)
-            if out.len == 0usize { out = "Not in the phrase book: Done asks the server" }
-        }
-    }
+    var out = current_output(a, s)
+    if value.len > 0usize && out.len == 0usize { out = "Not in the phrase book: Done asks the server" }
     var tone = ui.amber()
     if out.len > 28usize { tone = ui.light_muted() }
     if out.len > 0usize {
         let (box, box_error) = ui.wrapped(a, builder, faces.jost, 24.0, out, 32.0, 290.0, 348.0, 3u32, tone)
         if box_error != ok { ret box_error }
     }
+    // (C167) Save the pair (a star in the history), copy the translation, open the history.
+    var starred = false
+    if s.hist_total > 0usize && value.len > 0usize && same_entry(&s.hist[0usize], lowered(a, value), s.from, s.to) { starred = s.hist[0usize].saved }
+    var save_label = "Save"
+    if starred { save_label = "Saved" }
+    try ui.pill(a, builder, &s.hits, faces, 400usize, 32.0, 364.0, 100.0, 30.0, save_label, ui.soft(), 14.0)
+    try ui.pill(a, builder, &s.hits, faces, 401usize, 150.0, 364.0, 100.0, 30.0, "Copy", ui.soft(), 14.0)
+    try ui.pill(a, builder, &s.hits, faces, 402usize, 268.0, 364.0, 112.0, 30.0, "History", ui.soft(), 14.0)
     try ui.keyboard(a, builder, &s.hits, faces, "Done")
+    ret ok
+}
+
+// The history: newest first, the saved ones in amber; a tap loads the pair, a second tap on the loaded one stars it.
+fn draw_history(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try ui.put(a, builder, faces.jost_bold, 28.0, "History", 24.0, 20.0, ui.light())
+    if s.hist_total == 0usize {
+        try ui.put(a, builder, faces.jost, 18.0, "Nothing translated yet", 24.0, 90.0, ui.light_muted())
+    }
+    var i = 0usize
+    while i < s.hist_total {
+        let y: f32 = 80.0 + f32(i) * 70.0
+        var fill = ui.cream()
+        if s.hist[i].saved { fill = ui.amber() }
+        try ui.card(a, builder, 16.0, y, 380.0, 62.0, 16.0, fill)
+        try ui.put(a, builder, faces.grotesk, 12.0, ui.join(a, lang_name(s.hist[i].from), " to ", lang_name(s.hist[i].to)), 32.0, y + 6.0, ui.muted())
+        try ui.put(a, builder, faces.jost, 17.0, ui.text_of(a, s.hist[i].src[0usize..], s.hist[i].src_len), 32.0, y + 24.0, ui.ink())
+        try ui.put_right(a, builder, faces.jost, 17.0, ui.text_of(a, s.hist[i].dst[0usize..], s.hist[i].dst_len), 380.0, y + 24.0, ui.ink())
+        ui.hit(&s.hits, 500usize + i, 16.0, y, 380.0, 62.0)
+        i += 1usize
+    }
+    try ui.pill(a, builder, &s.hits, faces, 410usize, 106.0, 800.0, 200.0, 56.0, "Back", ui.amber(), 20.0)
     ret ok
 }
 
@@ -283,7 +494,9 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     s.hits.total = 0usize
     let faces = kit.faces
     try ui.ground(builder, kit.frame, kit.logical_h, 0.08, 0.09, 0.11)
-    if s.screen == MAIN_SCREEN { try draw_main(a, builder, s, faces) } else { try draw_pick(a, builder, s, faces) }
+    if s.screen == MAIN_SCREEN { try draw_main(a, builder, s, faces) }
+    if s.screen == PICK_SCREEN { try draw_pick(a, builder, s, faces) }
+    if s.screen == HISTORY_SCREEN { try draw_history(a, builder, s, faces) }
     try ui.handle(a, builder)
     ret ok
 }
@@ -304,12 +517,48 @@ fn report(a: *mem.Arena, s: *State) {
     let at = find(a, s.from, value)
     if at != NONE {
         ui.say("translate result ")
-        ui.say_text(phrase(s.to, at))
+        say_safe(phrase(s.to, at))
         ui.say("\n")
+        remember(s, phrase(s.from, at), phrase(s.to, at))
     }
 }
 
 fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
+    if s.screen == HISTORY_SCREEN {
+        if id == 410usize {
+            s.screen = MAIN_SCREEN
+            ret true
+        }
+        if id >= 500usize && id < 500usize + HISTORY {
+            let n = id - 500usize
+            if n < s.hist_total {
+                // A tap on an entry loads it; a tap on the entry that is already loaded stars it.
+                let current = lowered(a, ui.field_text(a, &s.typed))
+                if same_entry(&s.hist[n], current, s.from, s.to) {
+                    s.hist[n].saved = !s.hist[n].saved
+                    save_history(s)
+                    if s.hist[n].saved { ui.say("translate saved ") } else { ui.say("translate unsaved ") }
+                    say_safe(ui.text_of(a, s.hist[n].dst[0usize..], s.hist[n].dst_len))
+                    ui.say("\n")
+                } else {
+                    s.from = s.hist[n].from
+                    s.to = s.hist[n].to
+                    s.typed.len = 0usize
+                    var k = 0usize
+                    while k < s.hist[n].src_len {
+                        ui.field_type(&s.typed, s.hist[n].src[k], false)
+                        k += 1usize
+                    }
+                    ui.say("translate loaded ")
+                    say_safe(ui.text_of(a, s.hist[n].src[0usize..], s.hist[n].src_len))
+                    ui.say("\n")
+                }
+                s.screen = MAIN_SCREEN
+                ret true
+            }
+        }
+        ret false
+    }
     if s.screen == PICK_SCREEN {
         if id >= 300usize && id < 300usize + LANGS {
             if s.picking_to {
@@ -334,12 +583,46 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             // Done: a text the book does not have goes to the translation server.
             if s.typed.len > 0usize && find(a, s.from, ui.field_text(a, &s.typed)) == NONE {
                 let asked = ask_server(a, s)
+                if asked { remember(s, lowered(a, ui.field_text(a, &s.typed)), ui.text_of(a, s.remote[0usize..], s.remote_len)) }
             }
             ret true
         }
         let changed = ui.field_key(&s.typed, id, false)
         if changed { report(a, s) }
         ret changed
+    }
+    if id == 400usize {
+        // Save: the pair on show is starred in the history (a second tap takes the star off).
+        let value = lowered(a, ui.field_text(a, &s.typed))
+        if s.hist_total > 0usize && same_entry(&s.hist[0usize], value, s.from, s.to) {
+            s.hist[0usize].saved = !s.hist[0usize].saved
+            save_history(s)
+            if s.hist[0usize].saved { ui.say("translate saved ") } else { ui.say("translate unsaved ") }
+            say_safe(ui.text_of(a, s.hist[0usize].dst[0usize..], s.hist[0usize].dst_len))
+            ui.say("\n")
+            ret true
+        }
+        ret false
+    }
+    if id == 401usize {
+        // Copy: the translation goes to the system clipboard (owner 5), which clears itself after the time Settings sets.
+        let words = current_output(a, s)
+        if words.len == 0usize { ret false }
+        let (wall, wall_error) = time.now()
+        var now_s = 0usize
+        if wall_error == ok { now_s = usize(wall.nanos / 1000000000i64) }
+        let taken = sysettings.clip_set(5usize, now_s, words)
+        ui.say("translate copied ")
+        ui.say_num(words.len)
+        ui.say("\n")
+        ret false
+    }
+    if id == 402usize {
+        s.screen = HISTORY_SCREEN
+        ui.say("translate history ")
+        ui.say_num(s.hist_total)
+        ui.say("\n")
+        ret true
     }
     if id == 100usize {
         s.picking_to = false
@@ -391,6 +674,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var s: State = zero
     s.from = 0usize
     s.to = 1usize
+    let kept = load_history(&s)
+    if kept > 0usize {
+        ui.say("translate history loaded ")
+        ui.say_num(kept)
+        ui.say("\n")
+    }
     if !show(a, &kit, &s) {
         ui.say("translate present failed\n")
         ret ok

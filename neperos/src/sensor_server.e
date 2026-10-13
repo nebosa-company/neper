@@ -70,13 +70,15 @@ fn default_mask(app: usize) -> usize {
     if app == sensorclient.APP_COMPASS { ret 1usize | 2usize | 4usize | 8usize | BIT_FINE }
     if app == sensorclient.APP_LEVEL { ret 2usize | 4usize | 16usize }
     if app == sensorclient.APP_STEPS { ret 2usize | 16usize }
+    // (C168) The shell's home-screen step widget reads the counter, and nothing else of the hub.
+    if app == sensorclient.APP_SHELL { ret 16usize }
     // The background services process (kernel-started, app number 2): the step counter's keeper.
     if app == 2usize { ret 16usize }
     if app == sensorclient.APP_MAPS { ret 8usize | BIT_FINE }
     if app == sensorclient.APP_WEATHER { ret 8usize }
     // The camera belongs to the Camera app (entry 21); storage to the apps that were granted the filesystem's ends.
     if app == 21usize { ret 64usize | 128usize }
-    if app == 14usize || app == 15usize || app == 18usize || app == 20usize || app == 22usize || app == 23usize || app == 24usize || app == 25usize || app == 27usize || app == 31usize || app == 34usize || app == 37usize || app == 38usize || app == 40usize { ret 128usize }
+    if app == 14usize || app == 15usize || app == 18usize || app == 20usize || app == 22usize || app == 23usize || app == 24usize || app == 25usize || app == 27usize || app == 31usize || app == 34usize || app == 35usize || app == 37usize || app == 38usize || app == 40usize { ret 128usize }
     ret 0usize
 }
 
