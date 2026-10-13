@@ -11317,6 +11317,50 @@ greeting"
             esac
         done
     done < <(grep -v '^#' "$apps_table")
+    # Many installed apps, removal, update and roll back (C173, C151): Hello, a hand-written app (neperos/src/hello.e),
+    # is signed and put on the disk as /apps/hello.npkg, or Lab level at version 1 is, and the archive carries Lab level
+    # (version 1, or 2 for install_update). A row named <base>_again boots the plain archive on the disk its base left.
+    hello_image="$test_build/neperos-app-hello.img"
+    $test_build/neper-self emit-executable "$repo/neperos/src/hello.e" "$repo" aarch64 neperos "$hello_image" > /dev/null
+    hello_package="$test_build/hello.npkg"
+    python3 "$repo/scripts/make_package.py" pack "$hello_image" "$hello_package" Hello none 1 > /dev/null
+    hello_api2="$test_build/hello-api2.npkg"
+    python3 "$repo/scripts/make_package.py" pack "$hello_image" "$hello_api2" Hello none 1 2 > /dev/null
+    level_v2="$test_build/level2.npkg"
+    python3 "$repo/scripts/make_package.py" pack "$test_build/neperos-app-level.img" "$level_v2" 'Lab level' storage 2 > /dev/null
+    update_archive="$test_build/shell-update-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$update_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$settings_server_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der" "$level_v2"
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = installappsfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        apps_base="${fixture%_again}"
+        apps_disk="$test_build/shell-$apps_base.disk"
+        apps_archive="$package_archive"
+        if [ "$apps_base" = install_update ]; then apps_archive="$update_archive"; fi
+        if [ "$fixture" = "$apps_base" ]; then
+            if [ "$apps_base" = install_update ]; then
+                python3 "$repo/scripts/make_fs_image.py" "$apps_disk" 8 "/apps/lablevel.npkg=$package_file" > /dev/null
+            elif [ "$apps_base" = install_api ]; then
+                python3 "$repo/scripts/make_fs_image.py" "$apps_disk" 8 "/apps/hello.npkg=$hello_api2" > /dev/null
+            else
+                python3 "$repo/scripts/make_fs_image.py" "$apps_disk" 8 "/apps/hello.npkg=$hello_package" > /dev/null
+            fi
+        else
+            apps_archive="$crater_archive"
+        fi
+        last_marker="${markers##*;;}"
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$apps_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$apps_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
     # The live fixtures: the same, on a user-mode network with the host side (DNS, HTTP, HTTPS with the recorded API
     # replies) running, the network server in test mode (`nettest`) and the fixture's root as the 46th archive entry.
     live_ready="$test_build/live-hosts.ready"

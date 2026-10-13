@@ -36,6 +36,14 @@ const OP_READ_AT: usize = 14usize
 // fixed slots (the shell uses 6 and 7).
 const REFUSED_SEND: usize = 18446744073709551615usize
 
+// (C173) REMOVE path -> whether it was removed (a file, or an empty directory).
+fn remove(req: usize, rep: usize, path: str) -> bool {
+    let sent = os.send(req, OP_REMOVE, NO_SLOT)
+    if sent == REFUSED_SEND { ret false }
+    send_str(req, path)
+    ret os.recv(rep, NO_SLOT) == RESULT_OK
+}
+
 fn mkdir(req: usize, rep: usize, path: str) -> bool {
     let sent = os.send(req, OP_MKDIR, NO_SLOT)
     if sent == REFUSED_SEND { ret false }

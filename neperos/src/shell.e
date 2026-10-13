@@ -63,6 +63,17 @@ fn say(line: str) {
     let (written, write_error) = os.write(os.stdout(), line)
 }
 
+// Text that lives in the arena, through a copy on the stack (os.write reads the stack).
+fn say_arena(line: str) {
+    var copy: [64]u8 = zero
+    var n = 0usize
+    while n < line.len && n < 64usize {
+        copy[n] = line[n]
+        n += 1usize
+    }
+    say(copy[0usize..n])
+}
+
 fn say_num(value: usize) {
     var digits: [20]u8 = zero
     var at = 20usize
@@ -279,16 +290,33 @@ fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, hour: us
 // out the rest in order, and a tap on a position starts the icon that stands there.
 var hidden_mask: usize = 0usize
 
-// (C124) The one installed app: a signed package the kernel handed the shell (its last archive entry), verified
-// against the server's key. Its name, and its image in a page-aligned buffer, until it is launched from memory.
-var installed_name: [24]u8 = zero
-var installed_len: usize = 0usize
-var installed_va: usize = 0usize
-var installed_pages: usize = 0usize
+// (C124) The installed apps: signed packages, one the kernel handed the shell (its last archive entry) and the ones kept
+// in /apps, each verified against the server's key. (C173, C151) Up to three: the grid has room for three icons after
+// the 29 of the system (a fourth would sit under the home bar). Each one's name (24 bytes a slot), and its image in a
+// page-aligned buffer, until it is launched from memory.
+const MAX_INSTALLED: usize = 3usize
+var installed_name: [72]u8 = zero
+var installed_len: [3]usize = zero
+var installed_va: [3]usize = zero
+var installed_pages: [3]usize = zero
 // The capabilities the manifest declared: bit 0 network, bit 1 storage.
-var installed_caps: usize = 0usize
-// Whether the user allowed the installed app's capabilities this boot (the first run asks).
-var installed_allowed: bool = false
+var installed_caps: [3]usize = zero
+// Whether the user allowed the installed app's capabilities this boot (the first run asks); 1 when allowed.
+var installed_allowed: [3]usize = zero
+// The manifest's version of each, and whether the version it replaced is kept in /apps (for a roll back).
+var installed_version: [3]usize = zero
+var installed_prev: [3]usize = zero
+var installed_total: usize = 0usize
+// The one a tap, a prompt or a launch is about.
+var installed_pick: usize = 0usize
+// (C173) What the home screen's arena is reset to after an app: the mark taken at start, moved up by a roll back (its
+// image is allocated after the mark and has to outlive it).
+var home_floor: usize = 0usize
+
+// The name of installed app `k`.
+fn installed_label(k: usize) -> str {
+    ret installed_name[k * 24usize..k * 24usize + installed_len[k]]
+}
 
 fn visible_count() -> usize {
     var count = 0usize
@@ -319,15 +347,14 @@ fn draw_home(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, has_font
     try status_bar(a, builder, faces, has_fonts, clock, snap)
     let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
     var idx = 0usize
-    var extra = 0usize
-    if installed_len > 0usize { extra = 1usize }
+    let extra = installed_total
     while idx < visible_count() + extra {
         let icon = visible_icon(idx)
         var glyph = icons.app(icon)
         var caption = icons.app_label(icon)
         if icon == 99usize {
             glyph = icons.app(26usize)
-            caption = installed_name[0usize..installed_len]
+            caption = installed_label(idx - visible_count())
         }
         let col = idx % 4usize
         let row = idx / 4usize
@@ -446,25 +473,36 @@ fn show_prompt(a: *mem.Arena, renderer: *scene.Renderer, w: *window.Window, draw
     let cream = paint.Color { red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0 }
     let ink = paint.Color { red: 0.13, green: 0.13, blue: 0.14, alpha: 1.0 }
     let muted = paint.Color { red: 0.36, green: 0.35, blue: 0.34, alpha: 1.0 }
-    if card(a, &builder, 36.0, 270.0, 340.0, 300.0, 24.0, cream) != ok { ret false }
-    if centred(a, &builder, faces.jost_bold, 22.0, installed_name[0usize..installed_len], 206.0, 292.0, ink) != ok { ret false }
-    if centred(a, &builder, faces.grotesk, 13.0, "A generated app. It asks for:", 206.0, 328.0, muted) != ok { ret false }
+    let pick = installed_pick
+    if card(a, &builder, 36.0, 270.0, 340.0, 360.0, 24.0, cream) != ok { ret false }
+    if centred(a, &builder, faces.jost_bold, 22.0, installed_label(pick), 206.0, 292.0, ink) != ok { ret false }
+    if centred(a, &builder, faces.grotesk, 13.0, join3(a, "A generated app, version ", number_text(a, installed_version[pick]), ". It asks for:"), 206.0, 328.0, muted) != ok { ret false }
     var line: f32 = 364.0
-    if (installed_caps & 1usize) != 0usize {
+    if (installed_caps[pick] & 1usize) != 0usize {
         if centred(a, &builder, faces.jost, 18.0, "The network", 206.0, line, ink) != ok { ret false }
         line += 30.0
     }
-    if (installed_caps & 2usize) != 0usize {
+    if (installed_caps[pick] & 2usize) != 0usize {
         if centred(a, &builder, faces.jost, 18.0, "Storage", 206.0, line, ink) != ok { ret false }
         line += 30.0
     }
-    if installed_caps == 0usize {
+    if installed_caps[pick] == 0usize {
         if centred(a, &builder, faces.jost, 18.0, "Nothing beyond its own screen", 206.0, line, ink) != ok { ret false }
     }
+    // (C173) Allow (Open once it was allowed this boot) and Cancel; Remove deletes the package and the icon, Roll
+    // back puts the version this one replaced back.
+    var open_label = "Allow"
+    if installed_allowed[pick] != 0usize { open_label = "Open" }
     if card(a, &builder, 56.0, 490.0, 128.0, 48.0, 24.0, paint.Color { red: 0.88, green: 0.70, blue: 0.42, alpha: 1.0 }) != ok { ret false }
-    if centred(a, &builder, faces.jost, 18.0, "Allow", 120.0, 503.0, ink) != ok { ret false }
+    if centred(a, &builder, faces.jost, 18.0, open_label, 120.0, 503.0, ink) != ok { ret false }
     if card(a, &builder, 228.0, 490.0, 128.0, 48.0, 24.0, paint.Color { red: 0.80, green: 0.79, blue: 0.77, alpha: 1.0 }) != ok { ret false }
     if centred(a, &builder, faces.jost, 18.0, "Cancel", 292.0, 503.0, ink) != ok { ret false }
+    if card(a, &builder, 56.0, 558.0, 128.0, 48.0, 24.0, paint.Color { red: 0.80, green: 0.79, blue: 0.77, alpha: 1.0 }) != ok { ret false }
+    if centred(a, &builder, faces.jost, 18.0, "Remove", 120.0, 571.0, ink) != ok { ret false }
+    if installed_prev[pick] != 0usize {
+        if card(a, &builder, 228.0, 558.0, 128.0, 48.0, 24.0, paint.Color { red: 0.80, green: 0.79, blue: 0.77, alpha: 1.0 }) != ok { ret false }
+        if centred(a, &builder, faces.jost, 18.0, "Roll back", 292.0, 571.0, ink) != ok { ret false }
+    }
     let restore: scene.Command = .Restore
     if scene.push(&builder, restore) != ok { ret false }
     ret show(renderer, w, drawable, scene.finish(&builder))
@@ -518,10 +556,47 @@ fn icon_at(x: f32, y: f32) -> usize {
 }
 
 
+// The file name of an app: its name's letters and digits, lower case, up to 14 of them, and ".npkg".
+fn package_file(a: *mem.Arena, name: str) -> str {
+    var file: [24]u8 = zero
+    var f = 0usize
+    var k = 0usize
+    while k < name.len && f < 14usize {
+        var c = name[k]
+        if c >= 65u8 && c <= 90u8 { c = c + 32u8 }
+        if (c >= 97u8 && c <= 122u8) || (c >= 48u8 && c <= 57u8) {
+            file[f] = c
+            f += 1usize
+        }
+        k += 1usize
+    }
+    let suffix = ".npkg"
+    var s = 0usize
+    while s < suffix.len {
+        file[f + s] = suffix[s]
+        s += 1usize
+    }
+    ret join3(a, "/apps/", file[0usize..f + suffix.len], "")
+}
+
+// The number in the manifest's `version=` line (0 when there is none).
+fn manifest_version(pkg: package.Package) -> usize {
+    let (text_version, has_version) = package.value(pkg, "version")
+    var version = 0usize
+    var k = 0usize
+    while has_version && k < text_version.len && text_version[k] >= 48u8 && text_version[k] <= 57u8 {
+        version = version * 10usize + usize(text_version[k] - 48u8)
+        k += 1usize
+    }
+    ret version
+}
+
 // (C124) Take a signed package: check it against the server's key, keep the manifest's name and capabilities and the
 // image in a page-aligned buffer, and (when `persist`) write the package to /apps so the next boot has it. True when it
-// was adopted.
-fn adopt(a: *mem.Arena, data: str, persist: bool) -> bool {
+// was adopted. (C173, C151) A package of a name already installed is an update when its version is higher (the old
+// file is kept beside it as `.prev`, for a roll back), and nothing to do when it is the same; `downgrade` accepts a
+// lower one (the roll back). There is room for MAX_INSTALLED apps.
+fn adopt(a: *mem.Arena, data: str, persist: bool, downgrade: bool) -> bool {
     // (C143) The revocation list on the disk, if there is one: an app on it is refused whatever its signature.
     var revocations: [1024]u8 = zero
     var revocation_len = 0usize
@@ -535,15 +610,65 @@ fn adopt(a: *mem.Arena, data: str, persist: bool) -> bool {
         say("shell package revoked\n")
         ret false
     }
+    // (C173) The app kit's level (`api`) is versioned: a package written for a newer kit than this device's is refused
+    // for that reason, not as a bad signature.
+    if pkg_error == package.TooNew {
+        say("shell package needs a newer app kit\n")
+        ret false
+    }
     if pkg_error != ok {
         say("shell package refused\n")
         ret false
     }
     let (pkg_name, has_pkg_name) = package.value(pkg, "name")
-    var n = 0usize
-    while n < pkg_name.len && n < 24usize {
-        installed_name[n] = pkg_name[n]
-        n += 1usize
+    let version = manifest_version(pkg)
+    // The slot of the same name, if there is one.
+    var slot = 99usize
+    var k = 0usize
+    while k < installed_total {
+        let held = installed_label(k)
+        var same = held.len == pkg_name.len
+        var c = 0usize
+        while same && c < held.len {
+            if held[c] != pkg_name[c] { same = false }
+            c += 1usize
+        }
+        if same { slot = k }
+        k += 1usize
+    }
+    let path = package_file(a, pkg_name)
+    var updating = false
+    if slot != 99usize {
+        if version == installed_version[slot] && !downgrade {
+            // Already here. The archive's own copy still goes to the disk when the disk has none.
+            if persist {
+                let (have_size, have_kind, have_day, have_file) = fsproto.stat(FS_REQ, FS_REP, path)
+                if !have_file {
+                    let made_dir = fsproto.mkdir(FS_REQ, FS_REP, "/apps")
+                    if fsproto.write_big(FS_REQ, FS_REP, path, mem.address_of(&data[0usize]), data.len) {
+                        say("shell package kept ")
+                        say_arena(path)
+                        say("\n")
+                    }
+                }
+            }
+            ret true
+        }
+        if version < installed_version[slot] && !downgrade {
+            say("shell package older ")
+            say_arena(pkg_name)
+            say("\n")
+            ret false
+        }
+        updating = true
+    } else {
+        if installed_total >= MAX_INSTALLED {
+            say("shell package no room ")
+            say_arena(pkg_name)
+            say("\n")
+            ret false
+        }
+        slot = installed_total
     }
     let pages = (pkg.image.len + 4095usize) / 4096usize
     let (image_buf, image_error) = mem.alloc[u8](a, pages * 4096usize + 4096usize)
@@ -554,61 +679,157 @@ fn adopt(a: *mem.Arena, data: str, persist: bool) -> bool {
         os.store8(base + b, pkg.image[b])
         b += 1usize
     }
-    installed_va = base
-    installed_pages = pages
-    installed_len = n
-    installed_caps = 0usize
-    if package.declares(pkg, "network") { installed_caps = installed_caps | 1usize }
-    if package.declares(pkg, "storage") { installed_caps = installed_caps | 2usize }
+    var n = 0usize
+    while n < pkg_name.len && n < 24usize {
+        installed_name[slot * 24usize + n] = pkg_name[n]
+        n += 1usize
+    }
+    installed_len[slot] = n
+    installed_va[slot] = base
+    installed_pages[slot] = pages
+    installed_caps[slot] = 0usize
+    if package.declares(pkg, "network") { installed_caps[slot] = installed_caps[slot] | 1usize }
+    if package.declares(pkg, "storage") { installed_caps[slot] = installed_caps[slot] | 2usize }
+    installed_version[slot] = version
+    if !updating {
+        installed_allowed[slot] = 0usize
+        installed_prev[slot] = 0usize
+        installed_total += 1usize
+    }
     say("shell installed ")
-    say(installed_name[0usize..installed_len])
+    say(installed_label(slot))
     say("\n")
+    if updating {
+        say("shell updated ")
+        say(installed_label(slot))
+        say(" to ")
+        say_num(version)
+        say("\n")
+    }
     if persist {
-        // /apps/<the name's letters and digits, lower case>.npkg
         let made_dir = fsproto.mkdir(FS_REQ, FS_REP, "/apps")
-        var file: [24]u8 = zero
-        var f = 0usize
-        var k = 0usize
-        while k < installed_len && f < 14usize {
-            var c = installed_name[k]
-            if c >= 65u8 && c <= 90u8 { c = c + 32u8 }
-            if (c >= 97u8 && c <= 122u8) || (c >= 48u8 && c <= 57u8) {
-                file[f] = c
-                f += 1usize
+        let kept_path = package_file(a, installed_label(slot))
+        // The file about to be replaced becomes the .prev a roll back reads.
+        if updating {
+            let (old_size, old_kind, old_day, old_found) = fsproto.stat(FS_REQ, FS_REP, kept_path)
+            if old_found && old_size > 0usize && old_size <= 4194304usize {
+                let (old_buf, old_alloc) = mem.alloc[u8](a, old_size)
+                if old_alloc == ok {
+                    let (old_got, old_ok) = fsproto.read_big(FS_REQ, FS_REP, kept_path, mem.address_of(&old_buf[0usize]), old_size)
+                    if old_ok && old_got == old_size {
+                        if fsproto.write_big(FS_REQ, FS_REP, join3(a, kept_path, ".prev", ""), mem.address_of(&old_buf[0usize]), old_got) {
+                            installed_prev[slot] = 1usize
+                            say("shell previous version kept\n")
+                        }
+                    }
+                }
             }
-            k += 1usize
         }
-        let suffix = ".npkg"
-        var s = 0usize
-        while s < suffix.len {
-            file[f + s] = suffix[s]
-            s += 1usize
-        }
-        let path = join3(a, "/apps/", file[0usize..f + suffix.len], "")
-        if fsproto.write_big(FS_REQ, FS_REP, path, mem.address_of(&data[0usize]), data.len) {
+        if fsproto.write_big(FS_REQ, FS_REP, kept_path, mem.address_of(&data[0usize]), data.len) {
             say("shell package kept ")
-            say(path)
+            say_arena(kept_path)
             say("\n")
         }
     }
     ret true
 }
 
-// (C124) The first package in /apps, read from the disk, when the archive carried none.
-fn adopt_from_disk(a: *mem.Arena) -> bool {
-    var names: [256]u8 = zero
-    let (count, listed) = fsproto.list(FS_REQ, FS_REP, "/apps", mem.address_of(&names[0usize]), 256usize)
-    if !listed || count == 0usize { ret false }
-    var at = 0usize
-    while at < count && names[at] != 10u8 { at += 1usize }
-    let path = join3(a, "/apps/", names[0usize..at], "")
+// (C173) A kept `.prev` beside the app's package, noted for the slot (the disk was read, not written, at start).
+fn note_previous(a: *mem.Arena, slot: usize) {
+    let path = join3(a, package_file(a, installed_label(slot)), ".prev", "")
     let (size, kind, day, found) = fsproto.stat(FS_REQ, FS_REP, path)
+    if found && size > 0usize { installed_prev[slot] = 1usize }
+}
+
+// (C124, C173) Every package kept in /apps (names ending .npkg), up to the room there is.
+fn adopt_from_disk(a: *mem.Arena) -> bool {
+    var names: [512]u8 = zero
+    let (count, listed) = fsproto.list(FS_REQ, FS_REP, "/apps", mem.address_of(&names[0usize]), 512usize)
+    if !listed || count == 0usize { ret false }
+    var any = false
+    var start = 0usize
+    var at = 0usize
+    while at < count {
+        if names[at] == 10u8 {
+            let leaf = names[start..at]
+            if leaf.len > 5usize && leaf[leaf.len - 5usize] == 46u8 && leaf[leaf.len - 4usize] == 110u8 && leaf[leaf.len - 3usize] == 112u8 && leaf[leaf.len - 2usize] == 107u8 && leaf[leaf.len - 1usize] == 103u8 {
+                let path = join3(a, "/apps/", leaf, "")
+                let (size, kind, day, found) = fsproto.stat(FS_REQ, FS_REP, path)
+                if found && size > 0usize && size <= 4194304usize {
+                    let (buffer, buffer_error) = mem.alloc[u8](a, size)
+                    if buffer_error == ok {
+                        let (got, read_ok) = fsproto.read_big(FS_REQ, FS_REP, path, mem.address_of(&buffer[0usize]), size)
+                        if read_ok && got == size {
+                            let before = installed_total
+                            if adopt(a, buffer[0usize..got], false, false) {
+                                any = true
+                                // The slot this file belongs to (a new one, or the one it matched).
+                                var s = 0usize
+                                while s < installed_total {
+                                    note_previous(a, s)
+                                    s += 1usize
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret any
+}
+
+// (C173) Remove installed app `k`: its package (and the kept previous one) leave /apps and its icon leaves the grid.
+fn remove_installed(a: *mem.Arena, k: usize) {
+    let path = package_file(a, installed_label(k))
+    let gone = fsproto.remove(FS_REQ, FS_REP, path)
+    let gone_prev = fsproto.remove(FS_REQ, FS_REP, join3(a, path, ".prev", ""))
+    say("shell removed ")
+    say(installed_label(k))
+    say("\n")
+    var i = k
+    while i + 1usize < installed_total {
+        var c = 0usize
+        while c < 24usize {
+            installed_name[i * 24usize + c] = installed_name[(i + 1usize) * 24usize + c]
+            c += 1usize
+        }
+        installed_len[i] = installed_len[i + 1usize]
+        installed_va[i] = installed_va[i + 1usize]
+        installed_pages[i] = installed_pages[i + 1usize]
+        installed_caps[i] = installed_caps[i + 1usize]
+        installed_allowed[i] = installed_allowed[i + 1usize]
+        installed_version[i] = installed_version[i + 1usize]
+        installed_prev[i] = installed_prev[i + 1usize]
+        i += 1usize
+    }
+    if installed_total > 0usize { installed_total -= 1usize }
+}
+
+// (C173) Roll app `k` back to the version kept beside it: the .prev file is read and adopted over the newer one, then
+// becomes the package file (the newer one is dropped).
+fn roll_back(a: *mem.Arena, k: usize) -> bool {
+    let path = package_file(a, installed_label(k))
+    let prev_path = join3(a, path, ".prev", "")
+    let (size, kind, day, found) = fsproto.stat(FS_REQ, FS_REP, prev_path)
     if !found || size == 0usize || size > 4194304usize { ret false }
     let (buffer, buffer_error) = mem.alloc[u8](a, size)
     if buffer_error != ok { ret false }
-    let (got, read_ok) = fsproto.read_big(FS_REQ, FS_REP, path, mem.address_of(&buffer[0usize]), size)
+    let (got, read_ok) = fsproto.read_big(FS_REQ, FS_REP, prev_path, mem.address_of(&buffer[0usize]), size)
     if !read_ok || got != size { ret false }
-    ret adopt(a, buffer[0usize..got], false)
+    if !adopt(a, buffer[0usize..got], false, true) { ret false }
+    if fsproto.write_big(FS_REQ, FS_REP, path, mem.address_of(&buffer[0usize]), got) {
+        let removed_prev = fsproto.remove(FS_REQ, FS_REP, prev_path)
+    }
+    installed_prev[k] = 0usize
+    say("shell rolled back ")
+    say(installed_label(k))
+    say(" to ")
+    say_num(installed_version[k])
+    say("\n")
+    ret true
 }
 
 // The system theme Settings stored (C126, theme.e), or 0 when there is no disk or no file. The first send is
@@ -714,9 +935,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // (C124) A signed app package the kernel mapped after the files (args[7]), else the first one kept in /apps:
     // checked against the server's key and, when it passes, held for the last icon of the grid.
-    var adopted = false
-    if args.len >= 8usize { adopted = adopt(a, args[7usize], true) }
-    if !adopted { adopted = adopt_from_disk(a) }
+    // (C173) The packages kept in /apps first, then the archive's: a newer version in the archive is an update of the
+    // one on the disk (which is kept as the previous one), the same version is already installed.
+    var adopted = adopt_from_disk(a)
+    if args.len >= 8usize {
+        if adopt(a, args[7usize], true, false) { adopted = true }
+    }
     hidden_mask = sysettings.hidden()
     if hidden_mask != 0usize {
         say("shell hidden ")
@@ -830,6 +1054,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // sentinel.
     // (D2240) Everything the home screen draws after this point is dropped each time an app returns.
     let home_mark = mem.mark(a)
+    home_floor = home_mark
     var pointer_x = 0usize
     var pointer_y = 0usize
     var launched_test = false
@@ -866,7 +1091,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         let released_home = scene.release_scene(&renderer, last_scene)
                         has_last_scene = false
                     }
-                    mem.reset(a, home_mark)
+                    mem.reset(a, home_floor)
                     if show_lock(a, &renderer, &w, drawable, faces, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale, hour, minute, seconds) {
                         home_shown = false
                         framed = true
@@ -914,11 +1139,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     let py = f32(pointer_y) * logical_h / 32768.0
                     prompting = false
                     if px >= 56.0 && px < 184.0 && py >= 490.0 && py < 538.0 {
-                        installed_allowed = true
+                        if installed_allowed[installed_pick] == 0usize {
+                            say("shell allowed ")
+                        } else {
+                            say("shell open ")
+                        }
+                        installed_allowed[installed_pick] = 1usize
                         app = 97usize
-                        say("shell allowed ")
-                        say(installed_name[0usize..installed_len])
+                        say(installed_label(installed_pick))
                         say("\n")
+                    } else if px >= 56.0 && px < 184.0 && py >= 558.0 && py < 606.0 {
+                        // (C173) Remove: the package and the icon go.
+                        remove_installed(a, installed_pick)
+                        if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
+                        framed = true
+                    } else if px >= 228.0 && px < 356.0 && py >= 558.0 && py < 606.0 && installed_prev[installed_pick] != 0usize {
+                        // (C173) Roll back to the version this one replaced; the image it brings is kept past the next
+                        // return to the home screen.
+                        if roll_back(a, installed_pick) { home_floor = mem.mark(a) }
+                        if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
+                        framed = true
                     } else {
                         if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                         framed = true
@@ -934,17 +1174,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say(icons.app_label(icon))
                         say("\n")
                         app = icon
-                    } else if installed_len > 0usize && position == visible_count() {
+                    } else if position >= visible_count() && position < visible_count() + installed_total {
+                        // (C173) An installed app: its prompt (Allow the first time, Open after; Remove, Roll back).
+                        installed_pick = position - visible_count()
                         say("shell tap ")
-                        say(installed_name[0usize..installed_len])
+                        say(installed_label(installed_pick))
                         say("\n")
-                        if installed_allowed {
-                            app = 97usize
-                        } else if show_prompt(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) {
+                        if show_prompt(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) {
                             prompting = true
                             framed = true
                             say("shell prompt ")
-                            say(installed_name[0usize..installed_len])
+                            say(installed_label(installed_pick))
                             say("\n")
                         }
                     }
@@ -964,9 +1204,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     // The installed app: started from its image in this process's memory (the kernel copies
                     // the pages), as a full-screen app with the capabilities every app has.
                     say("shell launching ")
-                    say(installed_name[0usize..installed_len])
+                    say(installed_label(installed_pick))
                     say("\n")
-                    let install_word = (1usize << 63usize) | (installed_caps << 56usize) | (installed_pages << 40usize) | ((installed_va >> 12usize) << 8usize)
+                    let install_word = (1usize << 63usize) | (installed_caps[installed_pick] << 56usize) | (installed_pages[installed_pick] << 40usize) | ((installed_va[installed_pick] >> 12usize) << 8usize)
                     let child_installed = os.launch(install_word)
                     let code_installed = os.reap(child_installed)
                     say("shell app code ")
@@ -976,7 +1216,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         let released_installed = scene.release_scene(&renderer, last_scene)
                         has_last_scene = false
                     }
-                    mem.reset(a, home_mark)
+                    mem.reset(a, home_floor)
                     if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                     framed = true
                     say("shell home\n")
@@ -1051,7 +1291,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             let released_scene = scene.release_scene(&renderer, last_scene)
                             has_last_scene = false
                         }
-                        mem.reset(a, home_mark)
+                        mem.reset(a, home_floor)
                         if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                         framed = true
                         say("shell home\n")
