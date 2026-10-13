@@ -1469,6 +1469,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dg.selection_size(&grid15) != grp.visible_len(&app.grouping) { os.exit(507) }
     dg.set_multi_select(&grid15, false)
     if dg.is_marked(&grid15, m_second) { os.exit(508) }
+    // 27. a column's editor kind and the button editor's three dots, which tell the application once
+    dg.cancel_edit(&grid2)
+    dg.set_editor(&grid2, 3usize, dg.EDITOR_BUTTON)
+    if grid2.editors[3usize] != dg.EDITOR_BUTTON { os.exit(509) }
+    if dg.begin_edit(&grid2, 5usize, 3usize) != ok { os.exit(510) }
+    if dg.on_cell_button(mem.cast[*void](&grid2)) != ok { os.exit(511) }
+    let (button_row, button_spec, button_hit) = dg.button_cell(&grid2)
+    if !button_hit || button_row != 5usize || button_spec != 3usize { os.exit(512) }
+    let (_, _, button_again) = dg.button_cell(&grid2)
+    if button_again { os.exit(513) }
     os.exit(0)
     ret ok
 }

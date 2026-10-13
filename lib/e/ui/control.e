@@ -7716,6 +7716,28 @@ fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     ret (made, made_error)
 }
 
+// A button edit (DevExpress `TcxButtonEdit`, v3's Buy-at and Sell-at cells): a text field with a
+// 24 x 24 button at its end -- three dots -- named `button_label`, whose `action` the caller
+// handles (a picker, a dialog). The field is `options.width` wide, `options.height` high (the
+// design height when 0); `key + 1` is the button.
+fn button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, action: *const widget.Submit, button_label: str, options: FieldOptions) -> (widget.Node, err) {
+    var reserved = options
+    reserved.end_space = 24.0 - 8.0
+    let (editor, editor_error) = text_field(a, key, t, label, buffer, len, change, submit, reserved)
+    if editor_error != ok { ret (zero, editor_error) }
+    let usable = options.enabled && !options.read_only
+    let (dots, dots_error) = arrow_button(a, key + 1u64, t, .MoreHoriz, button_label, action, usable)
+    if dots_error != ok { ret (zero, dots_error) }
+    var h = options.height
+    if h <= 0.0 { h = t.tokens.metrics.control_height + 16.0 }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = editor
+    layers[2usize] = dots
+    layers[1usize] = widget.positioned(0u64, options.width - 8.0 - 24.0, max_zero((h - 24.0) * 0.5), style.defaults(), layers[2usize..3usize])
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+}
+
 // A spin box's arrow: 24 x 24 with `radius-xs` corners, a 16 chevron in
 // `on-surface-variant` under the state layer of that colour. (D1598) The design's
 // 24 x 18 fell short of WCAG 2.5.8's 24 x 24 target, and the stacked pair left no
