@@ -12,6 +12,7 @@ import random
 import sys
 from pathlib import Path
 
+from babel import Locale, localedata
 from babel.dates import format_datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -22,7 +23,9 @@ TAGS = ['en', 'fr', 'de', 'es', 'it', 'pt', 'nl', 'sv', 'da', 'nb', 'fi', 'pl', 
         'el', 'ja', 'zh', 'ko', 'id', 'vi', 'ar', 'he', 'hi']
 PATTERNS = [('dddd, d MMMM yyyy HH:mm:ss', 'EEEE, d MMMM yyyy HH:mm:ss', False),
             ('ddd d MMM yy hh:mm tt', 'EEE d MMM yy hh:mm a', True),
-            ('MMMM', 'MMMM', False), ('MMM/dd', 'MMM/dd', False), ('dddd', 'EEEE', False), ('h:mm t', 'h:mm', None)]
+            # a month name without a day is the stand-alone form (CLDR `LLLL`, `LLL`), with one the format form (D4605)
+            ('MMMM', 'LLLL', False), ('MMM', 'LLL', False), ('MMM/dd', 'MMM/dd', False), ('d MMMM', 'd MMMM', False),
+            ('dddd', 'EEEE', False), ('h:mm t', 'h:mm', None)]
 OUT = Path(__file__).resolve().parent.parent / 'tests' / 'selfhost' / 'fixtures' / 'link' / 'time_pattern_locales' / 'src' / 'main.e'
 
 lines = []
@@ -41,6 +44,42 @@ for tag in TAGS:
             if neper in ('dddd, d MMMM yyyy HH:mm:ss', 'ddd d MMM yy hh:mm tt', 'MMM/dd'):
                 lines.append('P|%s|%s|%s|%d|%d|%d|%d|%d|%d' % (tag, neper, want, dt.year, dt.month, dt.day, dt.hour,
                                                                 dt.minute, dt.second))
+# Either form of a month parses, whichever the pattern calls for (as .NET's ParseExact takes both).
+for tag, month in (('ru', 3), ('ru', 12), ('fi', 6), ('pl', 9), ('cs', 2), ('uk', 5), ('el', 8), ('de', 4), ('ar', 11), ('zh', 7)):
+    for ctx_pattern in ('LLLL', 'MMMM'):
+        text = format_datetime(datetime.datetime(2024, month, 1), ctx_pattern, locale=tag)
+        lines.append('P|%s|MMMM|%s|2000|%d|1|0|0|0' % (tag, text, month))
+        lines.append('P|%s|d MMMM|1 %s|2000|%d|1|0|0|0' % (tag, text, month))
+
+
+# Regional and script variants whose names differ from their language's: a date with a day and a weekday, a month alone and
+# an abbreviation, formatted by CLDR for that locale.
+def names_of(ident):
+    loc = Locale.parse(ident)
+    return (tuple(loc.months['format']['wide'].values()), tuple(loc.months['format']['abbreviated'].values()),
+            tuple(loc.months['stand-alone']['wide'].values()), tuple(loc.days['format']['wide'].values()),
+            tuple(loc.days['format']['abbreviated'].values()), loc.periods.get('am'), loc.periods.get('pm'))
+
+
+variants = []
+for tag in TAGS:
+    base = names_of(tag)
+    for ident in sorted(localedata.locale_identifiers()):
+        if ident.split('_')[0] == tag and '_' in ident:
+            try:
+                if names_of(ident) != base:
+                    variants.append(ident)
+            except Exception:
+                pass
+for ident in variants:
+    dt = datetime.datetime(random.randint(1990, 2040), random.randint(1, 12), random.randint(1, 28), 13, 5, 9)
+    bcp = ident.replace('_', '-')
+    for neper, cldr in (('dddd, d MMMM yyyy', 'EEEE, d MMMM yyyy'), ('MMMM', 'LLLL'), ('ddd d MMM yy', 'EEE d MMM yy'),
+                        ('MMM', 'LLL')):
+        want = format_datetime(dt, cldr, locale=ident)
+        lines.append('F|%s|%d|%d|%d|%d|%d|%d|%s|%s' % (bcp, dt.year, dt.month, dt.day, 13, 5, 9, neper, want))
+    lines.append('P|%s|dddd, d MMMM yyyy|%s|%d|%d|%d|0|0|0' % (bcp, format_datetime(dt, 'EEEE, d MMMM yyyy', locale=ident),
+                                                              dt.year, dt.month, dt.day))
 # English through the locale entry points is the invariant behaviour, an unknown tag and a regional tag.
 lines.append('E|zz|MMMM')
 lines.append('E|xx-YY|dddd')

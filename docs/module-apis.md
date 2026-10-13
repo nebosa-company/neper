@@ -24769,11 +24769,15 @@ The Chinese lunisolar calendar over `e.time`'s day count (days from 1970-01-01),
 ```neper
 fn lower(b: u8) -> u8
 fn locale_count() -> usize
+fn row_count() -> usize
 fn row(loc: usize) -> str
+fn alias(t: str) -> (usize, bool)
 fn field(r: str, n: usize) -> str
 fn item(f: str, n: usize) -> str
+fn language_index(name: str) -> (usize, bool)
 fn locale_index(tag: str) -> (usize, bool)
 fn month(loc: usize, m: u8, abbr: bool) -> str
+fn month_standalone(loc: usize, m: u8, abbr: bool) -> str
 fn weekday(loc: usize, index: i64, abbr: bool) -> str
 fn day_period(loc: usize, pm: bool) -> str
 fn row_0() -> str
@@ -24803,6 +24807,31 @@ fn row_23() -> str
 fn row_24() -> str
 fn row_25() -> str
 fn row_26() -> str
+fn row_27() -> str
+fn row_28() -> str
+fn row_29() -> str
+fn row_30() -> str
+fn row_31() -> str
+fn row_32() -> str
+fn row_33() -> str
+fn row_34() -> str
+fn row_35() -> str
+fn row_36() -> str
+fn row_37() -> str
+fn row_38() -> str
+fn row_39() -> str
+fn row_40() -> str
+fn row_41() -> str
+fn row_42() -> str
+fn row_43() -> str
+fn row_44() -> str
+fn row_45() -> str
+fn row_46() -> str
+fn row_47() -> str
+fn row_48() -> str
+fn row_49() -> str
+fn row_50() -> str
+fn row_51() -> str
 ```
 
 Month and weekday names (wide and abbreviated, CLDR's format context) and the AM/PM marks of 27 locales (`en fr de es it pt nl sv da nb fi pl cs hu ro ru uk tr el ja zh ko id vi ar he hi`), for `e.time.pattern`'s `format_locale` and `parse_locale`. A locale is an index (0 is English); `locale_index` finds it from a BCP 47 tag by its language subtag, case-insensitively (`fr`, `fr-CA`, `FR_ca`), so regional differences (`pt-PT`, `en-GB` abbreviations) are not distinguished. `month`, `weekday` (0 Monday) and `day_period` answer the empty string for an index out of range. Generated from Babel's CLDR by `scripts/gen_time_names.py`; `time_pattern_locales` compares 868 formatted and parsed date-times with Babel's formatter.
@@ -24818,6 +24847,8 @@ fn is_digit(b: u8) -> bool
 fn month_name(month: u8) -> str
 fn weekday_name(index: i64) -> str
 fn month_text(loc: usize, month: u8, abbr: bool) -> str
+fn month_text_for(loc: usize, month: u8, abbr: bool, standalone: bool) -> str
+fn has_day_field(pattern: str) -> bool
 fn weekday_text(loc: usize, index: i64, abbr: bool) -> str
 fn mark_text(loc: usize, pm: bool) -> str
 fn first_scalar(s: str) -> usize
@@ -24833,7 +24864,7 @@ fn format_locale(tag: str, pattern: str, value: calendar.DateTime, dst: []u8) ->
 fn format_in(loc: usize, pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
 fn read_digits(src: str, at: usize, min: usize, max: usize) -> (i64, usize, bool)
 fn starts_with_fold(src: str, at: usize, name: str, count: usize) -> bool
-fn match_month(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize)
+fn match_month(loc: usize, src: str, at: usize, abbr: bool, standalone: bool) -> (i64, usize)
 fn match_weekday(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize)
 fn parse_with(loc: usize, pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err)
 fn parse(pattern: str, source: str) -> (calendar.DateTime, err)
