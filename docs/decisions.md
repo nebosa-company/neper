@@ -40793,3 +40793,7 @@ A tap on a chip of the group box takes that grouping level away (`take_command` 
 ## D3953 — G012: a chip dragged out of the group box, v3's own collection and deck hints
 
 A chip of the group box is a drag source as well as a tap: let go outside the box, it takes its grouping away, as v3 does (B5-chip-drag-out-v5.png: the Rarity chip dragged out leaves Edition). The collection and deck grids' hint texts are now v3's own, read from resource.strings.pas (O_COLLECTION_COLUMN_HINT_*, O_DECK_CARDS_COLUMN_HINT_*) instead of the approximations of D3952.
+
+## D3954 — G012: reordering the group-box chips
+
+A chip dropped on another swaps the two grouping levels (the group box's chips are drag sources and drop targets; `take_command` returns CMD_GROUP_SWAP with the dragged level). The sample has the second order (Edition > Rarity) as a fifth grouping mode. Verified live (B6-chip-reorder-v5.png: Rarity, Edition becomes Edition, Rarity).
