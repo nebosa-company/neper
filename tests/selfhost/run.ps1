@@ -11474,6 +11474,19 @@ if ($neperosQemu) {
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }
+    # The scan fixtures (C170): a disk whose /DCIM holds one frame the Camera might have saved, a QR symbol of an otpauth
+    # URI (tests/selfhost/fixtures/neperos/qr_frame.png, made by qr_frame/src/main.e), for Secure's Scan.
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'scanfixture') { continue }
+        $fixture = $fields[1]
+        $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/DCIM/IMG_0001.png=' + (Join-Path $repo 'tests\selfhost\fixtures\neperos\qr_frame.png')) | Out-Null
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
     # The install-on-disk fixtures: the package archive on a fresh disk (the shell keeps the package in /apps), and
     # a row named <base>_again boots the plain archive on that disk (the shell finds the app there).
     foreach ($row in $appsTable) {
