@@ -34,6 +34,15 @@ const OP_RADIO: usize = 8usize
 // POLL max -> result, byte string: like RECV but only a short wait; R_EMPTY when nothing came (the peer's close
 // is still R_OK with an empty string). Plain TCP only.
 const OP_POLL: usize = 9usize
+// (C176) The links that are not the uplink. LINKS mask -> result: the settings server's word for the Bluetooth (bit 0)
+// and Hotspot (bit 1) switches, already gated by Airplane mode; the server brings each link up or down (a hotspot also
+// needs an uplink radio, so it is "waiting" while Wi-Fi and Mobile are both off). LINK_STATE -> result, state (bit 0
+// the uplink radios may carry traffic, bit 1 Bluetooth up, bit 2 Hotspot up, bit 3 Hotspot asked for and waiting),
+// the stations the hotspot serves, the Bluetooth devices bonded. BT_SCAN -> result, count, then per device: name
+// string, signal (0 to 100); none while Bluetooth is down. The test boots record the air; a driver would fill it.
+const OP_LINKS: usize = 10usize
+const OP_LINK_STATE: usize = 11usize
+const OP_BT_SCAN: usize = 12usize
 
 const R_OK: usize = 0usize
 const R_NO_NETWORK: usize = 1usize
