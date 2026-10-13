@@ -39132,3 +39132,7 @@ Recorded from mtgstudio.exe (Q1-quick-columns-v3.png): the header of the row ind
 ## D2405 — G012: the footer counts under the first text column
 
 v3's footer shows "Count: 120281" (pool) or "Rows: 8" (collection) centred in a #E7EAEA cell under the Name column, not "Total" at the left. The footer now puts `<footer_label>: <rows>` (`set_footer_label`, default "Count") under the first Text column with no summary of its own; the sample sets Count for the pool and Rows for the collection and deck. P013 closed (screenshot S4-footer-count-v5.png).
+
+## D2406 — G012: column hints on the header
+
+v3 gives every column a HeaderHint (resource.strings.pas O_CARDS_COLUMN_HINT_*) shown as a Windows tooltip when the pointer rests on the header: "<Column title> - <hint>". `set_header_hints(grid, hints)` (by column index) shows the title and hint in a white box with a #767676 frame at the pointer, one line while it fits 340 px, wrapped at 340 otherwise, after the runtime's 500 ms hover delay (`overlay.tooltip_wanted`). The sample carries v3's texts for the card pool columns (H1-header-hint-v5.png). The footer count cell now has the footer's height (the Percent height made the grid's own parts shift; it is the row height plus 4). Fixture exit codes 529-531 were reused by section 30; section 29's footer check now exits 530 and section 30 starts at 531 (the harness cannot tell them apart by code alone: a failure is found by the order).

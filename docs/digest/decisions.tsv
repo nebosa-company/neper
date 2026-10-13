@@ -2165,4 +2165,5 @@ D2401	1631	G012: the field chooser is a window you move, and columns drag in and
 D2402	1304	G012: the popup menus drawn in v3's look, with its own pictures
 D2403	1182	G012: drag arrows and the dragged name by cell semantics, one owner per chooser drag
 D2404	1295	G012: the row indicator's header is a button with the quick column list
-D2405	468	G012: the footer counts under the first text column
+D2405	469	G012: the footer counts under the first text column
+D2406	892	G012: column hints on the header
