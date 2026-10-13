@@ -116,7 +116,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape }
 
@@ -189,6 +189,24 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             if hole_error != ok { ret hole_error }
             try scene.push(b, scene.Command { FillPath: scene.FillPath { path: hole, brush: paint.Brush { Solid: m.inner } } })
         }
+        ret ok
+    }
+    if m.shape == Shape.Check {
+        let (cpb, cpb_error) = geometry.path_builder(m.arena, 8usize, 8usize)
+        if cpb_error != ok { ret cpb_error }
+        var cb = cpb
+        let cx0 = area.x
+        let cy0 = area.y
+        let cw = area.width
+        let ch = area.height
+        try geometry.move_to(&cb, geometry.Point { x: cx0, y: cy0 + ch * 0.55 })
+        try geometry.line_to(&cb, geometry.Point { x: cx0 + cw * 0.18, y: cy0 + ch * 0.4 })
+        try geometry.line_to(&cb, geometry.Point { x: cx0 + cw * 0.4, y: cy0 + ch * 0.62 })
+        try geometry.line_to(&cb, geometry.Point { x: cx0 + cw * 0.82, y: cy0 + ch * 0.1 })
+        try geometry.line_to(&cb, geometry.Point { x: cx0 + cw, y: cy0 + ch * 0.28 })
+        try geometry.line_to(&cb, geometry.Point { x: cx0 + cw * 0.4, y: cy0 + ch })
+        try geometry.close_path(&cb)
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&cb), brush: paint.Brush { Solid: m.color } } })
         ret ok
     }
     if m.shape == Shape.ArrowDown || m.shape == Shape.ArrowUp {
