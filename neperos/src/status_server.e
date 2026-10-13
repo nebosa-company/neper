@@ -30,6 +30,9 @@ const OP_POST_QUIET: usize = 6usize
 // The same as POST_APP (a word follows: the app's place in Settings' notification list) without the snapshot push: how a
 // background process posts as an app (C176).
 const OP_POST_APP_QUIET: usize = 7usize
+// (C176) The battery provider's reading (a word follows: present | charging << 8 | level), kept as the battery field; no
+// reply and no push. A service started with a recorded battery (the test boots' "statusbat") keeps its recording.
+const OP_SET_BATTERY: usize = 8usize
 // A field's present bit; absent providers send 0, so a client reads them as unavailable.
 const PRESENT: usize = 2147483648usize
 
@@ -70,7 +73,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // (C126) The test boots name this process "statusbat" and give it a recorded battery (78%, not charging), the way
     // they record the Wi-Fi air: QEMU virt has no battery, and a real provider would fill this word.
     var battery = 0usize
-    if args.len > 0usize && args[0usize].len == 9usize { battery = PRESENT | 78usize }
+    var recorded = false
+    if args.len > 0usize && args[0usize].len == 9usize {
+        battery = PRESENT | 78usize
+        recorded = true
+    }
     var allowed = 255usize
     var running = true
     while running {
@@ -87,6 +94,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 notes += 1usize
             }
             push_snapshot(notes, battery)
+        }
+        if op == OP_SET_BATTERY {
+            let reading = os.recv(REQ, NO_SLOT)
+            if !recorded { battery = reading }
         }
         if op == OP_POST_QUIET { notes += 1usize }
         if op == OP_POST_APP_QUIET {

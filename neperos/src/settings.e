@@ -1478,6 +1478,7 @@ fn act(s: *State, id: usize, x: f32) -> bool {
                 if (s.battery & 2147483648usize) != 0usize {
                     say("settings battery ")
                     say_num(s.battery & 255usize)
+                    if (s.battery & 256usize) != 0usize { say(" charging") }
                     say("\n")
                 } else {
                     say("settings battery unavailable\n")

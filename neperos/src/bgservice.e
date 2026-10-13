@@ -19,6 +19,7 @@ use e.time
 use e.audio
 use e.audio.mixer as mix
 use bgclient
+use power
 
 const REQ: usize = 2usize
 const REP: usize = 3usize
@@ -27,6 +28,9 @@ const NO_SLOT: usize = 99usize
 const TIMED_OUT: usize = 18446744073709551614usize
 const OP_POST_QUIET: usize = 6usize
 const OP_POST_APP_QUIET: usize = 7usize
+// (C176) The battery provider's word to the status service: present | charging << 8 | level.
+const OP_SET_BATTERY: usize = 8usize
+const BATTERY_PRESENT: usize = 2147483648usize
 
 // An app's place in Settings' notification list (Messages, Mail, Clock, Tasks, Weather, Stocks, Wallet, Chat) from its
 // archive entry, 99 for an app that has none.
@@ -217,6 +221,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var last_peak = 0usize
     var rings = 0usize
     var posted = 0usize
+    // (C176) The battery word last sent to the status service, and whether the low and critical notices were given.
+    var last_battery = 0usize
+    var low_told = false
+    var critical_told = false
     say("services up\n")
     var running = true
     while running {
@@ -323,6 +331,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // Once a second: the alarms and the timer against the wall clock.
         if now >= last_check + 1000usize {
             last_check = now
+            // (C176) The battery provider: the scripted fuel gauge (power.e) against the wall clock. The level and the
+            // charging state go to the status service when either changed; the low and critical levels are the
+            // system's own notifications, once each while the charger is out.
+            let clock_now = wall_seconds()
+            if clock_now != 0usize {
+                let (level, charging) = power.level_at(clock_now % 86400usize)
+                var charging_bit = 0usize
+                if charging { charging_bit = 256usize }
+                let battery_word = BATTERY_PRESENT | charging_bit | level
+                if battery_word != last_battery {
+                    last_battery = battery_word
+                    let set_sent = os.send(STATUS_REQ, OP_SET_BATTERY, NO_SLOT)
+                    let word_sent = os.send(STATUS_REQ, battery_word, NO_SLOT)
+                    say("services battery ")
+                    say_num(level)
+                    if charging { say(" charging\n") } else { say(" discharging\n") }
+                    if charging || level > power.LOW { low_told = false }
+                    if charging || level > power.CRITICAL { critical_told = false }
+                    if !charging && level <= power.LOW && !low_told {
+                        low_told = true
+                        let low_sent = os.send(STATUS_REQ, OP_POST_QUIET, NO_SLOT)
+                        posted += 1usize
+                        say("services battery low\n")
+                    }
+                    if !charging && level <= power.CRITICAL && !critical_told {
+                        critical_told = true
+                        let critical_sent = os.send(STATUS_REQ, OP_POST_QUIET, NO_SLOT)
+                        posted += 1usize
+                        say("services battery critical\n")
+                    }
+                }
+            }
             if ringing == bgclient.RING_NONE && !foreground {
                 let wall = wall_seconds()
                 if wall != 0usize {
