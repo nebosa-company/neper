@@ -40797,3 +40797,7 @@ A chip of the group box is a drag source as well as a tap: let go outside the bo
 ## D3954 — G012: reordering the group-box chips
 
 A chip dropped on another swaps the two grouping levels (the group box's chips are drag sources and drop targets; `take_command` returns CMD_GROUP_SWAP with the dragged level). The sample has the second order (Edition > Rarity) as a fifth grouping mode. Verified live (B6-chip-reorder-v5.png: Rarity, Edition becomes Edition, Rarity).
+
+## D3955 — G012: the editing arrow on the indicator of an in-place editing grid
+
+v3's collection grid (editors shown in place) marks its current row with a long arrow with a shaft, the pool with the plain triangle. `Shape.ArrowLong` is drawn on the current row of a grid with `set_immediate_edit` (B7-editing-arrow-v5.png: pool triangle above, collection arrow below).

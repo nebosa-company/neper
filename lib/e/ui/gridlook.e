@@ -116,7 +116,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape }
 
@@ -200,6 +200,19 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + area.width * 0.35, y: ry, width: area.width * 0.65, height: area.height * 0.12 }, brush: paint.Brush { Solid: m.inner } } })
             row_at += 1.0
         }
+        ret ok
+    }
+    if m.shape == Shape.ArrowLong {
+        // v3's editing indicator: a shaft with a solid head, pointing right
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: area.y + area.height * 0.38, width: area.width * 0.62, height: area.height * 0.24 }, brush: paint.Brush { Solid: m.color } } })
+        let (apb, apb_error) = geometry.path_builder(m.arena, 4usize, 4usize)
+        if apb_error != ok { ret apb_error }
+        var ab = apb
+        try geometry.move_to(&ab, geometry.Point { x: area.x + area.width * 0.55, y: area.y })
+        try geometry.line_to(&ab, geometry.Point { x: area.x + area.width, y: area.y + area.height * 0.5 })
+        try geometry.line_to(&ab, geometry.Point { x: area.x + area.width * 0.55, y: area.y + area.height })
+        try geometry.close_path(&ab)
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&ab), brush: paint.Brush { Solid: m.color } } })
         ret ok
     }
     if m.shape == Shape.Minus {

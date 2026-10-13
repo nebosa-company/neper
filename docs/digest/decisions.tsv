@@ -2532,4 +2532,5 @@ D3950	867	G012: popup mnemonics and keys, and the inactive selection
 D3951	576	G012: the Alignment submenu
 D3952	691	G012: a chip removes its grouping, a centred header title, hints for the other grids
 D3953	474	G012: a chip dragged out of the group box, v3's own collection and deck hints
-D3954	386	G012: reordering the group-box chips
+D3954	387	G012: reordering the group-box chips
+D3955	371	G012: the editing arrow on the indicator of an in-place editing grid
