@@ -156,8 +156,13 @@ fn add_in_space(ttbr: usize, name: str, elr: usize, arg0: usize, arg1: usize, st
     var empty: [16]Cap = zero
     // A spawned thread shares the creating thread's address space, so it shares its window size too.
     var inherited = 0usize
-    if current != NONE { inherited = threads[current].window }
-    threads[slot] = Thread { state: READY, name: name, ttbr: ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: inherited, deadline: 0usize, app: 0usize }
+    var inherited_app = 0usize
+    if current != NONE {
+        inherited = threads[current].window
+        // (D4810) And its app number: a thread of an installed app is that app to whoever it sends to.
+        inherited_app = threads[current].app
+    }
+    threads[slot] = Thread { state: READY, name: name, ttbr: ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: inherited, deadline: 0usize, app: inherited_app }
     live += 1usize
     ret slot
 }

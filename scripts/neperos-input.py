@@ -72,6 +72,10 @@ def main():
     if len(sys.argv) > 9 and sys.argv[9] != "-":
         args += ["-drive", "file=%s,format=raw,if=none,id=blk0" % sys.argv[9],
                  "-device", "virtio-blk-pci,disable-legacy=on,drive=blk0"]
+    # NEPEROS_DISK2=<raw image> is a second block device: the guest's external storage (D4811).
+    if os.environ.get("NEPEROS_DISK2"):
+        args += ["-drive", "file=%s,format=raw,if=none,id=blk1" % os.environ["NEPEROS_DISK2"],
+                 "-device", "virtio-blk-pci,disable-legacy=on,drive=blk1"]
     # NEPEROS_RTC=<date> sets the guest's real-time clock base (QEMU -rtc base=2026-12-15 or an ISO time): a fixture
     # that needs a later day, such as the Trash's thirty days (C125).
     if os.environ.get("NEPEROS_RTC"):

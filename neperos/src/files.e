@@ -26,12 +26,15 @@ use appkit
 use text
 use lunar
 use vaultfs
+use fsproto
 
 const NONE: usize = 99usize
 const MAX_NODES: usize = 48usize
 const MAX_HITS: usize = 96usize
 const BROWSE_SCREEN: usize = 0usize
 const ENTRY_SCREEN: usize = 1usize
+// (D4811) The external storage: a second block device's root listed, a file copied into Internal storage.
+const EXTERNAL_SCREEN: usize = 2usize
 const NEW_FOLDER: usize = 0usize
 const RENAME: usize = 1usize
 const NEW_FILE: usize = 2usize
@@ -166,6 +169,15 @@ type State = struct {
     handover: usize,
     // (D4807) The share sheet of the selected file is open: Document, Photos or Cancel.
     share_open: bool,
+    // (D4811) External storage: whether the kernel granted the second filesystem server's endpoints (slots 7 and 8),
+    // its root's first ten names with their sizes and kinds, and what the last tap did (0 nothing, 1 copied, 2 not).
+    external: bool,
+    ext_names: [240]u8,
+    ext_len: [10]usize,
+    ext_size: [10]usize,
+    ext_kind: [10]usize,
+    ext_total: usize,
+    ext_note: usize,
     // Select mode: items are ticked by a tap; Delete and Move then act on all of them.
     select_mode: bool,
     move_many: bool,
@@ -791,6 +803,8 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     }
     try pill(a, builder, s, faces, 700usize, 312.0, 20.0, 84.0, 34.0, sort_name(s.sort), soft(), 14.0)
     if s.real && !s.recent && s.query_len == 0usize { try pill(a, builder, s, faces, 156usize, 322.0, 58.0, 74.0, 28.0, grid_label(s.grid), soft(), 13.0) }
+    // (D4811) The external storage, at the root, when a second disk is attached.
+    if s.real && s.external && s.cwd == 0usize && !s.recent && s.query_len == 0usize { try pill(a, builder, s, faces, 157usize, 232.0, 58.0, 82.0, 28.0, "External", soft(), 13.0) }
     if s.query_len == 0usize && !s.recent { try pill(a, builder, s, faces, 152usize, 220.0, 20.0, 84.0, 34.0, "Search", soft(), 14.0) }
     if s.query_len == 0usize && s.moving == NONE && s.real && !s.select_mode { try pill(a, builder, s, faces, 153usize, 128.0, 20.0, 84.0, 34.0, "Select", soft(), 14.0) }
     // The rows, shifted by the scroll; only whole rows are drawn.
@@ -1010,6 +1024,89 @@ fn draw_entry(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     ret ok
 }
 
+// (D4811) External storage's root: the names (newline separated), each with its size and kind, over the second filesystem
+// server's endpoints (slots 7 and 8).
+fn load_external(s: *State) {
+    s.ext_total = 0usize
+    var names: [512]u8 = zero
+    let (count, listed) = fsproto.list(7usize, 8usize, "/", mem.address_of(&names[0usize]), 512usize)
+    if !listed { ret }
+    var start = 0usize
+    var at = 0usize
+    while at < count && s.ext_total < 10usize {
+        if names[at] == 10u8 {
+            let name = names[start..at]
+            if name.len > 0usize && name.len <= 24usize {
+                var path_bytes: [26]u8 = zero
+                path_bytes[0usize] = 47u8
+                var k = 0usize
+                while k < name.len {
+                    path_bytes[1usize + k] = name[k]
+                    k += 1usize
+                }
+                let (size, kind, day, found) = fsproto.stat(7usize, 8usize, path_bytes[0usize..1usize + name.len])
+                if found {
+                    var n = 0usize
+                    while n < name.len {
+                        s.ext_names[s.ext_total * 24usize + n] = name[n]
+                        n += 1usize
+                    }
+                    s.ext_len[s.ext_total] = name.len
+                    s.ext_size[s.ext_total] = size
+                    s.ext_kind[s.ext_total] = kind
+                    s.ext_total += 1usize
+                }
+            }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+}
+
+// A file of the external storage into [addr, addr + cap), in pieces of 2 KB: the bytes read and whether it read.
+fn external_read(path: str, addr: usize, cap: usize) -> (usize, bool) {
+    var at = 0usize
+    while at < cap {
+        var want = cap - at
+        if want > 2048usize { want = 2048usize }
+        let sent = os.send(7usize, fsproto.OP_READ_AT, fsproto.NO_SLOT)
+        if sent == 18446744073709551615usize { ret (0usize, false) }
+        fsproto.send_str(7usize, path)
+        let offset_sent = os.send(7usize, at, fsproto.NO_SLOT)
+        let want_sent = os.send(7usize, want, fsproto.NO_SLOT)
+        let result = os.recv(8usize, fsproto.NO_SLOT)
+        let got = fsproto.recv_packed(8usize, addr + at, want)
+        if result != fsproto.RESULT_OK { ret (at, false) }
+        at += got
+        if got < want { ret (at, true) }
+    }
+    ret (at, true)
+}
+
+fn draw_external(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), light())
+    hit(s, 630usize, 0.0, 10.0, 66.0, 56.0)
+    try put(a, builder, faces.jost_bold, 26.0, "External storage", 62.0, 14.0, light())
+    try put(a, builder, faces.grotesk, 12.0, "Tap a file to copy it to Internal storage", 62.0, 54.0, light_muted())
+    if s.ext_total == 0usize {
+        try centred(a, builder, faces.jost, 19.0, "Nothing on this card", 206.0, 220.0, light_muted())
+    }
+    var i = 0usize
+    while i < s.ext_total {
+        let y: f32 = 96.0 + f32(i) * 62.0
+        try card(a, builder, 16.0, y, 380.0, 54.0, 16.0, cream())
+        try put(a, builder, faces.jost, 17.0, text_of(a, s.ext_names[i * 24usize..], s.ext_len[i]), 32.0, y + 9.0, ink())
+        var detail = join(a, number(a, s.ext_size[i]), " bytes", "")
+        if s.ext_kind[i] == 2usize { detail = "Folder" }
+        try put(a, builder, faces.grotesk, 12.0, detail, 32.0, y + 32.0, muted())
+        if s.ext_kind[i] != 2usize { hit(s, 640usize + i, 16.0, y, 380.0, 54.0) }
+        i += 1usize
+    }
+    if s.ext_note == 1usize { try centred(a, builder, faces.grotesk, 14.0, "Copied to Internal storage", 206.0, 780.0, amber()) }
+    if s.ext_note == 2usize { try centred(a, builder, faces.grotesk, 14.0, "Could not copy", 206.0, 780.0, amber()) }
+    ret ok
+}
+
 fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
     s.hit_total = 0usize
     let faces = kit.faces
@@ -1022,6 +1119,8 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
             load_thumbs(a, kit, s)
         }
         try draw_browse(a, builder, s, faces)
+    } else if s.screen == EXTERNAL_SCREEN {
+        try draw_external(a, builder, s, faces)
     } else {
         try draw_entry(a, builder, s, faces)
     }
@@ -1109,6 +1208,49 @@ fn delete_item(a: *mem.Arena, s: *State, index: usize) {
 
 // What a tap on button `id` did: true when the screen changed.
 fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
+    if s.screen == EXTERNAL_SCREEN {
+        if id == 630usize {
+            s.screen = BROWSE_SCREEN
+            s.ext_note = 0usize
+            ret true
+        }
+        if id >= 640usize && id < 650usize && id - 640usize < s.ext_total {
+            // Copy the file into Internal storage's root: read it through the external server, write it through the system's.
+            let k = id - 640usize
+            let name = text_of(a, s.ext_names[k * 24usize..], s.ext_len[k])
+            s.ext_note = 2usize
+            var size = s.ext_size[k]
+            if size > 65536usize { size = 65536usize }
+            let (buffer, buffer_error) = mem.alloc[u8](a, size + 1usize)
+            if buffer_error == ok && size > 0usize && name_free(s, name, NONE) {
+                let (got, read_ok) = external_read(join(a, "/", name, ""), mem.address_of(&buffer[0usize]), size)
+                if read_ok && got == size {
+                    if vaultfs.write_big(join(a, "/", name, ""), mem.address_of(&buffer[0usize]), got) {
+                        let made = add_node(s, name, 0usize, false, got, 0usize)
+                        if made != NONE {
+                            s.ext_note = 1usize
+                            say("files external copied ")
+                            say_text(name)
+                            say(" ")
+                            say_text(number(a, got))
+                            say("\n")
+                        }
+                    }
+                }
+            }
+            ret true
+        }
+        ret false
+    }
+    if id == 157usize && s.external && s.screen == BROWSE_SCREEN {
+        load_external(s)
+        s.screen = EXTERNAL_SCREEN
+        s.ext_note = 0usize
+        say("files external ")
+        say_text(number(a, s.ext_total))
+        say("\n")
+        ret true
+    }
     if s.screen == ENTRY_SCREEN {
         if id >= 1000usize && id < 1026usize {
             type_byte(s, u8(97usize + id - 1000usize))
@@ -1650,6 +1792,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (used, total, answered) = vaultfs.stats()
         s.store_used = used
         s.store_total = total
+        // (D4811) Is there external storage (the kernel grants the second server's endpoints only when a second disk is attached)?
+        var ext_probe: [8]u8 = zero
+        let (ext_count, ext_found) = fsproto.list(7usize, 8usize, "/", mem.address_of(&ext_probe[0usize]), 8usize)
+        s.external = ext_found
+        if ext_found { say("files external storage present\n") }
         say("files real ")
         say_text(number(a, s.store_used))
         say("\n")

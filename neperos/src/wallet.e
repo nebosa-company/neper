@@ -19,6 +19,7 @@ use e.barcode
 use e.io
 use e.gfx.image
 use e.fmt.png
+use e.gfx.vision as vision
 use vaultfs
 use vault
 use e.gfx.geometry
@@ -211,6 +212,16 @@ type State = struct {
     // (D4808) The text the Camera's Scan mode read from a QR code (in /scancode), offered as a card.
     code: [36]u8,
     code_len: usize,
+    // (D4812) Choosing a master password when the disk has no vault: creating, the stage (0 the password, 1 again) and
+    // the first entry.
+    creating: bool,
+    stage: usize,
+    first: [36]u8,
+    first_len: usize,
+    // Whether the disk has a vault (from the start of the app).
+    vaulted: bool,
+    // Whether the machine has a disk to keep one on at all.
+    has_disk: bool,
     hits: [96]Hit,
     hit_total: usize,
 }
@@ -848,6 +859,8 @@ fn draw_stack(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     try card(a, builder, 274.0 - 1.5, 848.0 - 9.0, 3.0, 18.0, 1.5, ink())
     try put(a, builder, faces.jost, 17.0, "Add card", 298.0, 837.0, ink())
     hit(s, 150usize, 252.0, 820.0, 144.0, 56.0)
+    // (D4812) With a disk and no vault yet, the cards can be sealed under a master password chosen here.
+    if s.has_disk && !s.vaulted && !s.keyed { try pill(a, builder, s, faces, 92usize, 262.0, 26.0, 134.0, 36.0, "Protect cards", soft(), 14.0) }
     // (D4808) A code the Camera scanned waits to be added as a card.
     if s.code_len > 0usize {
         try card(a, builder, 16.0, 820.0, 224.0, 56.0, 28.0, soft())
@@ -947,7 +960,259 @@ fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     }
     try pill(a, builder, s, faces, 600usize, 16.0, 824.0, 150.0, 44.0, "Remove card", soft(), 16.0)
     if editable(c.kind) { try pill(a, builder, s, faces, 601usize, 246.0, 824.0, 150.0, 44.0, "Edit card", amber(), 16.0) }
+    // (D4812) A document with a scan can have its machine-readable zone read from it.
+    if c.kind == DOC && s.has_scan { try pill(a, builder, s, faces, 603usize, 16.0, 772.0, 150.0, 44.0, "Read MRZ", amber(), 16.0) }
+    // (D4813) A card with a code can be saved as a picture in Files (/Wallet/<name>.png).
+    if c.kind == PASS || c.kind == EVENT || c.kind == HEALTH || c.kind == LOYALTY || c.kind == TRANSIT {
+        try pill(a, builder, s, faces, 602usize, 246.0, 824.0, 150.0, 44.0, "Save image", amber(), 16.0)
+    }
     ret ok
+}
+
+// (D4812) Read the machine-readable zone of the document's scan (the PNG in /DCIM it keeps) with `vision.mrz_read`, and
+// when the check digits agree fill the document from it: the holder (given names then surname), the document number,
+// the issuing state and the expiry (DD.MM.20YY). Says the two lines either way. False when nothing was read.
+fn read_mrz(a: *mem.Arena, s: *State) -> bool {
+    let c = s.cards[s.open]
+    if c.kind != DOC || c.scan == 0usize { ret false }
+    var digits: [4]u8 = zero
+    var rest = c.scan
+    var d = 4usize
+    while d > 0usize {
+        d -= 1usize
+        digits[d] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+    }
+    let path = join(a, "/DCIM/SCAN_", digits[0usize..4usize], ".png")
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size == 0usize || size > 262144usize { ret false }
+    let (raw, raw_error) = mem.alloc[u8](a, size)
+    if raw_error != ok { ret false }
+    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+    if !read_ok || got != size { ret false }
+    var reader_state: io.SliceReader = zero
+    reader_state.data = raw[0usize..got]
+    reader_state.off = 0usize
+    let (page, page_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 4194304u64, verify_crc: true })
+    if page_error != ok { ret false }
+    let width = usize(page.width)
+    let height = usize(page.height)
+    let (luma, luma_error) = mem.alloc[u8](a, width * height)
+    if luma_error != ok { ret false }
+    var row = 0usize
+    while row < height {
+        var col = 0usize
+        while col < width {
+            if page.format == .R8 {
+                luma[row * width + col] = page.pixels[row * page.stride + col]
+            } else {
+                let at = row * page.stride + col * 4usize
+                luma[row * width + col] = u8((usize(page.pixels[at]) * 299usize + usize(page.pixels[at + 1usize]) * 587usize + usize(page.pixels[at + 2usize]) * 114usize) / 1000usize)
+            }
+            col += 1usize
+        }
+        row += 1usize
+    }
+    let (zone, zone_error) = vision.mrz_read(a, luma, width, height)
+    if zone_error != ok {
+        say("wallet mrz none\n")
+        ret false
+    }
+    say("wallet mrz ")
+    say(zone.line1[0usize..44usize])
+    say("\n")
+    say("wallet mrz ")
+    say(zone.line2[0usize..44usize])
+    say("\n")
+    if !zone.verified {
+        say("wallet mrz not verified\n")
+        ret true
+    }
+    say("wallet mrz verified ")
+    say_num(zone.changes)
+    say("\n")
+    // Holder: SURNAME<<GIVEN<NAMES after the five-character header.
+    var surname: [40]u8 = zero
+    var given: [40]u8 = zero
+    var sn = 0usize
+    var gn = 0usize
+    var at = 5usize
+    var in_given = false
+    while at < 44usize {
+        let ch = zone.line1[at]
+        if ch == 60u8 && at + 1usize < 44usize && zone.line1[at + 1usize] == 60u8 && !in_given {
+            in_given = true
+            at += 2usize
+        } else if ch == 60u8 {
+            if in_given && gn > 0usize && gn < 39usize && given[gn - 1usize] != 32u8 {
+                given[gn] = 32u8
+                gn += 1usize
+            }
+            if !in_given && sn > 0usize && sn < 39usize && surname[sn - 1usize] != 32u8 {
+                surname[sn] = 32u8
+                sn += 1usize
+            }
+            at += 1usize
+        } else {
+            if in_given && gn < 39usize {
+                given[gn] = ch
+                gn += 1usize
+            }
+            if !in_given && sn < 39usize {
+                surname[sn] = ch
+                sn += 1usize
+            }
+            at += 1usize
+        }
+    }
+    while gn > 0usize && given[gn - 1usize] == 32u8 { gn -= 1usize }
+    while sn > 0usize && surname[sn - 1usize] == 32u8 { sn -= 1usize }
+    var holder: [40]u8 = zero
+    var hn = 0usize
+    var i = 0usize
+    while i < gn && hn < 38usize {
+        holder[hn] = given[i]
+        hn += 1usize
+        i += 1usize
+    }
+    if gn > 0usize && sn > 0usize {
+        holder[hn] = 32u8
+        hn += 1usize
+    }
+    i = 0usize
+    while i < sn && hn < 38usize {
+        holder[hn] = surname[i]
+        hn += 1usize
+        i += 1usize
+    }
+    var number: [10]u8 = zero
+    var nn = 0usize
+    i = 0usize
+    while i < 9usize {
+        if zone.line2[i] != 60u8 {
+            number[nn] = zone.line2[i]
+            nn += 1usize
+        }
+        i += 1usize
+    }
+    var until: [10]u8 = zero
+    until[0usize] = zone.line2[25usize]
+    until[1usize] = zone.line2[26usize]
+    until[2usize] = 46u8
+    until[3usize] = zone.line2[23usize]
+    until[4usize] = zone.line2[24usize]
+    until[5usize] = 46u8
+    until[6usize] = 50u8
+    until[7usize] = 48u8
+    until[8usize] = zone.line2[21usize]
+    until[9usize] = zone.line2[22usize]
+    put_value(&s.cards[s.open], 0usize, holder[0usize..hn])
+    put_value(&s.cards[s.open], 1usize, number[0usize..nn])
+    put_value(&s.cards[s.open], 2usize, zone.line1[2usize..5usize])
+    put_value(&s.cards[s.open], 3usize, until[0usize..10usize])
+    let kept = save_all(a, s)
+    say("wallet mrz holder ")
+    say(holder[0usize..hn])
+    say("\n")
+    ret true
+}
+
+// (D4813) The open card's code as a PNG in /Wallet: a QR symbol (6 px a module) for a pass, ticket or certificate, a
+// Code 128 bar row (2 px a module, 80 px tall) for a loyalty or transit card, with a quiet zone, black on white; the file
+// is `/Wallet/<the title's letters and digits>.png`, read back by its size. True when it was written.
+fn export_code(a: *mem.Arena, s: *State) -> bool {
+    let c = s.cards[s.open]
+    var pixels: []u8 = zero
+    var width = 0usize
+    var height = 0usize
+    if c.kind == LOYALTY || c.kind == TRANSIT {
+        let (row, row_error) = barcode.code128(a, bar_text(a, c))
+        if row_error != ok { ret false }
+        width = (row.len + 20usize) * 2usize
+        height = 100usize
+        let (bytes, bytes_error) = mem.alloc[u8](a, width * height * 4usize)
+        if bytes_error != ok { ret false }
+        var y = 0usize
+        while y < height {
+            var x = 0usize
+            while x < width {
+                var dark = false
+                if x >= 20usize && x < 20usize + row.len * 2usize && y >= 10usize && y < 90usize { dark = row[(x - 20usize) / 2usize] == 1u8 }
+                var v = 255u8
+                if dark { v = 0u8 }
+                let at = (y * width + x) * 4usize
+                bytes[at] = v
+                bytes[at + 1usize] = v
+                bytes[at + 2usize] = v
+                bytes[at + 3usize] = 255u8
+                x += 1usize
+            }
+            y += 1usize
+        }
+        pixels = bytes
+    } else {
+        let (symbol, symbol_error) = barcode.qr_encode(a, code_payload(a, c), 1usize)
+        if symbol_error != ok { ret false }
+        width = (symbol.size + 8usize) * 6usize
+        height = width
+        let (bytes, bytes_error) = mem.alloc[u8](a, width * height * 4usize)
+        if bytes_error != ok { ret false }
+        var y = 0usize
+        while y < height {
+            var x = 0usize
+            while x < width {
+                var dark = false
+                let mx = x / 6usize
+                let my = y / 6usize
+                if mx >= 4usize && my >= 4usize && mx < symbol.size + 4usize && my < symbol.size + 4usize {
+                    dark = symbol.modules[(my - 4usize) * symbol.size + (mx - 4usize)] == 1u8
+                }
+                var v = 255u8
+                if dark { v = 0u8 }
+                let at = (y * width + x) * 4usize
+                bytes[at] = v
+                bytes[at + 1usize] = v
+                bytes[at + 2usize] = v
+                bytes[at + 3usize] = 255u8
+                x += 1usize
+            }
+            y += 1usize
+        }
+        pixels = bytes
+    }
+    let (source, source_error) = image.make_const(pixels, u32(width), u32(height), width * 4usize, image.Format.Rgba8, image.Alpha.Straight)
+    if source_error != ok { ret false }
+    // The encoder may store the rows nearly as they are (the Camera's buffer is the frame and more): room for all of them.
+    let (buffer, buffer_error) = mem.alloc[u8](a, width * height * 4usize + height + 16384usize)
+    if buffer_error != ok { ret false }
+    var sink = io.SliceWriter { data: buffer, off: 0usize }
+    var encoder = io.slice_writer(&sink)
+    // Two colours: the adaptive encoder writes it indexed at one bit a pixel and deflates it.
+    if png.encode_adaptive(&encoder, source, png.EncodeOptions { compression: .Balanced, interlace: false }) != ok { ret false }
+    // /Wallet/<letters and digits of the title, at most 16>.png
+    var name: [24]u8 = zero
+    var n = 0usize
+    var k = 0usize
+    while k < c.title_len && n < 16usize {
+        let ch = c.title[k]
+        if (ch >= 97u8 && ch <= 122u8) || (ch >= 65u8 && ch <= 90u8) || (ch >= 48u8 && ch <= 57u8) {
+            name[n] = ch
+            n += 1usize
+        }
+        k += 1usize
+    }
+    if n == 0usize { ret false }
+    let made_dir = vaultfs.mkdir("/Wallet")
+    let path = join(a, "/Wallet/", name[0usize..n], ".png")
+    if !vaultfs.write_big(path, mem.address_of(&buffer[0usize]), sink.off) { ret false }
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size != sink.off { ret false }
+    say("wallet image saved ")
+    say_text(path)
+    say(" ")
+    say_num(size)
+    say("\n")
+    ret true
 }
 
 // ---- the keyboard (the same as SSH's): digits, three rows of letters, a row with - / space . and Enter.
@@ -1131,9 +1396,20 @@ fn draw_add(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
 // (C154) The master password asked for before the cards are opened: the password as dots, Unlock, and Skip to use the
 // sample cards without keeping anything.
 fn draw_unlock(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
-    try put(a, builder, faces.jost_bold, 28.0, "Unlock Wallet", 24.0, 12.0, light())
-    try put(a, builder, faces.grotesk, 13.0, "Your cards are sealed under the Secure vault's password", 24.0, 58.0, light_muted())
-    try put(a, builder, faces.grotesk, 12.0, "Master password", 20.0, 104.0, light_muted())
+    if s.creating {
+        // (D4812) No vault yet: choose the master password, twice; Secure opens the same vault with it.
+        try put(a, builder, faces.jost_bold, 28.0, "Protect Wallet", 24.0, 12.0, light())
+        try put(a, builder, faces.grotesk, 13.0, "Seal your cards under a master password (Secure uses it too)", 24.0, 58.0, light_muted())
+        if s.stage == 0usize {
+            try put(a, builder, faces.grotesk, 12.0, "Choose a master password", 20.0, 104.0, light_muted())
+        } else {
+            try put(a, builder, faces.grotesk, 12.0, "Type it again", 20.0, 104.0, light_muted())
+        }
+    } else {
+        try put(a, builder, faces.jost_bold, 28.0, "Unlock Wallet", 24.0, 12.0, light())
+        try put(a, builder, faces.grotesk, 13.0, "Your cards are sealed under the Secure vault's password", 24.0, 58.0, light_muted())
+        try put(a, builder, faces.grotesk, 12.0, "Master password", 20.0, 104.0, light_muted())
+    }
     try card(a, builder, 14.0, 118.0, 384.0, 44.0, 16.0, amber())
     try card(a, builder, 16.0, 120.0, 380.0, 40.0, 14.0, cream())
     var dots = 0usize
@@ -1142,10 +1418,19 @@ fn draw_unlock(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         dots += 1usize
     }
     if s.problem != 0usize {
-        try put(a, builder, faces.grotesk, 13.0, "That password does not open the vault", 16.0, 170.0, paint.Color { red: 0.96, green: 0.45, blue: 0.42, alpha: 1.0 })
+        var message = "That password does not open the vault"
+        if s.creating { message = "The two entries differ; try again" }
+        try put(a, builder, faces.grotesk, 13.0, message, 16.0, 170.0, paint.Color { red: 0.96, green: 0.45, blue: 0.42, alpha: 1.0 })
     }
-    try pill(a, builder, s, faces, 1310usize, 16.0, 436.0, 186.0, 46.0, "Unlock", amber(), 17.0)
-    try pill(a, builder, s, faces, 1311usize, 210.0, 436.0, 186.0, 46.0, "Skip", soft(), 17.0)
+    if s.creating {
+        var go = "Next"
+        if s.stage == 1usize { go = "Create" }
+        try pill(a, builder, s, faces, 1310usize, 16.0, 436.0, 186.0, 46.0, go, amber(), 17.0)
+        try pill(a, builder, s, faces, 1311usize, 210.0, 436.0, 186.0, 46.0, "Not now", soft(), 17.0)
+    } else {
+        try pill(a, builder, s, faces, 1310usize, 16.0, 436.0, 186.0, 46.0, "Unlock", amber(), 17.0)
+        try pill(a, builder, s, faces, 1311usize, 210.0, 436.0, 186.0, 46.0, "Skip", soft(), 17.0)
+    }
     try draw_keyboard(a, builder, s, faces)
     ret ok
 }
@@ -1219,6 +1504,7 @@ fn open_add(s: *State) {
 // Is there enough to save: the name, and for a bank the IBAN, for a document the holder?
 fn problem_text(code: usize) -> str {
     if code == 1usize { ret "The card number fails its check digit" }
+    // (code 2 is the add form's expiry below)
     if code == 2usize { ret "The expiry must be a month 01-12 and a year, MM/YY" }
     if code == 3usize { ret "The IBAN is not valid" }
     if code == 4usize { ret "The card number needs 12 to 19 digits" }
@@ -1330,6 +1616,48 @@ fn try_unlock(a: *mem.Arena, s: *State) {
     s.screen = STACK_SCREEN
 }
 
+// (D4812) Make the vault from the password typed twice: a random salt and nonce from the random server, the key from
+// the password (Secure's own count of iterations), `/vmeta` written the way Secure writes it so Secure opens it with the
+// same password; then the cards are sealed under the key. The typed bytes are zeroed.
+fn create_vault(a: *mem.Arena, s: *State) {
+    var random: [32]u8 = zero
+    if !vaultfs.random(mem.address_of(&random[0usize]), 4usize) {
+        say("wallet vault create failed: no random source\n")
+        ret
+    }
+    let (key, derive_error) = vault.derive(s.fields[0usize..s.field_len[0usize]], random[0usize..16usize], 20000u32)
+    if derive_error != ok {
+        say("wallet vault create failed: no key\n")
+        ret
+    }
+    var meta: [80]u8 = zero
+    let (length, meta_error) = vault.meta_make(key, random[0usize..16usize], 20000u32, random[16usize..28usize], meta[0usize..])
+    if meta_error != ok {
+        say("wallet vault create failed: no seal\n")
+        ret
+    }
+    let made = vaultfs.mkdir("/v")
+    if !vaultfs.write("/vmeta", mem.address_of(&meta[0usize]), length) {
+        say("wallet vault create failed: disk\n")
+        ret
+    }
+    var i = 0usize
+    while i < 36usize {
+        s.fields[i] = 0u8
+        s.first[i] = 0u8
+        i += 1usize
+    }
+    s.field_len[0usize] = 0usize
+    s.first_len = 0usize
+    s.stage = 0usize
+    s.creating = false
+    s.key = key
+    s.keyed = true
+    let kept = save_all(a, s)
+    say("wallet vault created\n")
+    s.screen = STACK_SCREEN
+}
+
 // The kinds that can be edited: those that carry a check (the card's expiry, the bank's IBAN) and documents.
 fn editable(kind: usize) -> bool {
     ret kind == PAYMENT || kind == BANK || kind == DOC
@@ -1407,6 +1735,17 @@ fn edited_card(a: *mem.Arena, s: *State) -> Card {
 // What a tap on button `id` did: true when the screen changed.
 fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == STACK_SCREEN {
+        if id == 92usize && s.has_disk && !s.vaulted && !s.keyed {
+            s.creating = true
+            s.stage = 0usize
+            s.field_len[0usize] = 0usize
+            s.first_len = 0usize
+            s.focus = 0usize
+            s.problem = 0usize
+            s.screen = UNLOCK_SCREEN
+            say("wallet vault choose password\n")
+            ret true
+        }
         if id == 90usize && s.code_len > 0usize {
             // (D4808) The scanned code becomes a loyalty card whose barcode says it; the file is spent.
             let seed = 2000usize + s.code_len * 13usize
@@ -1492,6 +1831,15 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             open_edit(a, s)
             ret true
         }
+        if id == 603usize && s.cards[s.open].kind == DOC {
+            let zone_read = read_mrz(a, s)
+            ret true
+        }
+        if id == 602usize {
+            let saved_image = export_code(a, s)
+            if !saved_image { say("wallet image not saved\n") }
+            ret true
+        }
         ret false
     }
     // (C154) The master password: typed, then Unlock opens the vault and the sealed cards; Skip keeps the samples.
@@ -1527,7 +1875,47 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 1311usize {
             s.field_len[0usize] = 0usize
             s.screen = STACK_SCREEN
-            say("wallet vault skipped\n")
+            if s.creating {
+                s.creating = false
+                s.stage = 0usize
+                s.first_len = 0usize
+                say("wallet vault not created\n")
+            } else {
+                say("wallet vault skipped\n")
+            }
+            ret true
+        }
+        if (id == 1310usize || id == 1205usize) && s.creating {
+            if s.field_len[0usize] == 0usize { ret false }
+            if s.stage == 0usize {
+                // The first entry is kept to compare with the second.
+                var i = 0usize
+                while i < s.field_len[0usize] {
+                    s.first[i] = s.fields[i]
+                    s.fields[i] = 0u8
+                    i += 1usize
+                }
+                s.first_len = s.field_len[0usize]
+                s.field_len[0usize] = 0usize
+                s.stage = 1usize
+                s.problem = 0usize
+                ret true
+            }
+            var same = s.field_len[0usize] == s.first_len
+            var k = 0usize
+            while same && k < s.first_len {
+                if s.fields[k] != s.first[k] { same = false }
+                k += 1usize
+            }
+            if !same {
+                s.stage = 0usize
+                s.first_len = 0usize
+                s.field_len[0usize] = 0usize
+                s.problem = 2usize
+                say("wallet vault passwords differ\n")
+                ret true
+            }
+            create_vault(a, s)
             ret true
         }
         if id == 1310usize || id == 1205usize {
@@ -1759,6 +2147,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // (C154) A Secure vault on the disk: its master password opens the cards before they are shown.
     let (vault_meta, has_vault) = vaultfs.probe("/vmeta")
+    s.vaulted = has_vault
+    // A disk answers a list of the root even when nothing is on it.
+    var disk_probe: [8]u8 = zero
+    let (disk_count, disk_listed) = vaultfs.list("/", mem.address_of(&disk_probe[0usize]), 8usize)
+    s.has_disk = disk_listed
     if has_vault {
         s.screen = UNLOCK_SCREEN
         say("wallet vault locked\n")

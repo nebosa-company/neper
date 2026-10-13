@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sample documents for the Document fixtures of D4800 onward (C152, C172, C150): standard library only.
 
-usage: make_doc_samples.py <directory>
+usage: make_doc_samples.py <directory> [<external directory>]
 
   zimg.pdf    two pages: a heading, a 32 x 24 Flate RGB image, a text run through a font with a ToUnicode map (the
               codes 1..6 are "Neper!"), an outline of two bookmarks; the second page says "The needle is here"
@@ -172,6 +172,11 @@ def znested_zip():
 def main():
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
+    # A second argument is a directory for the external storage's files (the second disk).
+    if len(sys.argv) > 2:
+        os.makedirs(sys.argv[2], exist_ok=True)
+        with open(os.path.join(sys.argv[2], "ext.txt"), "wb") as handle:
+            handle.write(b"from the card\n1234\n")
     files = {"zimg.pdf": zimg_pdf(), "zpic.docx": zpic_docx(), "zshape.pptx": zshape_pptx(), "zcalc.ods": zcalc_ods(),
              "zpage.html": zpage_html(), "znested.zip": znested_zip()}
     for name, data in files.items():

@@ -11490,6 +11490,37 @@ if ($neperosQemu) {
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }
+    # The scan fixtures (D4812): a disk holding /DCIM/SCAN_0001.png, a page of a passport's two machine-readable lines.
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'scanfixture') { continue }
+        $fixture = $fields[1]
+        $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 2 ('/DCIM/SCAN_0001.png=' + (Join-Path $repo 'tests\selfhost\fixtures\neperos\mrz_scan.png')) | Out-Null
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
+    # The external-storage fixtures (D4811): the same disk of documents as the system disk and a second block device
+    # (NEPEROS_DISK2) with /ext.txt, which the second filesystem server serves to the Files app.
+    $extDir = Join-Path $testBuild 'extsamples'
+    & python (Join-Path $repo 'scripts\make_doc_samples.py') $docDir $extDir | Out-Null
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'externalfixture') { continue }
+        $fixture = $fields[1]
+        $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
+        $extDisk = Join-Path $testBuild "shell-$fixture-ext.disk"
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 @docFiles | Out-Null
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $extDisk 2 ('/ext.txt=' + (Join-Path $extDir 'ext.txt')) | Out-Null
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $env:NEPEROS_DISK2 = $extDisk
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
+        Remove-Item Env:NEPEROS_DISK2 -ErrorAction SilentlyContinue
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
     # The install-on-disk fixtures: the package archive on a fresh disk (the shell keeps the package in /apps), and
     # a row named <base>_again boots the plain archive on that disk (the shell finds the app there).
     foreach ($row in $appsTable) {

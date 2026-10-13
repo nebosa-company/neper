@@ -66,7 +66,7 @@ fn write_big(path: str, addr: usize, len: usize) -> bool {
         let op_sent = os.send(FS_REQ, fsproto.OP_WRITE_AT, fsproto.NO_SLOT)
         fsproto.send_str(FS_REQ, path)
         let offset_sent = os.send(FS_REQ, at, fsproto.NO_SLOT)
-        fsproto.send_packed(FS_REQ, addr + at, piece)
+        fsproto.send_packed7(FS_REQ, addr + at, piece)
         if os.recv(FS_REP, fsproto.NO_SLOT) != fsproto.RESULT_OK { ret false }
         at += piece
     }
