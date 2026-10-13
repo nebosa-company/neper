@@ -100,6 +100,19 @@
    "replayed": "ui_datagrid section 24"
   },
   {
+   "id": "E1",
+   "name": "collection grid: Qty edit, Tab order, focus after an edit",
+   "steps": [
+    "tap the Qty cell of a row: the row is current and a compact editor opens in the cell at once",
+    "type a digit, Enter: the value is committed, the editor closes, the row stays current and the footer sum updates",
+    "Down: the next row becomes current",
+    "Tab: the editor opens in the first editable cell of the row (Qty); Tab again: the next editable cell (Used)"
+   ],
+   "v3": "recorded: docs/grid-parity/E1-collection-edit-v3.png",
+   "neper": "set_immediate_edit(grid, true): first tap edits, commit returns the keyboard to the row (rest_row), Tab edits the next editable cell",
+   "replayed": "ui_datagrid section 25; live in the sample (E1-edit-sequence-v5.png)"
+  },
+  {
    "id": "F1",
    "name": "filter",
    "v3": "the card pool has no filter row: the toolbar box is a Find box (typing does nothing until the binoculars or Enter) and the funnel opens the 'Filter Card Pool' dialog with OK/Apply, so there is no delayed apply to record in this view",
@@ -109,6 +122,6 @@
  ],
  "open": [
   "Ctrl+click multi-sort, Shift+click ranges, typeahead search buffer reset time",
-  "focus after edit (the card pool is read-only in v3; editing happens in the deck and collection views, not yet recorded)"
+  "caret position inside the cell editor (v3 puts it at the click, Neper at the start)"
  ]
 }

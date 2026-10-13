@@ -2146,4 +2146,5 @@ D3926	1132	G012: a sort keeps the current card; best fit on a header-edge double
 D3927	794	G012: grouping keeps the current card; the card pool has no delayed filter
 D3928	720	G012: a row in the card's own colour
 D5005	858	Call: the recents are kept in /recents; emergency numbers are named as such
-D2386	938	G012: the collection and deck views
+D2386	939	G012: the collection and deck views
+D2387	903	G012: collection editing traces (immediate edit, Enter keeps the row, Tab order)
