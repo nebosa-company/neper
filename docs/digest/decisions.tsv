@@ -2524,4 +2524,5 @@ D3942	1244	G012: a right-click selects the card; the header menu finds its colum
 D3943	478	G012: the field chooser is a plain list called Column
 D3944	1631	G012: the field chooser is a window you move, and columns drag in and out
 D3945	1304	G012: the popup menus drawn in v3's look, with its own pictures
-D3946	1181	G012: drag arrows and the dragged name by cell semantics, one owner per chooser drag
+D3946	1182	G012: drag arrows and the dragged name by cell semantics, one owner per chooser drag
+D3947	1294	G012: the row indicator's header is a button with the quick column list
