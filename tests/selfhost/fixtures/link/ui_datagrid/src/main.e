@@ -1498,6 +1498,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if auto_sum < 599.0 || auto_sum > 601.0 { os.exit(518) }
     dg.set_auto_width(&grid2, false, 0.0)
+    // 31. the header menu's commands and the field chooser
+    let menu_cols = grid2.specs.len
+    var pick = dg.MenuPick { grid: &grid2, id: dg.CMD_REMOVE_COLUMN, spec: 1usize }
+    grid2.menu_open = true
+    if dg.on_menu_pick(mem.cast[*void](&pick)) != ok || grid2.menu_open || grid2.specs.len != menu_cols - 1usize { os.exit(571) }
+    var shown_again = dg.ChooserPick { grid: &grid2, spec: grid2.origin[0usize] }
+    // the removed column is the one the chooser lists: find it and bring it back
+    var gone = 0usize
+    while gone < grid2.hidden.len && !grid2.hidden[gone] { gone += 1usize }
+    if gone >= grid2.hidden.len { os.exit(572) }
+    shown_again.spec = gone
+    if dg.on_chooser_pick(mem.cast[*void](&shown_again)) != ok || grid2.specs.len != menu_cols { os.exit(573) }
+    pick.id = dg.CMD_CLEAR_SORT
+    if dg.on_menu_pick(mem.cast[*void](&pick)) != ok { os.exit(574) }
+    let (cmd_id, cmd_spec, cmd_has) = dg.take_command(&grid2)
+    if !cmd_has || cmd_id != dg.CMD_CLEAR_SORT || cmd_spec != 1usize { os.exit(575) }
+    let (_, _, cmd_again) = dg.take_command(&grid2)
+    if cmd_again { os.exit(576) }
+    pick.id = dg.CMD_GROUP_FIELD
+    if dg.on_menu_pick(mem.cast[*void](&pick)) != ok { os.exit(577) }
+    let (group_column, group_has) = dg.take_group_drop(&grid2)
+    if !group_has || group_column != grid2.specs[1usize].column { os.exit(578) }
+    let footer_was = grid2.footer_visible
+    pick.id = dg.CMD_FOOTER
+    if dg.on_menu_pick(mem.cast[*void](&pick)) != ok || grid2.footer_visible == footer_was { os.exit(579) }
+    pick.id = dg.CMD_FOOTER
+    if dg.on_menu_pick(mem.cast[*void](&pick)) != ok { os.exit(580) }
     // 29. P017: the hovered header cell turns #D9EBF9; P020: the footer band is #FFFFDD with #E7EAEA cells
     dg.clear_selection(&grid11)
     mem.reset(&f, 0usize)
