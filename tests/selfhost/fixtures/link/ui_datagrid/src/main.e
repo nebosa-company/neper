@@ -1479,6 +1479,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !button_hit || button_row != 5usize || button_spec != 3usize { os.exit(512) }
     let (_, _, button_again) = dg.button_cell(&grid2)
     if button_again { os.exit(513) }
+    // 28. the View menu's options: grid lines, header, indicator, auto width
+    if grid2.lines != dg.GridLines.Vertical || grid2.header_off { os.exit(514) }
+    dg.set_grid_lines(&grid2, dg.GridLines.Both)
+    dg.show_header(&grid2, false)
+    if grid2.lines != dg.GridLines.Both || !grid2.header_off { os.exit(515) }
+    let shown_before = grid2.specs.len
+    dg.show_indicator(&grid2, false)
+    if grid2.specs.len != shown_before - 1usize { os.exit(516) }
+    dg.show_indicator(&grid2, true)
+    if grid2.specs.len != shown_before { os.exit(517) }
+    dg.set_auto_width(&grid2, true, 600.0)
+    var auto_sum: f32 = 0.0
+    var auto_at = 0usize
+    while auto_at < grid2.columns.len {
+        auto_sum += grid2.columns[auto_at].width
+        auto_at += 1usize
+    }
+    if auto_sum < 599.0 || auto_sum > 601.0 { os.exit(518) }
+    dg.set_auto_width(&grid2, false, 0.0)
     os.exit(0)
     ret ok
 }

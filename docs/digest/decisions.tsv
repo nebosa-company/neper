@@ -2153,4 +2153,5 @@ D2389	843	G012: the cell editor's caret follows the tap
 D2390	968	G012: selecting several rows (trace M1)
 D2391	869	G012: header drag in the v3 look (trace D1)
 D2392	968	G012: the button editor as an e.ui control, in-cell editor kinds
-D2393	978	G012: a bare in-cell editor, and the group box as a drop target
+D2393	979	G012: a bare in-cell editor, and the group box as a drop target
+D2394	912	G012: the View menu's grid options

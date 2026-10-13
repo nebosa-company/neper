@@ -85,6 +85,9 @@ type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator, St
 // A titled span over `count` columns from spec `first`.
 type Band = struct { title: str, first: usize, count: usize }
 
+// v3's Show Grid Lines: the lines between cells (vertical), between rows (horizontal), both or none.
+type GridLines = enum u8 { Vertical, Horizontal, Both, None }
+
 type Nav = enum u8 { First, Prev, Next, Last, PrevPage, NextPage }
 
 // One grid column: the table column it shows and how, and which applied group summary it
@@ -134,6 +137,10 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    lines: GridLines,
+    header_off: bool,
+    auto_width: bool,
+    auto_total: f32,
     group_drop_spec: usize,
     group_drop_pending: bool,
     editors: []u8,
@@ -296,6 +303,24 @@ fn relayout(grid: *Grid) {
     }
     // the disclosure of a preview leads the first cell and needs room
     if grid.preview_on && n > 0usize && grid.column_store[0usize].width < 64.0 { grid.column_store[0usize].width = 64.0 }
+    if grid.auto_width && grid.auto_total > 0.0 && n > 0usize {
+        var sum: f32 = 0.0
+        var s = 0usize
+        while s < n {
+            sum += grid.column_store[s].width
+            s += 1usize
+        }
+        if sum > 0.0 {
+            let factor = grid.auto_total / sum
+            s = 0usize
+            while s < n {
+                var scaled = grid.column_store[s].width * factor
+                if scaled < 24.0 { scaled = 24.0 }
+                grid.column_store[s].width = scaled
+                s += 1usize
+            }
+        }
+    }
     grid.specs = grid.display[0usize..n]
     grid.columns = grid.column_store[0usize..n]
     grid.editing = false
@@ -519,6 +544,31 @@ fn spin_arrow(a: *mem.Arena, grid: *Grid, key: widget.Key, shape: gl.Shape, labe
     look.min_height = 12.0
     let (node, node_error) = control.pressable_states(a, key, grid.theme, 3u8, label, look, true, false, 0u32, 0u32, 0u64, action, mark)
     ret (node, node_error)
+}
+
+// ---- view options (v3's View menu: grid lines, header, indicator, columns auto width) ---------
+
+fn set_grid_lines(grid: *Grid, lines: GridLines) { grid.lines = lines }
+
+// Show Header: off, the grid has no header row (nor its sort, drag and resize).
+fn show_header(grid: *Grid, on: bool) { grid.header_off = !on }
+
+// Show Indicator: the row-indicator columns are shown or not.
+fn show_indicator(grid: *Grid, on: bool) {
+    var at = 0usize
+    while at < grid.all.len {
+        if grid.all[at].kind == CellKind.Indicator { grid.hidden[at] = !on }
+        at += 1usize
+    }
+    relayout(grid)
+}
+
+// Columns Auto Width: the columns share `total` between them in proportion to their widths, so the
+// grid never needs a horizontal scroll bar; off, they keep their own widths.
+fn set_auto_width(grid: *Grid, on: bool, total: f32) {
+    grid.auto_width = on
+    grid.auto_total = total
+    relayout(grid)
 }
 
 fn clear_selection(grid: *Grid) {
@@ -2420,7 +2470,7 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     var table_options: collection.TableOptions = zero
     if grid.look.on {
         let lk = grid.look
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row) }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     if grid.preview_on {
         table_options.expandable = true
