@@ -31,7 +31,7 @@ use appkit
 use text
 
 const NONE: usize = 99usize
-const MAX_CARDS: usize = 12usize
+const MAX_CARDS: usize = 16usize
 const MAX_HITS: usize = 96usize
 const VALUE_WIDTH: usize = 36usize
 const STACK_SCREEN: usize = 0usize
@@ -181,11 +181,11 @@ type Card = struct {
 type Hit = struct { id: usize, x: f32, y: f32, w: f32, h: f32 }
 
 type State = struct {
-    cards: [12]Card,
+    cards: [16]Card,
     screen: usize,
     filter: usize,
     open: usize,
-    visible: [12]usize,
+    visible: [16]usize,
     visible_total: usize,
     // The add form: the kind chosen (an index into the six chips), the document type, the five fields
     // and the one in focus.
@@ -208,6 +208,9 @@ type State = struct {
     keyed: bool,
     key: [32]u8,
     editing: usize,
+    // (D4808) The text the Camera's Scan mode read from a QR code (in /scancode), offered as a card.
+    code: [36]u8,
+    code_len: usize,
     hits: [96]Hit,
     hit_total: usize,
 }
@@ -393,7 +396,7 @@ fn save_all(a: *mem.Arena, s: *State) -> usize {
 // Open the sealed records into the card slots; how many came back. The cards in the slots now are replaced only when
 // at least one record opened.
 fn load_all(a: *mem.Arena, s: *State) -> usize {
-    var found: [12]Card = zero
+    var found: [16]Card = zero
     var loaded = 0usize
     var i = 0usize
     while i < MAX_CARDS {
@@ -845,6 +848,12 @@ fn draw_stack(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     try card(a, builder, 274.0 - 1.5, 848.0 - 9.0, 3.0, 18.0, 1.5, ink())
     try put(a, builder, faces.jost, 17.0, "Add card", 298.0, 837.0, ink())
     hit(s, 150usize, 252.0, 820.0, 144.0, 56.0)
+    // (D4808) A code the Camera scanned waits to be added as a card.
+    if s.code_len > 0usize {
+        try card(a, builder, 16.0, 820.0, 224.0, 56.0, 28.0, soft())
+        try put(a, builder, faces.jost, 16.0, "Add scanned code", 38.0, 837.0, ink())
+        hit(s, 90usize, 16.0, 820.0, 224.0, 56.0)
+    }
     ret ok
 }
 
@@ -1398,6 +1407,23 @@ fn edited_card(a: *mem.Arena, s: *State) -> Card {
 // What a tap on button `id` did: true when the screen changed.
 fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == STACK_SCREEN {
+        if id == 90usize && s.code_len > 0usize {
+            // (D4808) The scanned code becomes a loyalty card whose barcode says it; the file is spent.
+            let seed = 2000usize + s.code_len * 13usize
+            let made = add_card(s, plain_card("Scanned code", "From the Camera", LOYALTY, 5usize, seed, "Scanned", "-", "0", text_of(a, s.code[0usize..], s.code_len)))
+            if made == NONE {
+                say("wallet scanned code not added: full\n")
+            } else {
+                say("wallet scanned code added ")
+                say_text(text_of(a, s.code[0usize..], s.code_len))
+                say("\n")
+                let spent = vaultfs.remove("/scancode")
+                s.code_len = 0usize
+                let kept = save_all(a, s)
+                s.filter = 0usize
+            }
+            ret true
+        }
         if id >= 200usize && id < 206usize {
             s.filter = id - 200usize
             say("wallet filter ")
@@ -1721,6 +1747,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let c10 = add_card(&s, doc_card(1usize, "Sam Rivera", "V-884201", "Consulate General", "Dec 2027", 9usize, 20usize))
     let c11 = add_card(&s, doc_card(2usize, "Sam Rivera", "D 5530 1207", "Motor Vehicles", "Jun 2029", 2usize, 21usize))
     let c12 = add_card(&s, doc_card(11usize, "Sam Rivera", "KX 21 NTR", "Motor Vehicles", "Aug 2027", 6usize, 22usize))
+    // (D4808) A code the Camera's Scan mode read, waiting in /scancode.
+    var code_bytes: [36]u8 = zero
+    let (code_count, has_code) = vaultfs.read("/scancode", mem.address_of(&code_bytes[0usize]), 36usize)
+    if has_code && code_count > 0usize {
+        s.code = code_bytes
+        s.code_len = code_count
+        say("wallet scanned code waiting ")
+        say_text(text_of(a, s.code[0usize..], s.code_len))
+        say("\n")
+    }
     // (C154) A Secure vault on the disk: its master password opens the cards before they are shown.
     let (vault_meta, has_vault) = vaultfs.probe("/vmeta")
     if has_vault {

@@ -164,6 +164,8 @@ type State = struct {
     recent: bool,
     // A file handed over: the program to start for it (0 when none); main leaves with 20000 + it.
     handover: usize,
+    // (D4807) The share sheet of the selected file is open: Document, Photos or Cancel.
+    share_open: bool,
     // Select mode: items are ticked by a tap; Delete and Move then act on all of them.
     select_mode: bool,
     move_many: bool,
@@ -901,6 +903,14 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
         row += 1usize
     }
     if s.note == 1usize { try centred(a, builder, faces.grotesk, 13.0, opener_text(node.kind), 206.0, 654.0, amber_dark()) }
+    if s.share_open && s.real && !node.is_dir {
+        // (D4807) Share: the file goes to the app chosen, the way Open sends it to the app for its type.
+        try centred(a, builder, faces.grotesk, 13.0, "Share with", 206.0, 654.0, amber_dark())
+        try pill(a, builder, s, faces, 619usize, 16.0, 690.0, 180.0, 48.0, "Document", amber(), 16.0)
+        try pill(a, builder, s, faces, 620usize, 216.0, 690.0, 180.0, 48.0, "Photos", amber(), 16.0)
+        try pill(a, builder, s, faces, 621usize, 16.0, 754.0, 380.0, 48.0, "Cancel", soft(), 16.0)
+        ret ok
+    }
     try pill(a, builder, s, faces, 610usize, 16.0, 690.0, 118.0, 48.0, "Open", amber(), 16.0)
     try pill(a, builder, s, faces, 611usize, 147.0, 690.0, 118.0, 48.0, "Rename", soft(), 16.0)
     try pill(a, builder, s, faces, 612usize, 278.0, 690.0, 118.0, 48.0, "Delete", soft(), 16.0)
@@ -908,6 +918,7 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
         try pill(a, builder, s, faces, 613usize, 16.0, 754.0, 118.0, 48.0, "Close", soft(), 16.0)
         try pill(a, builder, s, faces, 616usize, 147.0, 754.0, 118.0, 48.0, "Copy", soft(), 16.0)
         try pill(a, builder, s, faces, 617usize, 278.0, 754.0, 118.0, 48.0, "Move", soft(), 16.0)
+        try pill(a, builder, s, faces, 618usize, 16.0, 818.0, 380.0, 48.0, "Share", soft(), 16.0)
     } else if s.real {
         try pill(a, builder, s, faces, 613usize, 16.0, 754.0, 180.0, 48.0, "Close", soft(), 16.0)
         try pill(a, builder, s, faces, 617usize, 216.0, 754.0, 180.0, 48.0, "Move", soft(), 16.0)
@@ -1431,9 +1442,39 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             s.note = 0usize
             ret true
         }
+        if id == 618usize && s.real && !s.nodes[s.selected].is_dir {
+            s.share_open = true
+            say("files share sheet\n")
+            ret true
+        }
+        if (id == 619usize || id == 620usize) && s.share_open && s.real && !s.nodes[s.selected].is_dir {
+            // (D4807) Hand the file over to the app chosen: its path in /handover, the shell starts the program.
+            let shared_path = path_of(a, s, s.selected)
+            var buffer: [64]u8 = zero
+            var n = 0usize
+            while n < shared_path.len && n < 63usize {
+                buffer[n] = shared_path[n]
+                n += 1usize
+            }
+            var program = 40usize
+            if id == 620usize { program = 22usize }
+            if vaultfs.write("/handover", mem.address_of(&buffer[0usize]), n) {
+                s.handover = program
+                say("files share ")
+                say_text(shared_path)
+                if program == 22usize { say(" photos\n") } else { say(" document\n") }
+            }
+            s.share_open = false
+            ret true
+        }
+        if id == 621usize && s.share_open {
+            s.share_open = false
+            ret true
+        }
         if id == 613usize || id == 614usize {
             s.selected = NONE
             s.note = 0usize
+            s.share_open = false
             ret true
         }
         ret false
@@ -1450,6 +1491,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         } else {
             s.selected = index
             s.note = 0usize
+            s.share_open = false
             say("files file ")
             say_text(text_of_static(s, index))
             say("\n")
@@ -1459,6 +1501,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if id >= 300usize && id < 300usize + MAX_NODES {
         s.selected = id - 300usize
         s.note = 0usize
+        s.share_open = false
         ret true
     }
     if id == 500usize {
