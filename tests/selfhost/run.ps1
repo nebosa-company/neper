@@ -2494,6 +2494,12 @@ $uiDatagridWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiDatagridWritten -ne 'executable written') { throw 'ui_datagrid emission failed' }
 & $uiDatagridPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_datagrid check failed: exit $LASTEXITCODE" }
+# `e.ui.gridrules`: conditional formatting rules over a table: cell-is, text, blank, above / below, top / bottom with ties, duplicate / unique, scale, bar, icons, priority, whole row, refresh, refusals, 150,000 rows against a count of the fixture's own (D3917).
+$uiGridrulesPath = Join-Path $testBuild 'ui-gridrules-selfhost.exe'
+$uiGridrulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_gridrules\src\main.e') $repo 'x64' 'windows' $uiGridrulesPath --arena 256m
+if ($LASTEXITCODE -ne 0 -or $uiGridrulesWritten -ne 'executable written') { throw 'ui_gridrules emission failed' }
+& $uiGridrulesPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_gridrules check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath

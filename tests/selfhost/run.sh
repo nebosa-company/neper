@@ -2208,6 +2208,11 @@ chmod +x "$test_build/data-tablerow-selfhost"
 ui_datagrid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_datagrid/src/main.e" "$repo" x64 linux "$test_build/ui-datagrid-selfhost" --arena 768m)
 [ "$ui_datagrid_written" = 'executable written' ]
 chmod +x "$test_build/ui-datagrid-selfhost"
+# `e.ui.gridrules`: conditional formatting rules over a table: cell-is, text, blank, above / below, top / bottom with ties, duplicate / unique, scale, bar, icons, priority, whole row, refresh, refusals, 150,000 rows against a count of the fixture's own (D3917).
+ui_gridrules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_gridrules/src/main.e" "$repo" x64 linux "$test_build/ui-gridrules-selfhost" --arena 256m)
+[ "$ui_gridrules_written" = 'executable written' ]
+chmod +x "$test_build/ui-gridrules-selfhost"
+"$test_build/ui-gridrules-selfhost"
 "$test_build/ui-datagrid-selfhost"
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
