@@ -1677,7 +1677,8 @@ fn header_gesture(ctx: *void, g: widget.Gesture) -> err {
         ret widget.begin_drag(h.runtime, header_payload_tag() + u64(h.column) + 1u64)
     case .Drop as d:
         // A hidden column dragged out of a field chooser: `from` is CHOOSER_FROM + its index.
-        if d.payload > chooser_payload_tag() && d.payload <= chooser_payload_tag() + 4096u64 {
+        if d.payload > chooser_payload_tag() && d.payload < chooser_payload_tag() + 1073741824u64 {
+            // the owner (its grid's key) and the column ride in the payload
             ret widget.fire_change[Reorder](h.reorder, Reorder { from: CHOOSER_FROM + usize(d.payload - chooser_payload_tag() - 1u64), to: h.column })
         }
         // (D1345) Only a header's drag reorders: its payload carries the tag.
@@ -1708,32 +1709,16 @@ fn chooser_payload_tag() -> u64 {
 fn chooser_dragged(t: *const control.Theme) -> (usize, bool) {
     if mem.address_of(t.runtime) == 0usize { ret (0usize, false) }
     let (payload, has_payload) = widget.dragging(t.runtime)
-    if !has_payload || payload <= chooser_payload_tag() || payload > chooser_payload_tag() + 4096u64 { ret (0usize, false) }
+    if !has_payload || payload <= chooser_payload_tag() || payload >= chooser_payload_tag() + 1073741824u64 { ret (0usize, false) }
     ret (usize(payload - chooser_payload_tag() - 1u64), true)
-}
-
-// The column whose header (keyed `key + 1 + 2 * index`) the pointer is over, for any drag.
-fn column_under_pointer(t: *const control.Theme, key: widget.Key, count: usize) -> (usize, bool) {
-    if mem.address_of(t.runtime) == 0usize { ret (0usize, false) }
-    let (s, state_error) = widget.state_of(t.runtime)
-    if state_error != ok { ret (0usize, false) }
-    let at = widget.pointer_position(t.runtime)
-    var look = 0usize
-    while look < count {
-        let (look_id, look_count) = widget.find_by_key(s, key + 1u64 + 2u64 * u64(look))
-        if look_count == 1usize {
-            let (look_box, has_look_box) = widget.bounds_of(t.runtime, look_id)
-            if has_look_box && at.x >= look_box.x && at.x < look_box.x + look_box.width { ret (look, true) }
-        }
-        look += 1usize
-    }
-    ret (0usize, false)
 }
 
 // (D1345) The column whose header is being dragged, if one is.
 fn lifted_column(t: *const control.Theme) -> (usize, bool) {
     if mem.address_of(t.runtime) == 0usize { ret (0usize, false) }
     let (payload, has_payload) = widget.dragging(t.runtime)
+    // a hidden column dragged out of a chooser lands like a header lifted from past the last column
+    if has_payload && payload > chooser_payload_tag() && payload < chooser_payload_tag() + 1073741824u64 { ret (4000usize, true) }
     if !has_payload || payload <= header_payload_tag() || payload > header_payload_tag() + 4096u64 { ret (0usize, false) }
     ret (usize(payload - header_payload_tag() - 1u64), true)
 }
@@ -1743,19 +1728,22 @@ fn lifted_column(t: *const control.Theme) -> (usize, bool) {
 fn landing_column(t: *const control.Theme, key: widget.Key, count: usize) -> (usize, bool) {
     let (lifted, has_lifted) = lifted_column(t)
     if !has_lifted { ret (0usize, false) }
-    let (s, state_error) = widget.state_of(t.runtime)
-    if state_error != ok { ret (0usize, false) }
+    if mem.address_of(t.runtime) == 0usize { ret (0usize, false) }
     let at = widget.pointer_position(t.runtime)
-    var look = 0usize
-    while look < count {
-        let (look_id, look_count) = widget.find_by_key(s, key + 1u64 + 2u64 * u64(look))
-        if look_count == 1usize && look != lifted {
-            let (look_box, has_look_box) = widget.bounds_of(t.runtime, look_id)
-            if has_look_box && at.x >= look_box.x && at.x < look_box.x + look_box.width { ret (look, true) }
-        }
-        look += 1usize
-    }
-    ret (0usize, false)
+    let (cell_row, column, rect, has_cell) = widget.cell_rect_at(t.runtime, at)
+    if !has_cell || cell_row != 0u32 || column < 1u32 || usize(column) > count { ret (0usize, false) }
+    let index = usize(column) - 1usize
+    if index == lifted { ret (0usize, false) }
+    ret (index, true)
+}
+
+// The header cell under the pointer: its column and bounds.
+fn header_under_pointer(t: *const control.Theme, count: usize) -> (usize, geometry.Rect, bool) {
+    if mem.address_of(t.runtime) == 0usize { ret (0usize, zero, false) }
+    let at = widget.pointer_position(t.runtime)
+    let (cell_row, column, rect, has_cell) = widget.cell_rect_at(t.runtime, at)
+    if !has_cell || cell_row != 0u32 || column < 1u32 || usize(column) > count { ret (0usize, zero, false) }
+    ret (usize(column) - 1usize, rect, true)
 }
 
 fn header_sort(ctx: *void) -> err {
@@ -1907,7 +1895,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         n += 1usize
     }
     // (D1357) Which header is dragged and where it would land.
-    let (lifted_at, has_lifted_column) = lifted_column(t)
+    let (lifted_at, lifted_present) = lifted_column(t)
+    // another grid's chooser drag is not this grid's: only the owner draws its arrows and name
+    let from_chooser = lifted_present && lifted_at == 4000usize && look.drag_label.len != 0usize
+    var has_lifted_column = lifted_present
+    if lifted_present && lifted_at == 4000usize && !from_chooser { has_lifted_column = false }
     let (landing, has_landing) = landing_column(t, key, columns.len)
     var landing_grip: widget.Key = 0u64
     var i = 0usize
@@ -2162,9 +2154,24 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     var part_count = 2usize
     // (D1478) The ghost: the lifted header's `surface-container-highest` at
     // elevation 4, its width last frame, its title, moved by the pointer's travel.
-    if has_lifted_column && lifted_at < columns.len && mem.address_of(t.runtime) != 0usize {
-        let lifted_key = key + 1u64 + 2u64 * u64(lifted_at)
-        let (lifted_box, has_lifted_box) = control.keyed_bounds(t.runtime, lifted_key)
+    if has_lifted_column && (lifted_at < columns.len || from_chooser) && mem.address_of(t.runtime) != 0usize {
+        var lifted_key = key + 1u64 + 2u64 * u64(lifted_at)
+        var lifted_title = ""
+        if lifted_at < columns.len { lifted_title = columns[lifted_at].title }
+        var lifted_box: geometry.Rect = zero
+        var has_lifted_box = false
+        if from_chooser {
+            // the hidden column's name follows the pointer, over the header it would land on
+            lifted_title = look.drag_label
+            let (landing_column_at, landing_box, has_landing_box) = header_under_pointer(t, columns.len)
+            lifted_box = landing_box
+            has_lifted_box = has_landing && has_landing_box
+            let _ = landing_column_at
+        } else {
+            let (own_box, has_own_box) = control.keyed_bounds(t.runtime, lifted_key)
+            lifted_box = own_box
+            has_lifted_box = has_own_box
+        }
         if has_lifted_box {
             var ghost_look = control.sized_style(lifted_box.width, lifted_box.height)
             ghost_look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
@@ -2177,26 +2184,34 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             var ghost_words = control.text_options()
             ghost_words.role = .TitleSmall
             ghost_words.wrap = .None
-            let (ghost_title, ghost_title_error) = control.colored_text(a, 0u64, columns[lifted_at].title, t, ghost_words, style.color(t.tokens, .OnSurface))
+            let (ghost_title, ghost_title_error) = control.colored_text(a, 0u64, lifted_title, t, ghost_words, style.color(t.tokens, .OnSurface))
             if ghost_title_error != ok { ret (zero, ghost_title_error) }
             let (ghost, ghost_error) = mem.alloc[widget.Node](a, 2usize)
             if ghost_error != ok { ret (zero, TooLarge) }
             ghost[0usize] = ghost_title
             ghost[1usize] = widget.aligned(0u64, .Center, .Center, ghost_look, ghost[0usize..1usize])
-            let travel = widget.pointer_position(t.runtime).x - widget.pointer_origin(t.runtime).x
-            parts[2usize] = widget.overlay(key + 1048600u64, widget.Overlay { anchor: lifted_key, placement: .Below, offset: geometry.Point { x: travel, y: 0.0 - lifted_box.height }, modal: false, dismiss: zero }, style.defaults(), ghost[1usize..2usize])
+            var travel = widget.pointer_position(t.runtime).x - widget.pointer_origin(t.runtime).x
+            if from_chooser { travel = widget.pointer_position(t.runtime).x - lifted_box.x }
+            if from_chooser {
+                parts[2usize] = widget.overlay(key + 1048600u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: widget.pointer_position(t.runtime).x + 10.0, y: lifted_box.y }, modal: false, dismiss: zero }, style.defaults(), ghost[1usize..2usize])
+            } else {
+    parts[2usize] = widget.overlay(key + 1048600u64, widget.Overlay { anchor: lifted_key, placement: .Below, offset: geometry.Point { x: travel, y: 0.0 - lifted_box.height }, modal: false, dismiss: zero }, style.defaults(), ghost[1usize..2usize])
+            }
             part_count = 3usize
             // The landing line stands over the ghost; (D1484) landing before the
             // first column, where no handle stands, it stands at that header's
             // start.
             var line_anchor = landing_grip
             var line_x: f32 = 3.0
-            if line_anchor == 0u64 && has_landing && landing == 0usize && lifted_at > 0usize {
+            if line_anchor == 0u64 && has_landing && landing == 0usize && (lifted_at > 0usize || from_chooser) {
                 line_anchor = key + 1u64
                 line_x = 0.0
             }
-            if line_anchor != 0u64 && look.on {
-                // v3: a green arrow above the header row and one below it, at the landing edge
+            let (arrow_column, arrow_rect, has_arrow_rect) = header_under_pointer(t, columns.len)
+            if has_landing && has_arrow_rect && look.on {
+                // v3: a green arrow above the header row and one below it, at the edge it lands on
+                var edge_x = arrow_rect.x - 4.0
+                if !from_chooser && landing > lifted_at { edge_x = arrow_rect.x + arrow_rect.width - 4.0 }
                 let (down_arrow, down_error) = gl.mark(a, .ArrowDown, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
                 if down_error != ok { ret (zero, down_error) }
                 let (up_arrow, up_error) = gl.mark(a, .ArrowUp, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
@@ -2205,9 +2220,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 if arrow_nodes_error != ok { ret (zero, TooLarge) }
                 arrow_nodes[0usize] = down_arrow
                 arrow_nodes[1usize] = up_arrow
-                parts[3usize] = widget.overlay(key + 1048601u64, widget.Overlay { anchor: line_anchor, placement: .Below, offset: geometry.Point { x: line_x - 4.0, y: 0.0 - inner - 11.0 }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[0usize..1usize])
-                parts[4usize] = widget.overlay(key + 1048602u64, widget.Overlay { anchor: line_anchor, placement: .Below, offset: geometry.Point { x: line_x - 4.0, y: 0.0 }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[1usize..2usize])
+                parts[3usize] = widget.overlay(key + 1048601u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: edge_x, y: arrow_rect.y - 11.0 }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[0usize..1usize])
+                parts[4usize] = widget.overlay(key + 1048602u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: edge_x, y: arrow_rect.y + arrow_rect.height }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[1usize..2usize])
                 part_count = 5usize
+                let _ = arrow_column
             } else if line_anchor != 0u64 {
                 var over_mark = control.sized_style(2.0, inner)
                 over_mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
@@ -2219,51 +2235,6 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             }
         }
     }
-    // A hidden column dragged out of a field chooser over the header: its name follows the pointer
-    // and the v3 arrows mark the edge it would take (before the column under the pointer).
-    let (chosen_spec, has_chosen) = chooser_dragged(t)
-    if has_chosen && look.on && !has_lifted_column && columns.len > 0usize {
-        let (under, has_under) = column_under_pointer(t, key, columns.len)
-        if has_under {
-            let cell_key = key + 1u64 + 2u64 * u64(under)
-            let (cell_box, has_cell_box) = control.keyed_bounds(t.runtime, cell_key)
-            if has_cell_box {
-                var edge_key = cell_key
-                var edge_x: f32 = 0.0 - 4.0
-                if under > 0usize {
-                    edge_key = key + 2u64 + 2u64 * u64(under - 1usize)
-                    edge_x = 3.0 - 4.0
-                }
-                if look.drag_label.len != 0usize {
-                    var ghost_words = control.text_options()
-                    ghost_words.wrap = .None
-                    ghost_words.size = look.text_size
-                    let (ghost_title, ghost_error) = control.colored_text(a, 0u64, look.drag_label, t, ghost_words, control.with_alpha(style.color(t.tokens, .OnSurface), 0.55))
-                    if ghost_error != ok { ret (zero, ghost_error) }
-                    let (ghost_nodes, ghost_nodes_error) = mem.alloc[widget.Node](a, 1usize)
-                    if ghost_nodes_error != ok { ret (zero, TooLarge) }
-                    ghost_nodes[0usize] = ghost_title
-                    let travel = widget.pointer_position(t.runtime).x - cell_box.x
-                    parts[2usize] = widget.overlay(key + 1048600u64, widget.Overlay { anchor: cell_key, placement: .Below, offset: geometry.Point { x: travel, y: 0.0 - cell_box.height }, modal: false, dismiss: zero }, style.defaults(), ghost_nodes[0usize..1usize])
-                    part_count = 3usize
-                } else {
-                    parts[2usize] = widget.box(0u64, style.defaults(), zero)
-                }
-                let (down_arrow, down_error) = gl.mark(a, .ArrowDown, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
-                if down_error != ok { ret (zero, down_error) }
-                let (up_arrow, up_error) = gl.mark(a, .ArrowUp, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
-                if up_error != ok { ret (zero, up_error) }
-                let (arrow_nodes, arrow_nodes_error) = mem.alloc[widget.Node](a, 2usize)
-                if arrow_nodes_error != ok { ret (zero, TooLarge) }
-                arrow_nodes[0usize] = down_arrow
-                arrow_nodes[1usize] = up_arrow
-                parts[3usize] = widget.overlay(key + 1048601u64, widget.Overlay { anchor: edge_key, placement: .Below, offset: geometry.Point { x: edge_x, y: 0.0 - inner - 11.0 }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[0usize..1usize])
-                parts[4usize] = widget.overlay(key + 1048602u64, widget.Overlay { anchor: edge_key, placement: .Below, offset: geometry.Point { x: edge_x, y: 0.0 }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[1usize..2usize])
-                part_count = 5usize
-            }
-        }
-    }
-    let _ = chosen_spec
     let (row_node, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
     row_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
