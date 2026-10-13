@@ -424,8 +424,8 @@
    "module": "e.fmt.html",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 64,
-   "delivered": 64,
+   "catalogue": 76,
+   "delivered": 76,
    "pending": [],
    "fixtures": [
     "fmt_gaps_a",
@@ -650,7 +650,8 @@
     "fmt_png",
     "fmt_png_adaptive",
     "fmt_png_quant",
-    "gfx_chart_png"
+    "gfx_chart_png",
+    "gfx_vision"
    ]
   },
   {
@@ -3613,6 +3614,7 @@
     "ui_collections5_v2",
     "ui_collections6_v2",
     "ui_collections_v2",
+    "ui_datagrid",
     "ui_interaction",
     "ui_navigation4_v2",
     "ui_paged",
@@ -3638,8 +3640,8 @@
    "module": "e.ui.gridlook",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 8,
-   "delivered": 8,
+   "catalogue": 11,
+   "delivered": 11,
    "pending": [],
    "fixtures": [
     "ui_datagrid"
