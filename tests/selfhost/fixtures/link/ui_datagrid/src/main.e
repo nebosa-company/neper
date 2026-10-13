@@ -29,6 +29,7 @@ use e.ui.input
 use e.gfx.paint
 use e.ui.datagrid as dg
 use e.ui.gridrules as gr
+use e.ui.gridlook as gl
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -1071,6 +1072,65 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (shot_n, shot_n_error) = testing.snapshot(&harness, a)
     if shot_n_error != ok { os.exit(354) }
     if is_color(shot_n, px(hi_bounds.x + 330.0, hi_bounds.y + hi_bounds.height * 0.5), rule_fill) { os.exit(355) }
+    // 15. the measured v3 look: row pitch 19, zebra #FFFFFF / #EFEFEF, the selected row #A6D2FF
+    var look_specs: [2]dg.ColumnSpec = zero
+    look_specs[0usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    look_specs[1usize] = dg.ColumnSpec { title: "Cmc", width: 120.0, column: C_CMC, kind: dg.CellKind.Int, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    let (made11, grid11_error) = dg.create(a, &app.tbl, &app.grouping, look_specs[0..], events, 9900u64)
+    if grid11_error != ok { os.exit(360) }
+    var grid11 = made11
+    dg.set_look(&grid11, gl.v3())
+    grid11.offset = 0.0
+    var first_look = ROWS
+    var second_look = ROWS
+    var third_look = ROWS
+    var look_at = 0usize
+    while look_at < 8usize && look_at < grp.visible_len(&app.grouping) {
+        if !grp.visible_is_group(&app.grouping, look_at) {
+            let candidate_row = grp.visible_row(&app.grouping, look_at)
+            if first_look == ROWS {
+                first_look = candidate_row
+            } else if second_look == ROWS {
+                second_look = candidate_row
+            } else if third_look == ROWS {
+                third_look = candidate_row
+            }
+        }
+        look_at += 1usize
+    }
+    if third_look == ROWS { os.exit(361) }
+    grid11.has_selection = true
+    grid11.selected_row = second_look
+    mem.reset(&f, 0usize)
+    let (root28, build28_error) = dg.build(&f, &grid11, &theme, 400.0)
+    if build28_error != ok { os.exit(362) }
+    if settle(&harness, root28, 80000000000i64) != ok { os.exit(363) }
+    let (shot_l, shot_l_error) = testing.snapshot(&harness, a)
+    if shot_l_error != ok { os.exit(364) }
+    let (b0, f0) = bounds(&harness, &runtime, dg.row_key(&grid11, first_look))
+    let (b1, f1) = bounds(&harness, &runtime, dg.row_key(&grid11, second_look))
+    let (b2, f2) = bounds(&harness, &runtime, dg.row_key(&grid11, third_look))
+    if !f0 || !f1 || !f2 { os.exit(365) }
+    // the pitch of a row (its height with no line between rows)
+    if b0.height < 18.9 || b0.height > 19.1 || b1.y - b0.y < 18.9 || b1.y - b0.y > 19.1 { os.exit(366) }
+    // inside the Cmc cell, clear of its digit: even row, selected row, odd row
+    if !is_color(shot_l, px(b0.x + 300.0, b0.y + 9.0), gl.rgb(0xFFFFFFu32)) { os.exit(367) }
+    if !is_color(shot_l, px(b1.x + 300.0, b1.y + 9.0), gl.rgb(0xA6D2FFu32)) { os.exit(368) }
+    if !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xFFFFFFu32)) && !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xEFEFEFu32)) { os.exit(369) }
+    // two neighbouring unselected rows differ (the zebra)
+    dg.clear_selection(&grid11)
+    mem.reset(&f, 0usize)
+    let (root29, build29_error) = dg.build(&f, &grid11, &theme, 400.0)
+    if build29_error != ok { os.exit(370) }
+    if settle(&harness, root29, 82000000000i64) != ok { os.exit(371) }
+    let (shot_z, shot_z_error) = testing.snapshot(&harness, a)
+    if shot_z_error != ok { os.exit(372) }
+    let (z0, zf0) = bounds(&harness, &runtime, dg.row_key(&grid11, first_look))
+    let (z1, zf1) = bounds(&harness, &runtime, dg.row_key(&grid11, second_look))
+    if !zf0 || !zf1 { os.exit(373) }
+    let upper = is_color(shot_z, px(z0.x + 300.0, z0.y + 9.0), gl.rgb(0xFFFFFFu32)) || is_color(shot_z, px(z0.x + 300.0, z0.y + 9.0), gl.rgb(0xEFEFEFu32))
+    let lower_same = is_color(shot_z, px(z1.x + 300.0, z1.y + 9.0), gl.rgb(0xFFFFFFu32)) == is_color(shot_z, px(z0.x + 300.0, z0.y + 9.0), gl.rgb(0xFFFFFFu32))
+    if !upper || lower_same { os.exit(374) }
     os.exit(0)
     ret ok
 }

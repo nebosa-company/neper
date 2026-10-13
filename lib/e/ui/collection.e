@@ -1831,13 +1831,13 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // (D1484) Landing before the first column, the line stands at its start.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     var plain: []const bool = zero
-    let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain, plain)
+    let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain, plain, zero_look())
     ret (made, made_error)
 }
 
 // (D1340) A filtered column's header shows the 18 `filter` mark 4 after its title
 // (and arrow) and says "filtered" as its hint.
-fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key, numeric: []const bool, filtered: []const bool) -> (widget.Node, err) {
+fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key, numeric: []const bool, filtered: []const bool, look: TableLook) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
     let (drags, drags_error) = mem.alloc[HeaderDrag](a, columns.len)
@@ -1882,6 +1882,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         caption.max_lines = 1u32
         var ink = muted
         if sorted { ink = strong }
+        if look.on {
+            caption.size = look.text_size
+            caption.weight = 400u32
+            ink = strong
+        }
         let (title_node, title_node_error) = control.colored_text(a, 0u64, columns[i].title, t, caption, ink)
         if title_node_error != ok { ret (zero, title_node_error) }
         let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
@@ -1917,6 +1922,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             b += 1usize
         }
         var line_main: ui_layout.MainAlign = .Start
+        if look.on && !numeric_column(numeric, i) {
+            // the sort triangle stands at the cell's right edge
+            line_main = .SpaceBetween
+            line_style.width = style.Length { Percent: 100.0 }
+        }
         if numeric_column(numeric, i) {
             // (D1328) At the end, the arrow before the title.
             line_main = .End
@@ -1931,6 +1941,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         // A tap sorts; a drag begins a reorder; a drop on it ends one.
         var head_style = control.sized_style(control.max_zero(columns[i].width - grip), inner)
         head_style.background = paint.Brush { Solid: control.with_alpha(strong, control.state_opacity(t, state)) }
+        if look.on {
+            var head_fill = look.header
+            if state.hovered { head_fill = look.header_hover }
+            head_style.background = paint.Brush { Solid: head_fill }
+        }
         // (D1345) The dragged header lifts: `surface-container-highest` at elevation 4.
         let (lifted, has_lifted) = lifted_column(t)
         if has_lifted && lifted == i {
@@ -2018,6 +2033,12 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         var mark = control.sized_style(1.0, control.max_zero(inner - 2.0 * inset))
         mark.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
         mark.margin = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: inset }, right: flat, bottom: flat }
+        if look.on {
+            // a full-height 1 px column line in the look's colour
+            mark = control.sized_style(1.0, inner)
+            mark.background = paint.Brush { Solid: look.line }
+            mark.margin = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: flat, right: flat, bottom: flat }
+        }
         if active {
             mark = control.sized_style(3.0, inner)
             mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
@@ -2068,12 +2089,14 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     var band = style.defaults()
     band.height = style.Length { Px: inner }
     band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+    if look.on { band.background = paint.Brush { Solid: look.header } }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, band, cells[0usize..n])
     var rule = style.defaults()
     rule.height = style.Length { Px: t.tokens.sizes.divider }
     rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+    if look.on { rule.background = paint.Brush { Solid: look.header_line } }
     parts[1usize] = widget.box(0u64, rule, zero)
     var part_count = 2usize
     // (D1478) The ghost: the lifted header's `surface-container-highest` at
@@ -2172,7 +2195,7 @@ fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, ce
 // colours when the row is selected.
 // (D1246) `has_check` puts `check` (a selection cell) first.
 fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool) -> (widget.Node, err) {
-    let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, count, extent, selected, pick, double, has_double, role, pad, grid, owned, check, has_check, 0u32)
+    let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, count, extent, selected, pick, double, has_double, role, pad, grid, owned, check, has_check, 0u32, zero_look())
     ret (made, made_error)
 }
 
@@ -2184,7 +2207,7 @@ const ROW_LOADING: u32 = 2u32
 // (D1500, docs/ux/components/TableRow, disabled) A `disabled` row: its content
 // (and its selection cell) at 38%, under no state layer, taking no pick, still
 // focusable so its words can be read, and Disabled in the tree.
-fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool, conditions: u32) -> (widget.Node, err) {
+fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool, conditions: u32, look: TableLook) -> (widget.Node, err) {
     let disabled = (conditions & ROW_DISABLED) != 0u32
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
@@ -2220,7 +2243,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = cells[c]
         var width = columns[c].width
-        if grid { width -= t.tokens.sizes.divider }
+        if grid || look.on { width -= t.tokens.sizes.divider }
         var cell_style = control.sized_style(control.max_zero(width), extent)
         cell_style.overflow = .Clip
         cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
@@ -2234,9 +2257,10 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         cell_sem.column = u32(c + 1usize)
         boxed[n] = widget.semantics(0u64, cell_sem, style.defaults(), framed[0usize..1usize])
         n += 1usize
-        if grid {
+        if grid || look.on {
             var line = control.sized_style(t.tokens.sizes.divider, extent)
             line.background = paint.Brush { Solid: rule }
+            if look.on { line.background = paint.Brush { Solid: look.line } }
             boxed[n] = widget.box(0u64, line, zero)
             n += 1usize
         }
@@ -2253,9 +2277,17 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     var fill = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
     if selected { fill = style.layer(style.color(t.tokens, .SecondaryContainer), style.color(t.tokens, .OnSecondaryContainer), control.state_opacity(t, state)) }
     if disabled && !selected { fill = control.with_alpha(style.color(t.tokens, .OnSurface), 0.0) }
+    if look.on {
+        // the measured zebra and selection, no state layer
+        fill = look.even
+        if index % 2usize == 1usize { fill = look.odd }
+        if mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8 { fill = look.group }
+        if selected { fill = look.selected }
+    }
     var row_style = style.defaults()
     row_style.height = style.Length { Px: extent }
     row_style.background = paint.Brush { Solid: fill }
+    if look.on && selected { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
     if lined_error != ok { ret (zero, TooLarge) }
     var content_look = style.defaults()
@@ -2313,7 +2345,17 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // their selection cell inert, still focusable and Disabled in the tree.
 // (D1501) `pending` marks rows (by key) whose data has not come: each cell is a
 // skeleton line (60% of the cell, 12 tall) and the row is Busy in the tree.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key }
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook }
+
+fn zero_look() -> TableLook {
+    var look: TableLook = zero
+    ret look
+}
+
+// A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
+// padding, the header and row colours, the row zebra, the selected row and the lines are these
+// values and not the theme's; a zero value leaves the theme's look.
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8 }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -3748,8 +3790,12 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let grid = role == 30u8
     var row_extent = extent
     if !(row_extent > 0.0) { row_extent = control.if_else(grid, 32.0, table_row_height(t)) }
-    let head_height = control.if_else(grid, 40.0, header_height(t))
-    let pad = control.if_else(grid, 12.0, cell_padding(t))
+    var head_height = control.if_else(grid, 40.0, header_height(t))
+    var pad = control.if_else(grid, 12.0, cell_padding(t))
+    if selection.look.on {
+        head_height = selection.look.header_height
+        pad = selection.look.pad
+    }
     let lead = control.if_else(grid, 40.0, 0.0)
     var width: f32 = lead
     var c = 0usize
@@ -3760,7 +3806,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let total = source.count(source.ctx)
     var below: widget.Key = 0u64
     if total > 0usize { below = source.key(source.ctx, 0usize) }
-    let (header, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric, selection.filtered)
+    let (header, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric, selection.filtered, selection.look)
     if head_error != ok { ret (zero, head_error) }
     var head = header
     // (D1246) A selectable table's check column and select-all checkbox.
@@ -3872,7 +3918,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             if acted_error != ok { ret (zero, acted_error) }
             if has_acted { cells[columns.len - 1usize] = acted }
         }
-        let lined = index + 1usize < total
+        let lined = index + 1usize < total && !selection.look.on
         let row_tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
         let chosen = is_selected(selected, row_key)
         let row_disabled = is_selected(selection.disabled, row_key)
@@ -3915,7 +3961,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 if hold_error != ok { ret (zero, hold_error) }
             }
         }
-        let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_conditions)
+        let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_conditions, selection.look)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
@@ -3952,7 +3998,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             inner[1usize] = widget.box(row_keys[i] ^ hash.fnv1a64("row-detail"), detail_style, inner[2usize..3usize])
             rows[i] = widget.flex(row_derived(row_keys[i], "row-with-detail"), ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), inner[0usize..2usize])
         }
-        if first + i + 1usize < total {
+        if first + i + 1usize < total && !selection.look.on {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (zero, TooLarge) }
             pair[0usize] = rows[i]
@@ -4059,7 +4105,7 @@ fn pinned_column(a: *mem.Arena, key: widget.Key, t: *const control.Theme, column
     let (sideways, has_sideways) = widget.scroll_offset_of(t.runtime, side_id)
     if !has_sideways || !(sideways > 0.0) { ret (zero, false, ok) }
     let lane = columns[0usize].width
-    let (head, head_error) = header_cells_numeric(a, key ^ hash.fnv1a64("pinned-head"), t, columns[0usize..1usize], sort_column, descending, sort, reorder, resize, head_height, pad, 0.0, below, selection.numeric, selection.filtered)
+    let (head, head_error) = header_cells_numeric(a, key ^ hash.fnv1a64("pinned-head"), t, columns[0usize..1usize], sort_column, descending, sort, reorder, resize, head_height, pad, 0.0, below, selection.numeric, selection.filtered, selection.look)
     if head_error != ok { ret (zero, false, head_error) }
     let ground = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let rule = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }

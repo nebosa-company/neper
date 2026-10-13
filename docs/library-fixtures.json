@@ -3624,8 +3624,19 @@
    "module": "e.ui.datagrid",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 53,
-   "delivered": 53,
+   "catalogue": 54,
+   "delivered": 54,
+   "pending": [],
+   "fixtures": [
+    "ui_datagrid"
+   ]
+  },
+  {
+   "module": "e.ui.gridlook",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 4,
+   "delivered": 4,
    "pending": [],
    "fixtures": [
     "ui_datagrid"
