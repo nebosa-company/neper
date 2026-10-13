@@ -2305,7 +2305,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         cell_sem.column = u32(c + 1usize)
         boxed[n] = widget.semantics(0u64, cell_sem, style.defaults(), framed[0usize..1usize])
         n += 1usize
-        if (grid || look.on) && !group_row {
+        if (grid || look.on) && !group_row && !(look.on && look.vertical_off) {
             var line = control.sized_style(t.tokens.sizes.divider, extent)
             line.background = paint.Brush { Solid: rule }
             if look.on { line.background = paint.Brush { Solid: look.line } }
@@ -2344,6 +2344,17 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     var content_look = style.defaults()
     if disabled { content_look.opacity = t.tokens.states.disabled_content }
     lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, content_look, boxed[0usize..n])
+    if look.on && look.horizontal_on && !(mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8) {
+        // v3's horizontal grid lines: a 1 px line along the bottom of the row
+        let (with_line, with_line_error) = mem.alloc[widget.Node](a, 3usize)
+        if with_line_error != ok { ret (zero, TooLarge) }
+        var rule_style = control.sized_style(4000.0, 1.0)
+        rule_style.background = paint.Brush { Solid: look.line }
+        with_line[0usize] = lined[0usize]
+        with_line[2usize] = widget.box(0u64, rule_style, zero)
+        with_line[1usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), with_line[2usize..3usize])
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..2usize])
+    }
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
     control.focus_look(t)
@@ -2406,7 +2417,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -3860,6 +3871,11 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let (header, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric, selection.filtered, selection.look)
     if head_error != ok { ret (zero, head_error) }
     var head = header
+    if selection.look.on && selection.look.header_hidden {
+        // v3's Show Header off: no header row, the body takes its height
+        head = widget.box(0u64, control.sized_style(1.0, 0.0), zero)
+        head_height = 0.0
+    }
     // (D1246) A selectable table's check column and select-all checkbox.
     let selecting = !owned && widget.change_set[ListSelect](selection.select.invoke) && mem.address_of(t.runtime) != 0usize
     let in_mode = selecting && selected.len > 0usize

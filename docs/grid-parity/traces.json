@@ -140,6 +140,19 @@
    "replayed": "live in the sample (D1-header-drag-v5.png, D1-group-box-drop-v5.png)"
   },
   {
+   "id": "V1",
+   "name": "the View menu's grid options",
+   "steps": [
+    "Show Grid Lines: Vertical (default), Horizontal, Both, None",
+    "Show Header off: no header row, the body takes its height",
+    "Show Indicator off: the row-indicator column goes",
+    "Columns Auto Width: the columns share the grid's width in proportion"
+   ],
+   "v3": "docs/grid.md section 2.5 (View menu); not recorded from mtgstudio.exe: the line colours are the measured #E6E6E6",
+   "neper": "set_grid_lines, show_header, show_indicator, set_auto_width; TableLook header_hidden / vertical_off / horizontal_on",
+   "replayed": "ui_datagrid section 28; live in the sample (V1-view-toggles-v5.png)"
+  },
+  {
    "id": "F1",
    "name": "filter",
    "v3": "the card pool has no filter row: the toolbar box is a Find box (typing does nothing until the binoculars or Enter) and the funnel opens the 'Filter Card Pool' dialog with OK/Apply, so there is no delayed apply to record in this view",
