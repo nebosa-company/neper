@@ -15,6 +15,7 @@ use e.algo.hash as hash
 use e.gpu
 use e.mem
 use e.os
+use e.fs
 use e.str
 use e.time
 use e.data.table as table
@@ -1209,6 +1210,168 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         if !varied { os.exit(406) }
     }
+    // 19. an SVG mark (v3's edition symbol, dark blue-black fill) is drawn at the size of its box
+    let (svg_text, svg_error) = fs.read_file(a, "D:/repos/mtg.studio.src/v5/cardgrid/symbols/ed_10e.svg", 65536usize)
+    if svg_error != ok { os.exit(409) }
+    if true {
+        mem.reset(&f, 0usize)
+        let (drawing, drawing_error) = gl.svg_mark(&f, svg_text, paint.rgba(1.0, 1.0, 1.0, 1.0), 64.0, 64.0)
+        if drawing_error != ok { os.exit(410) }
+        var holder: [1]widget.Node = zero
+        holder[0usize] = drawing
+        let boxed = widget.box(10400u64, style.defaults(), holder[0usize..1usize])
+        if settle(&harness, boxed, 93000000000i64) != ok { os.exit(411) }
+        let (shot_s, shot_s_error) = testing.snapshot(&harness, a)
+        if shot_s_error != ok { os.exit(412) }
+        let (svg_b, svg_f) = bounds(&harness, &runtime, 10400u64)
+        if !svg_f { os.exit(413) }
+        var svg_min_x = 9999usize
+        var svg_max_x = 0usize
+        var svg_min_y = 9999usize
+        var svg_max_y = 0usize
+        var yy: f32 = 0.0
+        while yy < 70.0 {
+            var xx: f32 = 0.0
+            while xx < 70.0 {
+                let at = px(svg_b.x + xx, svg_b.y + yy)
+                if shot_s.pixels[at + 2usize] > 8u8 {
+                    let ix = usize(xx)
+                    let iy = usize(yy)
+                    if ix < svg_min_x { svg_min_x = ix }
+                    if ix > svg_max_x { svg_max_x = ix }
+                    if iy < svg_min_y { svg_min_y = iy }
+                    if iy > svg_max_y { svg_max_y = iy }
+                }
+                xx += 1.0
+            }
+            yy += 1.0
+        }
+        // the symbol's ink spans 20 of its 32 units: 40 of the 64 high box
+        let ink_height = svg_max_y - svg_min_y + 1usize
+        if ink_height < 38usize || ink_height > 42usize { os.exit(414) }
+    }
+    // 19b. a fitted SVG mark (v3's edition symbol, dark blue-black fill) is drawn at the size of its box
+    let (fit_text, fit_error) = fs.read_file(a, "D:/repos/mtg.studio.src/v5/cardgrid/symbols/ed_10e.svg", 65536usize)
+    if fit_error != ok { os.exit(409) }
+    if true {
+        mem.reset(&f, 0usize)
+        let (fit_drawing, fit_drawing_error) = gl.svg_fit_mark(&f, fit_text, paint.rgba(1.0, 1.0, 1.0, 1.0), 64.0, 64.0)
+        if fit_drawing_error != ok { os.exit(410) }
+        var fit_holder: [1]widget.Node = zero
+        fit_holder[0usize] = fit_drawing
+        let fit_boxed = widget.box(10450u64, style.defaults(), fit_holder[0usize..1usize])
+        if settle(&harness, fit_boxed, 93500000000i64) != ok { os.exit(411) }
+        let (shot_fit, shot_fit_error) = testing.snapshot(&harness, a)
+        if shot_fit_error != ok { os.exit(412) }
+        let (fit_b, fit_f) = bounds(&harness, &runtime, 10450u64)
+        if !fit_f { os.exit(413) }
+        var fit_min_x = 9999usize
+        var fit_max_x = 0usize
+        var fit_min_y = 9999usize
+        var fit_max_y = 0usize
+        var yy: f32 = 0.0
+        while yy < 70.0 {
+            var xx: f32 = 0.0
+            while xx < 70.0 {
+                let at = px(fit_b.x + xx, fit_b.y + yy)
+                if shot_fit.pixels[at + 2usize] > 8u8 {
+                    let ix = usize(xx)
+                    let iy = usize(yy)
+                    if ix < fit_min_x { fit_min_x = ix }
+                    if ix > fit_max_x { fit_max_x = ix }
+                    if iy < fit_min_y { fit_min_y = iy }
+                    if iy > fit_max_y { fit_max_y = iy }
+                }
+                xx += 1.0
+            }
+            yy += 1.0
+        }
+        // the symbol's ink spans 20 of its 32 units: 40 of the 64 high box
+        let fit_ink_width = fit_max_x - fit_min_x + 1usize
+        if fit_ink_width < 60usize || fit_ink_width > 66usize { os.exit(415) }
+    }
+    // 20. the keyboard trace recorded from v3 (docs/grid-parity/traces.json): a tap makes a row current,
+    // Down moves it one row each, Up one back, End goes to the last row and Home to the first
+    var key_specs: [1]dg.ColumnSpec = zero
+    key_specs[0usize] = dg.ColumnSpec { title: "Name", width: 300.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    let (made15, grid15_error) = dg.create(a, &app.tbl, &app.grouping, key_specs[0..], events, 10500u64)
+    if grid15_error != ok { os.exit(420) }
+    var grid15 = made15
+    dg.set_look(&grid15, gl.v3())
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(421) }
+    mem.reset(&f, 0usize)
+    let (root33, build33_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build33_error != ok { os.exit(422) }
+    if settle(&harness, root33, 94000000000i64) != ok { os.exit(423) }
+    let first_data = grp.visible_row(&app.grouping, 0usize)
+    if !tap_key(&harness, &runtime, dg.row_key(&grid15, first_data)) { os.exit(424) }
+    let (start_at, start_has) = dg.current_position(&grid15)
+    if !start_has || start_at != 0usize { os.exit(425) }
+    var trace_clock = 95000000000i64
+    var presses = 0usize
+    while presses < 3usize {
+        if testing.press_key(&harness, 40u32, zero) != ok { os.exit(426) }
+        mem.reset(&f, 0usize)
+        let (root34, build34_error) = dg.build(&f, &grid15, &theme, 400.0)
+        if build34_error != ok { os.exit(436) }
+        if settle(&harness, root34, trace_clock) != ok { os.exit(437) }
+        trace_clock += 2000000000i64
+        presses += 1usize
+    }
+    let (down_at, down_has) = dg.current_position(&grid15)
+    if !down_has || down_at != 3usize { os.exit(427) }
+    if testing.press_key(&harness, 38u32, zero) != ok { os.exit(428) }
+    mem.reset(&f, 0usize)
+    let (root35, build35_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build35_error != ok { os.exit(438) }
+    if settle(&harness, root35, trace_clock) != ok { os.exit(439) }
+    trace_clock += 2000000000i64
+    let (up_at, up_has) = dg.current_position(&grid15)
+    if !up_has || up_at != 2usize { os.exit(429) }
+    if testing.press_key(&harness, 35u32, zero) != ok { os.exit(430) }
+    mem.reset(&f, 0usize)
+    let (root36, build36_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build36_error != ok { os.exit(440) }
+    if settle(&harness, root36, trace_clock) != ok { os.exit(441) }
+    trace_clock += 2000000000i64
+    var again = 0usize
+    while again < 3usize {
+        mem.reset(&f, 0usize)
+        let (root38, build38_error) = dg.build(&f, &grid15, &theme, 400.0)
+        if build38_error != ok { os.exit(444) }
+        if settle(&harness, root38, trace_clock) != ok { os.exit(445) }
+        trace_clock += 2000000000i64
+        again += 1usize
+    }
+    let (end_at, end_has) = dg.current_position(&grid15)
+    if !end_has || end_at != grp.visible_len(&app.grouping) - 1usize { os.exit(431) }
+    if testing.press_key(&harness, 36u32, zero) != ok { os.exit(432) }
+    mem.reset(&f, 0usize)
+    let (root37, build37_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build37_error != ok { os.exit(442) }
+    if settle(&harness, root37, trace_clock) != ok { os.exit(443) }
+    trace_clock += 2000000000i64
+    again = 0usize
+    while again < 3usize {
+        mem.reset(&f, 0usize)
+        let (root39, build39_error) = dg.build(&f, &grid15, &theme, 400.0)
+        if build39_error != ok { os.exit(446) }
+        if settle(&harness, root39, trace_clock) != ok { os.exit(447) }
+        trace_clock += 2000000000i64
+        again += 1usize
+    }
+    let (home_at, home_has) = dg.current_position(&grid15)
+    if !home_has || home_at != 0usize { os.exit(433) }
+    // 21. the extent of a drawing is measured from its path data (the 10th Edition symbol:
+    // x 0.03 to 26.4, y 5.87 to 26.13 of a 27 by 32 view box)
+    let (ink_text, ink_error) = fs.read_file(a, "D:/repos/mtg.studio.src/v5/cardgrid/symbols/ed_10e.svg", 65536usize)
+    if ink_error != ok { os.exit(449) }
+    let (ink, ink_w, ink_h) = gl.svg_ink(ink_text)
+    if !ink.any { os.exit(450) }
+    if ink_w != 27.0 || ink_h != 32.0 { os.exit(451) }
+    if ink.x0 > 0.1 || ink.x1 < 26.3 || ink.x1 > 26.5 { os.exit(452) }
+    if ink.y0 < 5.8 || ink.y0 > 5.95 || ink.y1 < 26.0 || ink.y1 > 26.2 { os.exit(453) }
     os.exit(0)
     ret ok
 }

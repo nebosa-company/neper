@@ -40453,3 +40453,15 @@ The group box is a #F0F0F0 panel over the header with a white chip (field and an
 `v5/cardgrid` no longer generates cards: `load` runs one query over `mtgstudio.db3` (`Cards` joined with `Editions` (active), `CardTypes` and `Rarities`, in CardId order) through `x.sqlite` / `e.db` (`winsqlite3.dll`), 120,239 rows, the count v3 shows. The Legal column reads the packed `Cards.Legality` string at v3's format ordinals (Standard 1, Modern 43, Extended 2, Legacy 3, Vintage 4) into two bits a format; the Cost column draws one v3 symbol picture per character of the stored cost ("2RR"). The Cards table has no prices (v3 reads them from a separate prices file), so the Price column became Rating (`Cards.Rating`, 0 throughout this database); favourites are not in the table either, and a pseudo favourite (CardId % 11) stays. Screenshot: `docs/grid-parity/S01-v5-real-cards-table.png`.
 
 The sample's status line carries the load time (`loaded from SQLite in N ms`, measured around `load`): 3,856 ms for the 120,239 active cards on this machine (the joined query and the filling of typed, dictionary-encoded columns together; screenshot `docs/grid-parity/S01-v5-load-time.png`). v3's own "Loaded in X s" for the same pool is the figure to compare under G011.
+
+## D3925 — G012: v3's columns and widths, edition symbols, navigator buttons, keyboard, first traces
+
+**Columns.** The sample's grid is v3's card pool: Favorite 23, ES 21, Legal 75, Name 150, Edition 70, Color 60, Type 150, Rarity 50, Cost 126, P/T 50, Text 255, CMC 50 (logical px, from `main.vcl.form.pas`, equal to the recording's column boundaries divided by 1.5; Legal, ES and Cost matter most). `CellKind.Picture` is a column with no side padding that the application draws (the ES column); `TableLook.glyph` carries it (1 star, 2 picture).
+
+**ES.** v3 keeps its edition symbols as SVG in an image collection of `main.vcl.data.dfm` (`ed_<abbreviation>[_<c|u|r|m>]`, 483 drawings, every active edition has one); they are extracted to `v5/cardgrid/symbols` and drawn with `gridlook.svg_fit_mark`, which measures the drawing's own extent (path data, control points included) and scales it to fill its box, as v3's best-fit does.
+
+**Navigator.** With a look: First, Previous page, Previous, "n of m", Next, Next page, Last and a funnel (`set_filter_action`); a page is the rows the body shows (`page_rows`).
+
+**Keyboard.** The current row follows the keyboard focus (`follow_focus`): Down, Up, Home, End and the page keys move the table's own focus, and the row that holds it is the current row (`row_picked` fires). Replayed from the v3 trace K1-K4 in `ui_datagrid` section 20. The Debug build of v3 stopped answering after End on 120,239 rows and its Page Down under load moved by two, so those two traces are the grid default, not recordings (`docs/grid-parity/traces.json` says which is which).
+
+**Limits met.** The sample needs a 64 MB frame arena and larger widget limits with 13 columns of real text; the window loop reported only "failed" (`lay_text` out of memory) until the arena was raised. `SCENE_BYTES` is 4 MB.

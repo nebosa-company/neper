@@ -842,6 +842,7 @@
     "test_snapshot",
     "text_math",
     "ui_activation",
+    "ui_datagrid",
     "ui_drag_drop",
     "ui_file_access",
     "ui_print",
@@ -3637,8 +3638,8 @@
    "module": "e.ui.gridlook",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 4,
-   "delivered": 4,
+   "catalogue": 8,
+   "delivered": 8,
    "pending": [],
    "fixtures": [
     "ui_datagrid"

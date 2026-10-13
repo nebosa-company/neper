@@ -1,0 +1,18 @@
+{
+ "schema": "neper-grid-behaviour-traces",
+ "source": "mtgstudio.exe 3.234 Debug, 2026-10-13, driven by docs/grid-parity/drive.ps1; the status bar's 'Rec: n' is the current record",
+ "traces": [
+  {"id": "K1", "name": "a click makes a row current", "steps": ["click first data row"], "v3": "Rec: 1", "neper": "tap on a row: current_position 0", "replayed": "ui_datagrid section 20"},
+  {"id": "K2", "name": "Down moves the current row by one", "steps": ["click first data row", "Down", "Down", "Down"], "v3": "Rec: 1 -> 4", "neper": "current_position 3", "replayed": "ui_datagrid section 20"},
+  {"id": "K3", "name": "Up moves it back by one", "steps": ["...", "Up"], "v3": "standard grid behaviour (not separately recorded)", "neper": "current_position 2", "replayed": "ui_datagrid section 20"},
+  {"id": "K4", "name": "End goes to the last record, Home to the first", "steps": ["End", "Home"], "v3": "not recorded: the Debug build stopped answering after End on 120,239 rows; DevExpress grid default", "neper": "last visible row / row 0", "replayed": "ui_datagrid section 20"},
+  {"id": "S1", "name": "a header click sorts ascending, the next descending", "steps": ["click header", "click header"], "v3": "triangle up, then triangle down (recorded S03, S04)", "neper": "sort_changed(spec, false), sort_changed(spec, true)", "replayed": "ui_datagrid section 2"},
+  {"id": "P1", "name": "Page Down moves by the rows shown", "v3": "unreliable in the recorded session (+2 of about 9 shown rows while card images downloaded)", "neper": "collection's page roving", "replayed": "open"}
+ ],
+ "open": [
+  "double-click on a header edge auto-sizes the column (v3 'Best Fit')",
+  "Ctrl+click multi-sort, Shift+click ranges, typeahead search buffer reset time",
+  "delayed filter apply (v3 applies after about 1 s)",
+  "focus and selection after sort, filter, group and edit"
+ ]
+}

@@ -1894,6 +1894,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = title_node
         var glyph_header = false
+        // a picture column (2) has no side padding; a star column (1) shows the star as its title
+        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 2u8 { glyph_header = true }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 1u8 {
             glyph_header = true
             // a column marked with the favourite star shows it in place of a title
@@ -2261,6 +2263,10 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         let group_row = look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8
         if group_row { cell_style.overflow = .Visible }
         cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+        // a picture column's cells have no side padding
+        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, c) != 0u8 {
+            cell_style.padding = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat }
+        }
         let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
         if framed_error != ok { ret (zero, TooLarge) }
         framed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell_style, body[0usize..1usize])

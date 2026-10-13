@@ -21,6 +21,7 @@ use e.gfx.image
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
+use e.gfx.svg
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
@@ -90,7 +91,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape }
 
@@ -207,6 +208,16 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.close_path(&hole)
         ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&hole), brush: paint.Brush { Solid: m.inner } } })
     }
+    if m.shape == Shape.DoubleLeft || m.shape == Shape.DoubleRight {
+        let half = area.width * 0.5
+        let left_side = m.shape == Shape.DoubleLeft
+        let (first_tri, first_error) = triangle_path(m.arena, x0, y0, x0 + half, y1, left_side)
+        if first_error != ok { ret first_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: first_tri, brush: paint.Brush { Solid: m.color } } })
+        let (second_tri, second_error) = triangle_path(m.arena, x0 + half, y0, x1, y1, left_side)
+        if second_error != ok { ret second_error }
+        ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: second_tri, brush: paint.Brush { Solid: m.color } } })
+    }
     if m.shape == Shape.Left || m.shape == Shape.Right {
         let (tri, tri_error) = triangle_path(m.arena, x0, y0, x1, y1, m.shape == Shape.Left)
         if tri_error != ok { ret tri_error }
@@ -273,4 +284,286 @@ fn load_picture(a: *mem.Arena, r: *scene.Renderer, path: str) -> (scene.TextureI
     if view_error != ok { ret (zero, BadPicture) }
     let (texture, upload_error) = scene.upload_image(r, view)
     ret (texture, upload_error)
+}
+
+// ---- vector pictures (v3's edition symbols are SVG) -------------------------------------------
+
+type SvgMark = struct { arena: *mem.Arena, text: str, color: paint.Color }
+
+fn svg_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*SvgMark](ctx)
+    ret svg.draw(m.arena, b, m.text, area, m.color)
+}
+
+// An SVG document drawn into a `width` by `height` box; `text` must stay valid while the node
+// is in the tree (a malformed document draws nothing).
+fn svg_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[SvgMark](a, 1usize)
+    if marks_error != ok { ret (zero, marks_error) }
+    marks[0usize] = SvgMark { arena: a, text: text, color: color }
+    var size = style.defaults()
+    size.width = style.Length { Px: width }
+    size.height = style.Length { Px: height }
+    size.min_width = style.Length { Px: width }
+    size.min_height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: svg_paint, state: widget.bytes_of[SvgMark](&marks[0usize]) } }, style: size, children: none }, ok)
+}
+
+// ---- vector pictures fitted to their ink ----------------------------------------------------
+//
+// An edition symbol's drawing sits inside a viewBox with a margin that differs from symbol to
+// symbol, but v3 shows each at the size of its row. `svg_fit_mark` measures the drawing extent
+// (the points of its path data, control points included) and scales it so that extent fills
+// the box.
+
+type Ink = struct { x0: f32, y0: f32, x1: f32, y1: f32, any: bool }
+
+fn ink_add(b: *Ink, x: f32, y: f32) {
+    if !b.any {
+        b.x0 = x
+        b.x1 = x
+        b.y0 = y
+        b.y1 = y
+        b.any = true
+        ret
+    }
+    if x < b.x0 { b.x0 = x }
+    if x > b.x1 { b.x1 = x }
+    if y < b.y0 { b.y0 = y }
+    if y > b.y1 { b.y1 = y }
+}
+
+fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
+
+fn is_sep(c: u8) -> bool { ret c == 32u8 || c == 44u8 || c == 10u8 || c == 13u8 || c == 9u8 }
+
+// Skips separators, then reads one number; false when none follows.
+fn num_at(d: str, at: *usize, out: *f32) -> bool {
+    var i = *at
+    while i < d.len && is_sep(d[i]) { i += 1usize }
+    if i >= d.len { ret false }
+    var negative = false
+    if d[i] == 45u8 {
+        negative = true
+        i += 1usize
+    } else if d[i] == 43u8 {
+        i += 1usize
+    }
+    var whole: f32 = 0.0
+    var any = false
+    while i < d.len && is_digit(d[i]) {
+        whole = whole * 10.0 + f32(d[i] - 48u8)
+        i += 1usize
+        any = true
+    }
+    if i < d.len && d[i] == 46u8 {
+        i += 1usize
+        var scale: f32 = 0.1
+        while i < d.len && is_digit(d[i]) {
+            whole += f32(d[i] - 48u8) * scale
+            scale = scale * 0.1
+            i += 1usize
+            any = true
+        }
+    }
+    if !any { ret false }
+    if i < d.len && (d[i] == 101u8 || d[i] == 69u8) {
+        var j = i + 1usize
+        var exp_negative = false
+        if j < d.len && (d[j] == 45u8 || d[j] == 43u8) {
+            exp_negative = d[j] == 45u8
+            j += 1usize
+        }
+        var e: i32 = 0
+        var has_e = false
+        while j < d.len && is_digit(d[j]) {
+            e = e * 10 + i32(d[j] - 48u8)
+            j += 1usize
+            has_e = true
+        }
+        if has_e {
+            var k: i32 = 0
+            while k < e {
+                if exp_negative { whole = whole * 0.1 } else { whole = whole * 10.0 }
+                k += 1
+            }
+            i = j
+        }
+    }
+    if negative { whole = 0.0 - whole }
+    *at = i
+    *out = whole
+    ret true
+}
+
+fn flag_at(d: str, at: *usize) -> bool {
+    var i = *at
+    while i < d.len && is_sep(d[i]) { i += 1usize }
+    if i >= d.len || (d[i] != 48u8 && d[i] != 49u8) { ret false }
+    *at = i + 1usize
+    ret true
+}
+
+// The extent of one path data string.
+fn path_ink(d: str, b: *Ink) {
+    var i = 0usize
+    var cx: f32 = 0.0
+    var cy: f32 = 0.0
+    var sx: f32 = 0.0
+    var sy: f32 = 0.0
+    var cmd: u8 = 0u8
+    var guard = 0usize
+    while i < d.len && guard < 40000usize {
+        guard += 1usize
+        while i < d.len && is_sep(d[i]) { i += 1usize }
+        if i >= d.len { break }
+        let c = d[i]
+        if (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) {
+            cmd = c
+            i += 1usize
+            if c == 90u8 || c == 122u8 {
+                cx = sx
+                cy = sy
+                continue
+            }
+        }
+        let relative = cmd >= 97u8
+        var upper = cmd
+        if relative { upper = cmd - 32u8 }
+        var p1: f32 = 0.0
+        var p2: f32 = 0.0
+        var p3: f32 = 0.0
+        var p4: f32 = 0.0
+        var p5: f32 = 0.0
+        var p6: f32 = 0.0
+        var ox: f32 = 0.0
+        var oy: f32 = 0.0
+        if relative {
+            ox = cx
+            oy = cy
+        }
+        if upper == 72u8 {
+            if !num_at(d, &i, &p1) { break }
+            cx = ox + p1
+            ink_add(b, cx, cy)
+        } else if upper == 86u8 {
+            if !num_at(d, &i, &p1) { break }
+            cy = oy + p1
+            ink_add(b, cx, cy)
+        } else if upper == 77u8 || upper == 76u8 || upper == 84u8 {
+            if !num_at(d, &i, &p1) || !num_at(d, &i, &p2) { break }
+            cx = ox + p1
+            cy = oy + p2
+            if upper == 77u8 {
+                sx = cx
+                sy = cy
+                if relative { cmd = 108u8 } else { cmd = 76u8 }
+            }
+            ink_add(b, cx, cy)
+        } else if upper == 67u8 {
+            if !num_at(d, &i, &p1) || !num_at(d, &i, &p2) || !num_at(d, &i, &p3) || !num_at(d, &i, &p4) || !num_at(d, &i, &p5) || !num_at(d, &i, &p6) { break }
+            ink_add(b, ox + p1, oy + p2)
+            ink_add(b, ox + p3, oy + p4)
+            cx = ox + p5
+            cy = oy + p6
+            ink_add(b, cx, cy)
+        } else if upper == 83u8 || upper == 81u8 {
+            if !num_at(d, &i, &p1) || !num_at(d, &i, &p2) || !num_at(d, &i, &p3) || !num_at(d, &i, &p4) { break }
+            ink_add(b, ox + p1, oy + p2)
+            cx = ox + p3
+            cy = oy + p4
+            ink_add(b, cx, cy)
+        } else if upper == 65u8 {
+            // rx ry rotation large-arc sweep x y
+            if !num_at(d, &i, &p1) || !num_at(d, &i, &p2) || !num_at(d, &i, &p3) { break }
+            if !flag_at(d, &i) || !flag_at(d, &i) { break }
+            if !num_at(d, &i, &p5) || !num_at(d, &i, &p6) { break }
+            cx = ox + p5
+            cy = oy + p6
+            ink_add(b, cx, cy)
+        } else {
+            break
+        }
+    }
+}
+
+// The value of the first ` name="..."` at or after `from` (and where it ended).
+fn attr_value(text: str, name: str, from: usize) -> (str, usize, bool) {
+    var i = from
+    while i + name.len + 2usize < text.len {
+        var hit = text[i] == 32u8
+        var k = 0usize
+        while hit && k < name.len {
+            if text[i + 1usize + k] != name[k] { hit = false }
+            k += 1usize
+        }
+        if hit && i + name.len + 2usize < text.len && text[i + 1usize + name.len] == 61u8 && text[i + 2usize + name.len] == 34u8 {
+            let start = i + name.len + 3usize
+            var end = start
+            while end < text.len && text[end] != 34u8 { end += 1usize }
+            ret (text[start..end], end, true)
+        }
+        i += 1usize
+    }
+    ret ("", from, false)
+}
+
+// The ink extent of a document's paths and its viewBox size (0 when it has none).
+fn svg_ink(text: str) -> (Ink, f32, f32) {
+    var ink: Ink = zero
+    var at = 0usize
+    var found = true
+    while found {
+        let (d, end, has) = attr_value(text, "d", at)
+        found = has
+        if has {
+            path_ink(d, &ink)
+            at = end
+        }
+    }
+    let (view, view_end, has_view) = attr_value(text, "viewBox", 0usize)
+    if has_view {
+        var i = 0usize
+        var skip: f32 = 0.0
+        var vw: f32 = 0.0
+        var vh: f32 = 0.0
+        if num_at(view, &i, &skip) && num_at(view, &i, &skip) && num_at(view, &i, &vw) && num_at(view, &i, &vh) {
+            ret (ink, vw, vh)
+        }
+    }
+    ret (ink, 0.0, 0.0)
+}
+
+type FitMark = struct { arena: *mem.Arena, text: str, color: paint.Color, x0: f32, y0: f32, x1: f32, y1: f32, vw: f32, vh: f32 }
+
+fn fit_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*FitMark](ctx)
+    let iw = m.x1 - m.x0
+    let ih = m.y1 - m.y0
+    if !(iw > 0.0) || !(ih > 0.0) || !(m.vw > 0.0) || !(m.vh > 0.0) { ret svg.draw(m.arena, b, m.text, area, m.color) }
+    var k = area.width / iw
+    if area.height / ih < k { k = area.height / ih }
+    let dest = geometry.Rect { x: area.x + area.width * 0.5 - (m.x0 + m.x1) * 0.5 * k, y: area.y + area.height * 0.5 - (m.y0 + m.y1) * 0.5 * k, width: m.vw * k, height: m.vh * k }
+    let save: scene.Command = .Save
+    try scene.push(b, save)
+    try scene.push(b, scene.Command { Clip: scene.Clip { Rect: area } })
+    try svg.draw(m.arena, b, m.text, dest, m.color)
+    let restore: scene.Command = .Restore
+    ret scene.push(b, restore)
+}
+
+// An SVG document drawn so that its own extent fills `width` by `height`.
+fn svg_fit_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[FitMark](a, 1usize)
+    if marks_error != ok { ret (zero, marks_error) }
+    let (ink, vw, vh) = svg_ink(text)
+    marks[0usize] = FitMark { arena: a, text: text, color: color, x0: ink.x0, y0: ink.y0, x1: ink.x1, y1: ink.y1, vw: vw, vh: vh }
+    var size = style.defaults()
+    size.width = style.Length { Px: width }
+    size.height = style.Length { Px: height }
+    size.min_width = style.Length { Px: width }
+    size.min_height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: fit_paint, state: widget.bytes_of[FitMark](&marks[0usize]) } }, style: size, children: none }, ok)
 }

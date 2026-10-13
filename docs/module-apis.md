@@ -2213,7 +2213,7 @@ window; the filter row stands above the header, not below.
 
 ```neper
 type Look = struct { on: bool, row_height: f32, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group_row: paint.Color, footer_band: paint.Color, footer_cell: paint.Color, frame: paint.Color, track: paint.Color, thumb: paint.Color, scroll_width: f32 }
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight }
 error BadPicture
 
 fn rgb(value: u32) -> paint.Color
@@ -2221,6 +2221,9 @@ fn v3() -> Look
 fn theme() -> Look
 fn mark(a: *mem.Arena, shape: Shape, color: paint.Color, inner: paint.Color, width: f32, height: f32) -> (widget.Node, err)
 fn load_picture(a: *mem.Arena, r: *scene.Renderer, path: str) -> (scene.TextureId, err)
+fn svg_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height: f32) -> (widget.Node, err)
+fn svg_fit_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height: f32) -> (widget.Node, err)
+fn svg_ink(text: str) -> (Ink, f32, f32)
 ```
 
 The measured look of the data grid (`docs/grid-parity/tokens.json`, G012): `v3()` is MTG Studio v3's grid in logical pixels

@@ -45,11 +45,11 @@ no-data, drag, conditional formatting and the deck and collection views are stil
 | P006 | Selected row: v3 #A6D2FF with a dark 1 px border and gradient ends; v5 flat tint, no border | | look applied (D3919); fixture probe pending |
 | P007 | v3 has full-height vertical column lines in header and body; v5 only short header dividers | | look applied (D3919); fixture probe pending |
 | P008 | Header look: v3 white cell with the sort triangle right-aligned in the cell; v5 tinted header with the arrow after the text | | look applied (D3919); fixture probe pending |
-| P009 | Left columns: v3 has the customization glyph, favourite star, "ES" icon and the row indicator arrow, each ~18-20 px / 13 logical; v5 has one 28 px indicator | | star column closed by D3922 (CellKind.Star: header star, gold cell star); ES icon column open (needs the edition-symbol data) |
+| P009 | Left columns: v3 has the customization glyph, favourite star, "ES" icon and the row indicator arrow, each ~18-20 px / 13 logical; v5 has one 28 px indicator | | closed by D3925: indicator 11.3, Favorite 23, ES 21 (v3 edition symbols fitted to their ink) |
 | P010 | Cell text inset: v3 ~6 px / 4; v5 ~16 px | | open |
 | P011 | v3 frames the grid with a 1 px border; v5 has none | | closed by D3920: 1 px #828790 frame, parts touch (screenshot S01-compare-after-text-frame.png) |
-| P012 | Navigator: v3 flat glyph buttons (|< << < "1 of 120239" > >> >| filter) and a grey scroll bar; v5 text buttons | | navigator arrows closed by D3922 (blue flat marks, grey at the ends, "n of m"); page-skip buttons, filter button and the grey scroll thumb open |
-| P013 | Footer: v3 shows summaries in a tinted band only when the footer is on ("Rows: 8" in the collection grid); v5 "Total" row styled differently | | open |
+| P012 | Navigator: v3 flat glyph buttons (|< << < "1 of 120239" > >> >| filter) and a grey scroll bar; v5 text buttons | | closed by D3925: first, previous page, previous, "n of m", next, next page, last, funnel |
+| P013 | Footer: v3 shows summaries in a tinted band only when the footer is on ("Rows: 8" in the collection grid); v5 "Total" row styled differently | | footer band and cells closed by D3920/D3923; labels differ (v3 shows "Count: n" under Name) |
 | P014 | Row ink by rarity: v3 orange (mythic) and red (rare) with the exact palette of the app; v5 uses theme data colours | | open, extract palette |
 | P015 | Scrollbar: v3 native thin vertical bar; v5 draws none in the capture | | closed by D3923: 16 dp #F0F0F0 track, slim #858585 thumb 16 dp in from each end (S01-compare-scrollbar.png) |
 | P017 | Header hover: v3 turns the cell #D9EBF9 and shows a filter drop-down glyph; v5 has no hover look | | look applied (D3919); fixture probe pending |
@@ -61,3 +61,11 @@ no-data, drag, conditional formatting and the deck and collection views are stil
 
 The metrics must move into the single token table the grid reads (grid.md 1.1) and every row above gets a
 fixture comparing a Neper render with its recording; none is closed yet.
+
+## Columns and behaviour (D3925)
+
+The sample uses v3's own card pool columns and widths in logical pixels, read from `main.vcl.form.pas` and
+confirmed against the recording at 150 % (each column boundary / 1.5): Favorite 23, ES 21, Legal 75, Name 150,
+Edition 70, Color 60, Type 150, Rarity 50, Cost 126, P/T 50, Text 255, CMC 50. Behaviour traces are in
+`docs/grid-parity/traces.json`; the 100 % and 125 % recordings need the display scale changed on the machine
+and are waiting for the owner (the capture and drive scripts take the process name and run unchanged).

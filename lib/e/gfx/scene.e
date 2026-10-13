@@ -47,7 +47,7 @@ error TooLarge
 error OutOfMemory
 error Lost
 
-const SCENE_BYTES: usize = 1048576usize
+const SCENE_BYTES: usize = 4194304usize
 const MAX_EDGES: usize = 65536usize
 const MAX_MASKS: usize = 8usize
 const MAX_LAYERS: usize = 4usize

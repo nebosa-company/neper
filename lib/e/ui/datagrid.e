@@ -76,13 +76,14 @@ const FILTER_TEXT: usize = 40usize
 const FILTER_KEY: u64 = 2048u64
 const EDIT_KEY: u64 = 3000u64
 const EDIT_TEXT: usize = 64usize
+const KEYBOARD_KEY: u64 = 3200u64
 
-type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator, Star }
+type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator, Star, Picture }
 
 // A titled span over `count` columns from spec `first`.
 type Band = struct { title: str, first: usize, count: usize }
 
-type Nav = enum u8 { First, Prev, Next, Last }
+type Nav = enum u8 { First, Prev, Next, Last, PrevPage, NextPage }
 
 // One grid column: the table column it shows and how, and which applied group summary it
 // shows on group rows and in the footer (`summary` < 0: none); `filter` asks for a field in the
@@ -128,6 +129,9 @@ type Grid = struct {
     bands: []const Band,
     navigator_visible: bool,
     group_box_visible: bool,
+    page_rows: usize,
+    filter_action: widget.Submit,
+    has_filter_action: bool,
     has_position: bool,
     position: usize,
     read_only: bool,
@@ -285,6 +289,12 @@ fn set_look(grid: *Grid, look: gl.Look) {
 // triangle), as in v3.
 fn show_group_box(grid: *Grid, on: bool) { grid.group_box_visible = on }
 
+// The navigator's funnel button calls `action` (v3 opens its filter dialog from it).
+fn set_filter_action(grid: *Grid, action: widget.Submit) {
+    grid.filter_action = action
+    grid.has_filter_action = true
+}
+
 fn set_hidden(grid: *Grid, spec: usize, hide: bool) {
     if spec >= grid.all.len { ret }
     grid.hidden[spec] = hide
@@ -397,6 +407,34 @@ fn navigate(grid: *Grid, kind: Nav) -> err {
         ret ok
     }
     let (at, has) = current_position(grid)
+    if kind == Nav.NextPage || kind == Nav.PrevPage {
+        // a page is the rows the body shows; the nearest data row at the aim
+        var page = grid.page_rows
+        if page == 0usize { page = 1usize }
+        var aim = 0usize
+        if kind == Nav.NextPage {
+            if has { aim = at + page }
+            if aim >= n { aim = n - 1usize }
+            i = aim
+            while i < n {
+                if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+                i += 1usize
+            }
+            i = aim
+            while i > 0usize {
+                i -= 1usize
+                if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+            }
+            ret ok
+        }
+        if has && at > page { aim = at - page }
+        i = aim
+        while i < n {
+            if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+            i += 1usize
+        }
+        ret ok
+    }
     if kind == Nav.Next {
         i = 0usize
         if has { i = at + 1usize }
@@ -1169,7 +1207,7 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         }
         ret text_node(a, grid, "", false, .Text, out)
     }
-    if grid.specs[column].kind == CellKind.Custom { ret grid.events.custom_cell(grid.events.ctx, a, grid.theme, row, grid.origin[column], out) }
+    if grid.specs[column].kind == CellKind.Custom || grid.specs[column].kind == CellKind.Picture { ret grid.events.custom_cell(grid.events.ctx, a, grid.theme, row, grid.origin[column], out) }
     var role = grid.events.row_role(grid.events.ctx, row)
     let (text, text_error) = cell_text(a, grid, column, row)
     if text_error != ok { ret text_error }
@@ -1229,6 +1267,7 @@ fn row_kind(ctx: *void, index: usize) -> u8 {
 fn header_glyph(ctx: *void, shown: usize) -> u8 {
     let grid = mem.cast[*Grid](ctx)
     if shown < grid.specs.len && grid.specs[shown].kind == CellKind.Star { ret 1u8 }
+    if shown < grid.specs.len && grid.specs[shown].kind == CellKind.Picture { ret 2u8 }
     ret 0u8
 }
 
@@ -1380,9 +1419,11 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
     if kind == Nav.First { shape = gl.Shape.FirstBar }
     if kind == Nav.Next { shape = gl.Shape.Right }
     if kind == Nav.Last { shape = gl.Shape.LastBar }
+    if kind == Nav.PrevPage { shape = gl.Shape.DoubleLeft }
+    if kind == Nav.NextPage { shape = gl.Shape.DoubleRight }
     if has {
-        if (kind == Nav.First || kind == Nav.Prev) && position == 0usize { enabled = false }
-        if (kind == Nav.Next || kind == Nav.Last) && position + 1usize >= visible { enabled = false }
+        if (kind == Nav.First || kind == Nav.Prev || kind == Nav.PrevPage) && position == 0usize { enabled = false }
+        if (kind == Nav.Next || kind == Nav.Last || kind == Nav.NextPage) && position + 1usize >= visible { enabled = false }
     }
     var ink = gl.rgb(0x2C7BD6u32)
     if !enabled { ink = gl.rgb(0xC9D3E0u32) }
@@ -1403,7 +1444,72 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
     ret (node, node_error)
 }
 
+// v3's navigator: first, previous page, previous, "n of m", next, next page, last and a funnel.
+fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let kinds: [6]Nav = [6]Nav{ Nav.First, Nav.PrevPage, Nav.Prev, Nav.Next, Nav.NextPage, Nav.Last }
+    let keys: [6]u64 = [6]u64{ 1u64, 5u64, 2u64, 3u64, 6u64, 4u64 }
+    let labels: [6]str = [6]str{ "First", "Previous page", "Previous", "Next", "Next page", "Last" }
+    let (picks, picks_error) = mem.alloc[NavPick](a, 6usize)
+    if picks_error != ok { ret (zero, picks_error) }
+    let (submits, submits_error) = mem.alloc[widget.Submit](a, 6usize)
+    if submits_error != ok { ret (zero, submits_error) }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
+    if cells_error != ok { ret (zero, cells_error) }
+    var at = 0usize
+    while at < 6usize {
+        picks[at] = NavPick { grid: grid, kind: kinds[at] }
+        submits[at] = widget.Submit { ctx: mem.cast[*void](&picks[at]), invoke: on_navigate }
+        let (icon, icon_error) = nav_icon(a, grid, navigator_key(grid) + keys[at], kinds[at], labels[at], &submits[at])
+        if icon_error != ok { ret (zero, icon_error) }
+        // the order on screen: First, PrevPage, Prev, text, Next, NextPage, Last, funnel
+        var slot = at
+        if at >= 3usize { slot = at + 1usize }
+        cells[slot] = icon
+        at += 1usize
+    }
+    let (b, b_error) = str.builder(a, 48usize)
+    if b_error != ok { ret (zero, b_error) }
+    var sb = b
+    let (position, has) = current_position(grid)
+    let (before, total) = data_counts(grid, position)
+    if has {
+        if str.push_usize(&sb, before + 1usize) != ok { ret (zero, control.TooLarge) }
+    } else {
+        if str.push(&sb, "0") != ok { ret (zero, control.TooLarge) }
+    }
+    if str.push(&sb, " of ") != ok || str.push_usize(&sb, total) != ok { ret (zero, control.TooLarge) }
+    var text_options = control.text_options()
+    text_options.size = grid.look.text_size
+    let (info, info_error) = control.text(a, 0u64, str.done(&sb), grid.theme, text_options)
+    if info_error != ok { ret (zero, info_error) }
+    cells[3usize] = info
+    // the funnel
+    var funnel_ink = gl.rgb(0x8A8A8Au32)
+    let funnel_key = navigator_key(grid) + 7u64
+    let (funnel_mark, funnel_error) = control.icon_square(a, funnel_ink, .Filter, 16.0)
+    if funnel_error != ok { ret (zero, funnel_error) }
+    let funnel_state = control.control_state(grid.theme, funnel_key, grid.has_filter_action, false)
+    var funnel_look = style.resolve(grid.theme.tokens, .Plain, funnel_state)
+    funnel_look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    funnel_look.border_width = 0.0
+    funnel_look.opacity = 1.0
+    funnel_look.radius = 2.0
+    funnel_look.custom_padding = true
+    funnel_look.padding = 2.0
+    funnel_look.padding_y = 1.0
+    funnel_look.min_width = 20.0
+    funnel_look.min_height = 18.0
+    let (funnel, funnel_node_error) = control.pressable_states(a, funnel_key, grid.theme, 3u8, "Filter", funnel_look, grid.has_filter_action, false, 0u32, 0u32, 0u64, &grid.filter_action, funnel_mark)
+    if funnel_node_error != ok { ret (zero, funnel_node_error) }
+    cells[7usize] = funnel
+    ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), cells[0usize..8usize]), ok)
+}
+
 fn navigator_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    if grid.look.on {
+        let (looked, looked_error) = navigator_row_look(a, grid)
+        ret (looked, looked_error)
+    }
     let labels: [4]str = [4]str{ "First", "Prev", "Next", "Last" }
     let (picks, picks_error) = mem.alloc[NavPick](a, 4usize)
     if picks_error != ok { ret (zero, picks_error) }
@@ -1512,6 +1618,32 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     ret (widget.flex(footer_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, band_style, cells[0usize..grid.specs.len]), ok)
 }
 
+// The keyboard of the grid (v3's): Up and Down move the current row by one, PageUp and PageDown by a
+// page, Home and End to the first and the last; in a scope round the grid, so a text field or an
+// editor that takes the key keeps it.
+fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err) {
+    let (picks, picks_error) = mem.alloc[NavPick](a, 6usize)
+    if picks_error != ok { ret (zero, control.TooLarge) }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize)
+    if shortcuts_error != ok { ret (zero, control.TooLarge) }
+    let codes: [6]u32 = [6]u32{ 38u32, 40u32, 33u32, 34u32, 36u32, 35u32 }
+    let kinds: [6]Nav = [6]Nav{ Nav.Prev, Nav.Next, Nav.PrevPage, Nav.NextPage, Nav.First, Nav.Last }
+    var none: input.Modifiers = zero
+    var at = 0usize
+    while at < 6usize {
+        picks[at] = NavPick { grid: grid, kind: kinds[at] }
+        shortcuts[at] = widget.Shortcut { key: codes[at], modifiers: none, action: widget.Submit { ctx: mem.cast[*void](&picks[at]), invoke: on_navigate } }
+        at += 1usize
+    }
+    var held: [1]widget.Node = zero
+    let (holder, holder_error) = mem.alloc[widget.Node](a, 1usize)
+    if holder_error != ok { ret (zero, control.TooLarge) }
+    holder[0usize] = node
+    var no_action: widget.Submit = zero
+    let scope = widget.scope(grid.key + KEYBOARD_KEY, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..6usize], default_action: no_action, cancel_action: no_action, keys: zero }, style.defaults(), holder[0usize..1usize])
+    ret (scope, ok)
+}
+
 // The group box: a panel with a white chip (field name and triangle) for each grouping level.
 fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let n = grid.g.level_count
@@ -1545,8 +1677,31 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 // The grid as a node of `height` for the body; `theme` must stay valid until the next build.
+// The current row follows the keyboard (v3's): when a row of this grid holds the focus, it is the
+// current row and the application hears `row_picked`.
+fn follow_focus(grid: *Grid, theme: *const control.Theme) -> err {
+    if mem.address_of(theme.runtime) == 0usize || grid.editing { ret ok }
+    let (focus, has_focus) = widget.focused_key(theme.runtime)
+    if !has_focus { ret ok }
+    let base = grid.key + KEY_BASE
+    if focus < base || focus >= base + u64(table.capacity(grid.t)) { ret ok }
+    let row = usize(focus - base)
+    if grid.has_selection && grid.selected_row == row { ret ok }
+    grid.has_selection = true
+    grid.selected_row = row
+    var found = 0usize
+    let visible = grp.visible_len(grid.g)
+    while found < visible && (grp.visible_is_group(grid.g, found) || grp.visible_row(grid.g, found) != row) { found += 1usize }
+    if found < visible {
+        grid.has_position = true
+        grid.position = found
+    }
+    ret grid.events.row_picked(grid.events.ctx, row)
+}
+
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     grid.theme = theme
+    try follow_focus(grid, theme)
     if grp.visible_len(grid.g) == 0usize {
         var inner: widget.Node = zero
         let node_error = text_node(a, grid, grid.empty_text, false, .Text, &inner)
@@ -1568,6 +1723,7 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     if grid.bands.len != 0usize { body_height = body_height - 36.0 }
     if grid.navigator_visible { body_height = body_height - 52.0 }
     if grid.group_box_visible { body_height = body_height - 35.0 }
+    grid.page_rows = usize(body_height / grid.row_height)
     var sort_shown = grid.specs.len
     let (sort_at, sort_visible) = display_of(grid, grid.sort_column)
     if sort_visible { sort_shown = sort_at }
@@ -1592,7 +1748,10 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     if with_bands { part_count += 1usize }
     if grid.navigator_visible { part_count += 1usize }
     if grid.group_box_visible { part_count += 1usize }
-    if part_count == 1usize { ret (body, ok) }
+    if part_count == 1usize {
+        let (keyed_body, keyed_body_error) = with_keys(a, grid, body)
+        ret (keyed_body, keyed_body_error)
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, part_count)
     if parts_error != ok { ret (zero, parts_error) }
     var at = 0usize
@@ -1635,5 +1794,7 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
         frame.border = style.Border { width: 1.0, color: grid.look.frame }
         gap = 0.0
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap }, frame, parts[0usize..part_count]), ok)
+    let stacked = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap }, frame, parts[0usize..part_count])
+    let (keyed, keyed_error) = with_keys(a, grid, stacked)
+    ret (keyed, keyed_error)
 }
