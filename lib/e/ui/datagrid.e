@@ -129,6 +129,8 @@ type Grid = struct {
     bands: []const Band,
     navigator_visible: bool,
     group_box_visible: bool,
+    fit_spec: usize,
+    fit_pending: bool,
     page_rows: usize,
     filter_action: widget.Submit,
     has_filter_action: bool,
@@ -1345,6 +1347,14 @@ fn on_reorder(ctx: *void, value: collection.Reorder) -> err {
 
 fn on_resize(ctx: *void, value: collection.ColumnResize) -> err {
     let grid = mem.cast[*Grid](ctx)
+    if value.width < 0.0 {
+        // a double tap on the handle: the best fit is made at the next build (it needs the fonts)
+        if value.column < grid.specs.len {
+            grid.fit_spec = grid.origin[value.column]
+            grid.fit_pending = true
+        }
+        ret ok
+    }
     if value.column < grid.specs.len { resize_column(grid, grid.origin[value.column], value.width) }
     ret ok
 }
@@ -1699,6 +1709,71 @@ fn follow_focus(grid: *Grid, theme: *const control.Theme) -> err {
     ret grid.events.row_picked(grid.events.ctx, row)
 }
 
+// After a sort, a filter or a grouping the current card stays current (v3's): its position in the
+// order is found again, and the view moves the least that shows it (up to put it at the top, down to
+// put it at the bottom), as v3 does.
+fn follow_row_after_reorder(grid: *Grid) {
+    if !grid.has_selection || !grid.has_position { ret }
+    let visible = grp.visible_len(grid.g)
+    if grid.position < visible && !grp.visible_is_group(grid.g, grid.position) && grp.visible_row(grid.g, grid.position) == grid.selected_row { ret }
+    var found = 0usize
+    while found < visible && (grp.visible_is_group(grid.g, found) || grp.visible_row(grid.g, found) != grid.selected_row) { found += 1usize }
+    if found >= visible {
+        grid.has_position = false
+        ret
+    }
+    grid.position = found
+    var page = grid.page_rows
+    if page == 0usize { page = 1usize }
+    let top = usize(grid.offset / grid.row_height)
+    if found < top {
+        grid.offset = f32(found) * grid.row_height
+    } else if found >= top + page {
+        grid.offset = f32(found + 1usize - page) * grid.row_height
+    }
+}
+
+// v3's Best Fit: the column takes the width of its widest content (and its title) in the grid's text;
+// the widest text is the longest by bytes, found without measuring every row.
+fn best_fit(a: *mem.Arena, grid: *Grid, spec: usize) -> err {
+    if spec >= grid.all.len { ret ok }
+    let s = grid.all[spec]
+    if s.kind == CellKind.Indicator || s.kind == CellKind.Star || s.kind == CellKind.Picture || s.kind == CellKind.Custom { ret ok }
+    var widest = s.title
+    let kind = table.column_kind(grid.t, s.column)
+    if kind == table.Kind.Dict {
+        let n = table.dict_len(grid.t, s.column)
+        var id = 0usize
+        while id < n {
+            let text = table.dict_str(grid.t, s.column, u32(id))
+            if text.len > widest.len { widest = text }
+            id += 1usize
+        }
+    } else if kind == table.Kind.Str {
+        var row = 0usize
+        let rows = table.row_count(grid.t)
+        while row < rows {
+            if table.is_live(grid.t, row) {
+                let text = table.get_str(grid.t, s.column, row)
+                if text.len > widest.len { widest = text }
+            }
+            row += 1usize
+        }
+    }
+    var text_node_value: widget.Node = zero
+    let node_error = text_node(a, grid, widest, false, .Text, &text_node_value)
+    if node_error != ok { ret node_error }
+    var width = widget.text_width(a, text_node_value)
+    // a title with its sort triangle needs a little more
+    var extra: f32 = 2.0 * 4.0 + 1.0
+    if grid.look.on { extra = 2.0 * grid.look.pad + 1.0 }
+    width += extra + 6.0
+    if width < 24.0 { width = 24.0 }
+    if width > 1600.0 { width = 1600.0 }
+    resize_column(grid, spec, width)
+    ret ok
+}
+
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     grid.theme = theme
     try follow_focus(grid, theme)
@@ -1724,6 +1799,12 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     if grid.navigator_visible { body_height = body_height - 52.0 }
     if grid.group_box_visible { body_height = body_height - 35.0 }
     grid.page_rows = usize(body_height / grid.row_height)
+    follow_row_after_reorder(grid)
+    if grid.fit_pending {
+        grid.fit_pending = false
+        let fit_error = best_fit(a, grid, grid.fit_spec)
+        if fit_error != ok { ret (zero, fit_error) }
+    }
     var sort_shown = grid.specs.len
     let (sort_at, sort_visible) = display_of(grid, grid.sort_column)
     if sort_visible { sort_shown = sort_at }

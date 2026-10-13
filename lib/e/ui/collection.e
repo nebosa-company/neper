@@ -1776,6 +1776,9 @@ fn resize_drag(ctx: *void, g: widget.Gesture) -> err {
         if width < r.low { width = r.low }
         r.width = width
         ret widget.fire_change[ColumnResize](r.resize, ColumnResize { column: r.column, width: width })
+    case .DoubleTap as at:
+        // a double tap on the handle asks for the column's best fit (width -1)
+        ret widget.fire_change[ColumnResize](r.resize, ColumnResize { column: r.column, width: -1.0 })
     default:
         ret ok
     }
@@ -2079,7 +2082,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         grip_style.width = style.Length { Percent: 100.0 }
         grip_style.height = style.Length { Percent: 100.0 }
         grip_style.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: flat, right: flat, bottom: flat }
-        grip_node[0usize] = widget.region(grip_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&resizes[i]), invoke: resize_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: false }, grip_style, drawn[0usize..1usize])
+        grip_node[0usize] = widget.region(grip_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&resizes[i]), invoke: resize_drag }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: false }, grip_style, drawn[0usize..1usize])
         let (grip_label, grip_label_error) = mem.alloc[u8](a, columns[i].title.len + 7usize)
         if grip_label_error != ok { ret (zero, TooLarge) }
         var grip_label_len = control.copy_text(grip_label, "Resize ")
