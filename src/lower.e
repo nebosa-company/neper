@@ -2848,7 +2848,16 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
         if stack_error != ok { ret stack_error }
         return_slot = stack
     }
-    try record_inlined(builder, entry.module_index, entry.name, entry.instance)
+    // A generic instance's body is its template's declaration (D4702), so that is the edge:
+    // the instance's owner is the module that instantiated it and has no function of the
+    // name, which a kernel's device copy of another module's helper reached.
+    var edge_module = entry.module_index
+    var edge_instance = entry.instance
+    if entry.instance != 0usize {
+        edge_module = entry.walked_in
+        edge_instance = 0usize
+    }
+    try record_inlined(builder, edge_module, entry.name, edge_instance)
     // The callee's body may itself hold copies (D212): every callee of those is a
     // body edge of this module too, or an edit to it would leave this copy stale.
     var nested_at = 0usize
@@ -3020,6 +3029,15 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                     try nir.set_branch_targets(builder, leave, continuation, 0usize)
                 } else {
                     var immediate = instruction.immediate
+                    // A conditional branch's explicit merge (one-based, a block of the
+                    // callee) is a block of the copy now: the device writer structures the
+                    // copy's control flow from it (D4702).
+                    if instruction.opcode == .BranchIf && instruction.immediate != 0usize {
+                        let merge_block = instruction.immediate - 1usize
+                        if merge_block >= callee.first_block && merge_block < callee.first_block + callee.block_count {
+                            immediate = block_map[merge_block - callee.first_block] + 1usize
+                        }
+                    }
                     if instruction.opcode == .Call || instruction.opcode == .FunctionAddress {
                         let reference = oracle.function_refs[instruction.immediate]
                         var interned = 0usize

@@ -7019,6 +7019,46 @@ cmp "$test_build/gpu-device-edit-hot" "$test_build/gpu-device-edit-clean"
 chmod +x "$test_build/gpu-device-edit-hot"
 device_edit_output=$("$test_build/gpu-device-edit-hot")
 [ "$device_edit_output" = 'gpu device edit ok' ]
+# (D4702) A constant read in an inlined body is part of the body's edge: a release build that
+# inlined `midhelp.mix` into main says the new value after the constant's edit.
+release_const_fixture="$repo/tests/selfhost/fixtures/link/release_const_edge"
+release_const_scratch="$test_build/release-const-edge"
+rm -rf "$release_const_scratch"
+mkdir -p "$release_const_scratch/src"
+cp "$release_const_fixture"/src/*.e "$release_const_scratch/src/"
+release_const_first=$($test_build/neper-self emit-executable "$release_const_scratch/src/main.e" "$repo" x64 linux "$release_const_scratch/release-const" --release --incremental 2>/dev/null)
+[ "$release_const_first" = 'executable written' ]
+chmod +x "$release_const_scratch/release-const"
+[ "$("$release_const_scratch/release-const")" = '14' ]
+cp "$release_const_fixture/edits/lowvals.e" "$release_const_scratch/src/lowvals.e"
+release_const_second=$($test_build/neper-self emit-executable "$release_const_scratch/src/main.e" "$repo" x64 linux "$release_const_scratch/release-const" --release --incremental 2>/dev/null)
+[ "$release_const_second" = 'executable written' ]
+[ "$("$release_const_scratch/release-const")" = '15' ]
+# (C094, D4702) Generic, early-return and loop helpers and a constant two modules from a kernel:
+# the device agrees with the host, and a constant's edit rebuilds the kernel's module.
+device_helpers_fixture="$repo/tests/selfhost/fixtures/link/gpu_device_helpers"
+device_helpers_scratch="$test_build/gpu-device-helpers-scratch"
+device_helpers_artifacts="$test_build/gpu-device-helpers-artifacts"
+rm -rf "$device_helpers_scratch" "$device_helpers_artifacts"
+mkdir -p "$device_helpers_scratch/src" "$device_helpers_artifacts"
+cp "$device_helpers_fixture"/src/*.e "$device_helpers_scratch/src/"
+device_helpers_main="$device_helpers_scratch/src/main.e"
+device_helpers_written=$($test_build/neper-self emit-executable "$device_helpers_main" "$repo" x64 linux "$test_build/gpu-device-helpers-selfhost")
+[ "$device_helpers_written" = 'executable written' ]
+chmod +x "$test_build/gpu-device-helpers-selfhost"
+device_helpers_output=$("$test_build/gpu-device-helpers-selfhost")
+case "$device_helpers_output" in
+    'gpu device helpers ok on cpu and '[0-9]' devices'|'gpu device helpers ok on cpu and '1[0-6]' devices') ;;
+    *) printf '%s\n' "the device helpers fixture failed: $device_helpers_output" >&2; exit 1 ;;
+esac
+device_helpers_first=$($test_build/neper-self emit-em-all "$device_helpers_main" "$repo" x64 linux "$device_helpers_artifacts")
+[ "$device_helpers_first" = 'compiled modules written' ]
+device_helpers_same=$($test_build/neper-self emit-em-all "$device_helpers_main" "$repo" x64 linux "$device_helpers_artifacts" --incremental)
+case "$device_helpers_same" in *rebuilt*) printf %s "an unchanged device helpers fixture rebuilt a module: $device_helpers_same" >&2; echo >&2; exit 1 ;; esac
+cp "$device_helpers_fixture/edits/lowvals_limit.e" "$device_helpers_scratch/src/lowvals.e"
+device_helpers_edit=$($test_build/neper-self emit-em-all "$device_helpers_main" "$repo" x64 linux "$device_helpers_artifacts" --incremental)
+case "$device_helpers_edit" in *'rebuilt main'*) ;; *) printf %s "a constant edit two modules from the kernel did not rebuild its module: $device_helpers_edit" >&2; echo >&2; exit 1 ;; esac
+case "$device_helpers_edit" in *'kept genhelp'*) ;; *) printf %s "an untouched module was rebuilt: $device_helpers_edit" >&2; echo >&2; exit 1 ;; esac
 # The schedule does not reach the image (C083, D331): the device oracle and the kernel
 # module's device copy are the same bytes under one worker and under a turned-around crew.
 device_edit_serial_written=$($test_build/neper-self emit-executable "$device_edit_hot_main" "$repo" x64 linux "$test_build/gpu-device-edit-j1" -j 1 2>/dev/null)

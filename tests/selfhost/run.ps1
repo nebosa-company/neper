@@ -7117,6 +7117,46 @@ if ($LASTEXITCODE -ne 0 -or $deviceEditCleanWritten -ne 'executable written') { 
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditHotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditCleanExe).Hash) { throw 'the hot build after a device-reached edit is not the clean build' }
 $deviceEditOutput = & $deviceEditHotExe
 if ($LASTEXITCODE -ne 0 -or $deviceEditOutput -ne 'gpu device edit ok') { throw "the edited device edit fixture answered wrongly: exit $LASTEXITCODE $deviceEditOutput" }
+# (D4702) A constant read in an inlined body is part of the body's edge: a release build that
+# inlined `midhelp.mix` into main says the new value after the constant's edit.
+$releaseConstFixture = Join-Path $PSScriptRoot 'fixtures\link\release_const_edge'
+$releaseConstScratch = Join-Path $testBuild 'release-const-edge'
+if (Test-Path -LiteralPath $releaseConstScratch) { Remove-Item -LiteralPath $releaseConstScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $releaseConstScratch 'src') | Out-Null
+Copy-Item (Join-Path $releaseConstFixture 'src\*.e') (Join-Path $releaseConstScratch 'src')
+$releaseConstMain = Join-Path $releaseConstScratch 'src\main.e'
+$releaseConstExe = Join-Path $releaseConstScratch 'release-const.exe'
+$releaseConstFirst = & $compiler emit-executable $releaseConstMain $repo 'x64' 'windows' $releaseConstExe --release --incremental 2>$null
+if ($LASTEXITCODE -ne 0 -or $releaseConstFirst -ne 'executable written' -or (& $releaseConstExe) -ne '14') { throw 'the release constant fixture did not build and answer 14' }
+Copy-Item (Join-Path $releaseConstFixture 'edits\lowvals.e') (Join-Path $releaseConstScratch 'src\lowvals.e')
+$releaseConstSecond = & $compiler emit-executable $releaseConstMain $repo 'x64' 'windows' $releaseConstExe --release --incremental 2>$null
+if ($LASTEXITCODE -ne 0 -or $releaseConstSecond -ne 'executable written' -or (& $releaseConstExe) -ne '15') { throw 'an incremental release build kept the old constant inlined' }
+# (C094, D4702) What else a kernel reaches in other modules: a generic helper instantiated in
+# a module the kernel does not own, helpers with an early return and a loop, and a constant
+# read two modules away. The device agrees with the host; and a constant's edit rebuilds the
+# kernel's module, whose device copy has the old value baked in, which a body edge on the
+# helper's tokens alone did not (the same hole kept a release build's inlined copy stale).
+$deviceHelpersFixture = Join-Path $PSScriptRoot 'fixtures\link\gpu_device_helpers'
+$deviceHelpersScratch = Join-Path $testBuild 'gpu-device-helpers-scratch'
+$deviceHelpersSource = Join-Path $deviceHelpersScratch 'src'
+$deviceHelpersArtifacts = Join-Path $testBuild 'gpu-device-helpers-artifacts'
+if (Test-Path -LiteralPath $deviceHelpersScratch) { Remove-Item -LiteralPath $deviceHelpersScratch -Recurse -Force }
+if (Test-Path -LiteralPath $deviceHelpersArtifacts) { Remove-Item -LiteralPath $deviceHelpersArtifacts -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $deviceHelpersSource, $deviceHelpersArtifacts | Out-Null
+Copy-Item (Join-Path $deviceHelpersFixture 'src\*.e') $deviceHelpersSource
+$deviceHelpersMain = Join-Path $deviceHelpersSource 'main.e'
+$deviceHelpersExe = Join-Path $testBuild 'gpu-device-helpers-selfhost.exe'
+$deviceHelpersWritten = & $compiler emit-executable $deviceHelpersMain $repo 'x64' 'windows' $deviceHelpersExe
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersWritten -ne 'executable written') { throw 'gpu_device_helpers emission failed' }
+$deviceHelpersOutput = & $deviceHelpersExe
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersOutput -notmatch '^gpu device helpers ok on cpu and [0-9]+ devices$') { throw "the device helpers fixture failed: exit $LASTEXITCODE $deviceHelpersOutput" }
+$deviceHelpersFirst = & $compiler emit-em-all $deviceHelpersMain $repo 'x64' 'windows' $deviceHelpersArtifacts
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersFirst -ne 'compiled modules written') { throw 'the device helpers fixture did not compile to artifacts' }
+$deviceHelpersSame = (& $compiler emit-em-all $deviceHelpersMain $repo 'x64' 'windows' $deviceHelpersArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersSame -match 'rebuilt') { throw "an unchanged device helpers fixture rebuilt a module: $deviceHelpersSame" }
+Copy-Item (Join-Path $deviceHelpersFixture 'edits\lowvals_limit.e') (Join-Path $deviceHelpersSource 'lowvals.e')
+$deviceHelpersEdit = (& $compiler emit-em-all $deviceHelpersMain $repo 'x64' 'windows' $deviceHelpersArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersEdit -notmatch 'rebuilt main' -or $deviceHelpersEdit -notmatch 'rebuilt midhelp' -or $deviceHelpersEdit -notmatch 'kept genhelp') { throw "a constant edit two modules from the kernel did not rebuild the kernel's module: $deviceHelpersEdit" }
 # The schedule does not reach the image (C083, D331): the device oracle and the kernel
 # module's device copy are the same bytes under one worker and under a turned-around crew.
 $deviceEditSerialExe = Join-Path $testBuild 'gpu-device-edit-j1.exe'

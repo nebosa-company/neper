@@ -2396,6 +2396,7 @@
     "gpu_barrier_occurrence",
     "gpu_cpu",
     "gpu_device_edit",
+    "gpu_device_helpers",
     "gpu_device_lock",
     "gpu_devices",
     "gpu_divergence",
