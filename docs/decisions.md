@@ -40705,3 +40705,7 @@ v3's collection grid edits on the first tap of an editable cell (Qty, Used, SB),
 ## D3931 — G012: pixel probes for the selected-row border, column lines and header fill
 
 ui_datagrid section 15 now probes the rendered frame for ledger rows P006 (selected row #A6D2FF with a #83878B 1 px line on its top and bottom edge), P007 (#E6E6E6 column lines through an unselected body row) and the header fill of P008 (white). The #C6C6C6 header divider is a short grip rule, not a full-height line, so it is not probed; the sort triangle's right alignment, the header hover (P017) and the footer band (P020) stay on the recordings until a fixture can drive a hover and show a footer.
+
+## D3932 — G012: the cell editor's caret follows the tap
+
+A tap on an editable cell of an immediate-edit grid now edits the tapped cell (not the row's first editable one; a non-editable cell edits nothing, as in v3) and puts the caret where the tap was: `Grid.edit_caret_frames` keeps the tap's distance into the cell (less its padding) and `widget.edit_place_caret(runtime, dx)` places the focused editor's caret there on the frames after the focus lands (an animation frame is requested meanwhile, since an idle grid builds nothing). The placement is relative to the cell, not the window: an editor's `text_origin` is where the element was placed, which is not where the cell's text sits once the row moves. Verified in the sample: a tap left of "11" then 5 gives 511, between the digits 151, right of them 115 (v3: 151 from the middle).

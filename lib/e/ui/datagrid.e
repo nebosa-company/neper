@@ -131,6 +131,8 @@ type Grid = struct {
     group_box_visible: bool,
     immediate_edit: bool,
     edit_focus_pending: bool,
+    edit_caret_frames: usize,
+    edit_click_x: f32,
     rest_row: usize,
     rest_spec: usize,
     rest_pending: bool,
@@ -1387,9 +1389,35 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
         // the first editable column of the row (v3 starts the edit of the clicked cell at once)
         var column = 0usize
         while column < grid.specs.len && !grid.specs[column].editable { column += 1usize }
+        // ... or the cell that was tapped, when it is one
+        var tapped = false
+        var tap_x: f32 = 0.0
+        if mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
+            let at_point = widget.pointer_position(grid.theme.runtime)
+            let (row_box, row_found) = widget.bounds_for_key(grid.theme.runtime, row_key(grid, usize(at)))
+            if row_found && at_point.x >= row_box.x {
+                var edge = row_box.x
+                var d = 0usize
+                while d < grid.specs.len {
+                    edge += grid.widths[grid.origin[d]]
+                    if at_point.x < edge {
+                        tapped = true
+                        // the tap's distance into the cell, less its padding
+                        tap_x = at_point.x - (edge - grid.widths[grid.origin[d]]) - 4.0
+                        if grid.specs[d].editable { column = d } else if grid.immediate_edit { column = grid.specs.len }
+                        break
+                    }
+                    d += 1usize
+                }
+            }
+        }
         if column < grid.specs.len {
             let began = begin_edit(grid, usize(at), grid.origin[column])
             if began != ok && began != Locked && began != NotEditable { ret began }
+            if began == ok && grid.editing && tapped {
+                grid.edit_caret_frames = 2usize
+                grid.edit_click_x = tap_x
+            }
         }
     } else if grid.editing && grid.edit_row != usize(at) {
         cancel_edit(grid)
@@ -1772,7 +1800,14 @@ fn follow_focus(grid: *Grid, theme: *const control.Theme) -> err {
     if grid.editing && grid.edit_focus_pending {
         // the editor takes the keyboard as soon as it stands in the tree
         if widget.focus_key(theme.runtime, grid.key + EDIT_KEY) == ok { grid.edit_focus_pending = false }
+        if grid.edit_caret_frames > 0usize { widget.request_animation_frame(theme.runtime) }
         ret ok
+    }
+    if grid.editing && grid.edit_caret_frames > 0usize && !grid.edit_focus_pending {
+        // v3 puts the caret where the tap was; the editor's text has its place from the second
+        // frame on, so the point is applied for the next few frames
+        if widget.edit_place_caret(theme.runtime, grid.edit_click_x) { grid.edit_caret_frames -= 1usize }
+        if grid.edit_caret_frames > 0usize { widget.request_animation_frame(theme.runtime) }
     }
     if grid.editing { ret ok }
     if grid.rest_pending {

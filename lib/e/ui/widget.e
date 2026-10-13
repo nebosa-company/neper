@@ -5364,6 +5364,19 @@ fn pointer_position(widget_runtime: *const Runtime) -> geometry.Point {
     ret s.arena_state.last
 }
 
+// Puts the caret of the focused text editor `dx` along its text from the text's origin, as a tap
+// at that distance into the editor does; false when no editor has the focus.
+fn edit_place_caret(widget_runtime: *Runtime, dx: f32) -> bool {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret false }
+    let (slot, held) = focused_edit(s)
+    if !held { ret false }
+    let o = s.elements[slot].text_origin
+    let to = edit_hit(s, slot, geometry.Point { x: o.x + dx, y: o.y + 1.0 })
+    edit_move(&s.elements[slot], to, false)
+    ret true
+}
+
 fn dragging(widget_runtime: *const Runtime) -> (u64, bool) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize { ret (0u64, false) }
