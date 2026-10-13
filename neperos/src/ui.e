@@ -398,7 +398,7 @@ fn keyboard(a: *mem.Arena, builder: *scene.Builder, hits: *Hits, faces: text.Fac
     try key_cap(a, builder, hits, faces, 1203usize, 18.0, 732.0, 44.0, "-", soft())
     try key_cap(a, builder, hits, faces, 1204usize, 68.0, 732.0, 44.0, "/", soft())
     // (C175) A Paste key beside space when the clipboard holds text (space gives up the width; its left edge stays).
-    var clip_bytes: [32]u8 = zero
+    var clip_bytes: [128]u8 = zero
     var now_seconds = 0usize
     let (wall, wall_error) = time.now()
     if wall_error == ok && wall.nanos > 0i64 { now_seconds = usize(wall.nanos / 1000000000i64) }
@@ -471,7 +471,7 @@ fn field_key(f: *Field, id: usize, capital: bool) -> bool {
     }
     if id == 1206usize {
         // Paste: the clipboard's text (the keyboard only draws this key while it holds some).
-        var clip_bytes: [32]u8 = zero
+        var clip_bytes: [128]u8 = zero
         var now_seconds = 0usize
         let (wall, wall_error) = time.now()
         if wall_error == ok && wall.nanos > 0i64 { now_seconds = usize(wall.nanos / 1000000000i64) }

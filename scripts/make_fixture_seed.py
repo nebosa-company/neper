@@ -8,6 +8,7 @@ secure_breach  /breachhost            the host Secure asks for the breach range 
 ssh_changed    /ssh/known             the SSH app trusts a key for slot 5 (neper-test) that is not the server's
 ai_attach      /DCIM/IMG_0001.png     a Camera frame (a PNG: tests/selfhost/fixtures/neperos/qr_frame.png) and
                /notes.txt             a text file, for the AI app's Attach
+chat_two       /chat/account          the account the Chat app signs in with (name:secret)
 ssh_sftp       /up.txt                a file of the device the SSH app's Files uploads
 """
 import pathlib
@@ -30,6 +31,8 @@ def main():
     elif name == 'ai_attach':
         files['/DCIM/IMG_0001.png'] = (pathlib.Path(__file__).resolve().parent.parent / 'tests' / 'selfhost' / 'fixtures' / 'neperos' / 'qr_frame.png').read_bytes()
         files['/notes.txt'] = b'Remember to water the plants on Friday.\n'
+    elif name == 'chat_two':
+        files['/chat/account'] = b'sam:samsecret'
     elif name == 'ssh_sftp':
         files['/up.txt'] = b'uploaded from NeperOS\n'
     else:

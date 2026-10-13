@@ -1357,7 +1357,7 @@ fn wall_seconds() -> usize {
 
 fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
     s.hits.total = 0usize
-    var clip_bytes: [32]u8 = zero
+    var clip_bytes: [128]u8 = zero
     let (clip_length, clip_owner) = sysettings.clip_get(wall_seconds(), clip_bytes[0usize..])
     s.clip_len = clip_length
     let faces = kit.faces
@@ -1884,7 +1884,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret true
     }
     if id == 212usize {
-        var clip_bytes: [32]u8 = zero
+        var clip_bytes: [128]u8 = zero
         let (clip_length, clip_owner) = sysettings.clip_get(wall_seconds(), clip_bytes[0usize..])
         if clip_length == 0usize { ret true }
         let pasted = ui.field_paste(&s.draft, clip_bytes[0usize..], clip_length)

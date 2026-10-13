@@ -49,7 +49,7 @@ const OP_TORCH: usize = 11usize
 const OP_CLIP_SET: usize = 12usize
 const OP_CLIP_GET: usize = 13usize
 const CLIP_SECONDS: usize = 90usize
-const CLIP_BYTES: usize = 32usize
+const CLIP_BYTES: usize = 128usize
 // (C163, D4006) The torch with a timer: TORCH_FOR level seconds -> the level now set; the server turns it off by itself
 // after the seconds (and after TORCH_MAX_SECONDS whatever was asked: the policy that no app leaves the LED on).
 // TORCH_TOGGLE -> the level now set: on at the last level used (full when none) or off, for the quick toggles of the
@@ -107,7 +107,7 @@ fn torch_toggle() -> (usize, bool) {
     ret (os.recv(REP, NO_SLOT), true)
 }
 
-// Put `value` (at most 32 bytes) on the clipboard as `owner`, at wall-clock second `now`; whether the server took it.
+// Put `value` (at most 128 bytes, C175) on the clipboard as `owner`, at wall-clock second `now`; whether the server took it.
 fn clip_set(owner: usize, now: usize, value: str) -> bool {
     let sent = os.send(REQ, OP_CLIP_SET, NO_SLOT)
     if sent == REFUSED { ret false }
@@ -117,7 +117,7 @@ fn clip_set(owner: usize, now: usize, value: str) -> bool {
     let s1 = os.send(REQ, now, NO_SLOT)
     let s2 = os.send(REQ, length, NO_SLOT)
     var w = 0usize
-    while w < 4usize {
+    while w < 16usize {
         var word_value = 0usize
         var b = 0usize
         while b < 8usize {
@@ -132,7 +132,7 @@ fn clip_set(owner: usize, now: usize, value: str) -> bool {
     ret true
 }
 
-// The clipboard's text into `out` (32 bytes at least) at wall-clock second `now`: its length (0 when empty, expired or
+// The clipboard's text into `out` (128 bytes at least) at wall-clock second `now`: its length (0 when empty, expired or
 // there is no server) and its owner.
 fn clip_get(now: usize, out: []u8) -> (usize, usize) {
     let sent = os.send(REQ, OP_CLIP_GET, NO_SLOT)
@@ -141,7 +141,7 @@ fn clip_get(now: usize, out: []u8) -> (usize, usize) {
     let length = os.recv(REP, NO_SLOT)
     let owner = os.recv(REP, NO_SLOT)
     var w = 0usize
-    while w < 4usize {
+    while w < 16usize {
         let word_value = os.recv(REP, NO_SLOT)
         var b = 0usize
         while b < 8usize {
