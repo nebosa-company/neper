@@ -2406,6 +2406,12 @@ D3915	3378	G006: datagrid Tab navigation, column visibility and order
 D3916	1982	G007: single-row reposition, editors by kind, lock, old/new text and batches
 D2472	433	The kernel's fs-grant list after the lane C merge is one condition
 D2473	630	The SSH GCM invocation counter carries without overflowing a byte
+D4700	1717	Mock GPU inventory and a bounded count/list retry
+D4701	2069	`f64` in the SPIR-V writer: the arithmetic that rounds once
+D4702	2991	A kernel's device copy of branchy, generic and constant-reading helpers, and the constant edge
+D4703	2297	C082 measured again: the bound is one module, and what splitting it needs
+D4704	3368	NeperOS: the rest of the `e.os` surface, the runtime symbols a library module reaches, and `target.os == .Neperos`
+D4705	1548	CUDA device enumeration
 D4500	2925	e.ui.terminal speaks keypad application mode, modifyOtherKeys and the kitty keyboard protocol
 D4501	1291	A selected word runs over a wrap and a wrapped wide character's padding blank is not text
 D4502	1377	The scrollback viewport is a separate module over e.ui.collection
@@ -2418,4 +2424,16 @@ D2475	451	The cross-host changed-input check joins the tool's lines
 D4400	1914	The deflate matcher and the PNG row filters run unchecked and in words
 D4401	2414	Language packs by registry ID, nested and second block comments, case-folded keywords
 D4402	1271	Per-view fold state through edits, and wrap-aware vertical motion
-D4403	1878	Completion source model, revisioned diagnostics, bracket and JSON lints
+D4403	1879	Completion source model, revisioned diagnostics, bracket and JSON lints
+D2477	789	The beat-timing fixture asserts the measurement, not the host's speed
+D4600	2843	L037: `coerceValue` and `coerceRecord` of `io/infer.js` in `e.algo.syncinfer`, and what the date parser now returns
+D4601	2362	L164: transparent retries in the call loop, and the loop over real sockets
+D4602	2835	L048: the SFTP protocol (version 3) as `e.net.sftp`, checked against OpenSSH's sftp-server
+D4603	2033	L048: AWS Signature Version 4 as `x.cloud.awssig`, checked against botocore
+D4604	1276	L162: the R half of the chart benchmark is written and not run
+D4605	2492	L150: region and script variants of the names, and the month names that depend on a day
+D4606	2610	L148: single-occurrence exceptions of a recurring series
+D4607	1800	L066: the Markdown viewer at the window: link taps and the clipboard
+D4608	2193	L067: eight more language tailorings of the tree adapter's sibling order, checked against ICU
+D4609	2293	L048: the wire bodies of the SDK calls: query, ec2 and json requests as `x.cloud.awsreq`
+D4610	2230	L048: rest-xml (S3, Route 53) request building in `x.cloud.awsreq`
