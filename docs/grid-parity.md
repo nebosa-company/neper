@@ -45,10 +45,10 @@ no-data, drag, conditional formatting and the deck and collection views are stil
 | P006 | Selected row: v3 #A6D2FF with a dark 1 px border and gradient ends; v5 flat tint, no border | | look applied (D3919); fixture probe pending |
 | P007 | v3 has full-height vertical column lines in header and body; v5 only short header dividers | | look applied (D3919); fixture probe pending |
 | P008 | Header look: v3 white cell with the sort triangle right-aligned in the cell; v5 tinted header with the arrow after the text | | look applied (D3919); fixture probe pending |
-| P009 | Left columns: v3 has the customization glyph, favourite star, "ES" icon and the row indicator arrow, each ~18-20 px / 13 logical; v5 has one 28 px indicator | | indicator width 11.3 done; star (~22.7) and ES (~21.3) icon columns open |
+| P009 | Left columns: v3 has the customization glyph, favourite star, "ES" icon and the row indicator arrow, each ~18-20 px / 13 logical; v5 has one 28 px indicator | | star column closed by D3922 (CellKind.Star: header star, gold cell star); ES icon column open (needs the edition-symbol data) |
 | P010 | Cell text inset: v3 ~6 px / 4; v5 ~16 px | | open |
 | P011 | v3 frames the grid with a 1 px border; v5 has none | | closed by D3920: 1 px #828790 frame, parts touch (screenshot S01-compare-after-text-frame.png) |
-| P012 | Navigator: v3 flat glyph buttons (|< << < "1 of 120239" > >> >| filter) and a grey scroll bar; v5 text buttons | | open |
+| P012 | Navigator: v3 flat glyph buttons (|< << < "1 of 120239" > >> >| filter) and a grey scroll bar; v5 text buttons | | navigator arrows closed by D3922 (blue flat marks, grey at the ends, "n of m"); page-skip buttons, filter button and the grey scroll thumb open |
 | P013 | Footer: v3 shows summaries in a tinted band only when the footer is on ("Rows: 8" in the collection grid); v5 "Total" row styled differently | | open |
 | P014 | Row ink by rarity: v3 orange (mythic) and red (rare) with the exact palette of the app; v5 uses theme data colours | | open, extract palette |
 | P015 | Scrollbar: v3 native thin vertical bar; v5 draws none in the capture | | open |

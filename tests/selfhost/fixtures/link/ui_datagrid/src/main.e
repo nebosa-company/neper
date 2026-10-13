@@ -1131,6 +1131,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let upper = is_color(shot_z, px(z0.x + 300.0, z0.y + 9.0), gl.rgb(0xFFFFFFu32)) || is_color(shot_z, px(z0.x + 300.0, z0.y + 9.0), gl.rgb(0xEFEFEFu32))
     let lower_same = is_color(shot_z, px(z1.x + 300.0, z1.y + 9.0), gl.rgb(0xFFFFFFu32)) == is_color(shot_z, px(z0.x + 300.0, z0.y + 9.0), gl.rgb(0xFFFFFFu32))
     if !upper || lower_same { os.exit(374) }
+    // 16. the favourite star: a Star column shows it in its header and, set, in its cells; the
+    // navigator of the measured look is drawn with arrow marks
+    var nine: [9]dg.ColumnSpec = zero
+    var ni = 0usize
+    while ni < 9usize {
+        nine[ni] = dg.ColumnSpec { title: "C", width: 80.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+        ni += 1usize
+    }
+    let (made13, grid13_error) = dg.create(a, &app.tbl, &app.grouping, nine[0..], events, 10100u64)
+    if grid13_error != ok { os.exit(390) }
+    var grid13 = made13
+    dg.set_look(&grid13, gl.v3())
+    mem.reset(&f, 0usize)
+    let (root31, build31_error) = dg.build(&f, &grid13, &theme, 400.0)
+    if build31_error != ok { os.exit(391) }
+    if settle(&harness, root31, 89000000000i64) != ok { os.exit(392) }
+    var star_specs: [2]dg.ColumnSpec = zero
+    star_specs[0usize] = dg.ColumnSpec { title: "Fav", width: 40.0, column: C_FOIL, kind: dg.CellKind.Star, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: true, choice: false }
+    star_specs[1usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    let (made12, grid12_error) = dg.create(a, &app.tbl, &app.grouping, star_specs[0..], events, 10000u64)
+    if grid12_error != ok { os.exit(380) }
+    var grid12 = made12
+    dg.set_look(&grid12, gl.v3())
+    dg.show_navigator(&grid12, true)
+    mem.reset(&f, 0usize)
+    let (root30, build30_error) = dg.build(&f, &grid12, &theme, 400.0)
+    if build30_error != ok { os.exit(381) }
+    if settle(&harness, root30, 90000000000i64) != ok { os.exit(382) }
+    // the four navigator buttons exist under their keys
+    if testing.by_key(&harness, dg.navigator_key(&grid12) + 1u64).count == 0usize { os.exit(383) }
+    if testing.by_key(&harness, dg.navigator_key(&grid12) + 4u64).count == 0usize { os.exit(384) }
     os.exit(0)
     ret ok
 }

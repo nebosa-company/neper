@@ -2444,4 +2444,6 @@ D2481	599	The shell-processes boot does not fix which child runs first
 D3918	818	G012: the grid is a pixel-perfect equivalent of the v3 grid
 D3919	1351	G012: the grid reads a measured look (e.ui.gridlook)
 D3920	535	G012: text size 8 pt and the grid frame
-D3921	693	G012: text size by measured ink width; no integer-advance mode
+D3921	694	G012: text size by measured ink width; no integer-advance mode
+D2482	1618	A lossy colour-reduction step beside the lossless PNG encoders
+D3922	934	G012: favourite star column, navigator arrows, 1 MB scenes

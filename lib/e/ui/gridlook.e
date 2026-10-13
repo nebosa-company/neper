@@ -11,7 +11,13 @@
 // ponytail: only what the recordings give is here; hover and pressed rows, the focus
 // rectangle and unfocused-window selection colours wait for their recordings.
 
+use e.mem
+use e.gfx.geometry
 use e.gfx.paint
+use e.gfx.scene
+use e.ui.layout as ui_layout
+use e.ui.style
+use e.ui.widget
 
 type Look = struct {
     on: bool,
@@ -68,4 +74,121 @@ fn v3() -> Look {
 fn theme() -> Look {
     var look: Look = zero
     ret look
+}
+
+// ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
+
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar }
+
+type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape }
+
+fn mark_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+// A five-point star about (cx, cy): outer radius `r`, the inner one 0.382 of it.
+fn star_path(a: *mem.Arena, cx: f32, cy: f32, r: f32) -> (geometry.Path, err) {
+    let (pb, pb_error) = geometry.path_builder(a, 12usize, 12usize)
+    if pb_error != ok { ret (zero, pb_error) }
+    var builder = pb
+    let ri = r * 0.382
+    try geometry.move_to(&builder, geometry.Point { x: cx, y: cy - r })
+    try geometry.line_to(&builder, geometry.Point { x: cx + ri * 0.5878, y: cy - ri * 0.8090 })
+    try geometry.line_to(&builder, geometry.Point { x: cx + r * 0.9511, y: cy - r * 0.3090 })
+    try geometry.line_to(&builder, geometry.Point { x: cx + ri * 0.9511, y: cy + ri * 0.3090 })
+    try geometry.line_to(&builder, geometry.Point { x: cx + r * 0.5878, y: cy + r * 0.8090 })
+    try geometry.line_to(&builder, geometry.Point { x: cx, y: cy + ri })
+    try geometry.line_to(&builder, geometry.Point { x: cx - r * 0.5878, y: cy + r * 0.8090 })
+    try geometry.line_to(&builder, geometry.Point { x: cx - ri * 0.9511, y: cy + ri * 0.3090 })
+    try geometry.line_to(&builder, geometry.Point { x: cx - r * 0.9511, y: cy - r * 0.3090 })
+    try geometry.line_to(&builder, geometry.Point { x: cx - ri * 0.5878, y: cy - ri * 0.8090 })
+    try geometry.close_path(&builder)
+    ret (geometry.finish(&builder), ok)
+}
+
+fn triangle_path(a: *mem.Arena, x0: f32, y0: f32, x1: f32, y1: f32, left: bool) -> (geometry.Path, err) {
+    let (pb, pb_error) = geometry.path_builder(a, 4usize, 4usize)
+    if pb_error != ok { ret (zero, pb_error) }
+    var builder = pb
+    let ym = (y0 + y1) * 0.5
+    if left {
+        try geometry.move_to(&builder, geometry.Point { x: x1, y: y0 })
+        try geometry.line_to(&builder, geometry.Point { x: x0, y: ym })
+        try geometry.line_to(&builder, geometry.Point { x: x1, y: y1 })
+    } else {
+        try geometry.move_to(&builder, geometry.Point { x: x0, y: y0 })
+        try geometry.line_to(&builder, geometry.Point { x: x1, y: ym })
+        try geometry.line_to(&builder, geometry.Point { x: x0, y: y1 })
+    }
+    try geometry.close_path(&builder)
+    ret (geometry.finish(&builder), ok)
+}
+
+fn bar_path(a: *mem.Arena, x0: f32, y0: f32, x1: f32, y1: f32) -> (geometry.Path, err) {
+    let (pb, pb_error) = geometry.path_builder(a, 5usize, 5usize)
+    if pb_error != ok { ret (zero, pb_error) }
+    var builder = pb
+    try geometry.move_to(&builder, geometry.Point { x: x0, y: y0 })
+    try geometry.line_to(&builder, geometry.Point { x: x1, y: y0 })
+    try geometry.line_to(&builder, geometry.Point { x: x1, y: y1 })
+    try geometry.line_to(&builder, geometry.Point { x: x0, y: y1 })
+    try geometry.close_path(&builder)
+    ret (geometry.finish(&builder), ok)
+}
+
+fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*Mark](ctx)
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    var side = area.width
+    if area.height < side { side = area.height }
+    if m.shape == Shape.StarOutline || m.shape == Shape.StarFilled {
+        let (outer, outer_error) = star_path(m.arena, cx, cy, side * 0.5)
+        if outer_error != ok { ret outer_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: outer, brush: paint.Brush { Solid: m.color } } })
+        if m.shape == Shape.StarOutline {
+            let (hole, hole_error) = star_path(m.arena, cx, cy, side * 0.5 * 0.6)
+            if hole_error != ok { ret hole_error }
+            try scene.push(b, scene.Command { FillPath: scene.FillPath { path: hole, brush: paint.Brush { Solid: m.inner } } })
+        }
+        ret ok
+    }
+    let x0 = area.x
+    let x1 = area.x + area.width
+    let y0 = area.y
+    let y1 = area.y + area.height
+    let bar = area.width * 0.18
+    if m.shape == Shape.Left || m.shape == Shape.Right {
+        let (tri, tri_error) = triangle_path(m.arena, x0, y0, x1, y1, m.shape == Shape.Left)
+        if tri_error != ok { ret tri_error }
+        ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: tri, brush: paint.Brush { Solid: m.color } } })
+    }
+    if m.shape == Shape.FirstBar {
+        let (stem, stem_error) = bar_path(m.arena, x0, y0, x0 + bar, y1)
+        if stem_error != ok { ret stem_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: stem, brush: paint.Brush { Solid: m.color } } })
+        let (tri, tri_error) = triangle_path(m.arena, x0 + bar * 1.6, y0, x1, y1, true)
+        if tri_error != ok { ret tri_error }
+        ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: tri, brush: paint.Brush { Solid: m.color } } })
+    }
+    let (stem, stem_error) = bar_path(m.arena, x1 - bar, y0, x1, y1)
+    if stem_error != ok { ret stem_error }
+    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: stem, brush: paint.Brush { Solid: m.color } } })
+    let (tri, tri_error) = triangle_path(m.arena, x0, y0, x1 - bar * 1.6, y1, false)
+    if tri_error != ok { ret tri_error }
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: tri, brush: paint.Brush { Solid: m.color } } })
+}
+
+// A mark `width` by `height` in `color` (a star's hole in `inner`).
+fn mark(a: *mem.Arena, shape: Shape, color: paint.Color, inner: paint.Color, width: f32, height: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
+    if marks_error != ok { ret (zero, marks_error) }
+    marks[0usize] = Mark { arena: a, color: color, inner: inner, shape: shape }
+    var size = style.defaults()
+    size.width = style.Length { Px: width }
+    size.height = style.Length { Px: height }
+    size.min_width = style.Length { Px: width }
+    size.min_height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: size, children: none }, ok)
 }
