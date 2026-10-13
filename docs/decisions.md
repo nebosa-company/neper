@@ -40597,3 +40597,103 @@ The settings server's clipboard is sixteen words (128 bytes) instead of four: `s
 
 ## D5107 — C173: a prompt prefix and readable diagnostics on the build server
 `dynamic_services.py` composes the request a real model would get as the card of traps (`docs/llm-neper-card.md`) and the app kit's level in front of the prompt, followed by the last attempt's diagnostics rewritten as `CODE at line L, column C: message` one to a line (`readable`); the canned model ignores it, the audit log records its size and the kit level. Not done in C173: the scanner is still the token-level one of scan.e (the NIR walk needs the compiler to hand a built program's calls over, which `emit-executable` does not expose), and the signed revocation list is unchanged from D4107.
+
+## D4900 — C158: Mail lists the server's mailboxes and shows an HTML message with its inline image
+
+`sync_inbox` now also asks `LIST "" *` after the login and keeps up to six mailbox names (`mail folders N`); the mailbox shown is chosen on a new Mailboxes screen (Boxes on the list header) and fetched with `SELECT <name>`, replacing the messages of the folder chip Inbox (an empty mailbox empties it). A message that carries HTML is walked as a MIME tree (`mime_walk`: multipart parts to depth four, `extract.decode_body` for transfer encoding and charset, the first text/html and text/plain part, the first PNG or JPEG part with its Content-ID) and the HTML is laid out as at most fourteen lines of kinds (heading, second heading, bullet, link, body, picture) from the `e.fmt.html` tree with the words wrapped per kind (`rich_walk`); an `<img src="cid:...">` that names the image part found is a line of its own and the PNG or JPEG is decoded (`e.fmt.png`, `e.fmt.jpeg`) and uploaded as a texture, drawn at three times its size up to 180 px. The message screen draws those lines in a taller card; a plain message is shown as before. The test server's `Updates` mailbox holds a `multipart/related` newsletter (heading, paragraph, two bullets, a link, a 24 x 24 PNG named `logo1`); `mail_html` opens it and passes (`mail rich 6 image 24x24`, `mail image drawn`). This is not the Document app's engine -- Document has no HTML reader -- but a second flow of the same tree Browser walks; the Document hand-over is D4906. Not done: inline images other than the first, remote images, link taps, fonts or colours from the message's CSS.
+
+## D4901 — C158: threads
+
+Two messages of one folder are one thread when their subjects match after `Re:`, `Fwd:` and `Fw:` (any case, repeated) are skipped (`same_thread`); `build_list` keeps the newest of each thread, a row of a thread of several shows the count as `(3) subject`, and a tap on it opens a Thread screen listing the thread's messages oldest first; a tap on one opens it and Back returns to the thread. The test server's `Archive` mailbox holds a three-message thread (`Trip plan`, two `Re:` with In-Reply-To and References) and a receipt; `mail_threads` selects it, opens the thread (`mail thread 3 Re: Trip plan`) and a message in it. Threads are by subject only (the References header is not read), so a changed subject starts a new thread.
+
+## D4902 — C158: accounts
+
+The built-in test account is account 0; Add account on the Mailboxes screen takes a user and a password on the keyboard, asks the server for a login (`try_login`) and, when it is accepted, keeps the account in `/mail_accounts` (`user<TAB>password<LF>`, three accounts at most) and shows its inbox; a tap on an account switches to it (its mailboxes are listed again). A restart finds the accounts again (`mail accounts 2`). The password is kept in that file in the clear: Secure's vault needs its master password to open and Mail has no way to ask for it, so "kept in Secure" (C116) is not met, and OAuth for the large providers is not started. `mail_accounts` and `mail_accounts_again` (live, on a disk) add `ada` and find her after a restart. The test server grew accounts `ada` (one inbox message), `grace` and `alan` (D4904, D4905), selected by LOGIN; flags and deletions are kept per (user, folder, uid).
+
+## D4903 — C158: compose with an attachment, checked on the server
+
+The compose screen has Attach, which lists `/Downloads` (the files Mail and Browser save there) and takes one of up to 4 KB; Send then builds `multipart/mixed` (the text, the file as base64 in 76-byte lines) and SMTP accepts it. The sender is the account's address. After the 250, `verify_sent` logs in over IMAP, selects `Sent` (the test server keeps what SMTP accepted, as sent) and reads the last message's attachment back with `find_attachment`, so `mail sent verified menu.txt 36` is what arrived, not what was sent. `find_attachment` now reads a part up to 24 KB of its encoded form, and saving an attachment fetches the message again by UID and writes the whole decoded part (`save_attachment`; the first 128 bytes kept in the message are only the fallback). `mail_attach_again` (on the disk `mail_attach` left, so `/Downloads/menu.txt` exists) composes, attaches, sends and verifies. Not done: attaching from Photos or the Camera, drafts, signatures, the contact picker.
+
+## D4904 — C158: search, mark unread and archive are done on the server
+
+The list header has Find: the words typed go to the server as `UID SEARCH TEXT "words"` over the mailbox shown (`imap.search`) and the list shows only the UIDs answered (`mail search enigma 1`); Clear lifts it. A message that came from the server has Unread (`UID STORE -FLAGS.SILENT (\Seen)`, `mail server unread N`) and Archive (`UID COPY N Archive`, then `+FLAGS.SILENT (\Deleted)` and `EXPUNGE`; `imap.run` carries the COPY, the library has no `copy`), after which the Archive mailbox holds it. The test server answers SEARCH over the rendered message, COPY into account `alan`'s Archive, and `-FLAGS` on STORE. `mail_actions` adds `alan`, searches, marks unread, clears, archives and reads the Archive back (`mail synced 1`). Swipe gestures and labels are not done; the actions are buttons.
+
+## D4905 — C158: new mail is found by polling and counted as a notification
+
+With the list in front the inbox is fetched again every 30 s (`tap.tick` and the monotonic clock); a message whose UID is above the highest seen is new, and Mail posts one notification through `bgclient.notify` (the background services process posts it as Mail's own place in Settings' list to the status service: `services notification from app 26`) and says `mail new N`, `mail notified N`. There is no IDLE (the library has none and the apps hold one connection at a time) and no icon badge. The test account `grace` has one message and a second arrives 20 s after the first time her inbox was fetched, so `mail_push` signs her in and waits.
+
+## D4906 — C158: Open in Document
+
+Doc on a message from the server fetches it again, writes its HTML (its plain text when it has none) to `/Downloads/mail-<uid>.html` and hands that over to Document: the path goes in `/handover`, Mail leaves and exits with 20040, the shell starts program 40 (how Files opens a file); Open beside an attachment does the same with the attachment. Document shows the file as source or text (it has no HTML renderer). `mail_document` and `mail_open_attachment` pass `document shown`.
+
+## D4910 — C159: POST forms and fields edited on the page
+
+`walk` keeps the fields of a `<form>` (name, value of 24 bytes, hidden, six at most) in the state and the form's method; each shown field is a box line a tap edits on a field screen with the keyboard (Done puts the value back into the line), and the form's end is a Submit button whose tap builds the query (GET: `action?query`, followed like a link) or the urlencoded body (POST: `httpc.post` with `Content-Type: application/x-www-form-urlencoded`, a 303 or 302 followed with GET, cookies sent and kept). `httpc.request` keeps a `Content-Type` the caller names in `extra` instead of adding the JSON one. `browser_post` edits `ada` to `bob`, submits, and the echo page shows `note=hi, token=t1, user=bob`. Not done: select, checkbox and radio controls, a body over 96 bytes, multipart/form-data, Back after a POST refetches with GET.
+
+## D4911 — C159: PNG and JPEG images
+
+The first two `<img>` of a page are fetched from its host (each inside a `mem.mark` so its 96 KB reply buffer is given back); a PNG or JPEG of at most 32 KB is decoded with `e.fmt.png` or `e.fmt.jpeg` (detected by its magic bytes, not its Content-Type) and uploaded as a texture, scaled to 96 px high or 372 wide; an SVG of at most 1.5 KB is kept as text as before. `browser_images` shows a 24 x 24 PNG and a 32 x 32 JPEG (`browser image png 24x24`, `browser image jpeg 32x32`, `browser image drawn`); the image files are PIL output committed under the net fixtures. Not done: more than two images, progressive or arithmetic-coded JPEG (whatever `e.fmt.jpeg` refuses), images in CSS.
+
+## D4912 — C159: a cache by ETag
+
+A 200 reply with an ETag and a body of at most 3 KB is kept (four entries, round robin); the next request for the address carries `If-None-Match`, and a 304 shows the kept body (`browser cached`, `browser cache revalidated`). Freshness (`Cache-Control: max-age`) is not used, so every visit asks. `browser_cache` visits a versioned page, follows a link and presses Back.
+
+## D4913 — C159: stylesheets through the cascade
+
+A page's `<style>` elements are tokenized and parsed (`e.fmt.css.syntax`), their selectors parsed (`e.fmt.css.selector`) and each element is resolved with `e.fmt.css.cascade.resolve` over the page's `e.fmt.css.match` matcher (author rules, the element's `style` attribute, the presentational hints); `display: none` drops the element, and `color` (`e.gfx.cssvalue.parse_color`), `font-size` (a length to px), `font-weight: bold` and `text-align: center` are inherited down the tree and carried by the lines made (a line is closed when the style changes). Sizes of 28 px and more draw as a heading, 21 px and more as a second heading. There is no box layout: margins, padding, backgrounds, flex and grid are not applied, and a line takes one style. `browser_css` reads four rules and four lines.
+
+## D4914 — C159: the tabs survive a restart
+
+`/browser_tabs` holds the current tab and, for each tab, where it stands (`S<sample page>`, `Q<search words>`, `L<host> <path>` for a live page), written after every tap that changed them; a restart restores the tabs, the current one fetching its page as it is shown (`browser tabs restored 2`). A tab's history is not kept. `browser_tabs` and `browser_tabs_again` (on that disk) open a live page and a second tab, then find both.
+
+## D4920 — C160: the tile pyramid, panning across tiles and zoom levels
+
+The map is a level `lz` (13 to 15) of the Web Mercator pyramid: the view is a position in the tile `ct_x`, `ct_y`, a tile is 1100 map units, and the tiles the view needs (up to six; the middle one first) are loaded one at each idle tick into six slots, replacing ones the view no longer needs. A pan past a tile's edge moves into the next tile; three zooms make a level and a fourth steps to the next level with the tile index doubled (and the reverse). Latitudes and longitudes convert with the standard formulas (`world_x`, `world_y`, `lat_of`, `lon_of`). The test server builds a tile for any z/x/y (a road and a street that continue across tile edges, a river, a place named by the tile) and keeps the older first tile unchanged. `maps_pyramid` pans east into 14/8682/4769 and zooms in to 15/17364/9538. Not done: rotation, drag and pinch, polygons filled, tile eviction by age.
+
+## D4921 — C160: offline regions in Files
+
+The download control fetches the tiles of the view from the server and writes each as `/Maps/<z>-<x>-<y>.pbf` (`maps area saved N tiles`); a tile is looked up there before the network (`maps tile 14/8681/4769 files`). `maps_offline` saves the six tiles of the first view and `maps_offline_again` (on that disk) loads the middle one from Files. The fixture shows the path taken, not that the server was unreachable: the test server stays up.
+
+## D4922 — C160: search over Nominatim-shaped JSON and routing over an OSRM-shaped route
+
+Find in the places sheet opens a Search screen (the words on the keyboard); Search sends them to `nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=` and reads the array (`display_name`, `lat` and `lon` as strings), five at most; a tap on one makes it the selected place and puts the view on it. Directions asks `router.project-osrm.org/route/v1/<foot|bike|car>/lon,lat;lon,lat?overview=full&geometries=geojson&steps=true` for the way from you to it: the length, the time, up to 48 points drawn as the route and the first four manoeuvres as text (`maps route osrm 646 m 8 min 3 steps`, `maps step 1 Head on Karl Johans gate, ...`); the mode button cycles walk, bike and drive and asks again. Both answers are written from the services' documented shape, not captured, and the test server computes the route as an L between the two points by haversine (the oracle of the route's length is that haversine, checked by hand against the coordinates the app sent). Not done: rerouting, voice, transit, a place card with hours and photos, saved places, Home and Work.
+
+## D4923 — C160: your place from the location service
+
+The target button asks `sensorclient.fix` (the simulated Seattle fix; the Location switch and Maps' permission decide), keeps it as where you are, puts the view on it and the tiles there are loaded (`maps location 47606 -122332`, then `maps tile 14/2624/5721 network`). With no fix (denied, no server) the view returns to the middle of the first tile as before.
+
+## D4930 — C156: other national feeds and the notification
+
+A place in the United States (17 to 72 N, 180 to 65 W) with no MetAlerts alert is asked of the National Weather Service (`api.weather.gov/alerts/active?point=lat,lon`, GeoJSON; the first feature's headline, else its event) and the alert stands in the red bar as the Norwegian ones do; `weather alert feed NWS|MET` says which. A new alert (a hash of its text per place) is counted once as a notification through `bgclient.notify` (`weather notified Seattle`, then `services notification from app 18` from the background services process) -- the status service is behind that process, which holds the grant, so Weather needs none of its own. The NWS answer is the documented shape, written for the test, not captured. `weather_notify`. Not done: matching a place to an alert's area polygon, other countries' feeds.
+
+## D4931 — The test server certificate covers api.weather.gov
+
+A new root and leaf as in D3901 (P-256, ecdsa-with-SHA256, the root key discarded, valid 2026-10-01 to 2125) with `api.weather.gov` added to the names. `ca.der`, `ca.pem`, `server.pem` and `server.key` change; a lane that also regenerates them has to be merged by regenerating once with the union of the names. Checked with `openssl verify` and by every live fixture's TLS handshake.
+
+## D4932 — C156: the current location as a place
+
+On the Add screen My location asks `sensorclient.fix(false)` (Weather holds only the coarse permission, so the simulated phone answers with the network fix, 47.60 N 122.33 W, not the satellite one the Compass gets), rounds it to a hundredth of a degree, and adds it as the place `My location` with its own forecast like a found place (`weather location 47600 -122330`, `weather added My location`, `weather live My location`); with Location off the status line says so. The list is four places, so one has to be removed first (`weather_here` removes the first). The test server answers the forecast for 47.60 with Seattle's recording.
+
+## D4915 — C159: bookmarks
+
+Star in the address bar adds the page's address (host and path, at most 48 bytes) to the bookmarks and, tapped again, takes it off; four are kept (the oldest goes first) in `/bookmarks`, one a line, and the start page lists them under the four sites; a tap loads one. `browser_bookmark` and `browser_bookmark_again` (on that disk). Not done: folders, a bookmarks screen, bookmarks for pages with long addresses, incognito, a chosen search engine, search suggestions.
+
+## D4916 — C159: a download is opened in Document
+
+The note a download leaves (`Downloaded`, the name, the size) now ends with Open in Document, a link whose target is `~open:<path>`: a tap puts the path in `/handover`, the Browser leaves and exits with 20040, and the shell starts Document with it, as Files does. `browser_open_download` saves a 21-byte text file served as `application/octet-stream` and opens it. Other kinds go to Document too (Photos for an image is Files' own rule and is not copied).
+
+## D4917 — Eight texture slots for an app, and Maps keeps tiles in Files
+
+`appkit.open` made the renderer with one texture slot (`scene.renderer(..., 3, 1)`); Mail's inline picture, the Browser's two images and any second upload (Files' thumbnails) failed with `TooLarge` after the first. It now has eight, and an app that is done with a picture releases it (`scene.release_image`: Mail when a sync replaces its messages, the Browser when a page is left). The kernel's filesystem grant list in `main.e` gains the Maps app (entry 28) for `/Maps`. Both are one-line edits of shared files, merge by hand.
+
+## D4918 — httpc keeps the Content-Type a caller names
+
+`httpc.request` put `Content-Type: application/json` on every request with a body; a caller whose `extra` already names a Content-Type (the Browser's form post) now keeps its own and only the length is added.
+
+## D4919 — Fixtures wait on the idle ticks, on a quiet machine
+
+The new rows wait with `~s` tokens rather than idle taps (a tap at a fixed point would land on the button the next version of a screen puts there: it did, on Mail's Unread) and the Browser, Mail and Maps rows that save files are `livediskfixture` (a live row has no disk). The idle tick every 500 ms is produced by the input server's poll loop, which on a host that runs four QEMU guests and a suite takes tens of seconds to deliver the first one: `maps_tile` and `weather_live` (old rows, unchanged) fail there for that reason and pass with a hundred seconds of waiting. The rows were verified with `WAITSCALE=2` on such a host; a quiet one needs no more than the stated waits.
+
+## D4933 — Mail opens a saved picture in Photos
+
+Lane K's D4806 and this lane both made Open on an attachment hand the saved file over; the merge keeps this lane's (`open_in_document`, markers `mail handover <path>`) and adds K's one extra rule: a .png, .jpg or .jpeg goes to Photos (program 22), anything else to Document (40). K's `mail_attach_open` row asserts the older marker text and is dropped (`mail_open_attachment` covers the same path).

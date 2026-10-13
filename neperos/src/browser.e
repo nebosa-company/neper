@@ -16,6 +16,16 @@ use e.gfx.svg
 use e.text.layout
 use e.text.shape
 use e.fmt.html as html
+use e.fmt.png
+use e.fmt.jpeg
+use e.gfx.image
+use e.io
+use e.data.list as list
+use e.fmt.css.syntax as syntax
+use e.fmt.css.selector as selector
+use e.fmt.css.match as match
+use e.fmt.css.cascade as cascade
+use e.gfx.cssvalue as cssvalue
 use appkit
 use text
 use ui
@@ -50,6 +60,10 @@ const KIND_LINK: usize = 3usize
 const KIND_BULLET: usize = 4usize
 const KIND_PRE: usize = 5usize
 const KIND_IMAGE: usize = 6usize
+// (C159) A form field shown on the page (its `aux` is the field's index) and a form's Submit (its `aux` is 1 for POST).
+const KIND_FIELD: usize = 7usize
+const KIND_SUBMIT: usize = 8usize
+const FIELD_SCREEN: usize = 3usize
 
 type Tab = struct {
     pages: [10]usize,
@@ -61,7 +75,11 @@ type Tab = struct {
 }
 
 // A line of the loaded page: its text (wrapped to what a line holds), its kind and the link it leads to.
-type PageLine = struct { text: [56]u8, len: usize, kind: usize, href: [48]u8, href_len: usize }
+// (C159) The line's style from the stylesheet: a colour (ARGB), a size in px (0 for the default), bold, centred.
+type PageLine = struct { text: [56]u8, len: usize, kind: usize, href: [48]u8, href_len: usize, aux: usize, has_color: bool, color: u32, px: usize, bold: bool, center: bool }
+
+// (C159) The style rules of the page's <style> elements as cascade rules, and the matcher over its document.
+type Styler = struct { m: match.Matcher, author: []const cascade.Rule, active: bool }
 
 type Url = struct { host: [40]u8, host_len: usize, path: [64]u8, path_len: usize, used: bool }
 
@@ -89,18 +107,49 @@ type State = struct {
     cookie_store: [16]cookie.Cookie,
     cookie_text: [2048]u8,
     jar: cookie.Jar,
-    // (C159) The form being read (its action and the query its fields make) and the first image of the page: the SVG
-    // fetched for it and the page line it stands at.
+    // (C159) The form being read (its action and method) and its fields (name, value, hidden or shown): the query or
+    // body is made from them when the form is submitted, so a field edited on the page goes with its new value.
     form_open: bool,
+    form_post: bool,
     form_action: [40]u8,
     form_action_len: usize,
-    form_query: [40]u8,
-    form_query_len: usize,
-    svg_text: [1536]u8,
-    svg_len: usize,
-    svg_line: usize,
+    fields: [6]Field,
+    field_total: usize,
+    // The field being edited on the field screen, and what has been typed into it.
+    edit_field: usize,
+    edit: ui.Field,
+    // (C159) The first two images of the page: each an SVG kept as text or a PNG or JPEG decoded into a texture, and
+    // the page line it stands at.
+    images: [2]PageImage,
+    // (C159) Revalidation: the last pages fetched with an ETag, so a later request can ask `If-None-Match`.
+    cache: [4]CacheEntry,
+    cache_next: usize,
+    // (C159) The style in force while a document is read (colour, size, bold, centred), copied into each line made.
+    st_has_color: bool,
+    st_color: u32,
+    st_px: usize,
+    st_bold: bool,
+    st_center: bool,
+    // (C159) What /browser_tabs holds now, so it is written only when the tabs change.
+    tabs_saved: [320]u8,
+    tabs_saved_len: usize,
+    // (C159) Bookmarks: up to four addresses (host and path), kept in /bookmarks, shown on the start page; and the
+    // program a downloaded file was handed over to (Document is 40), with which the app leaves.
+    marks: [4][48]u8,
+    mark_len: [4]usize,
+    mark_total: usize,
+    handover: usize,
     hits: ui.Hits,
 }
+
+// (C159) A field of the form being read: its name, its value (24 bytes) and whether the page shows it.
+type Field = struct { name: [16]u8, name_len: usize, value: [24]u8, value_len: usize, hidden: bool }
+
+// (C159) An image of the page: its page line, how it is kept (0 none, 1 SVG text, 2 texture) and its size.
+type PageImage = struct { line: usize, kind: usize, svg: [1536]u8, svg_len: usize, tex: scene.TextureId, w: f32, h: f32 }
+
+// (C159) A page kept with its validator: the address, the ETag and the body (up to 3 KB).
+type CacheEntry = struct { host: [40]u8, host_len: usize, path: [64]u8, path_len: usize, etag: [40]u8, etag_len: usize, body: [3072]u8, body_len: usize, used: bool }
 
 fn page_host(page: usize) -> str {
     if page >= LIVE_BASE { ret "Web page" }
@@ -136,6 +185,11 @@ fn limit_of(kind: usize) -> usize {
 
 // End the line being gathered: it becomes a line of the page.
 fn flush_line(s: *State, kind: usize, href: str) {
+    flush_line_aux(s, kind, href, 0usize)
+}
+
+// The same with the line's `aux`: the field it shows or the method of the form it submits.
+fn flush_line_aux(s: *State, kind: usize, href: str, aux: usize) {
     if s.cur_len == 0usize { ret }
     if s.page_total < PAGE_LINES {
         var line: PageLine = zero
@@ -152,6 +206,12 @@ fn flush_line(s: *State, kind: usize, href: str) {
             h += 1usize
         }
         line.href_len = h
+        line.aux = aux
+        line.has_color = s.st_has_color
+        line.color = s.st_color
+        line.px = s.st_px
+        line.bold = s.st_bold
+        line.center = s.st_center
         s.page[s.page_total] = line
         s.page_total += 1usize
     }
@@ -161,7 +221,12 @@ fn flush_line(s: *State, kind: usize, href: str) {
 
 // Add text to the line being gathered: whitespace collapses to one space and a line breaks at its limit.
 fn add_text(s: *State, text_in: str, kind: usize, href: str) {
-    let limit = limit_of(kind)
+    var limit = limit_of(kind)
+    // (C159) A larger font-size holds fewer characters to a line.
+    if s.st_px > 17usize && kind != KIND_H1 && kind != KIND_H2 {
+        limit = limit * 17usize / s.st_px
+        if limit < 8usize { limit = 8usize }
+    }
     var i = 0usize
     while i < text_in.len {
         let c = text_in[i]
@@ -227,41 +292,199 @@ fn query_size(piece: str) -> usize {
     ret n
 }
 
-fn query_put(s: *State, c: u8) {
-    s.form_query[s.form_query_len] = c
-    s.form_query_len += 1usize
-}
-
-fn query_piece(s: *State, piece: str) {
+// (C159) `piece` percent-encoded into `out` from `at` (a space is `+`); the new end. The caller has checked the room.
+fn query_piece(out: []u8, at: usize, piece: str) -> usize {
+    var n = at
     var i = 0usize
     while i < piece.len {
         let c = piece[i]
         if unreserved(c) {
-            query_put(s, c)
+            out[n] = c
+            n += 1usize
         } else if c == 32u8 {
-            query_put(s, 43u8)
+            out[n] = 43u8
+            n += 1usize
         } else {
-            query_put(s, 37u8)
-            query_put(s, hex_char(usize(c >> 4u8)))
-            query_put(s, hex_char(usize(c & 15u8)))
+            out[n] = 37u8
+            out[n + 1usize] = hex_char(usize(c >> 4u8))
+            out[n + 2usize] = hex_char(usize(c & 15u8))
+            n += 3usize
         }
         i += 1usize
     }
+    ret n
 }
 
-// (C159) One `name=value` pair of the form being read, percent-encoded; a pair that does not fit is dropped whole.
-fn query_add(s: *State, field: str, value: str) {
-    var need = query_size(field) + 1usize + query_size(value)
-    if s.form_query_len > 0usize { need += 1usize }
-    if s.form_query_len + need > 40usize { ret }
-    if s.form_query_len > 0usize { query_put(s, 38u8) }
-    query_piece(s, field)
-    query_put(s, 61u8)
-    query_piece(s, value)
+// (C159) The `name=value&...` query of the form's fields (hidden ones too) in `out`: its length. A pair that does not
+// fit is dropped whole.
+fn make_query(s: *State, out: []u8) -> usize {
+    var n = 0usize
+    var i = 0usize
+    while i < s.field_total {
+        let f = &s.fields[i]
+        let field_name: str = f.name[0usize..f.name_len]
+        let field_value: str = f.value[0usize..f.value_len]
+        var need = query_size(field_name) + 1usize + query_size(field_value)
+        if n > 0usize { need += 1usize }
+        if n + need <= out.len {
+            if n > 0usize {
+                out[n] = 38u8
+                n += 1usize
+            }
+            n = query_piece(out, n, field_name)
+            out[n] = 61u8
+            n += 1usize
+            n = query_piece(out, n, field_value)
+        }
+        i += 1usize
+    }
+    ret n
 }
 
-// Walk the document below `id`, gathering lines. `kind` and `href` come from the elements around.
-fn walk(s: *State, doc: *const html.Document, id: html.NodeId, kind: usize, href: str) {
+// (C159) The author rules of the document's <style> elements: each qualified rule's selectors (any pseudo-element one
+// left out) with its declarations, in source order.
+fn style_rules(a: *mem.Arena, doc: *const html.Document) -> []const cascade.Rule {
+    let (made, made_error) = list.init[cascade.Rule](a, 8usize)
+    if made_error != ok {
+        var none: []const cascade.Rule = zero
+        ret none
+    }
+    var out = made
+    var order = 0i64
+    var i = 0usize
+    while i < doc.nodes.len {
+        let n = doc.nodes[i]
+        if n.kind == .Element && ui.same(n.name, "style") {
+            let (source, source_error) = html.text_content(a, doc, u32(i))
+            if source_error == ok && source.len <= 4096usize {
+                let (tokens, token_error) = syntax.tokenize(a, source)
+                if token_error == ok {
+                    let (rules, rules_error) = syntax.parse_rules(a, tokens, true)
+                    if rules_error == ok {
+                        var r = 0usize
+                        while r < rules.len {
+                            let one = rules[r]
+                            if !one.at && one.has_block {
+                                let (chosen, chosen_error) = selector.parse_selector_list_for_rule(a, source, one.prelude)
+                                let (parsed, parsed_error) = syntax.parse_declarations(a, one.block.inner)
+                                if chosen_error == ok && parsed_error == ok {
+                                    let (decls, decls_error) = mem.alloc[cascade.Declaration](a, parsed.len + 1usize)
+                                    if decls_error == ok {
+                                        var d = 0usize
+                                        while d < parsed.len {
+                                            decls[d] = cascade.Declaration { property: cssvalue.lower(a, parsed[d].name), value: cssvalue.trim_ws(syntax.raw_text(source, parsed[d].value)), important: parsed[d].important }
+                                            d += 1usize
+                                        }
+                                        var q = 0usize
+                                        while q < chosen.len {
+                                            if !chosen[q].has_pseudo {
+                                                let pushed = list.push[cascade.Rule](&out, cascade.Rule { selector: chosen[q].selector, declarations: decls[0usize..parsed.len], source: order, has_layer: false, layer: 0i64, containers: zero, scopes: zero })
+                                                order += 1i64
+                                            }
+                                            q += 1usize
+                                        }
+                                    }
+                                }
+                            }
+                            r += 1usize
+                        }
+                    }
+                }
+            }
+        }
+        i += 1usize
+    }
+    ret list.slice_const[cascade.Rule](&out)
+}
+
+// (C159) The property `name` among the winners of the cascade.
+fn winner_value(ws: []const cascade.Winner, name: str) -> (str, bool) {
+    var i = 0usize
+    while i < ws.len {
+        if ui.same(ws[i].property, name) { ret (ws[i].value, true) }
+        i += 1usize
+    }
+    ret ("", false)
+}
+
+// Walk the element or text `id` with the style of the page's stylesheet applied: the cascade gives the element's
+// winning declarations (the author rules, the element's `style` attribute and the presentational hints), `display:
+// none` drops it, and colour, font-size, font-weight and text-align are inherited down the tree into the lines made.
+fn walk(a: *mem.Arena, s: *State, st: *Styler, doc: *const html.Document, id: html.NodeId, kind: usize, href: str) {
+    let n = html.node(doc, id)
+    if n.kind != .Element || !st.active {
+        walk_node(a, s, st, doc, id, kind, href)
+        ret
+    }
+    var inline: []const cascade.Declaration = zero
+    let (style_attr, has_style) = html.attribute(n, "style")
+    if has_style { inline = cascade.inline_declarations(a, style_attr) }
+    var no_rules: []const cascade.Rule = zero
+    var no_stack: []const cascade.ContainerBox = zero
+    let winners = cascade.resolve(&st.m, no_rules, st.author, id, no_stack, inline)
+    let (display, has_display) = winner_value(winners, "display")
+    if has_display && ui.same(display, "none") { ret }
+    let had_color = s.st_has_color
+    let old_color = s.st_color
+    let old_px = s.st_px
+    let old_bold = s.st_bold
+    let old_center = s.st_center
+    let (color_text, has_color) = winner_value(winners, "color")
+    if has_color {
+        let (argb, color_ok) = cssvalue.parse_color(a, color_text)
+        if color_ok {
+            s.st_has_color = true
+            s.st_color = argb
+        }
+    }
+    let (size_text, has_size) = winner_value(winners, "font-size")
+    if has_size {
+        let bases = cssvalue.Bases { has_em: true, em: 16.0f64, has_rem: true, rem: 16.0f64, has_percent: true, percent: 16.0f64, has_viewport_width: false, viewport_width: 0.0f64, has_viewport_height: false, viewport_height: 0.0f64 }
+        let (length, length_ok) = cssvalue.parse_length(a, size_text, bases)
+        if length_ok {
+            let (px, px_ok) = cssvalue.to_px(length, bases)
+            if px_ok && px >= 8.0f64 && px <= 64.0f64 { s.st_px = usize(px) }
+        }
+    }
+    let (weight, has_weight) = winner_value(winners, "font-weight")
+    if has_weight && (ui.same(weight, "bold") || ui.same(weight, "700") || ui.same(weight, "800") || ui.same(weight, "900")) { s.st_bold = true }
+    let (align, has_align) = winner_value(winners, "text-align")
+    if has_align && ui.same(align, "center") { s.st_center = true }
+    let changed = s.st_has_color != had_color || s.st_color != old_color || s.st_px != old_px || s.st_bold != old_bold || s.st_center != old_center
+    var inner_kind = kind
+    if kind == KIND_BODY && s.st_px >= 28usize { inner_kind = KIND_H1 } else if kind == KIND_BODY && s.st_px >= 21usize { inner_kind = KIND_H2 }
+    if changed {
+        // What was gathered so far keeps the style it was read under.
+        let now_color = s.st_color
+        let now_has = s.st_has_color
+        let now_px = s.st_px
+        let now_bold = s.st_bold
+        let now_center = s.st_center
+        s.st_color = old_color
+        s.st_has_color = had_color
+        s.st_px = old_px
+        s.st_bold = old_bold
+        s.st_center = old_center
+        flush_line(s, kind, href)
+        s.st_color = now_color
+        s.st_has_color = now_has
+        s.st_px = now_px
+        s.st_bold = now_bold
+        s.st_center = now_center
+    }
+    walk_node(a, s, st, doc, id, inner_kind, href)
+    if changed {
+        flush_line(s, inner_kind, href)
+        s.st_has_color = had_color
+        s.st_color = old_color
+        s.st_px = old_px
+        s.st_bold = old_bold
+        s.st_center = old_center
+    }
+}
+
+// The document below `id`, gathering lines. `kind` and `href` come from the elements around.
+fn walk_node(a: *mem.Arena, s: *State, st: *Styler, doc: *const html.Document, id: html.NodeId, kind: usize, href: str) {
     let n = html.node(doc, id)
     if n.kind == .Text {
         add_text(s, n.value, kind, href)
@@ -282,12 +505,13 @@ fn walk(s: *State, doc: *const html.Document, id: html.NodeId, kind: usize, href
             child_kind = KIND_BULLET
             add_text(s, "-", KIND_BULLET, "")
         }
-        // (C159) A form: its fields are shown as `name: value` and make a query; its end is a Submit link that fetches
-        // the action with that query (GET).
+        // (C159) A form: its fields are shown as `name: value` lines (a tap edits one) and are kept in the state; its
+        // end is a Submit line that makes the query (GET) or the body (POST) from the fields as they are then.
         if ui.same(name, "form") {
             flush_line(s, kind, href)
             s.form_open = true
-            s.form_query_len = 0usize
+            s.form_post = false
+            s.field_total = 0usize
             s.form_action_len = 0usize
             let (action, has_action) = html.attribute(n, "action")
             if has_action {
@@ -298,6 +522,8 @@ fn walk(s: *State, doc: *const html.Document, id: html.NodeId, kind: usize, href
                 }
                 s.form_action_len = k
             }
+            let (method, has_method) = html.attribute(n, "method")
+            if has_method && ui.same(method, "post") { s.form_post = true }
         }
         if ui.same(name, "input") && s.form_open {
             let (field, has_field) = html.attribute(n, "name")
@@ -307,16 +533,32 @@ fn walk(s: *State, doc: *const html.Document, id: html.NodeId, kind: usize, href
             var hidden = false
             if has_type && (ui.same(input_type, "submit") || ui.same(input_type, "button")) { pressed = true }
             if has_type && ui.same(input_type, "hidden") { hidden = true }
-            if has_field && !pressed {
+            if has_field && !pressed && s.field_total < 6usize {
                 var current_value = ""
                 if has_given { current_value = given }
-                query_add(s, field, current_value)
+                var entry: Field = zero
+                var k = 0usize
+                while k < field.len && k < 16usize {
+                    entry.name[k] = field[k]
+                    k += 1usize
+                }
+                entry.name_len = k
+                k = 0usize
+                while k < current_value.len && k < 24usize {
+                    entry.value[k] = current_value[k]
+                    k += 1usize
+                }
+                entry.value_len = k
+                entry.hidden = hidden
+                let index = s.field_total
+                s.fields[index] = entry
+                s.field_total += 1usize
                 if !hidden {
                     flush_line(s, kind, href)
-                    add_text(s, field, KIND_BODY, "")
-                    add_text(s, ":", KIND_BODY, "")
-                    add_text(s, current_value, KIND_BODY, "")
-                    flush_line(s, KIND_BODY, "")
+                    add_text(s, field, KIND_FIELD, "")
+                    add_text(s, ":", KIND_FIELD, "")
+                    add_text(s, current_value, KIND_FIELD, "")
+                    flush_line_aux(s, KIND_FIELD, "", index)
                 }
             }
         }
@@ -345,31 +587,18 @@ fn walk(s: *State, doc: *const html.Document, id: html.NodeId, kind: usize, href
     var more = true
     while more {
         let (child, has_child) = html.children_next(&it)
-        if !has_child { more = false } else { walk(s, doc, child, child_kind, child_href) }
+        if !has_child { more = false } else { walk(a, s, st, doc, child, child_kind, child_href) }
     }
     if n.kind == .Element {
         if is_block(n.name) || ui.same(n.name, "a") { flush_line(s, child_kind, child_href) }
         if ui.same(n.name, "form") && s.form_open {
             flush_line(s, kind, href)
             s.form_open = false
-            var dest: [48]u8 = zero
-            var t = 0usize
-            while t < s.form_action_len {
-                dest[t] = s.form_action[t]
-                t += 1usize
-            }
-            if s.form_query_len > 0usize {
-                dest[t] = 63u8
-                t += 1usize
-                var q = 0usize
-                while q < s.form_query_len && t < 48usize {
-                    dest[t] = s.form_query[q]
-                    t += 1usize
-                    q += 1usize
-                }
-            }
-            add_text(s, "Submit", KIND_LINK, dest[0usize..t])
-            flush_line(s, KIND_LINK, dest[0usize..t])
+            // The Submit line: its href is the form's action, its aux 1 for POST.
+            var method_aux = 0usize
+            if s.form_post { method_aux = 1usize }
+            add_text(s, "Submit", KIND_SUBMIT, s.form_action[0usize..s.form_action_len])
+            flush_line_aux(s, KIND_SUBMIT, s.form_action[0usize..s.form_action_len], method_aux)
         }
     }
 }
@@ -574,6 +803,13 @@ fn header_value(head: str, name: str) -> (str, bool) {
 // GET with the jar's cookies, absorbing what each response sets and following up to five redirects (a `Location` that
 // is a path on the same host or an absolute https address): the final reply and the host and path it came from.
 fn fetch_following(a: *mem.Arena, s: *State, host: str, path: str, now: i64) -> (httpc.Reply, str, str, err) {
+    let (reply, final_host, final_path, fetch_error) = fetch_with(a, s, host, path, now, "", false, "")
+    ret (reply, final_host, final_path, fetch_error)
+}
+
+// The same with `validator` (header lines for the first request: `If-None-Match`) and, when `post`, a form POST of
+// `post_body` as the first request; a redirect after a POST is followed with GET (303 and 302 always are).
+fn fetch_with(a: *mem.Arena, s: *State, host: str, path: str, now: i64, validator: str, post: bool, post_body: str) -> (httpc.Reply, str, str, err) {
     var h = host
     var p = path
     var last: httpc.Reply = zero
@@ -587,7 +823,18 @@ fn fetch_following(a: *mem.Arena, s: *State, host: str, path: str, now: i64) -> 
             ui.say_num(sent.len)
             ui.say(" bytes\n")
         }
-        let (reply, get_error) = httpc.get(a, h, p, extra)
+        if hops == 0usize && validator.len > 0usize { extra = ui.join(a, extra, validator, "") }
+        var reply: httpc.Reply = zero
+        var get_error = ok
+        if hops == 0usize && post {
+            let (posted, post_error) = httpc.post(a, h, p, ui.join(a, extra, "Content-Type: application/x-www-form-urlencoded\r\n", ""), post_body)
+            reply = posted
+            get_error = post_error
+        } else {
+            let (fetched, fetch_error) = httpc.get(a, h, p, extra)
+            reply = fetched
+            get_error = fetch_error
+        }
         if get_error != ok { ret (reply, h, p, get_error) }
         last = reply
         let kept = absorb_cookies(a, s, reply.head, h, p, now)
@@ -641,12 +888,18 @@ fn download(a: *mem.Arena, s: *State, slot: usize, path: str, body: str) -> bool
     s.cur_len = 0usize
     s.pending_space = false
     s.scroll = 0usize
-    s.svg_len = 0usize
-    s.svg_line = NONE
+    s.images[0usize].kind = 0usize
+    s.images[1usize].kind = 0usize
     s.title_len = 0usize
     flush_line_text(s, "Downloaded", KIND_H1)
     flush_line_text(s, name, KIND_BODY)
     flush_line_text(s, ui.join(a, ui.number(a, size), " bytes in Downloads", ""), KIND_BODY)
+    // (C159) Open in Document: a link whose target is `~open:<path>` hands the file over (Files' way).
+    if saved && found && dest.len + 6usize <= 48usize {
+        let opener = ui.join(a, "~open:", dest, "")
+        add_text(s, "Open in Document", KIND_LINK, opener)
+        flush_line(s, KIND_LINK, opener)
+    }
     s.loaded = slot
     s.load_error = 0usize
     if !saved || !found || size != body.len {
@@ -667,20 +920,117 @@ fn flush_line_text(s: *State, line_text: str, kind: usize) {
     flush_line(s, kind, "")
 }
 
+// (C159) The cache entry for host and path, or NONE.
+fn cache_find(s: *State, host: str, path: str) -> usize {
+    var i = 0usize
+    while i < 4usize {
+        let e = &s.cache[i]
+        if e.used && e.host_len == host.len && e.path_len == path.len {
+            var same = true
+            var k = 0usize
+            while k < host.len {
+                if e.host[k] != host[k] { same = false }
+                k += 1usize
+            }
+            k = 0usize
+            while k < path.len {
+                if e.path[k] != path[k] { same = false }
+                k += 1usize
+            }
+            if same { ret i }
+        }
+        i += 1usize
+    }
+    ret NONE
+}
+
+// (C159) Keep a 200 reply that carries an ETag (and is a page of at most 3 KB) for a later conditional request.
+fn cache_put(s: *State, host: str, path: str, etag: str, body: str) {
+    if etag.len == 0usize || etag.len > 40usize || body.len > 3072usize || host.len > 40usize || path.len > 64usize { ret }
+    var at = cache_find(s, host, path)
+    if at == NONE {
+        at = s.cache_next
+        s.cache_next = (s.cache_next + 1usize) % 4usize
+    }
+    var e = &s.cache[at]
+    var k = 0usize
+    while k < host.len {
+        e.host[k] = host[k]
+        k += 1usize
+    }
+    e.host_len = host.len
+    k = 0usize
+    while k < path.len {
+        e.path[k] = path[k]
+        k += 1usize
+    }
+    e.path_len = path.len
+    k = 0usize
+    while k < etag.len {
+        e.etag[k] = etag[k]
+        k += 1usize
+    }
+    e.etag_len = etag.len
+    k = 0usize
+    while k < body.len {
+        e.body[k] = body[k]
+        k += 1usize
+    }
+    e.body_len = body.len
+    e.used = true
+    ui.say("browser cached ")
+    ui.say_text(path)
+    ui.say("\n")
+}
+
 // Fetch and lay out the page of address slot `slot`: false (with `load_error` set) when it could not be had.
-fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
+fn load_live(a: *mem.Arena, kit: *appkit.Kit, s: *State, slot: usize) -> bool {
     let u = s.urls[slot]
     let host = ui.text_of(a, u.host[0usize..], u.host_len)
     let path = ui.text_of(a, u.path[0usize..], u.path_len)
+    ret fetch_page(a, kit, s, slot, host, path, false, "") != NONE
+}
+
+// (C159) Fetch `host``path` (a form POST with `post_body` when `post`) and lay out the reply as the page of address
+// slot `slot` (for a POST, the slot of the address the reply came from): the slot, or NONE with `load_error` set.
+fn fetch_page(a: *mem.Arena, kit: *appkit.Kit, s: *State, hint: usize, host: str, path: str, post: bool, post_body: str) -> usize {
+    var slot = hint
+    // The textures of the page before are given back (the renderer has a few slots).
+    var old = 0usize
+    while old < 2usize {
+        if s.images[old].kind == 2usize {
+            let released = scene.release_image(&kit.renderer, s.images[old].tex)
+        }
+        s.images[old].kind = 0usize
+        old += 1usize
+    }
     s.page_total = 0usize
     s.cur_len = 0usize
     s.pending_space = false
     s.scroll = 0usize
     s.title_len = 0usize
     s.loaded = NONE
-    // (C159) The cookies the jar holds go with each request, what a response sets is kept, redirects are followed.
+    // (C159) The cookies the jar holds go with each request, what a response sets is kept, redirects are followed. A
+    // page kept with an ETag is asked for again with If-None-Match: a 304 shows the kept body.
     let now = wall_seconds()
-    let (reply, final_host, final_path, get_error) = fetch_following(a, s, host, path, now)
+    var validator = ""
+    var kept_at = NONE
+    if !post {
+        kept_at = cache_find(s, host, path)
+        if kept_at != NONE { validator = ui.join(a, "If-None-Match: ", ui.text_of(a, s.cache[kept_at].etag[0usize..], s.cache[kept_at].etag_len), "\r\n") }
+    }
+    let (fetched, final_host, final_path, get_error) = fetch_with(a, s, host, path, now, validator, post, post_body)
+    var reply = fetched
+    if get_error == ok && reply.status == 304usize && kept_at != NONE {
+        reply.status = 200usize
+        reply.body = ui.text_of(a, s.cache[kept_at].body[0usize..], s.cache[kept_at].body_len)
+        ui.say("browser cache revalidated ")
+        ui.say_text(path)
+        ui.say("\n")
+    } else if get_error == ok && reply.status == 200usize && !post {
+        let (etag, has_etag) = header_value(reply.head, "etag:")
+        if has_etag { cache_put(s, final_host, final_path, etag, reply.body) }
+    }
     if get_error != ok {
         s.load_error = 1usize
         ui.say("browser fetch failed ")
@@ -693,55 +1043,50 @@ fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
         ui.say_text(host)
         ui.say_text(path)
         ui.say("\n")
-        ret false
+        ret NONE
     }
     if reply.status != 200usize {
         s.load_error = 2usize
         ui.say("browser fetch status ")
         ui.say_num(reply.status)
         ui.say("\n")
-        ret false
+        ret NONE
     }
+    // A POST's reply is the page of the address it came from.
+    if post { slot = url_slot(s, final_host, final_path) }
     // (C159) A reply that is not a page (its Content-Type is neither text nor XHTML) is a download: saved in /Downloads
     // under the last segment of the path and shown as a note.
     let (content_type, has_type) = header_value(reply.head, "content-type:")
     if has_type && !header_is(content_type, "text/") && !header_is(content_type, "application/xhtml") {
-        ret download(a, s, slot, final_path, reply.body)
+        if download(a, s, slot, final_path, reply.body) { ret slot }
+        ret NONE
     }
     let (doc, parse_error) = html.parse(a, reply.body, html.Options { max_bytes: 98304usize, max_nodes: 2048usize, max_attributes: 16usize, max_depth: 40u16, preserve_comments: false })
     if parse_error != ok {
         s.load_error = 3usize
-        ret false
+        ret NONE
     }
     s.form_open = false
+    s.field_total = 0usize
+    s.st_has_color = false
+    s.st_color = 0u32
+    s.st_px = 0usize
+    s.st_bold = false
+    s.st_center = false
     find_title(a, s, &doc)
-    walk(s, &doc, doc.root, KIND_BODY, "")
-    flush_line(s, KIND_BODY, "")
-    // (C159) The first image of the page, fetched from the page's host: an SVG of at most 1.5 KB is kept and drawn.
-    s.svg_len = 0usize
-    s.svg_line = NONE
-    var at_line = 0usize
-    while at_line < s.page_total && s.svg_line == NONE {
-        if s.page[at_line].kind == KIND_IMAGE {
-            let image_line = s.page[at_line]
-            let (image_host, image_path) = split_address(a, s, ui.text_of(a, image_line.href[0usize..], image_line.href_len), final_host)
-            let (image, image_got_host, image_got_path, image_error) = fetch_following(a, s, image_host, image_path, now)
-            if image_error == ok && image.status == 200usize && image.body.len > 0usize && image.body.len <= 1536usize {
-                var b = 0usize
-                while b < image.body.len {
-                    s.svg_text[b] = image.body[b]
-                    b += 1usize
-                }
-                s.svg_len = b
-                s.svg_line = at_line
-                ui.say("browser image ")
-                ui.say_num(b)
-                ui.say(" bytes\n")
-            }
-            at_line = s.page_total
-        }
-        at_line += 1usize
+    // (C159) The page's own stylesheet, applied through the cascade (only when it has a <style>).
+    var styler: Styler = zero
+    styler.author = style_rules(a, &doc)
+    styler.m = match.new_matcher(a, &doc, match.no_state())
+    styler.active = styler.author.len > 0usize
+    if styler.active {
+        ui.say("browser css ")
+        ui.say_num(styler.author.len)
+        ui.say(" rules\n")
     }
+    walk(a, s, &styler, &doc, doc.root, KIND_BODY, "")
+    flush_line(s, KIND_BODY, "")
+    load_images(a, kit, s, final_host, now)
     s.loaded = slot
     s.load_error = 0usize
     ui.say("browser live ")
@@ -750,7 +1095,95 @@ fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
     ui.say(" ")
     ui.say_text(ui.number(a, s.page_total))
     ui.say("\n")
-    ret true
+    ret slot
+}
+
+// (C159) The first two images of the page, fetched from the page's host: an SVG of at most 1.5 KB is kept as text; a
+// PNG or JPEG of at most 32 KB is decoded and uploaded as a texture.
+fn load_images(a: *mem.Arena, kit: *appkit.Kit, s: *State, final_host: str, now: i64) {
+    var tried = 0usize
+    var at_line = 0usize
+    while at_line < s.page_total && tried < 2usize {
+        if s.page[at_line].kind == KIND_IMAGE {
+            let image_line = s.page[at_line]
+            let (image_host, image_path) = split_address(a, s, ui.text_of(a, image_line.href[0usize..], image_line.href_len), final_host)
+            // Each image is fetched and kept inside a mark: its 96 KB reply buffer is given back afterwards.
+            let mark = mem.mark(a)
+            let (picture_reply, got_host, got_path, image_error) = fetch_following(a, s, image_host, image_path, now)
+            if image_error == ok && picture_reply.status == 200usize && picture_reply.body.len > 0usize && picture_reply.body.len <= 32768usize {
+                keep_picture(a, kit, s, tried, at_line, picture_reply.body)
+            } else {
+                ui.say("browser image not fetched ")
+                ui.say_text(image_path)
+                ui.say("\n")
+            }
+            mem.reset(a, mark)
+            tried += 1usize
+        }
+        at_line += 1usize
+    }
+}
+
+// (C159) Keep the bytes of an image as picture `which` standing at page line `line`.
+fn keep_picture(a: *mem.Arena, kit: *appkit.Kit, s: *State, which: usize, line: usize, data: str) {
+    var is_png = false
+    var is_jpeg = false
+    if data.len > 8usize && data[0usize] == 137u8 && data[1usize] == 80u8 && data[2usize] == 78u8 && data[3usize] == 71u8 { is_png = true }
+    if data.len > 4usize && data[0usize] == 255u8 && data[1usize] == 216u8 { is_jpeg = true }
+    if is_png || is_jpeg {
+        var reader_state: io.SliceReader = zero
+        reader_state.data = data
+        reader_state.off = 0usize
+        var decoded: image.Image = zero
+        var decode_error = ok
+        if is_jpeg {
+            let (jpeg_image, jpeg_error) = jpeg.decode(a, io.slice_reader(&reader_state), jpeg.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 262144u64 })
+            decoded = jpeg_image
+            decode_error = jpeg_error
+        } else {
+            let (png_image, png_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 262144u64, verify_crc: true })
+            decoded = png_image
+            decode_error = png_error
+        }
+        if decode_error != ok {
+            ui.say("browser image decode failed\n")
+            ret
+        }
+        let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+        if view_error != ok {
+            ui.say("browser image view failed\n")
+            ret
+        }
+        let (texture, upload_error) = scene.upload_image(&kit.renderer, view)
+        if upload_error != ok {
+            ui.say("browser image upload failed\n")
+            ret
+        }
+        s.images[which].tex = texture
+        s.images[which].w = f32(decoded.width)
+        s.images[which].h = f32(decoded.height)
+        s.images[which].kind = 2usize
+        s.images[which].line = line
+        if is_png { ui.say("browser image png ") } else { ui.say("browser image jpeg ") }
+        ui.say_num(usize(decoded.width))
+        ui.say("x")
+        ui.say_num(usize(decoded.height))
+        ui.say("\n")
+        ret
+    }
+    if data.len <= 1536usize {
+        var b = 0usize
+        while b < data.len {
+            s.images[which].svg[b] = data[b]
+            b += 1usize
+        }
+        s.images[which].svg_len = b
+        s.images[which].kind = 1usize
+        s.images[which].line = line
+        ui.say("browser image ")
+        ui.say_num(b)
+        ui.say(" bytes\n")
+    }
 }
 
 // An address slot for host and path (the same one when it is known).
@@ -966,7 +1399,79 @@ fn draw_start(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
         ui.hit(&s.hits, 400usize + tile, x, y, 184.0, 96.0)
         tile += 1usize
     }
+    // (C159) The bookmarks, up to four.
+    if s.mark_total > 0usize {
+        try ui.put(a, builder, faces.grotesk, 12.0, "Bookmarks", 24.0, 488.0, ui.light_muted())
+        var row = 0usize
+        while row < s.mark_total {
+            let y: f32 = 512.0 + f32(row) * 52.0
+            try ui.card(a, builder, 16.0, y, 380.0, 44.0, 14.0, ui.cream())
+            try ui.clipped(a, builder, faces.jost, 17.0, ui.text_of(a, s.marks[row][0usize..], s.mark_len[row]), 32.0, y + 11.0, 340.0, ui.ink())
+            ui.hit(&s.hits, 460usize + row, 16.0, y, 380.0, 44.0)
+            row += 1usize
+        }
+    }
     ret ok
+}
+
+// (C159) The address of a page as the address bar shows it: the host and path of a live page, else the site's name.
+fn address_of_page(a: *mem.Arena, s: *State, page: usize) -> str {
+    if page >= LIVE_BASE {
+        let u = s.urls[page - LIVE_BASE]
+        ret ui.join(a, ui.text_of(a, u.host[0usize..], u.host_len), ui.text_of(a, u.path[0usize..], u.path_len), "")
+    }
+    ret page_host(page)
+}
+
+// (C159) The index of the bookmark for `address`, or NONE.
+fn bookmarked(a: *mem.Arena, s: *State, address: str) -> usize {
+    var i = 0usize
+    while i < s.mark_total {
+        if ui.same(ui.text_of(a, s.marks[i][0usize..], s.mark_len[i]), address) { ret i }
+        i += 1usize
+    }
+    ret NONE
+}
+
+// The bookmarks are kept in /bookmarks, one address a line.
+fn save_marks(a: *mem.Arena, s: *State) {
+    var buf: [200]u8 = zero
+    var n = 0usize
+    var i = 0usize
+    while i < s.mark_total {
+        var k = 0usize
+        while k < s.mark_len[i] {
+            buf[n] = s.marks[i][k]
+            n += 1usize
+            k += 1usize
+        }
+        buf[n] = 10u8
+        n += 1usize
+        i += 1usize
+    }
+    let written = vaultfs.write_big("/bookmarks", mem.address_of(&buf[0usize]), n)
+}
+
+fn load_marks(s: *State) -> usize {
+    var buf: [200]u8 = zero
+    let (n, found) = vaultfs.read_big("/bookmarks", mem.address_of(&buf[0usize]), 200usize)
+    if !found || n == 0usize { ret 0usize }
+    var at = 0usize
+    while at < n && s.mark_total < 4usize {
+        var end = at
+        while end < n && buf[end] != 10u8 { end += 1usize }
+        if end > at && end - at <= 48usize {
+            var k = 0usize
+            while at + k < end {
+                s.marks[s.mark_total][k] = buf[at + k]
+                k += 1usize
+            }
+            s.mark_len[s.mark_total] = k
+            s.mark_total += 1usize
+        }
+        at = end + 1usize
+    }
+    ret s.mark_total
 }
 
 fn draw_neper(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
@@ -1053,6 +1558,35 @@ fn draw_results(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
     ret ok
 }
 
+// (C159) The picture kept for page line `line`, or NONE.
+fn picture_at(s: *State, line: usize) -> usize {
+    if s.images[0usize].kind != 0usize && s.images[0usize].line == line { ret 0usize }
+    if s.images[1usize].kind != 0usize && s.images[1usize].line == line { ret 1usize }
+    ret NONE
+}
+
+// (C159) A form field being edited: its name, its value and the keyboard.
+fn draw_field(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    let f = &s.fields[s.edit_field]
+    try ui.put(a, builder, faces.grotesk, 13.0, ui.text_of(a, f.name[0usize..], f.name_len), 24.0, 80.0, ui.light_muted())
+    let value = ui.field_text(a, &s.edit)
+    try ui.card(a, builder, 14.0, 100.0, 384.0, 54.0, 27.0, ui.amber())
+    try ui.card(a, builder, 16.0, 102.0, 380.0, 50.0, 25.0, ui.cream())
+    try ui.clipped(a, builder, faces.jost, 18.0, value, 36.0, 115.0, 340.0, ui.ink())
+    var caret_x: f32 = 36.0
+    if value.len > 0usize { caret_x = 36.0 + text.measure(a, faces.jost, 18.0, value) + 2.0 }
+    if caret_x > 372.0 { caret_x = 372.0 }
+    try ui.card(a, builder, caret_x, 113.0, 2.0, 26.0, 1.0, ui.amber())
+    try ui.keyboard(a, builder, &s.hits, faces, "Done")
+    ret ok
+}
+
+// (C159) The colour of a line from the stylesheet (ARGB), or `fallback`.
+fn style_color(line: PageLine, fallback: paint.Color) -> paint.Color {
+    if !line.has_color { ret fallback }
+    ret paint.Color { red: f32((line.color >> 16u32) & 255u32) / 255.0, green: f32((line.color >> 8u32) & 255u32) / 255.0, blue: f32(line.color & 255u32) / 255.0, alpha: 1.0 }
+}
+
 // A live page: its lines from the scroll position, links as amber lines that can be tapped.
 fn draw_live(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     var y: f32 = 92.0
@@ -1060,11 +1594,12 @@ fn draw_live(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     while i < s.page_total && y < 800.0 {
         let line = s.page[i]
         let text_line = ui.text_of(a, line.text[0usize..], line.len)
+        let tone = style_color(line, ui.light())
         if line.kind == KIND_H1 {
-            try ui.put(a, builder, faces.jost_bold, 30.0, text_line, 20.0, y, ui.light())
+            if line.center { try ui.centred(a, builder, faces.jost_bold, 30.0, text_line, 206.0, y, tone) } else { try ui.put(a, builder, faces.jost_bold, 30.0, text_line, 20.0, y, tone) }
             y += 44.0
         } else if line.kind == KIND_H2 {
-            try ui.put(a, builder, faces.jost_bold, 22.0, text_line, 20.0, y, ui.light())
+            if line.center { try ui.centred(a, builder, faces.jost_bold, 22.0, text_line, 206.0, y, tone) } else { try ui.put(a, builder, faces.jost_bold, 22.0, text_line, 20.0, y, tone) }
             y += 34.0
         } else if line.kind == KIND_LINK {
             try ui.put(a, builder, faces.jost, 17.0, text_line, 20.0, y, ui.amber())
@@ -1074,16 +1609,41 @@ fn draw_live(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         } else if line.kind == KIND_PRE {
             try ui.put(a, builder, faces.grotesk, 13.0, text_line, 20.0, y, ui.light())
             y += 20.0
-        } else if line.kind == KIND_IMAGE && s.svg_line == i && s.svg_len > 0usize {
-            try picture(a, builder, ui.text_of(a, s.svg_text[0usize..], s.svg_len), geometry.rect(20.0, y, 96.0, 96.0), ui.amber())
+        } else if line.kind == KIND_FIELD {
+            // (C159) A form field: its line is a box (a tap edits it).
+            try ui.card(a, builder, 16.0, y - 6.0, 380.0, 34.0, 10.0, ui.soft())
+            try ui.put(a, builder, faces.jost, 17.0, text_line, 28.0, y, ui.light())
+            ui.hit(&s.hits, 900usize + i, 16.0, y - 6.0, 380.0, 34.0)
+            y += 40.0
+        } else if line.kind == KIND_SUBMIT {
+            try ui.pill(a, builder, &s.hits, faces, 900usize + i, 20.0, y - 4.0, 120.0, 38.0, text_line, ui.amber(), 16.0)
+            y += 48.0
+        } else if line.kind == KIND_IMAGE && picture_at(s, i) != NONE {
+            let which = picture_at(s, i)
+            if s.images[which].kind == 1usize {
+                try picture(a, builder, ui.text_of(a, s.images[which].svg[0usize..], s.images[which].svg_len), geometry.rect(20.0, y, 96.0, 96.0), ui.amber())
+                y += 108.0
+            } else {
+                // A decoded picture, scaled to fit 96 high and 372 wide.
+                var scale: f32 = 96.0 / s.images[which].h
+                if s.images[which].w * scale > 372.0 { scale = 372.0 / s.images[which].w }
+                let dw: f32 = s.images[which].w * scale
+                let dh: f32 = s.images[which].h * scale
+                try scene.push(builder, scene.Command { Image: scene.DrawImage { texture: s.images[which].tex, source: geometry.rect(0.0, 0.0, s.images[which].w, s.images[which].h), destination: geometry.rect(20.0, y, dw, dh), opacity: 1.0 } })
+                y += dh + 12.0
+            }
             ui.say("browser image drawn\n")
-            y += 108.0
         } else if line.kind == KIND_IMAGE {
             try ui.put(a, builder, faces.jost, 17.0, ui.join(a, "[", text_line, "]"), 20.0, y, ui.light_muted())
             y += 26.0
         } else {
-            try ui.put(a, builder, faces.jost, 17.0, text_line, 20.0, y, ui.light())
-            y += 26.0
+            // (C159) A body line in its style: the stylesheet's colour, size, weight and alignment.
+            var size: f32 = 17.0
+            if line.px >= 10usize { size = f32(line.px) }
+            var face = faces.jost
+            if line.bold { face = faces.jost_bold }
+            if line.center { try ui.centred(a, builder, face, size, text_line, 206.0, y, tone) } else { try ui.put(a, builder, face, size, text_line, 20.0, y, tone) }
+            y += size * 1.5
         }
         i += 1usize
     }
@@ -1145,6 +1705,11 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     if page != START {
         try ui.put(a, builder, faces.grotesk, 14.0, "Copy", 350.0, 36.0, ui.muted())
         ui.hit(&s.hits, 710usize, 340.0, 22.0, 56.0, 46.0)
+        // (C159) Star: the page's address is a bookmark (taken off again by a second tap).
+        var star_label = "Star"
+        if bookmarked(a, s, address_of_page(a, s, page)) != NONE { star_label = "Starred" }
+        try ui.put(a, builder, faces.grotesk, 14.0, star_label, 296.0, 36.0, ui.amber_dark())
+        ui.hit(&s.hits, 711usize, 290.0, 22.0, 50.0, 46.0)
     }
     if page >= LIVE_BASE { try draw_live(a, builder, s, faces) }
     if page == START { try draw_start(a, builder, s, faces) }
@@ -1217,6 +1782,8 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         try draw_browse(a, builder, s, faces)
     } else if s.screen == ENTRY_SCREEN {
         try draw_entry(a, builder, s, faces)
+    } else if s.screen == FIELD_SCREEN {
+        try draw_field(a, builder, s, faces)
     } else {
         try draw_tabs(a, builder, s, faces)
     }
@@ -1235,18 +1802,124 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 // ----------------------------------------------------------------------------------------------
 // Behaviour.
 
+// (C159) The open tabs are kept in /browser_tabs as lines: `C<current>`, then one per tab -- `S<page>` for a sample
+// page, `Q<query>` for a search, `L<host> <path>` for a live page (its history is not kept, only where it stands).
+fn save_tabs(a: *mem.Arena, s: *State) {
+    var buf: [320]u8 = zero
+    var n = 0usize
+    buf[0usize] = 67u8
+    buf[1usize] = u8(48usize + s.current)
+    buf[2usize] = 10u8
+    n = 3usize
+    var i = 0usize
+    while i < s.tab_total {
+        let t = s.tabs[i]
+        let page = t.pages[t.at]
+        var piece = ""
+        if page >= LIVE_BASE {
+            let u = s.urls[page - LIVE_BASE]
+            piece = ui.join(a, "L", ui.join(a, ui.text_of(a, u.host[0usize..], u.host_len), " ", ""), ui.text_of(a, u.path[0usize..], u.path_len))
+        } else if page == RESULTS {
+            piece = ui.join(a, "Q", ui.text_of(a, t.query[0usize..], t.query_len), "")
+        } else {
+            piece = ui.join(a, "S", ui.number(a, page), "")
+        }
+        if n + piece.len + 1usize <= 320usize {
+            var k = 0usize
+            while k < piece.len {
+                buf[n + k] = piece[k]
+                k += 1usize
+            }
+            n += piece.len
+            buf[n] = 10u8
+            n += 1usize
+        }
+        i += 1usize
+    }
+    // Written only when it changed.
+    var same = n == s.tabs_saved_len
+    var c = 0usize
+    while same && c < n {
+        if s.tabs_saved[c] != buf[c] { same = false }
+        c += 1usize
+    }
+    if same { ret }
+    let written = vaultfs.write_big("/browser_tabs", mem.address_of(&buf[0usize]), n)
+    c = 0usize
+    while c < n {
+        s.tabs_saved[c] = buf[c]
+        c += 1usize
+    }
+    s.tabs_saved_len = n
+}
+
+// The tabs of /browser_tabs: how many came back (the current one is the one that was in front).
+fn load_tabs(a: *mem.Arena, s: *State) -> usize {
+    var buf: [320]u8 = zero
+    let (n, found) = vaultfs.read_big("/browser_tabs", mem.address_of(&buf[0usize]), 320usize)
+    if !found || n < 4usize || buf[0usize] != 67u8 { ret 0usize }
+    var wanted_current = usize(buf[1usize] - 48u8)
+    var at = 3usize
+    var restored = 0usize
+    while at < n && restored < MAX_TABS {
+        var end = at
+        while end < n && buf[end] != 10u8 { end += 1usize }
+        if end > at {
+            let line = buf[at..end]
+            var page = START
+            var okay = false
+            if line[0usize] == 83u8 && line.len == 2usize {
+                page = usize(line[1usize] - 48u8)
+                okay = page < 7usize
+            } else if line[0usize] == 81u8 {
+                page = RESULTS
+                okay = true
+            } else if line[0usize] == 76u8 {
+                var sp = 1usize
+                while sp < line.len && line[sp] != 32u8 { sp += 1usize }
+                if sp < line.len {
+                    page = LIVE_BASE + url_slot(s, line[1usize..sp], line[sp + 1usize..line.len])
+                    okay = true
+                }
+            }
+            if okay {
+                var t: Tab = zero
+                t.pages[0usize] = page
+                t.count = 1usize
+                t.used = true
+                if line[0usize] == 81u8 {
+                    var k = 1usize
+                    while k < line.len && k - 1usize < 32usize {
+                        t.query[k - 1usize] = line[k]
+                        k += 1usize
+                    }
+                    t.query_len = k - 1usize
+                }
+                s.tabs[s.tab_total] = t
+                s.tab_total += 1usize
+                restored += 1usize
+            }
+        }
+        at = end + 1usize
+    }
+    if restored == 0usize { ret 0usize }
+    if wanted_current >= s.tab_total { wanted_current = 0usize }
+    s.current = wanted_current
+    ret restored
+}
+
 // Make sure the page the tab is at is the one loaded (a live page is fetched again when it is not).
-fn ensure_live(a: *mem.Arena, s: *State) {
+fn ensure_live(a: *mem.Arena, kit: *appkit.Kit, s: *State) {
     let page = current_page(s)
     if page >= LIVE_BASE && s.loaded != page - LIVE_BASE {
-        if !load_live(a, s, page - LIVE_BASE) {
+        if !load_live(a, kit, s, page - LIVE_BASE) {
             let t = &s.tabs[s.current]
             t.pages[t.at] = ERROR
         }
     }
 }
 
-fn submit(a: *mem.Arena, s: *State, address: str) {
+fn submit(a: *mem.Arena, kit: *appkit.Kit, s: *State, address: str) {
     ui.say("browser address ")
     ui.say_text(address)
     ui.say("\n")
@@ -1255,7 +1928,7 @@ fn submit(a: *mem.Arena, s: *State, address: str) {
         // Not one of the sample sites: a real address, fetched over the network.
         let (host, path) = split_address(a, s, address, "")
         let slot = url_slot(s, host, path)
-        if load_live(a, s, slot) { page = LIVE_BASE + slot }
+        if load_live(a, kit, s, slot) { page = LIVE_BASE + slot }
     }
     if page == RESULTS {
         var t = &s.tabs[s.current]
@@ -1274,11 +1947,11 @@ fn submit(a: *mem.Arena, s: *State, address: str) {
 }
 
 // What a tap on button `id` did: true when the screen changed.
-fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
+fn act(a: *mem.Arena, kit: *appkit.Kit, s: *State, id: usize) -> bool {
     if s.screen == ENTRY_SCREEN {
         if ui.is_key(id) {
             if id == 1205usize {
-                submit(a, s, ui.field_text(a, &s.typed))
+                submit(a, kit, s, ui.field_text(a, &s.typed))
                 ret true
             }
             ret ui.field_key(&s.typed, id, false)
@@ -1288,8 +1961,51 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             if id == 451usize { site = "news.example" }
             if id == 452usize { site = "docs.example" }
             if id == 453usize { site = "weather.example" }
-            submit(a, s, site)
+            submit(a, kit, s, site)
             ret true
+        }
+        ret false
+    }
+    if s.screen == FIELD_SCREEN {
+        if ui.is_key(id) {
+            if id == 1205usize {
+                // Done: the value goes back into the field and into the page line that shows it.
+                let f = &s.fields[s.edit_field]
+                var n = 0usize
+                while n < s.edit.len && n < 24usize {
+                    f.value[n] = s.edit.bytes[n]
+                    n += 1usize
+                }
+                f.value_len = n
+                var at_line = 0usize
+                while at_line < s.page_total {
+                    if s.page[at_line].kind == KIND_FIELD && s.page[at_line].aux == s.edit_field {
+                        s.cur_len = 0usize
+                        s.pending_space = false
+                        add_text(s, ui.text_of(a, f.name[0usize..], f.name_len), KIND_FIELD, "")
+                        add_text(s, ":", KIND_FIELD, "")
+                        add_text(s, ui.text_of(a, f.value[0usize..], f.value_len), KIND_FIELD, "")
+                        let kept_total = s.page_total
+                        let replaced = s.page[at_line]
+                        var line_copy: PageLine = replaced
+                        var t = 0usize
+                        while t < s.cur_len && t < 56usize {
+                            line_copy.text[t] = s.cur[t]
+                            t += 1usize
+                        }
+                        line_copy.len = t
+                        s.page[at_line] = line_copy
+                        s.cur_len = 0usize
+                    }
+                    at_line += 1usize
+                }
+                s.screen = BROWSE_SCREEN
+                ui.say("browser field value ")
+                ui.say_text(ui.text_of(a, f.value[0usize..], f.value_len))
+                ui.say("\n")
+                ret true
+            }
+            ret ui.field_key(&s.edit, id, false)
         }
         ret false
     }
@@ -1298,7 +2014,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             if id - 510usize < s.tab_total {
                 s.current = id - 510usize
                 s.screen = BROWSE_SCREEN
-                ensure_live(a, s)
+                ensure_live(a, kit, s)
             }
             ret true
         }
@@ -1336,7 +2052,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if t.at > 0usize {
             t.at -= 1usize
             ui.say("browser back\n")
-            ensure_live(a, s)
+            ensure_live(a, kit, s)
         }
         ret true
     }
@@ -1345,7 +2061,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if t.at + 1usize < t.count {
             t.at += 1usize
             ui.say("browser forward\n")
-            ensure_live(a, s)
+            ensure_live(a, kit, s)
         }
         ret true
     }
@@ -1360,11 +2076,68 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     // A link on a live page.
     if id >= 900usize && id < 900usize + PAGE_LINES {
         let line = s.page[id - 900usize]
+        if line.kind == KIND_FIELD && line.aux < s.field_total {
+            // (C159) A form field: its value is edited on the field screen.
+            s.edit_field = line.aux
+            s.edit.len = 0usize
+            var c = 0usize
+            while c < s.fields[line.aux].value_len {
+                ui.field_type(&s.edit, s.fields[line.aux].value[c], false)
+                c += 1usize
+            }
+            s.screen = FIELD_SCREEN
+            ui.say("browser field ")
+            ui.say_text(ui.text_of(a, s.fields[line.aux].name[0usize..], s.fields[line.aux].name_len))
+            ui.say("\n")
+            ret true
+        }
+        if line.kind == KIND_SUBMIT {
+            // (C159) The form is submitted with its fields as they are now: GET puts them in the query of the action, POST
+            // sends them as the body.
+            var made: [96]u8 = zero
+            let query_len = make_query(s, made[0usize..96usize])
+            let current = s.urls[current_page(s) - LIVE_BASE]
+            let current_host = ui.text_of(a, current.host[0usize..], current.host_len)
+            let (host, path) = split_address(a, s, ui.text_of(a, line.href[0usize..], line.href_len), current_host)
+            let query_text = ui.text_of(a, made[0usize..], query_len)
+            var slot = NONE
+            if line.aux == 1usize {
+                ui.say("browser post ")
+                ui.say_text(path)
+                ui.say(" ")
+                ui.say_num(query_len)
+                ui.say("\n")
+                slot = fetch_page(a, kit, s, NONE, host, path, true, query_text)
+            } else {
+                var goal = path
+                if query_len > 0usize { goal = ui.join(a, ui.join(a, path, "?", ""), query_text, "") }
+                let get_slot = url_slot(s, host, goal)
+                if load_live(a, kit, s, get_slot) { slot = get_slot }
+            }
+            if slot != NONE { go(s, LIVE_BASE + slot) } else { go(s, ERROR) }
+            ret true
+        }
+        if line.href_len > 6usize && ui.same(ui.text_of(a, line.href[0usize..], 6usize), "~open:") {
+            // (C159) A downloaded file is opened in Document: its path goes in /handover, the app leaves with 20040.
+            var opened_path: [64]u8 = zero
+            var o = 0usize
+            while o + 6usize < line.href_len && o < 63usize {
+                opened_path[o] = line.href[6usize + o]
+                o += 1usize
+            }
+            if vaultfs.write("/handover", mem.address_of(&opened_path[0usize]), o) {
+                s.handover = 40usize
+                ui.say("browser handover ")
+                ui.say_text(ui.text_of(a, opened_path[0usize..], o))
+                ui.say("\n")
+            }
+            ret true
+        }
         if line.href_len > 0usize {
             let current = s.urls[current_page(s) - LIVE_BASE]
             let (host, path) = split_address(a, s, ui.text_of(a, line.href[0usize..], line.href_len), ui.text_of(a, current.host[0usize..], current.host_len))
             let slot = url_slot(s, host, path)
-            if load_live(a, s, slot) { go(s, LIVE_BASE + slot) } else { go(s, ERROR) }
+            if load_live(a, kit, s, slot) { go(s, LIVE_BASE + slot) } else { go(s, ERROR) }
         }
         ret true
     }
@@ -1374,6 +2147,47 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     }
     if id == 803usize {
         s.screen = TABS_SCREEN
+        ret true
+    }
+    if id == 711usize {
+        // (C159) Star: add the page's address to the bookmarks, or take it off when it is there.
+        let star_address = address_of_page(a, s, current_page(s))
+        let at = bookmarked(a, s, star_address)
+        if at != NONE {
+            var k = at + 1usize
+            while k < s.mark_total {
+                s.marks[k - 1usize] = s.marks[k]
+                s.mark_len[k - 1usize] = s.mark_len[k]
+                k += 1usize
+            }
+            s.mark_total -= 1usize
+            ui.say("browser bookmark removed ")
+        } else if star_address.len <= 48usize {
+            if s.mark_total >= 4usize {
+                var k = 1usize
+                while k < 4usize {
+                    s.marks[k - 1usize] = s.marks[k]
+                    s.mark_len[k - 1usize] = s.mark_len[k]
+                    k += 1usize
+                }
+                s.mark_total = 3usize
+            }
+            var n = 0usize
+            while n < star_address.len {
+                s.marks[s.mark_total][n] = star_address[n]
+                n += 1usize
+            }
+            s.mark_len[s.mark_total] = n
+            s.mark_total += 1usize
+            ui.say("browser bookmark added ")
+        }
+        ui.say_text(star_address)
+        ui.say("\n")
+        save_marks(a, s)
+        ret true
+    }
+    if id >= 460usize && id < 464usize && id - 460usize < s.mark_total {
+        submit(a, kit, s, ui.text_of(a, s.marks[id - 460usize][0usize..], s.mark_len[id - 460usize]))
         ret true
     }
     if id == 710usize {
@@ -1398,7 +2212,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if page >= LIVE_BASE {
             let slot = page - LIVE_BASE
             s.loaded = NONE
-            if !load_live(a, s, slot) {
+            if !load_live(a, kit, s, slot) {
                 let t = &s.tabs[s.current]
                 t.pages[t.at] = ERROR
             }
@@ -1449,6 +2263,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var s: State = zero
+    // No address slot is loaded yet (zero would be slot 0, which a restored tab may name).
+    s.loaded = NONE
     s.jar = cookie.jar_new(s.cookie_store[0usize..16usize], s.cookie_text[0usize..2048usize])
     let restored = load_jar(&s, wall_seconds())
     if restored > 0usize {
@@ -1456,7 +2272,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ui.say_num(restored)
         ui.say("\n")
     }
-    let first = new_tab(&s)
+    let marks_back = load_marks(&s)
+    if marks_back > 0usize {
+        ui.say("browser bookmarks ")
+        ui.say_num(marks_back)
+        ui.say("\n")
+    }
+    // (C159) The tabs of the last run come back, each at the page it was on; a live one is fetched as it is shown.
+    let tabs_back = load_tabs(a, &s)
+    if tabs_back > 0usize {
+        ui.say("browser tabs restored ")
+        ui.say_num(tabs_back)
+        ui.say("\n")
+        ensure_live(a, &kit, &s)
+    } else {
+        let first = new_tab(&s)
+    }
     if !show(a, &kit, &s) {
         ui.say("browser present failed\n")
         ret ok
@@ -1475,8 +2306,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             running = false
         } else {
             let id = ui.hit_at(&s.hits, tap.x, tap.y)
-            if id != ui.NONE && act(a, &s, id) {
-                if !show(a, &kit, &s) {
+            if id != ui.NONE && act(a, &kit, &s, id) {
+                save_tabs(a, &s)
+                if s.handover != 0usize {
+                    appkit.leave()
+                    running = false
+                } else if !show(a, &kit, &s) {
                     ui.say("browser present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)
                 }
@@ -1485,5 +2320,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
     }
+    if s.handover != 0usize { os.exit(i32(20000usize + s.handover)) }
     ret ok
 }

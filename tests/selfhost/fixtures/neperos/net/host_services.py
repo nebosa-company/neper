@@ -34,6 +34,8 @@ try:
     import dynamic_services as DYNAMIC
 except ImportError:
     DYNAMIC = None
+# (C159, C160, C156) More web pages, map and weather feeds for the Browser, Maps and Weather fixtures.
+import web_services as WEB
 
 # The test boot's translation "model": a word-for-word dictionary through English, six languages.
 WORDS = [
@@ -125,6 +127,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         # (C171) The AI providers' model lists (the key check).
         if ai_services.get(self, host, self.path):
+        if WEB.get(self, host, url.path, query):
             return
         if host == 'api.exchange.coinbase.com' and url.path == '/products':
             # Public, no key: the curated pair list the Add sheet's crypto Find searches.
@@ -312,6 +315,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         # (C171) The AI app's providers (ai_services.py): the local model's OpenAI shape and the hosted three.
         if ai_services.post(self, host, self.path, raw):
+        if WEB.post(self, host, self.path, raw):
             return
         if host == 'neper.test' and self.path == '/v1/chat/completions':
             if self.headers.get('Authorization') == 'Bearer bad':

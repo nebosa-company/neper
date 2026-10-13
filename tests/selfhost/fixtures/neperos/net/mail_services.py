@@ -1,10 +1,14 @@
 """A small IMAP4rev1 and SMTP server for the Mail app's fixture (C128), on loopback.
 
-  TCP 8143  IMAP: CAPABILITY, LOGIN (neper / secret), LIST, SELECT, (UID) FETCH, (UID) STORE, EXPUNGE, NOOP,
-            LOGOUT over a three-message INBOX; flags and deletions are kept for the life of the process, so a
-            later session sees what an earlier one did
+  TCP 8143  IMAP: CAPABILITY, LOGIN (neper / secret, and ada / lovelace), LIST, SELECT, (UID) FETCH, (UID) STORE,
+            EXPUNGE, NOOP, LOGOUT over a three-message INBOX; flags and deletions are kept for the life of the
+            process, so a later session sees what an earlier one did
   TCP 8993  the IMAP service over TLS 1.3 and 8465 the SMTP one (the client tries these first)
   TCP 8025  SMTP: EHLO, MAIL FROM, RCPT TO, DATA, RSET, QUIT; every accepted message is kept in SENT
+
+(C158) neper has more folders than the INBOX, selected by name: Archive (a three-message thread and a receipt),
+Updates (an HTML newsletter with an inline PNG named by Content-ID) and Sent (what SMTP accepted, as sent). ada has
+her own INBOX of one message. Flags and deletions are kept per (user, folder, uid).
 
 The guest reaches both at 10.0.2.2 (the name neper.test resolves there). Plain text: the TLS paths of the client
 libraries have their own fixtures.
@@ -20,16 +24,74 @@ MESSAGES = [
     (b"Alex Rivera <alex@neper.test>", b"Build is green", b"Thu, 08 Oct 2026 17:30:00 +0000",
      b"The nightly build passed all tests."),
 ]
+ARCHIVE = [
+    (b"Maya Chen <maya@neper.test>", b"Trip plan", b"Mon, 05 Oct 2026 09:00:00 +0000",
+     b"Shall we take the coast road on Saturday?"),
+    (b"Alex Rivera <alex@neper.test>", b"Re: Trip plan", b"Mon, 05 Oct 2026 11:30:00 +0000",
+     b"Coast road is fine, I will bring the maps."),
+    (b"Maya Chen <maya@neper.test>", b"Re: Trip plan", b"Tue, 06 Oct 2026 08:10:00 +0000",
+     b"Great, leaving at 8."),
+    (b"Neper Bank <bank@neper.test>", b"Old receipt", b"Sun, 20 Sep 2026 12:00:00 +0000",
+     b"Your receipt for September."),
+]
+UPDATES = [(b"Neper News <news@neper.test>", b"October update", b"Tue, 13 Oct 2026 07:00:00 +0000", b"")]
+ADA_INBOX = [(b"Charles Babbage <cb@neper.test>", b"Engine notes", b"Wed, 07 Oct 2026 10:00:00 +0000",
+              b"Dear Ada, the drawings for the engine are done.")]
+# grace has one message; a second one arrives ARRIVAL_SECONDS after the first time her INBOX was fetched (the push the
+# Mail fixture waits for: the account is only ever used by that fixture, so the clock starts there).
+GRACE_INBOX = [(b"Grace Hopper <gh@neper.test>", b"Compiler notes", b"Thu, 08 Oct 2026 09:00:00 +0000",
+                b"The first compiler is working.")]
+GRACE_LATER = (b"Grace Hopper <gh@neper.test>", b"Bug found", b"Tue, 13 Oct 2026 11:00:00 +0000",
+               b"A moth was found in the relay.")
+ARRIVAL_SECONDS = 20
+GRACE_FIRST_FETCH = []
+# alan is the account of the search / mark-unread / archive fixture: two messages, an Archive that starts empty.
+ALAN_INBOX = [(b"Alan Turing <at@neper.test>", b"Cipher notes", b"Mon, 12 Oct 2026 10:00:00 +0000",
+               b"The enigma settings for Monday are attached to the next message."),
+              (b"Joan Clarke <jc@neper.test>", b"Lunch plans", b"Mon, 12 Oct 2026 11:00:00 +0000",
+               b"Soup in the canteen at one.")]
+ALAN_ARCHIVE = []
+ACCOUNTS = {"neper": "secret", "ada": "lovelace", "grace": "hopper", "alan": "enigma"}
 MENU = b"Friday menu: soup 4, pasta 9, tea 2\n"
 SENT = []
 SEEN = set()
 DELETED = set()
 EXPUNGED = set()
-LOCK = threading.Lock()
+LOCK = threading.RLock()
 CRLF = b"\r\n"
 
 
+def newsletter(sender, subject, date):
+    """(C158) multipart/related: an HTML body (heading, paragraph, list, link) and an inline PNG named by Content-ID."""
+    import base64
+    import pathlib
+    png = base64.encodebytes((pathlib.Path(__file__).resolve().parent / "logo-24.png").read_bytes())
+    html = (b"<html><body><h1>October update</h1><p>This month: the <b>Mail</b> app learned HTML.</p>"
+            b"<ul><li>Folders and accounts</li><li>Threads</li></ul>"
+            b"<img src=\"cid:logo1\" alt=\"logo\"><p>Read more at <a href=\"https://neper.test/pages/index.html\">neper.test</a>.</p>"
+            b"</body></html>")
+    boundary = b"=_neper_rel"
+    return (b"From: " + sender + b"\r\nTo: neper@neper.test\r\nSubject: " + subject + b"\r\nDate: " + date +
+            b"\r\nMessage-ID: <news@neper.test>\r\nMIME-Version: 1.0\r\n"
+            b"Content-Type: multipart/related; boundary=\"" + boundary + b"\"\r\n\r\n"
+            b"--" + boundary + b"\r\nContent-Type: text/html; charset=utf-8\r\n\r\n" + html + b"\r\n"
+            b"--" + boundary + b"\r\nContent-Type: image/png\r\nContent-ID: <logo1>\r\n"
+            b"Content-Disposition: inline; filename=\"logo.png\"\r\nContent-Transfer-Encoding: base64\r\n\r\n" +
+            png.replace(b"\n", b"\r\n") + b"--" + boundary + b"--\r\n")
+
+
 def render(sender, subject, date, body):
+    if subject is None:
+        # A message kept as sent: the bytes the client submitted.
+        return sender
+    if subject == b"October update":
+        return newsletter(sender, subject, date)
+    if subject in (b"Trip plan", b"Re: Trip plan"):
+        # (C158) A thread: the replies name the first message in In-Reply-To and References.
+        extra = b"" if subject == b"Trip plan" else b"In-Reply-To: <trip@neper.test>\r\nReferences: <trip@neper.test>\r\n"
+        return (b"From: " + sender + b"\r\nTo: neper@neper.test\r\nSubject: " + subject + b"\r\nDate: " + date +
+                b"\r\nMessage-ID: <" + str(abs(hash(date)) % 100000).encode() + b"@neper.test>\r\n" + extra +
+                b"MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body + b"\r\n")
     if subject == b"Your hold is ready":
         # (C158) HTML only, quoted-printable: the client must undo both to show the text.
         html = b"<html><body><p>The book you reserved is ready for pickup at the <b>front desk</b>.</p></body></html>"
@@ -65,14 +127,45 @@ def render(sender, subject, date, body):
 
 
 class Imap(socketserver.StreamRequestHandler):
+    user = None
+    folder = "INBOX"
+
     def reply(self, data):
         self.wfile.write(data)
         self.wfile.flush()
 
+    def items(self):
+        """What the selected folder holds, in order: render tuples (a sent message as its raw bytes)."""
+        if self.user == "ada":
+            return ADA_INBOX if self.folder == "INBOX" else []
+        if self.user == "alan":
+            with LOCK:
+                if self.folder == "INBOX":
+                    return ALAN_INBOX
+                return ALAN_ARCHIVE if self.folder == "Archive" else []
+        if self.user == "grace":
+            import time
+            if self.folder != "INBOX":
+                return []
+            with LOCK:
+                if GRACE_FIRST_FETCH and time.time() - GRACE_FIRST_FETCH[0] >= ARRIVAL_SECONDS:
+                    return GRACE_INBOX + [GRACE_LATER]
+            return GRACE_INBOX
+        if self.folder == "INBOX":
+            return MESSAGES
+        if self.folder == "Archive":
+            return ARCHIVE
+        if self.folder == "Updates":
+            return UPDATES
+        if self.folder == "Sent":
+            with LOCK:
+                return [(data, None, None, None) for (_, _, data) in SENT]
+        return []
+
     def view(self):
-        """The INBOX as a client sees it: (uid, message) for what is not expunged, in order."""
+        """The selected folder as a client sees it: (uid, message) for what is not expunged, in order."""
         with LOCK:
-            return [(i + 1, m) for i, m in enumerate(MESSAGES) if (i + 1) not in EXPUNGED]
+            return [(i + 1, m) for i, m in enumerate(self.items()) if (self.user, self.folder, i + 1) not in EXPUNGED]
 
     def handle(self):
         self.reply(b"* OK IMAP4rev1 neper test server ready" + CRLF)
@@ -91,19 +184,63 @@ class Imap(socketserver.StreamRequestHandler):
                 command = sub[0].upper()
                 rest = sub[1] if len(sub) > 1 else ""
             inbox = self.view()
+            import os
+            if os.environ.get("NEPER_MAIL_LOG"):
+                import time
+                with open(os.environ["NEPER_MAIL_LOG"], "a") as log:
+                    log.write("%.1f %s %s/%s %s %s\n" % (time.time() % 10000, self.client_address[1], self.user, self.folder, command, rest[:40]))
             if command == "CAPABILITY":
                 self.reply(b"* CAPABILITY IMAP4rev1 UIDPLUS" + CRLF + tag + b" OK CAPABILITY completed" + CRLF)
             elif command == "LOGIN":
-                ok = rest.replace('"', "").split(" ") == ["neper", "secret"]
+                pair = rest.replace('"', "").split(" ")
+                ok = len(pair) == 2 and ACCOUNTS.get(pair[0]) == pair[1]
+                if ok:
+                    self.user = pair[0]
                 self.reply(tag + (b" OK LOGIN completed" if ok else b" NO LOGIN failed") + CRLF)
             elif command == "LIST":
-                self.reply(b'* LIST (\\HasNoChildren) "/" "INBOX"' + CRLF + tag + b" OK LIST completed" + CRLF)
+                names = ["INBOX", "Archive", "Updates", "Sent"]
+                if self.user in ("ada", "grace"):
+                    names = ["INBOX"]
+                elif self.user == "alan":
+                    names = ["INBOX", "Archive"]
+                listing = b"".join(b'* LIST (\\HasNoChildren) "/" "' + n.encode() + b'"' + CRLF for n in names)
+                self.reply(listing + tag + b" OK LIST completed" + CRLF)
             elif command in ("SELECT", "EXAMINE"):
-                n = len(inbox)
+                self.folder = rest.replace('"', "").strip() or "INBOX"
+                inbox = self.view()
                 self.reply(("* %d EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY 1] valid\r\n* OK [UIDNEXT %d] next\r\n"
-                            "* FLAGS (\\Seen \\Flagged \\Deleted)\r\n" % (n, len(MESSAGES) + 1)).encode() + tag +
-                           b" OK [READ-WRITE] SELECT completed" + CRLF)
+                            "* FLAGS (\\Seen \\Flagged \\Deleted)\r\n" % (len(inbox), len(self.items()) + 1)).encode() +
+                           tag + b" OK [READ-WRITE] SELECT completed" + CRLF)
+            elif command == "SEARCH":
+                # (C158) SEARCH TEXT "word" (and SUBJECT, FROM, UNSEEN): the matching UIDs of the selected folder.
+                import re
+                criteria = rest.strip()
+                found = []
+                for position, (uid, message) in enumerate(inbox, 1):
+                    raw = render(*message).lower()
+                    match = re.match(r'(?i)(text|subject|from|body)\s+"?([^"]*)"?$', criteria)
+                    with LOCK:
+                        seen = (self.user, self.folder, uid) in SEEN
+                    if match and match.group(2).lower().encode() in raw:
+                        found.append(uid)
+                    elif criteria.upper() == "UNSEEN" and not seen:
+                        found.append(uid)
+                self.reply(b"* SEARCH" + b"".join(b" %d" % u for u in found) + CRLF + tag + b" OK SEARCH completed" + CRLF)
+            elif command == "COPY":
+                # (C158) COPY set mailbox: a copy of the message goes to that mailbox (only Archive is kept).
+                spec, _, target = rest.partition(" ")
+                wanted = {int(x) for x in spec.split(",") if x.isdigit()}
+                for position, (uid, message) in enumerate(inbox, 1):
+                    if (uid if by_uid else position) in wanted and target.strip('"') == "Archive" and self.user == "alan":
+                        with LOCK:
+                            ALAN_ARCHIVE.append(message)
+                self.reply(tag + b" OK COPY completed" + CRLF)
             elif command == "FETCH":
+                if self.user == "grace":
+                    import time
+                    with LOCK:
+                        if not GRACE_FIRST_FETCH:
+                            GRACE_FIRST_FETCH.append(time.time())
                 spec = rest.split(" ", 1)[0]
                 first, _, last = spec.partition(":")
                 low = int(first)
@@ -115,7 +252,7 @@ class Imap(socketserver.StreamRequestHandler):
                         continue
                     raw = render(*message)
                     with LOCK:
-                        flags = b"\\Seen" if uid in SEEN else b""
+                        flags = b"\\Seen" if (self.user, self.folder, uid) in SEEN else b""
                     out += (b"* %d FETCH (UID %d FLAGS (" % (position, uid)) + flags + b") BODY[] {%d}\r\n" % len(raw) + raw + b")\r\n"
                 self.reply(out + tag + b" OK FETCH completed" + CRLF)
             elif command == "STORE":
@@ -124,17 +261,19 @@ class Imap(socketserver.StreamRequestHandler):
                 for position, (uid, message) in enumerate(inbox, 1):
                     if (uid if by_uid else position) in wanted:
                         with LOCK:
-                            if "\\Seen" in action:
-                                SEEN.add(uid)
+                            if "\\Seen" in action and action.lstrip().startswith("-"):
+                                SEEN.discard((self.user, self.folder, uid))
+                            elif "\\Seen" in action:
+                                SEEN.add((self.user, self.folder, uid))
                             if "\\Deleted" in action:
-                                DELETED.add(uid)
+                                DELETED.add((self.user, self.folder, uid))
                 self.reply(tag + b" OK STORE completed" + CRLF)
             elif command == "EXPUNGE":
                 out = b""
                 with LOCK:
                     for position, (uid, message) in enumerate(inbox, 1):
-                        if uid in DELETED:
-                            EXPUNGED.add(uid)
+                        if (self.user, self.folder, uid) in DELETED:
+                            EXPUNGED.add((self.user, self.folder, uid))
                             out += b"* %d EXPUNGE\r\n" % position
                 self.reply(out + tag + b" OK EXPUNGE completed" + CRLF)
             elif command == "NOOP":

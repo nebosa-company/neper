@@ -59,7 +59,9 @@ fn open(a: *mem.Arena, args: []str, first_font: usize, title: str) -> (Kit, err)
     let (render_box, render_box_error) = mem.alloc[mem.Arena](a, 1usize)
     if render_box_error != ok { ret (kit, render_box_error) }
     render_box[0usize] = mem.arena_from(render_store)
-    let (renderer_value, renderer_error) = scene.renderer(&render_box[0usize], device, q, 3u32, 1u32)
+    // (C158, C159) Eight texture slots (Mail's inline pictures, the Browser's two images, Files' thumbnails): a
+    // picture that is not drawn any more is released by the app that uploaded it.
+    let (renderer_value, renderer_error) = scene.renderer(&render_box[0usize], device, q, 3u32, 8u32)
     if renderer_error != ok { ret (kit, renderer_error) }
     var renderer = renderer_value
     let (faces, has_fonts) = text.load_faces(&renderer, args, first_font)
