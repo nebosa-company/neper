@@ -21,6 +21,7 @@ use appkit
 use text
 use ui
 use vaultfs
+use e.time
 
 const NONE: usize = 99usize
 const KEYPAD_TAB: usize = 0usize
@@ -35,7 +36,7 @@ const MAX_RECENTS: usize = 16usize
 
 type Contact = struct { name: [20]u8, name_len: usize, number: [12]u8, number_len: usize }
 
-type Recent = struct { contact: usize, number: [12]u8, number_len: usize, direction: usize, ago: usize, used: bool }
+type Recent = struct { contact: usize, number: [12]u8, number_len: usize, direction: usize, ago: usize, stamp: usize, used: bool }
 
 type State = struct {
     contacts: [10]Contact,
@@ -59,6 +60,10 @@ type State = struct {
     ticks: usize,
     muted: bool,
     speaker: bool,
+    // (C157) The wall clock in minutes when the app started (a recent's age is this minus its stamp), and whether
+    // the number on the call screen is an emergency number.
+    now_min: usize,
+    emergency: bool,
     hits: ui.Hits,
 }
 
@@ -157,9 +162,76 @@ fn add_recent(s: *State, contact: usize, number: str, direction: usize, ago: usi
     r.contact = contact
     r.direction = direction
     r.ago = ago
+    if s.now_min >= ago { r.stamp = s.now_min - ago }
     r.used = true
     s.recents[0usize] = r
     if s.recent_total < MAX_RECENTS { s.recent_total += 1usize }
+}
+
+// (C157) The recents are kept in /recents across restarts: 20 bytes each, newest first (direction, number length, the
+// number, the wall-clock minute of the call); the contact is found again by its number.
+const RECENT_BYTES: usize = 20usize
+
+fn save_recents(s: *State) {
+    var raw: [320]u8 = zero
+    var i = 0usize
+    while i < s.recent_total {
+        let at = i * RECENT_BYTES
+        let r = s.recents[i]
+        raw[at] = u8(r.direction)
+        raw[at + 1usize] = u8(r.number_len)
+        var k = 0usize
+        while k < r.number_len {
+            raw[at + 4usize + k] = r.number[k]
+            k += 1usize
+        }
+        raw[at + 16usize] = u8(r.stamp & 255usize)
+        raw[at + 17usize] = u8((r.stamp >> 8usize) & 255usize)
+        raw[at + 18usize] = u8((r.stamp >> 16usize) & 255usize)
+        raw[at + 19usize] = u8((r.stamp >> 24usize) & 255usize)
+        i += 1usize
+    }
+    let kept = vaultfs.write_big("/recents", mem.address_of(&raw[0usize]), s.recent_total * RECENT_BYTES)
+    if kept {
+        ui.say("call recents saved ")
+        ui.say_num(s.recent_total)
+        ui.say("\n")
+    }
+}
+
+// The recents kept, if there are any (false leaves the list as it is).
+fn load_recents(a: *mem.Arena, s: *State) -> bool {
+    var raw: [320]u8 = zero
+    let (n, found) = vaultfs.read_big("/recents", mem.address_of(&raw[0usize]), 320usize)
+    if !found || n < RECENT_BYTES { ret false }
+    let count = n / RECENT_BYTES
+    s.recent_total = 0usize
+    var i = 0usize
+    while i < count && i < MAX_RECENTS {
+        let at = i * RECENT_BYTES
+        var r: Recent = zero
+        r.direction = usize(raw[at])
+        r.number_len = usize(raw[at + 1usize])
+        if r.number_len > 12usize || r.direction > 2usize { ret s.recent_total > 0usize }
+        var k = 0usize
+        while k < r.number_len {
+            r.number[k] = raw[at + 4usize + k]
+            k += 1usize
+        }
+        r.stamp = usize(raw[at + 16usize]) | (usize(raw[at + 17usize]) << 8usize) | (usize(raw[at + 18usize]) << 16usize) | (usize(raw[at + 19usize]) << 24usize)
+        if s.now_min > r.stamp { r.ago = s.now_min - r.stamp }
+        r.contact = find_contact(a, s, recent_number(a, r))
+        r.used = true
+        s.recents[i] = r
+        s.recent_total += 1usize
+        i += 1usize
+    }
+    ret true
+}
+
+// The emergency numbers are always dialable (even when a contact or a setting would say otherwise).
+fn is_emergency(number: str) -> bool {
+    ret ui.same(number, "112") || ui.same(number, "911") || ui.same(number, "999")
 }
 
 fn recent_number(a: *mem.Arena, r: Recent) -> str {
@@ -343,6 +415,7 @@ fn draw_form(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
 fn draw_call(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     var name = ui.text_of(a, s.number[0usize..], s.number_len)
     if s.callee != NONE { name = contact_name(a, s, s.callee) }
+    if s.emergency { name = ui.join(a, "Emergency ", name, "") }
     try avatar(a, builder, faces, 206.0, 150.0, 56.0, name, s.callee)
     try ui.centred(a, builder, faces.jost_bold, 30.0, name, 206.0, 226.0, ui.light())
     var status = "Calling..."
@@ -423,7 +496,8 @@ fn start_call(a: *mem.Arena, s: *State, callee: usize, number: str) {
     s.muted = false
     s.speaker = false
     s.screen = CALL_SCREEN
-    ui.say("call dialed ")
+    s.emergency = is_emergency(number)
+    if s.emergency { ui.say("call emergency ") } else { ui.say("call dialed ") }
     ui.say_text(number)
     ui.say("\n")
 }
@@ -433,6 +507,7 @@ fn end_call(a: *mem.Arena, s: *State) {
     ui.say("call ended ")
     ui.say_num(s.ticks / 2usize)
     ui.say("s\n")
+    save_recents(s)
     s.screen = MAIN_SCREEN
     s.dial.len = 0usize
 }
@@ -652,11 +727,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     } else {
         save_contacts(a, &s)
     }
-    add_recent(&s, 5usize, "5550106", 0usize, 2900usize)
-    add_recent(&s, 3usize, "5550104", 1usize, 1500usize)
-    add_recent(&s, 2usize, "5550103", 2usize, 300usize)
-    add_recent(&s, 0usize, "5550101", 0usize, 95usize)
-    add_recent(&s, 1usize, "5550102", 1usize, 14usize)
+    let (wall, wall_error) = time.now()
+    if wall_error == ok { s.now_min = usize(wall.nanos / 60000000000i64) }
+    if load_recents(a, &s) {
+        ui.say("call recents loaded ")
+        ui.say_num(s.recent_total)
+        ui.say(" ")
+        ui.say_text(ago_text(a, s.recents[0usize].ago))
+        ui.say("\n")
+    } else {
+        add_recent(&s, 5usize, "5550106", 0usize, 2900usize)
+        add_recent(&s, 3usize, "5550104", 1usize, 1500usize)
+        add_recent(&s, 2usize, "5550103", 2usize, 300usize)
+        add_recent(&s, 0usize, "5550101", 0usize, 95usize)
+        add_recent(&s, 1usize, "5550102", 1usize, 14usize)
+    }
     if !show(a, &kit, &s) {
         ui.say("call present failed\n")
         ret ok
