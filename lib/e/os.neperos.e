@@ -372,8 +372,8 @@ fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path:
 // app's rendered pixels into that frame and signals the compositor on endpoint slot 1, exactly as a
 // hand-written compositor app does; window_poll reports no event (neperos input reaches an app over
 // the compositor's routed endpoint, not here). The headless testing harness touches none of these.
-// SURFACE_W, SURFACE_H and SHARED_FRAME_VA mirror vm.SHARED_FRAME_W, _H and _VA (USER_BASE + 2 MB); keep equal.
-const SHARED_FRAME_VA: usize = 548684169216usize
+// SURFACE_W, SURFACE_H and SHARED_FRAME_VA mirror vm.SHARED_FRAME_W, _H and _VA (USER_BASE + 4 MB); keep equal.
+const SHARED_FRAME_VA: usize = 548686266368usize
 const SURFACE_W: usize = 1280usize
 const SURFACE_H: usize = 2856usize
 const COMP_ENDPOINT: usize = 1usize

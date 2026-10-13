@@ -10,7 +10,7 @@ use virtio
 const AUX: usize = 548684165120usize
 // The shared surface frame (vm.SHARED_FRAME_VA): the whole screen, a 1280x2856 BGRA surface the app and
 // the compositor both map (vm.SHARED_FRAME_W and _H; keep equal).
-const SHARED: usize = 548684169216usize
+const SHARED: usize = 548686266368usize
 const SURFACE_W: usize = 1280usize
 const SURFACE_H: usize = 2856usize
 const APP: usize = 2usize

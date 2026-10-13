@@ -108,15 +108,21 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     // (D2470) The stack is STACK_SIZE unless the image leaves less of the 2 MB reach: a large program
     // (Mail, 1.4 MB since the SVG and format modules grew) gets the room that is left, down to MIN_STACK,
     // instead of being refused.
+    // (D2480) Past that, the window takes a second level-3 table (4 MB in all, the full stack kept): such a
+    // program has no aux page (a driver server is small) and no room for thread stacks.
     var stack_bytes = STACK_SIZE
+    var big = false
     let reach = (L3_PAGES - 1usize) * PAGE
     if arg_off + ARG_SIZE + stack_bytes > reach {
-        if arg_off + ARG_SIZE + MIN_STACK > reach { ret (zero, NoSpace) }
-        stack_bytes = (reach - arg_off - ARG_SIZE) & ~(PAGE - 1usize)
+        if arg_off + ARG_SIZE + MIN_STACK <= reach {
+            stack_bytes = (reach - arg_off - ARG_SIZE) & ~(PAGE - 1usize)
+        } else {
+            big = true
+            if arg_off + ARG_SIZE + stack_bytes > (2usize * L3_PAGES - 1usize) * PAGE { ret (zero, NoSpace) }
+        }
     }
     let window = arg_off + ARG_SIZE + stack_bytes
     let pages = window / PAGE
-    if pages > L3_PAGES - 1usize { ret (zero, NoSpace) }
     let (region, region_error) = mem.alloc[u8](a, window + PAGE)
     if region_error != ok { ret (zero, region_error) }
     let region_phys = (mem.address_of(&region[0usize]) + PAGE - 1usize) & ~(PAGE - 1usize)
@@ -126,6 +132,12 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     if l2_error != ok { ret (zero, l2_error) }
     let (l3, l3_error) = page_of(a)
     if l3_error != ok { ret (zero, l3_error) }
+    var l3b = 0usize
+    if big {
+        let (second, second_error) = page_of(a)
+        if second_error != ok { ret (zero, second_error) }
+        l3b = second
+    }
     let kernel_l1 = os.mrs(a64.TTBR0_EL1) & TABLE_MASK
     var entry_at = 0usize
     while entry_at < 512usize {
@@ -134,16 +146,26 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     }
     os.store64(l1 + L1_USER_INDEX * 8usize, u64(l2 | TABLE))
     os.store64(l2, u64(l3 | TABLE))
+    if big { os.store64(l2 + 8usize, u64(l3b | TABLE)) }
     let bits = user_page_bits()
     var page_at = 0usize
     while page_at < pages {
-        os.store64(l3 + page_at * 8usize, u64((region_phys + page_at * PAGE) | bits))
+        if page_at < L3_PAGES {
+            os.store64(l3 + page_at * 8usize, u64((region_phys + page_at * PAGE) | bits))
+        } else {
+            os.store64(l3b + (page_at - L3_PAGES) * 8usize, u64((region_phys + page_at * PAGE) | bits))
+        }
         page_at += 1usize
     }
-    // The aux page, mapped last in the table so no window can reach it (the check above keeps one entry free).
-    let (aux, aux_error) = page_of(a)
-    if aux_error != ok { ret (zero, aux_error) }
-    os.store64(l3 + (L3_PAGES - 1usize) * 8usize, u64(aux | bits))
+    // The aux page, mapped last in the first table so no one-table window can reach it (the checks above keep one
+    // entry free). A two-table window covers that address and has none.
+    var aux = 0usize
+    if !big {
+        let (aux_page, aux_error) = page_of(a)
+        if aux_error != ok { ret (zero, aux_error) }
+        aux = aux_page
+        os.store64(l3 + (L3_PAGES - 1usize) * 8usize, u64(aux | bits))
+    }
     var copied = 0usize
     while copied < image_len {
         os.store8(region_phys + copied, os.load8(image_addr + copied))
@@ -289,7 +311,7 @@ fn put_aux(space: Space, slot: usize, value: usize) {
 // it takes the next level-2 slot with a level-3 table of its own. The Pixel 9 Pro's 1280x2856 BGRA
 // frame is 14.6 MB = 3570 pages = seven tables. The size is also written in lib/e/os.neperos.e
 // (SURFACE_W, SURFACE_H, SHARED_FRAME_VA) for the EL0 side, and in the compositor; keep them equal.
-const SHARED_FRAME_OFFSET: usize = 2097152usize
+const SHARED_FRAME_OFFSET: usize = 4194304usize
 const SHARED_FRAME_W: usize = 1280usize
 const SHARED_FRAME_H: usize = 2856usize
 const SHARED_FRAME_BYTES: usize = SHARED_FRAME_W * SHARED_FRAME_H * 4usize

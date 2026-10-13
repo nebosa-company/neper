@@ -8,7 +8,7 @@ use e.os
 use e.gfx.geometry
 use e.gfx.paint
 
-const SHARED: usize = 548684169216usize
+const SHARED: usize = 548686266368usize
 // The shared frame is the whole screen (1280 pixels a row); this app draws a 256x256 patch of it at the top-left.
 const STRIDE: usize = 1280usize
 const SURFACE_W: usize = 256usize
