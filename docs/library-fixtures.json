@@ -2426,15 +2426,18 @@
     "gpu_barrier_occurrence",
     "gpu_cpu",
     "gpu_device_edit",
+    "gpu_device_helpers",
     "gpu_device_lock",
     "gpu_devices",
     "gpu_divergence",
+    "gpu_f64",
     "gpu_fault_bounds",
     "gpu_fault_nocheck",
     "gpu_fault_unchecked",
     "gpu_float_modes",
     "gpu_frame_many",
     "gpu_gaps",
+    "gpu_inventory",
     "gpu_present",
     "gpu_reshape",
     "gpu_shared",
@@ -2558,8 +2561,18 @@
    "delivered": 19,
    "pending": [],
    "fixtures": [
+    "gpu_inventory",
     "gpu_vulkan_raw"
    ]
+  },
+  {
+   "module": "e.gpu.cuda",
+   "milestone": "M3",
+   "schedule": "scheduled",
+   "catalogue": 6,
+   "delivered": 6,
+   "pending": [],
+   "fixtures": []
   },
   {
    "module": "e.gpu.tensor",
@@ -2628,6 +2641,7 @@
     "gfx_mesh",
     "gfx_scene_plan",
     "gfx_vision",
+    "gpu_f64",
     "gpu_float_modes",
     "gpu_vulkan_float",
     "math_exact",

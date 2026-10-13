@@ -51,6 +51,9 @@ type Module = struct {
     // Declared on first use, with the `Int64` capability.
     t_u64: usize,
     t_f32: usize,
+    // Declared on first use, with the `Float64` capability.
+    t_f64: usize,
+    t_psb_f64: usize,
     t_v2u32: usize,
     t_v4u32: usize,
     t_pair: usize,
@@ -442,6 +445,7 @@ const OP_CONVERT_F_TO_U: usize = 109usize
 const OP_CONVERT_F_TO_S: usize = 110usize
 const OP_CONVERT_S_TO_F: usize = 111usize
 const OP_CONVERT_U_TO_F: usize = 112usize
+const OP_F_CONVERT: usize = 115usize
 const OP_U_CONVERT: usize = 113usize
 const OP_S_CONVERT: usize = 114usize
 const OP_COMPOSITE_CONSTRUCT: usize = 80usize
@@ -622,6 +626,19 @@ fn u64_type(m: *Module) -> usize {
     ret m.t_u64
 }
 
+// `f64`, which needs the `Float64` capability: declared the first time a kernel holds one.
+fn f64_type(m: *Module) -> usize {
+    if m.t_f64 == 0usize {
+        capability(m, 10usize)
+        m.t_f64 = fresh(m)
+        head(&m.types, OP_TYPE_FLOAT, 3usize)
+        put(&m.types, m.t_f64)
+        put(&m.types, 64usize)
+        m.t_psb_f64 = pointer_type(m, STORAGE_PHYSICAL, m.t_f64)
+    }
+    ret m.t_f64
+}
+
 fn v4u32_type(m: *Module) -> usize {
     if m.t_v4u32 == 0usize {
         m.t_v4u32 = fresh(m)
@@ -779,7 +796,7 @@ fn constant(m: *Module, ty: usize, value: usize) -> usize {
     var low = value & 4294967295usize
     if ty != 0usize && ty == m.t_u8 { low = low & 255usize }
     if ty != 0usize && ty == m.t_u16 { low = low & 65535usize }
-    if ty != 0usize && ty == m.t_u64 { high = value >> 32usize }
+    if ty != 0usize && (ty == m.t_u64 || ty == m.t_f64) { high = value >> 32usize }
     if ty == m.t_v2u32 { high = value >> 32usize }
     var at = 0usize
     while at < m.constant_count {
@@ -803,7 +820,7 @@ fn constant(m: *Module, ty: usize, value: usize) -> usize {
             put(&m.types, ty)
             put(&m.types, id)
         } else {
-            if ty != 0usize && ty == m.t_u64 {
+            if ty != 0usize && (ty == m.t_u64 || ty == m.t_f64) {
                 head(&m.types, OP_CONSTANT, 5usize)
                 put(&m.types, ty)
                 put(&m.types, id)
@@ -893,6 +910,7 @@ fn value_type(m: *Module, ty: check.Type) -> (usize, bool) {
     }
     if ty.kind == .Float {
         if same(ty.name, "f32") { ret (m.t_f32, false) }
+        if same(ty.name, "f64") { ret (f64_type(m), false) }
         ret (0usize, false)
     }
     if ty.kind == .Integer {
@@ -956,7 +974,7 @@ fn reachable_uses_float(m: *Module, builder: *nir.Builder, name: str) -> bool {
 fn type_bytes(m: *Module, ty: usize) -> usize {
     if ty != 0usize && ty == m.t_u8 { ret 1usize }
     if ty != 0usize && ty == m.t_u16 { ret 2usize }
-    if ty == m.t_v2u32 || (ty != 0usize && ty == m.t_u64) { ret 8usize }
+    if ty == m.t_v2u32 || (ty != 0usize && (ty == m.t_u64 || ty == m.t_f64)) { ret 8usize }
     ret 4usize
 }
 
@@ -1661,13 +1679,15 @@ fn is_math_fma(m: *Module, c: *check.Checker, builder: *nir.Builder, call: nir.I
 
 fn emit_fma(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     if instruction.operand_count != 3usize || !instruction.has_result { ret fail(m, "a math.fma call has the wrong argument count") }
-    if instruction.ty.kind != .Float || !same(instruction.ty.name, "f32") { ret fail(m, "math.fma is written for f32 only") }
+    if instruction.ty.kind != .Float || (!same(instruction.ty.name, "f32") && !same(instruction.ty.name, "f64")) { ret fail(m, "math.fma is written for f32 and f64 only") }
     let a = operand(builder, instruction, 0usize)
     let b = operand(builder, instruction, 1usize)
     let c_value = operand(builder, instruction, 2usize)
     if KIND_SCALAR != values.kind[a] || KIND_SCALAR != values.kind[b] || KIND_SCALAR != values.kind[c_value] { ret fail(m, "a math.fma argument is not a scalar") }
-    let id = float_fma(m, values.id[a], values.id[b], values.id[c_value])
-    scalar(values, instruction.result, id, m.t_f32, false)
+    var float_type = m.t_f32
+    if same(instruction.ty.name, "f64") { float_type = f64_type(m) }
+    let id = float_fma_of(m, float_type, values.id[a], values.id[b], values.id[c_value])
+    scalar(values, instruction.result, id, float_type, false)
     ret ok
 }
 
@@ -2094,6 +2114,7 @@ fn device_pointer_type(m: *Module, ty: usize) -> usize {
     if ty != 0usize && ty == m.t_u64 { ret m.t_psb_u64 }
     if ty == m.t_v2u32 { ret m.t_psb_address }
     if ty == m.t_f32 { ret m.t_psb_f32 }
+    if ty != 0usize && ty == m.t_f64 { ret m.t_psb_f64 }
     ret m.t_psb_u32
 }
 
@@ -2572,6 +2593,10 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         }
         if ty == m.t_f32 { value = convert(m, OP_BITCAST, m.t_f32, low) }
         if ty == m.t_v2u32 { value = pair(m, low, load_word(m, private_word(m, values, address, 4usize))) }
+        // An `f64` is two words, joined as a pair and bitcast, which needs no `Int64`.
+        if ty != 0usize && ty == m.t_f64 {
+            value = convert(m, OP_BITCAST, m.t_f64, pair(m, low, load_word(m, private_word(m, values, address, 4usize))))
+        }
         if ty != 0usize && ty == m.t_u64 {
             let high = load_word(m, private_word(m, values, address, 4usize))
             let upper = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u64, convert(m, OP_U_CONVERT, m.t_u64, high), constant(m, m.t_u64, 32usize))
@@ -2621,6 +2646,11 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
             low = extract(m, values.id[value], 0usize)
             store_word(m, private_word(m, values, address, 4usize), extract(m, values.id[value], 1usize))
         }
+        if ty != 0usize && ty == m.t_f64 {
+            let words = convert(m, OP_BITCAST, m.t_v2u32, values.id[value])
+            low = extract(m, words, 0usize)
+            store_word(m, private_word(m, values, address, 4usize), extract(m, words, 1usize))
+        }
         if ty != 0usize && ty == m.t_u64 {
             low = convert(m, OP_U_CONVERT, m.t_u32, values.id[value])
             let shifted = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u64, values.id[value], constant(m, m.t_u64, 32usize))
@@ -2651,17 +2681,23 @@ fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
             if values.signed[source] && ty == u64_type(m) { opcode = OP_S_CONVERT }
             id = convert(m, opcode, ty, values.id[source])
         } else {
-            if ty == m.t_f32 && integer_from {
-                var opcode = OP_CONVERT_U_TO_F
-                if values.signed[source] { opcode = OP_CONVERT_S_TO_F }
-                id = convert(m, opcode, ty, values.id[source])
+            let float_from = from == m.t_f32 || (from != 0usize && from == m.t_f64)
+            let float_to = ty == m.t_f32 || (ty != 0usize && ty == m.t_f64)
+            if float_from && float_to {
+                id = convert(m, OP_F_CONVERT, ty, values.id[source])
             } else {
-                if from == m.t_f32 && integer_to {
-                    var opcode = OP_CONVERT_F_TO_U
-                    if signed { opcode = OP_CONVERT_F_TO_S }
+                if float_to && integer_from {
+                    var opcode = OP_CONVERT_U_TO_F
+                    if values.signed[source] { opcode = OP_CONVERT_S_TO_F }
                     id = convert(m, opcode, ty, values.id[source])
                 } else {
-                    ret fail(m, "a conversion of this type is not yet written as SPIR-V")
+                    if float_from && integer_to {
+                        var opcode = OP_CONVERT_F_TO_U
+                        if signed { opcode = OP_CONVERT_F_TO_S }
+                        id = convert(m, opcode, ty, values.id[source])
+                    } else {
+                        ret fail(m, "a conversion of this type is not yet written as SPIR-V")
+                    }
                 }
             }
         }
@@ -2684,9 +2720,14 @@ fn float_binary(m: *Module, opcode: usize, left: usize, right: usize) -> usize {
 }
 
 fn float_fma(m: *Module, a: usize, b: usize, c: usize) -> usize {
+    ret float_fma_of(m, m.t_f32, a, b, c)
+}
+
+// `Fma` over operands of one float type, `NoContraction`; both widths round once.
+fn float_fma_of(m: *Module, ty: usize, a: usize, b: usize, c: usize) -> usize {
     let id = fresh(m)
     head(&m.code, OP_EXT_INST, 8usize)
-    put(&m.code, m.t_f32)
+    put(&m.code, ty)
     put(&m.code, id)
     put(&m.code, glsl_import(m))
     put(&m.code, 50usize)
@@ -2932,6 +2973,18 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     if ty == 0usize || values.kind[left] != KIND_SCALAR || KIND_SCALAR != values.kind[right] { ret fail(m, "an arithmetic operation of this type is not yet written as SPIR-V") }
     let opcode = instruction.opcode
     var spirv = 0usize
+    if ty != 0usize && ty == m.t_f64 {
+        // IEEE add, subtract and multiply round once on a device; division and square root
+        // wait for an exact sequence like f32's.
+        if opcode == .Add { spirv = OP_F_ADD }
+        if opcode == .Subtract { spirv = OP_F_SUB }
+        if opcode == .Multiply { spirv = OP_F_MUL }
+        if spirv == 0usize { ret fail(m, "an f64 operation other than add, subtract and multiply is not yet written as SPIR-V") }
+        let id = binary(m, spirv, ty, values.id[left], values.id[right])
+        no_contraction(m, id)
+        scalar(values, instruction.result, id, ty, signed)
+        ret ok
+    }
     if ty == m.t_f32 {
         if opcode == .Add { spirv = OP_F_ADD }
         if opcode == .Subtract { spirv = OP_F_SUB }
@@ -2986,7 +3039,7 @@ fn emit_compare(m: *Module, builder: *nir.Builder, instruction: nir.Instruction,
     let signed = values.signed[left]
     let opcode = instruction.opcode
     var spirv = 0usize
-    if ty == m.t_f32 {
+    if ty == m.t_f32 || (ty != 0usize && ty == m.t_f64) {
         if opcode == .Equal { spirv = OP_F_ORD_EQUAL }
         if opcode == .NotEqual { spirv = OP_F_UNORD_NOT_EQUAL }
         if opcode == .Less { spirv = OP_F_ORD_LESS_THAN }
@@ -3025,14 +3078,14 @@ fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     var spirv = OP_NOT
     if instruction.opcode == .Negate {
         spirv = OP_S_NEGATE
-        if ty == m.t_f32 { spirv = OP_F_NEGATE }
+        if ty == m.t_f32 || (ty != 0usize && ty == m.t_f64) { spirv = OP_F_NEGATE }
     }
     if ty == m.t_bool {
         if instruction.opcode != .BitNot { ret fail(m, "a bool operation is not yet written as SPIR-V") }
         spirv = OP_LOGICAL_NOT
     }
     let id = convert(m, spirv, ty, values.id[source])
-    if ty == m.t_f32 { no_contraction(m, id) }
+    if ty == m.t_f32 || (ty != 0usize && ty == m.t_f64) { no_contraction(m, id) }
     scalar(values, instruction.result, id, ty, values.signed[source])
     ret ok
 }

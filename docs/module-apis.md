@@ -13965,6 +13965,22 @@ waits. The generated launcher also carries the checker's inferred capability mas
 cannot write yet has no module there, and its Vulkan
 launch answers `Unsupported`; the CPU device still runs it.
 
+A `.Cuda` device (D4705) is `e.gpu.cuda` underneath and is enumerated, not opened: `devices`
+lists the driver's devices (`Unsupported` without the driver, an empty list with a driver and
+no device, `TooLarge` past the limit), each key the device's `cuDeviceGetUuid` bytes under the
+`.Cuda` backend, `supported` false, memory known; `open` is `Unsupported`, and `open_id` of a
+listed key is `Unsupported` (found, nothing to open it with) where an absent key is `NoDevice`
+and two devices of one key `AmbiguousDevice`. The count/list race of a Vulkan enumeration is
+retried (`VK_INCOMPLETE` asks the count again, three attempts, then `Lost`, D4700).
+
+`NEPER_GPU_INVENTORY` names a text file of mock devices (`neper run --gpu-inventory FILE`
+sets it for the program): one line each, `<vulkan|cuda> <1|0 key valid> <32 hex digits or -> <name>`.
+When it is set it replaces the `.Vulkan` and `.Cuda` enumeration (`.Cpu` is untouched):
+`devices` and `open_id` resolve over its records with the real `resolve_key`, an index opens a
+CPU-backed device whose `info` is the record, and an unreadable or malformed file is
+`Unsupported`. It is how selection (duplicate keys, a record without a key) is tested on a
+machine with one device.
+
 The landed device-only intrinsics are `gid`, `lid`, `wgid`, `sid`, `barrier`,
 `memory_barrier`, `subgroup_size`, `subgroup_elect`, `subgroup_all`, `subgroup_any`,
 `subgroup_ballot`, `subgroup_broadcast`, `subgroup_shuffle`, the six arithmetic and
@@ -14017,6 +14033,30 @@ the argument block's address; `dispatch` records, submits and waits for the queu
 idle. Its helpers (`record`, `put32`, `put64`, `get32`, `get64`, `put_pointer`,
 `library_name`, `load_dispatch`, `record_and_submit`) and the `Api` table are the
 module's own.
+
+### `e.gpu.cuda`
+
+```neper
+error NoLoader
+error NoDevice
+error Failed
+
+type Physical = struct { name: str, uuid: [16]u8, uuid_valid: bool, memory_bytes: u64, integrated: bool }
+
+fn load(a: *mem.Arena) -> err
+fn devices(a: *mem.Arena, limit: usize) -> ([]Physical, err)
+```
+
+CUDA device enumeration under `e.gpu` (C093, D4705): the driver library (`nvcuda.dll`,
+`libcuda.so.1`) opened at run time through `os.dlopen` and `cuInit`, `cuDeviceGetCount`,
+`cuDeviceGet`, `cuDeviceGetName`, `cuDeviceGetUuid`, `cuDeviceTotalMem_v2` and
+`cuDeviceGetAttribute` through `os.dlsym`, so a program that never asks for a `.Cuda` device
+needs no NVIDIA driver. `devices` is `NoLoader` without the library or `cuInit`, `NoDevice` with a
+driver and no device, and otherwise the first `limit` devices with the name the driver gives,
+the sixteen-byte `cuDeviceGetUuid` (valid when not all zero; on a GPU that also has a Vulkan
+driver these are the bytes of its Vulkan `deviceUUID`), total memory and whether the device
+is integrated. There is no CUDA compute backend (M4): `e.gpu.devices(.Cuda, ...)` reports these
+with `supported` false, `open_id` of a present key is `Unsupported`, of an absent one `NoDevice`.
 
 ### `e.gpu.tensor`
 

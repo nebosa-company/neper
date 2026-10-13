@@ -1053,9 +1053,93 @@ fn prefill_body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     ret (checked_function, true, ok)
 }
 
+// The values of the constants a declaration's tokens read (D4702): an inlined copy of the
+// body -- a release build's, or a kernel's device copy in another module -- has them baked
+// in, and the body edge is this hash, so an edit to a constant has to change it or a warm
+// build keeps a stale copy. A constant is a bare name of the function's own module or
+// `q.NAME` through one of its imports; each found one's hash is folded (xor) into one of
+// `slots`, and the answer is how many slots hold something. A name that is no constant
+// costs one lookup; over-approximating (a field spelled like a constant) is a harmless edge.
+fn declaration_constants(c: *check.Checker, g: *graph.Graph, function: check.Function, slots: []usize, scratch: *binary.Buffer) -> (usize, err) {
+    let module = g.modules[function.module_index]
+    let tokens = module.tokens
+    var seen: [32]usize = zero
+    var used = 0usize
+    var low = 0usize
+    var high = tokens.len
+    while low < high {
+        let mid = (low + high) / 2usize
+        if usize(tokens[mid].start) < function.source_start { low = mid + 1usize } else { high = mid }
+    }
+    var at = low
+    while at < tokens.len && usize(tokens[at].end) <= function.source_end {
+        if tokens[at].kind == .Identifier && (at == 0usize || tokens[at - 1usize].kind != .PunctDot) {
+            let spelling = lex.token_text(module.text, tokens[at])
+            var constant_at = 0usize
+            var found_constant = false
+            var qualified = false
+            if at + 2usize < tokens.len && tokens[at + 1usize].kind == .PunctDot && tokens[at + 2usize].kind == .Identifier {
+                let member = lex.token_text(module.text, tokens[at + 2usize])
+                var import_at = module.first_import
+                let import_end = module.first_import + module.import_count
+                while import_at < import_end {
+                    if same(g.imports[import_at].qualifier, spelling) {
+                        qualified = true
+                        let (candidate, candidate_found) = check.find_constant(c, g.imports[import_at].target, member)
+                        if candidate_found {
+                            constant_at = candidate
+                            found_constant = true
+                        }
+                    }
+                    import_at += 1usize
+                }
+            }
+            if !qualified {
+                let (candidate, candidate_found) = check.find_constant(c, function.module_index, spelling)
+                if candidate_found {
+                    constant_at = candidate
+                    found_constant = true
+                }
+            }
+            if found_constant {
+                // Once each: a constant read twice would fold its hash in twice and cancel.
+                var seen_before = false
+                var seen_at = 0usize
+                while seen_at < used && seen_at < seen.len {
+                    if seen[seen_at] == constant_at + 1usize { seen_before = true }
+                    seen_at += 1usize
+                }
+                if !seen_before {
+                    let (constant_hash, constant_error) = constant_body_hash(c, g, constant_at, scratch)
+                    if constant_error != ok { ret (0usize, constant_error) }
+                    let slot = used % slots.len
+                    slots[slot] = slots[slot] ^ constant_hash
+                    if used < seen.len { seen[used] = constant_at + 1usize }
+                    used += 1usize
+                }
+            }
+        }
+        at += 1usize
+    }
+    if used > slots.len { used = slots.len }
+    ret (used, ok)
+}
+
 fn body_hash_uncached(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_function: usize, nir_function: usize, has_nir: bool, scratch: *binary.Buffer) -> (usize, err) {
     let (signature, signature_error) = signature_hash(c, g, checked_function, scratch)
     if signature_error != ok { ret (0usize, signature_error) }
+    // The constants the declaration reads (D4702), before the scratch is the hash's: each
+    // one's hash takes the scratch for itself.
+    var constant_slots: [32]usize = zero
+    var constant_slots_used = 0usize
+    if checked_function < c.function_count {
+        let early = c.functions[checked_function]
+        if early.source_end > early.source_start && early.module_index < g.count && graph.front_readable(g, early.module_index, c.fork.id) {
+            let (used, used_error) = declaration_constants(c, g, early, constant_slots[..], scratch)
+            if used_error != ok { ret (0usize, used_error) }
+            constant_slots_used = used
+        }
+    }
     scratch.count = 0usize
     let signature_write_error = binary.little_u64(scratch, signature)
     if signature_write_error != ok { ret (0usize, signature_write_error) }
@@ -1082,6 +1166,12 @@ fn body_hash_uncached(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
         if line_error != ok { ret (0usize, line_error) }
         let tokens_error = write_declaration_tokens_canonical(g.modules[function.module_index].text, g.modules[function.module_index].tokens, function.source_start, function.source_end, scratch)
         if tokens_error != ok { ret (0usize, tokens_error) }
+        var slot_at = 0usize
+        while slot_at < constant_slots_used {
+            let slot_error = binary.little_u64(scratch, constant_slots[slot_at])
+            if slot_error != ok { ret (0usize, slot_error) }
+            slot_at += 1usize
+        }
     } else {
         if has_nir {
             let marker_error = binary.byte(scratch, 1usize)

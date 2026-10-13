@@ -1,0 +1,7 @@
+# The mock inventory of gpu_inventory (C093): Vulkan records A, B twice, one without a key; one CUDA.
+vulkan 1 01000000000000000000000000000001 Mock A
+
+vulkan 1 02000000000000000000000000000002 Mock B first
+vulkan 1 02000000000000000000000000000002 Mock B second
+vulkan 0 - Mock without a key
+cuda 1 0a00000000000000000000000000000a Mock CUDA

@@ -119,14 +119,78 @@ fn check_vulkan(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
+// CUDA device selection: the driver's devices are listed with identities and cannot be opened.
+fn check_cuda(a: *mem.Arena) -> i32 {
+    let (found, found_error) = gpu.devices(a, .Cuda, 16usize)
+    if found_error == gpu.Unsupported {
+        let (_, absent_error) = gpu.open_id(a, key_of(1u8, .Cuda))
+        if absent_error != gpu.Unsupported { ret 2i32 }
+        ret 0i32
+    }
+    if found_error != ok { ret 1i32 }
+    let (_, none_error) = gpu.open_id(a, key_of(7u8, .Cuda))
+    if found.len > 0usize && none_error != gpu.NoDevice && none_error != gpu.Unsupported { ret 3i32 }
+    var at = 0usize
+    while at < found.len {
+        let record = found[at]
+        if record.key.backend != .Cuda || record.index != u32(at) || record.name.len == 0usize { ret 4i32 }
+        if record.supported || !record.memory_known || record.memory_bytes == 0u64 { ret 5i32 }
+        if record.key_valid {
+            var twins = 0usize
+            var other = 0usize
+            while other < found.len {
+                if found[other].key_valid && same_key(found[other].key, record.key) { twins += 1usize }
+                other += 1usize
+            }
+            let (_, open_error) = gpu.open_id(a, record.key)
+            if twins > 1usize && open_error != gpu.AmbiguousDevice { ret 6i32 }
+            if twins == 1usize && open_error != gpu.Unsupported { ret 7i32 }
+        }
+        // A Vulkan key is not a CUDA key, whatever the bytes: the other backend's key never matches.
+        let (_, cross_error) = gpu.open_id(a, gpu.DeviceKey { backend: .Vulkan, uuid: record.key.uuid })
+        if cross_error == gpu.AmbiguousDevice { ret 8i32 }
+        at += 1usize
+    }
+    // The bound is a bound here too.
+    if found.len > 0usize {
+        let (_, bound_error) = gpu.devices(a, .Cuda, found.len - 1usize)
+        if bound_error != gpu.TooLarge { ret 9i32 }
+    }
+    // An independent oracle: the NVIDIA GPU a Vulkan driver also lists has the same sixteen
+    // bytes as its CUDA identity (matched by name, since the backends share nothing else).
+    let (vulkan, vulkan_error) = gpu.devices(a, .Vulkan, 16usize)
+    if vulkan_error == ok {
+        var cuda_at = 0usize
+        while cuda_at < found.len {
+            var vulkan_at = 0usize
+            while vulkan_at < vulkan.len {
+                let same_name = vulkan[vulkan_at].name.len == found[cuda_at].name.len && vulkan[vulkan_at].key_valid && found[cuda_at].key_valid
+                if same_name {
+                    var equal = true
+                    var name_at = 0usize
+                    while name_at < found[cuda_at].name.len {
+                        if vulkan[vulkan_at].name[name_at] != found[cuda_at].name[name_at] { equal = false }
+                        name_at += 1usize
+                    }
+                    if equal && !same_key(gpu.DeviceKey { backend: .Cuda, uuid: vulkan[vulkan_at].key.uuid }, found[cuda_at].key) { ret 10i32 }
+                }
+                vulkan_at += 1usize
+            }
+            cuda_at += 1usize
+        }
+    }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let resolution = check_resolution()
     if resolution != 0i32 { os.exit(resolution) }
-    // The CUDA backend is not compiled in: both entry points say so.
-    let (_, cuda_error) = gpu.devices(a, .Cuda, 4usize)
-    if cuda_error != gpu.Unsupported { os.exit(1i32) }
-    let (_, cuda_open_error) = gpu.open_id(a, key_of(1u8, .Cuda))
-    if cuda_open_error != gpu.Unsupported { os.exit(2i32) }
+    // CUDA is enumerated and never opened (D4705): without a driver both entry points say
+    // `Unsupported`; with one, every record is a CUDA identity that is not supported, its own
+    // key resolves to `Unsupported` (found, nothing to open it with), and an absent key is
+    // `NoDevice`.
+    let cuda_check = check_cuda(a)
+    if cuda_check != 0i32 { os.exit(cuda_check) }
     let vulkan = check_vulkan(a)
     if vulkan != 0i32 { os.exit(vulkan) }
     try io.print("gpu devices ok\n")

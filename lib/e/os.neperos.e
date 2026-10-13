@@ -430,3 +430,139 @@ fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
     var request: AccessibleRequest = zero
     ret (request, false)
 }
+
+// (D4704, C107) The rest of the fence's surface, so every `e.*` module that compiles against the
+// other targets' `e.os` compiles for NeperOS: a NeperOS program has no sockets, pollers, mappings,
+// watches, signals, pipes, processes of its own or sandbox, and each of these answers
+// `Unsupported` -- never a wrong answer -- except what has a true value here (`page_size`, 4 KiB
+// frames) or a harmless one (`error_message` renders the operation). The shapes are the fence's.
+type ProcUsage = struct { exit_code: i32, peak_memory: usize }
+type Socket = resource(socket_close) struct { raw: usize }
+type Poller = resource(poller_close) struct { state: *void }
+type Mapping = resource(mapping_close) struct { raw: usize, address: *u8, len: usize }
+type Watch = resource(watch_close) struct { state: *void }
+type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
+type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
+type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
+type SocketFamily = enum u8 { Ip4, Ip6 }
+type SocketKind = enum u8 { Stream, Datagram }
+type SocketShutdown = enum u8 { Read, Write, Both }
+type SocketAddress = struct { family: SocketFamily, bytes: [16]u8, scope: u32, port: u16 }
+type PollInterest = struct { readable: bool, writable: bool }
+type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
+type FileLock = resource(file_unlock) struct { raw: usize }
+type ProcGroup = resource(proc_group_close) struct { raw: usize }
+type Signal = enum u8 { Interrupt, Terminate, Abort, SegmentFault, FloatingPoint, Illegal }
+type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes: bool, deny_dynamic_code: bool, kill_on_violation: bool }
+
+fn page_size() -> usize { ret 4096usize }
+fn release(p: *u8, n: usize) -> err { ret Unsupported }
+fn peak_memory() -> (usize, err) { ret (0usize, Unsupported) }
+fn stdin() -> File { ret File { raw: 0usize } }
+fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err) {
+    let (file, create_error) = create_new(a, path)
+    ret (file, create_error)
+}
+fn create_new_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (File, err) {
+    let (file, create_error) = create_new(a, path)
+    if create_error != ok {
+        *detail = ErrorDetail { kind: ErrorKind.Other, native_code: 0i32, operation: "create_new", subject: path }
+        ret (file, create_error)
+    }
+    ret (file, ok)
+}
+fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err) {
+    *detail = ErrorDetail { kind: ErrorKind.Unsupported, native_code: 0i32, operation: "dir_open", subject: path }
+    ret (Dir { raw: 0usize }, Unsupported)
+}
+fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) { ret (detail.operation, ok) }
+fn window_native(w: Window) -> (usize, usize, err) { ret (0usize, 0usize, Unsupported) }
+
+fn pipe() -> (File, File, err) { ret (File { raw: 0usize }, File { raw: 0usize }, Unsupported) }
+fn pipe_read(f: File, buffer: []u8) -> (usize, err) { ret (0usize, Unsupported) }
+fn dup(f: File) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
+fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) { ret (Proc { raw: 0usize }, Unsupported) }
+fn wait_usage(p: own Proc) -> (ProcUsage, err) {
+    let (code, wait_error) = wait(p)
+    ret (ProcUsage { exit_code: code, peak_memory: 0usize }, wait_error)
+}
+fn kill(p: Proc) -> err { ret Unsupported }
+fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) { ret (ProcGroup { raw: 0usize }, Proc { raw: 0usize }, Unsupported) }
+fn proc_group_terminate(group: ProcGroup, force: bool) -> err { ret Unsupported }
+fn proc_group_close(group: own ProcGroup) -> err { ret ok }
+fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) { ret (FileLock { raw: 0usize }, Unsupported) }
+fn file_unlock(lock: own FileLock) -> err { ret ok }
+fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err) { ret (0usize, Unsupported) }
+fn signal(which: Signal, handler: fn(Signal)) -> err { ret Unsupported }
+fn signal_default(which: Signal) -> err { ret Unsupported }
+fn signal_raise(which: Signal) -> err { ret Unsupported }
+fn sandbox(policy: *const SandboxPolicy) -> err { ret Unsupported }
+
+fn file_handle(f: File) -> Handle { ret Handle { raw: f.raw } }
+fn socket_handle(s: Socket) -> Handle { ret Handle { raw: s.raw } }
+fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) { ret (Socket { raw: 0usize }, Unsupported) }
+fn socket_set_nonblocking(s: Socket, enabled: bool) -> err { ret Unsupported }
+fn socket_bind(s: Socket, address: SocketAddress) -> err { ret Unsupported }
+fn socket_local_address(s: Socket) -> (SocketAddress, err) {
+    var none: SocketAddress = zero
+    ret (none, Unsupported)
+}
+fn socket_listen(s: Socket, backlog: u32) -> err { ret Unsupported }
+fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
+    var none: SocketAddress = zero
+    ret (Socket { raw: 0usize }, none, Unsupported)
+}
+fn socket_connect(s: Socket, address: SocketAddress) -> err { ret Unsupported }
+fn socket_receive(s: Socket, dst: []u8) -> (usize, err) { ret (0usize, Unsupported) }
+fn socket_send(s: Socket, src: []const u8) -> (usize, err) { ret (0usize, Unsupported) }
+fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
+    var none: SocketAddress = zero
+    ret (0usize, none, Unsupported)
+}
+fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err) { ret (0usize, Unsupported) }
+fn socket_shutdown(s: Socket, how: SocketShutdown) -> err { ret Unsupported }
+fn socket_close(s: own Socket) -> err { ret ok }
+fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
+    var none: []SocketAddress = zero
+    ret (none, Unsupported)
+}
+
+fn poller_open(a: *mem.Arena) -> (Poller, err) {
+    var none: Poller = zero
+    ret (none, Unsupported)
+}
+fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err { ret Unsupported }
+fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err { ret Unsupported }
+fn poller_unregister(p: Poller, handle: Handle) -> err { ret Unsupported }
+fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) { ret (0usize, Unsupported) }
+fn poller_wake(p: Poller) -> err { ret Unsupported }
+fn poller_close(p: own Poller) -> err { ret ok }
+
+fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err) {
+    var none: Mapping = zero
+    ret (none, Unsupported)
+}
+fn mapping_bytes(m: Mapping) -> []const u8 {
+    var none: []const u8 = zero
+    ret none
+}
+fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
+    var none: []u8 = zero
+    ret (none, Unsupported)
+}
+fn mapping_flush(m: Mapping) -> err { ret Unsupported }
+fn mapping_close(m: own Mapping) -> err { ret ok }
+
+fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
+    var none: Watch = zero
+    ret (none, Unsupported)
+}
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) { ret (0usize, Unsupported) }
+fn watch_close(w: own Watch) -> err { ret ok }
+
+// The mapping's bytes as the writable region e.fs.mmap hands out; no mapping is ever made here, so
+// the region is empty.
+fn mapping_region(m: Mapping) -> []u8 {
+    var none: []u8 = zero
+    ret none
+}

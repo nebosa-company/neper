@@ -53,6 +53,7 @@ use e.str
 use e.sync as locks
 use e.atomic
 use e.gpu.vulkan
+use e.gpu.cuda
 
 type Backend = enum u8 { Cpu, Vulkan, Cuda }
 type DeviceKind = enum u8 { Unknown, Cpu, Integrated, Discrete, Virtual, Other }
@@ -105,7 +106,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool }
 
 type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
@@ -526,7 +527,166 @@ fn vulkan_info(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (DeviceI
     ret (record, ok)
 }
 
+// The mock inventory (C093, the contract's `--gpu-inventory FILE`, which `neper run` hands the
+// program as NEPER_GPU_INVENTORY): a text file, one device per line,
+//     <vulkan|cuda> <1|0: key valid> <32 hex digits, or - for no key> <name>
+// Blank lines and `#` lines are skipped. When the variable names a file it REPLACES the
+// Vulkan and CUDA enumeration (`.Cpu` is untouched); a record is `Other`, supported, with no
+// capabilities and no known memory, and opening one yields a CPU-backed device whose `info`
+// is the record. A file that cannot be read or has a malformed line is `Unsupported`, never
+// a partial list.
+fn inventory_hex(byte: u8) -> u32 {
+    if byte >= 48u8 && byte <= 57u8 { ret u32(byte) - 48u32 }
+    if byte >= 97u8 && byte <= 102u8 { ret u32(byte) - 87u32 }
+    if byte >= 65u8 && byte <= 70u8 { ret u32(byte) - 55u32 }
+    ret 16u32
+}
+
+fn inventory_same(left: []const u8, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// One inventory line: 0 a record for `wanted`, 1 a record of the other backend, 2 malformed.
+fn inventory_line(a: *mem.Arena, line: []const u8, wanted: Backend) -> (u32, DeviceInfo, err) {
+    var record: DeviceInfo = zero
+    var first = 0usize
+    while first < line.len && line[first] != 32u8 { first += 1usize }
+    var named: Backend = .Cpu
+    var known = false
+    if inventory_same(line[0usize..first], "vulkan") {
+        named = .Vulkan
+        known = true
+    }
+    if inventory_same(line[0usize..first], "cuda") {
+        named = .Cuda
+        known = true
+    }
+    if !known { ret (2u32, record, ok) }
+    var at = first + 1usize
+    if at + 2usize >= line.len || line[at + 1usize] != 32u8 { ret (2u32, record, ok) }
+    let valid_byte = line[at]
+    if valid_byte != 48u8 && valid_byte != 49u8 { ret (2u32, record, ok) }
+    at += 2usize
+    var key_width = 32usize
+    if line[at] == 45u8 { key_width = 1usize }
+    if valid_byte == 49u8 && key_width == 1usize { ret (2u32, record, ok) }
+    if at + key_width + 1usize >= line.len || line[at + key_width] != 32u8 { ret (2u32, record, ok) }
+    var uuid: [16]u8 = zero
+    if key_width == 32usize {
+        var pair = 0usize
+        while pair < 16usize {
+            let high = inventory_hex(line[at + 2usize * pair])
+            let low = inventory_hex(line[at + 2usize * pair + 1usize])
+            if high > 15u32 || low > 15u32 { ret (2u32, record, ok) }
+            uuid[pair] = u8(high * 16u32 + low)
+            pair += 1usize
+        }
+    }
+    let text = line[at + key_width + 1usize..]
+    if named != wanted { ret (1u32, record, ok) }
+    var (name, builder_error) = str.builder(a, text.len)
+    if builder_error != ok { ret (2u32, record, builder_error) }
+    var copied = 0usize
+    while copied < text.len {
+        let pushed = str.push_byte(&name, text[copied])
+        if pushed != ok { ret (2u32, record, pushed) }
+        copied += 1usize
+    }
+    record.key.backend = named
+    record.key.uuid = uuid
+    record.key_valid = valid_byte == 49u8
+    record.name = str.done(&name)
+    record.kind = .Other
+    record.memory_known = false
+    record.supported = true
+    ret (0u32, record, ok)
+}
+
+// The mock records of `wanted` and whether the variable configured a mock at all.
+fn inventory_records(a: *mem.Arena, wanted: Backend) -> ([]DeviceInfo, bool, err) {
+    var none: []DeviceInfo = zero
+    let (path, env_error) = os.env(a, "NEPER_GPU_INVENTORY")
+    if env_error != ok || path.len == 0usize { ret (none, false, ok) }
+    let (file, file_error) = fs.read_file(a, path, 65536usize)
+    if file_error != ok { ret (none, true, Unsupported) }
+    var newlines = 1usize
+    var scan = 0usize
+    while scan < file.len {
+        if file[scan] == 10u8 { newlines += 1usize }
+        scan += 1usize
+    }
+    let (records, records_error) = mem.alloc[DeviceInfo](a, newlines)
+    if records_error != ok { ret (none, true, records_error) }
+    var used = 0usize
+    var start = 0usize
+    var at = 0usize
+    while at <= file.len {
+        if at == file.len || file[at] == 10u8 {
+            var stop = at
+            if stop > start && file[stop - 1usize] == 13u8 { stop = stop - 1usize }
+            let line = file[start..stop]
+            start = at + 1usize
+            if line.len > 0usize && line[0usize] != 35u8 {
+                let (outcome, record, line_error) = inventory_line(a, line, wanted)
+                if line_error != ok { ret (none, true, line_error) }
+                if outcome == 2u32 { ret (none, true, Unsupported) }
+                if outcome == 0u32 {
+                    var numbered = record
+                    numbered.index = u32(used)
+                    records[used] = numbered
+                    used += 1usize
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret (records[0usize..used], true, ok)
+}
+
+// A CUDA device as `devices` reports it (D4705): its name, identity and memory, `supported`
+// false because there is no CUDA compute backend to open it with (M4).
+fn cuda_info(physical: cuda.Physical, index: u32) -> DeviceInfo {
+    var record: DeviceInfo = zero
+    record.key.backend = .Cuda
+    record.key_valid = physical.uuid_valid
+    if physical.uuid_valid { record.key.uuid = physical.uuid }
+    record.index = index
+    record.name = physical.name
+    record.kind = .Discrete
+    if physical.integrated { record.kind = .Integrated }
+    record.memory_bytes = physical.memory_bytes
+    record.memory_known = true
+    record.supported = false
+    ret record
+}
+
+// A mock record opened: the CPU device with the record as its `info`.
+fn open_mock(a: *mem.Arena, record: DeviceInfo) -> (*Device, err) {
+    let (device, device_error) = open(a, .Cpu, 0u32)
+    if device_error != ok { ret (zero, device_error) }
+    let (state, state_error) = state_of(device)
+    if state_error != ok { ret (zero, state_error) }
+    state.mock = record
+    state.has_mock = true
+    unlock_state(state)
+    ret (device, ok)
+}
+
 fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo, err) {
+    if backend != .Cpu {
+        let (mocked, configured, mock_error) = inventory_records(a, backend)
+        if mock_error != ok { ret (zero, mock_error) }
+        if configured {
+            if mocked.len > limit { ret (zero, TooLarge) }
+            ret (mocked, ok)
+        }
+    }
     if backend == .Vulkan {
         // One past the limit shows whether the snapshot fits: past it is `TooLarge`, never a
         // truncated list presented as complete (D4200). A missing loader is a backend that
@@ -558,6 +718,38 @@ fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo
             let (record, record_error) = vulkan_info(a, found[at], u32(at))
             if record_error != ok { ret (zero, record_error) }
             records[at] = record
+            at += 1usize
+        }
+        ret (records, ok)
+    }
+    if backend == .Cuda {
+        // The driver's devices (D4705), reported and not openable: there is no CUDA compute
+        // backend yet. The same bounded, complete snapshot as Vulkan's.
+        let checkpoint = mem.mark(a)
+        let (found, found_error) = cuda.devices(a, limit + 1usize)
+        if found_error == cuda.NoLoader {
+            mem.reset(a, checkpoint)
+            ret (zero, Unsupported)
+        }
+        if found_error == cuda.NoDevice {
+            mem.reset(a, checkpoint)
+            var empty: []const DeviceInfo = zero
+            ret (empty, ok)
+        }
+        if found_error != ok {
+            mem.reset(a, checkpoint)
+            if found_error == mem.Exhausted { ret (zero, found_error) }
+            ret (zero, Lost)
+        }
+        if found.len > limit {
+            mem.reset(a, checkpoint)
+            ret (zero, TooLarge)
+        }
+        let (records, records_error) = mem.alloc[DeviceInfo](a, found.len)
+        if records_error != ok { ret (zero, records_error) }
+        var at = 0usize
+        while at < found.len {
+            records[at] = cuda_info(found[at], u32(at))
             at += 1usize
         }
         ret (records, ok)
@@ -597,6 +789,15 @@ fn state_of(device: *Device) -> (*DeviceState, err) {
 }
 
 fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
+    if backend != .Cpu {
+        let (mocked, configured, mock_error) = inventory_records(a, backend)
+        if mock_error != ok { ret (zero, mock_error) }
+        if configured {
+            if usize(index) >= mocked.len { ret (zero, NoDevice) }
+            let (device, device_error) = open_mock(a, mocked[usize(index)])
+            ret (device, device_error)
+        }
+    }
     if backend == .Vulkan {
         let (device, device_error) = open_vulkan(a, index)
         ret (device, device_error)
@@ -693,6 +894,9 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     state.context = no_context
     state.physical = no_physical
     state.pipeline_count = 0usize
+    var no_mock: DeviceInfo = zero
+    state.mock = no_mock
+    state.has_mock = false
     let (handles, handles_error) = mem.alloc[Device](a, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Device { state: mem.cast[*void](state) }
@@ -745,6 +949,42 @@ fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err) {
         let (device, device_error) = open(a, .Cpu, 0u32)
         ret (device, device_error)
     }
+    let (mocked, configured, mock_error) = inventory_records(a, key.backend)
+    if mock_error != ok { ret (zero, mock_error) }
+    if configured {
+        let (picked, picked_error) = resolve_key(mocked, key)
+        if picked_error != ok { ret (zero, picked_error) }
+        let (device, device_error) = open_mock(a, mocked[picked])
+        ret (device, device_error)
+    }
+    if key.backend == .Cuda {
+        // A CUDA key resolves against the driver's devices exactly as a Vulkan one does, so
+        // an absent or duplicated identity says so; a device that is there has no backend to
+        // open it with, which is `Unsupported`.
+        let checkpoint = mem.mark(a)
+        let (found, found_error) = cuda.devices(a, MAX_DEVICES)
+        if found_error == cuda.NoLoader {
+            mem.reset(a, checkpoint)
+            ret (zero, Unsupported)
+        }
+        if found_error == cuda.NoDevice {
+            mem.reset(a, checkpoint)
+            ret (zero, NoDevice)
+        }
+        if found_error != ok {
+            mem.reset(a, checkpoint)
+            ret (zero, Lost)
+        }
+        var cuda_records: [16]DeviceInfo = zero
+        var cuda_at = 0usize
+        while cuda_at < found.len && cuda_at < 16usize {
+            cuda_records[cuda_at] = cuda_info(found[cuda_at], u32(cuda_at))
+            cuda_at += 1usize
+        }
+        let (cuda_chosen, cuda_chosen_error) = resolve_key(cuda_records[..cuda_at], key)
+        if cuda_chosen_error != ok { ret (zero, cuda_chosen_error) }
+        ret (zero, Unsupported)
+    }
     if key.backend != .Vulkan { ret (zero, Unsupported) }
     // Enumerate the full set so a duplicate is seen, match, then open that very handle:
     // removal or a changed identity fails instead of opening a replacement at the ordinal.
@@ -780,6 +1020,7 @@ fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
     let (state, state_error) = state_of(device)
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state)
+    if state.has_mock { ret (state.mock, ok) }
     if state.backend == .Vulkan {
         let (record, record_error) = vulkan_info(a, state.physical, state.ordinal)
         ret (record, record_error)

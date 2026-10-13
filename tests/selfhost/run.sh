@@ -5249,6 +5249,18 @@ esac
 subgroup_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/subgroup.e" "$repo" spv none "$test_build/subgroup.spv")
 [ "$subgroup_spirv_written" = 'spir-v written' ]
 cmp "$test_build/subgroup.spv" "$repo/tests/conformance/spirv/subgroup.spv"
+# (C095) `f64` in a kernel: the corpus module byte for byte, then the runtime fixture.
+float64_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/float64.e" "$repo" spv none "$test_build/float64.spv")
+[ "$float64_spirv_written" = 'spir-v written' ]
+cmp "$test_build/float64.spv" "$repo/tests/conformance/spirv/float64.spv"
+gpu_f64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_f64/src/main.e" "$repo" x64 linux "$test_build/gpu-f64-selfhost")
+[ "$gpu_f64_written" = 'executable written' ]
+chmod +x "$test_build/gpu-f64-selfhost"
+gpu_f64_output=$("$test_build/gpu-f64-selfhost")
+case "$gpu_f64_output" in
+    'gpu f64 ok on cpu'|'gpu f64 ok on cpu and '[0-9]' devices ('[0-9]' ran f64)'|'gpu f64 ok on cpu and '1[0-6]' devices ('[0-9]' ran f64)') ;;
+    *) printf '%s\n' "the f64 kernel runtime failed: $gpu_f64_output" >&2; exit 1 ;;
+esac
 gpu_subgroup_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_subgroup_identity/src/main.e" "$repo" x64 linux "$test_build/gpu-subgroup-identity-selfhost")
 [ "$gpu_subgroup_written" = 'executable written' ]
 chmod +x "$test_build/gpu-subgroup-identity-selfhost"
@@ -5262,6 +5274,11 @@ for width in 8 16 32 64; do
     width_run=$("$test_build/neper-self" run "$repo/tests/selfhost/fixtures/link/gpu_subgroup_width/src/main.e" "$repo" x64 linux "$test_build/gpu-subgroup-width-$width-selfhost" --json --subgroup-width "$width" -- "$width")
     printf '%s\n' "$width_run" | grep -Fq '"record":"run","process_exit_code":0,"stdout":"gpu subgroup width ok\n"' || { printf '%s\n' "the $width-lane subgroup runtime failed: $width_run" >&2; exit 1; }
 done
+# (C093) The mock device inventory `neper run --gpu-inventory FILE` hands e.gpu, and the same
+# fixture without it (the VK_INCOMPLETE retry decision alone).
+gpu_inventory_run=$("$test_build/neper-self" run "$repo/tests/selfhost/fixtures/link/gpu_inventory/src/main.e" "$repo" x64 linux "$test_build/gpu-inventory-selfhost" --json --gpu-inventory "$repo/tests/selfhost/fixtures/link/gpu_inventory/inventory.txt")
+printf '%s\n' "$gpu_inventory_run" | grep -Fq '"record":"run","process_exit_code":0,"stdout":"gpu inventory ok\n"' || { printf '%s\n' "the mock GPU inventory failed: $gpu_inventory_run" >&2; exit 1; }
+[ "$("$test_build/gpu-inventory-selfhost")" = 'gpu inventory unconfigured ok' ]
 gpu_subgroup_reduce_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_subgroup_reduce/src/main.e" "$repo" x64 linux "$test_build/gpu-subgroup-reduce-selfhost")
 [ "$gpu_subgroup_reduce_written" = 'executable written' ]
 chmod +x "$test_build/gpu-subgroup-reduce-selfhost"
@@ -7068,6 +7085,53 @@ cmp "$test_build/gpu-device-edit-hot" "$test_build/gpu-device-edit-clean"
 chmod +x "$test_build/gpu-device-edit-hot"
 device_edit_output=$("$test_build/gpu-device-edit-hot")
 [ "$device_edit_output" = 'gpu device edit ok' ]
+# (D4704, C107) The portable library compiles for NeperOS: the maps, the network modules, the
+# shell family and `target.os` need the whole `e.os` surface, the runtime's hash and args, and
+# the target's own `e.os.shell`, `e.os.ident` and `e.proc.sys.host`. Compiling is not running.
+for neperos_fixture in data_map data_tree concurrent_queue_map net net_http os_socket os_poller os_mapping ui_app ui_clipboard os_shell os_ident proc_sys when_target call_moves; do
+    neperos_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/$neperos_fixture/src/main.e" "$repo" aarch64 neperos "$test_build/neperos-compile-$neperos_fixture.img")
+    [ "$neperos_written" = 'executable written' ] || { printf '%s\n' "$neperos_fixture did not compile for NeperOS: $neperos_written" >&2; exit 1; }
+done
+# (D4702) A constant read in an inlined body is part of the body's edge: a release build that
+# inlined `midhelp.mix` into main says the new value after the constant's edit.
+release_const_fixture="$repo/tests/selfhost/fixtures/link/release_const_edge"
+release_const_scratch="$test_build/release-const-edge"
+rm -rf "$release_const_scratch"
+mkdir -p "$release_const_scratch/src"
+cp "$release_const_fixture"/src/*.e "$release_const_scratch/src/"
+release_const_first=$($test_build/neper-self emit-executable "$release_const_scratch/src/main.e" "$repo" x64 linux "$release_const_scratch/release-const" --release --incremental 2>/dev/null)
+[ "$release_const_first" = 'executable written' ]
+chmod +x "$release_const_scratch/release-const"
+[ "$("$release_const_scratch/release-const")" = '14' ]
+cp "$release_const_fixture/edits/lowvals.e" "$release_const_scratch/src/lowvals.e"
+release_const_second=$($test_build/neper-self emit-executable "$release_const_scratch/src/main.e" "$repo" x64 linux "$release_const_scratch/release-const" --release --incremental 2>/dev/null)
+[ "$release_const_second" = 'executable written' ]
+[ "$("$release_const_scratch/release-const")" = '15' ]
+# (C094, D4702) Generic, early-return and loop helpers and a constant two modules from a kernel:
+# the device agrees with the host, and a constant's edit rebuilds the kernel's module.
+device_helpers_fixture="$repo/tests/selfhost/fixtures/link/gpu_device_helpers"
+device_helpers_scratch="$test_build/gpu-device-helpers-scratch"
+device_helpers_artifacts="$test_build/gpu-device-helpers-artifacts"
+rm -rf "$device_helpers_scratch" "$device_helpers_artifacts"
+mkdir -p "$device_helpers_scratch/src" "$device_helpers_artifacts"
+cp "$device_helpers_fixture"/src/*.e "$device_helpers_scratch/src/"
+device_helpers_main="$device_helpers_scratch/src/main.e"
+device_helpers_written=$($test_build/neper-self emit-executable "$device_helpers_main" "$repo" x64 linux "$test_build/gpu-device-helpers-selfhost")
+[ "$device_helpers_written" = 'executable written' ]
+chmod +x "$test_build/gpu-device-helpers-selfhost"
+device_helpers_output=$("$test_build/gpu-device-helpers-selfhost")
+case "$device_helpers_output" in
+    'gpu device helpers ok on cpu and '[0-9]' devices'|'gpu device helpers ok on cpu and '1[0-6]' devices') ;;
+    *) printf '%s\n' "the device helpers fixture failed: $device_helpers_output" >&2; exit 1 ;;
+esac
+device_helpers_first=$($test_build/neper-self emit-em-all "$device_helpers_main" "$repo" x64 linux "$device_helpers_artifacts")
+[ "$device_helpers_first" = 'compiled modules written' ]
+device_helpers_same=$($test_build/neper-self emit-em-all "$device_helpers_main" "$repo" x64 linux "$device_helpers_artifacts" --incremental)
+case "$device_helpers_same" in *rebuilt*) printf %s "an unchanged device helpers fixture rebuilt a module: $device_helpers_same" >&2; echo >&2; exit 1 ;; esac
+cp "$device_helpers_fixture/edits/lowvals_limit.e" "$device_helpers_scratch/src/lowvals.e"
+device_helpers_edit=$($test_build/neper-self emit-em-all "$device_helpers_main" "$repo" x64 linux "$device_helpers_artifacts" --incremental)
+case "$device_helpers_edit" in *'rebuilt main'*) ;; *) printf %s "a constant edit two modules from the kernel did not rebuild its module: $device_helpers_edit" >&2; echo >&2; exit 1 ;; esac
+case "$device_helpers_edit" in *'kept genhelp'*) ;; *) printf %s "an untouched module was rebuilt: $device_helpers_edit" >&2; echo >&2; exit 1 ;; esac
 # The schedule does not reach the image (C083, D331): the device oracle and the kernel
 # module's device copy are the same bytes under one worker and under a turned-around crew.
 device_edit_serial_written=$($test_build/neper-self emit-executable "$device_edit_hot_main" "$repo" x64 linux "$test_build/gpu-device-edit-j1" -j 1 2>/dev/null)
@@ -10781,6 +10845,17 @@ greeting"
     case "$neperos_io" in
         *'hello from e.io on neperos'*'e.io writer runs at EL0'*'io roundtrip ok'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS e.io did not run the portable surface and buffer round-trip: $neperos_io" >&2; exit 1 ;;
+    esac
+    # (D4704, C107) e.data.map and os.args on NeperOS: map_test hashes u64 and str keys through the
+    # program runtime's `neper_hash_bytes` and reads `os.args` through `neper_os_args`, both new.
+    map_test_img="$test_build/map_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/map_test.e" "$repo" aarch64 neperos "$map_test_img")" = 'executable written' ]
+    map_archive="$test_build/map-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$map_archive" "$map_test_img"
+    neperos_map=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$map_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_map" in
+        *'map u64 ok 200'*'map str ok'*'args 0'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.data.map or os.args did not run: $neperos_map" >&2; exit 1 ;;
     esac
     # (D2155, C107) e.time on NeperOS: time_test reads os.clock through e.time -- monotonic (the
     # virtual counter) and wall (the PL031 RTC) -- lowered to the kernel's clock system call.

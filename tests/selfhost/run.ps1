@@ -5729,6 +5729,19 @@ $subgroupSpirv = Join-Path $testBuild 'subgroup.spv'
 $subgroupSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\subgroup.e') $repo 'spv' 'none' $subgroupSpirv
 if ($LASTEXITCODE -ne 0 -or $subgroupSpirvWritten -ne 'spir-v written') { throw 'subgroup SPIR-V emission failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $subgroupSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\subgroup.spv')).Hash) { throw 'the subgroup SPIR-V module differs from the conformance corpus' }
+# (C095) `f64` in a kernel: the Float64 capability, 64-bit device loads and stores, the
+# arithmetic the writer has, `math.fma` and the conversions, byte for byte the corpus module;
+# the runtime fixture runs it on the CPU and on every device with Float64 and denormal
+# preservation, and answers the host's bits.
+$float64Spirv = Join-Path $testBuild 'float64.spv'
+$float64SpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\float64.e') $repo 'spv' 'none' $float64Spirv
+if ($LASTEXITCODE -ne 0 -or $float64SpirvWritten -ne 'spir-v written') { throw 'float64 SPIR-V emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $float64Spirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\float64.spv')).Hash) { throw 'the float64 SPIR-V module differs from the conformance corpus' }
+$gpuF64Path = Join-Path $testBuild 'gpu-f64-selfhost.exe'
+$gpuF64Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_f64\src\main.e') $repo 'x64' 'windows' $gpuF64Path
+if ($LASTEXITCODE -ne 0 -or $gpuF64Written -ne 'executable written') { throw 'gpu_f64 emission failed' }
+$gpuF64Output = & $gpuF64Path
+if ($LASTEXITCODE -ne 0 -or $gpuF64Output -notmatch '^gpu f64 ok on cpu( and [0-9]+ devices \([0-9]+ ran f64\))?$') { throw "the f64 kernel runtime failed: $gpuF64Output" }
 $gpuSubgroupPath = Join-Path $testBuild 'gpu-subgroup-identity-selfhost.exe'
 $gpuSubgroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_identity\src\main.e') $repo 'x64' 'windows' $gpuSubgroupPath
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupWritten -ne 'executable written') { throw 'gpu_subgroup_identity emission failed' }
@@ -5739,6 +5752,13 @@ foreach ($width in @(8, 16, 32, 64)) {
     $widthRun = & $compiler run (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_width\src\main.e') $repo 'x64' 'windows' (Join-Path $testBuild "gpu-subgroup-width-$width-selfhost.exe") --json --subgroup-width "$width" -- "$width"
     if ($LASTEXITCODE -ne 0 -or ($widthRun -join "`n") -notmatch '"record":"run","process_exit_code":0,"stdout":"gpu subgroup width ok\\n"') { throw "the $width-lane subgroup runtime failed: $($widthRun -join "`n")" }
 }
+# (C093) The mock device inventory `neper run --gpu-inventory FILE` hands e.gpu: duplicate keys,
+# a record without a key, open by index, and the CPU untouched; the same fixture without it
+# checks the VK_INCOMPLETE retry decision alone.
+$gpuInventoryRun = & $compiler run (Join-Path $PSScriptRoot 'fixtures\link\gpu_inventory\src\main.e') $repo 'x64' 'windows' (Join-Path $testBuild 'gpu-inventory-selfhost.exe') --json --gpu-inventory (Join-Path $PSScriptRoot 'fixtures\link\gpu_inventory\inventory.txt')
+if ($LASTEXITCODE -ne 0 -or ($gpuInventoryRun -join "`n") -notmatch '"record":"run","process_exit_code":0,"stdout":"gpu inventory ok\\n"') { throw "the mock GPU inventory failed: $($gpuInventoryRun -join "`n")" }
+$gpuInventoryPlain = & (Join-Path $testBuild 'gpu-inventory-selfhost.exe')
+if ($LASTEXITCODE -ne 0 -or $gpuInventoryPlain -ne 'gpu inventory unconfigured ok') { throw "the unconfigured GPU inventory fixture failed: $gpuInventoryPlain" }
 $gpuSubgroupReducePath = Join-Path $testBuild 'gpu-subgroup-reduce-selfhost.exe'
 $gpuSubgroupReduceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_reduce\src\main.e') $repo 'x64' 'windows' $gpuSubgroupReducePath
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupReduceWritten -ne 'executable written') { throw 'gpu_subgroup_reduce emission failed' }
@@ -7170,6 +7190,55 @@ if ($LASTEXITCODE -ne 0 -or $deviceEditCleanWritten -ne 'executable written') { 
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditHotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditCleanExe).Hash) { throw 'the hot build after a device-reached edit is not the clean build' }
 $deviceEditOutput = & $deviceEditHotExe
 if ($LASTEXITCODE -ne 0 -or $deviceEditOutput -ne 'gpu device edit ok') { throw "the edited device edit fixture answered wrongly: exit $LASTEXITCODE $deviceEditOutput" }
+# (D4704, C107) The portable library compiles for NeperOS: programs that reach the maps, the
+# network modules, the shell family and `target.os`, which need the whole `e.os` surface, the
+# runtime's hash and args, and the target's own variants of `e.os.shell`, `e.os.ident` and
+# `e.proc.sys.host`. Compiling is not running; the boots are in the NeperOS section.
+foreach ($neperosFixture in @('data_map', 'data_tree', 'concurrent_queue_map', 'net', 'net_http', 'os_socket', 'os_poller', 'os_mapping', 'ui_app', 'ui_clipboard', 'os_shell', 'os_ident', 'proc_sys', 'when_target', 'call_moves')) {
+    $neperosImage = Join-Path $testBuild "neperos-compile-$neperosFixture.img"
+    $neperosWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$neperosFixture\src\main.e") $repo 'aarch64' 'neperos' $neperosImage
+    if ($LASTEXITCODE -ne 0 -or $neperosWritten -ne 'executable written') { throw "$neperosFixture did not compile for NeperOS: $neperosWritten" }
+}
+# (D4702) A constant read in an inlined body is part of the body's edge: a release build that
+# inlined `midhelp.mix` into main says the new value after the constant's edit.
+$releaseConstFixture = Join-Path $PSScriptRoot 'fixtures\link\release_const_edge'
+$releaseConstScratch = Join-Path $testBuild 'release-const-edge'
+if (Test-Path -LiteralPath $releaseConstScratch) { Remove-Item -LiteralPath $releaseConstScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $releaseConstScratch 'src') | Out-Null
+Copy-Item (Join-Path $releaseConstFixture 'src\*.e') (Join-Path $releaseConstScratch 'src')
+$releaseConstMain = Join-Path $releaseConstScratch 'src\main.e'
+$releaseConstExe = Join-Path $releaseConstScratch 'release-const.exe'
+$releaseConstFirst = & $compiler emit-executable $releaseConstMain $repo 'x64' 'windows' $releaseConstExe --release --incremental 2>$null
+if ($LASTEXITCODE -ne 0 -or $releaseConstFirst -ne 'executable written' -or (& $releaseConstExe) -ne '14') { throw 'the release constant fixture did not build and answer 14' }
+Copy-Item (Join-Path $releaseConstFixture 'edits\lowvals.e') (Join-Path $releaseConstScratch 'src\lowvals.e')
+$releaseConstSecond = & $compiler emit-executable $releaseConstMain $repo 'x64' 'windows' $releaseConstExe --release --incremental 2>$null
+if ($LASTEXITCODE -ne 0 -or $releaseConstSecond -ne 'executable written' -or (& $releaseConstExe) -ne '15') { throw 'an incremental release build kept the old constant inlined' }
+# (C094, D4702) What else a kernel reaches in other modules: a generic helper instantiated in
+# a module the kernel does not own, helpers with an early return and a loop, and a constant
+# read two modules away. The device agrees with the host; and a constant's edit rebuilds the
+# kernel's module, whose device copy has the old value baked in, which a body edge on the
+# helper's tokens alone did not (the same hole kept a release build's inlined copy stale).
+$deviceHelpersFixture = Join-Path $PSScriptRoot 'fixtures\link\gpu_device_helpers'
+$deviceHelpersScratch = Join-Path $testBuild 'gpu-device-helpers-scratch'
+$deviceHelpersSource = Join-Path $deviceHelpersScratch 'src'
+$deviceHelpersArtifacts = Join-Path $testBuild 'gpu-device-helpers-artifacts'
+if (Test-Path -LiteralPath $deviceHelpersScratch) { Remove-Item -LiteralPath $deviceHelpersScratch -Recurse -Force }
+if (Test-Path -LiteralPath $deviceHelpersArtifacts) { Remove-Item -LiteralPath $deviceHelpersArtifacts -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $deviceHelpersSource, $deviceHelpersArtifacts | Out-Null
+Copy-Item (Join-Path $deviceHelpersFixture 'src\*.e') $deviceHelpersSource
+$deviceHelpersMain = Join-Path $deviceHelpersSource 'main.e'
+$deviceHelpersExe = Join-Path $testBuild 'gpu-device-helpers-selfhost.exe'
+$deviceHelpersWritten = & $compiler emit-executable $deviceHelpersMain $repo 'x64' 'windows' $deviceHelpersExe
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersWritten -ne 'executable written') { throw 'gpu_device_helpers emission failed' }
+$deviceHelpersOutput = & $deviceHelpersExe
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersOutput -notmatch '^gpu device helpers ok on cpu and [0-9]+ devices$') { throw "the device helpers fixture failed: exit $LASTEXITCODE $deviceHelpersOutput" }
+$deviceHelpersFirst = & $compiler emit-em-all $deviceHelpersMain $repo 'x64' 'windows' $deviceHelpersArtifacts
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersFirst -ne 'compiled modules written') { throw 'the device helpers fixture did not compile to artifacts' }
+$deviceHelpersSame = (& $compiler emit-em-all $deviceHelpersMain $repo 'x64' 'windows' $deviceHelpersArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersSame -match 'rebuilt') { throw "an unchanged device helpers fixture rebuilt a module: $deviceHelpersSame" }
+Copy-Item (Join-Path $deviceHelpersFixture 'edits\lowvals_limit.e') (Join-Path $deviceHelpersSource 'lowvals.e')
+$deviceHelpersEdit = (& $compiler emit-em-all $deviceHelpersMain $repo 'x64' 'windows' $deviceHelpersArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $deviceHelpersEdit -notmatch 'rebuilt main' -or $deviceHelpersEdit -notmatch 'rebuilt midhelp' -or $deviceHelpersEdit -notmatch 'kept genhelp') { throw "a constant edit two modules from the kernel did not rebuild the kernel's module: $deviceHelpersEdit" }
 # The schedule does not reach the image (C083, D331): the device oracle and the kernel
 # module's device copy are the same bytes under one worker and under a turned-around crew.
 $deviceEditSerialExe = Join-Path $testBuild 'gpu-device-edit-j1.exe'
@@ -11040,6 +11109,16 @@ if ($neperosQemu) {
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.io archive did not assemble' }
     $ioBoot = Invoke-NeperOS $neperosImage @('-initrd', $ioArchive, '-append', 'shell')
     if ($ioBoot -notmatch '(?s)hello from e\.io on neperos.*e\.io writer runs at EL0.*io roundtrip ok.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.io did not run the portable surface and buffer round-trip: $ioBoot" }
+    # (D4704, C107) e.data.map and os.args on NeperOS: map_test hashes u64 and str keys through the
+    # program runtime's `neper_hash_bytes` and reads `os.args` through `neper_os_args`, both new.
+    $mapTest = Join-Path $testBuild 'map_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\map_test.e') $repo aarch64 neperos $mapTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS map program did not build' }
+    $mapArchive = Join-Path $testBuild 'map-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $mapArchive $mapTest
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS map archive did not assemble' }
+    $mapBoot = Invoke-NeperOS $neperosImage @('-initrd', $mapArchive, '-append', 'shell')
+    if ($mapBoot -notmatch '(?s)map u64 ok 200.*map str ok.*args 0.*neperos: exit 0x0000000000000000') { throw "NeperOS e.data.map or os.args did not run: $mapBoot" }
     # (D2155, C107) e.time on NeperOS: time_test reads os.clock through e.time -- two monotonic
     # readings around a busy spin (the virtual counter) and the wall clock (the PL031 RTC) -- lowered
     # to the kernel's clock system call. Started as program 0 of a one-program archive.
