@@ -132,6 +132,12 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    editors: []u8,
+    button_row: usize,
+    button_spec: usize,
+    button_clicked: bool,
+    button_action: widget.Submit,
+    has_button_action: bool,
     marks: []u8,
     marked: usize,
     anchor: usize,
@@ -257,6 +263,14 @@ fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const Colum
         cleared += 1usize
     }
     grid.marks = marks
+    let (editors, editors_error) = mem.alloc[u8](a, specs.len + 1usize)
+    if editors_error != ok { ret (zero, editors_error) }
+    var edit_at = 0usize
+    while edit_at < editors.len {
+        editors[edit_at] = 0u8
+        edit_at += 1usize
+    }
+    grid.editors = editors
     relayout(&grid)
     ret (grid, ok)
 }
@@ -379,6 +393,106 @@ fn move_column(grid: *Grid, spec: usize, to: usize) {
 fn show_sort(grid: *Grid, spec: usize, descending: bool) {
     grid.sort_column = spec
     grid.descending = descending
+}
+
+// A column's in-cell editor (v3's cxSpinEdit and cxButtonEdit): the text field, a spin editor
+// with a step arrow either side of the number, or a field with a three-dots button at its end.
+const EDITOR_TEXT: u8 = 0u8
+const EDITOR_SPIN: u8 = 1u8
+const EDITOR_BUTTON: u8 = 2u8
+
+fn set_editor(grid: *Grid, spec: usize, kind: u8) {
+    if spec < grid.editors.len { grid.editors[spec] = kind }
+}
+
+// What the application runs when the three-dots button of a cell is pressed; `button_cell` then
+// tells which cell (once).
+fn set_button_action(grid: *Grid, action: widget.Submit) {
+    grid.button_action = action
+    grid.has_button_action = true
+}
+
+fn button_cell(grid: *Grid) -> (usize, usize, bool) {
+    if !grid.button_clicked { ret (0usize, 0usize, false) }
+    grid.button_clicked = false
+    ret (grid.button_row, grid.button_spec, true)
+}
+
+fn on_cell_button(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    if !grid.editing { ret ok }
+    grid.button_row = grid.edit_row
+    grid.button_spec = grid.origin[grid.edit_spec]
+    grid.button_clicked = true
+    if grid.has_button_action { ret grid.button_action.invoke(grid.button_action.ctx) }
+    ret ok
+}
+
+// The spin editor's arrows step the number being edited by one.
+fn spin_by(grid: *Grid, delta: i64) {
+    var value: i64 = 0
+    var at = 0usize
+    var negative = false
+    if grid.edit_len > 0usize && grid.edit_text[0usize] == 45u8 {
+        negative = true
+        at = 1usize
+    }
+    while at < grid.edit_len {
+        let c = grid.edit_text[at]
+        if c >= 48u8 && c <= 57u8 { value = value * 10 + i64(c - 48u8) }
+        at += 1usize
+    }
+    if negative { value = 0 - value }
+    value += delta
+    if value < 0 { value = 0 }
+    var digits: [24]u8 = zero
+    var n = 0usize
+    var rest = value
+    if rest == 0 {
+        digits[0usize] = 48u8
+        n = 1usize
+    }
+    while rest > 0 {
+        digits[n] = 48u8 + u8(rest % 10)
+        rest = rest / 10
+        n += 1usize
+    }
+    var k = 0usize
+    while k < n {
+        grid.edit_text[k] = digits[n - 1usize - k]
+        k += 1usize
+    }
+    grid.edit_len = n
+}
+
+fn on_spin_down(ctx: *void) -> err {
+    spin_by(mem.cast[*Grid](ctx), -1)
+    ret ok
+}
+
+fn on_spin_up(ctx: *void) -> err {
+    spin_by(mem.cast[*Grid](ctx), 1)
+    ret ok
+}
+
+// A small flat step arrow of the spin editor.
+fn spin_arrow(a: *mem.Arena, grid: *Grid, key: widget.Key, shape: gl.Shape, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let ink = gl.rgb(0x000000u32)
+    let (mark, mark_error) = gl.mark(a, shape, ink, ink, 6.0, 9.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    let state = control.control_state(grid.theme, key, true, false)
+    var look = style.resolve(grid.theme.tokens, .Plain, state)
+    look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 2.0
+    look.padding_y = 1.0
+    look.min_width = 12.0
+    look.min_height = 12.0
+    let (node, node_error) = control.pressable_states(a, key, grid.theme, 3u8, label, look, true, false, 0u32, 0u32, 0u64, action, mark)
+    ret (node, node_error)
 }
 
 fn clear_selection(grid: *Grid) {
@@ -1364,8 +1478,48 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         }
         let buffer = grid.edit_text[0usize..EDIT_TEXT]
         let me = mem.cast[*void](grid)
-        let (field, field_error) = control.text_field(a, grid.key + EDIT_KEY, grid.theme, field_label, buffer, grid.edit_len, widget.Change[str] { ctx: me, invoke: on_edit_change }, widget.Submit { ctx: me, invoke: on_edit_commit }, options)
+        var kind = EDITOR_TEXT
+        let edited_spec = grid.origin[column]
+        if edited_spec < grid.editors.len { kind = grid.editors[edited_spec] }
+        var field: widget.Node = zero
+        var field_error: err = ok
+        if kind == EDITOR_BUTTON {
+            let (pressed, pressed_error) = mem.alloc[widget.Submit](a, 1usize)
+            if pressed_error != ok { ret pressed_error }
+            pressed[0usize] = widget.Submit { ctx: me, invoke: on_cell_button }
+            let (made_button, made_button_error) = control.button_edit(a, grid.key + EDIT_KEY, grid.theme, field_label, buffer, grid.edit_len, widget.Change[str] { ctx: me, invoke: on_edit_change }, widget.Submit { ctx: me, invoke: on_edit_commit }, &pressed[0usize], "Choose", options)
+            field = made_button
+            field_error = made_button_error
+        } else {
+            let (made_field, made_field_error) = control.text_field(a, grid.key + EDIT_KEY, grid.theme, field_label, buffer, grid.edit_len, widget.Change[str] { ctx: me, invoke: on_edit_change }, widget.Submit { ctx: me, invoke: on_edit_commit }, options)
+            field = made_field
+            field_error = made_field_error
+        }
         if field_error != ok { ret field_error }
+        if kind == EDITOR_SPIN && grid.look.on {
+            // v3's spin editor: a step arrow either side of the number
+            let (down_submit, down_error) = mem.alloc[widget.Submit](a, 2usize)
+            if down_error != ok { ret down_error }
+            down_submit[0usize] = widget.Submit { ctx: me, invoke: on_spin_down }
+            down_submit[1usize] = widget.Submit { ctx: me, invoke: on_spin_up }
+            let (left_arrow, left_error) = spin_arrow(a, grid, grid.key + EDIT_KEY + 20u64, gl.Shape.Left, "Decrease", &down_submit[0usize])
+            if left_error != ok { ret left_error }
+            let (right_arrow, right_error) = spin_arrow(a, grid, grid.key + EDIT_KEY + 21u64, gl.Shape.Right, "Increase", &down_submit[1usize])
+            if right_error != ok { ret right_error }
+            // both arrows in one row laid over the field, a gap between them as wide as the number
+            let (spin_parts, spin_parts_error) = mem.alloc[widget.Node](a, 5usize)
+            if spin_parts_error != ok { ret spin_parts_error }
+            let (gap_nodes, gap_error) = mem.alloc[widget.Node](a, 1usize)
+            if gap_error != ok { ret gap_error }
+            gap_nodes[0usize] = widget.box(0u64, control.sized_style(options.width - 24.0, 1.0), zero)
+            spin_parts[2usize] = left_arrow
+            spin_parts[3usize] = gap_nodes[0usize]
+            spin_parts[4usize] = right_arrow
+            let arrow_y = (options.height - 11.0) * 0.5
+            spin_parts[1usize] = widget.positioned(0u64, 1.0, arrow_y, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), spin_parts[2usize..5usize])))
+            spin_parts[0usize] = field
+            field = widget.stack(0u64, style.defaults(), spin_parts[0usize..2usize])
+        }
         // Tab and Shift+Tab move the editor, Escape cancels it (a scope round the field)
         let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
         if shortcuts_error != ok { ret shortcuts_error }
