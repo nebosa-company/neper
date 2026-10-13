@@ -227,7 +227,7 @@ wrote revenue.svg: 836 bytes</code></pre>
         <li><strong>PNG is 21% slower, and the files are about 25% larger.</strong> The renderer is not the problem: it rasterizes a chart in 2.0 ms. The other 18 ms is the PNG encoder. Encoding the very pixels Neper drew with zlib at level 6, which is what matplotlib uses through Pillow, takes 1.74 ms and writes 11.3 KB; Neper's deflate takes about 18 ms for 14.0 KB. It writes only fixed Huffman codes (worth about 1.6 KB here), does no lazy matching and restarts its search window every 32 KiB (about 1.1 KB more), and the PNG layer computes its CRC one bit at a time. Smarter row filters would not help: Pillow's adaptive filters made this image larger. Faster, smaller encoding is queued as the next piece of library work.</li>
         <li><strong>Neper's SVG files are 32% smaller</strong> (30.2 KB against 44.4 KB). They used to be larger, at 62.0 KB, because the writer printed every coordinate with full float digits, such as 81.85714721679688. It now writes numbers to 0.01 px and leaves out attributes that only restate SVG defaults; across the gallery that makes the SVG files a third smaller (a quarter counting the one that embeds a 610 KB font), and an independent renderer finds no change beyond anti-aliasing along edges.</li>
       </ul>
-      <p>The same Neper program on Linux (WSL) runs within a few percent of these times and writes output of exactly the same size. Not measured: ggplot2, base R graphics and lattice, which need an R installation this machine does not have, and matplotlib on Linux. The harness is in <code>benchmarks/charts</code>: <code>python benchmarks/charts/run.py &lt;neper-self&gt; 9</code> builds the Neper side, runs both nine times and writes the medians to <code>results/</code>. Single runs on this shared machine varied by up to half, which is why the table uses medians.</p>
+      <p>The same Neper program on Linux (WSL) runs within a few percent of these times and writes output of exactly the same size. ggplot2, base R graphics and lattice are measured in <a href="charts-speed-and-png-size.html">a later post</a>; matplotlib and R on Linux are not measured. The harness is in <code>benchmarks/charts</code>: <code>python benchmarks/charts/run.py &lt;neper-self&gt; 9</code> builds the Neper side, runs both nine times and writes the medians to <code>results/</code>. Single runs on this shared machine varied by up to half, which is why the table uses medians.</p>
       <h2>Start from the question</h2>
       <p>Most bad charts are good charts answering the wrong question. Decide what you want the reader to see, then pick from the matching family:</p>
       <div class="table-scroll"><table><thead><tr><th>If the question is…</th><th>Start with</th><th>Family</th></tr></thead><tbody>
@@ -606,11 +606,10 @@ wrote revenue.svg: 836 bytes</code></pre>
       <h2>What is not there yet</h2>
       <p>The gallery is complete against its plan, but the library is not finished. Still open:</p>
       <ul>
-        <li>a faster PNG encoder: drawing a chart takes 2 ms, deflate takes the other 18 (see <a href="#speed">the benchmark</a>), queued next;</li>
+        <li>a faster PNG encoder: drawing a chart takes 2 ms, deflate took the other 18 (see <a href="#speed">the benchmark</a>; since D4400 the whole PNG is about twice as fast, and <a href="charts-speed-and-png-size.html">a later post</a> covers PNG size);</li>
         <li>embedded fonts and compression in PDF output;</li>
         <li>font subsetting for embedded SVG fonts (the whole font is embedded now);</li>
         <li>leader lines for labels that do not fit, and pointer events on charts in the UI;</li>
-        <li>comparisons with ggplot2, base R graphics and lattice, which need an R installation we did not have.</li>
       </ul>
       <p>The charts above that do statistics (capability, Weibull, dose response, the control-chart limits) compute what their captions say and no more. Where a parameter is supplied rather than estimated, the preview says so in its footer. A chart is a view of an analysis, not a substitute for one.</p>
       <div class="try-cta">
