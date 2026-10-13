@@ -2856,7 +2856,18 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
             if summed_error != ok { ret summed_error }
             footer_text = summed
         }
-        ret text_node(a, grid, footer_text, true, .Text, out)
+        if footer_text.len == 0usize { ret text_node(a, grid, "", true, .Text, out) }
+        var summed_node: widget.Node = zero
+        let summed_node_error = text_node(a, grid, footer_text, true, .Text, &summed_node)
+        if summed_node_error != ok { ret summed_node_error }
+        var summed_style = style.defaults()
+        summed_style.width = style.Length { Percent: 100.0 }
+        summed_style.background = paint.Brush { Solid: grid.look.footer_cell }
+        let (summed_holder, summed_holder_error) = mem.alloc[widget.Node](a, 1usize)
+        if summed_holder_error != ok { ret summed_holder_error }
+        summed_holder[0usize] = summed_node
+        *out = widget.aligned(0u64, .Center, .Center, summed_style, summed_holder[0usize..1usize])
+        ret ok
     }
     if grp.visible_is_group(grid.g, index) { ret group_cell(a, grid, grp.visible_group(grid.g, index), column, out) }
     let row = grp.visible_row(grid.g, index)
@@ -3085,6 +3096,7 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
 // The kind of a visible row for the table look: 1 for a group row.
 fn row_kind(ctx: *void, index: usize) -> u8 {
     let grid = mem.cast[*Grid](ctx)
+    if index < grp.visible_len(grid.g) && grp.visible_is_footer(grid.g, index) { ret 2u8 }
     if index < grp.visible_len(grid.g) && grp.visible_is_group(grid.g, index) { ret 1u8 }
     ret 0u8
 }
@@ -4014,7 +4026,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             let (held, has_held) = widget.focused_key(theme.runtime)
             if !has_held || !grid.has_selection || held != row_key(grid, grid.selected_row) { selected_fill = gl.rgb(0xD5E4EEu32) }
         }
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     if grid.preview_on {
         table_options.expandable = true

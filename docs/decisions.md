@@ -39180,3 +39180,7 @@ The header popup's Group Footers is live (it was listed disabled): `set_group_fo
 ## D2417 — G012: a ticked popup entry is its picture in a pale blue box
 
 Recorded from v3's header popup (B10-checked-entries-v3.png): a ticked entry with a picture (Group By Box, Footer) draws the picture inside a rounded box filled #CCE8FF with a #99D1FF line, not a tick; Group Footers is enabled and unticked there. The flat popup draws the same for entries that have a picture and are checkable and checked (B10-checked-entries-v5.png); entries without a picture keep the tick. Group Footers on v3 keeps its entry enabled whenever the grid is grouped, as here. The look of v3's group footer rows themselves was not recorded (they sit below the visible rows of every group in the pool and need a scroll the capture could not make).
+
+## D2418 — G012: the group footer's look, recorded from v3
+
+v3's group footer (F2-group-footer-v3.png, with Group Footers on and a small group scrolled to its end) is a full-width row in the footer band's yellow (#FFFFDD) under the group's last card, no column lines, the group's summaries in grey cells under their columns. The footer entries are drawn as that (`TableLook.footer_fill`, row kind 2; a summary cell is #E7EAEA, the others empty; F2-group-footer-v5.png: the Bonus group's mean CMC 1.1 in the CMC column). v3's footer row is about 29 px; ours has the row height of the grid (the virtual list takes one extent).
