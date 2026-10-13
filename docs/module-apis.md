@@ -8264,7 +8264,7 @@ const CLASS_SPACE: u8 = 8u8
 const STYLE_CRAMPED: u32 = 4u32
 type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool, stretch: bool }
 type Consts = struct { axis: f32, rule: f32, script: f32, scriptscript: f32, num_display: f32, num_text: f32, den_display: f32, den_text: f32, num_gap: f32, num_gap_display: f32, den_gap: f32, den_gap_display: f32, sup_display: f32, sup_text: f32, sup_cramped: f32, sub_only: f32, sub_both: f32, sub_top_max: f32, sup_bottom_min: f32, sup_max_with_sub: f32, sub_sup_gap: f32, sup_drop: f32, sub_drop: f32, script_space: f32, upper_gap: f32, lower_gap: f32, rad_rule: f32, rad_gap: f32, rad_gap_display: f32, rad_extra: f32, rad_before: f32, rad_after: f32, rad_raise: f32, delim_min: f32, op_min: f32, accent_base: f32, over_gap: f32, over_rule: f32, over_extra: f32, under_gap: f32, under_rule: f32, under_extra: f32, stretch_above: f32, stretch_below: f32 }
-type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, alphabet: u8, k: Consts }
+type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, alphabet: u8, tag_at: usize, tag_len: usize, tag_star: bool, k: Consts }
 fn maxf(x: f32, y: f32) -> f32
 fn minf(x: f32, y: f32) -> f32
 fn be16(d: []const u8, at: usize) -> u32
@@ -8348,6 +8348,14 @@ fn lay_brace(c: *Ctx, style: u32, over: bool) -> Atom
 fn font_ready(c: *Ctx) -> bool
 fn context(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Ctx, bool)
 fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
+fn typeset_numbered(a: *mem.Arena, source: str, options: Options, line_width: f32, items: []Item) -> (Equation, err)
+type RowTag = struct { at: usize, len: usize, star: bool, row: usize }
+fn lay_tag(c: *Ctx) -> Atom
+fn number_atom(c: *Ctx, raw: str, star: bool) -> Atom
+fn lay_substack(c: *Ctx, style: u32) -> Atom
+fn big_scale(word: str) -> f32
+fn big_class(word: str) -> u8
+fn glyph_run(c: *Ctx, a: Atom) -> bool
 fn to_layout(a: *mem.Arena, eq: Equation, font: shape.Font) -> (layout.Layout, err)
 type Ml = struct { src: str, pos: usize, out: str.Builder, status: err, depth: usize }
 fn ml_fail(m: *Ml, why: err)
@@ -8401,7 +8409,14 @@ glyph's `y` is its baseline, a rule's its top. `to_layout` turns the glyph items
 `e.text.layout.Layout` (one run of one glyph each) that `e.gfx.scene` draws as a
 `DrawText`; the rule items are rectangles to fill. `typeset`, `typeset_mathml`,
 `to_layout`, `Options`, `Item`, `Equation`, `Kind` and the four errors are the interface;
-the rest of the fence is the module's internals. Checked against fontTools metrics, a
+the rest of the fence is the module's internals. D4505 adds `\substack{a\\b}` (rows centred,
+a 1.2 em skip of the style, centred on the axis), `\big` `\Big` `\bigg` `\Bigg` with `l`, `r`
+or `m` (a delimiter 1.2, 1.8, 2.4 and 3 em tall whatever the style, centred on the axis;
+open, close, relation or ordinary), `\tag{n}` and `\tag*{n}` with `typeset_numbered` (the
+equation centred in a line `line_width` wide, `(n)` flush right, the equation moved left to
+clear it by an em, the line growing when there is no room; an `align` or `gather` row's tag
+goes in a right-aligned column an em right of the table; a second tag is `Invalid`), and
+MathKernInfo kerning of a base that is a run of glyphs on one baseline by its last glyph. Checked against fontTools metrics, a
 separate Python model of the rules over a generated MATH font, and Pillow renderings
 (`scripts/gen_math_font.py`, `scripts/gen_math_render_test.py`, `scripts/gen_math_test.py`).
 
