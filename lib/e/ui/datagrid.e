@@ -3577,6 +3577,20 @@ fn take_group_drop(grid: *Grid) -> (usize, bool) {
     ret (grid.group_drop_spec, true)
 }
 
+type ChipTap = struct { grid: *Grid, level: usize }
+
+fn on_chip_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let tap = mem.cast[*ChipTap](ctx)
+    switch g {
+    case .Tap as at:
+        tap.grid.command = CMD_CLEAR_GROUPING
+        tap.grid.command_spec = tap.level
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let n = grid.g.level_count
     let (chips, chips_error) = mem.alloc[widget.Node](a, n + 1usize)
@@ -3597,7 +3611,12 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         chip_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
         chip_style.height = style.Length { Px: 18.7 }
         let chip_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 14.0 }, style.defaults(), inside[0usize..2usize])
-        chips[i] = widget.padded(0u64, 6.0, 0.0, 6.0, 0.0, chip_style, one(a, chip_row))
+        // a tap on a chip takes that grouping away (v3: dragging the chip out of the box)
+        let (chip_taps, chip_taps_error) = mem.alloc[ChipTap](a, 1usize)
+        if chip_taps_error != ok { ret (zero, control.TooLarge) }
+        chip_taps[0usize] = ChipTap { grid: grid, level: i }
+        let padded_chip = widget.padded(0u64, 6.0, 0.0, 6.0, 0.0, chip_style, one(a, chip_row))
+        chips[i] = widget.region(grid.key + GROUP_BOX_KEY + 16u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&chip_taps[0usize]), invoke: on_chip_gesture }, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_chip))
         i += 1usize
     }
     var panel = style.defaults()
@@ -3878,7 +3897,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             let (held, has_held) = widget.focused_key(theme.runtime)
             if !has_held || !grid.has_selection || held != row_key(grid, grid.selected_row) { selected_fill = gl.rgb(0xD5E4EEu32) }
         }
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     if grid.preview_on {
         table_options.expandable = true

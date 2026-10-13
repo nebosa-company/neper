@@ -39148,3 +39148,7 @@ The grid popups take v3's captions with their `&` (acCards*: "&Add to Deck", "Ad
 ## D2409 — G012: the Alignment submenu
 
 The header popup's Alignment entry (v3's DevExpress column popup) opens a submenu beside it with Left, Center and Right, the current one ticked; the popup it came from stays drawn under it with its entry lit and a small right arrow. A choice sets the column's alignment: right-aligned cells use the table's existing numeric end alignment, centred cells a new `TableOptions.centered`. The header title follows only the right choice (the header has no centred mode yet). Verified live (B3-alignment-submenu-v5.png: Name set to Right).
+
+## D2410 — G012: a chip removes its grouping, a centred header title, hints for the other grids
+
+A tap on a chip of the group box takes that grouping level away (`take_command` returns CMD_CLEAR_GROUPING with the level; the sample drops the level, leaving the other: Rarity > Edition becomes Edition; the menu's Clear Grouping still clears all) -- v3 does this by dragging the chip out of the box, which is not built. A column set to Center in the Alignment popup now centres its header title as well (`TableLook.center_head`). The collection and deck grids carry hints for their columns (v3's texts where the pool has them). Verified live (B4: the Rarity chip removed; Edition remains).
