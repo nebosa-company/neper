@@ -956,7 +956,7 @@ fn on_chooser_close(ctx: *void) -> err {
     ret ok
 }
 
-// v3's Customization window: a small floating panel, "Columns" tab, the hidden columns listed.
+// The hidden columns in a small floating panel called Column: a tap on one shows it again.
 fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let me = mem.cast[*void](grid)
     let (items, items_error) = mem.alloc[widget.Node](a, grid.all.len + 3usize)
@@ -968,7 +968,7 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var n = 0usize
     // the title bar with its close box
     var title: widget.Node = zero
-    let title_error = text_node(a, grid, "Customization", false, .Text, &title)
+    let title_error = text_node(a, grid, "Column", true, .Text, &title)
     if title_error != ok { ret (zero, title_error) }
     let (close_act, close_error) = mem.alloc[widget.Submit](a, 1usize)
     if close_error != ok { ret (zero, control.TooLarge) }
@@ -978,11 +978,15 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if closer_error != ok { ret (zero, closer_error) }
     let close_state = control.control_state(grid.theme, grid.key + CHOOSER_KEY + 1u64, true, false)
     var close_look = style.resolve(grid.theme.tokens, .Plain, close_state)
-    close_look.background = gl.rgb(0xC75050u32)
+    close_look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if close_state.hovered { close_look.background = gl.rgb(0xE8A0A0u32) }
     close_look.border_width = 0.0
     close_look.radius = 0.0
-    close_look.min_width = 24.0
-    close_look.min_height = 20.0
+    close_look.custom_padding = true
+    close_look.padding = 2.0
+    close_look.padding_y = 0.0
+    close_look.min_width = 18.0
+    close_look.min_height = 16.0
     let (close_button, close_button_error) = control.pressable_states(a, grid.key + CHOOSER_KEY + 1u64, grid.theme, 3u8, "Close", close_look, true, false, 0u32, 0u32, 0u64, &close_act[0usize], closer)
     if close_button_error != ok { ret (zero, close_button_error) }
     let (bar, bar_error) = mem.alloc[widget.Node](a, 2usize)
@@ -990,11 +994,6 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     bar[0usize] = title
     bar[1usize] = close_button
     items[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, style.defaults(), bar[0usize..2usize])
-    n += 1usize
-    var tab: widget.Node = zero
-    let tab_error = text_node(a, grid, "Columns", true, .Text, &tab)
-    if tab_error != ok { ret (zero, tab_error) }
-    items[n] = tab
     n += 1usize
     var o = 0usize
     var listed = 0usize
@@ -1012,10 +1011,10 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             look.border_width = 0.0
             look.radius = 0.0
             look.custom_padding = true
-            look.padding = 3.0
-            look.padding_y = 2.0
-            look.min_width = 200.0
-            look.min_height = 20.0
+            look.padding = 4.0
+            look.padding_y = 1.0
+            look.min_width = 150.0
+            look.min_height = 19.0
             let (entry, entry_error) = control.pressable_states(a, grid.key + CHOOSER_KEY + 8u64 + u64(o), grid.theme, 3u8, grid.all[o].title, look, true, false, 0u32, 0u32, 0u64, &acts[listed], label)
             if entry_error != ok { ret (zero, entry_error) }
             if n < items.len {
@@ -1027,11 +1026,10 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         o += 1usize
     }
     var panel = style.defaults()
-    panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    panel.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     panel.border = style.Border { width: 1.0, color: grid.look.selected_line }
-    panel.width = style.Length { Px: 240.0 }
-    panel.min_height = style.Length { Px: 160.0 }
-    ret (widget.padded(0u64, 8.0, 6.0, 8.0, 8.0, panel, one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 4.0 }, style.defaults(), items[0usize..n]))), ok)
+    panel.width = style.Length { Px: 170.0 }
+    ret (widget.padded(0u64, 4.0, 3.0, 4.0, 4.0, panel, one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 1.0 }, style.defaults(), items[0usize..n]))), ok)
 }
 
 // The grid with its context menu target and, open, the menu or the chooser.
@@ -1066,7 +1064,7 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         var x: f32 = 400.0
         var y: f32 = 60.0
         if has_grid {
-            x = grid_rect.x + grid_rect.width - 260.0
+            x = grid_rect.x + grid_rect.width - 190.0
             y = grid_rect.y + 30.0
         }
         let (floating, floating_error) = mem.alloc[widget.Node](a, 1usize)

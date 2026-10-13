@@ -2159,4 +2159,5 @@ D2395	778	G012: v3's grid lines recorded; the line colour is #DEDEDE
 D2396	616	G012: pixel probes for the header hover and the footer band
 D2397	1342	G012: incremental search and the bookmark
 D2398	1408	G012: context menus by hit region and the field chooser
-D2399	1243	G012: a right-click selects the card; the header menu finds its column by semantics; the pool is read-only
+D2399	1244	G012: a right-click selects the card; the header menu finds its column by semantics; the pool is read-only
+D2400	477	G012: the field chooser is a plain list called Column
