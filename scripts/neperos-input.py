@@ -97,6 +97,8 @@ def main():
                 time.sleep(0.2)
         if sock is None:
             raise SystemExit("could not connect to QMP")
+        # (D2479) The connect used a one second timeout; a screendump or a busy host takes longer to answer.
+        sock.settimeout(60)
         sock.recv(65536)
         qmp(sock, {"execute": "qmp_capabilities"})
         if not wait_for(serial, "input ready", 60):

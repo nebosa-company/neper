@@ -63,6 +63,8 @@ def main():
                 time.sleep(0.2)
         if sock is None:
             raise SystemExit("could not connect to QMP")
+        # (D2479) The connect used a one second timeout; a screendump or a busy host takes longer to answer.
+        sock.settimeout(60)
         sock.recv(65536)
         qmp(sock, {"execute": "qmp_capabilities"})
         deadline = time.time() + 60
@@ -94,5 +96,23 @@ def main():
             proc.kill()
 
 
+def run_with_retry():
+    # (D2479) A QEMU that starts but does not answer QMP, or a guest late to its marker, is the harness failing to
+    # start; retried twice from a clean serial file. What the program printed is never retried.
+    last = None
+    for attempt in range(3):
+        try:
+            main()
+            return
+        except (TimeoutError, ConnectionError) as error:
+            last = error
+        except SystemExit as exit_request:
+            if str(exit_request) not in ("could not connect to QMP", "GPU driver did not flush in time"):
+                raise
+            last = exit_request
+        time.sleep(5)
+    raise last
+
+
 if __name__ == "__main__":
-    main()
+    run_with_retry()

@@ -40405,3 +40405,6 @@ Limits. The S3 host-style addressing, the `Content-MD5` and checksum headers, th
 
 ## D2478 — `e.gpu.cuda` has a fixture of its own
 `library_fixtures.py` requires every delivered declaration of a partial module to be used by an executable fixture; `e.gpu.cuda` (lane J, D4703) was reached only through `e.gpu`, so the suite's first gate stopped. `link/gpu_cuda` calls `cuda.devices` directly and checks what any machine must satisfy: with no driver an error and an empty list; with one, at least one device, every name and memory size non-zero, and no device marked key-valid with an all-zero key. It has a block in both runners.
+
+## D2479 — The QMP socket waits a minute, and the screendump script retries a start-up timeout
+Both harness scripts connected to QEMU's QMP port with a one second timeout and kept it for every later call, so a `screendump` of the 1280x2856 panel (or any answer on a loaded host) raised `TimeoutError` after a second, which stopped the e.ui-window golden after every NeperOS fixture had passed. The socket now waits 60 s after the connect, and `neperos-screendump.py` retries a timeout or a missing first flush up to twice, as `neperos-input.py` has since D2476; a wrong picture is never retried.
