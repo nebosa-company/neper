@@ -2442,6 +2442,21 @@ D2479	599	The QMP socket waits a minute, and the screendump script retries a sta
 D2480	1004	A program window may take a second level-3 table; the shared surface moves to USER_BASE + 4 MB
 D2481	599	The shell-processes boot does not fix which child runs first
 D3918	818	G012: the grid is a pixel-perfect equivalent of the v3 grid
+D4800	2932	C152, C172: `e.fmt.pdf` reads image XObjects, fonts' widths and ToUnicode maps, and the outline
+D4801	1950	C152, C172: Document paints a PDF page's pictures, lists its outline, highlights Find, zooms and pans
+D4802	1437	C152, C172: `e.fmt.ooxml` gives a Word document's pictures and a slide's shapes
+D4803	971	C172: `e.fmt.odf` reads a spreadsheet's sheets as grids
+D4804	990	C172: `e.fmt.html.to_markdown`, the reading view of a page
+D4805	2572	C152, C172: Document draws a Word file's styles and pictures, a deck's shapes, an .ods grid and an HTML page
+D4806	881	C152, C128: Mail opens an attachment in the app for its type
+D4807	1091	C150, C152: Share from Files, one zip entry extracted
+D4808	1339	C154: the Camera's Scan mode reads a QR code; Wallet adds it as a card
+D4809	1893	C154: `e.gfx.vision.mrz_read`, a passport's machine-readable zone from an image
+D4810	2224	C150: an installed app is confined to a directory of its own
+D4811	1138	C150: a second block device is external storage
+D4812	961	C154: Wallet asks for a master password when the disk has no vault
+D4813	799	C154: a card's code is saved as a picture in Files
+D4814	1259	C154: Wallet reads a document's machine-readable zone from its scan
 D3919	1351	G012: the grid reads a measured look (e.ui.gridlook)
 D3920	535	G012: text size 8 pt and the grid frame
 D3921	694	G012: text size by measured ink width; no integer-advance mode

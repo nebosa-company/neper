@@ -77,7 +77,7 @@ fn write_big(req: usize, rep: usize, path: str, addr: usize, len: usize) -> bool
         let op_sent = os.send(req, OP_WRITE_AT, NO_SLOT)
         send_str(req, path)
         let offset_sent = os.send(req, at, NO_SLOT)
-        send_packed(req, addr + at, piece)
+        send_packed7(req, addr + at, piece)
         if os.recv(rep, NO_SLOT) != RESULT_OK { ret false }
         at += piece
     }
@@ -120,9 +120,50 @@ fn send_packed(ep_slot: usize, addr: usize, len: usize) {
     }
 }
 
+// (D4810) The request endpoint is stamped by the kernel: the top byte of every word the server receives on it is
+// the sender's app number, so a request word carries 56 bits, and a payload sent to the server is packed seven bytes to
+// a word (`send_packed7`). Replies are not stamped and keep the eight. Lengths and numbers are read through this mask.
+const STAMP_MASK: usize = 72057594037927935usize
+
+// `send_packed` for a stamped endpoint: seven bytes a word.
+fn send_packed7(ep_slot: usize, addr: usize, len: usize) {
+    let header = os.send(ep_slot, len, NO_SLOT)
+    var at = 0usize
+    while at < len {
+        var word = 0usize
+        var j = 0usize
+        while j < 7usize && at + j < len {
+            word = word | (usize(os.load8(addr + at + j)) << (8usize * j))
+            j += 1usize
+        }
+        let sent = os.send(ep_slot, word, NO_SLOT)
+        at += 7usize
+    }
+}
+
+// `recv_packed` for a stamped endpoint: seven bytes a word, the length and the words masked of the stamp.
+fn recv_packed7(ep_slot: usize, addr: usize, cap: usize) -> usize {
+    let len = os.recv(ep_slot, NO_SLOT) & STAMP_MASK
+    var kept = 0usize
+    var at = 0usize
+    while at < len {
+        let word = os.recv(ep_slot, NO_SLOT) & STAMP_MASK
+        var j = 0usize
+        while j < 7usize && at + j < len {
+            if kept < cap {
+                os.store8(addr + kept, u8((word >> (8usize * j)) & 255usize))
+                kept += 1usize
+            }
+            j += 1usize
+        }
+        at += 7usize
+    }
+    ret kept
+}
+
 // Receive a packed byte string into [addr, addr + cap); the byte count kept (the rest is drained).
 fn recv_packed(ep_slot: usize, addr: usize, cap: usize) -> usize {
-    let len = os.recv(ep_slot, NO_SLOT)
+    let len = os.recv(ep_slot, NO_SLOT) & STAMP_MASK
     var kept = 0usize
     var at = 0usize
     while at < len {
@@ -173,10 +214,10 @@ fn send_str(ep_slot: usize, text: str) {
 // one-byte words, storing the first `cap` of them. Every word is consumed so the stream stays in
 // step even when the buffer is smaller; the stored count (min of length and cap) comes back.
 fn recv_bytes(ep_slot: usize, addr: usize, cap: usize) -> usize {
-    let len = os.recv(ep_slot, NO_SLOT)
+    let len = os.recv(ep_slot, NO_SLOT) & STAMP_MASK
     var i = 0usize
     while i < len {
-        let byte = os.recv(ep_slot, NO_SLOT)
+        let byte = os.recv(ep_slot, NO_SLOT) & 255usize
         if i < cap { os.store8(addr + i, u8(byte)) }
         i += 1usize
     }

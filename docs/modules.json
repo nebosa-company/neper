@@ -2160,7 +2160,9 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.fmt.jpeg",
     "e.fmt.zlib",
+    "e.gfx.image",
     "e.io",
     "e.mem",
     "e.os",
@@ -3644,7 +3646,9 @@
     "e.math",
     "e.math.fft",
     "e.math.filter",
-    "e.ml.reduce"
+    "e.mem",
+    "e.ml.reduce",
+    "e.valid"
    ],
    "blocked_by": []
   },

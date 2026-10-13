@@ -938,6 +938,17 @@ fn fetch_raw(a: *mem.Arena, s: *State, i: usize) -> (str, bool) {
     ret (out, got_it)
 }
 
+// Whether `whole` ends with `suffix`.
+fn ends_with(whole: str, suffix: str) -> bool {
+    if whole.len < suffix.len { ret false }
+    var i = 0usize
+    while i < suffix.len {
+        if whole[whole.len - suffix.len + i] != suffix[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // (C158) Open in Document: the message's HTML (or plain text), or with `attachment` its attachment, is written into
 // /Downloads and its path put in /handover; the app then leaves with 20000 + Document's program number and the shell
 // starts Document, which reads the path (how Files opens a file).
@@ -978,6 +989,8 @@ fn open_in_document(a: *mem.Arena, s: *State, i: usize, attachment: bool) -> boo
     }
     if !vaultfs.write("/handover", mem.address_of(&buffer[0usize]), n) { ret false }
     s.handover = 40usize
+    // A picture goes to Photos (22), anything else to Document.
+    if ends_with(path, ".png") || ends_with(path, ".jpg") || ends_with(path, ".jpeg") { s.handover = 22usize }
     ui.say("mail handover ")
     ui.say_text(path)
     ui.say("\n")
