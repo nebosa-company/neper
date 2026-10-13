@@ -140,6 +140,12 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    flat_left: f32,
+    flat_top: f32,
+    flat_width: f32,
+    aligns: []u8,
+    right_flags: []bool,
+    center_flags: []bool,
     menu_cursor: usize,
     menu_count: usize,
     menu_enabled: [24]bool,
@@ -311,6 +317,22 @@ fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const Colum
     let (search_buf, search_buf_error) = mem.alloc[u8](a, 64usize)
     if search_buf_error != ok { ret (zero, search_buf_error) }
     grid.search_buf = search_buf
+    let (aligns, aligns_error) = mem.alloc[u8](a, specs.len + 1usize)
+    if aligns_error != ok { ret (zero, aligns_error) }
+    let (rights, rights_error) = mem.alloc[bool](a, specs.len + 1usize)
+    if rights_error != ok { ret (zero, rights_error) }
+    let (centers, centers_error) = mem.alloc[bool](a, specs.len + 1usize)
+    if centers_error != ok { ret (zero, centers_error) }
+    var align_at = 0usize
+    while align_at < aligns.len {
+        aligns[align_at] = 0u8
+        rights[align_at] = false
+        centers[align_at] = false
+        align_at += 1usize
+    }
+    grid.aligns = aligns
+    grid.right_flags = rights
+    grid.center_flags = centers
     let (editors, editors_error) = mem.alloc[u8](a, specs.len + 1usize)
     if editors_error != ok { ret (zero, editors_error) }
     var edit_at = 0usize
@@ -745,12 +767,17 @@ const CMD_BEST_FIT_ALL: u8 = 10u8
 const CMD_EXPAND_ALL: u8 = 11u8
 const CMD_COLLAPSE_ALL: u8 = 12u8
 const CMD_CLEAR_GROUPING: u8 = 13u8
+const CMD_ALIGN_MENU: u8 = 14u8
+const CMD_ALIGN_LEFT: u8 = 15u8
+const CMD_ALIGN_CENTER: u8 = 16u8
+const CMD_ALIGN_RIGHT: u8 = 17u8
 
 // Which menu: the application's cell menu, a header's, the group box's.
 const MENU_CELL: u8 = 1u8
 const MENU_HEADER: u8 = 2u8
 const MENU_GROUP: u8 = 3u8
 const MENU_QUICK: u8 = 4u8
+const MENU_ALIGN: u8 = 5u8
 
 type MenuPick = struct { grid: *Grid, id: u8, spec: usize }
 
@@ -843,7 +870,7 @@ fn on_menu_dismiss(ctx: *void) -> err {
 fn on_menu_pick(ctx: *void) -> err {
     let pick = mem.cast[*MenuPick](ctx)
     let grid = pick.grid
-    grid.menu_open = false
+    grid.menu_open = pick.id == CMD_ALIGN_MENU
     let shown = pick.spec
     if pick.id == CMD_SORT_ASC || pick.id == CMD_SORT_DESC {
         if shown >= grid.specs.len { ret ok }
@@ -881,6 +908,23 @@ fn on_menu_pick(ctx: *void) -> err {
     if pick.id == CMD_CHOOSER {
         grid.chooser_open = true
         grid.chooser_active = true
+        ret ok
+    }
+    if pick.id == CMD_ALIGN_MENU {
+        // the Alignment submenu stands beside the popup, for the same column
+        grid.menu_open = true
+        grid.menu_kind = MENU_ALIGN
+        grid.menu_spec = shown
+        ret ok
+    }
+    if pick.id == CMD_ALIGN_LEFT || pick.id == CMD_ALIGN_CENTER || pick.id == CMD_ALIGN_RIGHT {
+        if shown < grid.specs.len {
+            let spec = grid.origin[shown]
+            var kind = 1u8
+            if pick.id == CMD_ALIGN_CENTER { kind = 2u8 }
+            if pick.id == CMD_ALIGN_RIGHT { kind = 3u8 }
+            grid.aligns[spec] = kind
+        }
         ret ok
     }
     if pick.id == CMD_BEST_FIT {
@@ -931,6 +975,20 @@ fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
         }
         ret (commands[0usize..n], ok)
     }
+    if grid.menu_kind == MENU_ALIGN {
+        let kinds: [3]u8 = [3]u8{ CMD_ALIGN_LEFT, CMD_ALIGN_CENTER, CMD_ALIGN_RIGHT }
+        let words: [3]str = [3]str{ "Left", "Center", "Right" }
+        var current = 1u8
+        if grid.menu_spec < grid.specs.len && grid.aligns[grid.origin[grid.menu_spec]] != 0u8 { current = grid.aligns[grid.origin[grid.menu_spec]] }
+        var q = 0usize
+        while q < 3usize {
+            picks[q] = MenuPick { grid: grid, id: kinds[q], spec: grid.menu_spec }
+            commands[q] = menu_item(words[q], widget.Submit { ctx: mem.cast[*void](&picks[q]), invoke: on_menu_pick }, true, false, "")
+            commands[q].checked = u8(q + 1usize) == current
+            q += 1usize
+        }
+        ret (commands[0usize..3usize], ok)
+    }
     if grid.menu_kind == MENU_GROUP {
         picks[0usize] = MenuPick { grid: grid, id: CMD_EXPAND_ALL, spec: 0usize }
         picks[1usize] = MenuPick { grid: grid, id: CMD_COLLAPSE_ALL, spec: 0usize }
@@ -945,7 +1003,7 @@ fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
     // a header: v3's column popup
     let shown = grid.menu_spec
     let labels: [13]str = [13]str{ "Sort Ascending", "Sort Descending", "Clear Sorting", "Group By This Field", "Group By Box", "Footer", "Group Footers", "Remove This Column", "Field Chooser", "Alignment", "Best Fit", "Best Fit (all columns)", "" }
-    let ids: [13]u8 = [13]u8{ CMD_SORT_ASC, CMD_SORT_DESC, CMD_CLEAR_SORT, CMD_GROUP_FIELD, CMD_GROUP_BOX, CMD_FOOTER, 0u8, CMD_REMOVE_COLUMN, CMD_CHOOSER, 0u8, CMD_BEST_FIT, CMD_BEST_FIT_ALL, 0u8 }
+    let ids: [13]u8 = [13]u8{ CMD_SORT_ASC, CMD_SORT_DESC, CMD_CLEAR_SORT, CMD_GROUP_FIELD, CMD_GROUP_BOX, CMD_FOOTER, 0u8, CMD_REMOVE_COLUMN, CMD_CHOOSER, CMD_ALIGN_MENU, CMD_BEST_FIT, CMD_BEST_FIT_ALL, 0u8 }
     var k = 0usize
     while k < 12usize {
         picks[k] = MenuPick { grid: grid, id: ids[k], spec: shown }
@@ -953,6 +1011,7 @@ fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
         var enabled = ids[k] != 0u8
         if ids[k] == CMD_REMOVE_COLUMN && grid.specs.len < 2usize { enabled = false }
         commands[n] = menu_item(labels[k], widget.Submit { ctx: mem.cast[*void](&picks[k]), invoke: on_menu_pick }, enabled, separated, "")
+        if ids[k] == CMD_ALIGN_MENU { commands[n].supporting = ">" }
         if ids[k] == CMD_FOOTER {
             commands[n].checkable = true
             commands[n].checked = grid.footer_visible
@@ -1357,7 +1416,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
             grid.menu_actions[i] = c.action
         }
         var parts_n = 0usize
-        let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 5usize)
         if cells_error != ok { ret (zero, control.TooLarge) }
         // the picture column: the picture, a check, or nothing
         var slot = control.sized_style(27.0, row_h)
@@ -1397,6 +1456,16 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
         }
         var row_style = control.sized_style(width - 2.0, row_h)
         if lit { row_style.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) } }
+        if c.supporting.len == 1usize && c.supporting[0usize] == 62u8 {
+            // an entry with a submenu ends in a small right arrow
+            let (arrow, arrow_error) = gl.mark(a, .Right, ink, ink, 5.0, 9.0)
+            if arrow_error != ok { ret (zero, arrow_error) }
+            let (arrow_cell, arrow_cell_error) = mem.alloc[widget.Node](a, 1usize)
+            if arrow_cell_error != ok { ret (zero, control.TooLarge) }
+            arrow_cell[0usize] = arrow
+            cells[parts_n] = widget.aligned(0u64, .Center, .Center, control.sized_style(18.0, row_h), arrow_cell[0usize..1usize])
+            parts_n += 1usize
+        }
         let (row_inner, row_inner_error) = mem.alloc[widget.Node](a, 1usize)
         if row_inner_error != ok { ret (zero, control.TooLarge) }
         row_inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..parts_n])
@@ -1459,7 +1528,15 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
     if top + tall > size.height { top = size.height - tall }
     if left < 0.0 { left = 0.0 }
     if top < 0.0 { top = 0.0 }
-    ret (widget.overlay(grid.key + MENU_KEY + 1u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: left, y: top }, modal: true, dismiss: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss } }, style.defaults(), column_box[0usize..1usize]), ok)
+    if grid.menu_kind != MENU_ALIGN {
+        // where the popup stands, for a submenu that opens beside it
+        grid.flat_left = left
+        grid.flat_top = top
+        grid.flat_width = width
+    }
+    var overlay_key = grid.key + MENU_KEY + 1u64
+    if grid.menu_kind == MENU_ALIGN { overlay_key = grid.key + MENU_KEY + 6u64 }
+    ret (widget.overlay(overlay_key, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: left, y: top }, modal: true, dismiss: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss } }, style.defaults(), column_box[0usize..1usize]), ok)
 }
 
 // ---- the quick column list under the row indicator's header (v3's column quick customization) ----
@@ -1666,7 +1743,7 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         }
     }
     if !grid.menu_open && !grid.chooser_open && !has_hint { ret (aimed, ok) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     parts[n] = aimed
@@ -1685,10 +1762,29 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         if commands_error != ok { ret (zero, commands_error) }
         let (at, pointed) = widget.context_point(theme.runtime)
         var row_h: f32 = 20.0
-        if grid.menu_kind == MENU_HEADER { row_h = 22.0 }
-        let (menu, menu_error) = flat_menu(a, grid, commands, at.x, at.y, row_h)
+        if grid.menu_kind == MENU_HEADER || grid.menu_kind == MENU_ALIGN { row_h = 22.0 }
+        var menu_x = at.x
+        var menu_y = at.y
+        if grid.menu_kind == MENU_ALIGN {
+            // beside the popup it came from, at the height of its Alignment entry
+            menu_x = grid.flat_left + grid.flat_width - 2.0
+            menu_y = grid.flat_top + 3.0 + 9.0 * 22.0 + 40.0
+        }
+        let (menu, menu_error) = flat_menu(a, grid, commands, menu_x, menu_y, row_h)
         if menu_error != ok { ret (zero, menu_error) }
         let _ = pointed
+        if grid.menu_kind == MENU_ALIGN {
+            // the popup the submenu came from stays under it
+            let kept = grid.menu_kind
+            grid.menu_kind = MENU_HEADER
+            let (parent_commands, parent_error) = menu_commands(a, grid)
+            if parent_error != ok { ret (zero, parent_error) }
+            let (parent, parent_menu_error) = flat_menu(a, grid, parent_commands, at.x, at.y, 22.0)
+            if parent_menu_error != ok { ret (zero, parent_menu_error) }
+            grid.menu_kind = kept
+            parts[n] = parent
+            n += 1usize
+        }
         parts[n] = menu
         n += 1usize
     }
@@ -3754,6 +3850,16 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     var table_options: collection.TableOptions = zero
     if grid.look.on {
         let lk = grid.look
+        // column alignment: shown columns right or centred by the Alignment popup
+        var shown_at = 0usize
+        while shown_at < grid.specs.len {
+            let origin_at = grid.origin[shown_at]
+            grid.right_flags[shown_at] = grid.aligns[origin_at] == 3u8
+            grid.center_flags[shown_at] = grid.aligns[origin_at] == 2u8
+            shown_at += 1usize
+        }
+        table_options.numeric = grid.right_flags[0usize..grid.specs.len]
+        table_options.centered = grid.center_flags[0usize..grid.specs.len]
         // the name of a hidden column being dragged out of the chooser follows the pointer
         var drag_label: str = ""
         if mem.address_of(theme.runtime) != 0usize {

@@ -2476,7 +2476,7 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // their selection cell inert, still focusable and Disabled in the tree.
 // (D1501) `pending` marks rows (by key) whose data has not come: each cell is a
 // skeleton line (60% of the cell, 12 tall) and the row is Busy in the tree.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook }
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook }
 
 fn zero_look() -> TableLook {
     var look: TableLook = zero
@@ -4010,6 +4010,13 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 var ended_style = style.defaults()
                 ended_style.width = style.Length { Percent: 100.0 }
                 cells[c] = widget.aligned(0u64, .End, .Center, ended_style, ended[0usize..1usize])
+            } else if numeric_column(selection.centered, c) {
+                let (middled, middled_error) = mem.alloc[widget.Node](a, 1usize)
+                if middled_error != ok { ret (zero, TooLarge) }
+                middled[0usize] = built
+                var middled_style = style.defaults()
+                middled_style.width = style.Length { Percent: 100.0 }
+                cells[c] = widget.aligned(0u64, .Center, .Center, middled_style, middled[0usize..1usize])
             }
             c += 1usize
         }

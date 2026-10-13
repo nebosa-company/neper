@@ -39144,3 +39144,7 @@ v3 gives every column a HeaderHint (resource.strings.pas O_CARDS_COLUMN_HINT_*) 
 ## D2408 — G012: popup mnemonics and keys, and the inactive selection
 
 The grid popups take v3's captions with their `&` (acCards*: "&Add to Deck", "Add &Foil to Collection", "&Search...", "&Advanced Filter...", "S&elect All"...): the character after the `&` is underlined and, pressed on its own, runs the entry; Down and Up move a cursor over the enabled entries (the pointed entry and the cursor are one), Enter runs it, Escape closes. The header popup has no mnemonics (as in v3's DevExpress menu). A selected row of a grid that has not the focus is #D5E4EE (measured on v3's collection grid with the card pool focused) instead of #A6D2FF; the line stays. Verified live (B1, B2); ui_datagrid section 15 expects the pale colour since its grid is never focused. Not done: v3's focused-cell frame and cell editors showing in the current row of an unfocused grid.
+
+## D2409 — G012: the Alignment submenu
+
+The header popup's Alignment entry (v3's DevExpress column popup) opens a submenu beside it with Left, Center and Right, the current one ticked; the popup it came from stays drawn under it with its entry lit and a small right arrow. A choice sets the column's alignment: right-aligned cells use the table's existing numeric end alignment, centred cells a new `TableOptions.centered`. The header title follows only the right choice (the header has no centred mode yet). Verified live (B3-alignment-submenu-v5.png: Name set to Right).
