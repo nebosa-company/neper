@@ -995,6 +995,15 @@ fn load_live(a: *mem.Arena, kit: *appkit.Kit, s: *State, slot: usize) -> bool {
 // slot `slot` (for a POST, the slot of the address the reply came from): the slot, or NONE with `load_error` set.
 fn fetch_page(a: *mem.Arena, kit: *appkit.Kit, s: *State, hint: usize, host: str, path: str, post: bool, post_body: str) -> usize {
     var slot = hint
+    // The textures of the page before are given back (the renderer has a few slots).
+    var old = 0usize
+    while old < 2usize {
+        if s.images[old].kind == 2usize {
+            let released = scene.release_image(&kit.renderer, s.images[old].tex)
+        }
+        s.images[old].kind = 0usize
+        old += 1usize
+    }
     s.page_total = 0usize
     s.cur_len = 0usize
     s.pending_space = false
@@ -1092,8 +1101,6 @@ fn fetch_page(a: *mem.Arena, kit: *appkit.Kit, s: *State, hint: usize, host: str
 // (C159) The first two images of the page, fetched from the page's host: an SVG of at most 1.5 KB is kept as text; a
 // PNG or JPEG of at most 32 KB is decoded and uploaded as a texture.
 fn load_images(a: *mem.Arena, kit: *appkit.Kit, s: *State, final_host: str, now: i64) {
-    s.images[0usize].kind = 0usize
-    s.images[1usize].kind = 0usize
     var tried = 0usize
     var at_line = 0usize
     while at_line < s.page_total && tried < 2usize {
@@ -2256,6 +2263,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var s: State = zero
+    // No address slot is loaded yet (zero would be slot 0, which a restored tab may name).
+    s.loaded = NONE
     s.jar = cookie.jar_new(s.cookie_store[0usize..16usize], s.cookie_text[0usize..2048usize])
     let restored = load_jar(&s, wall_seconds())
     if restored > 0usize {

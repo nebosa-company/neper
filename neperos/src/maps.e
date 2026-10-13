@@ -97,6 +97,7 @@ type State = struct {
     me_lat: f64,
     me_lon: f64,
     has_fix: bool,
+    here_pending: bool,
     target_lat: f64,
     target_lon: f64,
     target_name: [32]u8,
@@ -600,7 +601,13 @@ fn fill_tiles(a: *mem.Arena, s: *State) -> bool {
             }
             mem.reset(a, mark)
             t.have = good
-            if good { s.tile_ok = true }
+            if good {
+                s.tile_ok = true
+                if s.here_pending {
+                    s.here_pending = false
+                    center_on(s, s.me_lat, s.me_lon)
+                }
+            }
             ret good
         }
         i += 1usize
@@ -1447,7 +1454,9 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ui.say(" ")
             say_signed(lon_micro / 1000i64)
             ui.say("\n")
-            if s.tile_ok { center_on(s, s.me_lat, s.me_lon) }
+            // With tiles in view the view moves there now; before the first tile came the move waits for it (the
+            // sample city has no place to move to).
+            if s.tile_ok { center_on(s, s.me_lat, s.me_lon) } else { s.here_pending = true }
             ret true
         }
         if status == sensorclient.STATUS_DENIED { ui.say("maps location off\n") }

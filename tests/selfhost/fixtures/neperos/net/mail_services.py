@@ -184,6 +184,11 @@ class Imap(socketserver.StreamRequestHandler):
                 command = sub[0].upper()
                 rest = sub[1] if len(sub) > 1 else ""
             inbox = self.view()
+            import os
+            if os.environ.get("NEPER_MAIL_LOG"):
+                import time
+                with open(os.environ["NEPER_MAIL_LOG"], "a") as log:
+                    log.write("%.1f %s %s/%s %s %s\n" % (time.time() % 10000, self.client_address[1], self.user, self.folder, command, rest[:40]))
             if command == "CAPABILITY":
                 self.reply(b"* CAPABILITY IMAP4rev1 UIDPLUS" + CRLF + tag + b" OK CAPABILITY completed" + CRLF)
             elif command == "LOGIN":

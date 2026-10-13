@@ -101,6 +101,10 @@ def get(handler, host, path, query):
             handler.reply(200, tile_for(z, x, y), 'application/x-protobuf')
             return True
         return False
+    if host == 'api.open-meteo.com' and path == '/v1/forecast' and query.get('latitude', [''])[0] == '47.60':
+        # (C156) The coarse fix of the simulated phone (47.60, -122.33) is Seattle for the forecast service as well.
+        handler.reply(200, (here / 'forecast-seattle.json').read_bytes(), 'application/json')
+        return True
     if host == 'nominatim.openstreetmap.org' and path == '/search':
         wanted = query.get('q', [''])[0].lower()
         found = SEARCH_RESULTS if 'library' in wanted else []

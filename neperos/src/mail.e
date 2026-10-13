@@ -643,7 +643,12 @@ fn sync_inbox(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> usize {
                 // An empty mailbox shows nothing.
                 var cleared = 0usize
                 while cleared < MAX_MAILS {
-                    if s.mails[cleared].used && s.mails[cleared].folder == INBOX { s.mails[cleared].used = false }
+                    if s.mails[cleared].used && s.mails[cleared].folder == INBOX {
+                        if s.mails[cleared].has_img {
+                            let released = scene.release_image(&kit.renderer, s.mails[cleared].img_tex)
+                        }
+                        s.mails[cleared].used = false
+                    }
                     cleared += 1usize
                 }
             }
@@ -653,7 +658,13 @@ fn sync_inbox(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> usize {
                     // What the server holds replaces the sample inbox.
                     var k = 0usize
                     while k < MAX_MAILS {
-                        if s.mails[k].used && s.mails[k].folder == INBOX { s.mails[k].used = false }
+                        if s.mails[k].used && s.mails[k].folder == INBOX {
+                            // The picture a message held is given back to the renderer, which has a few slots.
+                            if s.mails[k].has_img {
+                                let released = scene.release_image(&kit.renderer, s.mails[k].img_tex)
+                            }
+                            s.mails[k].used = false
+                        }
                         k += 1usize
                     }
                     var now_seconds = 0i64
