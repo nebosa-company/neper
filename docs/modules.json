@@ -2160,7 +2160,9 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.fmt.jpeg",
     "e.fmt.zlib",
+    "e.gfx.image",
     "e.io",
     "e.mem",
     "e.os",
