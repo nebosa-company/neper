@@ -20,7 +20,9 @@ use e.net.http2 as h2
 use e.os
 use e.str
 
-type Behavior = struct { lat: u64, hlat: u64, headers: bool, code: u32, has_pushback: bool, pushback: str }
+// `kind`: 0 answers with `code`, 1 resets the stream with REFUSED_STREAM, 2 sends GOAWAY (last stream below the request) and the
+// client moves to a new connection.
+type Behavior = struct { lat: u64, hlat: u64, headers: bool, code: u32, has_pushback: bool, pushback: str, kind: u8 }
 
 // One server answer to come: `kind` 0 is the response headers, 1 the message and status.
 type Due = struct { at: u64, ordinal: u32, kind: u8, live: bool }
@@ -182,6 +184,20 @@ fn next_due(sim: *Sim) -> (usize, bool) {
     ret (best, best < sim.due_count)
 }
 
+// A new connection: a fresh client and server (stream ids start again) and their handshake.
+fn reconnect(sim: *Sim) {
+    sim.conn = new_client(sim.a)
+    sim.srv = new_server(sim.a)
+    var open: [256]u8 = zero
+    let (opened, open_error) = grpc.conn_start(&sim.conn, open[0usize..])
+    if open_error != ok { os.exit(114i32) }
+    to_server(sim, open[0usize..opened])
+    var sopen: [256]u8 = zero
+    let (sopened, sopen_error) = gs.server_start(&sim.srv, sopen[0usize..])
+    if sopen_error != ok { os.exit(115i32) }
+    to_client(sim, sopen[0usize..sopened])
+}
+
 // Answer everything due at or before `now`.
 fn serve_due(sim: *Sim) {
     while true {
@@ -200,6 +216,23 @@ fn serve_due(sim: *Sim) {
             let (n, e) = gs.response_headers(&sim.srv, out[0usize..], id, none)
             if e != ok { os.exit(103i32) }
             to_client(sim, out[0usize..n])
+        } else if b.kind == 1u8 {
+            let (n, e) = gs.response_reset(&sim.srv, out[0usize..], id, 7u32)
+            if e != ok { os.exit(120i32) }
+            to_client(sim, out[0usize..n])
+        } else if b.kind == 2u8 {
+            // GOAWAY: stream 0, last stream id, NO_ERROR
+            var frame: [17]u8 = zero
+            frame[2usize] = 8u8
+            frame[3usize] = 7u8
+            var last = 0u32
+            if id > 2u32 { last = id - 2u32 }
+            frame[9usize] = u8(last >> 24u32)
+            frame[10usize] = u8((last >> 16u32) & 255u32)
+            frame[11usize] = u8((last >> 8u32) & 255u32)
+            frame[12usize] = u8(last & 255u32)
+            to_client(sim, frame[0usize..17usize])
+            reconnect(sim)
         } else {
             var at = 0usize
             if b.code == 0u32 {
@@ -253,6 +286,16 @@ fn numbers(a: *mem.Arena, xs: []const u64) -> json.Value {
     ret json.Value{ Array: out[0usize..xs.len] }
 }
 
+fn kind_of(v: json.Value) -> u8 {
+    let (x, found) = ir.get(v, "kind")
+    let (t, is_text) = ir.string_of(x)
+    if found && is_text {
+        if str.eq(t, "refuse") { ret 1u8 }
+        if str.eq(t, "goaway") { ret 2u8 }
+    }
+    ret 0u8
+}
+
 fn run_case(a: *mem.Arena, c: json.Value) -> bool {
     let (mode_value, has_mode) = ir.get(c, "mode")
     let (mode_text, is_text) = ir.string_of(mode_value)
@@ -271,7 +314,7 @@ fn run_case(a: *mem.Arena, c: json.Value) -> bool {
     while i < items.len {
         let (pb, has_pb) = ir.get(items[i], "pushback")
         let (pb_text, pb_is_text) = ir.string_of(pb)
-        script[i] = Behavior { lat: num(items[i], "lat"), hlat: num(items[i], "hlat"), headers: flag(items[i], "headers"), code: u32(num(items[i], "code")), has_pushback: has_pb && pb_is_text, pushback: pb_text }
+        script[i] = Behavior { lat: num(items[i], "lat"), hlat: num(items[i], "hlat"), headers: flag(items[i], "headers"), code: u32(num(items[i], "code")), has_pushback: has_pb && pb_is_text, pushback: pb_text, kind: kind_of(items[i]) }
         i += 1usize
     }
     var call: gc.Call = zero

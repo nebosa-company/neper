@@ -14,7 +14,11 @@
 //     than half its tokens; when the last attempt has failed and no more can start, the call ends with that status;
 //   * `per_attempt_ns` (the per-attempt receive timeout, which A6 does not define): an attempt with no headers by then is
 //     cancelled and fails with `DEADLINE_EXCEEDED` through the same path as any other failure of its mode;
-//   * `deadline_ns` (absolute, 0 for none): at or past it everything is cancelled and the call ends `DEADLINE_EXCEEDED`.
+//   * `deadline_ns` (absolute, 0 for none): at or past it everything is cancelled and the call ends `DEADLINE_EXCEEDED`;
+//   * transparent retry (A6): an attempt whose stream was reset with REFUSED_STREAM, or that a GOAWAY left above its last
+//     stream id, never reached the server's application, so the first such failure of a call is retried at once, is not
+//     one of the policy's attempts and is not throttled; the second is an ordinary UNAVAILABLE failure. (A call that
+//     never left the client is the transport's: it simply does not START.)
 //
 // Use: `call_poll(now, jitter)` answers the next thing to do: START (open a stream, then `call_opened`), CANCEL (a stream
 // to reset), WAIT (nothing until `at_ns`, or an event, whichever is first) or DONE (the call's status and winning stream).
@@ -43,7 +47,7 @@ const SLOT_ENDED: u8 = 4u8
 type Hedging = struct { max_attempts: u32, delay_ns: u64, nonfatal: u32 }
 type Slot = struct { state: u8, attempt: u32, stream: u32, started_ns: u64, committed: bool }
 type Action = struct { kind: u8, attempt: u32, stream: u32, at_ns: u64, code: u32 }
-type Call = struct { mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, slots: [5]Slot, started: u32, pending: bool, next_ns: u64, stop: bool, done: bool, code: u32, winner: u32 }
+type Call = struct { mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, slots: [5]Slot, started: u32, pending: bool, next_ns: u64, stop: bool, done: bool, code: u32, winner: u32, transparent: u32, transparent_due: bool }
 
 fn max_hedges() -> u32 { ret 5u32 }
 
@@ -59,7 +63,7 @@ fn new_call(mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Thr
     var h = hedge
     if h.max_attempts > max_hedges() { h.max_attempts = max_hedges() }
     if h.max_attempts < 1u32 { h.max_attempts = 1u32 }
-    ret Call { mode: mode, policy: policy, hedge: h, throttle: throttle, per_attempt_ns: per_attempt_ns, deadline_ns: deadline_ns, slots: slots, started: 0u32, pending: true, next_ns: now_ns, stop: false, done: false, code: 0u32, winner: 0u32 }
+    ret Call { mode: mode, policy: policy, hedge: h, throttle: throttle, per_attempt_ns: per_attempt_ns, deadline_ns: deadline_ns, slots: slots, started: 0u32, pending: true, next_ns: now_ns, stop: false, done: false, code: 0u32, winner: 0u32, transparent: 0u32, transparent_due: false }
 }
 
 // A retrying call under `policy`.
@@ -215,6 +219,23 @@ fn reset_status(h2_code: u32) -> u32 {
     ret grpc.INTERNAL
 }
 
+// The attempt in slot `s` never reached the server's application (a REFUSED_STREAM reset, or a GOAWAY whose last stream
+// is below its id): gRFC A6's transparent retry. The first one of a call is made at once, is not an attempt of the
+// policy and does not touch the throttle; a second is an ordinary UNAVAILABLE failure.
+fn call_unprocessed(c: *Call, s: usize, now_ns: u64, jitter: f64) {
+    if c.slots[s].committed { ret }
+    if c.transparent == 0u32 {
+        c.transparent = 1u32
+        c.slots[s].state = SLOT_FREE
+        if c.started > 0u32 { c.started -= 1u32 }
+        c.pending = true
+        c.next_ns = now_ns
+        c.transparent_due = true
+        ret
+    }
+    fail_slot(c, s, grpc.UNAVAILABLE, "", false, now_ns, jitter)
+}
+
 fn call_event(c: *Call, ev: *const grpc.Event, now_ns: u64, jitter: f64) {
     if ev.kind == grpc.EVENT_HEADERS {
         call_headers(c, ev.stream)
@@ -222,7 +243,21 @@ fn call_event(c: *Call, ev: *const grpc.Event, now_ns: u64, jitter: f64) {
         let (pushback, has_pushback) = grpc.find_header(ev.headers, "grpc-retry-pushback-ms")
         call_status(c, ev.stream, ev.code, pushback, has_pushback, now_ns, jitter)
     } else if ev.kind == grpc.EVENT_RESET {
-        call_status(c, ev.stream, reset_status(ev.code), "", false, now_ns, jitter)
+        let s = slot_of_stream(c, ev.stream)
+        if !c.done && s < 5usize && ev.code == 7u32 {
+            call_unprocessed(c, s, now_ns, jitter)
+        } else {
+            call_status(c, ev.stream, reset_status(ev.code), "", false, now_ns, jitter)
+        }
+    } else if ev.kind == grpc.EVENT_GOAWAY {
+        // `ev.stream` is the GOAWAY's last stream id: the server has not processed any stream above it.
+        var i = 0usize
+        while i < 5usize && !c.done {
+            if c.slots[i].state == SLOT_LIVE && c.slots[i].stream > ev.stream && !c.slots[i].committed {
+                call_unprocessed(c, i, now_ns, jitter)
+            }
+            i += 1usize
+        }
     }
 }
 
@@ -262,7 +297,7 @@ fn call_poll(c: *Call, now_ns: u64, jitter: f64) -> Action {
         i += 1usize
     }
     if c.pending && now_ns >= c.next_ns {
-        if c.mode == MODE_HEDGE && c.started > 0u32 && !retry.throttle_allows(c.throttle) {
+        if c.mode == MODE_HEDGE && c.started > 0u32 && !c.transparent_due && !retry.throttle_allows(c.throttle) {
             // a hedge is sent only while the bucket is above half
             c.stop = true
             c.pending = false
@@ -279,6 +314,7 @@ fn call_poll(c: *Call, now_ns: u64, jitter: f64) -> Action {
             c.started += 1u32
             c.slots[free] = Slot { state: SLOT_OPENING, attempt: c.started, stream: 0u32, started_ns: now_ns, committed: false }
             c.pending = false
+            c.transparent_due = false
             if c.mode == MODE_HEDGE && c.started < c.hedge.max_attempts && !c.stop {
                 c.pending = true
                 c.next_ns = now_ns + c.hedge.delay_ns

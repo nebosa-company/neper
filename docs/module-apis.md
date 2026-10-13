@@ -7487,7 +7487,7 @@ const SLOT_ENDED: u8 = 4u8
 type Hedging = struct { max_attempts: u32, delay_ns: u64, nonfatal: u32 }
 type Slot = struct { state: u8, attempt: u32, stream: u32, started_ns: u64, committed: bool }
 type Action = struct { kind: u8, attempt: u32, stream: u32, at_ns: u64, code: u32 }
-type Call = struct { mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, slots: [5]Slot, started: u32, pending: bool, next_ns: u64, stop: bool, done: bool, code: u32, winner: u32 }
+type Call = struct { mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, slots: [5]Slot, started: u32, pending: bool, next_ns: u64, stop: bool, done: bool, code: u32, winner: u32, transparent: u32, transparent_due: bool }
 fn max_hedges() -> u32
 fn empty_slot() -> Slot
 fn new_call(mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, now_ns: u64) -> Call
@@ -7503,6 +7503,7 @@ fn call_headers(c: *Call, stream: u32)
 fn fail_slot(c: *Call, s: usize, code: u32, pushback: str, has_pushback: bool, now_ns: u64, jitter: f64)
 fn call_status(c: *Call, stream: u32, code: u32, pushback: str, has_pushback: bool, now_ns: u64, jitter: f64)
 fn reset_status(h2_code: u32) -> u32
+fn call_unprocessed(c: *Call, s: usize, now_ns: u64, jitter: f64)
 fn call_event(c: *Call, ev: *const grpc.Event, now_ns: u64, jitter: f64)
 fn min_nonzero(x: u64, y: u64) -> u64
 fn call_poll(c: *Call, now_ns: u64, jitter: f64) -> Action

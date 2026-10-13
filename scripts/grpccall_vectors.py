@@ -66,6 +66,7 @@ def model(cfg):
     now = 0
     attempts = []  # dict(start, live, committed, hdr_at, fin_at)
     starts, cancelled, marked = [], [], []
+    tr = [0]  # transparent retries used (gRFC A6: one, for an attempt the server never processed)
 
     def flush():
         # the transport resets the marked streams, lowest attempt first, before it does anything else
@@ -110,9 +111,13 @@ def model(cfg):
         """An attempt ended with `code`."""
         nonlocal tokens, pending, next_at, stop
         a['live'] = False
+        if a['b'].get('kind') and not timed_out and tr[0] == 0:
+            tr[0] = 1
+            pending, next_at = True, now
+            return
         if timed_out:
             marked.append(a['k'])
-        n = len(attempts)
+        n = len(attempts) - tr[0]
         if mode == 'retry':
             if code == 0:
                 tokens = min(float(max_tokens), tokens + ratio)
@@ -356,6 +361,124 @@ cfg['e'] = model(cfg)
 assert cfg['e']['code'] == 0 and cfg['e']['cancelled'] == [1] and cfg['e']['starts'] == [0, 10_000_000], cfg['e']
 cases.append(cfg)
 
+# --- transparent retries (gRFC A6) ---------------------------------------------------------------------------------------
+# grpcio against a scripted raw HTTP/2 server (the `h2` library): a GOAWAY whose last stream id is below the request is
+# retried transparently by grpc-core, once, outside the policy's attempts; that is the oracle for 'goaway'. grpcio 1.75
+# treats a REFUSED_STREAM reset as an ordinary UNAVAILABLE (it is counted, and retried only by the policy), so a script
+# with 'refuse' is checked against grpcio with the reset read as a plain status 14 (which pins the model's non-transparent
+# half) and its transparent expectation comes from the model, written from the gRFC's text (REFUSED_STREAM is transparent).
+import socket
+
+import h2.config
+import h2.connection
+import h2.errors
+import h2.events
+
+
+def raw_server(script, seen):
+    ls = socket.socket()
+    ls.bind(('127.0.0.1', 0))
+    ls.listen(8)
+    lock = threading.Lock()
+
+    def conn_thread(s):
+        c = h2.connection.H2Connection(config=h2.config.H2Configuration(client_side=False))
+        c.initiate_connection()
+        s.sendall(c.data_to_send())
+        try:
+            while True:
+                data = s.recv(65535)
+                if not data:
+                    return
+                for ev in c.receive_data(data):
+                    if isinstance(ev, h2.events.RequestReceived):
+                        with lock:
+                            i = len(seen)
+                            seen.append(ev.stream_id)
+                        b = script[min(i, len(script) - 1)]
+                        if b == 'refuse':
+                            c.reset_stream(ev.stream_id, h2.errors.ErrorCodes.REFUSED_STREAM)
+                        elif b == 'goaway':
+                            c.close_connection(error_code=0, last_stream_id=ev.stream_id - 2 if ev.stream_id > 1 else 0)
+                        elif b == 0:
+                            c.send_headers(ev.stream_id, [(':status', '200'), ('content-type', 'application/grpc')])
+                            c.send_data(ev.stream_id, b'\x00\x00\x00\x00\x00')
+                            c.send_headers(ev.stream_id, [('grpc-status', '0')], end_stream=True)
+                        else:
+                            c.send_headers(ev.stream_id, [(':status', '200'), ('content-type', 'application/grpc'), ('grpc-status', str(b))], end_stream=True)
+                        s.sendall(c.data_to_send())
+                s.sendall(c.data_to_send())
+        except Exception:
+            pass
+
+    def accept():
+        while True:
+            try:
+                s, _ = ls.accept()
+            except OSError:
+                return
+            threading.Thread(target=conn_thread, args=(s,), daemon=True).start()
+    threading.Thread(target=accept, daemon=True).start()
+    return ls.getsockname()[1], ls
+
+
+def live_raw(script, pol):
+    seen = []
+    port, ls = raw_server(script, seen)
+    opts = [('grpc.enable_retries', 1)]
+    if pol:
+        opts.append(('grpc.service_config', json.dumps({'methodConfig': [{'name': [{'service': 't.S'}], 'retryPolicy': pol}]})))
+    ch = grpc.insecure_channel(f'127.0.0.1:{port}', options=opts)
+    code = 0
+    try:
+        ch.unary_unary('/t.S/M')(b'x', timeout=10)
+    except grpc.RpcError as e:
+        code = NAMES.index(e.code().name)
+    time.sleep(0.03)
+    ch.close()
+    ls.close()
+    return len(seen), code
+
+
+def beh(x, plain=False):
+    if x in ('refuse', 'goaway') and not plain:
+        return {'lat': 0, 'hlat': 0, 'headers': False, 'code': 14, 'kind': x}
+    if x in ('refuse', 'goaway'):
+        x = 14
+    return {'lat': 0, 'hlat': 0, 'headers': False, 'code': x}
+
+
+transparent_live = transparent_model = 0
+for i in range(70):
+    cfg = base_cfg('retry')
+    cfg['policy'] = policy() if rng.random() < 0.85 else {'maxAttempts': 2, 'initialBackoff': '0.001s', 'maxBackoff': '0.002s', 'backoffMultiplier': 2, 'retryableStatusCodes': ['DATA_LOSS']}  # no retry policy: nothing here is DATA_LOSS
+    pool = ['goaway', 'goaway', 'refuse', 'refuse', 14, 14, 10, 8, 0]
+    n = rng.randint(2, 6)
+    script = [rng.choice(pool) for _ in range(n)]
+    if i % 7 == 0:
+        script = ['goaway', 0]  # goaway, then success
+    cfg['server'] = [beh(x) for x in script]
+    has_refuse = 'refuse' in script
+    plain_cfg = dict(cfg, server=[beh(x, plain=has_refuse) for x in script])
+    # grpcio sees a REFUSED_STREAM reset as a plain UNAVAILABLE and 'goaway' as itself.
+    if not has_refuse:
+        want = live_raw(script, None if cfg['policy']['retryableStatusCodes'] == ['DATA_LOSS'] else cfg['policy'])
+        got = model(cfg)
+        assert (got['attempts'], got['code']) == want, ('transparent', script, cfg['policy'], got, want)
+        transparent_live += 1
+    else:
+        # the model's non-transparent half against grpcio: the reset (and any goaway) read as plain 14 would not be a
+        # goaway anymore, so compare with the goaways kept and the refusals turned into a plain status
+        mixed = [x if x != 'refuse' else 14 for x in script]
+        mcfg = dict(cfg, server=[beh(x) for x in mixed])
+        want = live_raw(script, None if cfg['policy']['retryableStatusCodes'] == ['DATA_LOSS'] else cfg['policy'])
+        # grpcio: refusal == plain UNAVAILABLE, goaway transparent once
+        assert (model(mcfg)['attempts'], model(mcfg)['code']) == want, ('refuse-as-plain', script, cfg['policy'], model(mcfg), want)
+        transparent_model += 1
+    cfg['e'] = model(cfg)
+    assert cfg['e']['code'] >= 0, cfg
+    cases.append(cfg)
+
 lines = [json.dumps(c, sort_keys=True, separators=(',', ':')) for c in cases]
 bs = chr(92)
 chunks = []
@@ -369,4 +492,4 @@ out = t.replace('//__VECTOR_FUNCTIONS__\n', funcs + '\n').replace('    //__VECTO
 os.makedirs(os.path.dirname(FIXTURE), exist_ok=True)
 with open(FIXTURE, 'w', encoding='utf8', newline='\n') as f:
     f.write(out)
-print(f'{len(cases)} cases ({live_checked} against grpcio) in {len(chunks)} chunks -> net_grpccall')
+print(f'{len(cases)} cases ({live_checked + transparent_live} against grpcio, {transparent_model} transparent-refuse by the model) in {len(chunks)} chunks -> net_grpccall')
