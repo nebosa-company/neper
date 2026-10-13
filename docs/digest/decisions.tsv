@@ -2511,4 +2511,5 @@ D4933	451	Mail opens a saved picture in Photos
 D3930	904	G012: collection editing traces (immediate edit, Enter keeps the row, Tab order)
 D3931	596	G012: pixel probes for the selected-row border, column lines and header fill
 D3932	843	G012: the cell editor's caret follows the tap
-D3933	967	G012: selecting several rows (trace M1)
+D3933	968	G012: selecting several rows (trace M1)
+D3934	868	G012: header drag in the v3 look (trace D1)
