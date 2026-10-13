@@ -1354,6 +1354,12 @@ $ui_markdown_view_fitWritten = & $compiler emit-executable (Join-Path $PSScriptR
 if ($LASTEXITCODE -ne 0 -or $ui_markdown_view_fitWritten -ne 'executable written') { throw 'ui_markdown_view_fit emission failed' }
 & $ui_markdown_view_fitPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_markdown_view_fit check failed: exit $LASTEXITCODE" }
+# `e.ui.markdown_view` at the window: link activation by tap under both policies and the clipboard round trip of a selection (L066, D4607).
+$ui_markdown_view_windowPath = Join-Path $testBuild 'ui-markdown-view-window-selfhost.exe'
+$ui_markdown_view_windowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_markdown_view_window\src\main.e') $repo 'x64' 'windows' $ui_markdown_view_windowPath
+if ($LASTEXITCODE -ne 0 -or $ui_markdown_view_windowWritten -ne 'executable written') { throw 'ui_markdown_view_window emission failed' }
+& $ui_markdown_view_windowPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_markdown_view_window check failed: exit $LASTEXITCODE" }
 # `e.ui.schedule` zones, month bars and series moves against zoneinfo and dateutil (L148).
 $ui_schedule_zonesPath = Join-Path $testBuild 'ui-schedule-zones-selfhost.exe'
 $ui_schedule_zonesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule_zones\src\main.e') $repo 'x64' 'windows' $ui_schedule_zonesPath

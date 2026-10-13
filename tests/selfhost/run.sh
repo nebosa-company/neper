@@ -1246,6 +1246,11 @@ chmod +x "$test_build/ui-tree-adapter-tailored-selfhost"
 ui_markdown_view_fit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_markdown_view_fit/src/main.e" "$repo" x64 linux "$test_build/ui-markdown-view-fit-selfhost")
 [ "$ui_markdown_view_fit_written" = 'executable written' ]
 chmod +x "$test_build/ui-markdown-view-fit-selfhost"
+# `e.ui.markdown_view` at the window: link activation by tap under both policies and the clipboard round trip of a selection (L066, D4607).
+ui_markdown_view_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_markdown_view_window/src/main.e" "$repo" x64 linux "$test_build/ui-markdown-view-window-selfhost")
+[ "$ui_markdown_view_window_written" = 'executable written' ]
+chmod +x "$test_build/ui-markdown-view-window-selfhost"
+"$test_build/ui-markdown-view-window-selfhost"
 "$test_build/ui-markdown-view-fit-selfhost"
 # `e.ui.schedule` zones, month bars and series moves against zoneinfo and dateutil (L148).
 ui_schedule_zones_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_zones/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-zones-selfhost")
