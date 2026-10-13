@@ -2518,4 +2518,5 @@ D3936	979	G012: a bare in-cell editor, and the group box as a drop target
 D3937	913	G012: the View menu's grid options
 D3938	778	G012: v3's grid lines recorded; the line colour is #DEDEDE
 D3939	616	G012: pixel probes for the header hover and the footer band
-D3940	1341	G012: incremental search and the bookmark
+D3940	1342	G012: incremental search and the bookmark
+D3941	1407	G012: context menus by hit region and the field chooser

@@ -70,6 +70,7 @@ use e.ui.input
 use e.gfx.paint
 use e.gfx.geometry
 use e.ui.layout as ui_layout
+use e.ui.overlay
 use e.ui.style
 use e.ui.widget
 
@@ -137,6 +138,14 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    cell_menu: []const overlay.MenuCommand,
+    menu_open: bool,
+    menu_kind: u8,
+    menu_spec: usize,
+    command: u8,
+    command_spec: usize,
+    chooser_open: bool,
+    fit_all_pending: bool,
     search_spec: usize,
     has_search: bool,
     search_within: bool,
@@ -697,6 +706,354 @@ fn on_bookmark_goto(ctx: *void) -> err {
     let (found, moved) = goto_bookmark(mem.cast[*Grid](ctx))
     let _ = found
     ret moved
+}
+
+// ---- context menus and the field chooser (v3's pmCards / header popup / group box popup / Customization) ----
+
+const MENU_KEY: u64 = 3400u64
+const CHOOSER_KEY: u64 = 3500u64
+
+// What a menu command does (MenuPick.id).
+const CMD_SORT_ASC: u8 = 1u8
+const CMD_SORT_DESC: u8 = 2u8
+const CMD_CLEAR_SORT: u8 = 3u8
+const CMD_GROUP_FIELD: u8 = 4u8
+const CMD_GROUP_BOX: u8 = 5u8
+const CMD_FOOTER: u8 = 6u8
+const CMD_REMOVE_COLUMN: u8 = 7u8
+const CMD_CHOOSER: u8 = 8u8
+const CMD_BEST_FIT: u8 = 9u8
+const CMD_BEST_FIT_ALL: u8 = 10u8
+const CMD_EXPAND_ALL: u8 = 11u8
+const CMD_COLLAPSE_ALL: u8 = 12u8
+const CMD_CLEAR_GROUPING: u8 = 13u8
+
+// Which menu: the application's cell menu, a header's, the group box's.
+const MENU_CELL: u8 = 1u8
+const MENU_HEADER: u8 = 2u8
+const MENU_GROUP: u8 = 3u8
+
+type MenuPick = struct { grid: *Grid, id: u8, spec: usize }
+
+// The application's commands for the cell menu (a row under the pointer); the grid adds Show
+// Columns... after them. `commands` must outlive the grid's builds.
+fn set_cell_menu(grid: *Grid, commands: []const overlay.MenuCommand) {
+    grid.cell_menu = commands
+}
+
+// A command the application must carry out (Clear Sorting, Clear Grouping): taken once.
+fn take_command(grid: *Grid) -> (u8, usize, bool) {
+    if grid.command == 0u8 { ret (0u8, 0usize, false) }
+    let id = grid.command
+    grid.command = 0u8
+    ret (id, grid.command_spec, true)
+}
+
+fn show_chooser(grid: *Grid, on: bool) { grid.chooser_open = on }
+
+fn on_menu_show(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    grid.menu_open = true
+    grid.menu_kind = MENU_CELL
+    grid.menu_spec = 0usize
+    if mem.address_of(grid.theme) == 0usize || mem.address_of(grid.theme.runtime) == 0usize { ret ok }
+    let (at, pointed) = widget.context_point(grid.theme.runtime)
+    if !pointed { ret ok }
+    // the group box, then the header band (from the first header cell), else a cell
+    let (box_rect, has_box) = control.keyed_bounds(grid.theme.runtime, grid.key + GROUP_BOX_KEY)
+    if grid.group_box_visible && has_box && at.y >= box_rect.y && at.y < box_rect.y + box_rect.height {
+        grid.menu_kind = MENU_GROUP
+        ret ok
+    }
+    var shown = 0usize
+    while shown < grid.specs.len {
+        let (head_rect, has_head) = control.keyed_bounds(grid.theme.runtime, grid.key + 1u64 + 2u64 * u64(shown))
+        if has_head && at.y >= head_rect.y && at.y < head_rect.y + head_rect.height && at.x >= head_rect.x && at.x < head_rect.x + head_rect.width {
+            grid.menu_kind = MENU_HEADER
+            grid.menu_spec = shown
+            ret ok
+        }
+        shown += 1usize
+    }
+    ret ok
+}
+
+fn on_menu_dismiss(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    grid.menu_open = false
+    ret ok
+}
+
+fn on_menu_pick(ctx: *void) -> err {
+    let pick = mem.cast[*MenuPick](ctx)
+    let grid = pick.grid
+    grid.menu_open = false
+    let shown = pick.spec
+    if pick.id == CMD_SORT_ASC || pick.id == CMD_SORT_DESC {
+        if shown >= grid.specs.len { ret ok }
+        let spec = grid.origin[shown]
+        grid.sort_column = spec
+        grid.descending = pick.id == CMD_SORT_DESC
+        ret grid.events.sort_changed(grid.events.ctx, spec, grid.descending)
+    }
+    if pick.id == CMD_CLEAR_SORT || pick.id == CMD_CLEAR_GROUPING {
+        grid.command = pick.id
+        grid.command_spec = shown
+        ret ok
+    }
+    if pick.id == CMD_GROUP_FIELD {
+        if shown >= grid.specs.len { ret ok }
+        grid.group_drop_spec = grid.specs[shown].column
+        grid.group_drop_pending = true
+        grid.group_box_visible = true
+        ret ok
+    }
+    if pick.id == CMD_GROUP_BOX {
+        grid.group_box_visible = !grid.group_box_visible
+        ret ok
+    }
+    if pick.id == CMD_FOOTER {
+        grid.footer_visible = !grid.footer_visible
+        ret ok
+    }
+    if pick.id == CMD_REMOVE_COLUMN {
+        if shown >= grid.specs.len { ret ok }
+        grid.hidden[grid.origin[shown]] = true
+        relayout(grid)
+        ret ok
+    }
+    if pick.id == CMD_CHOOSER {
+        grid.chooser_open = true
+        ret ok
+    }
+    if pick.id == CMD_BEST_FIT {
+        if shown >= grid.specs.len { ret ok }
+        grid.fit_spec = grid.origin[shown]
+        grid.fit_pending = true
+        ret ok
+    }
+    if pick.id == CMD_BEST_FIT_ALL {
+        grid.fit_all_pending = true
+        ret ok
+    }
+    if pick.id == CMD_EXPAND_ALL || pick.id == CMD_COLLAPSE_ALL {
+        var group = 0usize
+        while group < grp.group_len(grid.g) {
+            let changed = grp.set_expanded(grid.g, group, pick.id == CMD_EXPAND_ALL)
+            if changed != ok { ret changed }
+            group += 1usize
+        }
+        ret ok
+    }
+    ret ok
+}
+
+fn menu_item(label: str, action: widget.Submit, enabled: bool, separated: bool, shortcut: str) -> overlay.MenuCommand {
+    var c = overlay.menu_command(label, action)
+    c.enabled = enabled
+    c.separated = separated
+    c.shortcut = shortcut
+    ret c
+}
+
+// The commands of the open menu.
+fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
+    let (picks, picks_error) = mem.alloc[MenuPick](a, 16usize)
+    if picks_error != ok { ret (zero, control.TooLarge) }
+    let (commands, commands_error) = mem.alloc[overlay.MenuCommand](a, 16usize + grid.cell_menu.len)
+    if commands_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    var p = 0usize
+    let me = mem.cast[*void](grid)
+    if grid.menu_kind == MENU_CELL {
+        var i = 0usize
+        while i < grid.cell_menu.len {
+            commands[n] = grid.cell_menu[i]
+            n += 1usize
+            i += 1usize
+        }
+        picks[p] = MenuPick { grid: grid, id: CMD_CHOOSER, spec: 0usize }
+        commands[n] = menu_item("Show Columns...", widget.Submit { ctx: mem.cast[*void](&picks[p]), invoke: on_menu_pick }, true, n != 0usize, "Ctrl+Alt+C")
+        n += 1usize
+        ret (commands[0usize..n], ok)
+    }
+    if grid.menu_kind == MENU_GROUP {
+        picks[0usize] = MenuPick { grid: grid, id: CMD_EXPAND_ALL, spec: 0usize }
+        picks[1usize] = MenuPick { grid: grid, id: CMD_COLLAPSE_ALL, spec: 0usize }
+        picks[2usize] = MenuPick { grid: grid, id: CMD_CLEAR_GROUPING, spec: 0usize }
+        picks[3usize] = MenuPick { grid: grid, id: CMD_GROUP_BOX, spec: 0usize }
+        commands[0usize] = menu_item("Full Expand", widget.Submit { ctx: mem.cast[*void](&picks[0usize]), invoke: on_menu_pick }, true, false, "")
+        commands[1usize] = menu_item("Full Collapse", widget.Submit { ctx: mem.cast[*void](&picks[1usize]), invoke: on_menu_pick }, true, false, "")
+        commands[2usize] = menu_item("Clear Grouping", widget.Submit { ctx: mem.cast[*void](&picks[2usize]), invoke: on_menu_pick }, true, true, "")
+        commands[3usize] = menu_item("Hide Group By Box", widget.Submit { ctx: mem.cast[*void](&picks[3usize]), invoke: on_menu_pick }, true, false, "")
+        ret (commands[0usize..4usize], ok)
+    }
+    // a header: v3's column popup
+    let shown = grid.menu_spec
+    let labels: [13]str = [13]str{ "Sort Ascending", "Sort Descending", "Clear Sorting", "Group By This Field", "Group By Box", "Footer", "Group Footers", "Remove This Column", "Field Chooser", "Alignment", "Best Fit", "Best Fit (all columns)", "" }
+    let ids: [13]u8 = [13]u8{ CMD_SORT_ASC, CMD_SORT_DESC, CMD_CLEAR_SORT, CMD_GROUP_FIELD, CMD_GROUP_BOX, CMD_FOOTER, 0u8, CMD_REMOVE_COLUMN, CMD_CHOOSER, 0u8, CMD_BEST_FIT, CMD_BEST_FIT_ALL, 0u8 }
+    var k = 0usize
+    while k < 12usize {
+        picks[k] = MenuPick { grid: grid, id: ids[k], spec: shown }
+        let separated = k == 3usize || k == 5usize || k == 7usize || k == 9usize || k == 11usize
+        var enabled = ids[k] != 0u8
+        if ids[k] == CMD_REMOVE_COLUMN && grid.specs.len < 2usize { enabled = false }
+        commands[n] = menu_item(labels[k], widget.Submit { ctx: mem.cast[*void](&picks[k]), invoke: on_menu_pick }, enabled, separated, "")
+        if ids[k] == CMD_FOOTER {
+            commands[n].checkable = true
+            commands[n].checked = grid.footer_visible
+        }
+        if ids[k] == CMD_GROUP_BOX {
+            commands[n].checkable = true
+            commands[n].checked = grid.group_box_visible
+        }
+        n += 1usize
+        k += 1usize
+    }
+    let _ = me
+    ret (commands[0usize..n], ok)
+}
+
+// A hidden column of the field chooser: a tap shows it again.
+type ChooserPick = struct { grid: *Grid, spec: usize }
+
+fn on_chooser_pick(ctx: *void) -> err {
+    let pick = mem.cast[*ChooserPick](ctx)
+    pick.grid.hidden[pick.spec] = false
+    relayout(pick.grid)
+    ret ok
+}
+
+fn on_open_chooser(ctx: *void) -> err {
+    mem.cast[*Grid](ctx).chooser_open = true
+    ret ok
+}
+
+fn on_chooser_close(ctx: *void) -> err {
+    mem.cast[*Grid](ctx).chooser_open = false
+    ret ok
+}
+
+// v3's Customization window: a small floating panel, "Columns" tab, the hidden columns listed.
+fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let me = mem.cast[*void](grid)
+    let (items, items_error) = mem.alloc[widget.Node](a, grid.all.len + 3usize)
+    if items_error != ok { ret (zero, control.TooLarge) }
+    let (picks, picks_error) = mem.alloc[ChooserPick](a, grid.all.len + 1usize)
+    if picks_error != ok { ret (zero, control.TooLarge) }
+    let (acts, acts_error) = mem.alloc[widget.Submit](a, grid.all.len + 1usize)
+    if acts_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    // the title bar with its close box
+    var title: widget.Node = zero
+    let title_error = text_node(a, grid, "Customization", false, .Text, &title)
+    if title_error != ok { ret (zero, title_error) }
+    let (close_act, close_error) = mem.alloc[widget.Submit](a, 1usize)
+    if close_error != ok { ret (zero, control.TooLarge) }
+    close_act[0usize] = widget.Submit { ctx: me, invoke: on_chooser_close }
+    var closer: widget.Node = zero
+    let closer_error = text_node(a, grid, "x", true, .Text, &closer)
+    if closer_error != ok { ret (zero, closer_error) }
+    let close_state = control.control_state(grid.theme, grid.key + CHOOSER_KEY + 1u64, true, false)
+    var close_look = style.resolve(grid.theme.tokens, .Plain, close_state)
+    close_look.background = gl.rgb(0xC75050u32)
+    close_look.border_width = 0.0
+    close_look.radius = 0.0
+    close_look.min_width = 24.0
+    close_look.min_height = 20.0
+    let (close_button, close_button_error) = control.pressable_states(a, grid.key + CHOOSER_KEY + 1u64, grid.theme, 3u8, "Close", close_look, true, false, 0u32, 0u32, 0u64, &close_act[0usize], closer)
+    if close_button_error != ok { ret (zero, close_button_error) }
+    let (bar, bar_error) = mem.alloc[widget.Node](a, 2usize)
+    if bar_error != ok { ret (zero, control.TooLarge) }
+    bar[0usize] = title
+    bar[1usize] = close_button
+    items[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, style.defaults(), bar[0usize..2usize])
+    n += 1usize
+    var tab: widget.Node = zero
+    let tab_error = text_node(a, grid, "Columns", true, .Text, &tab)
+    if tab_error != ok { ret (zero, tab_error) }
+    items[n] = tab
+    n += 1usize
+    var o = 0usize
+    var listed = 0usize
+    while o < grid.all.len {
+        if grid.hidden[o] && grid.all[o].kind != CellKind.Indicator && grid.all[o].title.len != 0usize {
+            picks[listed] = ChooserPick { grid: grid, spec: o }
+            acts[listed] = widget.Submit { ctx: mem.cast[*void](&picks[listed]), invoke: on_chooser_pick }
+            var label: widget.Node = zero
+            let label_error = text_node(a, grid, grid.all[o].title, false, .Text, &label)
+            if label_error != ok { ret (zero, label_error) }
+            let state = control.control_state(grid.theme, grid.key + CHOOSER_KEY + 8u64 + u64(o), true, false)
+            var look = style.resolve(grid.theme.tokens, .Plain, state)
+            look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            if state.hovered { look.background = gl.rgb(0xD9EBF9u32) }
+            look.border_width = 0.0
+            look.radius = 0.0
+            look.custom_padding = true
+            look.padding = 3.0
+            look.padding_y = 2.0
+            look.min_width = 200.0
+            look.min_height = 20.0
+            let (entry, entry_error) = control.pressable_states(a, grid.key + CHOOSER_KEY + 8u64 + u64(o), grid.theme, 3u8, grid.all[o].title, look, true, false, 0u32, 0u32, 0u64, &acts[listed], label)
+            if entry_error != ok { ret (zero, entry_error) }
+            if n < items.len {
+                items[n] = entry
+                n += 1usize
+            }
+            listed += 1usize
+        }
+        o += 1usize
+    }
+    var panel = style.defaults()
+    panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    panel.border = style.Border { width: 1.0, color: grid.look.selected_line }
+    panel.width = style.Length { Px: 240.0 }
+    panel.min_height = style.Length { Px: 160.0 }
+    ret (widget.padded(0u64, 8.0, 6.0, 8.0, 8.0, panel, one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 4.0 }, style.defaults(), items[0usize..n]))), ok)
+}
+
+// The grid with its context menu target and, open, the menu or the chooser.
+fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, err) {
+    if mem.address_of(grid.theme) == 0usize || mem.address_of(grid.theme.runtime) == 0usize { ret (inner, ok) }
+    let theme = grid.theme
+    let (shows, shows_error) = mem.alloc[widget.Submit](a, 2usize)
+    if shows_error != ok { ret (zero, control.TooLarge) }
+    shows[0usize] = widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_show }
+    shows[1usize] = widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss }
+    let (aimed, aimed_error) = overlay.context_target(a, grid.key + MENU_KEY, theme, .Grid, "Data grid", grid.key + MENU_KEY + 1u64, grid.menu_open, &shows[0usize], inner)
+    if aimed_error != ok { ret (zero, aimed_error) }
+    if !grid.menu_open && !grid.chooser_open { ret (aimed, ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    parts[n] = aimed
+    n += 1usize
+    if grid.menu_open {
+        let (commands, commands_error) = menu_commands(a, grid)
+        if commands_error != ok { ret (zero, commands_error) }
+        let (at, pointed) = widget.context_point(theme.runtime)
+        let (menu, menu_error) = overlay.context_menu_of(a, grid.key + MENU_KEY + 1u64, theme, grid.key + MENU_KEY, "Data grid", commands, true, &shows[1usize], at, pointed)
+        if menu_error != ok { ret (zero, menu_error) }
+        parts[n] = menu
+        n += 1usize
+    }
+    if grid.chooser_open {
+        let (panel, panel_error) = chooser_panel(a, grid)
+        if panel_error != ok { ret (zero, panel_error) }
+        let (grid_rect, has_grid) = control.keyed_bounds(theme.runtime, grid.key)
+        var x: f32 = 400.0
+        var y: f32 = 60.0
+        if has_grid {
+            x = grid_rect.x + grid_rect.width - 260.0
+            y = grid_rect.y + 30.0
+        }
+        let (floating, floating_error) = mem.alloc[widget.Node](a, 1usize)
+        if floating_error != ok { ret (zero, control.TooLarge) }
+        floating[0usize] = panel
+        parts[n] = widget.overlay(grid.key + CHOOSER_KEY, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: x, y: y }, modal: false, dismiss: zero }, style.defaults(), floating[0usize..1usize])
+        n += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..n]), ok)
 }
 
 // ---- view options (v3's View menu: grid lines, header, indicator, columns auto width) ---------
@@ -2344,7 +2701,11 @@ fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err
     shortcuts[tab_count + 1usize] = widget.Shortcut { key: 38u32, modifiers: ctrl_only, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_search_prev } }
     shortcuts[tab_count + 2usize] = widget.Shortcut { key: 49u32, modifiers: ctrl_only, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_bookmark_goto } }
     shortcuts[tab_count + 3usize] = widget.Shortcut { key: 49u32, modifiers: ctrl_shift, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_bookmark_toggle } }
-    tab_count += 4usize
+    var ctrl_alt: input.Modifiers = zero
+    ctrl_alt.control = true
+    ctrl_alt.alt = true
+    shortcuts[tab_count + 4usize] = widget.Shortcut { key: 67u32, modifiers: ctrl_alt, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_open_chooser } }
+    tab_count += 5usize
     if grid.has_search {
         // type-ahead: a shortcut per letter, digit and space, plain and with Shift, and Backspace
         let (chars, chars_error) = mem.alloc[SearchKey](a, 38usize)
@@ -2607,7 +2968,15 @@ fn reveal_current(grid: *Grid) {
     }
 }
 
+// The grid as a node of `height`: its parts, in the context menu target (and chooser) of v3.
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
+    let (inner, inner_error) = build_parts(a, grid, theme, height)
+    if inner_error != ok { ret (zero, inner_error) }
+    let (menus, menus_error) = with_menus(a, grid, inner)
+    ret (menus, menus_error)
+}
+
+fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     grid.theme = theme
     try follow_focus(grid, theme)
     if grp.visible_len(grid.g) == 0usize {
@@ -2648,6 +3017,15 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     if grid.group_box_visible { body_height = body_height - 35.0 }
     grid.page_rows = usize(body_height / grid.row_height)
     follow_row_after_reorder(grid)
+    if grid.fit_all_pending {
+        grid.fit_all_pending = false
+        var fit_at = 0usize
+        while fit_at < grid.all.len {
+            let all_error = best_fit(a, grid, fit_at)
+            if all_error != ok { ret (zero, all_error) }
+            fit_at += 1usize
+        }
+    }
     if grid.fit_pending {
         grid.fit_pending = false
         let fit_error = best_fit(a, grid, grid.fit_spec)

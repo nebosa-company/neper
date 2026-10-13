@@ -166,6 +166,19 @@
    "replayed": "ui_datagrid section 30; live in the sample (S3-incremental-search-v5.png)"
   },
   {
+   "id": "C1",
+   "name": "context menus and the field chooser",
+   "steps": [
+    "right-click a card: Add to Deck, Add to Sideboard (disabled without a deck), | Add to Collection, Add Foil to Collection | Search... Ctrl+F, Advanced Filter... Ctrl+Alt+F | Show Columns... Ctrl+Alt+C",
+    "right-click a header: Sort Ascending, Sort Descending, Clear Sorting | Group By This Field, Group By Box | Footer, Group Footers | Remove This Column, Field Chooser | Alignment, Best Fit | Best Fit (all columns)",
+    "right-click the group box: Full Expand, Full Collapse | Clear Grouping, Hide Group By Box",
+    "Show Columns (Ctrl+Alt+C): a small floating 'Customization' window with a red close box, tabs Bands and Columns, and the hidden columns listed"
+   ],
+   "v3": "docs/grid-parity/C1-cell-menu-v3.png, C1-header-menu-v3.png, C1-group-box-menu-v3.png, C1-customization-v3.png",
+   "neper": "set_cell_menu (the application's cell commands), header and group box menus in the grid, take_command for Clear Sorting / Clear Grouping, chooser_panel; Ctrl+Alt+C",
+   "replayed": "ui_datagrid section 31 (the commands, the chooser pick); the menus live in the sample (C1-menus-v5.png); the chooser panel itself was not seen live"
+  },
+  {
    "id": "F1",
    "name": "filter",
    "v3": "the card pool has no filter row: the toolbar box is a Find box (typing does nothing until the binoculars or Enter) and the funnel opens the 'Filter Card Pool' dialog with OK/Apply, so there is no delayed apply to record in this view",
