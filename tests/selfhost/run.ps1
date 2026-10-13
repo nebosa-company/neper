@@ -2494,6 +2494,12 @@ $uiDatagridWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiDatagridWritten -ne 'executable written') { throw 'ui_datagrid emission failed' }
 & $uiDatagridPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_datagrid check failed: exit $LASTEXITCODE" }
+# `e.ui.gridrules`: conditional formatting rules over a table: cell-is, text, blank, above / below, top / bottom with ties, duplicate / unique, scale, bar, icons, priority, whole row, refresh, refusals, 150,000 rows against a count of the fixture's own (D3917).
+$uiGridrulesPath = Join-Path $testBuild 'ui-gridrules-selfhost.exe'
+$uiGridrulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_gridrules\src\main.e') $repo 'x64' 'windows' $uiGridrulesPath --arena 256m
+if ($LASTEXITCODE -ne 0 -or $uiGridrulesWritten -ne 'executable written') { throw 'ui_gridrules emission failed' }
+& $uiGridrulesPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_gridrules check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath
@@ -7416,7 +7422,7 @@ foreach ($hotMode in @('--release', '--time')) {
     if ($LASTEXITCODE -ne 0 -or $shapeFirst -ne 'executable written') { throw "the cold build of the gpu_reshape fixture failed ($hotMode)" }
     & $shapeExe
     if ($LASTEXITCODE -ne 50) { throw "the gpu_reshape fixture did not exit 50 before the edits ($hotMode): $LASTEXITCODE" }
-    foreach ($shapeStep in @(@('main', 'main.e', 'main=rebuilt:source-changed', 'k=kept:stable', 50), @('body', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 50), @('size', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 82))) {
+    foreach ($shapeStep in @(@('main', 'main.e', 'main=rebuilt:source-changed', 'k=kept:stable', 50), @('body', 'k.e', 'main=kept:edges-hold', 'k=rebuilt:source-changed', 50), @('size', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 82))) {
         $shapeEdit = $shapeStep[0]
         Copy-Item (Join-Path $shapeScratch "edits\$shapeEdit.e") (Join-Path $shapeScratch "src\$($shapeStep[1])") -Force
         $shapeWarm = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeExe $hotMode --incremental -j 1 2>$null
@@ -8266,7 +8272,7 @@ $crossAltered = Join-Path $testBuild 'manifest-cross-linux-altered.json'
 $crossText = [IO.File]::ReadAllText($crossLinux)
 [IO.File]::WriteAllText($crossAltered, [regex]::Replace($crossText, '("path":"run_args\.e"\},"sha256":")[0-9a-f]{64}', '${1}0000000000000000000000000000000000000000000000000000000000000000'))
 $crossChanged = & $compiler compare-manifests $crossWindows $crossAltered --cross-host
-if ($LASTEXITCODE -ne 1 -or $crossChanged -notmatch 'input run_args\.e: ') { throw "a changed input is not named across hosts: $crossChanged" }
+if ($LASTEXITCODE -ne 1 -or (($crossChanged | ForEach-Object { "$_" }) -join "`n") -notmatch 'input run_args\.e: ') { throw "a changed input is not named across hosts: $crossChanged" }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
 $shortRoot = Join-Path $repo 'build\windows\short'

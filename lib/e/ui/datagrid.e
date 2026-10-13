@@ -51,6 +51,11 @@
 // which order; every spec index the application sees (events, `begin_edit`, `show_sort`, widths,
 // filter texts, layout) is the index in the list given to `create`, never a display position.
 //
+// Conditional formatting. `set_rules` attaches an `e.ui.gridrules` rule set: each data cell asks
+// it for a look (ink role, fill, bold, a data bar behind the text, an icon glyph before it) by
+// the column's table column and the storage row. The application calls `rules.refresh` after
+// the table changes. A rule's ink replaces `row_role`'s for that cell.
+//
 // ponytail: one level of header and the filter row sits above it (the table owns the header).
 
 use e.mem
@@ -59,6 +64,7 @@ use e.data.table as table
 use e.data.tablegroup as grp
 use e.ui.collection
 use e.ui.control
+use e.ui.gridrules as rules
 use e.ui.input
 use e.gfx.paint
 use e.ui.layout as ui_layout
@@ -139,6 +145,8 @@ type Grid = struct {
     select_open: bool,
     batch_depth: usize,
     batch_count: usize,
+    rule_set: *rules.Rules,
+    has_rules: bool,
     filter_text: []u8,
     filter_lens: []usize,
     theme: *const control.Theme
@@ -255,6 +263,14 @@ fn display_of(grid: *const Grid, spec: usize) -> (usize, bool) {
 }
 
 // Shows or hides a column.
+// Attaches (or with `nil` detaches) a conditional formatting rule set.
+fn set_rules(grid: *Grid, set: *rules.Rules) {
+    grid.rule_set = set
+    grid.has_rules = true
+}
+
+fn clear_rules(grid: *Grid) { grid.has_rules = false }
+
 fn set_hidden(grid: *Grid, spec: usize, hide: bool) {
     if spec >= grid.all.len { ret }
     grid.hidden[spec] = hide
@@ -1089,10 +1105,52 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         ret text_node(a, grid, mark, true, .Text, out)
     }
     if grid.specs[column].kind == CellKind.Custom { ret grid.events.custom_cell(grid.events.ctx, a, grid.theme, row, grid.origin[column], out) }
-    let role = grid.events.row_role(grid.events.ctx, row)
+    var role = grid.events.row_role(grid.events.ctx, row)
     let (text, text_error) = cell_text(a, grid, column, row)
     if text_error != ok { ret text_error }
-    ret text_node(a, grid, text, false, role, out)
+    if !grid.has_rules { ret text_node(a, grid, text, false, role, out) }
+    let look = rules.format(grid.rule_set, row, grid.specs[column].column)
+    if look.has_ink { role = look.ink }
+    var shown = text
+    if look.icon != 0u8 {
+        var glyph = "- "
+        if look.icon == 1u8 { glyph = "v " }
+        if look.icon == look.buckets { glyph = "^ " }
+        let (b, b_error) = str.builder(a, text.len + 4usize)
+        if b_error != ok { ret b_error }
+        var sb = b
+        if str.push(&sb, glyph) != ok { ret control.TooLarge }
+        if str.push(&sb, text) != ok { ret control.TooLarge }
+        shown = str.done(&sb)
+    }
+    var node: widget.Node = zero
+    try text_node(a, grid, shown, look.bold, role, &node)
+    if !look.has_fill && !look.has_bar {
+        *out = node
+        ret ok
+    }
+    // a fill or a data bar: the text over a box of the colour (the bar a fraction of its width)
+    var layers: []widget.Node = zero
+    var count = 0usize
+    let (made, made_error) = mem.alloc[widget.Node](a, 2usize)
+    if made_error != ok { ret control.TooLarge }
+    layers = made
+    var back = style.defaults()
+    back.width = style.Length { Percent: 100.0 }
+    back.height = style.Length { Percent: 100.0 }
+    if look.has_bar {
+        var bar = style.defaults()
+        bar.width = style.Length { Percent: look.bar * 100.0 }
+        bar.height = style.Length { Percent: 100.0 }
+        bar.background = paint.Brush { Solid: look.bar_color }
+        layers[count] = widget.box(0u64, bar, zero)
+        count += 1usize
+    }
+    if look.has_fill { back.background = paint.Brush { Solid: look.fill } }
+    layers[count] = node
+    count += 1usize
+    *out = widget.stack(0u64, back, layers[0usize..count])
+    ret ok
 }
 
 // ---- events ----------------------------------------------------------------------
