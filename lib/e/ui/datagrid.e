@@ -146,6 +146,12 @@ type Grid = struct {
     command: u8,
     command_spec: usize,
     chooser_open: bool,
+    chooser_x: f32,
+    chooser_y: f32,
+    chooser_placed: bool,
+    chooser_active: bool,
+    chooser_grab_x: f32,
+    chooser_grab_y: f32,
     fit_all_pending: bool,
     search_spec: usize,
     has_search: bool,
@@ -754,6 +760,7 @@ fn show_chooser(grid: *Grid, on: bool) { grid.chooser_open = on }
 
 fn on_menu_show(ctx: *void) -> err {
     let grid = mem.cast[*Grid](ctx)
+    grid.chooser_active = false
     grid.menu_open = true
     grid.menu_kind = MENU_CELL
     grid.menu_spec = 0usize
@@ -846,6 +853,7 @@ fn on_menu_pick(ctx: *void) -> err {
     }
     if pick.id == CMD_CHOOSER {
         grid.chooser_open = true
+        grid.chooser_active = true
         ret ok
     }
     if pick.id == CMD_BEST_FIT {
@@ -947,7 +955,9 @@ fn on_chooser_pick(ctx: *void) -> err {
 }
 
 fn on_open_chooser(ctx: *void) -> err {
-    mem.cast[*Grid](ctx).chooser_open = true
+    let grid = mem.cast[*Grid](ctx)
+    grid.chooser_open = true
+    grid.chooser_active = true
     ret ok
 }
 
@@ -956,80 +966,168 @@ fn on_chooser_close(ctx: *void) -> err {
     ret ok
 }
 
-// The hidden columns in a small floating panel called Column: a tap on one shows it again.
+// One hidden column of the chooser: a tap shows it, a drag takes it to the header.
+type ChooserItem = struct { grid: *Grid, spec: usize }
+
+fn on_chooser_item(ctx: *void, g: widget.Gesture) -> err {
+    let item = mem.cast[*ChooserItem](ctx)
+    let grid = item.grid
+    switch g {
+    case .Tap as at:
+        grid.chooser_active = true
+        grid.hidden[item.spec] = false
+        relayout(grid)
+        ret ok
+    case .DragStart as at:
+        grid.chooser_active = true
+        ret widget.begin_drag(grid.theme.runtime, collection.chooser_payload_tag() + u64(item.spec) + 1u64)
+    default:
+        ret ok
+    }
+}
+
+// The chooser is a window of its own: its title moves it, and it is active (its close mark red)
+// until something in the grid is used.
+fn on_chooser_title(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.chooser_active = true
+        ret ok
+    case .DragStart as at:
+        grid.chooser_active = true
+        grid.chooser_grab_x = at.x - grid.chooser_x
+        grid.chooser_grab_y = at.y - grid.chooser_y
+        ret ok
+    case .DragMove as d:
+        grid.chooser_x = d.position.x - grid.chooser_grab_x
+        grid.chooser_y = d.position.y - grid.chooser_grab_y
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// A header dropped on the chooser takes its column out of the grid.
+fn on_chooser_drop(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Drop as d:
+        let tag = collection.header_payload_tag()
+        if d.payload <= tag || d.payload > tag + 4096u64 { ret ok }
+        let shown = usize(d.payload - tag - 1u64)
+        if shown >= grid.specs.len || grid.specs.len < 2usize { ret ok }
+        grid.hidden[grid.origin[shown]] = true
+        grid.chooser_active = true
+        relayout(grid)
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// The hidden columns in a window called Column: drag one to the header, or a header to the window.
 fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let me = mem.cast[*void](grid)
-    let (items, items_error) = mem.alloc[widget.Node](a, grid.all.len + 3usize)
+    let (items, items_error) = mem.alloc[widget.Node](a, grid.all.len + 2usize)
     if items_error != ok { ret (zero, control.TooLarge) }
-    let (picks, picks_error) = mem.alloc[ChooserPick](a, grid.all.len + 1usize)
+    let (picks, picks_error) = mem.alloc[ChooserItem](a, grid.all.len + 1usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
-    let (acts, acts_error) = mem.alloc[widget.Submit](a, grid.all.len + 1usize)
-    if acts_error != ok { ret (zero, control.TooLarge) }
-    var n = 0usize
-    // the title bar with its close box
-    var title: widget.Node = zero
-    let title_error = text_node(a, grid, "Column", true, .Text, &title)
+    // the title bar: the name, and a close mark that is grey, red when the window is active, deeper red hovered
+    var title_words = control.text_options()
+    title_words.wrap = .None
+    title_words.size = grid.look.text_size
+    var title_ink = gl.rgb(0xA0A0A0u32)
+    if grid.chooser_active { title_ink = gl.rgb(0x000000u32) }
+    let (title, title_error) = control.colored_text(a, 0u64, "Column", grid.theme, title_words, title_ink)
     if title_error != ok { ret (zero, title_error) }
+    var title_style = style.defaults()
+    title_style.width = style.Length { Px: 130.0 }
+    title_style.height = style.Length { Px: 22.0 }
+    title_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let (title_nodes, title_nodes_error) = mem.alloc[widget.Node](a, 1usize)
+    if title_nodes_error != ok { ret (zero, control.TooLarge) }
+    title_nodes[0usize] = title
+    let title_region = widget.region(grid.key + CHOOSER_KEY + 2u64, widget.Region { gesture: widget.GestureAction { ctx: me, invoke: on_chooser_title }, gestures: 3u8, enabled: true, focusable: false }, title_style, title_nodes[0usize..1usize])
     let (close_act, close_error) = mem.alloc[widget.Submit](a, 1usize)
     if close_error != ok { ret (zero, control.TooLarge) }
     close_act[0usize] = widget.Submit { ctx: me, invoke: on_chooser_close }
     var closer: widget.Node = zero
-    let closer_error = text_node(a, grid, "x", true, .Text, &closer)
+    var closer_words = control.text_options()
+    closer_words.wrap = .None
+    closer_words.size = grid.look.text_size
+    let (closer_text, closer_error) = control.colored_text(a, 0u64, "x", grid.theme, closer_words, gl.rgb(0xFFFFFFu32))
     if closer_error != ok { ret (zero, closer_error) }
+    closer = closer_text
     let close_state = control.control_state(grid.theme, grid.key + CHOOSER_KEY + 1u64, true, false)
     var close_look = style.resolve(grid.theme.tokens, .Plain, close_state)
-    close_look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
-    if close_state.hovered { close_look.background = gl.rgb(0xE8A0A0u32) }
+    var close_fill = gl.rgb(0xDADADAu32)
+    if grid.chooser_active { close_fill = gl.rgb(0xC75050u32) }
+    if close_state.hovered { close_fill = gl.rgb(0xE04343u32) }
+    close_look.background = close_fill
     close_look.border_width = 0.0
     close_look.radius = 0.0
     close_look.custom_padding = true
-    close_look.padding = 2.0
+    close_look.padding = 6.0
     close_look.padding_y = 0.0
-    close_look.min_width = 18.0
-    close_look.min_height = 16.0
+    close_look.min_width = 24.0
+    close_look.min_height = 20.0
     let (close_button, close_button_error) = control.pressable_states(a, grid.key + CHOOSER_KEY + 1u64, grid.theme, 3u8, "Close", close_look, true, false, 0u32, 0u32, 0u64, &close_act[0usize], closer)
     if close_button_error != ok { ret (zero, close_button_error) }
     let (bar, bar_error) = mem.alloc[widget.Node](a, 2usize)
     if bar_error != ok { ret (zero, control.TooLarge) }
-    bar[0usize] = title
+    bar[0usize] = title_region
     bar[1usize] = close_button
-    items[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, style.defaults(), bar[0usize..2usize])
+    var bar_style = style.defaults()
+    bar_style.background = paint.Brush { Solid: gl.rgb(0xF3F3F3u32) }
+    var n = 0usize
+    items[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, bar_style, bar[0usize..2usize])
     n += 1usize
-    var o = 0usize
+    // the list: white, the hidden columns by name in the order of their titles
+    let (rows, rows_error) = mem.alloc[widget.Node](a, grid.all.len + 1usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
     var listed = 0usize
+    var o = 0usize
     while o < grid.all.len {
         if grid.hidden[o] && grid.all[o].kind != CellKind.Indicator && grid.all[o].title.len != 0usize {
-            picks[listed] = ChooserPick { grid: grid, spec: o }
-            acts[listed] = widget.Submit { ctx: mem.cast[*void](&picks[listed]), invoke: on_chooser_pick }
+            picks[listed] = ChooserItem { grid: grid, spec: o }
             var label: widget.Node = zero
             let label_error = text_node(a, grid, grid.all[o].title, false, .Text, &label)
             if label_error != ok { ret (zero, label_error) }
-            let state = control.control_state(grid.theme, grid.key + CHOOSER_KEY + 8u64 + u64(o), true, false)
-            var look = style.resolve(grid.theme.tokens, .Plain, state)
-            look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
-            if state.hovered { look.background = gl.rgb(0xD9EBF9u32) }
-            look.border_width = 0.0
-            look.radius = 0.0
-            look.custom_padding = true
-            look.padding = 4.0
-            look.padding_y = 1.0
-            look.min_width = 150.0
-            look.min_height = 19.0
-            let (entry, entry_error) = control.pressable_states(a, grid.key + CHOOSER_KEY + 8u64 + u64(o), grid.theme, 3u8, grid.all[o].title, look, true, false, 0u32, 0u32, 0u64, &acts[listed], label)
-            if entry_error != ok { ret (zero, entry_error) }
-            if n < items.len {
-                items[n] = entry
-                n += 1usize
-            }
+            let item_key = grid.key + CHOOSER_KEY + 8u64 + u64(o)
+            let item_state = control.control_state(grid.theme, item_key, true, false)
+            var item_style = style.defaults()
+            item_style.width = style.Length { Percent: 100.0 }
+            item_style.height = style.Length { Px: 19.0 }
+            item_style.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            if item_state.hovered { item_style.background = paint.Brush { Solid: gl.rgb(0xD9EBF9u32) } }
+            let (label_nodes, label_nodes_error) = mem.alloc[widget.Node](a, 1usize)
+            if label_nodes_error != ok { ret (zero, control.TooLarge) }
+            label_nodes[0usize] = label
+            rows[listed] = widget.region(item_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[listed]), invoke: on_chooser_item }, gestures: 7u8, enabled: true, focusable: false }, item_style, label_nodes[0usize..1usize])
             listed += 1usize
         }
         o += 1usize
     }
-    var panel = style.defaults()
-    panel.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
-    panel.border = style.Border { width: 1.0, color: grid.look.selected_line }
-    panel.width = style.Length { Px: 170.0 }
-    ret (widget.padded(0u64, 4.0, 3.0, 4.0, 4.0, panel, one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 1.0 }, style.defaults(), items[0usize..n]))), ok)
+    var list_style = style.defaults()
+    list_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    list_style.border = style.Border { width: 1.0, color: gl.rgb(0xABABABu32) }
+    list_style.width = style.Length { Percent: 100.0 }
+    list_style.min_height = style.Length { Px: 120.0 }
+    items[n] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, list_style, rows[0usize..listed])
+    n += 1usize
+    let inner = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 3.0 }, style.defaults(), items[0usize..n])
+    var window = style.defaults()
+    window.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    window.border = style.Border { width: 1.0, color: gl.rgb(0xBABABAu32) }
+    window.width = style.Length { Px: 170.0 }
+    let padded_window = widget.padded(0u64, 3.0, 0.0, 3.0, 4.0, window, one(a, inner))
+    // the whole window takes a dropped header
+    let (window_nodes, window_nodes_error) = mem.alloc[widget.Node](a, 1usize)
+    if window_nodes_error != ok { ret (zero, control.TooLarge) }
+    window_nodes[0usize] = padded_window
+    let dropping = widget.region(grid.key + CHOOSER_KEY + 3u64, widget.Region { gesture: widget.GestureAction { ctx: me, invoke: on_chooser_drop }, gestures: widget.GESTURE_DROP, enabled: true, focusable: false }, style.defaults(), window_nodes[0usize..1usize])
+    ret (dropping, ok)
 }
 
 // The grid with its context menu target and, open, the menu or the chooser.
@@ -1060,13 +1158,18 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
     if grid.chooser_open {
         let (panel, panel_error) = chooser_panel(a, grid)
         if panel_error != ok { ret (zero, panel_error) }
-        let (grid_rect, has_grid) = control.keyed_bounds(theme.runtime, grid.key)
-        var x: f32 = 400.0
-        var y: f32 = 60.0
-        if has_grid {
-            x = grid_rect.x + grid_rect.width - 190.0
-            y = grid_rect.y + 30.0
+        if !grid.chooser_placed {
+            let (grid_rect, has_grid) = control.keyed_bounds(theme.runtime, grid.key)
+            grid.chooser_x = 400.0
+            grid.chooser_y = 60.0
+            if has_grid {
+                grid.chooser_x = grid_rect.x + grid_rect.width - 190.0
+                grid.chooser_y = grid_rect.y + 30.0
+            }
+            grid.chooser_placed = true
         }
+        let x = grid.chooser_x
+        let y = grid.chooser_y
         let (floating, floating_error) = mem.alloc[widget.Node](a, 1usize)
         if floating_error != ok { ret (zero, control.TooLarge) }
         floating[0usize] = panel
@@ -2269,6 +2372,7 @@ fn header_glyph(ctx: *void, shown: usize) -> u8 {
 
 fn on_sort(ctx: *void, shown: usize) -> err {
     let grid = mem.cast[*Grid](ctx)
+    grid.chooser_active = false
     if shown >= grid.specs.len { ret ok }
     let spec = grid.origin[shown]
     var descending = false
@@ -2292,6 +2396,7 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
         }
         ret ok
     }
+    grid.chooser_active = false
     var again = grid.has_selection && grid.selected_row == usize(at)
     grid.has_selection = true
     grid.selected_row = usize(at)
@@ -2380,6 +2485,16 @@ fn on_scroll(ctx: *void, value: f32) -> err {
 
 fn on_reorder(ctx: *void, value: collection.Reorder) -> err {
     let grid = mem.cast[*Grid](ctx)
+    if value.from >= collection.CHOOSER_FROM {
+        // a hidden column dragged out of the chooser onto a header
+        let spec = value.from - collection.CHOOSER_FROM
+        if spec < grid.all.len && grid.hidden[spec] {
+            grid.hidden[spec] = false
+            relayout(grid)
+            move_column(grid, spec, value.to)
+        }
+        ret ok
+    }
     if value.from < grid.specs.len && value.to < grid.specs.len { move_column(grid, grid.origin[value.from], value.to) }
     ret ok
 }
@@ -3057,7 +3172,17 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     var table_options: collection.TableOptions = zero
     if grid.look.on {
         let lk = grid.look
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        // the name of a hidden column being dragged out of the chooser follows the pointer
+        var drag_label: str = ""
+        if mem.address_of(theme.runtime) != 0usize {
+            let (dragged_payload, has_dragged) = widget.dragging(theme.runtime)
+            let chooser_tag = collection.chooser_payload_tag()
+            if has_dragged && dragged_payload > chooser_tag && dragged_payload <= chooser_tag + 4096u64 {
+                let dragged_spec = usize(dragged_payload - chooser_tag - 1u64)
+                if dragged_spec < grid.all.len { drag_label = grid.all[dragged_spec].title }
+            }
+        }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     if grid.preview_on {
         table_options.expandable = true
