@@ -2442,6 +2442,11 @@ D2479	599	The QMP socket waits a minute, and the screendump script retries a sta
 D2480	1004	A program window may take a second level-3 table; the shared surface moves to USER_BASE + 4 MB
 D2481	599	The shell-processes boot does not fix which child runs first
 D3918	818	G012: the grid is a pixel-perfect equivalent of the v3 grid
+D5000	3792	The step widget stall was scene storage taken from the arena the shell resets
+D5001	1928	Bluetooth and Hotspot are links of the network server, gated by Airplane mode
+D5002	2179	A battery provider posts to the status service; the recorded 78% stays for the test boots that name it
+D5003	2798	The microphone and the speaker are the services process's; a recording goes on without its app
+D5004	1246	Translate: Russian and Greek by merging DejaVu's glyphs into Jost; a history in /translate; Copy to the clipboard
 D4800	2932	C152, C172: `e.fmt.pdf` reads image XObjects, fonts' widths and ToUnicode maps, and the outline
 D4801	1950	C152, C172: Document paints a PDF page's pictures, lists its outline, highlights Find, zooms and pans
 D4802	1437	C152, C172: `e.fmt.ooxml` gives a Word document's pictures and a slide's shapes
@@ -2468,3 +2473,4 @@ D3925	2188	G012: v3's columns and widths, edition symbols, navigator buttons, ke
 D3926	1132	G012: a sort keeps the current card; best fit on a header-edge double tap
 D3927	794	G012: grouping keeps the current card; the card pool has no delayed filter
 D3928	720	G012: a row in the card's own colour
+D5005	857	Call: the recents are kept in /recents; emergency numbers are named as such

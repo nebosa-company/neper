@@ -570,10 +570,10 @@
       "group": "NeperOS",
       "order": 157,
       "title": "NeperOS Call remainder: telephony and audio, shared contacts, voicemail, notifications",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C127 (D2409): the Call app keeps contacts as a vCard file with New, Edit and Delete. Acceptance: (1) a telephony server over the modem or a SIP/VoIP stack on C117 networking (needs UDP in the network server): dial, answer, reject, hold, mute, speaker, DTMF, call waiting and conference; (2) the in-call audio path through e.audio with the earpiece, speaker and Bluetooth routes; (3) the contact store read by Messages, Mail and Wallet, with favorites, search, and vCard import and export through Files; (4) recents kept across restarts, missed-call notifications through the status server, Do Not Disturb honoured; (5) voicemail and visual voicemail; (6) emergency numbers always dialable; (7) a fixture on QEMU against a loopback SIP server that dials, answers and ends a call and checks the audio frames."
+      "evidence": "Split from C127 (D2409): the Call app keeps contacts as a vCard file with New, Edit and Delete. Acceptance: (1) a telephony server over the modem or a SIP/VoIP stack on C117 networking (needs UDP in the network server): dial, answer, reject, hold, mute, speaker, DTMF, call waiting and conference; (2) the in-call audio path through e.audio with the earpiece, speaker and Bluetooth routes; (3) the contact store read by Messages, Mail and Wallet, with favorites, search, and vCard import and export through Files; (4) recents kept across restarts, missed-call notifications through the status server, Do Not Disturb honoured; (5) voicemail and visual voicemail; (6) emergency numbers always dialable; (7) a fixture on QEMU against a loopback SIP server that dials, answers and ends a call and checks the audio frames. PART (D5005): recents kept in /recents across restarts, 112/911/999 shown as Emergency; rows call_recents(_again), call_emergency. Remaining: telephony/SIP and audio path, shared contact store for Messages/Mail/Wallet, favorites and search, missed-call notifications and DND, voicemail, SIP loopback fixture."
     },
     {
       "id": "C158",
@@ -669,10 +669,10 @@
       "group": "NeperOS",
       "order": 166,
       "title": "NeperOS Recorder remainder: the microphone and speaker, transcription, background recording",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C136 (D2425): the Recorder keeps WAV files of a scripted microphone and plays their bytes back. Acceptance: (1) capture from the microphone and playback to the speaker through e.audio (an audio server with a device under QEMU and the Pixel's later), the level meter driven by the real samples; (2) Opus or a compressed format from the library, rename, share and delete, search by name; (3) a speech-to-text model on the device or on a server (C117) for the transcript with words timed to the playhead and tap-to-seek; (4) recording in the background with a notification and the lock-screen control; (5) a fixture that records from a scripted audio source and plays it back checking the bytes at the device."
+      "evidence": "Split from C136 (D2425): the Recorder keeps WAV files of a scripted microphone and plays their bytes back. Acceptance: (1) capture from the microphone and playback to the speaker through e.audio (an audio server with a device under QEMU and the Pixel's later), the level meter driven by the real samples; (2) Opus or a compressed format from the library, rename, share and delete, search by name; (3) a speech-to-text model on the device or on a server (C117) for the transcript with words timed to the playhead and tap-to-seek; (4) recording in the background with a notification and the lock-screen control; (5) a fixture that records from a scripted audio source and plays it back checking the bytes at the device. PART (D5003): microphone and speaker owned by the services process, a recording goes on without its app. Remaining: transcript with words timed to the playhead and tap-to-seek, lock-screen control, scripted-source record-and-play fixture."
     },
     {
       "id": "C167",
@@ -680,10 +680,10 @@
       "group": "NeperOS",
       "order": 167,
       "title": "NeperOS Translate remainder: a real model, more scripts and inputs, history and speech",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C137 (D2426): Translate asks a dictionary server for text outside its phrase book. Acceptance: (1) translation by an on-device model from the ml modules or a real server, at least forty languages with auto-detect and offline packs kept in Files (C125); (2) fonts and shaping for Arabic, Devanagari, CJK, Cyrillic, Greek, Thai and Hebrew added to the font set the apps load; (3) input by voice (C166's speech engine), by camera (text recognition in e.gfx.vision on a Camera frame, C153) and by handwriting; (4) history and saved phrases, copy and share, speak the result through e.audio; (5) conversation mode with two languages on the two halves of the screen; (6) a fixture that translates a fixed sentence with a small test model and checks the output text."
+      "evidence": "Split from C137 (D2426): Translate asks a dictionary server for text outside its phrase book. Acceptance: (1) translation by an on-device model from the ml modules or a real server, at least forty languages with auto-detect and offline packs kept in Files (C125); (2) fonts and shaping for Arabic, Devanagari, CJK, Cyrillic, Greek, Thai and Hebrew added to the font set the apps load; (3) input by voice (C166's speech engine), by camera (text recognition in e.gfx.vision on a Camera frame, C153) and by handwriting; (4) history and saved phrases, copy and share, speak the result through e.audio; (5) conversation mode with two languages on the two halves of the screen; (6) a fixture that translates a fixed sentence with a small test model and checks the output text. PART (D5004): Russian and Greek via DejaVu glyphs merged into Jost (8 languages), history of 8 and saved phrases in /translate, Copy to the clipboard; rows translate_scripts, translate_history(_again), translate_copy. Remaining: 40 languages and an on-device model, Arabic/Devanagari/CJK/Thai/Hebrew shaping, voice/camera/handwriting input, conversation mode, speech output, small-test-model fixture."
     },
     {
       "id": "C168",
@@ -691,10 +691,10 @@
       "group": "NeperOS",
       "order": 168,
       "title": "NeperOS Steps remainder: background counting, history, profile, notifications",
-      "score": 0.7,
+      "score": 0.85,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total. Acceptance: (1) counting in the background at a low-power sensor rate from the sensor server (C161), with the run and walk classification shown; (2) the history of days, weeks and months in storage (C125), the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than a fixed figure per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture that replays a recorded accelerometer walk and checks the count within two per cent. PART (D2444): e.algo.pedometer distance_m and calories_kcal from height and weight (algo_pedometer_energy). Remaining: the Settings profile, background counting, history, notification and widget, the recorded-walk fixture. PART (D2449): the week's history kept in /steps and rolled forward by the days passed (e.algo.pedometer.roll_week; fixtures algo_pedometer_energy, steps_kept, steps_kept_again). Remaining: Settings profile, background counting, month view, notification/widget, recorded-walk fixture. PART: steps, steps_kept(_again), steps_replay, steps_month pass. Missing: the home-screen step widget (built, reverted: it made the shell stall after an app returned; shell/compositor tick path suspected)."
+      "evidence": "Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total. Acceptance: (1) counting in the background at a low-power sensor rate from the sensor server (C161), with the run and walk classification shown; (2) the history of days, weeks and months in storage (C125), the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than a fixed figure per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture that replays a recorded accelerometer walk and checks the count within two per cent. PART (D2444): e.algo.pedometer distance_m and calories_kcal from height and weight (algo_pedometer_energy). Remaining: the Settings profile, background counting, history, notification and widget, the recorded-walk fixture. PART (D2449): the week's history kept in /steps and rolled forward by the days passed (e.algo.pedometer.roll_week; fixtures algo_pedometer_energy, steps_kept, steps_kept_again). Remaining: Settings profile, background counting, month view, notification/widget, recorded-walk fixture. PART: steps, steps_kept(_again), steps_replay, steps_month pass. Missing: the home-screen step widget (built, reverted: it made the shell stall after an app returned; shell/compositor tick path suspected). PART (D5000): home-screen step widget refreshes every thirty seconds; the shell stall was scene storage taken from the arena the shell resets. Remaining: real sensor hardware (scripted hub)."
     },
     {
       "id": "C169",
@@ -779,10 +779,10 @@
       "group": "NeperOS",
       "order": 176,
       "title": "NeperOS settings recipients remainder: audio, fingerprint, radios, battery",
-      "score": 0.6,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C149 (D2436): notification permission is enforced at the status service. Acceptance: (1) an audio server (virtio-sound or a software mixer behind e.audio) that takes the media, ring and alarm volumes and Vibrate from the settings server, with a fixture on QEMU; (2) a fingerprint or biometric unlock path on the lock screen, or a recorded sensor in the test boots, honouring the Fingerprint switch; (3) Bluetooth and Hotspot recipients in the network stack (a link layer that can be switched), gated like Airplane mode; (4) a real battery provider posting to the status service, and per-app permissions (camera, location, storage) as values per app; (5) apps hold a notification capability so they can post as themselves through OP_POST_APP. PART: lock_fingerprint, settings_permission and the audio mixer/ringer/notification paths exercised by clock_ring pass. Missing: Bluetooth/Hotspot recipients, a real battery provider (status_server takes a recorded 78 %)."
+      "evidence": "Split from C149 (D2436): notification permission is enforced at the status service. Acceptance: (1) an audio server (virtio-sound or a software mixer behind e.audio) that takes the media, ring and alarm volumes and Vibrate from the settings server, with a fixture on QEMU; (2) a fingerprint or biometric unlock path on the lock screen, or a recorded sensor in the test boots, honouring the Fingerprint switch; (3) Bluetooth and Hotspot recipients in the network stack (a link layer that can be switched), gated like Airplane mode; (4) a real battery provider posting to the status service, and per-app permissions (camera, location, storage) as values per app; (5) apps hold a notification capability so they can post as themselves through OP_POST_APP. PART: lock_fingerprint, settings_permission and the audio mixer/ringer/notification paths exercised by clock_ring pass. Missing: Bluetooth/Hotspot recipients, a real battery provider (status_server takes a recorded 78 %). PART (D5001, D5002): Bluetooth and Hotspot are links of the network server gated by Airplane mode; a scripted battery provider posts to the status service. Remaining: a real battery driver and Bluetooth/Hotspot peers."
     },
     {
       "id": "L164",
