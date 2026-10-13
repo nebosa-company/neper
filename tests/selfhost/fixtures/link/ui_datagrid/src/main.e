@@ -1554,6 +1554,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dg.on_reorder(mem.cast[*void](&grid2), collection.Reorder { from: collection.CHOOSER_FROM + win_carried, to: 0usize }) != ok { os.exit(588) }
     if grid2.specs.len != win_before || grid2.hidden[win_spec] { os.exit(589) }
     if grid2.origin[0usize] != win_spec { os.exit(590) }
+    // 34. group footers: one more entry after the rows of each expanded group, not selectable
+    app.group_rarity = true
+    if rebuild(app, 5usize, false) != ok { os.exit(591) }
+    grp.set_all_expanded(&app.grouping, true)
+    let rows_and_groups = grp.visible_len(&app.grouping)
+    grp.set_group_footers(&app.grouping, true)
+    if grp.visible_len(&app.grouping) != rows_and_groups + grp.group_len(&app.grouping) { os.exit(592) }
+    var footer_entries = 0usize
+    var footer_at = 0usize
+    while footer_at < grp.visible_len(&app.grouping) {
+        if grp.visible_is_footer(&app.grouping, footer_at) {
+            footer_entries += 1usize
+            if !grp.visible_is_group(&app.grouping, footer_at) { os.exit(593) }
+        }
+        footer_at += 1usize
+    }
+    if footer_entries != grp.group_len(&app.grouping) { os.exit(594) }
+    grp.set_group_footers(&app.grouping, false)
+    if grp.visible_len(&app.grouping) != rows_and_groups { os.exit(595) }
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(596) }
     // 29. P017: the hovered header cell turns #D9EBF9; P020: the footer band is #FFFFDD with #E7EAEA cells
     dg.clear_selection(&grid11)
     mem.reset(&f, 0usize)

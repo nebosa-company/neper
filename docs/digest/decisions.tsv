@@ -2535,4 +2535,5 @@ D3953	474	G012: a chip dragged out of the group box, v3's own collection and dec
 D3954	387	G012: reordering the group-box chips
 D3955	372	G012: the editing arrow on the indicator of an in-place editing grid
 D3956	497	G012: fixture coverage of the Column window's drag in and out
-D3957	605	G012: the current row of an in-place editing grid shows its editors' buttons
+D3957	606	G012: the current row of an in-place editing grid shows its editors' buttons
+D3958	742	G012: group footers

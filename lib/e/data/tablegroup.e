@@ -30,6 +30,8 @@ use e.data.tableview as view
 const MAX_LEVELS: usize = 4usize
 const NO_GROUP: u32 = 4294967295u32
 const HEADER_BIT: u32 = 2147483648u32
+// a group footer is a header-flagged entry that also carries this bit
+const FOOTER_BIT: u32 = 1073741824u32
 const MAX_TOGGLED: usize = 4096usize
 
 type GroupLevel = struct { column: usize, descending: bool, fold: bool }
@@ -55,6 +57,7 @@ type Grouping = struct {
     group_total: usize,
     visible: []u32,
     visible_total: usize,
+    group_footers: bool,
     toggled: []u64,
     toggled_count: usize,
     default_expanded: bool,
@@ -93,7 +96,7 @@ fn create(a: *mem.Arena, v: *view.View, group_capacity: usize) -> (Grouping, err
         if groups_error != ok { ret (g, groups_error) }
         g.groups = groups
     }
-    let (visible, visible_error) = mem.alloc[u32](a, rows + group_capacity)
+    let (visible, visible_error) = mem.alloc[u32](a, rows + 2usize * group_capacity)
     if visible_error != ok { ret (g, visible_error) }
     g.visible = visible
     let (toggled, toggled_error) = mem.alloc[u64](a, MAX_TOGGLED)
@@ -254,6 +257,11 @@ fn build_visible(g: *Grouping) {
                 out += 1usize
                 p += 1usize
             }
+            // v3's group footer: the group's summaries once more, under its last row
+            if g.group_footers {
+                g.visible[out] = u32(gi) | HEADER_BIT | FOOTER_BIT
+                out += 1usize
+            }
         }
         gi += 1usize
     }
@@ -266,7 +274,16 @@ fn visible_len(g: *const Grouping) -> usize { ret g.visible_total }
 fn visible_is_group(g: *const Grouping, position: usize) -> bool { ret (g.visible[position] & HEADER_BIT) != 0u32 }
 
 // The group index of a header entry.
-fn visible_group(g: *const Grouping, position: usize) -> usize { ret usize(g.visible[position] & (HEADER_BIT - 1u32)) }
+fn visible_group(g: *const Grouping, position: usize) -> usize { ret usize(g.visible[position] & (FOOTER_BIT - 1u32)) }
+
+// Whether a group entry is a group's footer.
+fn visible_is_footer(g: *const Grouping, position: usize) -> bool { ret (g.visible[position] & FOOTER_BIT) != 0u32 && (g.visible[position] & HEADER_BIT) != 0u32 }
+
+// Shows or hides the groups' footers.
+fn set_group_footers(g: *Grouping, on: bool) {
+    g.group_footers = on
+    build_visible(g)
+}
 
 // The storage row of a data entry.
 fn visible_row(g: *const Grouping, position: usize) -> usize { ret usize(g.order[usize(g.visible[position])]) }
