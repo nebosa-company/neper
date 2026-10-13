@@ -5391,6 +5391,39 @@ fn edit_place_caret(widget_runtime: *Runtime, dx: f32) -> bool {
     ret true
 }
 
+// The deepest element under `p` whose semantics name a column (a table's cell or header cell), by
+// the row (0 for a header) and the column, both 1-based as the semantics are.
+fn cell_under(s: *State, index: usize, p: geometry.Point) -> (u32, u32, bool) {
+    let e = &s.elements[index]
+    if !e.live || !geometry.contains(e.bounds, p) { ret (0u32, 0u32, false) }
+    var found_row = 0u32
+    var found_column = 0u32
+    var has_found = false
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        let (cell_row, cell_column, has_cell) = cell_under(s, usize(at), p)
+        if has_cell {
+            found_row = cell_row
+            found_column = cell_column
+            has_found = true
+        }
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    if has_found { ret (found_row, found_column, true) }
+    if e.has_semantics && e.sem.column != 0u32 { ret (e.sem.row, e.sem.column, true) }
+    ret (0u32, 0u32, false)
+}
+
+fn cell_at(widget_runtime: *const Runtime, p: geometry.Point) -> (u32, u32, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed || !s.has_root { ret (0u32, 0u32, false) }
+    let (found_row, found_column, found) = cell_under(s, usize(s.root), p)
+    ret (found_row, found_column, found)
+}
+
 fn dragging(widget_runtime: *const Runtime) -> (u64, bool) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize { ret (0u64, false) }
