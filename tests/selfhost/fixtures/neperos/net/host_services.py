@@ -127,6 +127,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         # (C171) The AI providers' model lists (the key check).
         if ai_services.get(self, host, self.path):
+            return
         if WEB.get(self, host, url.path, query):
             return
         if host == 'api.exchange.coinbase.com' and url.path == '/products':
@@ -315,6 +316,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         # (C171) The AI app's providers (ai_services.py): the local model's OpenAI shape and the hosted three.
         if ai_services.post(self, host, self.path, raw):
+            return
         if WEB.post(self, host, self.path, raw):
             return
         if host == 'neper.test' and self.path == '/v1/chat/completions':
