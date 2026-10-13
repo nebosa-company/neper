@@ -5765,6 +5765,12 @@ $gpuCudaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $gpuCudaWritten -ne 'executable written') { throw 'gpu_cuda emission failed' }
 & $gpuCudaPath
 if ($LASTEXITCODE -ne 0) { throw "a gpu_cuda check failed: exit $LASTEXITCODE" }
+# (D2482) `e.fmt.png.quantize` and `encode_quantized` against a Python model of the colour-reduction rule.
+$pngQuantPath = Join-Path $testBuild 'fmt-png-quant-selfhost.exe'
+$pngQuantWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\linkmt_png_quant\src\main.e') $repo 'x64' 'windows' $pngQuantPath
+if ($LASTEXITCODE -ne 0 -or $pngQuantWritten -ne 'executable written') { throw 'fmt_png_quant emission failed' }
+& $pngQuantPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_png_quant check failed: exit $LASTEXITCODE" }
 $gpuSubgroupReducePath = Join-Path $testBuild 'gpu-subgroup-reduce-selfhost.exe'
 $gpuSubgroupReduceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_reduce\src\main.e') $repo 'x64' 'windows' $gpuSubgroupReducePath
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupReduceWritten -ne 'executable written') { throw 'gpu_subgroup_reduce emission failed' }

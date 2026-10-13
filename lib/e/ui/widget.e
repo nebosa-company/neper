@@ -1966,7 +1966,10 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         copies[0usize] = laid
         try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: geometry.Point { x: inner.x, y: inner.y }, brush: paint.Brush { Solid: t.color } } })
     case .Image as im:
-        try scene.push(b, scene.Command { Image: scene.DrawImage { texture: im.texture, source: geometry.Rect { x: 0.0, y: 0.0, width: 1.0, height: 1.0 }, destination: inner, opacity: 1.0 } })
+        // the source rectangle is in texels: the whole image
+        let (texture_w, texture_h, texture_error) = scene.image_size(s.renderer, im.texture)
+        if texture_error != ok { ret InvalidTree }
+        try scene.push(b, scene.Command { Image: scene.DrawImage { texture: im.texture, source: geometry.Rect { x: 0.0, y: 0.0, width: f32(texture_w), height: f32(texture_h) }, destination: inner, opacity: 1.0 } })
     case .Custom as c:
         try c.paint(c.ctx, b, inner)
     case .Edit as ed:

@@ -8,6 +8,7 @@ use e.gfx.chart
 use e.gfx.chart.scene as chart_scene
 use e.gfx.chart.svg as chart_svg
 use e.gfx.geometry
+use e.gfx.image
 use e.gfx.paint
 use e.gfx.scene
 use e.gpu
@@ -185,6 +186,52 @@ fn main(a: *mem.Arena, args: []str) -> err {
         j += 1usize
     }
     try io.printf["png {} {} {}\n"](CHARTS, ms(time.since(start)), png_bytes)
+    // (D2482) The same raster without the alpha channel, lossless, at .Best: the chart is opaque (it starts with a full
+    // white fill), so declaring that drops a channel; and quantized to 256 colours, indexed (lossy, largest channel
+    // error 17 on this chart).
+    var lossless_bytes = 0usize
+    var indexed_bytes = 0usize
+    var pass = 0usize
+    while pass < 2usize {
+        start = try time.monotonic()
+        j = 0usize
+        while j < CHARTS {
+            let mark = mem.mark(a)
+            fill(d, j)
+            let marks = try lay_out(d, s, plot)
+            let (made, builder_error) = scene.builder(a, 512usize)
+            if builder_error != ok { ret builder_error }
+            var builder = made
+            try scene.push(&builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), brush: paint.Brush { Solid: white } } })
+            try chart_scene.append_guides(&builder, plot, zero, marks.ticks, paint.Brush { Solid: grid }, paint.Brush { Solid: grid })
+            try chart_scene.append(a, &builder, &marks.line, paint.Brush { Solid: blue })
+            try chart_scene.append(a, &builder, &marks.dots, paint.Brush { Solid: orange })
+            try chart_scene.append_labels(a, &builder, marks.labels, font, 8.0, paint.Brush { Solid: dark })
+            let view = try chart_scene.rasterize(a, queue, output_target, canvas, &renderer, &builder, WIDTH, HEIGHT)
+            let opaque = image.ConstImage { pixels: view.pixels, width: view.width, height: view.height, stride: view.stride, format: view.format, alpha: .Opaque }
+            let (scratch, scratch_error) = mem.alloc[u8](a, usize(WIDTH) * usize(HEIGHT) * 4usize)
+            if scratch_error != ok { ret scratch_error }
+            let (state, unused, writer_error) = io.memory_writer(a, 0usize)
+            if writer_error != ok { ret writer_error }
+            var held = state
+            var writer = io.writer(mem.cast[*void](&held), io.memory_write)
+            if pass == 0usize {
+                try png.encode(&writer, opaque, png.EncodeOptions { compression: .Best, interlace: false })
+                lossless_bytes += io.memory_bytes(&held).len
+            } else {
+                try png.encode_quantized(&writer, opaque, png.EncodeOptions { compression: .Best, interlace: false }, 256usize, scratch)
+                indexed_bytes += io.memory_bytes(&held).len
+            }
+            mem.reset(a, mark)
+            j += 1usize
+        }
+        if pass == 0usize {
+            try io.printf["png_opaque_best {} {} {}\n"](CHARTS, ms(time.since(start)), lossless_bytes)
+        } else {
+            try io.printf["png_indexed {} {} {}\n"](CHARTS, ms(time.since(start)), indexed_bytes)
+        }
+        pass += 1usize
+    }
     try scene.close(&renderer)
     try gpu.close_target(output_target)
     ret gpu.close(device)
