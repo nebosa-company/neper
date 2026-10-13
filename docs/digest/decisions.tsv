@@ -2513,4 +2513,5 @@ D3931	596	G012: pixel probes for the selected-row border, column lines and heade
 D3932	843	G012: the cell editor's caret follows the tap
 D3933	968	G012: selecting several rows (trace M1)
 D3934	869	G012: header drag in the v3 look (trace D1)
-D3935	967	G012: the button editor as an e.ui control, in-cell editor kinds
+D3935	968	G012: the button editor as an e.ui control, in-cell editor kinds
+D3936	978	G012: a bare in-cell editor, and the group box as a drop target

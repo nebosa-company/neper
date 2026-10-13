@@ -136,8 +136,8 @@
     "over the group box: the arrows stand at the left of the box, and a drop makes a chip there"
    ],
    "v3": "recorded: docs/grid-parity/D1-header-drag-v3.png",
-   "neper": "collection header drag in the v3 look: lifted fill, translucent ghost, gl.Shape.ArrowDown/ArrowUp overlays",
-   "replayed": "live in the sample (D1-header-drag-v5.png); the group-box drop highlight is still to do"
+   "neper": "collection header drag in the v3 look: lifted fill, translucent ghost, gl.Shape.ArrowDown/ArrowUp overlays; group box: drop zone, hint text, green arrows over it, take_group_drop",
+   "replayed": "live in the sample (D1-header-drag-v5.png, D1-group-box-drop-v5.png)"
   },
   {
    "id": "F1",

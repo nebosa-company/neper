@@ -68,6 +68,7 @@ use e.ui.gridrules as rules
 use e.ui.gridlook as gl
 use e.ui.input
 use e.gfx.paint
+use e.gfx.geometry
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
@@ -77,6 +78,7 @@ const FILTER_KEY: u64 = 2048u64
 const EDIT_KEY: u64 = 3000u64
 const EDIT_TEXT: usize = 64usize
 const KEYBOARD_KEY: u64 = 3200u64
+const GROUP_BOX_KEY: u64 = 3300u64
 
 type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator, Star, Picture }
 
@@ -132,6 +134,8 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    group_drop_spec: usize,
+    group_drop_pending: bool,
     editors: []u8,
     button_row: usize,
     button_spec: usize,
@@ -473,6 +477,28 @@ fn on_spin_down(ctx: *void) -> err {
 fn on_spin_up(ctx: *void) -> err {
     spin_by(mem.cast[*Grid](ctx), 1)
     ret ok
+}
+
+// The three dots of a button editor: a flat 18 px cell button.
+fn dots_button(a: *mem.Arena, grid: *Grid, key: widget.Key, action: *const widget.Submit) -> (widget.Node, err) {
+    let (dots, dots_error) = mem.alloc[widget.Node](a, 1usize)
+    if dots_error != ok { ret (zero, dots_error) }
+    let mark_error = text_node(a, grid, "...", true, .Text, &dots[0usize])
+    if mark_error != ok { ret (zero, mark_error) }
+    let state = control.control_state(grid.theme, key, true, false)
+    var look = style.resolve(grid.theme.tokens, .Plain, state)
+    look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    look.border_width = 1.0
+    look.border = grid.look.selected_line
+    look.opacity = 1.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 1.0
+    look.padding_y = 0.0
+    look.min_width = 18.0
+    look.min_height = 16.0
+    let (node, node_error) = control.pressable_states(a, key, grid.theme, 3u8, "Choose", look, true, false, 0u32, 0u32, 0u64, action, dots[0usize])
+    ret (node, node_error)
 }
 
 // A small flat step arrow of the spin editor.
@@ -1483,7 +1509,46 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         if edited_spec < grid.editors.len { kind = grid.editors[edited_spec] }
         var field: widget.Node = zero
         var field_error: err = ok
-        if kind == EDITOR_BUTTON {
+        if grid.look.on {
+            // v3's in-cell editor: the bare text on white in a thin line, with its arrows or dots
+            let width = grid.columns[column].width - 2.0
+            let height = grid.look.row_height - 2.0
+            var inner_width = width
+            if kind == EDITOR_SPIN { inner_width = width - 24.0 }
+            if kind == EDITOR_BUTTON { inner_width = width - 18.0 }
+            let (bare, bare_error) = control.bare_field(a, grid.key + EDIT_KEY, grid.theme, "", buffer, grid.edit_len, widget.Change[str] { ctx: me, invoke: on_edit_change }, widget.Submit { ctx: me, invoke: on_edit_commit }, inner_width, height, grid.look.text_size, gl.rgb(0xFFFFFFu32), grid.look.selected_line)
+            if bare_error != ok { ret bare_error }
+            let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+            if parts_error != ok { ret parts_error }
+            var n = 0usize
+            if kind == EDITOR_SPIN {
+                let (steps, steps_error) = mem.alloc[widget.Submit](a, 2usize)
+                if steps_error != ok { ret steps_error }
+                steps[0usize] = widget.Submit { ctx: me, invoke: on_spin_down }
+                steps[1usize] = widget.Submit { ctx: me, invoke: on_spin_up }
+                let (left_arrow, left_error) = spin_arrow(a, grid, grid.key + EDIT_KEY + 20u64, gl.Shape.Left, "Decrease", &steps[0usize])
+                if left_error != ok { ret left_error }
+                let (right_arrow, right_error) = spin_arrow(a, grid, grid.key + EDIT_KEY + 21u64, gl.Shape.Right, "Increase", &steps[1usize])
+                if right_error != ok { ret right_error }
+                parts[0usize] = left_arrow
+                parts[1usize] = bare
+                parts[2usize] = right_arrow
+                n = 3usize
+            } else if kind == EDITOR_BUTTON {
+                let (pressed, pressed_error) = mem.alloc[widget.Submit](a, 1usize)
+                if pressed_error != ok { ret pressed_error }
+                pressed[0usize] = widget.Submit { ctx: me, invoke: on_cell_button }
+                let (dots, dots_error) = dots_button(a, grid, grid.key + EDIT_KEY + 22u64, &pressed[0usize])
+                if dots_error != ok { ret dots_error }
+                parts[0usize] = bare
+                parts[1usize] = dots
+                n = 2usize
+            } else {
+                parts[0usize] = bare
+                n = 1usize
+            }
+            field = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), parts[0usize..n])
+        } else if kind == EDITOR_BUTTON {
             let (pressed, pressed_error) = mem.alloc[widget.Submit](a, 1usize)
             if pressed_error != ok { ret pressed_error }
             pressed[0usize] = widget.Submit { ctx: me, invoke: on_cell_button }
@@ -1496,7 +1561,7 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
             field_error = made_field_error
         }
         if field_error != ok { ret field_error }
-        if kind == EDITOR_SPIN && grid.look.on {
+        if false {
             // v3's spin editor: a step arrow either side of the number
             let (down_submit, down_error) = mem.alloc[widget.Submit](a, 2usize)
             if down_error != ok { ret down_error }
@@ -2075,6 +2140,30 @@ fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err
 }
 
 // The group box: a panel with a white chip (field name and triangle) for each grouping level.
+// A header dropped on the group box asks to group by its column; the application takes the request
+// (`take_group_drop`, the table column) and groups, as its menus do.
+fn on_group_drop(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Drop as d:
+        let tag = collection.header_payload_tag()
+        if d.payload <= tag || d.payload > tag + 4096u64 { ret ok }
+        let shown = usize(d.payload - tag - 1u64)
+        if shown >= grid.specs.len { ret ok }
+        grid.group_drop_spec = grid.specs[shown].column
+        grid.group_drop_pending = true
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn take_group_drop(grid: *Grid) -> (usize, bool) {
+    if !grid.group_drop_pending { ret (0usize, false) }
+    grid.group_drop_pending = false
+    ret (grid.group_drop_spec, true)
+}
+
 fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let n = grid.g.level_count
     let (chips, chips_error) = mem.alloc[widget.Node](a, n + 1usize)
@@ -2102,8 +2191,42 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     panel.background = paint.Brush { Solid: grid.look.group_row }
     panel.height = style.Length { Px: 35.0 }
     panel.width = style.Length { Percent: 100.0 }
-    let chip_flow = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), chips[0usize..n])
-    ret (widget.padded(0u64, 6.7, 7.3, 6.7, 7.3, panel, one(a, chip_flow)), ok)
+    var content: widget.Node = zero
+    if n == 0usize {
+        // v3's hint of an empty box
+        let hint_error = text_node(a, grid, "Drag a column header here to group by that column", false, .Text, &content)
+        if hint_error != ok { ret (zero, hint_error) }
+    } else {
+        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), chips[0usize..n])
+    }
+    let box_key = grid.key + GROUP_BOX_KEY
+    let padded_panel = widget.padded(0u64, 6.7, 7.3, 6.7, 7.3, panel, one(a, content))
+    let (zone, zone_error) = mem.alloc[widget.Node](a, 1usize)
+    if zone_error != ok { ret (zero, control.TooLarge) }
+    zone[0usize] = padded_panel
+    var zone_style = style.defaults()
+    zone_style.width = style.Length { Percent: 100.0 }
+    let drop_zone = widget.region(box_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_group_drop }, gestures: widget.GESTURE_DROP, enabled: true, focusable: false }, zone_style, zone[0usize..1usize])
+    // v3: while a header is over the box, a green arrow above it and one below it show the drop
+    if mem.address_of(grid.theme) == 0usize || mem.address_of(grid.theme.runtime) == 0usize { ret (drop_zone, ok) }
+    let (lifted, has_lifted) = collection.lifted_column(grid.theme)
+    if !has_lifted { ret (drop_zone, ok) }
+    let (box_rect, has_box) = control.keyed_bounds(grid.theme.runtime, box_key)
+    if !has_box { ret (drop_zone, ok) }
+    let at = widget.pointer_position(grid.theme.runtime)
+    if at.x < box_rect.x || at.x >= box_rect.x + box_rect.width || at.y < box_rect.y || at.y >= box_rect.y + box_rect.height { ret (drop_zone, ok) }
+    let (down_arrow, down_error) = gl.mark(a, .ArrowDown, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
+    if down_error != ok { ret (zero, down_error) }
+    let (up_arrow, up_error) = gl.mark(a, .ArrowUp, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
+    if up_error != ok { ret (zero, up_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
+    if layers_error != ok { ret (zero, control.TooLarge) }
+    layers[3usize] = down_arrow
+    layers[4usize] = up_arrow
+    layers[0usize] = drop_zone
+    layers[1usize] = widget.overlay(box_key + 1u64, widget.Overlay { anchor: box_key, placement: .Below, offset: geometry.Point { x: 2.0, y: 0.0 - box_rect.height - 11.0 }, modal: false, dismiss: zero }, style.defaults(), layers[3usize..4usize])
+    layers[2usize] = widget.overlay(box_key + 2u64, widget.Overlay { anchor: box_key, placement: .Below, offset: geometry.Point { x: 2.0, y: 0.0 }, modal: false, dismiss: zero }, style.defaults(), layers[4usize..5usize])
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), layers[0usize..3usize]), ok)
 }
 
 // The grid as a node of `height` for the body; `theme` must stay valid until the next build.

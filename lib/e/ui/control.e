@@ -7716,6 +7716,24 @@ fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     ret (made, made_error)
 }
 
+// A bare text editor for a grid cell: no label, no field chrome and no inset -- the text at `size`
+// (the body size when 0) on `fill` inside a 1 px `line`, `width` by `height` -- for a cell as high
+// as a row of dense text. The caller wraps what it needs round it (spin arrows, a button).
+fn bare_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, width: f32, height: f32, size: f32, fill: paint.Color, line: paint.Color) -> (widget.Node, err) {
+    var words = text_options()
+    words.role = .BodyMedium
+    words.size = size
+    let (text_look, style_error) = text_style_faced(a, t, words)
+    if style_error != ok { ret (zero, style_error) }
+    var editor_style = sized_style(width, height)
+    editor_style.background = paint.Brush { Solid: fill }
+    editor_style.border = style.Border { width: 1.0, color: line }
+    editor_style.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 0.0 } }
+    let bare = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let (named, named_error) = named_editor(a, key, label, "", false, editor_style, bare)
+    ret (named, named_error)
+}
+
 // A button edit (DevExpress `TcxButtonEdit`, v3's Buy-at and Sell-at cells): a text field with a
 // 24 x 24 button at its end -- three dots -- named `button_label`, whose `action` the caller
 // handles (a picker, a dialog). The field is `options.width` wide, `options.height` high (the
