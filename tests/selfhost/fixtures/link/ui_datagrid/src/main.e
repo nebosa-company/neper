@@ -1421,6 +1421,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root44, build44_error) = dg.build(&f, &grid15, &theme, 400.0)
     if build44_error != ok { os.exit(486) }
     if !grid15.has_position || grp.visible_row(&app.grouping, grid15.position) != grouped_row { os.exit(487) }
+    // 25. v3 trace E1: an immediate-edit grid keeps the row after a commit, and Tab edits the next cell
+    dg.set_immediate_edit(&grid2, true)
+    grid2.has_selection = true
+    grid2.selected_row = 5usize
+    if dg.begin_edit(&grid2, 5usize, 3usize) != ok { os.exit(488) }
+    grid2.edit_text[0usize] = 53u8
+    grid2.edit_len = 1usize
+    if dg.commit_edit(&grid2) != ok || grid2.editing { os.exit(489) }
+    if !grid2.rest_pending || grid2.rest_row != 5usize || grid2.rest_spec != 3usize { os.exit(490) }
+    // Tab after the last editable cell edits nothing; on the next row it starts at the first editable cell
+    if dg.on_row_tab(mem.cast[*void](&grid2)) != ok { os.exit(494) }
+    let (rested_at, rested_shown) = dg.display_of(&grid2, grid2.rest_spec)
+    if !rested_shown || (grid2.editing && grid2.edit_spec <= rested_at) { os.exit(491) }
+    if grid2.editing && dg.commit_edit(&grid2) != ok { os.exit(493) }
+    grid2.selected_row = 6usize
+    var first_edit = 0usize
+    while first_edit < grid2.specs.len && !grid2.specs[first_edit].editable { first_edit += 1usize }
+    if dg.on_row_tab(mem.cast[*void](&grid2)) != ok || !grid2.editing || grid2.edit_spec != first_edit { os.exit(492) }
     os.exit(0)
     ret ok
 }

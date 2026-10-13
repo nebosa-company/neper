@@ -40697,3 +40697,7 @@ The new rows wait with `~s` tokens rather than idle taps (a tap at a fixed point
 ## D4933 — Mail opens a saved picture in Photos
 
 Lane K's D4806 and this lane both made Open on an attachment hand the saved file over; the merge keeps this lane's (`open_in_document`, markers `mail handover <path>`) and adds K's one extra rule: a .png, .jpg or .jpeg goes to Photos (program 22), anything else to Document (40). K's `mail_attach_open` row asserts the older marker text and is dropped (`mail_open_attachment` covers the same path).
+
+## D3930 — G012: collection editing traces (immediate edit, Enter keeps the row, Tab order)
+
+v3's collection grid edits on the first tap of an editable cell (Qty, Used, SB), commits on Enter and leaves the row current with the keyboard on it, and Tab then opens the editor in the next editable cell (the first one of the row after a Down). `Grid.immediate_edit` (`set_immediate_edit`) reproduces it: a tap on an editable cell begins the edit, a commit records `rest_row`/`rest_spec` and returns focus to the row, `on_row_tab` is the Tab shortcut that edits the cell after the one edited last (first editable cell of a different row). The sample sets it on the collection and deck grids and re-sums the footer in `on_collection_edited`. Trace E1; replayed by ui_datagrid section 25 (mutation: Tab not advancing exits 491). Open: v3's caret sits at the click position, Neper's at the start of the text.

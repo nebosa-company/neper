@@ -129,6 +129,11 @@ type Grid = struct {
     bands: []const Band,
     navigator_visible: bool,
     group_box_visible: bool,
+    immediate_edit: bool,
+    edit_focus_pending: bool,
+    rest_row: usize,
+    rest_spec: usize,
+    rest_pending: bool,
     ink_ctx: *void,
     ink_of: fn(*void, usize) -> (paint.Color, bool),
     has_ink: bool,
@@ -299,6 +304,10 @@ fn set_row_ink(grid: *Grid, ctx: *void, ink: fn(*void, usize) -> (paint.Color, b
     grid.ink_of = ink
     grid.has_ink = true
 }
+
+// v3's collection grid edits at once: a click on a row makes it current and opens its first
+// editable cell (without this the second tap on the current row does).
+fn set_immediate_edit(grid: *Grid, on: bool) { grid.immediate_edit = on }
 
 fn show_group_box(grid: *Grid, on: bool) { grid.group_box_visible = on }
 
@@ -543,6 +552,7 @@ fn begin_edit(grid: *Grid, row: usize, spec_index: usize) -> err {
         o += 1usize
     }
     grid.edit_old_len = grid.edit_len
+    grid.edit_focus_pending = true
     ret ok
 }
 
@@ -633,6 +643,12 @@ fn commit_edit(grid: *Grid) -> err {
     grid.editing = false
     grid.edit_invalid = false
     grid.select_open = false
+    if grid.immediate_edit {
+        // v3 keeps the row current and its keyboard: Down moves on, Tab edits the next cell
+        grid.rest_row = row
+        grid.rest_spec = grid.origin[spec]
+        grid.rest_pending = true
+    }
     ret raise_edit(grid, row, spec, grid.edit_old[0usize..grid.edit_old_len], text)
 }
 
@@ -738,6 +754,26 @@ fn on_edit_tab(ctx: *void) -> err {
 fn on_edit_back_tab(ctx: *void) -> err {
     let grid = mem.cast[*Grid](ctx)
     ret edit_move(grid, true)
+}
+
+// Tab with no editor open (after a commit in an immediate-edit grid): edit the cell after the one
+// edited last, or the first editable cell of the next row.
+fn on_row_tab(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    if !grid.immediate_edit || grid.editing || !grid.has_selection { ret ok }
+    let row = grid.selected_row
+    let (shown, visible) = display_of(grid, grid.rest_spec)
+    var d = 0usize
+    if visible && row == grid.rest_row { d = shown + 1usize }
+    while d < grid.specs.len {
+        if grid.specs[d].editable {
+            let began = begin_edit(grid, row, grid.origin[d])
+            if began != ok && began != Locked && began != NotEditable { ret began }
+            ret ok
+        }
+        d += 1usize
+    }
+    ret ok
 }
 
 fn on_edit_cancel(ctx: *void) -> err {
@@ -1211,9 +1247,16 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         options.width = grid.columns[column].width - 12.0
         options.height = 36.0
         options.invalid = grid.edit_invalid
+        var field_label = grid.specs[column].title
+        if grid.look.on {
+            // v3's in-cell editor: no label, as high as the row
+            field_label = ""
+            options.height = grid.look.row_height - 2.0
+            options.width = grid.columns[column].width - 2.0
+        }
         let buffer = grid.edit_text[0usize..EDIT_TEXT]
         let me = mem.cast[*void](grid)
-        let (field, field_error) = control.text_field(a, grid.key + EDIT_KEY, grid.theme, grid.specs[column].title, buffer, grid.edit_len, widget.Change[str] { ctx: me, invoke: on_edit_change }, widget.Submit { ctx: me, invoke: on_edit_commit }, options)
+        let (field, field_error) = control.text_field(a, grid.key + EDIT_KEY, grid.theme, field_label, buffer, grid.edit_len, widget.Change[str] { ctx: me, invoke: on_edit_change }, widget.Submit { ctx: me, invoke: on_edit_commit }, options)
         if field_error != ok { ret field_error }
         // Tab and Shift+Tab move the editor, Escape cancels it (a scope round the field)
         let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
@@ -1340,8 +1383,8 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
         grid.has_position = true
         grid.position = found
     }
-    if again && !grid.read_only && !grid.editing {
-        // the first editable column of the row
+    if (again || grid.immediate_edit) && !grid.read_only && !grid.editing {
+        // the first editable column of the row (v3 starts the edit of the clicked cell at once)
         var column = 0usize
         while column < grid.specs.len && !grid.specs[column].editable { column += 1usize }
         if column < grid.specs.len {
@@ -1664,7 +1707,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err) {
     let (picks, picks_error) = mem.alloc[NavPick](a, 6usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 7usize)
     if shortcuts_error != ok { ret (zero, control.TooLarge) }
     let codes: [6]u32 = [6]u32{ 38u32, 40u32, 33u32, 34u32, 36u32, 35u32 }
     let kinds: [6]Nav = [6]Nav{ Nav.Prev, Nav.Next, Nav.PrevPage, Nav.NextPage, Nav.First, Nav.Last }
@@ -1675,12 +1718,17 @@ fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err
         shortcuts[at] = widget.Shortcut { key: codes[at], modifiers: none, action: widget.Submit { ctx: mem.cast[*void](&picks[at]), invoke: on_navigate } }
         at += 1usize
     }
+    var tab_count = 6usize
+    if grid.immediate_edit {
+        shortcuts[6usize] = widget.Shortcut { key: 9u32, modifiers: none, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_row_tab } }
+        tab_count = 7usize
+    }
     var held: [1]widget.Node = zero
     let (holder, holder_error) = mem.alloc[widget.Node](a, 1usize)
     if holder_error != ok { ret (zero, control.TooLarge) }
     holder[0usize] = node
     var no_action: widget.Submit = zero
-    let scope = widget.scope(grid.key + KEYBOARD_KEY, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..6usize], default_action: no_action, cancel_action: no_action, keys: zero }, style.defaults(), holder[0usize..1usize])
+    let scope = widget.scope(grid.key + KEYBOARD_KEY, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..tab_count], default_action: no_action, cancel_action: no_action, keys: zero }, style.defaults(), holder[0usize..1usize])
     ret (scope, ok)
 }
 
@@ -1720,7 +1768,17 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 // The current row follows the keyboard (v3's): when a row of this grid holds the focus, it is the
 // current row and the application hears `row_picked`.
 fn follow_focus(grid: *Grid, theme: *const control.Theme) -> err {
-    if mem.address_of(theme.runtime) == 0usize || grid.editing { ret ok }
+    if mem.address_of(theme.runtime) == 0usize { ret ok }
+    if grid.editing && grid.edit_focus_pending {
+        // the editor takes the keyboard as soon as it stands in the tree
+        if widget.focus_key(theme.runtime, grid.key + EDIT_KEY) == ok { grid.edit_focus_pending = false }
+        ret ok
+    }
+    if grid.editing { ret ok }
+    if grid.rest_pending {
+        // after a commit the keyboard goes back to the row
+        if widget.focus_key(theme.runtime, row_key(grid, grid.rest_row)) == ok { grid.rest_pending = false }
+    }
     let (focus, has_focus) = widget.focused_key(theme.runtime)
     if !has_focus { ret ok }
     let base = grid.key + KEY_BASE
