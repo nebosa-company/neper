@@ -7512,6 +7512,92 @@ fn call_poll(c: *Call, now_ns: u64, jitter: f64) -> Action
 The loop that carries out gRFC A6 over `e.net.grpc` (L164): a `Call` is a set of attempts, each a stream of one connection, and `call_poll` answers what the transport does next (START a stream and report it with `call_opened`, CANCEL one, WAIT until an instant or an event, DONE with the status); `call_event` turns `e.net.grpc` events into `call_headers` and `call_status`. Retry mode asks `e.net.grpcretry.decide` after each uncommitted failure and starts the next attempt after its delay; hedging mode starts attempts at the hedging delay without waiting, lets a response with headers or `OK` win and cancels the rest, sends the next hedge at once after a non-fatal code, ends the call on a fatal one, and stops on a pushback that forbids more or while the throttle bucket is at most half full. `per_attempt_ns` cancels an attempt with no headers by then and fails it as `DEADLINE_EXCEEDED` (A6 does not define it), and `deadline_ns` ends the call `DEADLINE_EXCEEDED`. The caller owns the clock, the sockets and the jitter. Checked on a virtual clock over the real client and server connections against grpcio (60 retry runs: attempts and status) and an independent model of A6 (271 timed retry and hedging runs) (D3401).
 
 
+### `e.net.sftp`
+
+```neper
+error Incomplete
+error Invalid
+error TooSmall
+error TooLarge
+const FXP_INIT: u8 = 1u8
+const FXP_VERSION: u8 = 2u8
+const FXP_OPEN: u8 = 3u8
+const FXP_CLOSE: u8 = 4u8
+const FXP_READ: u8 = 5u8
+const FXP_WRITE: u8 = 6u8
+const FXP_LSTAT: u8 = 7u8
+const FXP_FSTAT: u8 = 8u8
+const FXP_SETSTAT: u8 = 9u8
+const FXP_FSETSTAT: u8 = 10u8
+const FXP_OPENDIR: u8 = 11u8
+const FXP_READDIR: u8 = 12u8
+const FXP_REMOVE: u8 = 13u8
+const FXP_MKDIR: u8 = 14u8
+const FXP_RMDIR: u8 = 15u8
+const FXP_REALPATH: u8 = 16u8
+const FXP_STAT: u8 = 17u8
+const FXP_RENAME: u8 = 18u8
+const FXP_READLINK: u8 = 19u8
+const FXP_SYMLINK: u8 = 20u8
+const FXP_STATUS: u8 = 101u8
+const FXP_HANDLE: u8 = 102u8
+const FXP_DATA: u8 = 103u8
+const FXP_NAME: u8 = 104u8
+const FXP_ATTRS: u8 = 105u8
+const FXP_EXTENDED: u8 = 200u8
+const FXP_EXTENDED_REPLY: u8 = 201u8
+const FX_OK: u32 = 0u32
+const FX_EOF: u32 = 1u32
+const FX_NO_SUCH_FILE: u32 = 2u32
+const FX_PERMISSION_DENIED: u32 = 3u32
+const FX_FAILURE: u32 = 4u32
+const FX_BAD_MESSAGE: u32 = 5u32
+const FX_NO_CONNECTION: u32 = 6u32
+const FX_CONNECTION_LOST: u32 = 7u32
+const FX_OP_UNSUPPORTED: u32 = 8u32
+const OPEN_READ: u32 = 1u32
+const OPEN_WRITE: u32 = 2u32
+const OPEN_APPEND: u32 = 4u32
+const OPEN_CREAT: u32 = 8u32
+const OPEN_TRUNC: u32 = 16u32
+const OPEN_EXCL: u32 = 32u32
+const ATTR_SIZE: u32 = 1u32
+const ATTR_UIDGID: u32 = 2u32
+const ATTR_PERMISSIONS: u32 = 4u32
+const ATTR_ACMODTIME: u32 = 8u32
+const ATTR_EXTENDED: u32 = 2147483648u32
+const MAX_PACKET: usize = 1048576usize
+type Attrs = struct { flags: u32, size: u64, uid: u32, gid: u32, permissions: u32, atime: u32, mtime: u32, extended: u32 }
+type Name = struct { filename: str, longname: str, attrs: Attrs }
+type Response = struct { kind: u8, id: u32, version: u32, extensions: u32, status: u32, message: str, language: str, handle: []const u8, data: []const u8, count: usize, attrs: Attrs }
+fn no_attrs() -> Attrs
+fn put32(b: []u8, at: usize, v: u32)
+fn put64(b: []u8, at: usize, v: u64)
+fn begin(dst: []u8, kind: u8) -> (usize, err)
+fn finish(dst: []u8, at: usize) -> (usize, err)
+fn add32(dst: []u8, at: *usize, v: u32) -> err
+fn add64(dst: []u8, at: *usize, v: u64) -> err
+fn add_bytes(dst: []u8, at: *usize, s: []const u8) -> err
+fn add_attrs(dst: []u8, at: *usize, a: Attrs) -> err
+fn encode_init(dst: []u8, version: u32) -> (usize, err)
+fn encode_path(dst: []u8, kind: u8, id: u32, path: str) -> (usize, err)
+fn encode_handle(dst: []u8, kind: u8, id: u32, handle: []const u8) -> (usize, err)
+fn encode_open(dst: []u8, id: u32, path: str, flags: u32, attrs: Attrs) -> (usize, err)
+fn encode_read(dst: []u8, id: u32, handle: []const u8, offset: u64, length: u32) -> (usize, err)
+fn encode_write(dst: []u8, id: u32, handle: []const u8, offset: u64, data: []const u8) -> (usize, err)
+fn encode_path_attrs(dst: []u8, kind: u8, id: u32, path: str, attrs: Attrs) -> (usize, err)
+fn encode_fsetstat(dst: []u8, id: u32, handle: []const u8, attrs: Attrs) -> (usize, err)
+fn encode_two_paths(dst: []u8, kind: u8, id: u32, first: str, second: str) -> (usize, err)
+fn encode_extended(dst: []u8, id: u32, name: str, data: []const u8) -> (usize, err)
+fn encode_extended_paths(dst: []u8, id: u32, name: str, first: str, second: str) -> (usize, err)
+fn get32(b: []const u8, at: usize) -> u32
+fn get64(b: []const u8, at: usize) -> u64
+fn take_bytes(p: []const u8, at: *usize) -> ([]const u8, err)
+fn take_attrs(p: []const u8, at: *usize) -> (Attrs, err)
+fn decode(input: []const u8, names: []Name) -> (usize, Response, err)
+fn status_name(code: u32) -> str
+```
+
 ### `e.net.grpctls`
 
 ```neper
@@ -22570,6 +22656,49 @@ fn observed(a: *mem.Arena, type_: str, live: json.Value) -> json.Value
 
 The Kubernetes provider's identity and drift rules (L048), after Petcow's `provider/k8s/mod.rs`: the fourteen built-in kinds and an operator manifest of more merged over them by type (`default_defs`, `parse_defs`, `merge_defs`), the kubectl selector and `-n` arguments (`selector`, `ns_args`), the apply manifest with `metadata.name` forced and the `petcow.io/managed` and `petcow.io/name` labels injected over a user's own (`apply_manifest`), the observed state taken from the `last-applied-configuration` annotation when it parses and from the live object otherwise (`observed`), and whether an object is managed or a kubectl error means not found (`is_managed_item`, `is_not_found`). A string field accepts a plain scalar as its text, as the reference's YAML reader does; a number written with a trailing zero or an exponent is read as its shortest text. The kubectl process is host code. Checked against Petcow's own functions, extracted unchanged, with the S3, IAM, EC2, Lightsail and transport helpers, over 600 inputs on Windows (D2922).
 
+
+### `x.cloud.awssig`
+
+```neper
+fn empty_hash() -> str
+fn unsigned_payload() -> str
+type Header = struct { name: str, value: str }
+fn concat_all(a: *mem.Arena, parts: []const str, sep: str) -> str
+fn cat2(a: *mem.Arena, x: str, y: str) -> str
+fn lower_ascii_text(a: *mem.Arena, s: str) -> str
+fn eq_fold(x: str, y: str) -> bool
+fn hex_text(a: *mem.Arena, b: []const u8) -> str
+fn sha256_hex(a: *mem.Arena, data: []const u8) -> str
+fn quote(a: *mem.Arena, s: str, safe: str) -> str
+fn remove_dot_segments(a: *mem.Arena, url: str) -> str
+fn normalize_url_path(a: *mem.Arena, path: str) -> str
+fn py_space(u: u32) -> bool
+fn trimall(a: *mem.Arena, s: str) -> str
+type Url = struct { scheme: str, host: str, port: i64, path: str, query: str, ipv6: bool }
+fn url_parts(a: *mem.Arena, url: str) -> Url
+fn host_from_url(a: *mem.Arena, url: str) -> str
+type Pair = struct { key: str, value: str }
+fn pair_less(x: Pair, y: Pair) -> bool
+fn sort_pairs(p: []Pair)
+fn pairs_text(a: *mem.Arena, p: []const Pair) -> str
+fn canonical_query(a: *mem.Arena, params: []const Pair, have_params: bool, url_query: str) -> str
+fn blacklisted(lname: str) -> bool
+type Signed = struct { canonical_request: str, string_to_sign: str, signature: str, authorization: str, headers: []const Header }
+fn find_header(h: []const Header, name: str) -> (str, bool)
+fn push_header(l: *list.List[Header], name: str, value: str)
+fn headers_to_sign(a: *mem.Arena, headers: []const Header, url: str) -> ([]const Pair, str)
+fn canonical_headers_text(a: *mem.Arena, p: []const Pair) -> str
+fn hmac(a: *mem.Arena, key: []const u8, message: str) -> [32]u8
+fn signature(a: *mem.Arena, secret: str, date: str, region: str, service: str, to_sign: str) -> str
+fn http_date(a: *mem.Arena, timestamp: str) -> str
+type Request = struct  { method: str, url: str, headers: []const Header, params: []const Pair, have_params: bool, body: str, region: str, service: str, access_key: str, secret_key: str, token: str, timestamp: str, s3: bool, payload_signing: bool, streaming_input: bool }
+fn sign_request(a: *mem.Arena, r: Request) -> Signed
+fn text_of(v: json.Value, key: str) -> str
+fn flag_of(v: json.Value, key: str, default_value: bool) -> bool
+fn pairs_of(a: *mem.Arena, v: json.Value) -> []const Pair
+fn headers_of(a: *mem.Arena, v: json.Value) -> []const Header
+fn sign_json(a: *mem.Arena, v: json.Value) -> json.Value
+```
 
 ### `x.cloud.awssdk`
 

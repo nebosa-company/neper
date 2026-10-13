@@ -3836,12 +3836,24 @@ chmod +x "$test_build/net-grpcretry-selfhost"
 net_grpcretry_output=$("$test_build/net-grpcretry-selfhost")
 [ "$net_grpcretry_output" = 'net grpcretry ok' ]
 # `e.net.grpccall`: the A6 retry and hedging loop over the real client and server connections on a virtual clock
-# # (331 runs: 60 against grpcio, the rest against an independent model, D3401).
+# # (401 runs: 101 against grpcio, the rest against an independent model, D3401, D4601).
 net_grpccall_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpccall/src/main.e" "$repo" x64 linux "$test_build/net-grpccall-selfhost" -j 2)
 [ "$net_grpccall_written" = 'executable written' ]
 chmod +x "$test_build/net-grpccall-selfhost"
 net_grpccall_output=$("$test_build/net-grpccall-selfhost")
 [ "$net_grpccall_output" = 'net grpccall ok' ]
+# `e.net.sftp`: SFTP v3 packets against OpenSSH's sftp-server (134 transcript lines recorded from a live server, D4602)
+net_sftp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_sftp/src/main.e" "$repo" x64 linux "$test_build/net-sftp-selfhost" -j 2)
+[ "$net_sftp_written" = 'executable written' ]
+chmod +x "$test_build/net-sftp-selfhost"
+net_sftp_output=$("$test_build/net-sftp-selfhost")
+[ "$net_sftp_output" = 'net sftp ok' ]
+# `x.cloud.awssig`: AWS Signature Version 4 against botocore's SigV4Auth and S3SigV4Auth (1500 generated requests, D4603)
+x_cloud_awssig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_cloud_awssig/src/main.e" "$repo" x64 linux "$test_build/x-cloud-awssig-selfhost" -j 2)
+[ "$x_cloud_awssig_written" = 'executable written' ]
+chmod +x "$test_build/x-cloud-awssig-selfhost"
+x_cloud_awssig_output=$("$test_build/x-cloud-awssig-selfhost")
+[ "$x_cloud_awssig_output" = 'x cloud awssig ok' ]
 # `e.net.grpcstub`: typed gRPC stubs generated from descriptors, round-tripped against Python's protobuf wire bytes
 # # (242 serialised instances, fixed messages, the generator's own output, D3006).
 net_grpcstub_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpcstub/src/main.e" "$repo" x64 linux "$test_build/net-grpcstub-selfhost" -j 2)

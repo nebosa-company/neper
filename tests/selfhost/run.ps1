@@ -4336,12 +4336,24 @@ if ($LASTEXITCODE -ne 0 -or $netGrpcretryWritten -ne 'executable written') { thr
 $netGrpcretryOutput = & $netGrpcretryPath
 if ($LASTEXITCODE -ne 0 -or $netGrpcretryOutput -ne 'net grpcretry ok') { throw "net_grpcretry answered wrongly: exit $LASTEXITCODE" }
 # `e.net.grpccall`: the A6 retry and hedging loop over the real client and server connections on a virtual clock
-# # (331 runs: 60 against grpcio, the rest against an independent model, D3401).
+# # (401 runs: 101 against grpcio, the rest against an independent model, D3401, D4601).
 $netGrpccallPath = Join-Path $testBuild 'net-grpccall-selfhost.exe'
 $netGrpccallWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpccall\src\main.e') $repo 'x64' 'windows' $netGrpccallPath -j 2
 if ($LASTEXITCODE -ne 0 -or $netGrpccallWritten -ne 'executable written') { throw 'net_grpccall emission failed' }
 $netGrpccallOutput = & $netGrpccallPath
 if ($LASTEXITCODE -ne 0 -or $netGrpccallOutput -ne 'net grpccall ok') { throw "net_grpccall answered wrongly: exit $LASTEXITCODE" }
+# `e.net.sftp`: SFTP v3 packets against OpenSSH's sftp-server (134 transcript lines recorded from a live server, D4602)
+$netSftpPath = Join-Path $testBuild 'net-sftp-selfhost.exe'
+$netSftpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_sftp\src\main.e') $repo 'x64' 'windows' $netSftpPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netSftpWritten -ne 'executable written') { throw 'net_sftp emission failed' }
+$netSftpOutput = & $netSftpPath
+if ($LASTEXITCODE -ne 0 -or $netSftpOutput -ne 'net sftp ok') { throw "net_sftp answered wrongly: exit $LASTEXITCODE" }
+# `x.cloud.awssig`: AWS Signature Version 4 against botocore's SigV4Auth and S3SigV4Auth (1500 generated requests, D4603)
+$xCloudAwssigPath = Join-Path $testBuild 'x-cloud-awssig-selfhost.exe'
+$xCloudAwssigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_cloud_awssig\src\main.e') $repo 'x64' 'windows' $xCloudAwssigPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xCloudAwssigWritten -ne 'executable written') { throw 'x_cloud_awssig emission failed' }
+$xCloudAwssigOutput = & $xCloudAwssigPath
+if ($LASTEXITCODE -ne 0 -or $xCloudAwssigOutput -ne 'x cloud awssig ok') { throw "x_cloud_awssig answered wrongly: exit $LASTEXITCODE" }
 # `e.net.grpcstub`: typed gRPC stubs generated from descriptors, round-tripped against Python's protobuf wire bytes
 # # (242 serialised instances, fixed messages, the generator's own output, D3006).
 $netGrpcstubPath = Join-Path $testBuild 'net-grpcstub-selfhost.exe'
