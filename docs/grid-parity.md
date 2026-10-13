@@ -43,7 +43,7 @@ no-data, drag, conditional formatting and the deck and collection views are stil
 | P004 | v3 stripes rows (#FFFFFF / #EFEFEF); v5 does not | | closed by D3919 (pixel-probed, ui_datagrid s15) |
 | P005 | v5 draws 2 px row separators; v3 has none between rows | | closed by D3919 (pixel-probed, ui_datagrid s15) |
 | P006 | Selected row: v3 #A6D2FF with a dark 1 px border and gradient ends; v5 flat tint, no border | | look applied (D3919); fixture probe pending |
-| P007 | v3 has full-height vertical column lines in header and body; v5 only short header dividers | | closed by D3931 (pixel-probed: #E6E6E6 column lines in body rows, ui_datagrid s15) |
+| P007 | v3 has full-height vertical column lines in header and body; v5 only short header dividers | | closed by D3931 (pixel-probed: #DEDEDE column lines in body rows, ui_datagrid s15) |
 | P008 | Header look: v3 white cell with the sort triangle right-aligned in the cell; v5 tinted header with the arrow after the text | | header fill (white) pixel-probed by D3931; the right-aligned sort triangle is checked on the recordings only |
 | P009 | Left columns: v3 has the customization glyph, favourite star, "ES" icon and the row indicator arrow, each ~18-20 px / 13 logical; v5 has one 28 px indicator | | closed by D3925: indicator 11.3, Favorite 23, ES 21 (v3 edition symbols fitted to their ink) |
 | P010 | Cell text inset: v3 ~6 px / 4; v5 ~16 px | | open |
