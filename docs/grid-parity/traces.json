@@ -153,6 +153,19 @@
    "replayed": "ui_datagrid section 28; live in the sample (V1-view-toggles-v5.png)"
   },
   {
+   "id": "S3",
+   "name": "incremental search and the bookmark",
+   "steps": [
+    "with a row current, type letters: the text is searched in the Name column (begins-with), the current row moves to the first match from itself on and the view puts it at the top; the status line shows 'search: bal'",
+    "Ctrl+Down / Ctrl+Up: the next / previous match, wrapping",
+    "Backspace shortens the text, Escape ends the search",
+    "Ctrl+Shift+1 sets the one bookmark of the view on the current row, Ctrl+1 goes to it (kept on the row, survives sort and filter)"
+   ],
+   "v3": "docs/grid.md section 2.5 (Search menu); the toolbar's quick search and Search > Next/Previous/Bookmark were not recorded from mtgstudio.exe",
+   "neper": "set_search_column, search_query, search_next, toggle_bookmark/goto_bookmark; a shortcut per typed key (a scope may now bind more than 16 shortcuts)",
+   "replayed": "ui_datagrid section 30; live in the sample (S3-incremental-search-v5.png)"
+  },
+  {
    "id": "F1",
    "name": "filter",
    "v3": "the card pool has no filter row: the toolbar box is a Find box (typing does nothing until the binoculars or Enter) and the funnel opens the 'Filter Card Pool' dialog with OK/Apply, so there is no delayed apply to record in this view",

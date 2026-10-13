@@ -283,6 +283,9 @@ type Element = struct {
     focusable: bool,
     traps_focus: bool,
     shortcuts: [16]Shortcut,
+    // more than 16: the caller's slice, kept as given (as long as its actions' contexts live)
+    long_shortcuts: []const Shortcut,
+    has_long_shortcuts: bool,
     shortcut_count: usize,
     default_action: Submit,
     cancel_action: Submit,
@@ -1327,6 +1330,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     e.gestures = 0u8
     e.focusable = false
     e.shortcut_count = 0usize
+    e.has_long_shortcuts = false
     e.has_semantics = false
     switch node.kind {
     case .Button as b:
@@ -1373,11 +1377,15 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     case .Scope as sc:
         e.enabled = true
         e.traps_focus = sc.traps_focus
-        if sc.shortcuts.len > MAX_SHORTCUTS { ret (0usize, TooLarge) }
-        var k = 0usize
-        while k < sc.shortcuts.len {
-            e.shortcuts[k] = sc.shortcuts[k]
-            k += 1usize
+        e.has_long_shortcuts = sc.shortcuts.len > MAX_SHORTCUTS
+        if e.has_long_shortcuts {
+            e.long_shortcuts = sc.shortcuts
+        } else {
+            var k = 0usize
+            while k < sc.shortcuts.len {
+                e.shortcuts[k] = sc.shortcuts[k]
+                k += 1usize
+            }
         }
         e.shortcut_count = sc.shortcuts.len
         e.default_action = sc.default_action
@@ -4692,7 +4700,7 @@ fn edit_key(s: *State, element: usize, k: input.KeyEvent) -> (bool, err) {
             if parent.kind == SCOPE_TAG {
                 var shortcut = 0usize
                 while shortcut < parent.shortcut_count {
-                    let bound = parent.shortcuts[shortcut]
+                    let bound = shortcut_of(parent, shortcut)
                     if key_code(bound.key) == code && !bound.modifiers.shift && !bound.modifiers.control && !bound.modifiers.alt && !bound.modifiers.meta && !k.modifiers.shift && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta { ret (false, ok) }
                     shortcut += 1usize
                 }
@@ -4757,6 +4765,11 @@ fn same_modifiers(a: input.Modifiers, b: input.Modifiers) -> bool {
     ret a.shift == b.shift && a.control == b.control && a.alt == b.alt && a.meta == b.meta
 }
 
+fn shortcut_of(e: *const Element, i: usize) -> Shortcut {
+    if e.has_long_shortcuts { ret e.long_shortcuts[i] }
+    ret e.shortcuts[i]
+}
+
 fn has_scoped_shortcut(s: *State, from: usize, code: u32, held: input.Modifiers) -> bool {
     var at = from
     while true {
@@ -4764,7 +4777,8 @@ fn has_scoped_shortcut(s: *State, from: usize, code: u32, held: input.Modifiers)
         if e.kind == SCOPE_TAG {
             var i = 0usize
             while i < e.shortcut_count {
-                if key_code(e.shortcuts[i].key) == code && same_modifiers(e.shortcuts[i].modifiers, held) { ret true }
+                let bound = shortcut_of(e, i)
+                if key_code(bound.key) == code && same_modifiers(bound.modifiers, held) { ret true }
                 i += 1usize
             }
         }
@@ -4813,7 +4827,7 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
             }
             var i = 0usize
             while i < e.shortcut_count {
-                let shortcut = e.shortcuts[i]
+                let shortcut = shortcut_of(e, i)
                 if key_code(shortcut.key) == code && same_modifiers(shortcut.modifiers, k.modifiers) {
                     let fired = fire_submit(shortcut.action)
                     ret (true, fired)
