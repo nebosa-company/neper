@@ -38994,3 +38994,31 @@ D2377 read v3's 8 pt as a 16 px em and blamed GDI-hinted advances for the width 
 ## D2379 — G012: favourite star column, navigator arrows, 1 MB scenes
 
 `CellKind.Star` on a boolean column draws the favourite star: an outline star in the header (`TableLook.glyph`, no padding, centred) and a gold star in a set cell; a tap on the current row flips it like a Bool. With a look the navigator is four flat arrow marks (blue, grey where they cannot move) and "n of m" without "Row". `e.ui.gridlook` carries the mark painter (`mark`: star outline / filled, left / right arrows with a bar). Compact v3 rows put more of the grid in a frame than a scene could hold: `SCENE_BYTES` 256 KB -> 1 MB (a 9-column sample failed `scene.compile` with `TooLarge`, which the window loop reported only as "failed"; found by giving each widget `TooLarge` site its own name). Screenshot: `docs/grid-parity/S01-compare-after-star-navigator.png`. Open: ES icon column (needs the edition symbols), page-skip and filter buttons, scrollbar.
+
+## D2380 — G012: group box, group rows, scrollbar, v3's own pictures; image nodes drew one texel
+
+The group box is a #F0F0F0 panel over the header with a white chip (field and an outlined triangle) for each grouping level (`show_group_box`). With a look, group rows draw a framed +/- box and "Field : value (Count: n)", carry the label in the first column that is not an indicator or a star, let it run over the cells beside it (`overflow` visible) and have no column lines. The scrollbar is the measured one: a 16 dp #F0F0F0 track the height of header and body with a slim #858585 thumb 16 dp in from each end; the runtime's own thumb stays but is made transparent so it can still be dragged.
+
+**Pictures.** `gridlook.load_picture` decodes a .png or .bmp and uploads it (the renderer copies the pixels). The v5 sample now draws v3's own images: the mana symbols (`bin/data/png/symbols`) in the Cost column and the five legality letters (`bin/data/bmp/legality/letters/<format>_<state>.bmp`) in a Legal column; the `13x13` collapsed/expanded files are red/green dots of another control, not the grid's expander, and are not used.
+
+**Defect fixed.** `widget` drew an `Image` with a source rectangle of 0..1, but `scene.DrawImage.source` is in texels: every image node showed its first texel (a flat tint or nothing). It now passes the texture's size (`scene.image_size`). The 13-column-wide failure earlier in G012 was `scene.compile` over `SCENE_BYTES`; the sample's group-row failure was a flex that could not fit a fixed-size mark in a narrow cell (layered with a stack instead). Checked: `ui_datagrid` sections 17-18 (a symbol drawn through an image node differs between centre and corner; a 1x1 source fails exit 149).
+
+## D2381 — G012: the sample reads the real Cards table
+
+`v5/cardgrid` no longer generates cards: `load` runs one query over `mtgstudio.db3` (`Cards` joined with `Editions` (active), `CardTypes` and `Rarities`, in CardId order) through `x.sqlite` / `e.db` (`winsqlite3.dll`), 120,239 rows, the count v3 shows. The Legal column reads the packed `Cards.Legality` string at v3's format ordinals (Standard 1, Modern 43, Extended 2, Legacy 3, Vintage 4) into two bits a format; the Cost column draws one v3 symbol picture per character of the stored cost ("2RR"). The Cards table has no prices (v3 reads them from a separate prices file), so the Price column became Rating (`Cards.Rating`, 0 throughout this database); favourites are not in the table either, and a pseudo favourite (CardId % 11) stays. Screenshot: `docs/grid-parity/S01-v5-real-cards-table.png`.
+
+The sample's status line carries the load time (`loaded from SQLite in N ms`, measured around `load`): 3,856 ms for the 120,239 active cards on this machine (the joined query and the filling of typed, dictionary-encoded columns together; screenshot `docs/grid-parity/S01-v5-load-time.png`). v3's own "Loaded in X s" for the same pool is the figure to compare under G011.
+
+## D2382 — G012: v3's columns and widths, edition symbols, navigator buttons, keyboard, first traces
+
+**Columns.** The sample's grid is v3's card pool: Favorite 23, ES 21, Legal 75, Name 150, Edition 70, Color 60, Type 150, Rarity 50, Cost 126, P/T 50, Text 255, CMC 50 (logical px, from `main.vcl.form.pas`, equal to the recording's column boundaries divided by 1.5; Legal, ES and Cost matter most). `CellKind.Picture` is a column with no side padding that the application draws (the ES column); `TableLook.glyph` carries it (1 star, 2 picture).
+
+**ES.** v3 keeps its edition symbols as SVG in an image collection of `main.vcl.data.dfm` (`ed_<abbreviation>[_<c|u|r|m>]`, 483 drawings, every active edition has one); they are extracted to `v5/cardgrid/symbols` and drawn with `gridlook.svg_fit_mark`, which measures the drawing's own extent (path data, control points included) and scales it to fill its box, as v3's best-fit does.
+
+**Navigator.** With a look: First, Previous page, Previous, "n of m", Next, Next page, Last and a funnel (`set_filter_action`); a page is the rows the body shows (`page_rows`).
+
+**Keyboard.** The current row follows the keyboard focus (`follow_focus`): Down, Up, Home, End and the page keys move the table's own focus, and the row that holds it is the current row (`row_picked` fires). Replayed from the v3 trace K1-K4 in `ui_datagrid` section 20. The Debug build of v3 stopped answering after End on 120,239 rows and its Page Down under load moved by two, so those two traces are the grid default, not recordings (`docs/grid-parity/traces.json` says which is which).
+
+**Limits met.** The sample needs a 64 MB frame arena and larger widget limits with 13 columns of real text; the window loop reported only "failed" (`lay_text` out of memory) until the arena was raised. `SCENE_BYTES` is 4 MB.
+
+The owner allowed changing the display scale, so the 100 % and 125 % recordings were made (D2382): `SystemParametersInfo(SPI_SETLOGICALDPIOVERRIDE, -2 / -1)` per user, apps restarted, whole screen captured for `mtgstudio.exe` and the sample, then the scale put back to 150 % (`0`). Row pitch is 19, 23.75 and 28.5 px at 100, 125 and 150 % in both programs.

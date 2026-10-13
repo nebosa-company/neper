@@ -2052,16 +2052,26 @@ window; the filter row stands above the header, not below.
 ### `e.ui.gridlook`
 
 ```neper
-type Look = struct { on: bool, row_height: f32, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group_row: paint.Color, footer_band: paint.Color, footer_cell: paint.Color, frame: paint.Color }
+type Look = struct { on: bool, row_height: f32, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group_row: paint.Color, footer_band: paint.Color, footer_cell: paint.Color, frame: paint.Color, track: paint.Color, thumb: paint.Color, scroll_width: f32 }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight }
+error BadPicture
 
 fn rgb(value: u32) -> paint.Color
 fn v3() -> Look
 fn theme() -> Look
+fn mark(a: *mem.Arena, shape: Shape, color: paint.Color, inner: paint.Color, width: f32, height: f32) -> (widget.Node, err)
+fn load_picture(a: *mem.Arena, r: *scene.Renderer, path: str) -> (scene.TextureId, err)
+fn svg_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height: f32) -> (widget.Node, err)
+fn svg_fit_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height: f32) -> (widget.Node, err)
+fn svg_ink(text: str) -> (Ink, f32, f32)
 ```
 
 The measured look of the data grid (`docs/grid-parity/tokens.json`, G012): `v3()` is MTG Studio v3's grid in logical pixels
-and colours (row 19, header 21, zebra #FFFFFF / #EFEFEF, selected #A6D2FF with a #83878B edge, group row #F0F0F0,
-footer band #FFFFDD with #E7EAEA cells); `theme()` is the unset look. Read by `e.ui.datagrid.set_look`.
+and colours (row 19, header 21, text 10.35, zebra #FFFFFF / #EFEFEF, selected #A6D2FF with a #83878B edge, group row
+#F0F0F0, footer band #FFFFDD with #E7EAEA cells, frame #828790, a 16 wide #F0F0F0 scroll track with a slim #858585
+thumb); `theme()` is the unset look. `mark` draws the grid's own marks (favourite star, navigator arrows, group
+expander box, group chip triangle). `load_picture` decodes a .png or .bmp file (v3's `bin/data` symbols and legality
+letters) and uploads it; the pixels are copied, so the arena may be reset afterwards. Read by `e.ui.datagrid.set_look`.
 
 ### `e.ui.gridrules`
 
@@ -14416,7 +14426,7 @@ error Invalid
 error TooLarge
 error OutOfMemory
 error Lost
-const SCENE_BYTES: usize = 1048576usize
+const SCENE_BYTES: usize = 4194304usize
 const MAX_EDGES: usize = 65536usize
 const MAX_MASKS: usize = 8usize
 const MAX_LAYERS: usize = 4usize

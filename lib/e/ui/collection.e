@@ -1894,6 +1894,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = title_node
         var glyph_header = false
+        // a picture column (2) has no side padding; a star column (1) shows the star as its title
+        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 2u8 { glyph_header = true }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 1u8 {
             glyph_header = true
             // a column marked with the favourite star shows it in place of a title
@@ -2257,7 +2259,14 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if grid || look.on { width -= t.tokens.sizes.divider }
         var cell_style = control.sized_style(control.max_zero(width), extent)
         cell_style.overflow = .Clip
+        // a group row's label runs on over the cells beside it, with no column lines
+        let group_row = look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8
+        if group_row { cell_style.overflow = .Visible }
         cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+        // a picture column's cells have no side padding
+        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, c) != 0u8 {
+            cell_style.padding = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat }
+        }
         let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
         if framed_error != ok { ret (zero, TooLarge) }
         framed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell_style, body[0usize..1usize])
@@ -2268,7 +2277,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         cell_sem.column = u32(c + 1usize)
         boxed[n] = widget.semantics(0u64, cell_sem, style.defaults(), framed[0usize..1usize])
         n += 1usize
-        if grid || look.on {
+        if (grid || look.on) && !group_row {
             var line = control.sized_style(t.tokens.sizes.divider, extent)
             line.background = paint.Brush { Solid: rule }
             if look.on { line.background = paint.Brush { Solid: look.line } }
@@ -2366,7 +2375,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8 }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32 }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4051,7 +4060,10 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         head = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), tiers[0usize..2usize])
     }
     parts[p] = head
-    parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent, fades: false }, view_style, rows[0usize..count])
+    // with a look the drawn bar below replaces the overlay thumb, which stays to be dragged
+    var scroll_thumb = control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
+    if selection.look.on && selection.look.scroll_width > 0.0 { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
+    parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: scroll_thumb, change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent, fades: false }, view_style, rows[0usize..count])
     // (D1248) With no rows the body is the loading or empty state; the header stays.
     // (D1413) A failed load (`failed`) stands in the body whatever the rows.
     if selection.failed.len > 0usize || (total == 0usize && (selection.loading || selection.empty_title.len > 0usize)) {
@@ -4065,6 +4077,40 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, parts[0usize..p])
+    if selection.look.on && selection.look.scroll_width > 0.0 {
+        // the measured bar: a light track the height of header and body with a slim thumb,
+        // 16 in from each end (where v3 has its arrow buttons)
+        let lk = selection.look
+        let track_h = head_height + body_height
+        let content = f32(total) * row_extent
+        let room = track_h - 32.0
+        var thumb_h = room
+        if content > body_height && content > 0.0 { thumb_h = room * body_height / content }
+        if thumb_h < 17.0 { thumb_h = 17.0 }
+        if thumb_h > room { thumb_h = room }
+        var thumb_y: f32 = 0.0
+        let span = content - body_height
+        if span > 0.0 {
+            var share = offset / span
+            if share < 0.0 { share = 0.0 }
+            if share > 1.0 { share = 1.0 }
+            thumb_y = (room - thumb_h) * share
+        }
+        var thumb_style = control.sized_style(2.7, thumb_h)
+        thumb_style.background = paint.Brush { Solid: lk.thumb }
+        thumb_style.radius = 1.3
+        thumb_style.margin = style.EdgeLengths { left: style.Length { Px: (lk.scroll_width - 2.7) * 0.5 }, top: style.Length { Px: 16.0 + thumb_y }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        let (thumb_holder, thumb_error) = mem.alloc[widget.Node](a, 1usize)
+        if thumb_error != ok { ret (zero, TooLarge) }
+        thumb_holder[0usize] = widget.box(0u64, thumb_style, zero)
+        var track_style = control.sized_style(lk.scroll_width, track_h)
+        track_style.background = paint.Brush { Solid: lk.track }
+        let (bar_parts, bar_error) = mem.alloc[widget.Node](a, 2usize)
+        if bar_error != ok { ret (zero, TooLarge) }
+        bar_parts[0usize] = column_node[0usize]
+        bar_parts[1usize] = widget.box(0u64, track_style, thumb_holder[0usize..1usize])
+        column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bar_parts[0usize..2usize])
+    }
     // (D1283) Wider than its view, the table scrolls sideways (keyed
     // `key + 2097152`), its overlay thumb under the body.
     if selection.view_width > 0.0 && width > selection.view_width {

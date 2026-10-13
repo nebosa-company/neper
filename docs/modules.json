@@ -4520,7 +4520,19 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.gfx.paint"
+    "e.fmt.png",
+    "e.fs",
+    "e.gfx.geometry",
+    "e.gfx.image",
+    "e.gfx.paint",
+    "e.gfx.scene",
+    "e.gfx.svg",
+    "e.io",
+    "e.mem",
+    "e.str",
+    "e.ui.layout",
+    "e.ui.style",
+    "e.ui.widget"
    ],
    "blocked_by": []
   },

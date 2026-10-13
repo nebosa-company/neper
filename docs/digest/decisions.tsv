@@ -2134,4 +2134,7 @@ D2375	818	G012: the grid is a pixel-perfect equivalent of the v3 grid
 D2376	1351	G012: the grid reads a measured look (e.ui.gridlook)
 D2377	535	G012: text size 8 pt and the grid frame
 D2378	694	G012: text size by measured ink width; no integer-advance mode
-D2379	934	G012: favourite star column, navigator arrows, 1 MB scenes
+D2379	935	G012: favourite star column, navigator arrows, 1 MB scenes
+D2380	1726	G012: group box, group rows, scrollbar, v3's own pictures; image nodes drew one texel
+D2381	1232	G012: the sample reads the real Cards table
+D2382	2187	G012: v3's columns and widths, edition symbols, navigator buttons, keyboard, first traces
