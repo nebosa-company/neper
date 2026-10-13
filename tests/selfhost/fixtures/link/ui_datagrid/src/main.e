@@ -1541,6 +1541,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if settle(&harness, root_q, 230000000000i64) != ok { os.exit(583) }
     if !tap_key(&harness, &runtime, grid_q.key + 1u64) { os.exit(584) }
     if !grid_q.menu_open || grid_q.menu_kind != dg.MENU_QUICK { os.exit(585) }
+    // 33. the Column window: a header dropped on it hides the column, an item dragged out onto a
+    // header shows it again before that header (v3's Customization form)
+    let win_before = grid2.specs.len
+    let win_spec = grid2.origin[1usize]
+    let win_tag = collection.header_payload_tag()
+    let win_drop = widget.Gesture { Drop: widget.Dropped { position: geometry.Point { x: 0.0, y: 0.0 }, payload: win_tag + 2u64 } }
+    if dg.on_chooser_drop(mem.cast[*void](&grid2), win_drop) != ok { os.exit(586) }
+    if grid2.specs.len != win_before - 1usize || !grid2.hidden[win_spec] { os.exit(587) }
+    // the item comes back before the first column: the Reorder of a chooser drag carries CHOOSER_FROM
+    let win_carried = (usize(grid2.key & 65535u64) << 13usize) + win_spec
+    if dg.on_reorder(mem.cast[*void](&grid2), collection.Reorder { from: collection.CHOOSER_FROM + win_carried, to: 0usize }) != ok { os.exit(588) }
+    if grid2.specs.len != win_before || grid2.hidden[win_spec] { os.exit(589) }
+    if grid2.origin[0usize] != win_spec { os.exit(590) }
     // 29. P017: the hovered header cell turns #D9EBF9; P020: the footer band is #FFFFDD with #E7EAEA cells
     dg.clear_selection(&grid11)
     mem.reset(&f, 0usize)
