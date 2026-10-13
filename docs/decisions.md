@@ -40428,3 +40428,7 @@ The Mail image grew past 1.6 MB (every library merge adds SVG, format and networ
 ## D3920 — G012: text size 8 pt and the grid frame
 
 The v3 text is Segoe UI 8 pt (16 px em at 150 %: cap height 12 px, "Name" 40 px ink), not the 9 pt first assumed, so `gridlook.v3().text_size` is 10.6667 logical px. With `look.on` the grid draws a 1 px #828790 frame round its parts and they touch (gap 0). The remaining text difference is that v3 uses GDI-hinted integer advances (P021): the shaper needs an integer-advance mode before strings match to the pixel. Screenshot: `docs/grid-parity/S01-compare-after-text-frame.png`.
+
+## D3921 — G012: text size by measured ink width; no integer-advance mode
+
+D3920 read v3's 8 pt as a 16 px em and blamed GDI-hinted advances for the width difference (P021). That came from a mismeasured string: with the v3 ink widths measured by pixel ("Ach! Hans, Run!" 114, "UNH" 32, "Name" 38, "Edition" 44) the linear advances of Segoe UI fit a 14.5-15 px em to within 2 px, and the Neper renderer needs a text size of 10.35 logical px (about 15.5 px at 150 %) for its ink widths to equal v3's header ("Name" 38, "Edition" 44). So `gridlook.v3().text_size` is 10.35, P021 is withdrawn and the shaper keeps linear advances. Screenshot: `docs/grid-parity/S01-compare-after-text-size.png`.
