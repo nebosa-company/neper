@@ -25,6 +25,7 @@ use e.gfx.geometry
 use e.gfx.image
 use e.text.shape
 use e.gfx.scene
+use e.ui.collection
 use e.ui.control
 use e.ui.input
 use e.gfx.paint
@@ -1372,6 +1373,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ink_w != 27.0 || ink_h != 32.0 { os.exit(451) }
     if ink.x0 > 0.1 || ink.x1 < 26.3 || ink.x1 > 26.5 { os.exit(452) }
     if ink.y0 < 5.8 || ink.y0 > 5.95 || ink.y1 < 26.0 || ink.y1 > 26.2 { os.exit(453) }
+    // 22. the v3 trace of a sort: the current card stays current and the view moves the least that
+    // shows it (docs/grid-parity/traces.json S2)
+    if rebuild(app, 5usize, false) != ok { os.exit(460) }
+    mem.reset(&f, 0usize)
+    let (root40, build40_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build40_error != ok { os.exit(461) }
+    if settle(&harness, root40, trace_clock) != ok { os.exit(462) }
+    trace_clock += 2000000000i64
+    let kept_row = grid15.selected_row
+    let old_at = grid15.position
+    // a different order: by the second column, descending
+    if rebuild(app, 3usize, true) != ok { os.exit(463) }
+    mem.reset(&f, 0usize)
+    let (root41, build41_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build41_error != ok { os.exit(464) }
+    if settle(&harness, root41, trace_clock) != ok { os.exit(465) }
+    if !grid15.has_selection || grid15.selected_row != kept_row { os.exit(466) }
+    if !grid15.has_position || grp.visible_row(&app.grouping, grid15.position) != kept_row { os.exit(467) }
+    // the view shows it
+    let shown_top = usize(grid15.offset / grid15.row_height)
+    if grid15.position < shown_top || grid15.position >= shown_top + grid15.page_rows + 1usize { os.exit(468) }
+    // 23. a double tap on a column's resize handle asks for its best fit (v3 trace A1): the width becomes
+    // the content's, here far under the 300 given (the harness has no fonts, so the least)
+    let before_fit = dg.column_width(&grid15, 0usize)
+    if dg.on_resize(mem.cast[*void](&grid15), collection.ColumnResize { column: 0usize, width: -1.0 }) != ok { os.exit(470) }
+    mem.reset(&f, 0usize)
+    let (root42, build42_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build42_error != ok { os.exit(471) }
+    if dg.column_width(&grid15, 0usize) >= before_fit { os.exit(472) }
     os.exit(0)
     ret ok
 }
