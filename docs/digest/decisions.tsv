@@ -2529,4 +2529,5 @@ D3947	1295	G012: the row indicator's header is a button with the quick column li
 D3948	469	G012: the footer counts under the first text column
 D3949	893	G012: column hints on the header
 D3950	867	G012: popup mnemonics and keys, and the inactive selection
-D3951	575	G012: the Alignment submenu
+D3951	576	G012: the Alignment submenu
+D3952	690	G012: a chip removes its grouping, a centred header title, hints for the other grids
