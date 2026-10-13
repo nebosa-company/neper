@@ -515,6 +515,15 @@ fn update_image(r: *Renderer, texture: TextureId, image_view: image.ConstImage) 
     ret ok
 }
 
+// The size in texels of an uploaded image (a `DrawImage.source` is in texels).
+fn image_size(r: *Renderer, texture: TextureId) -> (u32, u32, err) {
+    let (s, state_error) = renderer_state(r)
+    if state_error != ok { ret (0u32, 0u32, state_error) }
+    let (slot, slot_error) = texture_slot(s, texture)
+    if slot_error != ok { ret (0u32, 0u32, slot_error) }
+    ret (s.textures[slot].width, s.textures[slot].height, ok)
+}
+
 fn release_image(r: *Renderer, texture: TextureId) -> err {
     let (s, state_error) = renderer_state(r)
     if state_error != ok { ret state_error }

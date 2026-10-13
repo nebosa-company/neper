@@ -1162,6 +1162,53 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // the four navigator buttons exist under their keys
     if testing.by_key(&harness, dg.navigator_key(&grid12) + 1u64).count == 0usize { os.exit(383) }
     if testing.by_key(&harness, dg.navigator_key(&grid12) + 4u64).count == 0usize { os.exit(384) }
+    // 17. the group box and the drawn expanders of the measured look, with the grid grouped
+    let (made14, grid14_error) = dg.create(a, &app.tbl, &app.grouping, look_specs[0..], events, 10200u64)
+    if grid14_error != ok { os.exit(395) }
+    var grid14 = made14
+    dg.set_look(&grid14, gl.v3())
+    dg.show_group_box(&grid14, true)
+    app.group_rarity = true
+    if rebuild(app, 5usize, false) != ok { os.exit(396) }
+    mem.reset(&f, 0usize)
+    let (root32, build32_error) = dg.build(&f, &grid14, &theme, 400.0)
+    if build32_error != ok { os.exit(397) }
+    if settle(&harness, root32, 91000000000i64) != ok { os.exit(398) }
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(399) }
+    // 18. a picture of v3's data folder drawn by an image node keeps its pixels (skipped when absent)
+    let (symbol, symbol_error) = gl.load_picture(a, widget.renderer_of(&runtime), "D:/repos/mtg.studio.src/version-3/bin/data/png/symbols/2.png")
+    if symbol_error == gl.BadPicture { os.exit(400) }
+    if symbol_error == ok {
+        mem.reset(&f, 0usize)
+        let (picture, picture_error) = control.image(&f, 10300u64, symbol, 36.0, 36.0, .Fill, "")
+        if picture_error != ok { os.exit(401) }
+        if settle(&harness, picture, 92000000000i64) != ok { os.exit(402) }
+        let (shot_p, shot_p_error) = testing.snapshot(&harness, a)
+        if shot_p_error != ok { os.exit(403) }
+        let (pic_b, pic_f) = bounds(&harness, &runtime, 10300u64)
+        if !pic_f { os.exit(404) }
+        // an image node draws the whole picture, not one texel: the symbol's middle (dark grey ring and
+        // numeral) differs from its transparent corner
+        let centre = px(pic_b.x + 18.0, pic_b.y + 18.0)
+        let corner = px(pic_b.x + 1.0, pic_b.y + 1.0)
+        var distinct = 0usize
+        var channel = 0usize
+        while channel < 3usize {
+            if shot_p.pixels[centre + channel] != shot_p.pixels[corner + channel] { distinct += 1usize }
+            channel += 1usize
+        }
+        if distinct == 0usize { os.exit(405) }
+        // and its left and right halves differ somewhere along the middle row
+        var varied = false
+        var pic_x: f32 = 2.0
+        while pic_x < 34.0 {
+            let at = px(pic_b.x + pic_x, pic_b.y + 18.0)
+            if shot_p.pixels[at] != shot_p.pixels[centre] { varied = true }
+            pic_x += 1.0
+        }
+        if !varied { os.exit(406) }
+    }
     os.exit(0)
     ret ok
 }

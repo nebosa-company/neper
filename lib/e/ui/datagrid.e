@@ -127,6 +127,7 @@ type Grid = struct {
     filter_visible: bool,
     bands: []const Band,
     navigator_visible: bool,
+    group_box_visible: bool,
     has_position: bool,
     position: usize,
     read_only: bool,
@@ -279,6 +280,10 @@ fn set_look(grid: *Grid, look: gl.Look) {
     grid.look = look
     if look.on { grid.row_height = look.row_height }
 }
+
+// The group box above the header: a chip for each grouping level (the field and its sort
+// triangle), as in v3.
+fn show_group_box(grid: *Grid, on: bool) { grid.group_box_visible = on }
 
 fn set_hidden(grid: *Grid, spec: usize, hide: bool) {
     if spec >= grid.all.len { ret }
@@ -1022,9 +1027,20 @@ fn source_key(ctx: *void, index: usize) -> widget.Key {
 }
 
 // A group row: first column "[+] key (count)", the summaries under their columns.
+// The shown column that carries a group row's label: the first one that is not an indicator or
+// a star (a narrow column of marks cannot hold the text).
+fn label_column(grid: *const Grid) -> usize {
+    var at = 0usize
+    while at < grid.specs.len {
+        if grid.specs[at].kind != CellKind.Indicator && grid.specs[at].kind != CellKind.Star { ret at }
+        at += 1usize
+    }
+    ret 0usize
+}
+
 fn group_cell(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: *widget.Node) -> err {
     let s = grid.specs[spec]
-    if spec == 0usize {
+    if spec == label_column(grid) {
         let (b, b_error) = str.builder(a, 120usize)
         if b_error != ok { ret b_error }
         var sb = b
@@ -1034,11 +1050,19 @@ fn group_cell(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: *widge
             if str.push(&sb, "      ") != ok { ret control.TooLarge }
             indent += 1usize
         }
-        var mark = "[+] "
-        if grp.is_expanded(grid.g, group) { mark = "[-] " }
-        if str.push(&sb, mark) != ok { ret control.TooLarge }
+        // with the measured look the expander is drawn (a box) before the text
+        let drawn_mark = grid.look.on
+        if !drawn_mark {
+            var mark = "[+] "
+            if grp.is_expanded(grid.g, group) { mark = "[-] " }
+            if str.push(&sb, mark) != ok { ret control.TooLarge }
+        }
         let key_column = grid.g.levels[level].column
         let key_row = grp.group_key_row(grid.g, group)
+        if grid.look.on {
+            // v3's "Field : value (Count: n)"
+            if str.push(&sb, table.column_name(grid.t, key_column)) != ok || str.push(&sb, " : ") != ok { ret control.TooLarge }
+        }
         if table.is_null(grid.t, key_column, key_row) {
             if str.push(&sb, "(none)") != ok { ret control.TooLarge }
         } else {
@@ -1049,8 +1073,29 @@ fn group_cell(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: *widge
                 if str.push_i64(&sb, i64(key_row)) != ok { ret control.TooLarge }
             }
         }
-        if str.push(&sb, "  (") != ok || str.push_usize(&sb, grp.group_count(grid.g, group)) != ok || str.push(&sb, ")") != ok { ret control.TooLarge }
-        ret text_node(a, grid, str.done(&sb), true, .Text, out)
+        if grid.look.on {
+            if str.push(&sb, " (Count: ") != ok || str.push_usize(&sb, grp.group_count(grid.g, group)) != ok || str.push(&sb, ")") != ok { ret control.TooLarge }
+        } else {
+            if str.push(&sb, "  (") != ok || str.push_usize(&sb, grp.group_count(grid.g, group)) != ok || str.push(&sb, ")") != ok { ret control.TooLarge }
+        }
+        var label: widget.Node = zero
+        let label_error = text_node(a, grid, str.done(&sb), !grid.look.on, .Text, &label)
+        if label_error != ok { ret label_error }
+        if !grid.look.on {
+            *out = label
+            ret ok
+        }
+        var box_shape = gl.Shape.PlusBox
+        if grp.is_expanded(grid.g, group) { box_shape = gl.Shape.MinusBox }
+        let (box, box_error) = gl.mark(a, box_shape, gl.rgb(0x919191u32), gl.rgb(0xFFFFFFu32), 11.0, 11.0)
+        if box_error != ok { ret box_error }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret control.TooLarge }
+        // layered, not a row: a narrow first column must clip the label, not fail the layout
+        pair[0usize] = box
+        pair[1usize] = widget.padded(0u64, 17.0, 0.0, 0.0, 0.0, style.defaults(), one(a, label))
+        *out = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
+        ret ok
     }
     if s.summary >= 0 && usize(s.summary) < grid.g.specs.len {
         let (text, text_error) = summary_text(a, s, grp.group_summary(grid.g, group, usize(s.summary)))
@@ -1467,6 +1512,38 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     ret (widget.flex(footer_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, band_style, cells[0usize..grid.specs.len]), ok)
 }
 
+// The group box: a panel with a white chip (field name and triangle) for each grouping level.
+fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let n = grid.g.level_count
+    let (chips, chips_error) = mem.alloc[widget.Node](a, n + 1usize)
+    if chips_error != ok { ret (zero, control.TooLarge) }
+    var i = 0usize
+    while i < n {
+        var title: widget.Node = zero
+        let title_error = text_node(a, grid, table.column_name(grid.t, grid.g.levels[i].column), false, .Text, &title)
+        if title_error != ok { ret (zero, title_error) }
+        let (triangle, triangle_error) = gl.mark(a, .UpOutline, gl.rgb(0xB9B9B9u32), gl.rgb(0xFFFFFFu32), 9.0, 8.0)
+        if triangle_error != ok { ret (zero, triangle_error) }
+        let (inside, inside_error) = mem.alloc[widget.Node](a, 2usize)
+        if inside_error != ok { ret (zero, control.TooLarge) }
+        inside[0usize] = title
+        inside[1usize] = triangle
+        if grid.look.on && false { inside[1usize] = title }
+        var chip_style = style.defaults()
+        chip_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        chip_style.height = style.Length { Px: 18.7 }
+        let chip_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 14.0 }, style.defaults(), inside[0usize..2usize])
+        chips[i] = widget.padded(0u64, 6.0, 0.0, 6.0, 0.0, chip_style, one(a, chip_row))
+        i += 1usize
+    }
+    var panel = style.defaults()
+    panel.background = paint.Brush { Solid: grid.look.group_row }
+    panel.height = style.Length { Px: 35.0 }
+    panel.width = style.Length { Percent: 100.0 }
+    let chip_flow = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), chips[0usize..n])
+    ret (widget.padded(0u64, 6.7, 7.3, 6.7, 7.3, panel, one(a, chip_flow)), ok)
+}
+
 // The grid as a node of `height` for the body; `theme` must stay valid until the next build.
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     grid.theme = theme
@@ -1490,13 +1567,14 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     if grid.filter_visible { body_height = body_height - 44.0 }
     if grid.bands.len != 0usize { body_height = body_height - 36.0 }
     if grid.navigator_visible { body_height = body_height - 52.0 }
+    if grid.group_box_visible { body_height = body_height - 35.0 }
     var sort_shown = grid.specs.len
     let (sort_at, sort_visible) = display_of(grid, grid.sort_column)
     if sort_visible { sort_shown = sort_at }
     var table_options: collection.TableOptions = zero
     if grid.look.on {
         let lk = grid.look
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width }
     }
     if grid.preview_on {
         table_options.expandable = true
@@ -1513,10 +1591,17 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     if grid.filter_visible { part_count += 1usize }
     if with_bands { part_count += 1usize }
     if grid.navigator_visible { part_count += 1usize }
+    if grid.group_box_visible { part_count += 1usize }
     if part_count == 1usize { ret (body, ok) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, part_count)
     if parts_error != ok { ret (zero, parts_error) }
     var at = 0usize
+    if grid.group_box_visible {
+        let (box_node, box_error) = group_box(a, grid)
+        if box_error != ok { ret (zero, box_error) }
+        parts[at] = box_node
+        at += 1usize
+    }
     if with_bands {
         let (bands_node, bands_error) = band_row(a, grid)
         if bands_error != ok { ret (zero, bands_error) }

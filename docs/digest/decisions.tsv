@@ -2446,4 +2446,5 @@ D3919	1351	G012: the grid reads a measured look (e.ui.gridlook)
 D3920	535	G012: text size 8 pt and the grid frame
 D3921	694	G012: text size by measured ink width; no integer-advance mode
 D2482	1618	A lossy colour-reduction step beside the lossless PNG encoders
-D3922	934	G012: favourite star column, navigator arrows, 1 MB scenes
+D3922	935	G012: favourite star column, navigator arrows, 1 MB scenes
+D3923	1725	G012: group box, group rows, scrollbar, v3's own pictures; image nodes drew one texel

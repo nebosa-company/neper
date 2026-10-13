@@ -11,7 +11,13 @@
 // ponytail: only what the recordings give is here; hover and pressed rows, the focus
 // rectangle and unfocused-window selection colours wait for their recordings.
 
+use e.fs
+use e.io
 use e.mem
+use e.str
+use e.fmt.png as png
+use e.fmt.bmp as bmp
+use e.gfx.image
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -36,7 +42,10 @@ type Look = struct {
     group_row: paint.Color,
     footer_band: paint.Color,
     footer_cell: paint.Color,
-    frame: paint.Color
+    frame: paint.Color,
+    track: paint.Color,
+    thumb: paint.Color,
+    scroll_width: f32
 }
 
 // A colour from 0xRRGGBB.
@@ -66,7 +75,10 @@ fn v3() -> Look {
         group_row: rgb(0xF0F0F0u32),
         footer_band: rgb(0xFFFFDDu32),
         footer_cell: rgb(0xE7EAEAu32),
-        frame: rgb(0x828790u32)
+        frame: rgb(0x828790u32),
+        track: rgb(0xF0F0F0u32),
+        thumb: rgb(0x858585u32),
+        scroll_width: 16.0
     }
 }
 
@@ -78,7 +90,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape }
 
@@ -158,6 +170,43 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let y0 = area.y
     let y1 = area.y + area.height
     let bar = area.width * 0.18
+    if m.shape == Shape.PlusBox || m.shape == Shape.MinusBox {
+        // the group row's expander: a framed square with a plus (collapsed) or a minus (open)
+        let (frame, frame_error) = bar_path(m.arena, x0, y0, x1, y1)
+        if frame_error != ok { ret frame_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: frame, brush: paint.Brush { Solid: m.color } } })
+        let (fill, fill_error) = bar_path(m.arena, x0 + 1.0, y0 + 1.0, x1 - 1.0, y1 - 1.0)
+        if fill_error != ok { ret fill_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: fill, brush: paint.Brush { Solid: m.inner } } })
+        let (dash, dash_error) = bar_path(m.arena, x0 + 2.5, cy - 0.5, x1 - 2.5, cy + 0.5)
+        if dash_error != ok { ret dash_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: dash, brush: paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 1.0) } } })
+        if m.shape == Shape.MinusBox { ret ok }
+        let (upright, upright_error) = bar_path(m.arena, cx - 0.5, y0 + 2.5, cx + 0.5, y1 - 2.5)
+        if upright_error != ok { ret upright_error }
+        ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: upright, brush: paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 1.0) } } })
+    }
+    if m.shape == Shape.UpOutline {
+        // an outlined triangle, the sort direction mark of a group chip
+        let (pb, pb_error) = geometry.path_builder(m.arena, 4usize, 4usize)
+        if pb_error != ok { ret pb_error }
+        var outer = pb
+        try geometry.move_to(&outer, geometry.Point { x: cx, y: y0 })
+        try geometry.line_to(&outer, geometry.Point { x: x1, y: y1 })
+        try geometry.line_to(&outer, geometry.Point { x: x0, y: y1 })
+        try geometry.close_path(&outer)
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&outer), brush: paint.Brush { Solid: m.color } } })
+        let (qb, qb_error) = geometry.path_builder(m.arena, 4usize, 4usize)
+        if qb_error != ok { ret qb_error }
+        var hole = qb
+        let w = area.width * 0.22
+        let h = area.height * 0.26
+        try geometry.move_to(&hole, geometry.Point { x: cx, y: y0 + h })
+        try geometry.line_to(&hole, geometry.Point { x: x1 - w, y: y1 - h * 0.45 })
+        try geometry.line_to(&hole, geometry.Point { x: x0 + w, y: y1 - h * 0.45 })
+        try geometry.close_path(&hole)
+        ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&hole), brush: paint.Brush { Solid: m.inner } } })
+    }
     if m.shape == Shape.Left || m.shape == Shape.Right {
         let (tri, tri_error) = triangle_path(m.arena, x0, y0, x1, y1, m.shape == Shape.Left)
         if tri_error != ok { ret tri_error }
@@ -191,4 +240,37 @@ fn mark(a: *mem.Arena, shape: Shape, color: paint.Color, inner: paint.Color, wid
     size.min_height = style.Length { Px: height }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: size, children: none }, ok)
+}
+
+// ---- pictures from MTG Studio v3's data folder ---------------------------------------------
+
+error BadPicture
+
+fn ends_with_bmp(path: str) -> bool {
+    if path.len < 4usize { ret false }
+    let n = path.len
+    ret (path[n - 3usize] == 98u8 || path[n - 3usize] == 66u8) && (path[n - 2usize] == 109u8 || path[n - 2usize] == 77u8) && (path[n - 1usize] == 112u8 || path[n - 1usize] == 80u8)
+}
+
+// One .png or .bmp file decoded and uploaded to the renderer (`a` may be reset afterwards).
+fn load_picture(a: *mem.Arena, r: *scene.Renderer, path: str) -> (scene.TextureId, err) {
+    let (bytes, read_error) = fs.read_file(a, path, 1048576usize)
+    if read_error != ok { ret (zero, read_error) }
+    var state: io.SliceReader = zero
+    state.data = bytes
+    state.off = 0usize
+    var decoded: image.Image = zero
+    if ends_with_bmp(path) {
+        let (bitmap, bitmap_error) = bmp.decode(a, io.slice_reader(&state), bmp.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64 })
+        if bitmap_error != ok { ret (zero, BadPicture) }
+        decoded = bitmap
+    } else {
+        let (picture, picture_error) = png.decode(a, io.slice_reader(&state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
+        if picture_error != ok { ret (zero, BadPicture) }
+        decoded = picture
+    }
+    let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+    if view_error != ok { ret (zero, BadPicture) }
+    let (texture, upload_error) = scene.upload_image(r, view)
+    ret (texture, upload_error)
 }
