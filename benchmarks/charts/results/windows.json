@@ -3,54 +3,97 @@
   "machine": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
   "python": "3.12.10",
   "matplotlib": "3.9.4",
-  "runs": 9,
+  "runs": 5,
   "neper": {
     "layout": {
       "charts": 200,
-      "ms": 30.8938,
+      "ms": 46.6982,
       "bytes": 0
     },
     "svg": {
       "charts": 200,
-      "ms": 500.8478,
+      "ms": 785.5804,
       "bytes": 6044803
     },
     "raster": {
       "charts": 200,
-      "ms": 398.7496,
+      "ms": 674.6905,
       "bytes": 0
     },
     "png": {
       "charts": 200,
-      "ms": 4004.1523,
-      "bytes": 2800800
+      "ms": 2205.096,
+      "bytes": 2266800
     },
     "process": {
       "charts": 0,
-      "ms": 4955.34200000111,
+      "ms": 3820.2919000177644,
       "bytes": 0
     }
   },
   "matplotlib_results": {
     "import": {
       "charts": 0,
-      "ms": 526.68559999438,
+      "ms": 1456.1066000023857,
       "bytes": 0
     },
     "svg": {
       "charts": 200,
-      "ms": 3126.82930000301,
+      "ms": 8846.028700005263,
       "bytes": 8877473
     },
     "png": {
       "charts": 200,
-      "ms": 3302.115700003924,
+      "ms": 9169.843300012872,
       "bytes": 2243472
     },
     "process": {
       "charts": 0,
-      "ms": 7165.599200001452,
+      "ms": 19941.804800007958,
       "bytes": 0
     }
+  },
+  "r": {
+    "import": {
+      "charts": 0,
+      "ms": 760.0,
+      "bytes": 0
+    },
+    "ggplot2_svg": {
+      "charts": 200,
+      "ms": 57710.0,
+      "bytes": 8376625
+    },
+    "ggplot2_png": {
+      "charts": 200,
+      "ms": 52360.0,
+      "bytes": 689925
+    },
+    "base_svg": {
+      "charts": 200,
+      "ms": 2640.0,
+      "bytes": 8362280
+    },
+    "base_png": {
+      "charts": 200,
+      "ms": 4710.0,
+      "bytes": 637061
+    },
+    "lattice_svg": {
+      "charts": 200,
+      "ms": 6970.0,
+      "bytes": 8493669
+    },
+    "lattice_png": {
+      "charts": 200,
+      "ms": 10330.0,
+      "bytes": 590253
+    },
+    "process": {
+      "charts": 0,
+      "ms": 132143.7014999974,
+      "bytes": 0
+    },
+    "version": "R version 4.6.1 (2026-06-24 ucrt)"
   }
 }
