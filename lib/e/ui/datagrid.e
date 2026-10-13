@@ -3586,6 +3586,16 @@ fn on_chip_gesture(ctx: *void, g: widget.Gesture) -> err {
         tap.grid.command = CMD_CLEAR_GROUPING
         tap.grid.command_spec = tap.level
         ret ok
+    case .DragEnd as at:
+        // a chip let go outside the group box takes its grouping away (v3)
+        let grid = tap.grid
+        if mem.address_of(grid.theme) == 0usize || mem.address_of(grid.theme.runtime) == 0usize { ret ok }
+        let (box_rect, has_box) = control.keyed_bounds(grid.theme.runtime, grid.key + GROUP_BOX_KEY)
+        if has_box && (at.y < box_rect.y || at.y >= box_rect.y + box_rect.height || at.x < box_rect.x || at.x >= box_rect.x + box_rect.width) {
+            grid.command = CMD_CLEAR_GROUPING
+            grid.command_spec = tap.level
+        }
+        ret ok
     default:
         ret ok
     }
@@ -3616,7 +3626,7 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if chip_taps_error != ok { ret (zero, control.TooLarge) }
         chip_taps[0usize] = ChipTap { grid: grid, level: i }
         let padded_chip = widget.padded(0u64, 6.0, 0.0, 6.0, 0.0, chip_style, one(a, chip_row))
-        chips[i] = widget.region(grid.key + GROUP_BOX_KEY + 16u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&chip_taps[0usize]), invoke: on_chip_gesture }, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_chip))
+        chips[i] = widget.region(grid.key + GROUP_BOX_KEY + 16u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&chip_taps[0usize]), invoke: on_chip_gesture }, gestures: 1u8 | 2u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_chip))
         i += 1usize
     }
     var panel = style.defaults()
