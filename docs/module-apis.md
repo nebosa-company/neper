@@ -1961,7 +1961,7 @@ type Band = struct { title: str, first: usize, count: usize }
 type Nav = enum u8 { First, Prev, Next, Last }
 type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool, choice: bool }
 type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, cell_edited: fn(*void, usize, usize) -> err, value_changed: fn(*void, usize, usize, str, str) -> err, can_edit: fn(*void, usize, usize) -> bool, batch_done: fn(*void, usize) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
-type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, edit_old: [64]u8, edit_old_len: usize, select_open: bool, batch_depth: usize, batch_count: usize, rule_set: *rules.Rules, has_rules: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
+type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, edit_old: [64]u8, edit_old_len: usize, select_open: bool, batch_depth: usize, batch_count: usize, look: gl.Look, rule_set: *rules.Rules, has_rules: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
 error TooManyColumns
 error NotEditable
 error Locked
@@ -1973,6 +1973,7 @@ fn show_sort(grid: *Grid, spec: usize, descending: bool)
 fn clear_selection(grid: *Grid)
 fn relayout(grid: *Grid)
 fn display_of(grid: *const Grid, spec: usize) -> (usize, bool)
+fn set_look(grid: *Grid, look: gl.Look)
 fn set_rules(grid: *Grid, set: *rules.Rules)
 fn clear_rules(grid: *Grid)
 fn set_hidden(grid: *Grid, spec: usize, hide: bool)
@@ -2044,8 +2045,23 @@ version line). A grid owns the widget keys from `key` to
 `key + KEY_BASE + row capacity + group capacity` (the table's own header cells use the keys just
 above `key`; the filter fields use `key + FILTER_KEY + spec`). `set_rules` attaches an `e.ui.gridrules` rule set (`clear_rules` detaches it): each data cell asks it for
 its look by the column's table column and the storage row, and draws the ink, bold, a fill, a data bar
-behind the text and an icon glyph (`v`, `-`, `^`) before it. Not yet: a column chooser
+behind the text and an icon glyph (`v`, `-`, `^`) before it. `set_look` (an `e.ui.gridlook.Look`, `v3()` is MTG Studio v3's measured one) sets the row and header heights, text size, zebra,
+selection, header, group-row and footer colours and column lines; with `on` false the theme's look stays. Not yet: a column chooser
 window; the filter row stands above the header, not below.
+
+### `e.ui.gridlook`
+
+```neper
+type Look = struct { on: bool, row_height: f32, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group_row: paint.Color, footer_band: paint.Color, footer_cell: paint.Color, frame: paint.Color }
+
+fn rgb(value: u32) -> paint.Color
+fn v3() -> Look
+fn theme() -> Look
+```
+
+The measured look of the data grid (`docs/grid-parity/tokens.json`, G012): `v3()` is MTG Studio v3's grid in logical pixels
+and colours (row 19, header 21, zebra #FFFFFF / #EFEFEF, selected #A6D2FF with a #83878B edge, group row #F0F0F0,
+footer band #FFFFDD with #E7EAEA cells); `theme()` is the unset look. Read by `e.ui.datagrid.set_look`.
 
 ### `e.ui.gridrules`
 

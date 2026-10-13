@@ -65,6 +65,7 @@ use e.data.tablegroup as grp
 use e.ui.collection
 use e.ui.control
 use e.ui.gridrules as rules
+use e.ui.gridlook as gl
 use e.ui.input
 use e.gfx.paint
 use e.ui.layout as ui_layout
@@ -145,6 +146,7 @@ type Grid = struct {
     select_open: bool,
     batch_depth: usize,
     batch_count: usize,
+    look: gl.Look,
     rule_set: *rules.Rules,
     has_rules: bool,
     filter_text: []u8,
@@ -270,6 +272,13 @@ fn set_rules(grid: *Grid, set: *rules.Rules) {
 }
 
 fn clear_rules(grid: *Grid) { grid.has_rules = false }
+
+// The look of the grid (`e.ui.gridlook`): row and header heights, text size, colours; the
+// theme's own look when `look.on` is false.
+fn set_look(grid: *Grid, look: gl.Look) {
+    grid.look = look
+    if look.on { grid.row_height = look.row_height }
+}
 
 fn set_hidden(grid: *Grid, spec: usize, hide: bool) {
     if spec >= grid.all.len { ret }
@@ -991,6 +1000,7 @@ fn text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role: styl
     var options = control.text_options()
     options.wrap = .None
     options.color = role
+    if grid.look.on { options.size = grid.look.text_size }
     if bold { options.weight = 700u32 }
     let (node, node_error) = control.text(a, 0u64, text, grid.theme, options)
     if node_error != ok { ret node_error }
@@ -1151,6 +1161,13 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     count += 1usize
     *out = widget.stack(0u64, back, layers[0usize..count])
     ret ok
+}
+
+// The kind of a visible row for the table look: 1 for a group row.
+fn row_kind(ctx: *void, index: usize) -> u8 {
+    let grid = mem.cast[*Grid](ctx)
+    if index < grp.visible_len(grid.g) && grp.visible_is_group(grid.g, index) { ret 1u8 }
+    ret 0u8
 }
 
 // ---- events ----------------------------------------------------------------------
@@ -1385,10 +1402,13 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if node_error != ok { ret (zero, node_error) }
         var cell_style = style.defaults()
         cell_style.width = style.Length { Px: grid.columns[at].width }
+        if grid.look.on && text.len != 0usize { cell_style.background = paint.Brush { Solid: grid.look.footer_cell } }
         cells[at] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
         at += 1usize
     }
-    ret (widget.flex(footer_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..grid.specs.len]), ok)
+    var band_style = style.defaults()
+    if grid.look.on { band_style.background = paint.Brush { Solid: grid.look.footer_band } }
+    ret (widget.flex(footer_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, band_style, cells[0usize..grid.specs.len]), ok)
 }
 
 // The grid as a node of `height` for the body; `theme` must stay valid until the next build.
@@ -1418,6 +1438,10 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     let (sort_at, sort_visible) = display_of(grid, grid.sort_column)
     if sort_visible { sort_shown = sort_at }
     var table_options: collection.TableOptions = zero
+    if grid.look.on {
+        let lk = grid.look
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind }
+    }
     if grid.preview_on {
         table_options.expandable = true
         table_options.expanded = grid.preview_open[0usize..grid.preview_count]
