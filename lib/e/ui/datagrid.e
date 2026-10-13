@@ -771,6 +771,8 @@ const CMD_ALIGN_MENU: u8 = 14u8
 const CMD_ALIGN_LEFT: u8 = 15u8
 const CMD_ALIGN_CENTER: u8 = 16u8
 const CMD_ALIGN_RIGHT: u8 = 17u8
+const CMD_GROUP_SWAP: u8 = 18u8
+const CHIP_TAG: u64 = 4398046511104u64
 
 // Which menu: the application's cell menu, a header's, the group box's.
 const MENU_CELL: u8 = 1u8
@@ -3586,6 +3588,16 @@ fn on_chip_gesture(ctx: *void, g: widget.Gesture) -> err {
         tap.grid.command = CMD_CLEAR_GROUPING
         tap.grid.command_spec = tap.level
         ret ok
+    case .DragStart as at:
+        ret widget.begin_drag(tap.grid.theme.runtime, CHIP_TAG + u64(tap.level) + 1u64)
+    case .Drop as d:
+        // a chip dropped on another swaps their order
+        if d.payload <= CHIP_TAG || d.payload > CHIP_TAG + 64u64 { ret ok }
+        let from = usize(d.payload - CHIP_TAG - 1u64)
+        if from == tap.level { ret ok }
+        tap.grid.command = CMD_GROUP_SWAP
+        tap.grid.command_spec = from
+        ret ok
     case .DragEnd as at:
         // a chip let go outside the group box takes its grouping away (v3)
         let grid = tap.grid
@@ -3626,7 +3638,7 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if chip_taps_error != ok { ret (zero, control.TooLarge) }
         chip_taps[0usize] = ChipTap { grid: grid, level: i }
         let padded_chip = widget.padded(0u64, 6.0, 0.0, 6.0, 0.0, chip_style, one(a, chip_row))
-        chips[i] = widget.region(grid.key + GROUP_BOX_KEY + 16u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&chip_taps[0usize]), invoke: on_chip_gesture }, gestures: 1u8 | 2u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_chip))
+        chips[i] = widget.region(grid.key + GROUP_BOX_KEY + 16u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&chip_taps[0usize]), invoke: on_chip_gesture }, gestures: 1u8 | 2u8 | 8u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_chip))
         i += 1usize
     }
     var panel = style.defaults()
