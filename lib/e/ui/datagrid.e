@@ -902,9 +902,6 @@ fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
             n += 1usize
             i += 1usize
         }
-        picks[p] = MenuPick { grid: grid, id: CMD_CHOOSER, spec: 0usize }
-        commands[n] = menu_item("Show Columns...", widget.Submit { ctx: mem.cast[*void](&picks[p]), invoke: on_menu_pick }, true, n != 0usize, "Ctrl+Alt+C")
-        n += 1usize
         ret (commands[0usize..n], ok)
     }
     if grid.menu_kind == MENU_GROUP {
