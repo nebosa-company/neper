@@ -40255,3 +40255,6 @@ Merging lane C's grant line (the Flashlight, entry 31) onto master's (Mail, Wall
 
 ## D2473 — The SSH GCM invocation counter carries without overflowing a byte
 `e.net.ssh` kept the AES-GCM invocation counter (the big-endian u64 in bytes 4..12 of the IV, RFC 5647) by adding one to a byte and testing for zero, which traps `u8 + overflows` on the 256th packet in each direction: `net_ssh gcm256` and `rekey` exited 134 against asyncssh once a session sent enough packets. Both directions now set a 255 byte to zero and carry, or add one and stop. `net_ssh` passes all seven checks (password, key, badpass, badhost, gcm256, gcm128, rekey). The NeperOS SSH app shares the code, so a long session no longer traps.
+
+## D2474 — A kernel body edit keeps `main` when the kernel's signature holds
+After lane E's device-code flattening (D4201) the kernel module's `.em` carries the device code and `main` records only the kernel's Interface, so editing `k.fill`'s body (`1u32 + lid` to `lid + 1u32`) leaves `main` `kept:edges-hold` in both modes where it used to be `rebuilt:edge-changed`. The warm executable is byte-identical to the clean build in debug and release (the block asserts the SHA-256), the size edit still rebuilds `main` (`edge-changed`), and the refusal cases are unchanged. The two runner tables now expect `main=kept:edges-hold` for the `body` step.
