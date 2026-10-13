@@ -101,6 +101,10 @@ var theme_arg: usize = 0usize
 var sizes_arg: bool = false
 // (C126) Whether the settings server runs: every full-screen app is then granted its two endpoints (slots 9 and 10).
 var settings_present: bool = false
+// (D4003) Whether the sensor server runs: every full-screen app is then granted its two endpoints (slots 11 and 12).
+var sensors_present: bool = false
+// (D4007) Whether the background services process runs: every full-screen app is then granted slots 13 and 14.
+var services_present: bool = false
 // (C124) One more archive entry mapped into the process started next, after its extra files: the shell's
 // signed app package (an entry that begins "NPKG"), or 0 for none.
 var tail_file: usize = 0usize
@@ -372,6 +376,7 @@ fn exception(raw: *void) {
             if intid == timer.INTID {
                 timer.rearm(TICKS_PER_SECOND)
                 ticks += 1usize
+
                 // The timer interrupt is delivered to a user driver too (D2128): notification
                 // 0 is signalled, waking any thread waiting on it before the switch.
                 thread.signal_notification(0usize, 1usize)
@@ -804,6 +809,17 @@ fn launch(frame: *a64.Frame) {
         }
         thread.grant(child, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
         thread.grant(child, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize)
+        // (D4003) The kernel stamps the app's number on its words to the sensor server; a launched app is its archive
+        // entry, an installed one 99 (which the server holds no sensor for).
+        thread.set_app(child, index)
+        if sensors_present {
+            thread.grant(child, 11usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 14usize)
+            thread.grant(child, 12usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 15usize)
+        }
+        if services_present {
+            thread.grant(child, 13usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 16usize)
+            thread.grant(child, 14usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 17usize)
+        }
         if settings_present {
             thread.grant(child, 9usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 12usize)
             thread.grant(child, 10usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 13usize)
@@ -834,8 +850,10 @@ fn launch(frame: *a64.Frame) {
         // (C136) The Recorder (entry 34) keeps its recordings as WAV files in /Recordings.
         // (C138) The Steps app (entry 36) keeps today's count and the goal in /steps.
         // (C139) The Blocks app (entry 37) keeps the best score in /blocks.
+        // (C163) The Flashlight (entry 31) keeps its saved patterns and speed in /flashlight.
         // (C158) The Mail app (entry 26) saves an attachment into /Downloads.
         if index == 38usize || index == 26usize || index == 39usize || index == 19usize || index == 41usize || index == 32usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize {
+        if index == 38usize || index == 26usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize || index == 31usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
@@ -1218,8 +1236,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // network server (slots 3 and 4); the Secure app alone is granted the filesystem's (slots 5 and 6) and
             // the random server's (slots 7 and 8). A machine without a device starts nothing for it, and an app that
             // asks for what it was not granted gets the kernel's refusal.
-            if archive_count >= 45usize {
-                if has_word(bootargs, "nettest") && archive_count >= 46usize { driver_flag = 1usize }
+            // (D4003, D4007) Entry 44 is the sensor server and entry 45 the background services process (the table's
+            // `sensor_server` and `bgservice`, after the two network servers), so the trust store is entry 46 and the
+            // test root entry 47.
+            if archive_count >= 47usize {
+                if has_word(bootargs, "nettest") && archive_count >= 48usize { driver_flag = 1usize }
                 last_server_index = thread.MAX_THREADS
                 let (rng_bar, rng_error) = start_driver_server(a, archive_base + archive_offset[42usize], archive_length[42usize], 8usize, pci_host, next_bar, pci.VIRTIO_ENTROPY, "rng")
                 if rng_error != ok { ret rng_error }
@@ -1229,9 +1250,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     rng_present = true
                 }
                 // The network server's arguments: the trust store (and the test root).
-                extra_first = 44usize
+                extra_first = 46usize
                 extra_count = 1usize
-                if has_word(bootargs, "nettest") && archive_count >= 46usize { extra_count = 2usize }
+                if has_word(bootargs, "nettest") && archive_count >= 48usize { extra_count = 2usize }
                 driver_pool_bytes = 1048576usize
                 driver_arena_bytes = 8388608usize
                 last_server_index = thread.MAX_THREADS
@@ -1286,8 +1307,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 thread.grant(comp_app, 9usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 12usize)
                 thread.grant(comp_app, 10usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 13usize)
                 settings_present = true
-                // Launched apps take ASIDs above the servers'.
+                // (D4003) The sensor server: archive entry 44, serving endpoints 14 (requests, stamped with the sender's
+                // app number by the kernel) and 15 (replies). It holds the filesystem's ends (slots 4, 5: its permission
+                // overrides in /permits) and the settings server's (slots 9, 10, as an app holds them: the Location
+                // switch). Every app is granted its two ends in slots 11 (requests) and 12 (replies).
                 next_asid = 11usize
+                let (sensor_server, sensor_server_error) = start_process(archive_base + archive_offset[44usize], archive_length[44usize], "sensor")
+                if sensor_server_error != ok { ret sensor_server_error }
+                thread.grant(sensor_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 14usize)
+                thread.grant(sensor_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 15usize)
+                if fs_present {
+                    thread.grant(sensor_server, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
+                    thread.grant(sensor_server, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
+                }
+                thread.grant(sensor_server, 9usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 12usize)
+                thread.grant(sensor_server, 10usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 13usize)
+                thread.stamp_endpoint(14usize)
+                sensors_present = true
+                // The shell is app number 1 to the sensor server, and holds its ends for the lock screen's fingerprint pad.
+                thread.set_app(comp_app, 1usize)
+                thread.grant(comp_app, 11usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 14usize)
+                thread.grant(comp_app, 12usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 15usize)
+                // (D4007) The background services process: archive entry 45, endpoints 16 (requests, stamped) and 17
+                // (replies), the status service's request end (slot 6), app number 2 (the sensor hub's step counter's
+                // keeper, and the stamp the settings server's pushes carry as 0). Every app is granted its two ends in
+                // slots 13 and 14; the settings server may send to it (slot 11).
+                next_asid = 12usize
+                let (services, services_error) = start_process(archive_base + archive_offset[45usize], archive_length[45usize], "services")
+                if services_error != ok { ret services_error }
+                thread.grant(services, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 16usize)
+                thread.grant(services, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 17usize)
+                thread.grant(services, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 3usize)
+                thread.grant(services, 11usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 14usize)
+                thread.grant(services, 12usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 15usize)
+                thread.set_app(services, 2usize)
+                thread.grant(settings_server, 11usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 16usize)
+                thread.stamp_endpoint(16usize)
+                services_present = true
+                // Launched apps take ASIDs above the servers'.
+                next_asid = 13usize
             }
         }
     }

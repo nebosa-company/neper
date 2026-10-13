@@ -24,6 +24,7 @@ use vaultfs
 use ui
 use theme
 use sysettings
+use sensorclient
 use netproto
 
 const NONE: usize = 99usize
@@ -65,6 +66,11 @@ const NOTIFY: usize = 26usize
 const SETTINGS: usize = 40usize
 // Time zone: 0 UTC, 1 Berlin (+1), 2 New York (-5), 3 Tokyo (+9). The shell's clock and date follow it.
 const TIMEZONE: usize = 34usize
+// (C175, C168) How long a copy stays on the clipboard (0 30 s, 1 a minute, 2 five minutes, 3 fifteen), and the profile
+// the step counter's calories follow (a height and a weight, four steps each).
+const CLIPBOARD: usize = 35usize
+const HEIGHT: usize = 36usize
+const WEIGHT: usize = 37usize
 // The Settings icon's index on the home screen: the one app that cannot be uninstalled.
 const SETTINGS_ICON: usize = 19usize
 
@@ -212,6 +218,9 @@ fn setting_name(setting: usize) -> str {
     if setting == BLUETOOTH { ret "Bluetooth" }
     if setting == ROTATE { ret "Auto-rotate" }
     if setting == TIMEZONE { ret "Time zone" }
+    if setting == CLIPBOARD { ret "Clear clipboard after" }
+    if setting == HEIGHT { ret "Height" }
+    if setting == WEIGHT { ret "Weight" }
     ret "Notifications"
 }
 
@@ -219,6 +228,7 @@ fn setting_name(setting: usize) -> str {
 // notification switches (NOTIFY + app) are listed under the app's name.
 fn setting_label(setting: usize) -> str {
     if setting == TIMEZONE { ret "Time zone" }
+    if setting > TIMEZONE { ret setting_name(setting) }
     if setting >= NOTIFY { ret notify_app(setting - NOTIFY) }
     ret setting_name(setting)
 }
@@ -251,6 +261,8 @@ fn setting_words(setting: usize) -> str {
     if setting == BLUETOOTH { ret "pair wireless headphones devices" }
     if setting == ROTATE { ret "orientation landscape portrait screen" }
     if setting == TIMEZONE { ret "region utc berlin new york tokyo clock date" }
+    if setting == CLIPBOARD { ret "copy paste clipboard erase privacy" }
+    if setting == HEIGHT || setting == WEIGHT { ret "profile body calories steps fitness" }
     ret "alerts messages"
 }
 
@@ -260,7 +272,8 @@ fn setting_page(setting: usize) -> usize {
     if setting == BRIGHTNESS || setting == DARK || setting == ADAPTIVE || setting == TIMEOUT || setting == FONT { ret 1usize }
     if setting == MEDIA || setting == RING || setting == ALARM || setting == DND || setting == VIBRATE { ret 2usize }
     if setting == SAVER { ret 3usize }
-    if setting == TIMEZONE { ret 9usize }
+    if setting == TIMEZONE || setting == HEIGHT || setting == WEIGHT { ret 9usize }
+    if setting == CLIPBOARD { ret 7usize }
     if setting >= NOTIFY { ret 5usize }
     if setting == LOCATION || setting == CAMERA_ACCESS || setting == MIC_ACCESS || setting == FINGERPRINT || setting == LOCK { ret 7usize }
     if setting == HOUR24 { ret 9usize }
@@ -696,6 +709,23 @@ fn chips_row(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     ret ok
 }
 
+// (C176) A permission of one app (the sensor server holds it, one bit a kind and an app): a switch whose state is the app's
+// own, with the system-wide switch it also needs noted beneath.
+fn perm_row(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, label: str, caption: str, kind: usize, program: usize, y: f32) -> err {
+    let on = sensorclient.permitted(program, kind)
+    try card(a, builder, 16.0, y + 2.0, 380.0, 64.0, 18.0, surface())
+    try put(a, builder, faces.jost, 18.0, label, 32.0, y + 12.0, ink())
+    if caption.len > 0usize { try put(a, builder, faces.grotesk, 12.0, caption, 32.0, y + 40.0, muted()) }
+    var track = soft()
+    if on { track = amber() }
+    try card(a, builder, 328.0, y + 20.0, 52.0, 28.0, 14.0, track)
+    var knob_x: f32 = 342.0
+    if on { knob_x = 366.0 }
+    try disc(a, builder, knob_x, y + 34.0, 11.0, paint.Color { red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0 })
+    hit(s, 8000usize + kind, 16.0, y + 2.0, 380.0, 64.0)
+    ret ok
+}
+
 fn info_row(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, label: str, value: str, y: f32) -> err {
     try card(a, builder, 16.0, y + 2.0, 380.0, 50.0, 16.0, surface())
     try put(a, builder, faces.grotesk, 13.0, label, 32.0, y + 17.0, muted())
@@ -925,6 +955,8 @@ fn draw_security(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
     try toggle_row(a, builder, s, faces, CAMERA_ACCESS, "Apps can use the camera", y)
     y += 68.0
     try toggle_row(a, builder, s, faces, MIC_ACCESS, "Apps can use the microphone", y)
+    y += 68.0
+    try chips_row(a, builder, s, faces, CLIPBOARD, y, "30 s", "1 min", "5 min", "15 min")
     ret ok
 }
 
@@ -947,6 +979,10 @@ fn draw_system(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     try info_row(a, builder, faces, "Language", "English (United States)", y)
     y += 54.0
     try chips_row(a, builder, s, faces, TIMEZONE, y, "UTC", "Berlin", "New York", "Tokyo")
+    y += 92.0
+    try chips_row(a, builder, s, faces, HEIGHT, y, "155 cm", "165 cm", "175 cm", "185 cm")
+    y += 92.0
+    try chips_row(a, builder, s, faces, WEIGHT, y, "55 kg", "70 kg", "85 kg", "100 kg")
     y += 92.0
     try card(a, builder, 16.0, y + 8.0, 380.0, 52.0, 26.0, amber())
     try centred(a, builder, faces.jost, 17.0, "Reset settings", 206.0, y + 22.0, ink())
@@ -1085,12 +1121,14 @@ fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     }
     try section(a, builder, faces, "Access", y)
     y += 34.0
-    try info_row(a, builder, faces, "Camera", on_off(is_on(s, CAMERA_ACCESS)), y)
-    y += 54.0
+    try perm_row(a, builder, s, faces, "Camera", "Needs Camera access in Security & privacy", sensorclient.KIND_CAMERA, program, y)
+    y += 68.0
     try info_row(a, builder, faces, "Microphone", on_off(is_on(s, MIC_ACCESS)), y)
     y += 54.0
-    try info_row(a, builder, faces, "Location", on_off(is_on(s, LOCATION)), y)
-    y += 70.0
+    try perm_row(a, builder, s, faces, "Location", "Needs Location in Security & privacy", sensorclient.KIND_LOCATION, program, y)
+    y += 68.0
+    try perm_row(a, builder, s, faces, "Storage", "Files this app may keep", sensorclient.KIND_STORAGE, program, y)
+    y += 74.0
     if pos == SETTINGS_ICON {
         try put(a, builder, faces.grotesk, 14.0, "A system app: it cannot be uninstalled.", 20.0, y + 14.0, fg_dim())
     } else {
@@ -1235,6 +1273,20 @@ fn remove_dynamic(s: *State, k: usize) {
 }
 
 fn act(s: *State, id: usize, x: f32) -> bool {
+    if s.page == DETAIL && s.detail < icons.APP_COUNT && id >= 8000usize && id < 8008usize {
+        // A permission of this app flipped: kept by the sensor server, only this app (Settings) may say so.
+        let program = icons.program_of(s.detail)
+        let kind = id - 8000usize
+        let was = sensorclient.permitted(program, kind)
+        let taken = sensorclient.set_permit(program, kind, !was)
+        say("settings permission ")
+        say(icons.app_label(s.detail))
+        if kind == sensorclient.KIND_CAMERA { say(" camera ") }
+        if kind == sensorclient.KIND_LOCATION { say(" location ") }
+        if kind == sensorclient.KIND_STORAGE { say(" storage ") }
+        if taken && !was { say("on\n") } else if taken { say("off\n") } else { say("refused\n") }
+        ret true
+    }
     if s.page == DETAIL && s.detail >= icons.APP_COUNT {
         if id == 500usize {
             s.page = 6usize

@@ -85,6 +85,8 @@ fn default_value(index: usize) -> usize {
         if index == 31usize { ret 0usize }
         ret 1usize
     }
+    // (C168) The profile starts at 165 cm and 70 kg (chip 1 of each).
+    if index == 36usize || index == 37usize { ret 1usize }
     ret 0usize
 }
 

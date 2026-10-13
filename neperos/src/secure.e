@@ -1637,6 +1637,8 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if id == 150usize {
         lock_now(s)
         ui.say("secure locked\n")
+        // (C175) What Secure put on the clipboard goes with the lock.
+        let cleared = sysettings.clip_clear(1usize)
         ret true
     }
     if id == 411usize || id == 412usize {

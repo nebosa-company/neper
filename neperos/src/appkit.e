@@ -34,7 +34,7 @@ const ABS_Y: usize = 1usize
 const ANSWER_NONE: usize = 0usize
 const ANSWER_LATER: usize = 4usize
 
-type Kit = struct { device: *gpu.Device, win: window.Window, drawable: scene.Target, renderer: scene.Renderer, faces: text.Faces, has_fonts: bool, scale: f32, logical_h: f32, previous: scene.SceneId, has_previous: bool, x: usize, y: usize, frame: usize, frame_mark: usize }
+type Kit = struct { device: *gpu.Device, win: window.Window, drawable: scene.Target, renderer: scene.Renderer, faces: text.Faces, has_fonts: bool, scale: f32, logical_h: f32, previous: scene.SceneId, has_previous: bool, x: usize, y: usize, frame: usize, frame_mark: usize, down: bool }
 
 // A tap, in dp, or the end of the event stream.
 // A tick (type 0xF1, every 500 ms when the input server has ticks on) carries the monotonic
@@ -72,7 +72,7 @@ fn open(a: *mem.Arena, args: []str, first_font: usize, title: str) -> (Kit, err)
         say("\n")
     }
     let scale = f32(os.SURFACE_W) / 412.0
-    kit = Kit { device: device, win: w, drawable: drawable, renderer: renderer, faces: faces, has_fonts: has_fonts, scale: scale, logical_h: f32(os.SURFACE_H) / scale, previous: zero, has_previous: false, x: 0usize, y: 0usize, frame: 0usize, frame_mark: 0usize }
+    kit = Kit { device: device, win: w, drawable: drawable, renderer: renderer, faces: faces, has_fonts: has_fonts, scale: scale, logical_h: f32(os.SURFACE_H) / scale, previous: zero, has_previous: false, x: 0usize, y: 0usize, frame: 0usize, frame_mark: 0usize, down: false }
     // (D2242) Whatever an app allocates after this point is for one frame: `begin` gives it back.
     kit.frame_mark = mem.mark(a)
     ret (kit, ok)
@@ -200,6 +200,61 @@ fn next_tap(kit: *Kit) -> Tap {
         answer(ANSWER_NONE)
     }
     ret Tap { x: 0.0, y: 0.0, ended: true, tick: false, ms: 0usize }
+}
+
+// (D4004) The touch layer: press, move, release and the time that passes between events. `next_touch` waits at most
+// `wait_ms` milliseconds (0 waits for ever) for the routed endpoint; with none it returns TOUCH_TIMEOUT, which the
+// caller does not answer (no event was forwarded to it). Every other kind is answered like a tap: by presenting a
+// frame or `answer(ANSWER_NONE)`. A press carries the position of the finger, a move the new one while it is down, a
+// release the last. A tick still comes every 500 ms.
+const TOUCH_TIMEOUT: usize = 0usize
+const TOUCH_DOWN: usize = 1usize
+const TOUCH_MOVE: usize = 2usize
+const TOUCH_UP: usize = 3usize
+const TOUCH_TICK: usize = 4usize
+const TOUCH_END: usize = 5usize
+const TIMEOUT_BASE: usize = 1000usize
+const TIMED_OUT: usize = 18446744073709551614usize
+const EV_SYN: usize = 0usize
+
+type Touch = struct { kind: usize, x: f32, y: f32, ms: usize }
+
+fn touch_at(kit: *Kit, kind: usize) -> Touch {
+    ret Touch { kind: kind, x: f32(kit.x) * 412.0 / 32768.0, y: f32(kit.y) * kit.logical_h / 32768.0, ms: 0usize }
+}
+
+fn next_touch(kit: *Kit, wait_ms: usize) -> Touch {
+    while true {
+        var slot = NO_SLOT
+        if wait_ms > 0usize { slot = TIMEOUT_BASE + wait_ms }
+        let word = os.recv(ROUTED, slot)
+        if word == TIMED_OUT { ret Touch { kind: TOUCH_TIMEOUT, x: 0.0, y: 0.0, ms: 0usize } }
+        let etype = (word >> 48usize) & LOW16
+        if etype == SENTINEL { ret Touch { kind: TOUCH_END, x: 0.0, y: 0.0, ms: 0usize } }
+        let code = (word >> 32usize) & LOW16
+        let value = word & LOW32
+        if etype == EV_TICK { ret Touch { kind: TOUCH_TICK, x: 0.0, y: 0.0, ms: value } }
+        if etype == EV_ABS && code == ABS_X {
+            kit.x = value
+            if kit.down { ret touch_at(kit, TOUCH_MOVE) }
+        }
+        if etype == EV_ABS && code == ABS_Y {
+            kit.y = value
+            if kit.down { ret touch_at(kit, TOUCH_MOVE) }
+        }
+        if etype == EV_KEY && code == BTN_LEFT {
+            if value == 1usize {
+                kit.down = true
+                ret touch_at(kit, TOUCH_DOWN)
+            }
+            if value == 0usize && kit.down {
+                kit.down = false
+                ret touch_at(kit, TOUCH_UP)
+            }
+        }
+        answer(ANSWER_NONE)
+    }
+    ret Touch { kind: TOUCH_END, x: 0.0, y: 0.0, ms: 0usize }
 }
 
 // Leave the app: tell the compositor a frame will follow (the shell redraws Home once this process

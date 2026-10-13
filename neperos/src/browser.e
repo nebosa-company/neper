@@ -21,6 +21,7 @@ use text
 use ui
 use scenes
 use httpc
+use sysettings
 use vaultfs
 use e.time
 use e.net.cookie as cookie
@@ -1140,6 +1141,11 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try ui.put(a, builder, faces.jost, 17.0, shown, 62.0, 33.0, ui.ink())
     }
     ui.hit(&s.hits, 700usize, 16.0, 22.0, 380.0, 46.0)
+    // (C175) Copy: the address of the page goes to the clipboard (a tap on the right end of the bar).
+    if page != START {
+        try ui.put(a, builder, faces.grotesk, 14.0, "Copy", 350.0, 36.0, ui.muted())
+        ui.hit(&s.hits, 710usize, 340.0, 22.0, 56.0, 46.0)
+    }
     if page >= LIVE_BASE { try draw_live(a, builder, s, faces) }
     if page == START { try draw_start(a, builder, s, faces) }
     if page == NEPER { try draw_neper(a, builder, s, faces) }
@@ -1368,6 +1374,22 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     }
     if id == 803usize {
         s.screen = TABS_SCREEN
+        ret true
+    }
+    if id == 710usize {
+        let page = current_page(s)
+        var address = page_host(page)
+        if page >= LIVE_BASE {
+            let u = s.urls[page - LIVE_BASE]
+            address = ui.join(a, ui.text_of(a, u.host[0usize..], u.host_len), ui.text_of(a, u.path[0usize..], u.path_len), "")
+        }
+        let (wall, wall_error) = time.now()
+        var now_s = 0usize
+        if wall_error == ok { now_s = usize(wall.nanos / 1000000000i64) }
+        let taken = sysettings.clip_set(4usize, now_s, address)
+        ui.say("browser copied ")
+        ui.say_text(address)
+        ui.say("\n")
         ret true
     }
     if id == 804usize {

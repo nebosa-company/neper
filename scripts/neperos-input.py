@@ -113,12 +113,33 @@ def main():
             # argv[11]: taps as "x,y;x,y;..." in the tablet's 0..32767 range (default one tap at the
             # centre); the unified shell takes a tap to unlock, then a tap on an icon (D2205).
             taps = sys.argv[11].split(";") if len(sys.argv) > 11 else ["16384,16384"]
+            # (D4004) Three more forms: "x,y@ms" holds the finger down for ms milliseconds, "x,y>x2,y2" drags it
+            # to (x2, y2) in a few steps before it lifts, and "~s" only waits s seconds (a stream elapsing).
             for tap in taps:
+                if tap.startswith("~"):
+                    time.sleep(float(tap[1:]))
+                    continue
+                hold_ms = 0
+                end = None
+                if "@" in tap:
+                    tap, hold = tap.split("@")
+                    hold_ms = int(hold)
+                if ">" in tap:
+                    tap, to = tap.split(">")
+                    end = [int(v) for v in to.split(",")]
                 x, y = [int(v) for v in tap.split(",")]
                 qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
                     {"type": "abs", "data": {"axis": "x", "value": x}},
                     {"type": "abs", "data": {"axis": "y", "value": y}},
                     {"type": "btn", "data": {"down": True, "button": "left"}}]}})
+                if end is not None:
+                    for step in range(1, 5):
+                        time.sleep(0.4)
+                        qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
+                            {"type": "abs", "data": {"axis": "x", "value": x + (end[0] - x) * step // 4}},
+                            {"type": "abs", "data": {"axis": "y", "value": y + (end[1] - y) * step // 4}}]}})
+                if hold_ms:
+                    time.sleep(hold_ms / 1000.0)
                 qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
                     {"type": "btn", "data": {"down": False, "button": "left"}}]}})
                 # The virtio-input queue holds a few events and drops the rest, and an app redraws

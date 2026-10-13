@@ -28,6 +28,7 @@ use text
 use lunar
 use vaultfs
 use zones
+use bgclient
 
 const ALARM_TAB: usize = 0usize
 const CLOCK_TAB: usize = 1usize
@@ -1084,10 +1085,13 @@ fn act(s: *State, id: usize) -> bool {
         s.alarms[s.ringing].minutes = (alarm.minutes + 5usize) % 1440usize
         s.alarms[s.ringing].on = true
         s.ringing = NONE
+        // (C174) The background ringer is told too: the ring it started stops (its notification stays counted).
+        let snoozed = bgclient.ring_stop()
         ret true
     }
     if id == 351usize {
         s.ringing = NONE
+        let dismissed = bgclient.ring_stop()
         ret true
     }
     // The timer.
@@ -1130,6 +1134,7 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == 414usize {
         s.timer_done = false
+        let timer_dismissed = bgclient.ring_stop()
         ret true
     }
     if id >= 420usize && id < 424usize {
@@ -1253,6 +1258,8 @@ fn on_tick(s: *State) -> bool {
                 say("clock alarm ringing ")
                 say_hhmm(alarm.minutes)
                 say("\n")
+                // The alarm stream's tone through the audio mixer (the background process).
+                let (heard, served) = bgclient.play(bgclient.STREAM_ALARM, bgclient.TONE_ALARM, 600usize)
                 changed = true
             }
             i += 1usize
@@ -1332,6 +1339,8 @@ fn save_state(s: *State) {
     put_word(buf[0usize..64usize], 51usize, usize(started % 4294967296i64))
     put_word(buf[0usize..64usize], 55usize, usize(s.sw_acc_ms))
     let kept = vaultfs.write("/clock", mem.address_of(&buf[0usize]), 64usize)
+    // (C174) The background ringer holds the same schedule, so it rings with this app closed.
+    bgclient.schedule(buf[0usize..64usize])
 }
 
 // Read /clock into `s`; true when there was a file of this version.
@@ -1429,6 +1438,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
         say_hhmm(s.alarms[0usize].minutes)
         say("\n")
     }
+    // (C174) The Clock is in front, so the background ringer leaves ringing to it -- except what rang already: the
+    // alarm or the timer that went off with the app closed is shown ringing, its Snooze and Dismiss to hand.
+    bgclient.foreground(true)
+    save_state(&s)
+    let (ring_index, ring_what, ring_minute) = bgclient.ring_state()
+    if ring_what == bgclient.RING_ALARM && ring_index < s.alarm_total {
+        s.ringing = ring_index
+        s.tab = ALARM_TAB
+        s.editing = NONE
+        say("clock adopted ring alarm ")
+        say_hhmm(s.alarms[ring_index].minutes)
+        say("\n")
+    }
+    if ring_what == bgclient.RING_TIMER {
+        s.timer_running = false
+        s.timer_done = true
+        s.timer_left_ms = 0i64
+        s.tab = TIMER_TAB
+        say("clock adopted ring timer\n")
+    }
     if !show(a, &kit, &s) {
         say("clock present failed\n")
         ret ok
@@ -1450,6 +1479,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         } else if tap.y >= exit_y(&s) {
             say("clock home\n")
+            bgclient.foreground(false)
             appkit.leave()
             running = false
         } else {

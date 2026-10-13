@@ -10,6 +10,7 @@
 // be faster. Held keys, hold, a ghost piece, high scores kept in storage and sound are queued as C139.
 use e.mem
 use e.os
+use e.time
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -20,8 +21,43 @@ use appkit
 use text
 use ui
 use vaultfs
+use bgclient
 
 const NONE: usize = 99usize
+// (C169, D4008) The auto-repeat of a held button: the delay before the first repeat and the interval after it, in ms.
+const REPEAT_DELAY: usize = 250usize
+const REPEAT_EVERY: usize = 90usize
+// The board's rectangle in dp, for the drag and the swipe.
+fn board_x() -> f32 { ret 12.0 }
+fn board_y() -> f32 { ret 84.0 }
+fn board_w() -> f32 { ret 248.0 }
+fn board_h() -> f32 { ret 488.0 }
+
+// While set, the moves of an auto-repeat do not say each step on the serial line.
+var silent: bool = false
+
+fn note(line: str) {
+    if !silent { ui.say(line) }
+}
+
+fn now_ms() -> usize {
+    let (now, now_error) = time.monotonic()
+    if now_error != ok { ret 0usize }
+    ret usize(now.nanos / 1000000i64)
+}
+
+// The milliseconds a row takes to fall at `level`: half a second at the first, a sixth less each level, and fifty (twenty
+// rows a second) from the fifteenth.
+fn fall_ms(level: usize) -> usize {
+    var ms = 500usize
+    var l = 1usize
+    while l < level && ms > 50usize {
+        ms = ms * 85usize / 100usize
+        l += 1usize
+    }
+    if ms < 50usize { ms = 50usize }
+    ret ms
+}
 const COLS: usize = 10usize
 const ROWS: usize = 20usize
 fn cell_size() -> f32 {
@@ -53,6 +89,20 @@ type State = struct {
     top: [5]usize,
     top_count: usize,
     last: usize,
+    // (C169, D4008) The fall's clock (the monotonic ms the next row is due), the button being held and when it repeats
+    // next, a drag on the board (where it began, the cells it has moved, whether it moved at all) and whether the screen
+    // is behind the game (drawn at the next tick).
+    next_fall: usize,
+    held_id: usize,
+    repeat_at: usize,
+    drag_active: bool,
+    drag_x: f32,
+    drag_y: f32,
+    drag_cells: i32,
+    drag_moved: bool,
+    dirty: bool,
+    // Practice: the pieces do not fall by themselves (Down and Drop still move them).
+    manual: bool,
     hits: ui.Hits,
 }
 
@@ -149,6 +199,16 @@ fn draw_from_bag(s: *State) -> usize {
     ret p
 }
 
+// A sound of the game on the media stream: a click as a piece locks, a chime for lines, the alarm's burst at the end.
+fn sound(tone: usize, ms: usize, what: str) {
+    let (peak, served) = bgclient.play(bgclient.STREAM_MEDIA, tone, ms)
+    if served {
+        ui.say("blocks sound ")
+        ui.say(what)
+        ui.say("\n")
+    }
+}
+
 fn spawn(s: *State) {
     s.piece = s.next
     s.next = draw_from_bag(s)
@@ -160,6 +220,7 @@ fn spawn(s: *State) {
     if !fits(s, s.piece, s.rot, s.px, s.py) {
         s.over = true
         ui.say("blocks game over\n")
+        sound(bgclient.TONE_ALARM, 300usize, "over")
         finish_game(s)
     }
 }
@@ -234,7 +295,12 @@ fn lock(s: *State) {
         s.level = 1usize + s.lines / 10usize
         ui.say("blocks lines ")
         ui.say_num(s.lines)
+        ui.say(" score ")
+        ui.say_num(s.score)
         ui.say("\n")
+        sound(bgclient.TONE_CHIME, 200usize, "lines")
+    } else {
+        sound(bgclient.TONE_BEEP, 40usize, "lock")
     }
     spawn(s)
 }
@@ -432,7 +498,14 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     if s.paused { pause_label = "Resume" }
     try ui.pill(a, builder, &s.hits, faces, 105usize, 276.0, 664.0, 120.0, 52.0, pause_label, ui.soft(), 18.0)
     try ui.pill(a, builder, &s.hits, faces, 107usize, 16.0, 732.0, 90.0, 44.0, "Hold", ui.soft(), 16.0)
-    try ui.pill(a, builder, &s.hits, faces, 106usize, 116.0, 732.0, 180.0, 44.0, "Restart", ui.soft(), 16.0)
+    try ui.pill(a, builder, &s.hits, faces, 106usize, 116.0, 732.0, 110.0, 44.0, "Restart", ui.soft(), 16.0)
+    var fall_label = "Fall: auto"
+    var fall_fill = ui.soft()
+    if s.manual {
+        fall_label = "Fall: manual"
+        fall_fill = ui.amber()
+    }
+    try ui.pill(a, builder, &s.hits, faces, 108usize, 236.0, 732.0, 160.0, 44.0, fall_label, fall_fill, 16.0)
     try ui.handle(a, builder)
     ret ok
 }
@@ -462,6 +535,18 @@ fn act(s: *State, id: usize) -> bool {
         ui.say("blocks restart\n")
         ret true
     }
+    if id == 108usize {
+        s.manual = !s.manual
+        if s.manual {
+            // Practice starts a game afresh with the fixed seed (what fell while the mode was being chosen is undone).
+            s.seed = 20261008usize
+            restart(s)
+            ui.say("blocks fall manual\n")
+        } else {
+            ui.say("blocks fall auto\n")
+        }
+        ret true
+    }
     if id == 105usize {
         s.paused = !s.paused
         ui.say("blocks pause\n")
@@ -470,12 +555,12 @@ fn act(s: *State, id: usize) -> bool {
     if s.paused { ret false }
     if id == 100usize {
         if fits(s, s.piece, s.rot, s.px - 1i32, s.py) { s.px -= 1i32 }
-        ui.say("blocks move left\n")
+        note("blocks move left\n")
         ret true
     }
     if id == 102usize {
         if fits(s, s.piece, s.rot, s.px + 1i32, s.py) { s.px += 1i32 }
-        ui.say("blocks move right\n")
+        note("blocks move right\n")
         ret true
     }
     if id == 101usize {
@@ -566,6 +651,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ui.say("\n")
     }
     restart(&s)
+    s.held_id = NONE
+    s.next_fall = now_ms() + fall_ms(s.level)
     if !show(a, &kit, &s) {
         ui.say("blocks present failed\n")
         ret ok
@@ -573,36 +660,131 @@ fn main(a: *mem.Arena, args: []str) -> err {
     ui.say("blocks shown\n")
     var running = true
     while running {
-        let tap = appkit.next_tap(&kit)
-        if tap.ended {
+        // The app wakes when a row is due or a held button repeats; the kernel's receive deadline is the clock.
+        var wait = 0usize
+        if !s.paused && !s.over && (!s.manual || s.held_id != NONE) {
+            let now = now_ms()
+            var due = s.next_fall
+            if s.manual { due = s.repeat_at }
+            if s.held_id != NONE && s.repeat_at < due { due = s.repeat_at }
+            wait = 1usize
+            if due > now { wait = due - now }
+        }
+        let touch = appkit.next_touch(&kit, wait)
+        if touch.kind == appkit.TOUCH_TIMEOUT {
+            let now = now_ms()
+            if s.held_id != NONE && now >= s.repeat_at && !s.paused && !s.over {
+                silent = true
+                if act(&s, s.held_id) { s.dirty = true }
+                silent = false
+                s.repeat_at = now + REPEAT_EVERY
+            }
+            // A pause (or a long frame) leaves the clock behind: it starts again from now, not from where it was.
+            if now >= s.next_fall + 1500usize { s.next_fall = now + fall_ms(s.level) }
+            // Rows that are due fall, a few at most at once (a long frame is not a free run of the board).
+            var rows = 0usize
+            while !s.paused && !s.over && !s.manual && now >= s.next_fall && rows < 4usize {
+                let moved = step_down(&s)
+                s.next_fall += fall_ms(s.level)
+                s.dirty = true
+                rows += 1usize
+                if !moved { rows = 4usize }
+            }
+        } else if touch.kind == appkit.TOUCH_END {
             running = false
-        } else if tap.tick {
-            // The piece falls: a row a tick, and one more for every three levels.
-            if !s.paused && !s.over {
-                var rows = 1usize + (s.level - 1usize) / 3usize
-                while rows > 0usize && !s.over {
-                    let moved = step_down(&s)
-                    rows -= 1usize
-                    if !moved { rows = 0usize }
-                }
+        } else if touch.kind == appkit.TOUCH_TICK {
+            // The half-second tick draws what the game did since the last frame.
+            if s.dirty {
                 if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
+                s.dirty = false
             } else {
                 appkit.answer(appkit.ANSWER_NONE)
             }
-        } else if tap.y >= 896.0 {
-            ui.say("blocks home\n")
-            appkit.leave()
-            running = false
-        } else {
-            let id = ui.hit_at(&s.hits, tap.x, tap.y)
-            if id != ui.NONE && act(&s, id) {
-                if !show(a, &kit, &s) {
-                    ui.say("blocks present failed\n")
+        } else if touch.kind == appkit.TOUCH_DOWN {
+            if touch.y >= 896.0 {
+                ui.say("blocks home\n")
+                appkit.leave()
+                running = false
+            } else if touch.x >= board_x() && touch.x < board_x() + board_w() && touch.y >= board_y() && touch.y < board_y() + board_h() && !s.over && !s.paused {
+                // A finger on the board: a drag moves the piece, a swipe down drops it, a tap turns it.
+                s.drag_active = true
+                s.drag_x = touch.x
+                s.drag_y = touch.y
+                s.drag_cells = 0i32
+                s.drag_moved = false
+                appkit.answer(appkit.ANSWER_NONE)
+            } else {
+                let id = ui.hit_at(&s.hits, touch.x, touch.y)
+                if id != ui.NONE && act(&s, id) {
+                    // Left, Right and Down repeat while the finger stays on them.
+                    if id == 100usize || id == 102usize || id == 103usize { s.held_id = id }
+                    if !show(a, &kit, &s) {
+                        ui.say("blocks present failed\n")
+                        appkit.answer(appkit.ANSWER_NONE)
+                    }
+                    // The delay counts from the end of the frame (a frame outlasts it under emulation, and the
+                    // release of a quick tap is already waiting).
+                    s.repeat_at = now_ms() + REPEAT_DELAY
+                } else {
                     appkit.answer(appkit.ANSWER_NONE)
                 }
-            } else {
-                appkit.answer(appkit.ANSWER_NONE)
             }
+        } else if touch.kind == appkit.TOUCH_MOVE {
+            if s.drag_active && !s.over && !s.paused {
+                // One cell for each 24 dp the finger has moved sideways since it touched down.
+                let cells = i32((touch.x - s.drag_x) / cell_size())
+                var guard = 0usize
+                while s.drag_cells < cells && guard < 12usize {
+                    if fits(&s, s.piece, s.rot, s.px + 1i32, s.py) { s.px += 1i32 }
+                    s.drag_cells += 1i32
+                    s.drag_moved = true
+                    s.dirty = true
+                    guard += 1usize
+                }
+                while s.drag_cells > cells && guard < 24usize {
+                    if fits(&s, s.piece, s.rot, s.px - 1i32, s.py) { s.px -= 1i32 }
+                    s.drag_cells -= 1i32
+                    s.drag_moved = true
+                    s.dirty = true
+                    guard += 1usize
+                }
+            }
+            appkit.answer(appkit.ANSWER_NONE)
+        } else if touch.kind == appkit.TOUCH_UP {
+            var drew = false
+            if s.held_id != NONE {
+                ui.say("blocks released px ")
+                ui.say_num(usize(s.px))
+                ui.say("\n")
+                s.held_id = NONE
+            }
+            if s.drag_active {
+                s.drag_active = false
+                let dx = touch.x - s.drag_x
+                let dy = touch.y - s.drag_y
+                var adx = dx
+                if adx < 0.0 { adx = 0.0 - adx }
+                if s.drag_moved {
+                    ui.say("blocks drag px ")
+                    ui.say_num(usize(s.px))
+                    ui.say("\n")
+                    s.dirty = true
+                } else if dy > 60.0 && dy > 2.0 * adx {
+                    // A swipe down: the piece goes all the way.
+                    ui.say("blocks swipe\n")
+                    if act(&s, 104usize) { s.dirty = true }
+                } else if adx < 10.0 && dy < 10.0 && dy > -10.0 {
+                    // A tap on the board turns the piece.
+                    if act(&s, 101usize) { s.dirty = true }
+                }
+            }
+            if s.dirty {
+                if show(a, &kit, &s) { drew = true }
+                s.dirty = false
+            }
+            if !drew { appkit.answer(appkit.ANSWER_NONE) }
+        } else {
+            appkit.answer(appkit.ANSWER_NONE)
         }
     }
     ret ok
