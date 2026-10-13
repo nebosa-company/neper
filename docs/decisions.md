@@ -40414,3 +40414,7 @@ The Mail image grew past 1.6 MB (every library merge adds SVG, format and networ
 
 ## D2481 — The shell-processes boot does not fix which child runs first
 `shell_init` starts programs A (exit 7) and B (a fault) and reaps both; the block required `el0 prog A exit 7` before `el0 prog B faulting`. With the threads of the current kernel (the sensor and services processes, D4003 and D4007) B is scheduled first, which the property under test -- the fault is contained, both run, and the init reaps A with 7 and B as killed, then finishes -- does not care about. Both runners now require both lines and both children's fault and exit lines anywhere, and the reaping lines in order.
+
+## D3918 — G012: the grid is a pixel-perfect equivalent of the v3 grid
+
+**Requirement (owner, 2026-10-13).** The Neper grid's UI and behaviour must equal MTG Studio v3's, pixel for pixel and input for input; the v5 sample shows many visual inconsistencies, each a defect. Reference is `mtgstudio.exe` recorded in place (or screenshots the owner supplies), per catalogued state at 100/125/150 % DPI; metrics are extracted into one token table instead of tuned per widget; Neper offline renders are compared region by region at a recorded tolerance; v3 event traces (keyboard, mouse, timing, focus after sort/filter/group/edit) are replayed through the UI harness; every difference is a ledger row. G006–G011 cannot score 1 while the ledger has open rows. Recorded in `docs/grid.md` section 1.1 and queued as G012.

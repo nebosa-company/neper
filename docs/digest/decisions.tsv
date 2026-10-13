@@ -2436,4 +2436,9 @@ D4606	2610	L148: single-occurrence exceptions of a recurring series
 D4607	1800	L066: the Markdown viewer at the window: link taps and the clipboard
 D4608	2193	L067: eight more language tailorings of the tree adapter's sibling order, checked against ICU
 D4609	2293	L048: the wire bodies of the SDK calls: query, ec2 and json requests as `x.cloud.awsreq`
-D4610	2230	L048: rest-xml (S3, Route 53) request building in `x.cloud.awsreq`
+D4610	2231	L048: rest-xml (S3, Route 53) request building in `x.cloud.awsreq`
+D2478	550	`e.gpu.cuda` has a fixture of its own
+D2479	599	The QMP socket waits a minute, and the screendump script retries a start-up timeout
+D2480	1004	A program window may take a second level-3 table; the shared surface moves to USER_BASE + 4 MB
+D2481	599	The shell-processes boot does not fix which child runs first
+D3918	817	G012: the grid is a pixel-perfect equivalent of the v3 grid

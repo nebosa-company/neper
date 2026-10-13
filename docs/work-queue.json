@@ -926,6 +926,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: all §7 rows exercised; benchmark table filled with measured numbers."
+    },
+    {
+      "id": "G012",
+      "category": "library",
+      "group": "UI",
+      "order": 273,
+      "title": "pixel-perfect parity with the v3 grid: reference recordings, state catalogue, metric tokens, visual and behavioural diff ledger",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Requirement added by the owner 2026-10-13 (docs/grid.md section 1.1): the grid UI and behaviour must be a pixel-perfect equivalent of MTG Studio v3 (many visual inconsistencies in v5/cardgrid). Record mtgstudio.exe (or owner-supplied screenshots) per state at 100/125/150% DPI; extract metrics into one token table; compare Neper offline renders region by region; replay recorded event traces for keyboard, mouse, timing and focus rules; keep a ledger. Acceptance: every catalogue state within recorded tolerance; traces replay with identical outcomes; no open ledger rows. Blocks G006-G011 from scoring 1."
     }
   ]
 }

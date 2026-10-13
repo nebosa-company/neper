@@ -33,6 +33,39 @@ open at once (card pool, deck, collection), custom comparers, custom cell painti
 write-through, persisted layout and filters, and export. The Delphi build does this today on every keystroke of the
 filter row (1 s delayed) and every header click; the Neper grid must not feel slower.
 
+### 1.1 Pixel-perfect parity with the v3 grid (requirement added 2026-10-13)
+
+The Neper grid is to be a **pixel-perfect equivalent of the MTG Studio v3 grid, in look and in behaviour**, not an
+approximation of it. The samples built so far (`v5/cardgrid`) show many visual inconsistencies against v3 — header
+glyph and sort-arrow placement, row and header heights, cell padding and text baseline, separator and grid-line
+colours, selection and focus colours, group-row and footer styling, band and indicator metrics — and each is a defect
+against this requirement, not a matter of taste.
+
+* **Reference.** `version-3\bin\mtgstudio.exe` itself, running the same card pool, at 100 / 125 / 150 % DPI, with its
+  shipped skin / look-and-feel. Screenshots are recorded from the running program (the window is driven and captured
+  the way the sample is: DPI-aware, topmost, `GetWindowRect`, `CopyFromScreen`), or supplied by the owner when a state
+  cannot be reached by automation. The recordings are committed as reference images with the state that produced
+  them (view, data, scroll offset, focused cell, selection, hover, pressed, editor open, DPI, window size).
+* **State catalogue.** At least: header (normal, hover, pressed, sorted ascending / descending, multi-sort index,
+  filter glyph, resize cursor zone), band row, filter row (empty, with text, operator popup), data rows (odd / even,
+  focused cell, selected focused / unfocused window, hover), group rows (collapsed, expanded, nested levels, with
+  summaries), footer and group footers, row indicator (current, editing, new), preview row, in-place editors
+  (text, spin, check, combo, drop-down open), no-data text, scrollbars (v / h, thumb states), column chooser, drag
+  of a column header, and the conditional-formatting looks (fill, bar, icons).
+* **Visual acceptance.** For every state the Neper offline render (the `neper offline UI screenshot` recipe) is
+  compared with the recording region by region (header, band, body cell, group row, footer, scrollbar), at a recorded
+  tolerance; a mismatch is listed in the ledger with the measured delta, never accepted silently. Metrics (heights,
+  paddings, widths, colours, font size and weight) are extracted from the recordings into one token table the grid
+  reads, not tuned by eye in each widget.
+* **Behavioural acceptance.** The same inputs produce the same outcomes: keyboard map (arrows, Home / End, PageUp /
+  PageDown, Ctrl+arrows, Tab / Shift+Tab, Enter, Esc, F2, Insert / Delete, Space, type-to-search), mouse (click,
+  double-click, header drag, edge double-click auto-size, wheel, shift / ctrl selection, right-click menus), timing
+  (delayed filter apply, search buffer reset, scroll animation) and focus / selection rules after sort, filter,
+  group and edit. Each is recorded as an event trace from v3 and replayed through the UI harness against the Neper
+  grid; a difference is a defect in the ledger.
+* **Rule.** A grid increment that touches look or behaviour does not close until its states are compared with the
+  recordings. Scores of G006–G011 cannot reach 1 while the parity ledger has open rows (see G012).
+
 ---
 
 ## 2. How MTG Studio v3 uses the grid
@@ -1094,7 +1127,7 @@ placement, case folding, Like wildcards, custom orders).
 
 ---
 
-## 9. Work items (enqueued as G001–G011 in `docs/work-queue.json`, 2026-10-12)
+## 9. Work items (enqueued as G001–G011 in `docs/work-queue.json`, 2026-10-12; G012 added 2026-10-13)
 
 Per `AGENTS.md`, the first item in `docs/work-queue.json` is the only one to work; they are appended at the end of the
 queue (order 262–272), score 0, each with its acceptance list.
@@ -1112,6 +1145,7 @@ queue (order 262–272), score 0, each with its acceptance list.
 | G009 | layout + filter persistence, customization panel, quick customization | round-trip; unknown/new column tolerance |
 | G010 | export + clipboard (+ print hand-off) | CSV/XML/HTML/XLSX of filtered+grouped view equals golden |
 | G011 | MTG Studio reference app: card-pool/deck/collection views over a 150k fixture | all §7 rows exercised; benchmark table filled with measured numbers |
+| G012 | pixel-perfect parity with the v3 grid: reference recordings, state catalogue, metric token table, visual and behavioural diff ledger | every catalogue state within tolerance of the mtgstudio.exe recording at 100/125/150 % DPI; recorded event traces replay with identical outcomes; ledger has no open rows |
 
 ---
 
