@@ -131,6 +131,11 @@ type Grid = struct {
     group_box_visible: bool,
     immediate_edit: bool,
     edit_focus_pending: bool,
+    multi: bool,
+    marks: []u8,
+    marked: usize,
+    anchor: usize,
+    has_anchor: bool,
     edit_caret_frames: usize,
     edit_click_x: f32,
     rest_row: usize,
@@ -244,6 +249,14 @@ fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const Colum
         }
         grid.filter_lens = lens
     }
+    let (marks, marks_error) = mem.alloc[u8](a, (table.capacity(t) + 7usize) / 8usize)
+    if marks_error != ok { ret (zero, marks_error) }
+    var cleared = 0usize
+    while cleared < marks.len {
+        marks[cleared] = 0u8
+        cleared += 1usize
+    }
+    grid.marks = marks
     relayout(&grid)
     ret (grid, ok)
 }
@@ -368,7 +381,94 @@ fn show_sort(grid: *Grid, spec: usize, descending: bool) {
     grid.descending = descending
 }
 
-fn clear_selection(grid: *Grid) { grid.has_selection = false }
+fn clear_selection(grid: *Grid) {
+    grid.has_selection = false
+    clear_marks(grid)
+}
+
+// ---- several selected rows (v3's MultiSelect) ---------------------------------------------
+
+// Turns on selecting several rows: Ctrl+click toggles a row, Shift+click selects the range from the
+// anchor, Ctrl+A all, Shift+Up/Down extend.
+fn set_multi_select(grid: *Grid, on: bool) {
+    grid.multi = on
+    if !on { clear_marks(grid) }
+}
+
+fn is_marked(grid: *const Grid, row: usize) -> bool {
+    if row / 8usize >= grid.marks.len { ret false }
+    ret (grid.marks[row / 8usize] >> u8(row % 8usize)) & 1u8 != 0u8
+}
+
+fn set_mark(grid: *Grid, row: usize, on: bool) {
+    if row / 8usize >= grid.marks.len { ret }
+    let was = is_marked(grid, row)
+    let bit = 1u8 << u8(row % 8usize)
+    if on && !was {
+        grid.marks[row / 8usize] = grid.marks[row / 8usize] | bit
+        grid.marked += 1usize
+    }
+    if !on && was {
+        grid.marks[row / 8usize] = grid.marks[row / 8usize] & (255u8 ^ bit)
+        grid.marked -= 1usize
+    }
+}
+
+fn clear_marks(grid: *Grid) {
+    var at = 0usize
+    while at < grid.marks.len {
+        grid.marks[at] = 0u8
+        at += 1usize
+    }
+    grid.marked = 0usize
+}
+
+// How many rows are selected (the current row counts when no other is).
+fn selection_size(grid: *const Grid) -> usize {
+    if grid.multi && grid.marked != 0usize { ret grid.marked }
+    if grid.has_selection { ret 1usize }
+    ret 0usize
+}
+
+// Marks the data rows between two visible positions, both included.
+fn mark_range(grid: *Grid, from: usize, to: usize) {
+    var lo = from
+    var hi = to
+    if lo > hi {
+        lo = to
+        hi = from
+    }
+    let visible = grp.visible_len(grid.g)
+    while lo <= hi && lo < visible {
+        if !grp.visible_is_group(grid.g, lo) { set_mark(grid, grp.visible_row(grid.g, lo), true) }
+        lo += 1usize
+    }
+}
+
+// Ctrl+A: every data row of the view.
+fn select_all(grid: *Grid) {
+    if !grid.multi { ret }
+    let visible = grp.visible_len(grid.g)
+    if visible == 0usize { ret }
+    mark_range(grid, 0usize, visible - 1usize)
+}
+
+// Shift+Up / Shift+Down: the range from the anchor to the new current row.
+fn extend_selection(grid: *Grid, kind: Nav) -> err {
+    if !grid.has_anchor && grid.has_position {
+        grid.anchor = grid.position
+        grid.has_anchor = true
+    }
+    let kept = grid.anchor
+    let moved = navigate(grid, kind)
+    if moved != ok { ret moved }
+    grid.anchor = kept
+    if grid.has_anchor && grid.has_position {
+        clear_marks(grid)
+        mark_range(grid, grid.anchor, grid.position)
+    }
+    ret ok
+}
 
 // Puts a row of band titles above the header (an empty slice removes it).
 fn set_bands(grid: *Grid, bands: []const Band) { grid.bands = bands }
@@ -404,6 +504,12 @@ fn go_to(grid: *Grid, at: usize) -> err {
     let row = grp.visible_row(grid.g, at)
     grid.has_selection = true
     grid.selected_row = row
+    if grid.multi {
+        clear_marks(grid)
+        set_mark(grid, row, true)
+        grid.anchor = at
+        grid.has_anchor = true
+    }
     var top = f32(at) * grid.row_height - 2.0 * grid.row_height
     if top < 0.0 { top = 0.0 }
     grid.offset = top
@@ -1270,9 +1376,20 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         ret ok
     }
     if grid.specs[column].kind == CellKind.Indicator {
-        var mark = ""
-        if grid.has_selection && grid.selected_row == row { mark = ">" }
-        ret text_node(a, grid, mark, true, .Text, out)
+        // v3: a triangle on the current row, a thin arrow on each other selected row
+        var current = grid.has_selection && grid.selected_row == row
+        var others = grid.multi && is_marked(grid, row) && !current
+        if !current && !others { ret text_node(a, grid, "", true, .Text, out) }
+        var size: f32 = 8.0
+        var ink = gl.rgb(0x000000u32)
+        if others {
+            size = 6.0
+            ink = gl.rgb(0x505050u32)
+        }
+        let (arrow, arrow_error) = gl.mark(a, .Right, ink, ink, size, size)
+        if arrow_error != ok { ret arrow_error }
+        *out = arrow
+        ret ok
     }
     if grid.specs[column].kind == CellKind.Star {
         // a favourite: a gold star when the boolean is set, nothing otherwise
@@ -1345,6 +1462,7 @@ fn header_glyph(ctx: *void, shown: usize) -> u8 {
     let grid = mem.cast[*Grid](ctx)
     if shown < grid.specs.len && grid.specs[shown].kind == CellKind.Star { ret 1u8 }
     if shown < grid.specs.len && grid.specs[shown].kind == CellKind.Picture { ret 2u8 }
+    if shown < grid.specs.len && grid.specs[shown].kind == CellKind.Indicator { ret 3u8 }
     ret 0u8
 }
 
@@ -1375,7 +1493,7 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
         }
         ret ok
     }
-    let again = grid.has_selection && grid.selected_row == usize(at)
+    var again = grid.has_selection && grid.selected_row == usize(at)
     grid.has_selection = true
     grid.selected_row = usize(at)
     var found = 0usize
@@ -1384,6 +1502,27 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
     if found < visible {
         grid.has_position = true
         grid.position = found
+    }
+    if grid.multi && found < visible {
+        // Ctrl+click toggles the row, Shift+click selects from the anchor, a plain click selects one
+        var held: input.Modifiers = zero
+        if mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize { held = widget.modifiers(grid.theme.runtime) }
+        if held.control {
+            set_mark(grid, usize(at), !is_marked(grid, usize(at)))
+            grid.anchor = found
+            grid.has_anchor = true
+            again = false
+        } else if held.shift && grid.has_anchor {
+            clear_marks(grid)
+            mark_range(grid, grid.anchor, found)
+            again = false
+        } else {
+            clear_marks(grid)
+            set_mark(grid, usize(at), true)
+            grid.anchor = found
+            grid.has_anchor = true
+        }
+        if held.control || held.shift { ret grid.events.row_picked(grid.events.ctx, usize(at)) }
     }
     if (again || grid.immediate_edit) && !grid.read_only && !grid.editing {
         // the first editable column of the row (v3 starts the edit of the clicked cell at once)
@@ -1514,6 +1653,16 @@ fn band_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 type NavPick = struct { grid: *Grid, kind: Nav }
+
+fn on_select_all(ctx: *void) -> err {
+    select_all(mem.cast[*Grid](ctx))
+    ret ok
+}
+
+fn on_extend(ctx: *void) -> err {
+    let pick = mem.cast[*NavPick](ctx)
+    ret extend_selection(pick.grid, pick.kind)
+}
 
 fn on_navigate(ctx: *void) -> err {
     let pick = mem.cast[*NavPick](ctx)
@@ -1735,7 +1884,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err) {
     let (picks, picks_error) = mem.alloc[NavPick](a, 6usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 7usize)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 10usize)
     if shortcuts_error != ok { ret (zero, control.TooLarge) }
     let codes: [6]u32 = [6]u32{ 38u32, 40u32, 33u32, 34u32, 36u32, 35u32 }
     let kinds: [6]Nav = [6]Nav{ Nav.Prev, Nav.Next, Nav.PrevPage, Nav.NextPage, Nav.First, Nav.Last }
@@ -1750,6 +1899,17 @@ fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err
     if grid.immediate_edit {
         shortcuts[6usize] = widget.Shortcut { key: 9u32, modifiers: none, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_row_tab } }
         tab_count = 7usize
+    }
+    if grid.multi {
+        // Ctrl+A selects every row; Shift+Up and Shift+Down extend the selection
+        var with_control: input.Modifiers = zero
+        with_control.control = true
+        var with_shift: input.Modifiers = zero
+        with_shift.shift = true
+        shortcuts[tab_count] = widget.Shortcut { key: 65u32, modifiers: with_control, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_select_all } }
+        shortcuts[tab_count + 1usize] = widget.Shortcut { key: 38u32, modifiers: with_shift, action: widget.Submit { ctx: mem.cast[*void](&picks[0usize]), invoke: on_extend } }
+        shortcuts[tab_count + 2usize] = widget.Shortcut { key: 40u32, modifiers: with_shift, action: widget.Submit { ctx: mem.cast[*void](&picks[1usize]), invoke: on_extend } }
+        tab_count += 3usize
     }
     var held: [1]widget.Node = zero
     let (holder, holder_error) = mem.alloc[widget.Node](a, 1usize)
@@ -1940,10 +2100,25 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
         if node_error != ok { ret (zero, node_error) }
         ret (widget.padded(grid.key, 16.0, 16.0, 16.0, 16.0, style.defaults(), one(a, inner)), ok)
     }
-    let (selected, selected_error) = mem.alloc[u64](a, 1usize)
+    let (selected, selected_error) = mem.alloc[u64](a, 160usize)
     if selected_error != ok { ret (zero, selected_error) }
     var selected_count = 0usize
-    if grid.has_selection {
+    if grid.multi {
+        // the marked rows among those the body shows (it draws only a window)
+        var first = usize(grid.offset / grid.row_height)
+        if first > 2usize { first -= 2usize } else { first = 0usize }
+        var shown = grid.page_rows + 6usize
+        if shown > 150usize { shown = 150usize }
+        var p = first
+        let visible_rows = grp.visible_len(grid.g)
+        while p < visible_rows && p < first + shown {
+            if !grp.visible_is_group(grid.g, p) && is_marked(grid, grp.visible_row(grid.g, p)) {
+                selected[selected_count] = row_key(grid, grp.visible_row(grid.g, p))
+                selected_count += 1usize
+            }
+            p += 1usize
+        }
+    } else if grid.has_selection {
         selected[0usize] = row_key(grid, grid.selected_row)
         selected_count = 1usize
     }
@@ -1968,7 +2143,7 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     var table_options: collection.TableOptions = zero
     if grid.look.on {
         let lk = grid.look
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row) }
     }
     if grid.preview_on {
         table_options.expandable = true

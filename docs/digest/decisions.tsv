@@ -2510,4 +2510,5 @@ D4919	746	Fixtures wait on the idle ticks, on a quiet machine
 D4933	451	Mail opens a saved picture in Photos
 D3930	904	G012: collection editing traces (immediate edit, Enter keeps the row, Tab order)
 D3931	596	G012: pixel probes for the selected-row border, column lines and header fill
-D3932	842	G012: the cell editor's caret follows the tap
+D3932	843	G012: the cell editor's caret follows the tap
+D3933	967	G012: selecting several rows (trace M1)
