@@ -79,7 +79,8 @@ const FILTER_KEY: u64 = 2048u64
 const EDIT_KEY: u64 = 3000u64
 const EDIT_TEXT: usize = 64usize
 const KEYBOARD_KEY: u64 = 3200u64
-const GROUP_BOX_KEY: u64 = 3300u64
+// keys far from every row, header and filter key (rows run to 4096 + the table's capacity)
+const GROUP_BOX_KEY: u64 = 1073741824u64
 
 type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator, Star, Picture }
 
@@ -710,8 +711,8 @@ fn on_bookmark_goto(ctx: *void) -> err {
 
 // ---- context menus and the field chooser (v3's pmCards / header popup / group box popup / Customization) ----
 
-const MENU_KEY: u64 = 3400u64
-const CHOOSER_KEY: u64 = 3500u64
+const MENU_KEY: u64 = 1073742000u64
+const CHOOSER_KEY: u64 = 1073742100u64
 
 // What a menu command does (MenuPick.id).
 const CMD_SORT_ASC: u8 = 1u8
@@ -765,15 +766,36 @@ fn on_menu_show(ctx: *void) -> err {
         grid.menu_kind = MENU_GROUP
         ret ok
     }
-    var shown = 0usize
-    while shown < grid.specs.len {
-        let (head_rect, has_head) = control.keyed_bounds(grid.theme.runtime, grid.key + 1u64 + 2u64 * u64(shown))
-        if has_head && at.y >= head_rect.y && at.y < head_rect.y + head_rect.height && at.x >= head_rect.x && at.x < head_rect.x + head_rect.width {
-            grid.menu_kind = MENU_HEADER
-            grid.menu_spec = shown
-            ret ok
+    // a right-click on a card makes it current (and the only selected one unless it is selected)
+    var look_at = usize(grid.offset / grid.row_height)
+    let look_end = look_at + grid.page_rows + 4usize
+    while look_at < grp.visible_len(grid.g) && look_at < look_end {
+        if !grp.visible_is_group(grid.g, look_at) {
+            let row = grp.visible_row(grid.g, look_at)
+            let (row_rect, has_row) = control.keyed_bounds(grid.theme.runtime, row_key(grid, row))
+            if has_row && at.y >= row_rect.y && at.y < row_rect.y + row_rect.height && at.x >= row_rect.x && at.x < row_rect.x + row_rect.width {
+                grid.has_selection = true
+                grid.selected_row = row
+                grid.has_position = true
+                grid.position = look_at
+                if grid.multi && !is_marked(grid, row) {
+                    clear_marks(grid)
+                    set_mark(grid, row, true)
+                    grid.anchor = look_at
+                    grid.has_anchor = true
+                }
+                let picked = grid.events.row_picked(grid.events.ctx, row)
+                let _ = picked
+                ret ok
+            }
         }
-        shown += 1usize
+        look_at += 1usize
+    }
+    // not a card: a header cell (its semantics name row 0 and the column)
+    let (cell_row, cell_column, has_cell) = widget.cell_at(grid.theme.runtime, at)
+    if has_cell && cell_row == 0u32 && cell_column >= 1u32 && usize(cell_column) <= grid.specs.len {
+        grid.menu_kind = MENU_HEADER
+        grid.menu_spec = usize(cell_column) - 1usize
     }
     ret ok
 }
