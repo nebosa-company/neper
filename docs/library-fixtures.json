@@ -1829,6 +1829,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_flow",
     "ui_focus_ring",
     "ui_gallery",
@@ -2050,6 +2051,7 @@
     "ui_content3_v2",
     "ui_content_v2",
     "ui_core",
+    "ui_datagrid",
     "ui_edit",
     "ui_flow",
     "ui_focus_ring",
@@ -3562,8 +3564,8 @@
    "module": "e.ui.datagrid",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 14,
-   "delivered": 14,
+   "catalogue": 51,
+   "delivered": 51,
    "pending": [],
    "fixtures": [
     "ui_datagrid"
@@ -3748,6 +3750,7 @@
     "ui_containers_v2",
     "ui_content",
     "ui_content2_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_edit",
     "ui_entry",
@@ -4280,6 +4283,7 @@
     "data_table",
     "data_tablefilter",
     "data_tablegroup",
+    "data_tablerow",
     "data_tablesearch",
     "data_tableview",
     "ui_datagrid"
@@ -4289,12 +4293,13 @@
    "module": "e.data.tableview",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 31,
-   "delivered": 31,
+   "catalogue": 36,
+   "delivered": 36,
    "pending": [],
    "fixtures": [
     "data_tablefilter",
     "data_tablegroup",
+    "data_tablerow",
     "data_tablesearch",
     "data_tableview",
     "ui_datagrid"
