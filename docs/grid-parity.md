@@ -12,9 +12,16 @@ made (change the display scale, rerun the capture).
 |---|---|---|---|
 | S01 card pool, header + first rows, first row selected (current), nothing filtered | `S01-v3-cardpool-150pct.png` | `S01-v5-cardgrid-150pct.png` | `S01-compare-v3-over-v5.png` (v3 above, v5 below, same scale) |
 
-Still to record (catalogue in grid.md 1.1): header hover/pressed/sorted, group rows and group footers, footer
-summaries, filter row, preview row, in-place editors, scrollbars, no-data, drag, conditional formatting, and the
-deck and collection views.
+| S02 header hover (Edition) | `s02_header_hover.png` | | light-blue cell, sort triangle and filter drop-down glyph at the right edge |
+| S03 / S04 sorted ascending / descending | `s03_sorted_edition_asc.png`, `s04_sorted_edition_desc.png` | | triangle up / down right-aligned in the cell, header text left |
+| G3 grouped by Rarity (group box shown) | `g3_group_rows.png` | | `[+]` rows "Rarity : B (Count: 10)" on #F0F0F0, group box chip |
+| F1 footer on | `f1_footer.png` | | #FFFFDD band, "Count: 120239" in a #E7EAEA cell under Name |
+| M1 / M2 menus | `m_header_menu.png`, `m_header_menu2.png`, `m_view_menu.png` | | header context menu and View menu (sort order, group by) |
+
+The metrics of these states are in `docs/grid-parity/tokens.json`. The card pool view has no filter row (its filter
+is the "Filter Card Pool" dialog from the toolbar funnel); the filter row, preview row, editors, scrollbar states,
+no-data, drag, conditional formatting and the deck and collection views are still to be recorded, as are the
+100 % and 125 % scales.
 
 ## Measured metrics (S01)
 
@@ -45,6 +52,10 @@ deck and collection views.
 | P013 | Footer: v3 shows summaries in a tinted band only when the footer is on ("Rows: 8" in the collection grid); v5 "Total" row styled differently | | open |
 | P014 | Row ink by rarity: v3 orange (mythic) and red (rare) with the exact palette of the app; v5 uses theme data colours | | open, extract palette |
 | P015 | Scrollbar: v3 native thin vertical bar; v5 draws none in the capture | | open |
+| P017 | Header hover: v3 turns the cell #D9EBF9 and shows a filter drop-down glyph; v5 has no hover look | | open |
+| P018 | Group rows: v3 `[+]` box, "Field : value (Count: n)" on #F0F0F0 with a dotted focus rectangle; v5 `[+]` text prefix | | open |
+| P019 | Group box: v3 shows a panel with a draggable chip (field name + sort triangle) above the header; v5 has a button row | | open |
+| P020 | Footer: v3 #FFFFDD band with #E7EAEA summary cells under their columns ("Count: 120239"); v5 plain row | | open |
 | P016 | Legality cell: v3 paints five coloured "S M E L V" badges; v5 shows no legality column | | open (G008 painter) |
 
 The metrics must move into the single token table the grid reads (grid.md 1.1) and every row above gets a
