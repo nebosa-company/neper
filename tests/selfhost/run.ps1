@@ -2944,6 +2944,12 @@ $uiTerminalProtoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $uiTerminalProtoWritten -ne 'executable written') { throw 'ui_terminal_proto emission failed' }
 & $uiTerminalProtoPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_terminal_proto check failed: exit $LASTEXITCODE" }
+# `e.ui.terminal_view`: the scrollback as a virtual list (D4500): only the lines in view are built, keys stable across scrolling and eviction, follow-bottom and anchored offsets, selection marking, the alternate screen, cell mapping.
+$uiTerminalViewPath = Join-Path $testBuild 'ui-terminal-view-selfhost.exe'
+$uiTerminalViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_terminal_view\src\main.e') $repo 'x64' 'windows' $uiTerminalViewPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalViewWritten -ne 'executable written') { throw 'ui_terminal_view emission failed' }
+$uiTerminalViewOutput = & $uiTerminalViewPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalViewOutput -ne 'ui terminal view ok') { throw "ui_terminal_view answered wrongly: exit $LASTEXITCODE" }
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 $uiCodeEditorPath = Join-Path $testBuild 'ui-code-editor-selfhost.exe'
 $uiCodeEditorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_code_editor\src\main.e') $repo 'x64' 'windows' $uiCodeEditorPath

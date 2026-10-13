@@ -10813,6 +10813,30 @@ fn wrap_filler(t: *const Term, line: usize, col: usize) -> bool
 
 A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering. D3501 adds `resize_reflow` (LINE_WRAPPED-joined logical lines re-wrapped at the new width through a caller-sized scratch; cursor kept; alternate screen and unchanged width fall to `resize`), `encode_key`/`encode_mouse`/`encode_focus`/`paste_begin`/`paste_filter`/`paste_end` (xterm defaults: cursor-key mode, modifier parameters, X10/1000/1002/1003 with legacy or SGR encoding, mode 1004, bracketed paste) and a `Selection` (character, word, line and block) with `selection_range`, `selection_contains`, `selection_text` and `selection_adjust`. D4500 adds keypad application mode (ESC =, ESC >, ?66; `KEY_KP_*` are kitty's code points), xterm's modifyOtherKeys (`CSI > 4 ; n m`, query `CSI ? 4 m`, form `CSI 27 ; mods ; code ~`), the kitty keyboard protocol (a 16-deep flag stack per screen driven by `CSI > n u`, `CSI < n u`, `CSI = n ; m u`, answered by `CSI ? u`; `encode_key_event` takes the event type, shifted and base-layout alternates and the produced text), mouse formats 1005 (UTF-8) and 1015 (urxvt), a selection word that continues over a wrapped row, and a selection copy that skips the blank padding a wrapped wide character. `sb_dropped` counts lines that left the history, so a line's key (`sb_dropped` + index) is stable for `e.ui.terminal_view`.
 
+### `e.ui.terminal_view`
+
+```neper
+type Viewport = struct { t: *const tm.Term, theme: *const control.Theme }
+const ALT_KEY_BIT: u64 = 4611686018427387904u64
+fn viewport(t: *const tm.Term, theme: *const control.Theme) -> Viewport
+fn base_line(v: *const Viewport) -> usize
+fn line_total(v: *const Viewport) -> usize
+fn buffer_line(v: *const Viewport, index: usize) -> usize
+fn line_key(v: *const Viewport, index: usize) -> widget.Key
+fn count_of(ctx: *void) -> usize
+fn key_of(ctx: *void, index: usize) -> widget.Key
+fn build_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err
+fn source(v: *Viewport) -> collection.Source
+fn list(a: *mem.Arena, key: widget.Key, v: *Viewport, label: str, selected: []const widget.Key, extent: f32, offset: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err)
+fn bottom_offset(v: *const Viewport, extent: f32, height: f32) -> f32
+fn at_bottom(v: *const Viewport, offset: f32, extent: f32, height: f32) -> bool
+fn follow(v: *const Viewport, offset: f32, extent: f32, height: f32, was_at_bottom: bool, dropped_before: usize) -> f32
+fn cell_at(v: *const Viewport, offset: f32, extent: f32, cell_width: f32, x: f32, y: f32) -> (usize, usize)
+fn selected_keys(v: *const Viewport, sel: *const tm.Selection, first: usize, count: usize, out: []widget.Key) -> usize
+```
+
+The terminal's scrollback as a virtual list (L136, D4500): `source`/`list` hand the buffer's lines (scrollback then live rows; the live rows alone on the alternate screen) to `e.ui.collection.virtual_list`, so only the lines in view are built, each its trimmed text in the monospace face. A line's key is `sb_dropped + buffer line + 1` (alternate rows in a separate range), stable while the line scrolls into history and while older lines are evicted; `follow` keeps a view pinned to the newest output or on the same text as the history drops lines, `cell_at` maps a point to buffer line and column, `selected_keys` names the list rows a `Selection` touches. Over `e.ui.collection` only: nothing in `e.ui.control` changes.
+
 ### `e.ui.style`
 
 ```neper

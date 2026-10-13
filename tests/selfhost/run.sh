@@ -2588,6 +2588,12 @@ ui_terminal_proto_written=$($test_build/neper-self emit-executable "$repo/tests/
 [ "$ui_terminal_proto_written" = 'executable written' ]
 chmod +x "$test_build/ui-terminal-proto-selfhost"
 "$test_build/ui-terminal-proto-selfhost"
+# `e.ui.terminal_view`: the scrollback as a virtual list (D4500): only the lines in view are built, keys stable across scrolling and eviction, follow-bottom and anchored offsets, selection marking, the alternate screen, cell mapping.
+ui_terminal_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_terminal_view/src/main.e" "$repo" x64 linux "$test_build/ui-terminal-view-selfhost")
+[ "$ui_terminal_view_written" = 'executable written' ]
+chmod +x "$test_build/ui-terminal-view-selfhost"
+ui_terminal_view_output=$("$test_build/ui-terminal-view-selfhost")
+[ "$ui_terminal_view_output" = 'ui terminal view ok' ]
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 ui_code_editor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_code_editor/src/main.e" "$repo" x64 linux "$test_build/ui-code-editor-selfhost")
 [ "$ui_code_editor_written" = 'executable written' ]

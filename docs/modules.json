@@ -493,6 +493,7 @@
     "e.ui.state",
     "e.ui.undo",
     "e.ui.terminal",
+    "e.ui.terminal_view",
     "e.ui.code_editor",
     "e.ui.ink",
     "e.ui.markdown_view",
@@ -5244,6 +5245,21 @@
    "direct_dependencies": [
     "e.mem",
     "e.text.encoding"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.terminal_view",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.ui.collection",
+    "e.ui.control",
+    "e.ui.terminal",
+    "e.ui.widget"
    ],
    "blocked_by": []
   },

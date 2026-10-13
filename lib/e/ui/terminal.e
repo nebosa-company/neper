@@ -590,6 +590,7 @@ fn new(a: *mem.Arena, cols: usize, rows: usize, max_cols: usize, max_rows: usize
         j += 1usize
     }
     reset(&t)
+    t.sb_dropped = 0usize
     ret (t, ok)
 }
 
