@@ -40789,3 +40789,7 @@ The header popup's Alignment entry (v3's DevExpress column popup) opens a submen
 ## D3952 — G012: a chip removes its grouping, a centred header title, hints for the other grids
 
 A tap on a chip of the group box takes that grouping level away (`take_command` returns CMD_CLEAR_GROUPING with the level; the sample drops the level, leaving the other: Rarity > Edition becomes Edition; the menu's Clear Grouping still clears all) -- v3 does this by dragging the chip out of the box, which is not built. A column set to Center in the Alignment popup now centres its header title as well (`TableLook.center_head`). The collection and deck grids carry hints for their columns (v3's texts where the pool has them). Verified live (B4: the Rarity chip removed; Edition remains).
+
+## D3953 — G012: a chip dragged out of the group box, v3's own collection and deck hints
+
+A chip of the group box is a drag source as well as a tap: let go outside the box, it takes its grouping away, as v3 does (B5-chip-drag-out-v5.png: the Rarity chip dragged out leaves Edition). The collection and deck grids' hint texts are now v3's own, read from resource.strings.pas (O_COLLECTION_COLUMN_HINT_*, O_DECK_CARDS_COLUMN_HINT_*) instead of the approximations of D3952.
