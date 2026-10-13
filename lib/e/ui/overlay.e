@@ -270,7 +270,7 @@ type MenuItem = struct { label: str, action: widget.Submit, enabled: bool }
 // choice (a 6px dot), or has a leading glyph; its optional supporting line;
 // whether a separator stands before it, whether it destroys (in `error`), the
 // head of the group it starts, and its optional first-level submenu.
-type MenuCommand = struct { label: str, supporting: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, head: str, submenu: []const MenuCommand, submenu_open: bool, submenu_toggle: widget.Submit }
+type MenuCommand = struct { label: str, supporting: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, head: str, submenu: []const MenuCommand, submenu_open: bool, submenu_toggle: widget.Submit, has_picture: bool, picture: scene.TextureId }
 
 // A plain enabled command.
 fn menu_command(label: str, action: widget.Submit) -> MenuCommand {
@@ -553,6 +553,14 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
             let (mark, mark_error) = control.icon_square(a, mark_ink, .Check, slot)
             if mark_error != ok { ret (zero, mark_error) }
             parts[p] = mark
+        } else if c.has_picture && !c.radio && !c.checkable {
+            // a bitmap of the application's (v3's 16 by 16 menu pictures), in its own colours
+            let (pic, pic_error) = control.image(a, 0u64, c.picture, 16.0, 16.0, .Contain, "")
+            if pic_error != ok { ret (zero, pic_error) }
+            let (pic_box, pic_box_error) = mem.alloc[widget.Node](a, 1usize)
+            if pic_box_error != ok { ret (zero, TooLarge) }
+            pic_box[0usize] = pic
+            parts[p] = widget.aligned(0u64, .Center, .Center, control.sized_style(slot, slot), pic_box[0usize..1usize])
         } else if c.pictured && !c.radio && !c.checkable {
             var icon_ink = muted
             if c.destructive { icon_ink = ink }
@@ -700,7 +708,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     var slotted = false
     var k = 0usize
     while k < commands.len {
-        if commands[k].checkable || commands[k].checked || commands[k].radio || commands[k].pictured { slotted = true }
+        if commands[k].checkable || commands[k].checked || commands[k].radio || commands[k].pictured || commands[k].has_picture { slotted = true }
         k += 1usize
     }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize * commands.len + 2usize)
