@@ -2923,7 +2923,14 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
             size = 6.0
             ink = gl.rgb(0x505050u32)
         }
-        let (arrow, arrow_error) = gl.mark(a, .Right, ink, ink, size, size)
+        // a grid that edits in place shows the editing arrow on its current row (v3's collection)
+        var arrow_shape = gl.Shape.Right
+        var arrow_w = size
+        if current && grid.immediate_edit {
+            arrow_shape = gl.Shape.ArrowLong
+            arrow_w = 11.0
+        }
+        let (arrow, arrow_error) = gl.mark(a, arrow_shape, ink, ink, arrow_w, size)
         if arrow_error != ok { ret arrow_error }
         *out = arrow
         ret ok
