@@ -2938,6 +2938,12 @@ $uiTerminalExtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $uiTerminalExtWritten -ne 'executable written') { throw 'ui_terminal_ext emission failed' }
 & $uiTerminalExtPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_terminal_ext check failed: exit $LASTEXITCODE" }
+# `e.ui.terminal` protocol additions: 6964 generated cases (keypad application mode, modifyOtherKeys, the kitty keyboard protocol flag stack and its five flags, mouse 1005/1015, word and wrap-filler selection edge cases, truncation) equal to an independent Python table model of the protocol texts (D4500).
+$uiTerminalProtoPath = Join-Path $testBuild 'ui-terminal-proto-selfhost.exe'
+$uiTerminalProtoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_terminal_proto\src\main.e') $repo 'x64' 'windows' $uiTerminalProtoPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalProtoWritten -ne 'executable written') { throw 'ui_terminal_proto emission failed' }
+& $uiTerminalProtoPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_terminal_proto check failed: exit $LASTEXITCODE" }
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 $uiCodeEditorPath = Join-Path $testBuild 'ui-code-editor-selfhost.exe'
 $uiCodeEditorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_code_editor\src\main.e') $repo 'x64' 'windows' $uiCodeEditorPath

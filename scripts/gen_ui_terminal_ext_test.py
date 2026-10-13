@@ -182,7 +182,19 @@ def select_text(stream, cols, rows, sbcap, mode, al, ac, hl, hc):
         (fl_, fc), (ll_, lc) = ((al, a_c), (hl, h_c)) if (al, a_c) <= (hl, h_c) else ((hl, h_c), (al, a_c))
         if mode == 3: sl, sc, el, ec = first_of(fl_), 0, last_of(ll_), cols
         elif mode == 2:
-            sl, sc, el, ec = fl_, wbounds(fl_, fc)[0], ll_, wbounds(ll_, lc)[1]
+            # D4500: a word runs over a wrap -- model it on the flattened logical line, head cells only
+            def run(line, col):
+                col = snap(line, col)
+                flat = [(l, c) for l in range(first_of(line), last_of(line) + 1) for c in range(cols) if not L[l][0][c][3] & CONT]
+                i = flat.index((line, col))
+                k = cls(L[line][0][col])
+                s = f = i
+                while s > 0 and cls(L[flat[s - 1][0]][0][flat[s - 1][1]]) == k: s -= 1
+                while f + 1 < len(flat) and cls(L[flat[f + 1][0]][0][flat[f + 1][1]]) == k: f += 1
+                el_, ec_ = flat[f]
+                return flat[s], (el_, ec_ + (2 if L[el_][0][ec_][3] & WIDE else 1))
+            (sl, sc), _ = run(fl_, fc)
+            _, (el, ec) = run(ll_, lc)
         else: sl, sc, el, ec = fl_, fc, ll_, lc + 1
     out = []
     for l in range(sl, el + 1):
@@ -198,7 +210,11 @@ def select_text(stream, cols, rows, sbcap, mode, al, ac, hl, hc):
                 cell = L[l][0][last - 1]
                 if cell[3] & CONT or cell[0] not in (32, 0): break
                 last -= 1
-        txt = ''.join(chr(L[l][0][c][0] or 32) for c in range(c0, last) if not L[l][0][c][3] & CONT)
+        def filler(c):   # D4500: the blank that pads a wide character moved to the next row is layout, not text
+            cell = L[l][0][c]
+            return (c == cols - 1 and wrapped(l) and l + 1 < n and cell[0] in (32, 0) and cell[3] == 0
+                    and bool(L[l + 1][0][0][3] & WIDE))
+        txt = ''.join(chr(L[l][0][c][0] or 32) for c in range(c0, last) if not L[l][0][c][3] & CONT and not filler(c))
         out.append(txt)
         if l != el and not (wrapped(l) and l != el): out.append('\n')
     return ''.join(out).encode('utf-8')

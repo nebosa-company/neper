@@ -2583,6 +2583,11 @@ ui_terminal_ext_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$ui_terminal_ext_written" = 'executable written' ]
 chmod +x "$test_build/ui-terminal-ext-selfhost"
 "$test_build/ui-terminal-ext-selfhost"
+# `e.ui.terminal` protocol additions: 6964 generated cases (keypad application mode, modifyOtherKeys, the kitty keyboard protocol flag stack and its five flags, mouse 1005/1015, word and wrap-filler selection edge cases, truncation) equal to an independent Python table model of the protocol texts (D4500).
+ui_terminal_proto_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_terminal_proto/src/main.e" "$repo" x64 linux "$test_build/ui-terminal-proto-selfhost")
+[ "$ui_terminal_proto_written" = 'executable written' ]
+chmod +x "$test_build/ui-terminal-proto-selfhost"
+"$test_build/ui-terminal-proto-selfhost"
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 ui_code_editor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_code_editor/src/main.e" "$repo" x64 linux "$test_build/ui-code-editor-selfhost")
 [ "$ui_code_editor_written" = 'executable written' ]

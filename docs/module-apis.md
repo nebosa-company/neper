@@ -10624,7 +10624,7 @@ The model and engine layer of the native code editor (L065, D3201); the widget, 
 ```neper
 type Cell = struct { ch: u32, fg: u32, bg: u32, attr: u32 }
 type Selection = struct { mode: u32, a_line: usize, a_col: usize, h_line: usize, h_col: usize }
-type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32 }
+type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32, app_keypad: bool, mouse_utf8: bool, mouse_urxvt: bool, modify_other: u32, kitty: [32]u32, kitty_n: [2]usize, sb_dropped: usize }
 error Invalid
 const BOLD: u32 = 1u32
 const DIM: u32 = 2u32
@@ -10772,9 +10772,46 @@ fn selection_range(t: *const Term, sel: *const Selection) -> (usize, usize, usiz
 fn selection_contains(t: *const Term, sel: *const Selection, line: usize, col: usize) -> bool
 fn selection_text(t: *const Term, sel: *const Selection, dst: []u8) -> usize
 fn selection_adjust(sel: *Selection, dropped: usize) -> bool
+fn kitty_flags(t: *const Term) -> u32
+fn kitty_push(t: *Term, flags: u32)
+fn kitty_set(t: *Term, flags: u32, mode: u32)
+fn dispatch_csi_keys(t: *Term, f: u32)
+const MOD_HYPER: u32 = 16u32
+const MOD_CAPS_LOCK: u32 = 64u32
+const MOD_NUM_LOCK: u32 = 128u32
+const KEY_KP_0: u32 = 57399u32
+const KEY_KP_9: u32 = 57408u32
+const KEY_KP_DECIMAL: u32 = 57409u32
+const KEY_KP_DIVIDE: u32 = 57410u32
+const KEY_KP_MULTIPLY: u32 = 57411u32
+const KEY_KP_SUBTRACT: u32 = 57412u32
+const KEY_KP_ADD: u32 = 57413u32
+const KEY_KP_ENTER: u32 = 57414u32
+const KEY_KP_EQUAL: u32 = 57415u32
+const KEY_KP_SEPARATOR: u32 = 57416u32
+const KEY_LEFT_SHIFT: u32 = 57441u32
+const KEY_LEFT_CONTROL: u32 = 57442u32
+const KEY_LEFT_ALT: u32 = 57443u32
+const KEY_LEFT_SUPER: u32 = 57444u32
+const EVENT_PRESS: u32 = 1u32
+const EVENT_REPEAT: u32 = 2u32
+const EVENT_RELEASE: u32 = 3u32
+const KITTY_DISAMBIGUATE: u32 = 1u32
+const KITTY_EVENT_TYPES: u32 = 2u32
+const KITTY_ALTERNATE_KEYS: u32 = 4u32
+const KITTY_ALL_KEYS: u32 = 8u32
+const KITTY_TEXT: u32 = 16u32
+fn other_keys(code: u32, m: usize, dst: []u8) -> usize
+fn encode_keypad(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize
+fn encode_legacy(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize
+fn kitty_u(code: u32, shifted: u32, base: u32, mods: u32, event: u32, text: u32, dst: []u8) -> usize
+fn kitty_func(key: u32, mods: u32, event: u32, dst: []u8) -> usize
+fn encode_kitty(t: *const Term, key: u32, mods_in: u32, event_in: u32, shifted: u32, base: u32, text: u32, flags: u32, dst: []u8) -> usize
+fn encode_key_event(t: *const Term, key: u32, mods: u32, event: u32, shifted: u32, base: u32, text: u32, dst: []u8) -> usize
+fn wrap_filler(t: *const Term, line: usize, col: usize) -> bool
 ```
 
-A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering. D3501 adds `resize_reflow` (LINE_WRAPPED-joined logical lines re-wrapped at the new width through a caller-sized scratch; cursor kept; alternate screen and unchanged width fall to `resize`), `encode_key`/`encode_mouse`/`encode_focus`/`paste_begin`/`paste_filter`/`paste_end` (xterm defaults: cursor-key mode, modifier parameters, X10/1000/1002/1003 with legacy or SGR encoding, mode 1004, bracketed paste) and a `Selection` (character, word, line and block) with `selection_range`, `selection_contains`, `selection_text` and `selection_adjust`.
+A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering. D3501 adds `resize_reflow` (LINE_WRAPPED-joined logical lines re-wrapped at the new width through a caller-sized scratch; cursor kept; alternate screen and unchanged width fall to `resize`), `encode_key`/`encode_mouse`/`encode_focus`/`paste_begin`/`paste_filter`/`paste_end` (xterm defaults: cursor-key mode, modifier parameters, X10/1000/1002/1003 with legacy or SGR encoding, mode 1004, bracketed paste) and a `Selection` (character, word, line and block) with `selection_range`, `selection_contains`, `selection_text` and `selection_adjust`. D4500 adds keypad application mode (ESC =, ESC >, ?66; `KEY_KP_*` are kitty's code points), xterm's modifyOtherKeys (`CSI > 4 ; n m`, query `CSI ? 4 m`, form `CSI 27 ; mods ; code ~`), the kitty keyboard protocol (a 16-deep flag stack per screen driven by `CSI > n u`, `CSI < n u`, `CSI = n ; m u`, answered by `CSI ? u`; `encode_key_event` takes the event type, shifted and base-layout alternates and the produced text), mouse formats 1005 (UTF-8) and 1015 (urxvt), a selection word that continues over a wrapped row, and a selection copy that skips the blank padding a wrapped wide character. `sb_dropped` counts lines that left the history, so a line's key (`sb_dropped` + index) is stable for `e.ui.terminal_view`.
 
 ### `e.ui.style`
 
