@@ -2473,4 +2473,5 @@ D3925	2188	G012: v3's columns and widths, edition symbols, navigator buttons, ke
 D3926	1132	G012: a sort keeps the current card; best fit on a header-edge double tap
 D3927	794	G012: grouping keeps the current card; the card pool has no delayed filter
 D3928	720	G012: a row in the card's own colour
-D5005	857	Call: the recents are kept in /recents; emergency numbers are named as such
+D5005	858	Call: the recents are kept in /recents; emergency numbers are named as such
+D3929	938	G012: the collection and deck views
