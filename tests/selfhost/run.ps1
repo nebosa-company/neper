@@ -5759,6 +5759,12 @@ $gpuInventoryRun = & $compiler run (Join-Path $PSScriptRoot 'fixtures\link\gpu_i
 if ($LASTEXITCODE -ne 0 -or ($gpuInventoryRun -join "`n") -notmatch '"record":"run","process_exit_code":0,"stdout":"gpu inventory ok\\n"') { throw "the mock GPU inventory failed: $($gpuInventoryRun -join "`n")" }
 $gpuInventoryPlain = & (Join-Path $testBuild 'gpu-inventory-selfhost.exe')
 if ($LASTEXITCODE -ne 0 -or $gpuInventoryPlain -ne 'gpu inventory unconfigured ok') { throw "the unconfigured GPU inventory fixture failed: $gpuInventoryPlain" }
+# (C093) `e.gpu.cuda`: the driver's list, whatever this machine has (an empty list with an error when there is no driver).
+$gpuCudaPath = Join-Path $testBuild 'gpu-cuda-selfhost.exe'
+$gpuCudaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_cuda\src\main.e') $repo 'x64' 'windows' $gpuCudaPath
+if ($LASTEXITCODE -ne 0 -or $gpuCudaWritten -ne 'executable written') { throw 'gpu_cuda emission failed' }
+& $gpuCudaPath
+if ($LASTEXITCODE -ne 0) { throw "a gpu_cuda check failed: exit $LASTEXITCODE" }
 $gpuSubgroupReducePath = Join-Path $testBuild 'gpu-subgroup-reduce-selfhost.exe'
 $gpuSubgroupReduceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_reduce\src\main.e') $repo 'x64' 'windows' $gpuSubgroupReducePath
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupReduceWritten -ne 'executable written') { throw 'gpu_subgroup_reduce emission failed' }

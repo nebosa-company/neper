@@ -2572,7 +2572,9 @@
    "catalogue": 6,
    "delivered": 6,
    "pending": [],
-   "fixtures": []
+   "fixtures": [
+    "gpu_cuda"
+   ]
   },
   {
    "module": "e.gpu.tensor",
