@@ -764,7 +764,8 @@ span are under the operand's identity, `project-src` in a project. The record is
 which case the files hold the rest. A flooding child therefore costs the harness at
 most two bounds of memory and never a pipe: the streams are files, drained by the
 OS. It does not stream raw child bytes into the JSONL
-channel. With `--chunked` (D1525), the captured prefixes come as `output` records
+channel. `run --gpu-inventory FILE` (D4700) hands the program `NEPER_GPU_INVENTORY=FILE`, the mock device
+inventory `e.gpu` reads in place of its Vulkan and CUDA enumeration (`e.gpu`'s section in docs/module-apis.md). With `--chunked` (D1525), the captured prefixes come as `output` records
 instead, the `run` record's `stdout` and `stderr` left empty. Each stream's records
 come in turn, stdout first, each at most 4,096 bytes, with `stream`, a contiguous
 one-based `sequence`, the `offset` of its first byte, `bytes`, and `data` as a JSON
