@@ -2944,6 +2944,18 @@ $uiTerminalExtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $uiTerminalExtWritten -ne 'executable written') { throw 'ui_terminal_ext emission failed' }
 & $uiTerminalExtPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_terminal_ext check failed: exit $LASTEXITCODE" }
+# `e.ui.terminal` protocol additions: 6964 generated cases (keypad application mode, modifyOtherKeys, the kitty keyboard protocol flag stack and its five flags, mouse 1005/1015, word and wrap-filler selection edge cases, truncation) equal to an independent Python table model of the protocol texts (D4500).
+$uiTerminalProtoPath = Join-Path $testBuild 'ui-terminal-proto-selfhost.exe'
+$uiTerminalProtoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_terminal_proto\src\main.e') $repo 'x64' 'windows' $uiTerminalProtoPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalProtoWritten -ne 'executable written') { throw 'ui_terminal_proto emission failed' }
+& $uiTerminalProtoPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_terminal_proto check failed: exit $LASTEXITCODE" }
+# `e.ui.terminal_view`: the scrollback as a virtual list (D4500): only the lines in view are built, keys stable across scrolling and eviction, follow-bottom and anchored offsets, selection marking, the alternate screen, cell mapping.
+$uiTerminalViewPath = Join-Path $testBuild 'ui-terminal-view-selfhost.exe'
+$uiTerminalViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_terminal_view\src\main.e') $repo 'x64' 'windows' $uiTerminalViewPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalViewWritten -ne 'executable written') { throw 'ui_terminal_view emission failed' }
+$uiTerminalViewOutput = & $uiTerminalViewPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalViewOutput -ne 'ui terminal view ok') { throw "ui_terminal_view answered wrongly: exit $LASTEXITCODE" }
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 $uiCodeEditorPath = Join-Path $testBuild 'ui-code-editor-selfhost.exe'
 $uiCodeEditorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_code_editor\src\main.e') $repo 'x64' 'windows' $uiCodeEditorPath
@@ -4634,6 +4646,18 @@ $gfxSvgTextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gfxSvgTextWritten -ne 'executable written') { throw 'gfx_svg_text emission failed' }
 & $gfxSvgTextPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_text check failed: exit $LASTEXITCODE" }
+# e.gfx.svg filter effects (D4503): 33 documents (blur, offset, flood, blend modes, composite operators, colour matrices, merge, drop shadow, units, regions, transform, clip and opacity) against a numpy model over cairosvg's raster of the source graphic.
+$gfxSvgFilterPath = Join-Path $testBuild 'gfx-svg-filter-selfhost.exe'
+$gfxSvgFilterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_filter\src\main.e') $repo 'x64' 'windows' $gfxSvgFilterPath -j 2
+if ($LASTEXITCODE -ne 0 -or $gfxSvgFilterWritten -ne 'executable written') { throw 'gfx_svg_filter emission failed' }
+& $gfxSvgFilterPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_filter check failed: exit $LASTEXITCODE" }
+# e.gfx.svg font selection and text on a path (D4504): family lists, nearest weight, textPath on a line, a semicircle and a quadratic, against Pillow's FreeType over Jost and Exo 2 at 8x.
+$gfxSvgTextFacesPath = Join-Path $testBuild 'gfx-svg-text-faces-selfhost.exe'
+$gfxSvgTextFacesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_text_faces\src\main.e') $repo 'x64' 'windows' $gfxSvgTextFacesPath -j 2
+if ($LASTEXITCODE -ne 0 -or $gfxSvgTextFacesWritten -ne 'executable written') { throw 'gfx_svg_text_faces emission failed' }
+& $gfxSvgTextFacesPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_text_faces check failed: exit $LASTEXITCODE" }
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 $textMathPath = Join-Path $testBuild 'text-math-selfhost.exe'
 $textMathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_math\src\main.e') $repo 'x64' 'windows' $textMathPath -j 2

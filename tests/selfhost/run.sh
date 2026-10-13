@@ -2588,6 +2588,17 @@ ui_terminal_ext_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$ui_terminal_ext_written" = 'executable written' ]
 chmod +x "$test_build/ui-terminal-ext-selfhost"
 "$test_build/ui-terminal-ext-selfhost"
+# `e.ui.terminal` protocol additions: 6964 generated cases (keypad application mode, modifyOtherKeys, the kitty keyboard protocol flag stack and its five flags, mouse 1005/1015, word and wrap-filler selection edge cases, truncation) equal to an independent Python table model of the protocol texts (D4500).
+ui_terminal_proto_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_terminal_proto/src/main.e" "$repo" x64 linux "$test_build/ui-terminal-proto-selfhost")
+[ "$ui_terminal_proto_written" = 'executable written' ]
+chmod +x "$test_build/ui-terminal-proto-selfhost"
+"$test_build/ui-terminal-proto-selfhost"
+# `e.ui.terminal_view`: the scrollback as a virtual list (D4500): only the lines in view are built, keys stable across scrolling and eviction, follow-bottom and anchored offsets, selection marking, the alternate screen, cell mapping.
+ui_terminal_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_terminal_view/src/main.e" "$repo" x64 linux "$test_build/ui-terminal-view-selfhost")
+[ "$ui_terminal_view_written" = 'executable written' ]
+chmod +x "$test_build/ui-terminal-view-selfhost"
+ui_terminal_view_output=$("$test_build/ui-terminal-view-selfhost")
+[ "$ui_terminal_view_output" = 'ui terminal view ok' ]
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 ui_code_editor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_code_editor/src/main.e" "$repo" x64 linux "$test_build/ui-code-editor-selfhost")
 [ "$ui_code_editor_written" = 'executable written' ]
@@ -4130,6 +4141,16 @@ gfx_svg_text_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$gfx_svg_text_written" = 'executable written' ]
 chmod +x "$test_build/gfx-svg-text-selfhost"
 "$test_build/gfx-svg-text-selfhost"
+# e.gfx.svg filter effects (D4503): 33 documents (blur, offset, flood, blend modes, composite operators, colour matrices, merge, drop shadow, units, regions, transform, clip and opacity) against a numpy model over cairosvg's raster of the source graphic.
+gfx_svg_filter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_filter/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-filter-selfhost" -j 2)
+[ "$gfx_svg_filter_written" = 'executable written' ]
+chmod +x "$test_build/gfx-svg-filter-selfhost"
+"$test_build/gfx-svg-filter-selfhost"
+# e.gfx.svg font selection and text on a path (D4504): family lists, nearest weight, textPath on a line, a semicircle and a quadratic, against Pillow's FreeType over Jost and Exo 2 at 8x.
+gfx_svg_text_faces_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_text_faces/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-text-faces-selfhost" -j 2)
+[ "$gfx_svg_text_faces_written" = 'executable written' ]
+chmod +x "$test_build/gfx-svg-text-faces-selfhost"
+"$test_build/gfx-svg-text-faces-selfhost"
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 text_math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_math/src/main.e" "$repo" x64 linux "$test_build/text-math-selfhost" -j 2)
 [ "$text_math_written" = 'executable written' ]

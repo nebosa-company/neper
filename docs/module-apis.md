@@ -8304,7 +8304,7 @@ const CLASS_SPACE: u8 = 8u8
 const STYLE_CRAMPED: u32 = 4u32
 type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool, stretch: bool }
 type Consts = struct { axis: f32, rule: f32, script: f32, scriptscript: f32, num_display: f32, num_text: f32, den_display: f32, den_text: f32, num_gap: f32, num_gap_display: f32, den_gap: f32, den_gap_display: f32, sup_display: f32, sup_text: f32, sup_cramped: f32, sub_only: f32, sub_both: f32, sub_top_max: f32, sup_bottom_min: f32, sup_max_with_sub: f32, sub_sup_gap: f32, sup_drop: f32, sub_drop: f32, script_space: f32, upper_gap: f32, lower_gap: f32, rad_rule: f32, rad_gap: f32, rad_gap_display: f32, rad_extra: f32, rad_before: f32, rad_after: f32, rad_raise: f32, delim_min: f32, op_min: f32, accent_base: f32, over_gap: f32, over_rule: f32, over_extra: f32, under_gap: f32, under_rule: f32, under_extra: f32, stretch_above: f32, stretch_below: f32 }
-type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, alphabet: u8, k: Consts }
+type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, alphabet: u8, tag_at: usize, tag_len: usize, tag_star: bool, k: Consts }
 fn maxf(x: f32, y: f32) -> f32
 fn minf(x: f32, y: f32) -> f32
 fn be16(d: []const u8, at: usize) -> u32
@@ -8388,6 +8388,14 @@ fn lay_brace(c: *Ctx, style: u32, over: bool) -> Atom
 fn font_ready(c: *Ctx) -> bool
 fn context(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Ctx, bool)
 fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
+fn typeset_numbered(a: *mem.Arena, source: str, options: Options, line_width: f32, items: []Item) -> (Equation, err)
+type RowTag = struct { at: usize, len: usize, star: bool, row: usize }
+fn lay_tag(c: *Ctx) -> Atom
+fn number_atom(c: *Ctx, raw: str, star: bool) -> Atom
+fn lay_substack(c: *Ctx, style: u32) -> Atom
+fn big_scale(word: str) -> f32
+fn big_class(word: str) -> u8
+fn glyph_run(c: *Ctx, a: Atom) -> bool
 fn to_layout(a: *mem.Arena, eq: Equation, font: shape.Font) -> (layout.Layout, err)
 type Ml = struct { src: str, pos: usize, out: str.Builder, status: err, depth: usize }
 fn ml_fail(m: *Ml, why: err)
@@ -8441,7 +8449,14 @@ glyph's `y` is its baseline, a rule's its top. `to_layout` turns the glyph items
 `e.text.layout.Layout` (one run of one glyph each) that `e.gfx.scene` draws as a
 `DrawText`; the rule items are rectangles to fill. `typeset`, `typeset_mathml`,
 `to_layout`, `Options`, `Item`, `Equation`, `Kind` and the four errors are the interface;
-the rest of the fence is the module's internals. Checked against fontTools metrics, a
+the rest of the fence is the module's internals. D4505 adds `\substack{a\\b}` (rows centred,
+a 1.2 em skip of the style, centred on the axis), `\big` `\Big` `\bigg` `\Bigg` with `l`, `r`
+or `m` (a delimiter 1.2, 1.8, 2.4 and 3 em tall whatever the style, centred on the axis;
+open, close, relation or ordinary), `\tag{n}` and `\tag*{n}` with `typeset_numbered` (the
+equation centred in a line `line_width` wide, `(n)` flush right, the equation moved left to
+clear it by an em, the line growing when there is no room; an `align` or `gather` row's tag
+goes in a right-aligned column an em right of the table; a second tag is `Invalid`), and
+MathKernInfo kerning of a base that is a run of glyphs on one baseline by its last glyph. Checked against fontTools metrics, a
 separate Python model of the rules over a generated MATH font, and Pillow renderings
 (`scripts/gen_math_font.py`, `scripts/gen_math_render_test.py`, `scripts/gen_math_test.py`).
 
@@ -10787,7 +10802,7 @@ The model and engine layer of the native code editor (L065, D3201); the widget, 
 ```neper
 type Cell = struct { ch: u32, fg: u32, bg: u32, attr: u32 }
 type Selection = struct { mode: u32, a_line: usize, a_col: usize, h_line: usize, h_col: usize }
-type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32 }
+type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32, app_keypad: bool, mouse_utf8: bool, mouse_urxvt: bool, modify_other: u32, kitty: [32]u32, kitty_n: [2]usize, sb_dropped: usize }
 error Invalid
 const BOLD: u32 = 1u32
 const DIM: u32 = 2u32
@@ -10935,9 +10950,70 @@ fn selection_range(t: *const Term, sel: *const Selection) -> (usize, usize, usiz
 fn selection_contains(t: *const Term, sel: *const Selection, line: usize, col: usize) -> bool
 fn selection_text(t: *const Term, sel: *const Selection, dst: []u8) -> usize
 fn selection_adjust(sel: *Selection, dropped: usize) -> bool
+fn kitty_flags(t: *const Term) -> u32
+fn kitty_push(t: *Term, flags: u32)
+fn kitty_set(t: *Term, flags: u32, mode: u32)
+fn dispatch_csi_keys(t: *Term, f: u32)
+const MOD_HYPER: u32 = 16u32
+const MOD_CAPS_LOCK: u32 = 64u32
+const MOD_NUM_LOCK: u32 = 128u32
+const KEY_KP_0: u32 = 57399u32
+const KEY_KP_9: u32 = 57408u32
+const KEY_KP_DECIMAL: u32 = 57409u32
+const KEY_KP_DIVIDE: u32 = 57410u32
+const KEY_KP_MULTIPLY: u32 = 57411u32
+const KEY_KP_SUBTRACT: u32 = 57412u32
+const KEY_KP_ADD: u32 = 57413u32
+const KEY_KP_ENTER: u32 = 57414u32
+const KEY_KP_EQUAL: u32 = 57415u32
+const KEY_KP_SEPARATOR: u32 = 57416u32
+const KEY_LEFT_SHIFT: u32 = 57441u32
+const KEY_LEFT_CONTROL: u32 = 57442u32
+const KEY_LEFT_ALT: u32 = 57443u32
+const KEY_LEFT_SUPER: u32 = 57444u32
+const EVENT_PRESS: u32 = 1u32
+const EVENT_REPEAT: u32 = 2u32
+const EVENT_RELEASE: u32 = 3u32
+const KITTY_DISAMBIGUATE: u32 = 1u32
+const KITTY_EVENT_TYPES: u32 = 2u32
+const KITTY_ALTERNATE_KEYS: u32 = 4u32
+const KITTY_ALL_KEYS: u32 = 8u32
+const KITTY_TEXT: u32 = 16u32
+fn other_keys(code: u32, m: usize, dst: []u8) -> usize
+fn encode_keypad(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize
+fn encode_legacy(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize
+fn kitty_u(code: u32, shifted: u32, base: u32, mods: u32, event: u32, text: u32, dst: []u8) -> usize
+fn kitty_func(key: u32, mods: u32, event: u32, dst: []u8) -> usize
+fn encode_kitty(t: *const Term, key: u32, mods_in: u32, event_in: u32, shifted: u32, base: u32, text: u32, flags: u32, dst: []u8) -> usize
+fn encode_key_event(t: *const Term, key: u32, mods: u32, event: u32, shifted: u32, base: u32, text: u32, dst: []u8) -> usize
+fn wrap_filler(t: *const Term, line: usize, col: usize) -> bool
 ```
 
-A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering. D3501 adds `resize_reflow` (LINE_WRAPPED-joined logical lines re-wrapped at the new width through a caller-sized scratch; cursor kept; alternate screen and unchanged width fall to `resize`), `encode_key`/`encode_mouse`/`encode_focus`/`paste_begin`/`paste_filter`/`paste_end` (xterm defaults: cursor-key mode, modifier parameters, X10/1000/1002/1003 with legacy or SGR encoding, mode 1004, bracketed paste) and a `Selection` (character, word, line and block) with `selection_range`, `selection_contains`, `selection_text` and `selection_adjust`.
+A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering. D3501 adds `resize_reflow` (LINE_WRAPPED-joined logical lines re-wrapped at the new width through a caller-sized scratch; cursor kept; alternate screen and unchanged width fall to `resize`), `encode_key`/`encode_mouse`/`encode_focus`/`paste_begin`/`paste_filter`/`paste_end` (xterm defaults: cursor-key mode, modifier parameters, X10/1000/1002/1003 with legacy or SGR encoding, mode 1004, bracketed paste) and a `Selection` (character, word, line and block) with `selection_range`, `selection_contains`, `selection_text` and `selection_adjust`. D4500 adds keypad application mode (ESC =, ESC >, ?66; `KEY_KP_*` are kitty's code points), xterm's modifyOtherKeys (`CSI > 4 ; n m`, query `CSI ? 4 m`, form `CSI 27 ; mods ; code ~`), the kitty keyboard protocol (a 16-deep flag stack per screen driven by `CSI > n u`, `CSI < n u`, `CSI = n ; m u`, answered by `CSI ? u`; `encode_key_event` takes the event type, shifted and base-layout alternates and the produced text), mouse formats 1005 (UTF-8) and 1015 (urxvt), a selection word that continues over a wrapped row, and a selection copy that skips the blank padding a wrapped wide character. `sb_dropped` counts lines that left the history, so a line's key (`sb_dropped` + index) is stable for `e.ui.terminal_view`.
+
+### `e.ui.terminal_view`
+
+```neper
+type Viewport = struct { t: *const tm.Term, theme: *const control.Theme }
+const ALT_KEY_BIT: u64 = 4611686018427387904u64
+fn viewport(t: *const tm.Term, theme: *const control.Theme) -> Viewport
+fn base_line(v: *const Viewport) -> usize
+fn line_total(v: *const Viewport) -> usize
+fn buffer_line(v: *const Viewport, index: usize) -> usize
+fn line_key(v: *const Viewport, index: usize) -> widget.Key
+fn count_of(ctx: *void) -> usize
+fn key_of(ctx: *void, index: usize) -> widget.Key
+fn build_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err
+fn source(v: *Viewport) -> collection.Source
+fn list(a: *mem.Arena, key: widget.Key, v: *Viewport, label: str, selected: []const widget.Key, extent: f32, offset: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err)
+fn bottom_offset(v: *const Viewport, extent: f32, height: f32) -> f32
+fn at_bottom(v: *const Viewport, offset: f32, extent: f32, height: f32) -> bool
+fn follow(v: *const Viewport, offset: f32, extent: f32, height: f32, was_at_bottom: bool, dropped_before: usize) -> f32
+fn cell_at(v: *const Viewport, offset: f32, extent: f32, cell_width: f32, x: f32, y: f32) -> (usize, usize)
+fn selected_keys(v: *const Viewport, sel: *const tm.Selection, first: usize, count: usize, out: []widget.Key) -> usize
+```
+
+The terminal's scrollback as a virtual list (L136, D4500): `source`/`list` hand the buffer's lines (scrollback then live rows; the live rows alone on the alternate screen) to `e.ui.collection.virtual_list`, so only the lines in view are built, each its trimmed text in the monospace face. A line's key is `sb_dropped + buffer line + 1` (alternate rows in a separate range), stable while the line scrolls into history and while older lines are evicted; `follow` keeps a view pinned to the newest output or on the same text as the history drops lines, `cell_at` maps a point to buffer line and column, `selected_keys` names the list rows a `Selection` touches. Over `e.ui.collection` only: nothing in `e.ui.control` changes.
 
 ### `e.ui.style`
 
@@ -18006,6 +18082,10 @@ error TooComplex
 fn size(text: str) -> (f32, f32, bool)
 fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color) -> err
 fn draw_with_font(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font) -> err
+type Face = struct { family: str, weight: u32, italic: bool, font: fonts.Font }
+fn draw_with_faces(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, faces: []const Face) -> err
+fn draw_filtered(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool, host: *sf.Host) -> err
+fn draw_filtered_faces(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, faces: []const Face, host: *sf.Host) -> err
 ```
 
 `draw` fits the document's viewBox (meet, centred) into `dest` and pushes balanced
@@ -18033,10 +18113,50 @@ in the mask add nothing, overlapping mask shapes add their pieces; masks inside 
 pattern are ignored). `draw_with_font` also sets `<text>` through `e.text.layout` in the
 given font (the caller registers it with the renderer): `x`, `y`, `dx`, `dy` (first value),
 `font-size`, `text-anchor`, `fill`, folded whitespace, entities, and `tspan` with its own
-`x`/`y` as a new chunk; `font-family`, `font-weight`, `text-decoration`, text on a path and
-per-glyph position lists are not read, and `draw` leaves `<text>` undrawn. Filters, an
-object-bounding-box mask or mask region, and a focal radial gradient with translucent stops
-are not drawn as specified.
+`x`/`y` as a new chunk; `text-decoration` and per-glyph position lists are not read, and `draw`
+leaves `<text>` undrawn. Since D4503: `draw_filtered` also draws an element with
+`filter="url(#id)"` through the `<filter>` element's primitives -- `feGaussianBlur`, `feOffset`,
+`feFlood`, `feBlend` (all sixteen modes), `feComposite` (over, in, out, atop, xor, arithmetic),
+`feColorMatrix`, `feMerge` and `feDropShadow`, with filter and primitive units, the filter region
+and primitive subregions, `color-interpolation-filters` (linearRGB by default) -- by rendering the
+element into a scratch target as big as its filter region, clipped to the host's target
+(`e.gfx.svg_filter.Host`), running the primitives over those pixels and drawing the result as an
+image of the host's renderer, before its clip, mask and opacity apply. An unknown filter draws
+nothing; filtered content inside a filtered element, a pattern, a marker or a mask replay is drawn
+unfiltered; `dest` must be in target pixels. Since D4504: `mask` honours `maskUnits`, `maskContentUnits`
+and `x`/`y`/`width`/`height` (box units measure the element), `draw_with_faces` and
+`draw_filtered_faces` choose a `Face` by `font-family` (a list, case-insensitive, quotes optional),
+nearest `font-weight` and `font-style`, and `<textPath>` sets its characters along the first subpath
+of the path its `href` names (`startOffset` in units or percent, `text-anchor`; a character whose middle
+is off the path is dropped). `e.gfx.scene` text now follows the whole linear part of a transform, so
+rotated runs draw. A focal radial gradient with translucent stops is not drawn as specified.
+
+### `e.gfx.svg_filter`
+
+```neper
+type Prim = struct { kind: u32, mode: u32, in1: i32, in2: i32, merge: [8]i32, merge_n: usize, linear: bool, x0: i32, y0: i32, x1: i32, y1: i32, p: [20]f32 }
+type Host = struct { renderer: *scene.Renderer, width: u32, height: u32, max_pixels: usize, textures: [16]scene.TextureId, texture_count: usize }
+type Slot = struct { id: scene.TextureId, bytes: []u8 }
+error TooComplex
+fn host(renderer: *scene.Renderer, width: u32, height: u32, max_pixels: usize) -> Host
+fn release(h: *Host) -> err
+fn run(a: *mem.Arena, prims: []const Prim, source: []const f32, w: usize, h: usize, out: []f32) -> err
+fn render_pixels(a: *mem.Arena, hst: *const Host, list: scene.DisplayList, w: usize, h: usize, registered: []const fonts.Font, out: []f32) -> err
+fn reserve(a: *mem.Arena, hst: *Host, w: usize, h: usize) -> (Slot, err)
+fn fill(hst: *const Host, slot: Slot, pixels: []const f32, w: usize, h: usize) -> err
+```
+
+The pixel half of SVG filter effects (L125, D4503). `e.gfx.svg` parses a `<filter>` into a program of
+`Prim`s (blur, offset, flood, blend, composite, colour matrix, merge, drop shadow, or a pass-through for a
+primitive it does not know) and renders the source graphic into a scratch target; `run` executes the program
+over premultiplied RGBA f32 buffers (linear light when `linear`, the three-box blur of the SVG text for a
+deviation of 2 pixels or more and an exact kernel below, transparent outside the region, results cut to their
+subregion). `Host` names the renderer a result texture is uploaded to (`reserve` takes the texture before the
+scratch so its pixels sit below what is reset; `fill` writes the result) and the scratch's pixel limit;
+`render_pixels` draws a display list into a target of its own renderer on the same device, so the caller's
+renderer and its damage tracking are untouched; `release` frees the host's textures after the scene using them
+has been rendered. Checked by `gfx_svg_filter` (33 documents against a numpy model over cairosvg's raster of
+the source graphic, mean difference at most 0.3 of 255).
 
 ### `e.gfx.curve`
 
