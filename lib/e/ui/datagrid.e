@@ -1774,6 +1774,40 @@ fn best_fit(a: *mem.Arena, grid: *Grid, spec: usize) -> err {
     ret ok
 }
 
+// After a grouping the application calls this: v3 opens the groups that contain the current card
+// and shows it (the card stays current).
+fn reveal_current(grid: *Grid) {
+    if !grid.has_selection { ret }
+    var at = 0usize
+    let total = grp.row_count(grid.g)
+    while at < total && grp.row_at(grid.g, at) != grid.selected_row { at += 1usize }
+    if at >= total { ret }
+    var group = 0usize
+    while group < grp.group_len(grid.g) {
+        if grp.group_first(grid.g, group) <= at && at < grp.group_first(grid.g, group) + grp.group_count(grid.g, group) {
+            let opened = grp.set_expanded(grid.g, group, true)
+        }
+        group += 1usize
+    }
+    var found = 0usize
+    let visible = grp.visible_len(grid.g)
+    while found < visible && (grp.visible_is_group(grid.g, found) || grp.visible_row(grid.g, found) != grid.selected_row) { found += 1usize }
+    if found >= visible {
+        grid.has_position = false
+        ret
+    }
+    grid.has_position = true
+    grid.position = found
+    var page = grid.page_rows
+    if page == 0usize { page = 1usize }
+    let top = usize(grid.offset / grid.row_height)
+    if found < top {
+        grid.offset = f32(found) * grid.row_height
+    } else if found >= top + page {
+        grid.offset = f32(found + 1usize - page) * grid.row_height
+    }
+}
+
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     grid.theme = theme
     try follow_focus(grid, theme)
