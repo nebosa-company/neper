@@ -10428,6 +10428,8 @@ fn range_of(cfg: Config) -> (i64, i64)
 type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names, zoned: bool, zone_src: tz.Zone, zone_dst: tz.Zone }
 fn zone_shift(src: tz.Zone, dst: tz.Zone, abs: i64) -> i64
 fn push_occ(c: *Ctx, item: u32, start_in: i64, minutes: i64, recurring: bool, all_day: bool) -> err
+fn exdate_split(rule: str) -> (usize, usize, bool, bool)
+fn is_excluded(list: str, at: calendar.DateTime, all_day: bool) -> bool
 fn collect(c: *Ctx, items: []const Item) -> err
 fn occ_before(c: *const Ctx, x: u32, y: u32) -> bool
 fn put_placed(c: *Ctx, p: Placed) -> err
@@ -10485,6 +10487,9 @@ fn series_until(o: *SeriesOut, value: str, delta: i64) -> bool
 fn key_is(part: str, key: str) -> bool
 fn interval_is_one(rule: str) -> bool
 fn move_series(item: Item, from: calendar.DateTime, to: calendar.DateTime, dst: []u8) -> (Item, err)
+fn series_exdate(o: *SeriesOut, d: calendar.DateTime, all_day: bool)
+fn cancel_occurrence(item: Item, original: calendar.DateTime, dst: []u8) -> (Item, err)
+fn move_occurrence(item: Item, original: calendar.DateTime, start: calendar.DateTime, minutes: u32, dst: []u8) -> (Item, Item, err)
 ```
 
 Scheduler control model (L148, D2882): `build(items, cfg, storage)` lays appointments out

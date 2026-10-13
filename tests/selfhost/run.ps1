@@ -1360,6 +1360,12 @@ $ui_schedule_zonesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $ui_schedule_zonesWritten -ne 'executable written') { throw 'ui_schedule_zones emission failed' }
 & $ui_schedule_zonesPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_schedule_zones check failed: exit $LASTEXITCODE" }
+# `e.ui.schedule` single-occurrence exceptions (EXDATE, cancel_occurrence, move_occurrence) against dateutil (L148, D4606).
+$ui_schedule_exceptionsPath = Join-Path $testBuild 'ui-schedule-exceptions-selfhost.exe'
+$ui_schedule_exceptionsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule_exceptions\src\main.e') $repo 'x64' 'windows' $ui_schedule_exceptionsPath
+if ($LASTEXITCODE -ne 0 -or $ui_schedule_exceptionsWritten -ne 'executable written') { throw 'ui_schedule_exceptions emission failed' }
+& $ui_schedule_exceptionsPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_schedule_exceptions check failed: exit $LASTEXITCODE" }
 # `e.time.pattern` locale names against Babel's CLDR formatter (L150).
 $time_pattern_localesPath = Join-Path $testBuild 'time-pattern-locales-selfhost.exe'
 $time_pattern_localesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_pattern_locales\src\main.e') $repo 'x64' 'windows' $time_pattern_localesPath

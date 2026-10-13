@@ -3200,6 +3200,7 @@
     "ui_ribbon",
     "ui_ripple_v2",
     "ui_schedule",
+    "ui_schedule_exceptions",
     "ui_schedule_month",
     "ui_schedule_zones",
     "ui_scroll_view",
@@ -3248,6 +3249,7 @@
     "time_pattern_locales",
     "time_recur",
     "ui_schedule",
+    "ui_schedule_exceptions",
     "ui_schedule_month",
     "ui_schedule_zones"
    ]
@@ -3359,6 +3361,7 @@
     "ui_property",
     "ui_ribbon",
     "ui_schedule",
+    "ui_schedule_exceptions",
     "ui_schedule_month",
     "ui_schedule_zones",
     "ui_selection",

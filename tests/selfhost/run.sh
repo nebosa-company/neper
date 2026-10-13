@@ -1251,6 +1251,11 @@ chmod +x "$test_build/ui-markdown-view-fit-selfhost"
 ui_schedule_zones_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_zones/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-zones-selfhost")
 [ "$ui_schedule_zones_written" = 'executable written' ]
 chmod +x "$test_build/ui-schedule-zones-selfhost"
+# `e.ui.schedule` single-occurrence exceptions (EXDATE, cancel_occurrence, move_occurrence) against dateutil (L148, D4606).
+ui_schedule_exceptions_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_exceptions/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-exceptions-selfhost")
+[ "$ui_schedule_exceptions_written" = 'executable written' ]
+chmod +x "$test_build/ui-schedule-exceptions-selfhost"
+"$test_build/ui-schedule-exceptions-selfhost"
 "$test_build/ui-schedule-zones-selfhost"
 # `e.time.pattern` locale names against Babel's CLDR formatter (L150).
 time_pattern_locales_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_pattern_locales/src/main.e" "$repo" x64 linux "$test_build/time-pattern-locales-selfhost")
