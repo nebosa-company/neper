@@ -431,8 +431,7 @@ fn with_commas(a: *mem.Arena, value: usize) -> str {
 // The widget takes the free slots at the end of the icon grid (the rest of the last row, or a row of its own): its
 // left edge in dp, its top and its width.
 fn widget_slot() -> (f32, f32, f32) {
-    var count = visible_count()
-    if installed_len > 0usize { count += 1usize }
+    let count = visible_count() + installed_total
     let col = count % 4usize
     let row = count / 4usize
     ret (f32(col) * 103.0 + 5.0, 70.0 + f32(row) * 104.0, f32(4usize - col) * 103.0 - 10.0)
