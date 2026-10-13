@@ -97,6 +97,34 @@ def app_source(title, body_expression, button, marker):
             '}\n') % (title, title, body_expression, button, marker, marker, marker)
 
 
+KIT_LEVEL = 1
+
+
+def prompt_prefix():
+    """(C173) What goes in front of every request to a real model: the card of traps (docs/llm-neper-card.md) and the
+    app kit's level, so the model writes for the kit the device runs."""
+    card = REPO / 'docs' / 'llm-neper-card.md'
+    text = card.read_text(encoding='utf-8') if card.exists() else ''
+    return 'App kit level %d.\n%s\n' % (KIT_LEVEL, text)
+
+
+def readable(diagnostics):
+    """(C173) The compiler's lines (`path:line:col: error[CODE]: message`) as the model is told them: the code, the
+    place and what the compiler said, one per line, without the path of the server's working directory."""
+    out = []
+    for line in diagnostics.splitlines():
+        head, sep, message = line.partition(': error[')
+        if not sep:
+            continue
+        code, _, rest = message.partition(']: ')
+        place = head.rsplit(':', 2)
+        if len(place) == 3:
+            out.append('%s at line %s, column %s: %s' % (code, place[1], place[2], rest))
+        else:
+            out.append('%s: %s' % (code, rest))
+    return '\n'.join(out)
+
+
 def model(prompt, attempt, diagnostics):
     """The canned model: the source it writes for `prompt` at its `attempt`-th try, given the diagnostics of the last."""
     words = prompt.lower()
@@ -197,8 +225,12 @@ def make(handler, raw):
         attempts = 0
         event('stage', {'stage': 0, 'note': 'a model is writing the app'})
         time.sleep(0.3)
+        prefix = prompt_prefix()
         for attempt in range(3):
             attempts = attempt + 1
+            # (C173) The request a real model would get: the prefix, the prompt and the last attempt's diagnostics
+            # made readable. The canned model ignores it; its size is recorded in the audit log.
+            request_text = prefix + prompt + '\n' + readable(diagnostics)
             name, source = model(prompt, attempt, diagnostics)
             event('stage', {'stage': 1, 'note': 'compiling with the Neper compiler, attempt %d' % attempts})
             image, diagnostics, reproducible = build(source, digest)
@@ -229,7 +261,7 @@ def make(handler, raw):
         ident = hashlib.sha256(package).hexdigest()[:16]
         PACKAGES[ident] = package
         audit({'prompt_sha': digest, 'result': 'signed', 'image_sha': image_sha, 'attempts': attempts,
-               'package': ident, 'reproducible': reproducible})
+               'package': ident, 'reproducible': reproducible, 'request_bytes': len(request_text), 'kit_level': KIT_LEVEL})
         event('stage', {'stage': 3, 'note': 'signed with the server key'})
         time.sleep(0.2)
         event('done', {'id': ident, 'name': name, 'version': 1, 'size': len(package), 'sha256': image_sha,
