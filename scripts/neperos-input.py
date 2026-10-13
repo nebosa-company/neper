@@ -162,5 +162,27 @@ def main():
             proc.kill()
 
 
+def run_with_retry():
+    # (D2476) QEMU sometimes starts but does not answer QMP within its window (a loaded host), or the guest is
+    # late to its first marker: those are the harness failing to start, not the program under test. They are
+    # retried twice from a clean serial file; anything the program itself did is never retried.
+    last = None
+    for attempt in range(3):
+        try:
+            serial_path = sys.argv[5]
+            if os.path.exists(serial_path):
+                os.remove(serial_path)
+            main()
+            return
+        except (TimeoutError, ConnectionError) as error:
+            last = error
+        except SystemExit as exit_request:
+            if str(exit_request) not in ("could not connect to QMP", "input server not ready"):
+                raise
+            last = exit_request
+        time.sleep(5)
+    raise last
+
+
 if __name__ == "__main__":
-    main()
+    run_with_retry()
