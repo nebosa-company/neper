@@ -6,6 +6,7 @@ import asyncio
 import os
 import subprocess
 import sys
+import tempfile
 
 sys.path.insert(0, os.environ.get("NEPER_PYLIB", "D:/Temp/claude/pylib"))
 import asyncssh  # noqa: E402
@@ -60,8 +61,15 @@ async def handle(process):
 CLIENT_KEY = private_key_from_seed(SEED)
 
 
-async def run_client(exe, mode, port, host_key_hex):
-    proc = await asyncio.create_subprocess_exec(exe, mode, str(port), host_key_hex)
+class ForwardServer(Server):
+    """(C155) A server that also takes `direct-tcpip` channels: asyncssh connects to the target itself."""
+
+    def connection_requested(self, dest_host, dest_port, orig_host, orig_port):
+        return True
+
+
+async def run_client(exe, mode, port, host_key_hex, *extra):
+    proc = await asyncio.create_subprocess_exec(exe, mode, str(port), host_key_hex, *[str(x) for x in extra])
     try:
         await asyncio.wait_for(proc.wait(), 60)
     except asyncio.TimeoutError:
@@ -105,6 +113,50 @@ async def main(exe):
             failed += 1
         other_server.close()
         await other_server.wait_closed()
+    # (C155) The sftp subsystem, with a chroot holding hello.txt (the client reads it and writes up.bin, which is
+    # checked here against what it should hold), and direct-tcpip forwards: to an echo server that upper-cases a
+    # line, and to a port nothing listens on (refused).
+    with tempfile.TemporaryDirectory() as root:
+        with open(os.path.join(root, "hello.txt"), "wb") as f:
+            f.write(b"hello sftp\n")
+        sftp_server = await asyncssh.create_server(
+            Server, "127.0.0.1", 0, server_host_keys=[host_key], process_factory=handle,
+            sftp_factory=lambda chan: asyncssh.SFTPServer(chan, chroot=os.fsencode(root)),
+            encoding="utf-8", line_editor=False, kex_algs=["curve25519-sha256"],
+            encryption_algs=["chacha20-poly1305@openssh.com"], mac_algs=["hmac-sha2-256"])
+        sftp_port = sftp_server.sockets[0].getsockname()[1]
+        code = await run_client(exe, "sftp", sftp_port, key_bytes.hex())
+        written = open(os.path.join(root, "up.bin"), "rb").read() if os.path.exists(os.path.join(root, "up.bin")) else b""
+        print("net_ssh sftp: exit %s, up.bin %d bytes %s" % (code, len(written), "ok" if written == bytes(range(200)) else "WRONG"))
+        if code != 0 or written != bytes(range(200)):
+            failed += 1
+        sftp_server.close()
+        await sftp_server.wait_closed()
+
+    async def echo(reader, writer):
+        data = await reader.readline()
+        writer.write(data.upper())
+        await writer.drain()
+        writer.close()
+    echo_server = await asyncio.start_server(echo, "127.0.0.1", 0)
+    echo_port = echo_server.sockets[0].getsockname()[1]
+    closed = await asyncio.start_server(echo, "127.0.0.1", 0)
+    closed_port = closed.sockets[0].getsockname()[1]
+    closed.close()
+    await closed.wait_closed()
+    forward_server = await asyncssh.create_server(
+        ForwardServer, "127.0.0.1", 0, server_host_keys=[host_key], process_factory=handle,
+        encoding="utf-8", line_editor=False, kex_algs=["curve25519-sha256"],
+        encryption_algs=["chacha20-poly1305@openssh.com"], mac_algs=["hmac-sha2-256"])
+    forward_port = forward_server.sockets[0].getsockname()[1]
+    for mode, target in (("forward", echo_port), ("forward_refused", closed_port)):
+        code = await run_client(exe, mode, forward_port, key_bytes.hex(), target)
+        print("net_ssh %s: exit %s" % (mode, code))
+        if code != 0:
+            failed += 1
+    forward_server.close()
+    await forward_server.wait_closed()
+    echo_server.close()
     return failed
 
 
