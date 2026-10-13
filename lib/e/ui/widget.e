@@ -5417,6 +5417,30 @@ fn cell_under(s: *State, index: usize, p: geometry.Point) -> (u32, u32, bool) {
     ret (0u32, 0u32, false)
 }
 
+// The deepest cell under `p` with its bounds (row 0 is a header cell).
+fn cell_rect_under(s: *State, index: usize, p: geometry.Point) -> (u32, u32, geometry.Rect, bool) {
+    let e = &s.elements[index]
+    if !e.live || !geometry.contains(e.bounds, p) { ret (0u32, 0u32, zero, false) }
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        let (cell_row, cell_column, cell_rect, has_cell) = cell_rect_under(s, usize(at), p)
+        if has_cell { ret (cell_row, cell_column, cell_rect, true) }
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    if e.has_semantics && e.sem.column != 0u32 { ret (e.sem.row, e.sem.column, e.bounds, true) }
+    ret (0u32, 0u32, zero, false)
+}
+
+fn cell_rect_at(widget_runtime: *const Runtime, p: geometry.Point) -> (u32, u32, geometry.Rect, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed || !s.has_root { ret (0u32, 0u32, zero, false) }
+    let (found_row, found_column, found_rect, found) = cell_rect_under(s, usize(s.root), p)
+    ret (found_row, found_column, found_rect, found)
+}
+
 fn cell_at(widget_runtime: *const Runtime, p: geometry.Point) -> (u32, u32, bool) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize || s.closed || !s.has_root { ret (0u32, 0u32, false) }

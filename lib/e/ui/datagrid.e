@@ -1004,7 +1004,8 @@ fn on_chooser_item(ctx: *void, g: widget.Gesture) -> err {
         ret ok
     case .DragStart as at:
         grid.chooser_active = true
-        ret widget.begin_drag(grid.theme.runtime, collection.chooser_payload_tag() + u64(item.spec) + 1u64)
+        // the payload carries the grid (its key, 16 bits) and the column
+        ret widget.begin_drag(grid.theme.runtime, collection.chooser_payload_tag() + ((grid.key & 65535u64) << 13u64) + u64(item.spec) + 1u64)
     default:
         ret ok
     }
@@ -2659,7 +2660,10 @@ fn on_reorder(ctx: *void, value: collection.Reorder) -> err {
     let grid = mem.cast[*Grid](ctx)
     if value.from >= collection.CHOOSER_FROM {
         // a hidden column dragged out of the chooser onto a header
-        let spec = value.from - collection.CHOOSER_FROM
+        let carried = value.from - collection.CHOOSER_FROM
+        let owner = u64(carried >> 13usize)
+        let spec = carried & 8191usize
+        if owner != (grid.key & 65535u64) { ret ok }
         if spec < grid.all.len && grid.hidden[spec] {
             grid.hidden[spec] = false
             relayout(grid)
@@ -3349,9 +3353,11 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         if mem.address_of(theme.runtime) != 0usize {
             let (dragged_payload, has_dragged) = widget.dragging(theme.runtime)
             let chooser_tag = collection.chooser_payload_tag()
-            if has_dragged && dragged_payload > chooser_tag && dragged_payload <= chooser_tag + 4096u64 {
-                let dragged_spec = usize(dragged_payload - chooser_tag - 1u64)
-                if dragged_spec < grid.all.len { drag_label = grid.all[dragged_spec].title }
+            if has_dragged && dragged_payload > chooser_tag && dragged_payload < chooser_tag + 1073741824u64 {
+                let carried = usize(dragged_payload - chooser_tag - 1u64)
+                let owner = u64(carried >> 13usize)
+                let dragged_spec = carried & 8191usize
+                if owner == (grid.key & 65535u64) && dragged_spec < grid.all.len { drag_label = grid.all[dragged_spec].title }
             }
         }
         table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
