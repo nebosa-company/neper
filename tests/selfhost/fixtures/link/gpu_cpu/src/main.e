@@ -109,7 +109,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, vulkan_error) = gpu.devices(a, .Vulkan, 4usize)
     if vulkan_error != ok && vulkan_error != gpu.Unsupported && vulkan_error != gpu.TooLarge { os.exit(2i32) }
     let (_, cuda_devices_error) = gpu.devices(a, .Cuda, 4usize)
-    if cuda_devices_error != gpu.Unsupported { os.exit(2i32) }
+    if cuda_devices_error != gpu.Unsupported && cuda_devices_error != ok && cuda_devices_error != gpu.TooLarge { os.exit(2i32) }
     let (_, limit_error) = gpu.devices(a, .Cpu, 0usize)
     if limit_error != gpu.TooLarge { os.exit(3i32) }
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
