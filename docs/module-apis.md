@@ -10328,6 +10328,7 @@ fn node_name(c: *const Ctx, i: usize) -> str
 fn rank_of(c: *const Ctx, n: Node) -> u32
 const KEY_CAP: usize = 512usize
 fn fold_keys(name: str, fold: bool, tailoring: u8, all: []u32, base: []u32) -> (usize, usize)
+fn mark_rank(tailoring: u8, m: u32) -> u32
 fn primary_key(tailoring: u8, s: u32) -> u32
 fn lone_key(tailoring: u8, s: u32) -> u32
 fn mark_key(tailoring: u8, b: u32, m: u32) -> u32
