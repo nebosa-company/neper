@@ -140,6 +140,7 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    footer_label: str,
     quick_x: f32,
     quick_y: f32,
     header_icons: [9]scene.TextureId,
@@ -756,6 +757,9 @@ fn set_header_menu_icons(grid: *Grid, icons: [9]scene.TextureId) {
     grid.header_icons = icons
     grid.has_header_icons = true
 }
+
+// The word before the count in the footer (v3: "Count" in the pool, "Rows" in the collection).
+fn set_footer_label(grid: *Grid, label: str) { grid.footer_label = label }
 
 fn set_cell_menu(grid: *Grid, commands: []const overlay.MenuCommand) {
     grid.cell_menu = commands
@@ -3116,12 +3120,27 @@ fn filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, grid.specs.len)
     if cells_error != ok { ret (zero, cells_error) }
+    // v3's footer counts under the first text column ("Count: 120281" in the pool, "Rows: 8" in the
+    // collection), centred in a #E7EAEA cell; the other summaries sit under their own columns
+    var count_at = grid.specs.len
+    var probe = 0usize
+    while probe < grid.specs.len && count_at == grid.specs.len {
+        let k = grid.specs[probe].kind
+        if k == CellKind.Text && grid.specs[probe].summary < 0 { count_at = probe }
+        probe += 1usize
+    }
     var at = 0usize
     while at < grid.specs.len {
         let s = grid.specs[at]
         var text = ""
-        if at == 0usize {
-            text = "Total"
+        if at == count_at {
+            let (b, b_error) = str.builder(a, 40usize)
+            if b_error != ok { ret (zero, b_error) }
+            var sb = b
+            var label = grid.footer_label
+            if label.len == 0usize { label = "Count" }
+            if str.push(&sb, label) != ok || str.push(&sb, ": ") != ok || str.push_usize(&sb, grp.row_count(grid.g)) != ok { ret (zero, control.TooLarge) }
+            text = str.done(&sb)
         } else if s.summary >= 0 && usize(s.summary) < grid.g.specs.len {
             let (shown, shown_error) = summary_text(a, s, grp.footer_summary(grid.g, usize(s.summary)))
             if shown_error != ok { ret (zero, shown_error) }
@@ -3133,7 +3152,15 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var cell_style = style.defaults()
         cell_style.width = style.Length { Px: grid.columns[at].width }
         if grid.look.on && text.len != 0usize { cell_style.background = paint.Brush { Solid: grid.look.footer_cell } }
-        cells[at] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
+        if at == count_at && grid.look.on {
+            // centred in its cell
+            let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+            if centred_error != ok { ret (zero, control.TooLarge) }
+            centred[0usize] = inner
+            cells[at] = widget.aligned(0u64, .Center, .Center, cell_style, centred[0usize..1usize])
+        } else {
+            cells[at] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
+        }
         at += 1usize
     }
     var band_style = style.defaults()
