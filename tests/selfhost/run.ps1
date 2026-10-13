@@ -5767,7 +5767,7 @@ if ($LASTEXITCODE -ne 0 -or $gpuCudaWritten -ne 'executable written') { throw 'g
 if ($LASTEXITCODE -ne 0) { throw "a gpu_cuda check failed: exit $LASTEXITCODE" }
 # (D2482) `e.fmt.png.quantize` and `encode_quantized` against a Python model of the colour-reduction rule.
 $pngQuantPath = Join-Path $testBuild 'fmt-png-quant-selfhost.exe'
-$pngQuantWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\linkmt_png_quant\src\main.e') $repo 'x64' 'windows' $pngQuantPath
+$pngQuantWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\linkfmt_png_quant\src\main.e') $repo 'x64' 'windows' $pngQuantPath
 if ($LASTEXITCODE -ne 0 -or $pngQuantWritten -ne 'executable written') { throw 'fmt_png_quant emission failed' }
 & $pngQuantPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_png_quant check failed: exit $LASTEXITCODE" }
