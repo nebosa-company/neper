@@ -254,3 +254,202 @@ fn slides(a: *mem.Arena, data: []const u8) -> ([]ooxml.Slide, err) {
     }
     ret (out[0usize..written], ok)
 }
+
+// ---- A spreadsheet's sheet as a grid (D4803).
+
+const LIMIT_GRID_ROWS: usize = 2000usize
+const LIMIT_GRID_COLUMNS: usize = 64usize
+
+fn odf_local(name: str) -> str {
+    var i = name.len
+    while i > 0usize {
+        if name[i - 1usize] == 58u8 { ret name[i..name.len] }
+        i -= 1usize
+    }
+    ret name
+}
+
+fn repeat_of(node: *const xml.Node, attribute: str) -> usize {
+    let (text, has) = xml.attribute(node, attribute)
+    if !has { ret 1usize }
+    let (value, parse_error) = str.parse_u64(text)
+    if parse_error != ok || value == 0u64 { ret 1usize }
+    if value > 100000u64 { ret 100000usize }
+    ret usize(value)
+}
+
+// Whether node `n` is inside element `root` (a descendant of it).
+fn odf_within(nodes: []const xml.Node, n: usize, root: usize) -> bool {
+    var at = n
+    var guard = 0usize
+    while at < nodes.len && guard < 64usize {
+        if at == root { ret true }
+        let up = parent_of(nodes, at)
+        if up == NO_OWNER { ret false }
+        at = up
+        guard += 1usize
+    }
+    ret false
+}
+
+// Record a finished cell: its text into `cells` (when filling) over the repeats of its column and row, and the extent.
+fn emit_cell(fill: bool, cells: []str, columns: usize, row: usize, column: usize, cell_repeat: usize, row_repeat: usize, text: str, max_rows: *usize, max_columns: *usize) {
+    if text.len == 0usize { ret }
+    var r = 0usize
+    while r < cell_repeat && column + r < LIMIT_GRID_COLUMNS {
+        var q = 0usize
+        while q < row_repeat && row + q < LIMIT_GRID_ROWS {
+            if fill && column + r < columns { cells[(row + q) * columns + column + r] = text }
+            if row + q + 1usize > *max_rows { *max_rows = row + q + 1usize }
+            q += 1usize
+        }
+        if column + r + 1usize > *max_columns { *max_columns = column + r + 1usize }
+        r += 1usize
+    }
+}
+
+// The `p` element a text node sits in (an index), or NO_OWNER.
+fn paragraph_of(nodes: []const xml.Node, n: usize) -> usize {
+    var at = parent_of(nodes, n)
+    var guard = 0usize
+    while at != NO_OWNER && guard < 8usize {
+        if nodes[at].kind == .Element && str.eq(odf_local(nodes[at].name), "p") { ret at }
+        at = parent_of(nodes, at)
+        guard += 1usize
+    }
+    ret NO_OWNER
+}
+
+// One walk over a sheet's rows and cells: with `fill` false it measures (rows, columns written to the pointers); with
+// `fill` true it writes each non-empty cell's text into `cells[row * columns + column]`.
+fn walk_sheet(a: *mem.Arena, nodes: []const xml.Node, table: usize, fill: bool, cells: []str, columns: usize, rows_out: *usize, columns_out: *usize) {
+    var row = 0usize
+    var column = 0usize
+    var row_repeat = 1usize
+    var started = false
+    var cell_repeat = 1usize
+    var cell_text = ""
+    var in_cell = false
+    var last_paragraph = NO_OWNER
+    var max_rows = 0usize
+    var max_columns = 0usize
+    var i = table + 1usize
+    while i < nodes.len && odf_within(nodes, i, table) {
+        if nodes[i].kind == .Element {
+            let name = odf_local(nodes[i].name)
+            let is_row = str.eq(name, "table-row")
+            let is_cell = str.eq(name, "table-cell") || str.eq(name, "covered-table-cell")
+            if is_row || is_cell {
+                // The cell before is finished.
+                if in_cell {
+                    emit_cell(fill, cells, columns, row, column, cell_repeat, row_repeat, cell_text, &max_rows, &max_columns)
+                    column += cell_repeat
+                    in_cell = false
+                }
+            }
+            if is_row {
+                if started { row += row_repeat }
+                started = true
+                row_repeat = repeat_of(&nodes[i], "table:number-rows-repeated")
+                column = 0usize
+            } else if is_cell {
+                in_cell = true
+                cell_repeat = repeat_of(&nodes[i], "table:number-columns-repeated")
+                cell_text = ""
+                last_paragraph = NO_OWNER
+                // A number, date or boolean with no text paragraph shows its attribute.
+                let (value, has_value) = xml.attribute(&nodes[i], "office:value")
+                if has_value { cell_text = value }
+                let (date, has_date) = xml.attribute(&nodes[i], "office:date-value")
+                if has_date { cell_text = date }
+                let (flag, has_flag) = xml.attribute(&nodes[i], "office:boolean-value")
+                if has_flag {
+                    if str.eq(flag, "true") { cell_text = "TRUE" } else { cell_text = "FALSE" }
+                }
+            }
+        }
+        if in_cell && nodes[i].kind == .Text {
+            let owner = paragraph_of(nodes, i)
+            if owner != NO_OWNER {
+                if last_paragraph == NO_OWNER {
+                    cell_text = nodes[i].value
+                } else if owner == last_paragraph {
+                    cell_text = join(a, cell_text, nodes[i].value)
+                } else {
+                    cell_text = join(a, join(a, cell_text, " "), nodes[i].value)
+                }
+                last_paragraph = owner
+            }
+        }
+        i += 1usize
+    }
+    if in_cell { emit_cell(fill, cells, columns, row, column, cell_repeat, row_repeat, cell_text, &max_rows, &max_columns) }
+    *rows_out = max_rows
+    *columns_out = max_columns
+}
+
+// Sheet `number` (from 1) of an `.ods` held in `data` as a grid of cell texts (the cell's paragraphs joined by a
+// space, else its `office:value`, date or boolean), repeated rows and columns expanded, at most LIMIT_GRID_ROWS by
+// LIMIT_GRID_COLUMNS; trailing empty rows and columns are not part of it. `NoContent` for a package with no such sheet.
+fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (ooxml.Grid, err) {
+    let (part, part_error) = content(a, data)
+    if part_error != ok { ret (zero, part_error) }
+    let (doc, parse_error) = xml.parse(a, part)
+    if parse_error != ok { ret (zero, parse_error) }
+    let nodes = doc.nodes
+    var seen = 0usize
+    var table = NO_OWNER
+    var i = 0usize
+    while i < nodes.len && table == NO_OWNER {
+        if nodes[i].kind == .Element && str.eq(odf_local(nodes[i].name), "table") {
+            seen += 1usize
+            if seen == number { table = i }
+        }
+        i += 1usize
+    }
+    if table == NO_OWNER { ret (zero, NoContent) }
+    var rows = 0usize
+    var columns = 0usize
+    var none: [1]str = zero
+    walk_sheet(a, nodes, table, false, none[0usize..0usize], 0usize, &rows, &columns)
+    let (cells, cells_error) = mem.alloc[str](a, rows * columns + 1usize)
+    if cells_error != ok { ret (zero, cells_error) }
+    var c = 0usize
+    while c < rows * columns + 1usize {
+        cells[c] = ""
+        c += 1usize
+    }
+    var rows_again = 0usize
+    var columns_again = 0usize
+    walk_sheet(a, nodes, table, true, cells, columns, &rows_again, &columns_again)
+    ret (ooxml.Grid { rows: rows, columns: columns, cells: cells, after: 0usize }, ok)
+}
+
+// The names of the sheets of an `.ods`, in order.
+fn sheet_names(a: *mem.Arena, data: []const u8) -> ([]str, err) {
+    let (part, part_error) = content(a, data)
+    if part_error != ok { ret (zero, part_error) }
+    let (doc, parse_error) = xml.parse(a, part)
+    if parse_error != ok { ret (zero, parse_error) }
+    let nodes = doc.nodes
+    var count = 0usize
+    var i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Element && str.eq(odf_local(nodes[i].name), "table") { count += 1usize }
+        i += 1usize
+    }
+    let (names, names_error) = mem.alloc[str](a, count + 1usize)
+    if names_error != ok { ret (zero, names_error) }
+    var n = 0usize
+    i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Element && str.eq(odf_local(nodes[i].name), "table") {
+            let (title, has_title) = xml.attribute(&nodes[i], "table:name")
+            names[n] = ""
+            if has_title { names[n] = title }
+            n += 1usize
+        }
+        i += 1usize
+    }
+    ret (names[0usize..n], ok)
+}

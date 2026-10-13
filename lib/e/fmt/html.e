@@ -1104,3 +1104,193 @@ fn tokenize(a: *mem.Arena, source: str, out: []Token) -> (usize, err) {
     if flush_error != ok { ret (t.count, flush_error) }
     ret (t.count, ok)
 }
+
+// ---- HTML as a Markdown-like outline (D4804): what a viewer's reading mode shows of a page.
+
+type MdWriter = struct { out: []u8, n: usize, space: bool, depth_pre: bool, rule_done: bool }
+
+const MD_MAX_DEPTH: usize = 40usize
+
+fn md_put(w: *MdWriter, c: u8) {
+    if w.n < w.out.len {
+        w.out[w.n] = c
+        w.n += 1usize
+    }
+}
+
+fn md_put_str(w: *MdWriter, text: str) {
+    var i = 0usize
+    while i < text.len {
+        md_put(w, text[i])
+        i += 1usize
+    }
+}
+
+// End the line being written (trailing spaces dropped); nothing when the output is empty or already at a line start.
+fn md_end_line(w: *MdWriter) {
+    while w.n > 0usize && w.out[w.n - 1usize] == 32u8 { w.n -= 1usize }
+    if w.n > 0usize && w.out[w.n - 1usize] != 10u8 { md_put(w, 10u8) }
+    w.space = false
+}
+
+// End the line and leave one blank line after it.
+fn md_blank(w: *MdWriter) {
+    md_end_line(w)
+    if w.n > 0usize && !(w.n >= 2usize && w.out[w.n - 1usize] == 10u8 && w.out[w.n - 2usize] == 10u8) { md_put(w, 10u8) }
+}
+
+// Text with its runs of white space folded to one space (and none at a line start), or verbatim inside `pre`.
+fn md_text(w: *MdWriter, text: str) {
+    var i = 0usize
+    while i < text.len {
+        let c = text[i]
+        if w.depth_pre {
+            md_put(w, c)
+        } else if c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 || c == 12u8 {
+            w.space = true
+        } else {
+            if w.space && w.n > 0usize && w.out[w.n - 1usize] != 10u8 && w.out[w.n - 1usize] != 32u8 { md_put(w, 32u8) }
+            w.space = false
+            md_put(w, c)
+        }
+        i += 1usize
+    }
+}
+
+fn md_is(name: str, other: str) -> bool { ret str.eq(name, other) }
+
+fn md_skipped(name: str) -> bool {
+    ret md_is(name, "script") || md_is(name, "style") || md_is(name, "head") || md_is(name, "template") || md_is(name, "noscript") || md_is(name, "svg") || md_is(name, "title") || md_is(name, "iframe")
+}
+
+fn md_block(name: str) -> bool {
+    ret md_is(name, "p") || md_is(name, "div") || md_is(name, "section") || md_is(name, "article") || md_is(name, "header") || md_is(name, "footer") || md_is(name, "nav") || md_is(name, "main") || md_is(name, "aside") || md_is(name, "blockquote") || md_is(name, "figure") || md_is(name, "figcaption") || md_is(name, "form") || md_is(name, "ul") || md_is(name, "ol") || md_is(name, "dl") || md_is(name, "table") || md_is(name, "address") || md_is(name, "details") || md_is(name, "summary")
+}
+
+// Write element or text node `id` and what is under it. `row_cells` counts a table row's cells (so the delimiter row
+// after a header row has the right width); `ordinal` numbers the items of an `ol`.
+fn md_walk(doc: *const Document, id: NodeId, w: *MdWriter, depth: usize) {
+    if depth > MD_MAX_DEPTH { ret }
+    let n = &doc.nodes[usize(id)]
+    if n.kind == .Text {
+        md_text(w, n.value)
+        ret
+    }
+    if n.kind != .Element && n.kind != .Document { ret }
+    if n.kind == .Element && n.namespace == .Html && md_skipped(n.name) { ret }
+    let name = n.name
+    var heading = 0usize
+    if n.kind == .Element {
+        if md_is(name, "h1") { heading = 1usize }
+        if md_is(name, "h2") { heading = 2usize }
+        if md_is(name, "h3") || md_is(name, "h4") || md_is(name, "h5") || md_is(name, "h6") { heading = 3usize }
+    }
+    if heading > 0usize {
+        md_blank(w)
+        if heading == 1usize { md_put_str(w, "# ") } else { md_put_str(w, "## ") }
+        w.space = false
+    } else if n.kind == .Element && md_is(name, "pre") {
+        md_blank(w)
+        md_put_str(w, "```\n")
+        w.depth_pre = true
+    } else if n.kind == .Element && md_is(name, "li") {
+        md_end_line(w)
+        md_put_str(w, "- ")
+        w.space = false
+    } else if n.kind == .Element && md_is(name, "tr") {
+        md_end_line(w)
+        md_put_str(w, "| ")
+        w.space = false
+    } else if n.kind == .Element && md_is(name, "table") {
+        md_blank(w)
+        w.rule_done = false
+        w.space = false
+    } else if n.kind == .Element && (md_is(name, "td") || md_is(name, "th")) {
+        w.space = false
+    } else if n.kind == .Element && md_is(name, "br") {
+        md_end_line(w)
+        ret
+    } else if n.kind == .Element && md_is(name, "hr") {
+        md_blank(w)
+        ret
+    } else if n.kind == .Element && md_is(name, "img") {
+        let (alt, has_alt) = attribute(n, "alt")
+        let (src, has_src) = attribute(n, "src")
+        if w.space && w.n > 0usize && w.out[w.n - 1usize] != 10u8 { md_put(w, 32u8) }
+        w.space = false
+        md_put_str(w, "[image: ")
+        if has_alt && alt.len > 0usize { md_put_str(w, alt) } else if has_src { md_put_str(w, src) }
+        md_put(w, 93u8)
+        w.space = true
+        ret
+    } else if n.kind == .Element && md_block(name) {
+        md_blank(w)
+    }
+    // Children.
+    var child = n.first_child
+    var first_row = true
+    while child != NONE {
+        md_walk(doc, child, w, depth + 1usize)
+        let c = &doc.nodes[usize(child)]
+        // After the first row of a table (in its head, or the first `tr`) a delimiter row.
+        if c.kind == .Element && md_is(c.name, "tr") && first_row && !w.rule_done && (md_is(name, "table") || md_is(name, "thead") || md_is(name, "tbody")) {
+            var cells = 0usize
+            var k = c.first_child
+            while k != NONE {
+                if doc.nodes[usize(k)].kind == .Element && (md_is(doc.nodes[usize(k)].name, "td") || md_is(doc.nodes[usize(k)].name, "th")) { cells += 1usize }
+                k = doc.nodes[usize(k)].next_sibling
+            }
+            md_end_line(w)
+            var d = 0usize
+            md_put(w, 124u8)
+            while d < cells {
+                md_put_str(w, "---|")
+                d += 1usize
+            }
+            md_put(w, 10u8)
+            w.rule_done = true
+            first_row = false
+        }
+        child = c.next_sibling
+    }
+    if heading > 0usize {
+        md_blank(w)
+    } else if n.kind == .Element && md_is(name, "pre") {
+        w.depth_pre = false
+        md_end_line(w)
+        md_put_str(w, "```\n")
+        md_blank(w)
+    } else if n.kind == .Element && (md_is(name, "td") || md_is(name, "th")) {
+        while w.n > 0usize && w.out[w.n - 1usize] == 32u8 { w.n -= 1usize }
+        md_put_str(w, " | ")
+        w.space = false
+    } else if n.kind == .Element && md_is(name, "a") {
+        let (href, has_href) = attribute(n, "href")
+        if has_href && href.len > 0usize && href.len <= 80usize && href[0usize] != 35u8 {
+            md_put_str(w, " (")
+            md_put_str(w, href)
+            md_put(w, 41u8)
+            w.space = true
+        }
+    } else if n.kind == .Element && md_is(name, "tr") {
+        md_end_line(w)
+    } else if n.kind == .Element && md_block(name) {
+        md_blank(w)
+    }
+}
+
+// The text of an HTML page as Markdown the viewers draw: `h1` is `# `, other headings `## `, a list item `- `, a table
+// row `| a | b |` with a `|---|---|` row after the first, `pre` a fenced block, an image `[image: alt]`, a link `text (url)`
+// (an absolute or relative URL of at most 80 bytes; a fragment link shows its text only); script, style, head,
+// template, svg and iframe are dropped; white space is folded outside `pre`. The result is at most 3 x the source.
+fn to_markdown(a: *mem.Arena, source: str) -> (str, err) {
+    let (doc, parse_error) = parse(a, source, Options { max_bytes: 4194304usize, max_nodes: 65536usize, max_attributes: 32usize, max_depth: 64u16, preserve_comments: false })
+    if parse_error != ok { ret ("", parse_error) }
+    let (out, out_error) = mem.alloc[u8](a, source.len * 3usize + 64usize)
+    if out_error != ok { ret ("", out_error) }
+    var w = MdWriter { out: out, n: 0usize, space: false, depth_pre: false, rule_done: false }
+    md_walk(&doc, 0u32, &w, 0usize)
+    md_end_line(&w)
+    while w.n > 0usize && w.out[w.n - 1usize] == 10u8 { w.n -= 1usize }
+    ret (out[0usize..w.n], ok)
+}

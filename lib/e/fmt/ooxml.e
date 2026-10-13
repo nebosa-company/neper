@@ -567,3 +567,353 @@ fn cell_flags(a: *mem.Arena, data: []const u8) -> ([]bool, err) {
     }
     ret (flags[0usize..count], ok)
 }
+
+// ---- Pictures and shapes (D4802): the images of a Word document and the shapes of a slide.
+
+// An image: the paragraph it sits in (an index into `paragraphs`; 0 for a slide's), the size it is drawn at in EMU
+// (914400 to the inch; 0 when the part gives none), its part name and its bytes (a PNG or JPEG as stored).
+type Picture = struct { paragraph: usize, cx: usize, cy: usize, name: str, data: []const u8 }
+const LIMIT_PICTURES: usize = 8usize
+const LIMIT_PICTURE: u64 = 262144u64
+const LIMIT_SHAPES: usize = 64usize
+const NO_COLOR: u32 = 16777216u32
+const NO_PICTURE: usize = 4294967295usize
+const SHAPE_RECT: u8 = 0u8
+const SHAPE_ELLIPSE: u8 = 1u8
+const SHAPE_PICTURE: u8 = 2u8
+const SHAPE_LINE: u8 = 3u8
+
+// The part name `dest` stands for in a relationship of a part in directory `base` (`word/`, `ppt/slides/`): an
+// absolute dest loses its slash, each `../` goes up a directory.
+fn resolve_target(a: *mem.Arena, base: str, dest: str) -> str {
+    if dest.len > 0usize && dest[0usize] == 47u8 { ret dest[1usize..dest.len] }
+    var dir = base
+    var rest = dest
+    while rest.len >= 3usize && rest[0usize] == 46u8 && rest[1usize] == 46u8 && rest[2usize] == 47u8 {
+        rest = rest[3usize..rest.len]
+        // Drop the last directory of `dir` (which ends with a slash).
+        var cut = dir.len
+        if cut > 0usize { cut -= 1usize }
+        while cut > 0usize && dir[cut - 1usize] != 47u8 { cut -= 1usize }
+        dir = dir[0usize..cut]
+    }
+    var out = ""
+    let (builder, builder_error) = str.builder(a, dir.len + rest.len + 1usize)
+    if builder_error != ok { ret rest }
+    var b = builder
+    let first = str.push(&b, dir)
+    let second = str.push(&b, rest)
+    out = str.done(&b)
+    ret out
+}
+
+// The dest of relationship `id` in the relationships part `rels_name`, resolved against `base`; "" when there is none.
+fn related_part(a: *mem.Arena, ar: *zip.Archive, rels_name: str, base: str, id: str) -> str {
+    let (index, found) = find(ar, rels_name)
+    if !found { ret "" }
+    let (part, extract_error) = zip.extract(a, ar, index)
+    if extract_error != ok { ret "" }
+    let (doc, parse_error) = xml.parse(a, part)
+    if parse_error != ok { ret "" }
+    let nodes = doc.nodes
+    var i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Element && str.eq(local(nodes[i].name), "Relationship") {
+            let (rid, has_id) = xml.attribute(&nodes[i], "Id")
+            let (dest, has_dest) = xml.attribute(&nodes[i], "Target")
+            if has_id && has_dest && str.eq(rid, id) { ret resolve_target(a, base, dest) }
+        }
+        i += 1usize
+    }
+    ret ""
+}
+
+// The bytes of the part called `name`, empty when there is none or it is over LIMIT_PICTURE.
+fn part_bytes(a: *mem.Arena, ar: *zip.Archive, name: str) -> []const u8 {
+    let (index, found) = find(ar, name)
+    if !found { ret "" }
+    let listed = zip.entries(ar)
+    if listed[index].size > LIMIT_PICTURE { ret "" }
+    let (bytes, extract_error) = zip.extract(a, ar, index)
+    if extract_error != ok { ret "" }
+    ret bytes
+}
+
+fn number_attribute(node: *const xml.Node, name: str) -> usize {
+    let (text, has) = xml.attribute(node, name)
+    if !has { ret 0usize }
+    let (value, parse_error) = str.parse_u64(text)
+    if parse_error != ok { ret 0usize }
+    ret usize(value)
+}
+
+// The pictures of a `.docx` (up to LIMIT_PICTURES, each at most 256 KB) with the paragraph each sits in and the
+// size its `wp:extent` gives, read through `word/_rels/document.xml.rels`.
+fn pictures(a: *mem.Arena, data: []const u8) -> ([]Picture, err) {
+    let (archive, open_error) = open_package(a, data)
+    if open_error != ok { ret (zero, open_error) }
+    var ar = archive
+    let (index, found) = find(&ar, "word/document.xml")
+    if !found { ret (zero, NoMainPart) }
+    let (part, extract_error) = zip.extract(a, &ar, index)
+    if extract_error != ok { ret (zero, extract_error) }
+    let (doc, parse_error) = xml.parse(a, part)
+    if parse_error != ok { ret (zero, parse_error) }
+    let nodes = doc.nodes
+    let (out, out_error) = mem.alloc[Picture](a, LIMIT_PICTURES)
+    if out_error != ok { ret (zero, out_error) }
+    var n = 0usize
+    var paragraph = 0usize
+    var seen_paragraphs = 0usize
+    var cx = 0usize
+    var cy = 0usize
+    var i = 0usize
+    while i < nodes.len && n < LIMIT_PICTURES {
+        if nodes[i].kind == .Element {
+            let name = local(nodes[i].name)
+            if str.eq(name, "p") {
+                paragraph = seen_paragraphs
+                seen_paragraphs += 1usize
+            }
+            if str.eq(name, "extent") {
+                cx = number_attribute(&nodes[i], "cx")
+                cy = number_attribute(&nodes[i], "cy")
+            }
+            if str.eq(name, "blip") {
+                let (rid, has_rid) = xml.attribute(&nodes[i], "r:embed")
+                if has_rid {
+                    let dest = related_part(a, &ar, "word/_rels/document.xml.rels", "word/", rid)
+                    if dest.len > 0usize {
+                        let bytes = part_bytes(a, &ar, dest)
+                        if bytes.len > 0usize {
+                            out[n] = Picture { paragraph: paragraph, cx: cx, cy: cy, name: dest, data: bytes }
+                            n += 1usize
+                        }
+                    }
+                }
+            }
+        }
+        i += 1usize
+    }
+    ret (out[0usize..n], ok)
+}
+
+// One shape of a slide: its kind, position and size in EMU, the fill (`NO_COLOR` for none), its text (paragraphs
+// joined by a newline) and, for a picture, the index into `SlideLayout.pictures`.
+type SlideShape = struct { kind: u8, x: usize, y: usize, cx: usize, cy: usize, fill: u32, text: str, picture: usize }
+type SlideLayout = struct { width: usize, height: usize, shapes: []SlideShape, pictures: []Picture }
+
+fn hex_digit(c: u8) -> u32 {
+    if c >= 48u8 && c <= 57u8 { ret u32(c - 48u8) }
+    if c >= 65u8 && c <= 70u8 { ret u32(c - 55u8) }
+    if c >= 97u8 && c <= 102u8 { ret u32(c - 87u8) }
+    ret 0u32
+}
+
+fn has_ancestor(nodes: []const xml.Node, n: usize, name: str) -> bool {
+    var at = usize(nodes[n].parent)
+    var guard = 0usize
+    while at < nodes.len && guard < 64usize {
+        if nodes[at].kind == .Element && str.eq(local(nodes[at].name), name) { ret true }
+        if usize(nodes[at].parent) == at { ret false }
+        at = usize(nodes[at].parent)
+        guard += 1usize
+    }
+    ret false
+}
+
+// Whether node `n` is inside (a descendant of) element `root`.
+fn within(nodes: []const xml.Node, n: usize, root: usize) -> bool {
+    var at = n
+    var guard = 0usize
+    while at < nodes.len && guard < 64usize {
+        if at == root { ret true }
+        if usize(nodes[at].parent) == at { ret false }
+        at = usize(nodes[at].parent)
+        guard += 1usize
+    }
+    ret false
+}
+
+// The layout of slide `number` (from 1, in slide-number order) of a `.pptx`: the slide size from
+// `ppt/presentation.xml` (default 9144000 by 6858000), and its `sp` shapes (a rectangle, ellipse or line by its
+// `prstGeom`), `pic` pictures and `cxnSp` connectors with their offsets, extents, solid fills and text. Groups are not
+// transformed: a shape in a group is placed as if the group were the slide.
+fn slide_layout(a: *mem.Arena, data: []const u8, number: usize) -> (SlideLayout, err) {
+    let (archive, open_error) = open_package(a, data)
+    if open_error != ok { ret (zero, open_error) }
+    var ar = archive
+    let listed = zip.entries(&ar)
+    var part_index = 0usize
+    var part_number = 0usize
+    var seen = 0usize
+    var want = 1usize
+    var located = false
+    while !located && want < 10000usize && seen < number {
+        var j = 0usize
+        while j < listed.len {
+            if slide_number(listed[j].name) == want {
+                seen += 1usize
+                if seen == number {
+                    part_index = j
+                    part_number = want
+                    located = true
+                }
+            }
+            j += 1usize
+        }
+        want += 1usize
+    }
+    if !located { ret (zero, NoMainPart) }
+    var width = 9144000usize
+    var height = 6858000usize
+    let (pres_index, has_pres) = find(&ar, "ppt/presentation.xml")
+    if has_pres {
+        let (pres, pres_error) = zip.extract(a, &ar, pres_index)
+        if pres_error == ok {
+            let (pdoc, pdoc_error) = xml.parse(a, pres)
+            if pdoc_error == ok {
+                var k = 0usize
+                while k < pdoc.nodes.len {
+                    if pdoc.nodes[k].kind == .Element && str.eq(local(pdoc.nodes[k].name), "sldSz") {
+                        let w = number_attribute(&pdoc.nodes[k], "cx")
+                        let h = number_attribute(&pdoc.nodes[k], "cy")
+                        if w > 0usize && h > 0usize {
+                            width = w
+                            height = h
+                        }
+                    }
+                    k += 1usize
+                }
+            }
+        }
+    }
+    let (part, extract_error) = zip.extract(a, &ar, part_index)
+    if extract_error != ok { ret (zero, extract_error) }
+    let (doc, parse_error) = xml.parse(a, part)
+    if parse_error != ok { ret (zero, parse_error) }
+    let nodes = doc.nodes
+    let (shapes, shapes_error) = mem.alloc[SlideShape](a, LIMIT_SHAPES)
+    if shapes_error != ok { ret (zero, shapes_error) }
+    let (pics, pics_error) = mem.alloc[Picture](a, LIMIT_PICTURES)
+    if pics_error != ok { ret (zero, pics_error) }
+    var shape_n = 0usize
+    var pic_n = 0usize
+    let (rels_builder, rels_builder_error) = str.builder(a, 64usize)
+    if rels_builder_error != ok { ret (zero, rels_builder_error) }
+    var rb = rels_builder
+    let r1 = str.push(&rb, "ppt/slides/_rels/slide")
+    let r2 = str.push_usize(&rb, part_number)
+    let r3 = str.push(&rb, ".xml.rels")
+    let rels_name = str.done(&rb)
+    var i = 0usize
+    while i < nodes.len && shape_n < LIMIT_SHAPES {
+        if nodes[i].kind == .Element {
+            let name = local(nodes[i].name)
+            let is_sp = str.eq(name, "sp")
+            let is_pic = str.eq(name, "pic")
+            let is_line = str.eq(name, "cxnSp")
+            if (is_sp || is_pic || is_line) && !has_ancestor(nodes, i, "sp") && !has_ancestor(nodes, i, "pic") {
+                var shape = SlideShape { kind: SHAPE_RECT, x: 0usize, y: 0usize, cx: 0usize, cy: 0usize, fill: NO_COLOR, text: "", picture: NO_PICTURE }
+                if is_pic { shape.kind = SHAPE_PICTURE }
+                if is_line { shape.kind = SHAPE_LINE }
+                var got_ext = false
+                var got_fill = false
+                var k = i + 1usize
+                while k < nodes.len && within(nodes, k, i) {
+                    if nodes[k].kind == .Element {
+                        let inner = local(nodes[k].name)
+                        if str.eq(inner, "off") && !got_ext {
+                            shape.x = number_attribute(&nodes[k], "x")
+                            shape.y = number_attribute(&nodes[k], "y")
+                        }
+                        if str.eq(inner, "ext") && !got_ext {
+                            let w = number_attribute(&nodes[k], "cx")
+                            let h = number_attribute(&nodes[k], "cy")
+                            if w > 0usize || h > 0usize {
+                                shape.cx = w
+                                shape.cy = h
+                                got_ext = true
+                            }
+                        }
+                        if str.eq(inner, "prstGeom") {
+                            let (prst, has_prst) = xml.attribute(&nodes[k], "prst")
+                            if has_prst && str.eq(prst, "ellipse") { shape.kind = SHAPE_ELLIPSE }
+                            if has_prst && str.eq(prst, "line") { shape.kind = SHAPE_LINE }
+                        }
+                        if str.eq(inner, "srgbClr") && !got_fill && has_ancestor(nodes, k, "spPr") && !has_ancestor(nodes, k, "ln") && !has_ancestor(nodes, k, "txBody") {
+                            let (hex, has_hex) = xml.attribute(&nodes[k], "val")
+                            if has_hex && hex.len == 6usize {
+                                var v = 0u32
+                                var d = 0usize
+                                while d < 6usize {
+                                    v = v * 16u32 + hex_digit(hex[d])
+                                    d += 1usize
+                                }
+                                shape.fill = v
+                                got_fill = true
+                            }
+                        }
+                        if str.eq(inner, "blip") && is_pic && pic_n < LIMIT_PICTURES {
+                            let (rid, has_rid) = xml.attribute(&nodes[k], "r:embed")
+                            if has_rid {
+                                let dest = related_part(a, &ar, rels_name, "ppt/slides/", rid)
+                                if dest.len > 0usize {
+                                    let bytes = part_bytes(a, &ar, dest)
+                                    if bytes.len > 0usize {
+                                        pics[pic_n] = Picture { paragraph: 0usize, cx: shape.cx, cy: shape.cy, name: dest, data: bytes }
+                                        shape.picture = pic_n
+                                        pic_n += 1usize
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    k += 1usize
+                }
+                // The text: every `t` under a txBody, a newline between paragraphs.
+                var size = 0usize
+                k = i + 1usize
+                while k < nodes.len && within(nodes, k, i) {
+                    if nodes[k].kind == .Text && usize(nodes[k].parent) < nodes.len && str.eq(local(nodes[usize(nodes[k].parent)].name), "t") { size += nodes[k].value.len + 1usize }
+                    k += 1usize
+                }
+                if size > 0usize {
+                    let (buffer, buffer_error) = mem.alloc[u8](a, size)
+                    if buffer_error != ok { ret (zero, buffer_error) }
+                    var at = 0usize
+                    var last_paragraph = 99999999usize
+                    k = i + 1usize
+                    while k < nodes.len && within(nodes, k, i) {
+                        if nodes[k].kind == .Text && usize(nodes[k].parent) < nodes.len && str.eq(local(nodes[usize(nodes[k].parent)].name), "t") {
+                            // The paragraph element above this run: a change of it is a newline.
+                            var up = usize(nodes[k].parent)
+                            var guard = 0usize
+                            while up < nodes.len && guard < 8usize && !(nodes[up].kind == .Element && str.eq(local(nodes[up].name), "p")) {
+                                up = usize(nodes[up].parent)
+                                guard += 1usize
+                            }
+                            if last_paragraph != 99999999usize && up != last_paragraph && at < size {
+                                buffer[at] = 10u8
+                                at += 1usize
+                            }
+                            last_paragraph = up
+                            var c = 0usize
+                            while c < nodes[k].value.len && at < size {
+                                buffer[at] = nodes[k].value[c]
+                                at += 1usize
+                                c += 1usize
+                            }
+                        }
+                        k += 1usize
+                    }
+                    shape.text = buffer[0usize..at]
+                }
+                shapes[shape_n] = shape
+                shape_n += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret (SlideLayout { width: width, height: height, shapes: shapes[0usize..shape_n], pictures: pics[0usize..pic_n] }, ok)
+}
