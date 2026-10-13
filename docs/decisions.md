@@ -39092,3 +39092,7 @@ The in-cell editor of a grid in the v3 look is `control.bare_field` (a chromeles
 ## D2395 — G012: v3's grid lines recorded; the line colour is #DEDEDE
 
 mtgstudio.exe's View > Show Grid Lines (Both, Horizontal, Vertical, None; docs/grid-parity/V1-grid-lines-v3.png) confirms D3937's semantics: Vertical and Both draw the column lines, Horizontal and Both draw a one-pixel line along the bottom of each data row, None draws neither, and Vertical (the default) has no row lines. The line is #DEDEDE in both directions (a full pixel of 222 at 150 % where the zebra's #EFEFEF meets white), darker than the #E6E6E6 first measured: `Look.line` and the P007 probe take #DEDEDE, tokens.json gains `grid_line`. The recording was taken by driving the View menu with the mouse through the DPI-aware screen: the lower items sit below a 1280 by 800 virtualised capture.
+
+## D2396 — G012: pixel probes for the header hover and the footer band
+
+The v3 recordings of the hovered header (s02_header_hover.png) and the footer (f1_footer.png) are now replayed: ui_datagrid section 29 hovers a header cell of a grid in the v3 look and requires #D9EBF9 inside it, and requires the footer row to hold both the band's #FFFFDD and the summary cells' #E7EAEA. P017 and P020 are closed on those; the filter drop-down glyph v3 shows in a hovered header is not drawn (the filter lives in the funnel and the filter row) and stays listed as a difference, as does the footer's "Count: n" label (P013).

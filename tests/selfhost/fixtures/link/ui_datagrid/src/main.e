@@ -1498,6 +1498,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if auto_sum < 599.0 || auto_sum > 601.0 { os.exit(518) }
     dg.set_auto_width(&grid2, false, 0.0)
+    // 29. P017: the hovered header cell turns #D9EBF9; P020: the footer band is #FFFFDD with #E7EAEA cells
+    dg.clear_selection(&grid11)
+    mem.reset(&f, 0usize)
+    let (root50, build50_error) = dg.build(&f, &grid11, &theme, 400.0)
+    if build50_error != ok { os.exit(519) }
+    if settle(&harness, root50, 210000000000i64) != ok { os.exit(520) }
+    let (head_box, head_found) = bounds(&harness, &runtime, grid11.key + 1u64 + 2u64 * 1u64)
+    if !head_found { os.exit(521) }
+    if testing.hover(&harness, head_box.x + head_box.width * 0.5, head_box.y + head_box.height * 0.5) != ok { os.exit(522) }
+    mem.reset(&f, 0usize)
+    let (root51, build51_error) = dg.build(&f, &grid11, &theme, 400.0)
+    if build51_error != ok { os.exit(523) }
+    if settle(&harness, root51, 212000000000i64) != ok { os.exit(524) }
+    let (shot_h, shot_h_error) = testing.snapshot(&harness, a)
+    if shot_h_error != ok { os.exit(525) }
+    if !is_color(shot_h, px(head_box.x + 2.0, head_box.y + 2.0), gl.rgb(0xD9EBF9u32)) { os.exit(526) }
+    // the footer: along its middle, the band's own colour and the summary cells'
+    let (foot_box, foot_found) = bounds(&harness, &runtime, dg.footer_key(&grid11))
+    if !foot_found { os.exit(527) }
+    var band_seen = false
+    var cell_seen = false
+    var foot_x: f32 = 0.0
+    while foot_x < foot_box.width {
+        let at_px = px(foot_box.x + foot_x, foot_box.y + foot_box.height * 0.5)
+        if is_color(shot_h, at_px, gl.rgb(0xFFFFDDu32)) { band_seen = true }
+        if is_color(shot_h, at_px, gl.rgb(0xE7EAEAu32)) { cell_seen = true }
+        foot_x += 2.0
+    }
+    if !band_seen || !cell_seen { os.exit(528) }
     os.exit(0)
     ret ok
 }
