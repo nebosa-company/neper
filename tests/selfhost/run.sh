@@ -2593,6 +2593,11 @@ ui_code_editor_ext_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$ui_code_editor_ext_written" = 'executable written' ]
 chmod +x "$test_build/ui-code-editor-ext-selfhost"
 "$test_build/ui-code-editor-ext-selfhost"
+# `e.ui.code_editor` services: 1,098 generated cases (registry-ID language packs against Pygments, suffix map read from the plan, wrap-aware motion over collapsed folds, per-view fold state through edits and undo, completion sources and refinement, revisioned diagnostics, bracket and JSON lints against Python's json) (D4401).
+ui_code_editor_svc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_code_editor_svc/src/main.e" "$repo" x64 linux "$test_build/ui-code-editor-svc-selfhost")
+[ "$ui_code_editor_svc_written" = 'executable written' ]
+chmod +x "$test_build/ui-code-editor-svc-selfhost"
+"$test_build/ui-code-editor-svc-selfhost"
 # `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
 fmt_lzma_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_lzma/src/main.e" "$repo" x64 linux "$test_build/fmt-lzma-selfhost")
 [ "$fmt_lzma_written" = 'executable written' ]

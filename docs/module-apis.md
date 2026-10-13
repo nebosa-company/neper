@@ -10456,16 +10456,17 @@ type Batch = struct { edit_first: usize, edit_n: usize, text_first: usize, text_
 type Entry = struct { batch_first: usize, batch_n: usize, sel_first: usize, sel_n: usize, id_before: u64, kind: u32 }
 type Stack = struct { entries: []Entry, nent: usize, batches: []Batch, nbat: usize, edits: []Edit, ned: usize, text: []u8, ntext: usize, sels: []Range, nsel: usize }
 type Token = struct { start: usize, end: usize, kind: u32 }
-type Language = struct { keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str }
+type Language = struct { keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str, fold_case: bool, line_comment2: str, nested: bool, block2_open: str, block2_close: str }
 type SearchOpts = struct { case_sensitive: bool, whole_word: bool }
-type Fold = struct { from: usize, to: usize }
-type Editor = struct { buf: []u8, gap_start: usize, gap_end: usize, lines: []usize, nlines: usize, line_state: []u8, first_dirty: usize, sels: []Range, nsel: usize, primary: usize, undo: Stack, redo: Stack, content_id: u64, next_id: u64, saved_id: u64, revision: u64, can_merge: bool, merge_kind: u32, lang: Language, use_tabs: bool, tab_width: usize, indent_unit: usize, scratch_edits: []Edit, scratch_text: []u8, scratch_sels: []Range }
+type Editor = struct { buf: []u8, gap_start: usize, gap_end: usize, lines: []usize, nlines: usize, line_state: []u8, first_dirty: usize, sels: []Range, nsel: usize, primary: usize, undo: Stack, redo: Stack, content_id: u64, next_id: u64, saved_id: u64, revision: u64, can_merge: bool, merge_kind: u32, lang: Language, use_tabs: bool, tab_width: usize, indent_unit: usize, scratch_edits: []Edit, scratch_text: []u8, scratch_sels: []Range, views: []FoldView, diag: DiagSet }
 error Invalid
 error TooLarge
 error TooManyLines
 error TooManySelections
 error NotBoundary
 error BadEdits
+error NoFold
+error Stale
 const NO_GOAL: usize = 18446744073709551615usize
 const NO_DIRTY: usize = 18446744073709551615usize
 const KIND_OTHER: u32 = 0u32
@@ -10510,6 +10511,43 @@ fn lang_yaml() -> Language
 fn lang_toml() -> Language
 fn lang_lua() -> Language
 fn same_bytes(x: []const u8, y: str) -> bool
+fn pack(keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str) -> Language
+fn lang_jsonc() -> Language
+fn lang_c_dialect() -> Language
+fn lang_csharp() -> Language
+fn lang_kotlin() -> Language
+fn lang_swift() -> Language
+fn lang_dart() -> Language
+fn lang_r() -> Language
+fn lang_protobuf() -> Language
+fn lang_assembly() -> Language
+fn lang_intelasm() -> Language
+fn lang_markdown() -> Language
+fn lang_sql_dialect(extra: str, hash_comments: bool) -> Language
+fn lang_objectpascal() -> Language
+fn lang_powershell() -> Language
+fn lang_terraform() -> Language
+fn lang_batch() -> Language
+fn lang_vbnet() -> Language
+fn lang_vbclassic() -> Language
+fn lang_fortran() -> Language
+fn lang_php() -> Language
+fn lang_ada() -> Language
+fn lang_objectivec() -> Language
+fn lang_cobol() -> Language
+fn lang_julia() -> Language
+fn lang_ruby() -> Language
+fn lang_perl() -> Language
+fn lang_sas() -> Language
+fn lang_matlab() -> Language
+fn lang_caml() -> Language
+fn lang_prolog() -> Language
+fn lang_gml() -> Language
+fn lang_by_id(id: str) -> Language
+fn suffix_in(s: []const u8, list: str) -> bool
+fn lang_id_for_suffix(suffix: str) -> str
+fn lang_suffix_ambiguous(suffix: str) -> bool
+fn lang_id_for_file_name(name: str) -> str
 fn lang_for_suffix(suffix: str) -> Language
 fn len(e: *const Editor) -> usize
 fn byte_at(e: *const Editor, i: usize) -> u8
@@ -10530,9 +10568,18 @@ fn column_of(e: *const Editor, pos: usize) -> usize
 fn pos_at_column(e: *const Editor, ln: usize, col: usize) -> usize
 fn lines_splice(e: *Editor, at: usize, rem: usize, src: []const u8, off: usize, n: usize)
 fn is_word_byte(c: u8) -> bool
-fn has_word(set: str, e: *const Editor, from: usize, to: usize) -> bool
+fn lower_byte(c: u8) -> u8
+fn has_word(set: str, e: *const Editor, from: usize, to: usize, fold: bool) -> bool
 fn at_prefix(e: *const Editor, p: usize, end: usize, s: str) -> bool
+fn at_prefix_fold(e: *const Editor, p: usize, end: usize, s: str, fold: bool) -> bool
 fn quote_index(set: str, c: u8) -> usize
+const ST_BLOCK: u8 = 1u8
+const ST_QUOTE0: u8 = 2u8
+const ST_BLOCK2: u8 = 10u8
+const ST_DEEP0: u8 = 11u8
+const ST_MAX: u8 = 127u8
+fn comment_scan(e: *const Editor, lg: *const Language, p_in: usize, end: usize, pair: u8, depth_in: usize) -> (usize, usize)
+fn state_of_block(pair: u8, depth: usize) -> u8
 fn scan_probe(e: *const Editor, ln: usize, state_in: u8, out: []Token, probe: usize) -> (usize, u8, bool)
 fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize, u8)
 fn ensure_states(e: *Editor, upto: usize)
@@ -10594,6 +10641,7 @@ fn find_regex(e: *Editor, prog: *const rx.Regex, from: usize, forward: bool) -> 
 fn count_regex(e: *Editor, prog: *const rx.Regex, limit: usize) -> (usize, bool)
 fn expand_replacement(text: str, whole: rx.Match, groups: []const rx.Match, repl: str, dst: []u8, off_in: usize) -> usize
 fn replace_regex_all(a: *mem.Arena, e: *Editor, prog: *const rx.Regex, repl: str) -> (usize, err)
+type Fold = struct { from: usize, to: usize }
 fn bracket_partner(c: u8) -> u8
 fn in_skipped(e: *Editor, pos: usize) -> bool
 fn match_at_bracket(e: *Editor, at: usize) -> (usize, bool)
@@ -10613,6 +10661,81 @@ fn word_bounds(e: *const Editor, pos: usize) -> (usize, usize)
 fn select_next_occurrence(e: *Editor, o: SearchOpts) -> err
 fn select_all_occurrences(e: *Editor, o: SearchOpts) -> err
 fn split_selection_by_line(e: *Editor) -> err
+type FoldView = struct { folds: []Fold, n: usize }
+fn attach_views(e: *Editor, a: *mem.Arena, nviews: usize, cap: usize) -> err
+fn view_count(e: *const Editor) -> usize
+fn fold_count(e: *const Editor, view: usize) -> usize
+fn fold_get(e: *const Editor, view: usize, i: usize) -> Fold
+fn fold_index(e: *const Editor, view: usize, ln: usize) -> usize
+fn fold_is_collapsed(e: *const Editor, view: usize, ln: usize) -> bool
+fn fold_insert(fv: *FoldView, f: Fold)
+fn fold_collapse(e: *Editor, view: usize, ln: usize) -> err
+fn fold_expand(e: *Editor, view: usize, ln: usize) -> bool
+fn fold_toggle(e: *Editor, view: usize, ln: usize) -> err
+fn fold_expand_all(e: *Editor, view: usize)
+fn fold_collapse_all(e: *Editor, view: usize) -> err
+fn line_hidden(e: *const Editor, view: usize, ln: usize) -> bool
+fn visible_line_count(e: *const Editor, view: usize) -> usize
+fn next_visible_line(e: *const Editor, view: usize, ln: usize) -> usize
+fn prev_visible_line(e: *const Editor, view: usize, ln: usize) -> usize
+fn fold_refresh(e: *Editor, view: usize) -> usize
+const MOVE_ROW_START: u32 = 11u32
+const MOVE_ROW_END: u32 = 12u32
+fn wrap_row_span(e: *const Editor, ln: usize, pos: usize, width: usize) -> (usize, usize)
+fn wrap_pos_in_row(e: *const Editor, ln: usize, rs: usize, re: usize, goal: usize) -> usize
+fn move_wrapped(e: *Editor, dir: u32, extend: bool, width: usize, view: usize) -> err
+const COMP_KEYWORD: u32 = 1u32
+const COMP_TYPE: u32 = 2u32
+const COMP_WORD: u32 = 3u32
+const COMP_SNIPPET: u32 = 4u32
+const COMP_SYMBOL: u32 = 5u32
+const RANK_KEYWORD: u32 = 1000u32
+const RANK_TYPE: u32 = 1001u32
+const RANK_WORD: u32 = 2000u32
+type CompSource = struct { kind: u32, rank: u32, words: str }
+type Candidate = struct { off: usize, len: usize, kind: u32, rank: u32, score: u32 }
+type CompletionSet = struct { items: []Candidate, n: usize, text: []u8, ntext: usize, from: usize, to: usize, revision: u64, incomplete: bool, valid: bool }
+fn completion_open(a: *mem.Arena, items: usize, text_bytes: usize) -> (CompletionSet, err)
+fn completion_label(s: *const CompletionSet, i: usize) -> []const u8
+fn comp_score(e: *const Editor, label: []const u8, pf: usize, pt: usize) -> u32
+fn comp_before(s: *const CompletionSet, score: u32, rank: u32, label: []const u8, b: usize) -> bool
+fn comp_add(s: *CompletionSet, e: *const Editor, label: []const u8, kind: u32, rank: u32, pf: usize, pt: usize)
+fn comp_sort(s: *CompletionSet)
+fn comp_add_words(s: *CompletionSet, e: *const Editor, words: str, kind: u32, rank: u32, pf: usize, pt: usize)
+fn complete(e: *Editor, s: *CompletionSet, pos: usize, sources: []const CompSource, triggers: str, manual: bool) -> err
+fn completion_refine(e: *const Editor, s: *CompletionSet, pos: usize) -> bool
+const SEV_ERROR: u32 = 1u32
+const SEV_WARNING: u32 = 2u32
+const SEV_INFO: u32 = 3u32
+const SEV_HINT: u32 = 4u32
+const NO_SOURCE: u32 = 4294967295u32
+const SRC_BRACKETS: u32 = 1u32
+const SRC_JSON: u32 = 2u32
+type Diagnostic = struct { from: usize, to: usize, severity: u32, code: u32, source: u32, msg_off: usize, msg_len: usize }
+type DiagSet = struct { items: []Diagnostic, n: usize, text: []u8, ntext: usize }
+fn attach_diagnostics(e: *Editor, a: *mem.Arena, cap: usize, text_cap: usize) -> err
+fn diag_count(e: *const Editor) -> usize
+fn diag_get(e: *const Editor, i: usize) -> Diagnostic
+fn diag_message(e: *const Editor, i: usize) -> []const u8
+fn diag_counts(e: *const Editor) -> (usize, usize, usize)
+fn diag_before(a: Diagnostic, b: Diagnostic) -> bool
+fn diag_clear(e: *Editor, source: u32) -> usize
+fn diag_publish(e: *Editor, source: u32, revision: u64, items: []const Diagnostic, text: []const u8) -> err
+fn diag_at(e: *const Editor, pos: usize) -> usize
+fn diag_next(e: *const Editor, pos: usize, forward: bool, wrap: bool) -> usize
+fn map_marks(e: *Editor, edits: []const Edit)
+const LINT_UNMATCHED_CLOSE: u32 = 1u32
+const LINT_MISMATCHED: u32 = 2u32
+const LINT_UNCLOSED: u32 = 3u32
+const LINT_JSON: u32 = 10u32
+fn lint_brackets(e: *Editor, out: []Diagnostic) -> usize
+fn json_ws(e: *const Editor, p_in: usize) -> usize
+fn json_digit(e: *const Editor, p: usize) -> bool
+fn json_hex(e: *const Editor, p: usize) -> bool
+fn json_string(e: *const Editor, p: usize) -> (usize, u32)
+fn json_number(e: *const Editor, p: usize) -> usize
+fn json_literal(e: *const Editor, p: usize, word: str) -> bool
+fn lint_json(e: *const Editor) -> (usize, bool)
 ```
 
 D3500 adds regular-expression `find_regex`/`count_regex`/`replace_regex_all` over a compiled `e.text.regex` program (the non-empty matches left to right; `$0`..`$9` and `$$` in replacements; one transaction), `match_bracket` (string and comment tokens neither match nor count), `fold_at`/`fold_all` (bracket folds, plus indentation folds in `#`-comment languages), soft-wrap rows (`wrap_rows`, `wrap_row_start`, `wrap_locate`, `wrap_total_rows`: a row breaks after the last blank it holds, else at the overflowing caret stop), `add_cursor_vertical`, `select_rect`, `select_next_occurrence`, `select_all_occurrences`, `split_selection_by_line`, and the language packs `lang_c`, `lang_rust`, `lang_go`, `lang_java`, `lang_typescript`, `lang_json`, `lang_shell`, `lang_sql`, `lang_css`, `lang_html`, `lang_yaml`, `lang_toml`, `lang_lua` behind `lang_for_suffix`.

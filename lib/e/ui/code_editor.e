@@ -6,8 +6,10 @@
 // and its history reserved BEFORE anything is mutated, so a refused edit leaves content, selections, history and
 // saved state exactly as they were. Positions are UTF-8 byte offsets; columns are counted in code points and
 // caret motion steps over combining marks and ZWJ sequences. Storage is one arena allocation made by `open`.
-// Not here yet: the widget, IME/accessibility, bidi, wrapping/virtual rows, decorations, folding, regex search,
-// completion, diagnostics, LSP and the remaining language packs (see docs/code-editor-plan.md).
+// D4401 added the registry-ID language packs (suffix map, nested and second block comments, case-folded keywords),
+// per-view folds mapped through every edit, wrap-aware vertical motion, the completion source model, revisioned
+// diagnostics and the bracket and JSON lints. Not here yet: the widget, IME/accessibility, bidi, virtual rows,
+// decorations, snippets, LSP, the Scratch adapter and the semantic providers (see docs/code-editor-plan.md).
 
 use e.mem
 use e.text.regex as rx
@@ -604,13 +606,13 @@ fn lang_suffix_ambiguous(suffix: str) -> bool {
         lower[i] = lower_byte(suffix[i])
         i += 1usize
     }
-    ret suffix_in(lower[0usize..suffix.len], " h m pl ml mli inc ")
+    ret suffix_in(lower[0usize..suffix.len], " h m pl ml inc ")
 }
 
 // The registry ID for a file name: whole-name conventions first (`Gemfile`, `Rakefile`, `Makefile`-free), then the
 // text after the last dot; "" when neither is known.
 fn lang_id_for_file_name(name: str) -> str {
-    if same_bytes(name, "Gemfile") || same_bytes(name, "Rakefile") || same_bytes(name, "Guardfile") { ret "ruby" }
+    if same_bytes(name, "Gemfile") || same_bytes(name, "Rakefile") { ret "ruby" }
     var dot = name.len
     var i = 0usize
     while i < name.len {
