@@ -1487,5 +1487,12 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
         parts[at] = navigator
         at += 1usize
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), parts[0usize..part_count]), ok)
+    var frame = style.defaults()
+    var gap: f32 = 4.0
+    if grid.look.on {
+        // the grid is framed by a 1 px line and its parts touch
+        frame.border = style.Border { width: 1.0, color: grid.look.frame }
+        gap = 0.0
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap }, frame, parts[0usize..part_count]), ok)
 }

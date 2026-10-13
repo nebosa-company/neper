@@ -2442,4 +2442,5 @@ D2479	599	The QMP socket waits a minute, and the screendump script retries a sta
 D2480	1004	A program window may take a second level-3 table; the shared surface moves to USER_BASE + 4 MB
 D2481	599	The shell-processes boot does not fix which child runs first
 D3918	818	G012: the grid is a pixel-perfect equivalent of the v3 grid
-D3919	1350	G012: the grid reads a measured look (e.ui.gridlook)
+D3919	1351	G012: the grid reads a measured look (e.ui.gridlook)
+D3920	534	G012: text size 8 pt and the grid frame
