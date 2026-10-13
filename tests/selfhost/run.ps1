@@ -8266,7 +8266,7 @@ $crossAltered = Join-Path $testBuild 'manifest-cross-linux-altered.json'
 $crossText = [IO.File]::ReadAllText($crossLinux)
 [IO.File]::WriteAllText($crossAltered, [regex]::Replace($crossText, '("path":"run_args\.e"\},"sha256":")[0-9a-f]{64}', '${1}0000000000000000000000000000000000000000000000000000000000000000'))
 $crossChanged = & $compiler compare-manifests $crossWindows $crossAltered --cross-host
-if ($LASTEXITCODE -ne 1 -or $crossChanged -notmatch 'input run_args\.e: ') { throw "a changed input is not named across hosts: $crossChanged" }
+if ($LASTEXITCODE -ne 1 -or (($crossChanged | ForEach-Object { "$_" }) -join "`n") -notmatch 'input run_args\.e: ') { throw "a changed input is not named across hosts: $crossChanged" }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
 $shortRoot = Join-Path $repo 'build\windows\short'
