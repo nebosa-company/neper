@@ -570,7 +570,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build10_error != ok { os.exit(120) }
     if settle(&harness, root10, 10000000000i64) != ok { os.exit(121) }
     if testing.by_text(&harness, "Row 1 of 3000").count == 0usize { os.exit(122) }
-    if testing.by_text(&harness, ">").count == 0usize { os.exit(123) }
+    if !grid2.has_selection { os.exit(123) }
     if !tap_text(&harness, &runtime, "Next") { os.exit(124) }
     if app.picked != grp.visible_row(&app.grouping, 1usize) { os.exit(125) }
     if !tap_text(&harness, &runtime, "Last") { os.exit(126) }
@@ -1452,6 +1452,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var first_edit = 0usize
     while first_edit < grid2.specs.len && !grid2.specs[first_edit].editable { first_edit += 1usize }
     if dg.on_row_tab(mem.cast[*void](&grid2)) != ok || !grid2.editing || grid2.edit_spec != first_edit { os.exit(492) }
+    // 26. v3 trace M1: several rows selected. Shift+Down extends from the anchor, Ctrl toggles one row,
+    // a plain move selects one again, Ctrl+A selects every row
+    dg.set_multi_select(&grid15, true)
+    if dg.navigate(&grid15, dg.Nav.First) != ok { os.exit(500) }
+    if dg.selection_size(&grid15) != 1usize { os.exit(501) }
+    if dg.extend_selection(&grid15, dg.Nav.Next) != ok || dg.extend_selection(&grid15, dg.Nav.Next) != ok { os.exit(502) }
+    if dg.selection_size(&grid15) != 3usize { os.exit(503) }
+    let (m_first, m_has) = dg.current_position(&grid15)
+    if !m_has || m_first != 2usize { os.exit(504) }
+    let m_second = grp.visible_row(&app.grouping, 1usize)
+    dg.set_mark(&grid15, m_second, !dg.is_marked(&grid15, m_second))
+    if dg.selection_size(&grid15) != 2usize || dg.is_marked(&grid15, m_second) { os.exit(505) }
+    if dg.navigate(&grid15, dg.Nav.Next) != ok || dg.selection_size(&grid15) != 1usize { os.exit(506) }
+    dg.select_all(&grid15)
+    if dg.selection_size(&grid15) != grp.visible_len(&app.grouping) { os.exit(507) }
+    dg.set_multi_select(&grid15, false)
+    if dg.is_marked(&grid15, m_second) { os.exit(508) }
     os.exit(0)
     ret ok
 }

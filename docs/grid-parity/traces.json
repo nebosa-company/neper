@@ -114,6 +114,20 @@
    "replayed": "ui_datagrid section 25; live in the sample (E1-edit-sequence-v5.png)"
   },
   {
+   "id": "M1",
+   "name": "selecting several rows",
+   "steps": [
+    "click a row: it is selected and current",
+    "Shift+click another row: every row between is selected, the clicked one is current (thin arrow in the indicator of each selected row, a black triangle on the current)",
+    "Ctrl+click a selected row: it is deselected and stays current (triangle, 1 px line, no fill)",
+    "Ctrl+click an unselected row: it joins the selection",
+    "Ctrl+A selects every row; Shift+Up/Down extend from the anchor"
+   ],
+   "v3": "recorded: docs/grid-parity/M1-multi-select-v3.png",
+   "neper": "set_multi_select(grid, true): marks bitset, Ctrl/Shift in on_pick (widget.modifiers), Ctrl+A and Shift+Up/Down shortcuts, indicator marks",
+   "replayed": "ui_datagrid section 26; live in the sample (M1-multi-select-v5.png)"
+  },
+  {
    "id": "F1",
    "name": "filter",
    "v3": "the card pool has no filter row: the toolbar box is a Find box (typing does nothing until the binoculars or Enter) and the funnel opens the 'Filter Card Pool' dialog with OK/Apply, so there is no delayed apply to record in this view",

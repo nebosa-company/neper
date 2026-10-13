@@ -28,6 +28,11 @@ foreach ($s in ($Script -split ";")) {
     'dclick' { [AW]::SetCursorPos($r.L + [int]$t[1], $r.T + [int]$t[2]) | Out-Null; Start-Sleep -Milliseconds 150; 1..2 | ForEach-Object { [AW]::mouse_event(2,0,0,0,[UIntPtr]::Zero); [AW]::mouse_event(4,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 60 }; Start-Sleep -Milliseconds 600 }
     'rclick' { [AW]::SetCursorPos($r.L + [int]$t[1], $r.T + [int]$t[2]) | Out-Null; Start-Sleep -Milliseconds 150; [AW]::mouse_event(8,0,0,0,[UIntPtr]::Zero); [AW]::mouse_event(16,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 600 }
     'key'    { [AW]::keybd_event([byte][int]$t[1],0,0,[UIntPtr]::Zero); [AW]::keybd_event([byte][int]$t[1],0,2,[UIntPtr]::Zero); Start-Sleep -Milliseconds 500 }
+    'kd'     { [AW]::keybd_event([byte][int]$t[1],0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 150 }
+    'ku'     { [AW]::keybd_event([byte][int]$t[1],0,2,[UIntPtr]::Zero); Start-Sleep -Milliseconds 150 }
+    'down'   { [AW]::SetCursorPos($r.L + [int]$t[1], $r.T + [int]$t[2]) | Out-Null; Start-Sleep -Milliseconds 200; [AW]::mouse_event(2,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 300 }
+    'drag'   { $x0 = [int]$t[1]; $y0 = [int]$t[2]; $x1 = [int]$t[3]; $y1 = [int]$t[4]; foreach ($i in 1..12) { [AW]::SetCursorPos($r.L + $x0 + [int](($x1-$x0)*$i/12), $r.T + $y0 + [int](($y1-$y0)*$i/12)) | Out-Null; Start-Sleep -Milliseconds 60 }; Start-Sleep -Milliseconds 400 }
+    'up'     { [AW]::mouse_event(4,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 500 }
     'wait'   { Start-Sleep -Milliseconds ([int]$t[1]) }
     'shot'   {
       # the full screen, so popup menus (separate windows) are in it; cropped to the window plus margin
