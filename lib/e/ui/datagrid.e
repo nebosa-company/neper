@@ -77,7 +77,7 @@ const FILTER_KEY: u64 = 2048u64
 const EDIT_KEY: u64 = 3000u64
 const EDIT_TEXT: usize = 64usize
 
-type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator }
+type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator, Star }
 
 // A titled span over `count` columns from spec `first`.
 type Band = struct { title: str, first: usize, count: usize }
@@ -1114,6 +1114,16 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         if grid.has_selection && grid.selected_row == row { mark = ">" }
         ret text_node(a, grid, mark, true, .Text, out)
     }
+    if grid.specs[column].kind == CellKind.Star {
+        // a favourite: a gold star when the boolean is set, nothing otherwise
+        if !table.is_null(grid.t, grid.specs[column].column, row) && table.get_bool(grid.t, grid.specs[column].column, row) {
+            let (star, star_error) = gl.mark(a, .StarFilled, gl.rgb(0xE8B100u32), gl.rgb(0xFFFFFFu32), 13.0, 13.0)
+            if star_error != ok { ret star_error }
+            *out = star
+            ret ok
+        }
+        ret text_node(a, grid, "", false, .Text, out)
+    }
     if grid.specs[column].kind == CellKind.Custom { ret grid.events.custom_cell(grid.events.ctx, a, grid.theme, row, grid.origin[column], out) }
     var role = grid.events.row_role(grid.events.ctx, row)
     let (text, text_error) = cell_text(a, grid, column, row)
@@ -1167,6 +1177,13 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
 fn row_kind(ctx: *void, index: usize) -> u8 {
     let grid = mem.cast[*Grid](ctx)
     if index < grp.visible_len(grid.g) && grp.visible_is_group(grid.g, index) { ret 1u8 }
+    ret 0u8
+}
+
+// The header mark of a column for the table look: 1 (the favourite star) for a Star column.
+fn header_glyph(ctx: *void, shown: usize) -> u8 {
+    let grid = mem.cast[*Grid](ctx)
+    if shown < grid.specs.len && grid.specs[shown].kind == CellKind.Star { ret 1u8 }
     ret 0u8
 }
 
@@ -1309,6 +1326,38 @@ fn on_navigate(ctx: *void) -> err {
 }
 
 // First / Prev / Next / Last buttons and "Row n of m".
+// A navigator button of the measured look: a blue arrow mark (grey where it cannot move).
+fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let (position, has) = current_position(grid)
+    let visible = grp.visible_len(grid.g)
+    var enabled = visible != 0usize
+    var shape = gl.Shape.Left
+    if kind == Nav.First { shape = gl.Shape.FirstBar }
+    if kind == Nav.Next { shape = gl.Shape.Right }
+    if kind == Nav.Last { shape = gl.Shape.LastBar }
+    if has {
+        if (kind == Nav.First || kind == Nav.Prev) && position == 0usize { enabled = false }
+        if (kind == Nav.Next || kind == Nav.Last) && position + 1usize >= visible { enabled = false }
+    }
+    var ink = gl.rgb(0x2C7BD6u32)
+    if !enabled { ink = gl.rgb(0xC9D3E0u32) }
+    let (mark, mark_error) = gl.mark(a, shape, ink, ink, 12.0, 12.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    let state = control.control_state(grid.theme, key, enabled, false)
+    var look = style.resolve(grid.theme.tokens, .Plain, state)
+    look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 2.0
+    look.custom_padding = true
+    look.padding = 4.0
+    look.padding_y = 3.0
+    look.min_width = 20.0
+    look.min_height = 18.0
+    let (node, node_error) = control.pressable_states(a, key, grid.theme, 3u8, label, look, enabled, false, 0u32, 0u32, 0u64, action, mark)
+    ret (node, node_error)
+}
+
 fn navigator_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let labels: [4]str = [4]str{ "First", "Prev", "Next", "Last" }
     let (picks, picks_error) = mem.alloc[NavPick](a, 4usize)
@@ -1325,6 +1374,13 @@ fn navigator_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if at == 3usize { kind = Nav.Last }
         picks[at] = NavPick { grid: grid, kind: kind }
         submits[at] = widget.Submit { ctx: mem.cast[*void](&picks[at]), invoke: on_navigate }
+        if grid.look.on {
+            let (icon, icon_error) = nav_icon(a, grid, navigator_key(grid) + 1u64 + u64(at), kind, labels[at], &submits[at])
+            if icon_error != ok { ret (zero, icon_error) }
+            cells[at] = icon
+            at += 1usize
+            continue
+        }
         var options = control.button_options()
         options.variant = .Outlined
         let (button, button_error) = control.button(a, navigator_key(grid) + 1u64 + u64(at), grid.theme, labels[at], &submits[at], options)
@@ -1337,7 +1393,7 @@ fn navigator_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var sb = b
     let (position, has) = current_position(grid)
     let (before, total) = data_counts(grid, position)
-    if str.push(&sb, "Row ") != ok { ret (zero, control.TooLarge) }
+    if !grid.look.on && str.push(&sb, "Row ") != ok { ret (zero, control.TooLarge) }
     if has {
         if str.push_usize(&sb, before + 1usize) != ok { ret (zero, control.TooLarge) }
     } else {
@@ -1440,7 +1496,7 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     var table_options: collection.TableOptions = zero
     if grid.look.on {
         let lk = grid.look
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph }
     }
     if grid.preview_on {
         table_options.expandable = true

@@ -2133,4 +2133,5 @@ D2374	2303	G008: conditional formatting rules (e.ui.gridrules) and their grid re
 D2375	818	G012: the grid is a pixel-perfect equivalent of the v3 grid
 D2376	1351	G012: the grid reads a measured look (e.ui.gridlook)
 D2377	535	G012: text size 8 pt and the grid frame
-D2378	693	G012: text size by measured ink width; no integer-advance mode
+D2378	694	G012: text size by measured ink width; no integer-advance mode
+D2379	934	G012: favourite star column, navigator arrows, 1 MB scenes

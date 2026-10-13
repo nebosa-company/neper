@@ -12,6 +12,7 @@ use e.gfx.paint
 use e.ui.accessibility
 use e.ui.animation
 use e.ui.control
+use e.ui.gridlook as gl
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
@@ -1892,6 +1893,14 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = title_node
+        var glyph_header = false
+        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 1u8 {
+            glyph_header = true
+            // a column marked with the favourite star shows it in place of a title
+            let (star, star_error) = gl.mark(a, .StarOutline, paint.rgba(0.71, 0.71, 0.71, 1.0), look.header, 15.0, 15.0)
+            if star_error != ok { ret (zero, star_error) }
+            body[0usize] = star
+        }
         var b = 1usize
         if sorted || state.hovered {
             if !sorted { ink = control.with_alpha(muted, 0.5) }
@@ -1926,6 +1935,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             // the sort triangle stands at the cell's right edge
             line_main = .SpaceBetween
             line_style.width = style.Length { Percent: 100.0 }
+            if glyph_header { line_main = .Center }
         }
         if numeric_column(numeric, i) {
             // (D1328) At the end, the arrow before the title.
@@ -1955,6 +1965,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let sides = style.Length { Px: pad }
         let flat = style.Length { Px: 0.0 }
         head_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+        if glyph_header { head_style.padding = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat } }
         head_style.overflow = .Clip
         let (tapped, tapped_error) = mem.alloc[widget.Node](a, 1usize)
         if tapped_error != ok { ret (zero, TooLarge) }
@@ -2355,7 +2366,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8 }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8 }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
