@@ -58,12 +58,12 @@ ratios_png = {k: png_ms[k] / neper_png for k in order if k != "Neper"}
 # The banner: SVG time per chart as bars, clipped at 60 ms with the ggplot2 value written out.
 bars = ""
 y = 232
-scale = 760.0 / 60.0
+scale = 620.0 / 60.0
 for k in ["Neper", "base R", "lattice", "matplotlib", "ggplot2"]:
     v = svg_ms[k]
     w = min(v, 60.0) * scale
     cls = "accent" if k == "Neper" else "rival"
-    label = f(v) + " ms" + ("  (bar clipped)" if v > 60.0 else "")
+    label = f(v) + " ms"
     bars += ('<text class="sans ink" x="64" y="%d" font-size="26">%s</text>'
              '<rect class="%s" x="260" y="%d" width="%.0f" height="30" rx="6"/>'
              '<text class="mono ink" x="%.0f" y="%d" font-size="24">%s</text>\n  ') % (y + 24, k, cls, y, w, 260 + w + 14, y + 24, label)
@@ -82,6 +82,7 @@ banner = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width
   <text class="display ink" x="64" y="110" font-size="56">Faster charts, smaller SVG</text>
   <text class="sans muted" x="64" y="160" font-size="28">One 360x240 chart, 1,000 points and 200 markers, written as SVG. Median ms per chart.</text>
   %s
+  <text class="sans muted" x="64" y="548" font-size="22">The ggplot2 bar is clipped at 60 ms.</text>
   <text class="mono muted" x="64" y="590" font-size="20">Windows 11, R 4.6.1, matplotlib 3.9.4, five-run medians (benchmarks/charts)</text>
 </svg>
 ''' % (f(svg_ms["Neper"]), f(svg_ms["base R"]), f(svg_ms["lattice"]), f(svg_ms["matplotlib"]), f(svg_ms["ggplot2"]), bars)
