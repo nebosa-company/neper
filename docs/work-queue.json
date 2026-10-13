@@ -1648,10 +1648,10 @@
       "group": "UI",
       "order": 269,
       "title": "custom painters + row style + conditional formatting rules",
-      "score": 0,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: mana-cost/legality/foil painter fixtures from MTG assets."
+      "evidence": "D2374: e.ui.gridrules (cell-is, text, blank, above/below, top/bottom with ties and percent, duplicate/unique, 2/3-colour scale, data bar, icon set; per-field priority, whole-row, refresh by column version) and datagrid set_rules rendering (fill, bar, icon, ink, bold); ui_gridrules fixture incl. 150,000 rows vs own count, ui_datagrid section 14 pixel probes, mutations caught (exit 83, 351); v5 cardgrid uses a data bar and a top-price rule; custom painters and row_role were G006. Open: rules manager UI, expression rules, MTG legality/foil painters, Linux run."
     },
     {
       "id": "G009",

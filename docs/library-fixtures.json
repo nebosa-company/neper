@@ -323,6 +323,63 @@
    ]
   },
   {
+   "module": "e.data.table",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 50,
+   "delivered": 50,
+   "pending": [],
+   "fixtures": [
+    "data_table",
+    "data_tablefilter",
+    "data_tablegroup",
+    "data_tablerow",
+    "data_tablesearch",
+    "data_tableview",
+    "ui_datagrid",
+    "ui_gridrules"
+   ]
+  },
+  {
+   "module": "e.data.tableview",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 36,
+   "delivered": 36,
+   "pending": [],
+   "fixtures": [
+    "data_tablefilter",
+    "data_tablegroup",
+    "data_tablerow",
+    "data_tablesearch",
+    "data_tableview",
+    "ui_datagrid"
+   ]
+  },
+  {
+   "module": "e.data.tablegroup",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 36,
+   "delivered": 36,
+   "pending": [],
+   "fixtures": [
+    "data_tablegroup",
+    "ui_datagrid"
+   ]
+  },
+  {
+   "module": "e.data.tablesearch",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 6,
+   "delivered": 6,
+   "pending": [],
+   "fixtures": [
+    "data_tablesearch"
+   ]
+  },
+  {
    "module": "e.data.tree",
    "milestone": null,
    "schedule": "later",
@@ -1118,6 +1175,7 @@
     "ui_content3_v2",
     "ui_content_v2",
     "ui_core",
+    "ui_datagrid",
     "ui_desktop",
     "ui_edit",
     "ui_entry",
@@ -1742,6 +1800,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_flow",
     "ui_focus_ring",
     "ui_gallery",
@@ -1960,10 +2019,12 @@
     "ui_content3_v2",
     "ui_content_v2",
     "ui_core",
+    "ui_datagrid",
     "ui_edit",
     "ui_flow",
     "ui_focus_ring",
     "ui_gesture",
+    "ui_gridrules",
     "ui_inputs2_v2",
     "ui_inputs3_v2",
     "ui_inputs_v2",
@@ -2192,6 +2253,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_edit",
     "ui_entry",
@@ -2343,6 +2405,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_drag_drop",
     "ui_edit",
@@ -2851,6 +2914,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_edit",
     "ui_entry",
@@ -2996,6 +3060,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_drag_drop",
     "ui_entry",
@@ -3227,6 +3292,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_entry",
     "ui_feedback",
@@ -3358,6 +3424,29 @@
     "ui_property",
     "ui_ripple_v2",
     "ui_tabular"
+   ]
+  },
+  {
+   "module": "e.ui.datagrid",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 53,
+   "delivered": 53,
+   "pending": [],
+   "fixtures": [
+    "ui_datagrid"
+   ]
+  },
+  {
+   "module": "e.ui.gridrules",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 17,
+   "delivered": 17,
+   "pending": [],
+   "fixtures": [
+    "ui_datagrid",
+    "ui_gridrules"
    ]
   },
   {
@@ -3539,6 +3628,7 @@
     "ui_containers_v2",
     "ui_content",
     "ui_content2_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_edit",
     "ui_entry",
@@ -3725,6 +3815,7 @@
     "ui_content3_v2",
     "ui_content_v2",
     "ui_core",
+    "ui_datagrid",
     "ui_desktop",
     "ui_drag_drop",
     "ui_edit",
@@ -3737,6 +3828,7 @@
     "ui_form",
     "ui_gallery",
     "ui_gesture",
+    "ui_gridrules",
     "ui_host",
     "ui_inputs2_v2",
     "ui_inputs3_v2",
@@ -3828,6 +3920,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_entry",
     "ui_feedback",
@@ -3935,6 +4028,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_drag_drop",
     "ui_edit",

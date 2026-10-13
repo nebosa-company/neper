@@ -971,6 +971,10 @@ chmod +x "$test_build/data-tablerow-selfhost"
 ui_datagrid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_datagrid/src/main.e" "$repo" x64 linux "$test_build/ui-datagrid-selfhost" --arena 768m)
 [ "$ui_datagrid_written" = 'executable written' ]
 chmod +x "$test_build/ui-datagrid-selfhost"
+# `e.ui.gridrules`: conditional formatting rules over a table: cell-is, text, blank, above / below, top / bottom with ties, duplicate / unique, scale, bar, icons, priority, whole row, refresh, refusals, 150,000 rows against a count of the fixture's own (D2374).
+ui_gridrules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_gridrules/src/main.e" "$repo" x64 linux "$test_build/ui-gridrules-selfhost" --arena 256m)
+[ "$ui_gridrules_written" = 'executable written' ]
+chmod +x "$test_build/ui-gridrules-selfhost"
 "$test_build/ui-datagrid-selfhost"
 # `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
 # generational keys: stale after removal, reused with the next generation, retired at the last.
