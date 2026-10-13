@@ -106,10 +106,11 @@
     "tap the Qty cell of a row: the row is current and a compact editor opens in the cell at once",
     "type a digit, Enter: the value is committed, the editor closes, the row stays current and the footer sum updates",
     "Down: the next row becomes current",
-    "Tab: the editor opens in the first editable cell of the row (Qty); Tab again: the next editable cell (Used)"
+    "Tab: the editor opens in the first editable cell of the row (Qty); Tab again: the next editable cell (Used)",
+    "the caret sits where the cell was tapped: a tap left of the digits then a typed 5 gives 511, between them 151, past them 115"
    ],
    "v3": "recorded: docs/grid-parity/E1-collection-edit-v3.png",
-   "neper": "set_immediate_edit(grid, true): first tap edits, commit returns the keyboard to the row (rest_row), Tab edits the next editable cell",
+   "neper": "set_immediate_edit(grid, true): first tap edits, commit returns the keyboard to the row (rest_row), Tab edits the next editable cell; edit_caret_frames + widget.edit_place_caret put the caret at the tap's distance into the cell",
    "replayed": "ui_datagrid section 25; live in the sample (E1-edit-sequence-v5.png)"
   },
   {
@@ -121,7 +122,6 @@
   }
  ],
  "open": [
-  "Ctrl+click multi-sort, Shift+click ranges, typeahead search buffer reset time",
-  "caret position inside the cell editor (v3 puts it at the click, Neper at the start)"
+  "Ctrl+click multi-sort, Shift+click ranges, typeahead search buffer reset time"
  ]
 }

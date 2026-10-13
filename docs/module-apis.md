@@ -14784,6 +14784,7 @@ fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction
 fn slider_value_of(widget_runtime: *const Runtime, element: ElementId) -> (f32, f32, bool)
 fn edit_value(widget_runtime: *const Runtime, element: ElementId) -> (str, bool)
 fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize, usize, bool)
+fn edit_place_caret(widget_runtime: *Runtime, dx: f32) -> bool
 fn scroll_to(widget_runtime: *Runtime, element: ElementId, offset: f32) -> err
 fn scroll_offset_of(widget_runtime: *const Runtime, element: ElementId) -> (f32, bool)
 fn visible_range(offset: f32, viewport: f32, count: usize, extent: f32) -> (usize, usize)
