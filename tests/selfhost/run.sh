@@ -1246,11 +1246,21 @@ chmod +x "$test_build/ui-tree-adapter-tailored-selfhost"
 ui_markdown_view_fit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_markdown_view_fit/src/main.e" "$repo" x64 linux "$test_build/ui-markdown-view-fit-selfhost")
 [ "$ui_markdown_view_fit_written" = 'executable written' ]
 chmod +x "$test_build/ui-markdown-view-fit-selfhost"
+# `e.ui.markdown_view` at the window: link activation by tap under both policies and the clipboard round trip of a selection (L066, D4607).
+ui_markdown_view_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_markdown_view_window/src/main.e" "$repo" x64 linux "$test_build/ui-markdown-view-window-selfhost")
+[ "$ui_markdown_view_window_written" = 'executable written' ]
+chmod +x "$test_build/ui-markdown-view-window-selfhost"
+"$test_build/ui-markdown-view-window-selfhost"
 "$test_build/ui-markdown-view-fit-selfhost"
 # `e.ui.schedule` zones, month bars and series moves against zoneinfo and dateutil (L148).
 ui_schedule_zones_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_zones/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-zones-selfhost")
 [ "$ui_schedule_zones_written" = 'executable written' ]
 chmod +x "$test_build/ui-schedule-zones-selfhost"
+# `e.ui.schedule` single-occurrence exceptions (EXDATE, cancel_occurrence, move_occurrence) against dateutil (L148, D4606).
+ui_schedule_exceptions_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_exceptions/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-exceptions-selfhost")
+[ "$ui_schedule_exceptions_written" = 'executable written' ]
+chmod +x "$test_build/ui-schedule-exceptions-selfhost"
+"$test_build/ui-schedule-exceptions-selfhost"
 "$test_build/ui-schedule-zones-selfhost"
 # `e.time.pattern` locale names against Babel's CLDR formatter (L150).
 time_pattern_locales_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_pattern_locales/src/main.e" "$repo" x64 linux "$test_build/time-pattern-locales-selfhost")
@@ -3857,12 +3867,30 @@ chmod +x "$test_build/net-grpcretry-selfhost"
 net_grpcretry_output=$("$test_build/net-grpcretry-selfhost")
 [ "$net_grpcretry_output" = 'net grpcretry ok' ]
 # `e.net.grpccall`: the A6 retry and hedging loop over the real client and server connections on a virtual clock
-# # (331 runs: 60 against grpcio, the rest against an independent model, D3401).
+# # (401 runs: 101 against grpcio, the rest against an independent model, D3401, D4601).
 net_grpccall_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpccall/src/main.e" "$repo" x64 linux "$test_build/net-grpccall-selfhost" -j 2)
 [ "$net_grpccall_written" = 'executable written' ]
 chmod +x "$test_build/net-grpccall-selfhost"
 net_grpccall_output=$("$test_build/net-grpccall-selfhost")
 [ "$net_grpccall_output" = 'net grpccall ok' ]
+# `e.net.sftp`: SFTP v3 packets against OpenSSH's sftp-server (134 transcript lines recorded from a live server, D4602)
+net_sftp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_sftp/src/main.e" "$repo" x64 linux "$test_build/net-sftp-selfhost" -j 2)
+[ "$net_sftp_written" = 'executable written' ]
+chmod +x "$test_build/net-sftp-selfhost"
+net_sftp_output=$("$test_build/net-sftp-selfhost")
+[ "$net_sftp_output" = 'net sftp ok' ]
+# `x.cloud.awssig`: AWS Signature Version 4 against botocore's SigV4Auth and S3SigV4Auth (1500 generated requests, D4603)
+x_cloud_awssig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_cloud_awssig/src/main.e" "$repo" x64 linux "$test_build/x-cloud-awssig-selfhost" -j 2)
+[ "$x_cloud_awssig_written" = 'executable written' ]
+chmod +x "$test_build/x-cloud-awssig-selfhost"
+x_cloud_awssig_output=$("$test_build/x-cloud-awssig-selfhost")
+[ "$x_cloud_awssig_output" = 'x cloud awssig ok' ]
+# `x.cloud.awsreq`: query, ec2, json and rest-xml request bodies against botocore's serializers (450 parameter sets over 75 operations, query, ec2, json and rest-xml, D4609, D4610)
+x_cloud_awsreq_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_cloud_awsreq/src/main.e" "$repo" x64 linux "$test_build/x-cloud-awsreq-selfhost" -j 2)
+[ "$x_cloud_awsreq_written" = 'executable written' ]
+chmod +x "$test_build/x-cloud-awsreq-selfhost"
+x_cloud_awsreq_output=$("$test_build/x-cloud-awsreq-selfhost")
+[ "$x_cloud_awsreq_output" = 'x cloud awsreq ok' ]
 # `e.net.grpcstub`: typed gRPC stubs generated from descriptors, round-tripped against Python's protobuf wire bytes
 # # (242 serialised instances, fixed messages, the generator's own output, D3006).
 net_grpcstub_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpcstub/src/main.e" "$repo" x64 linux "$test_build/net-grpcstub-selfhost" -j 2)
@@ -3898,6 +3926,13 @@ algo_syncinfer_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/algo-syncinfer-selfhost"
 algo_syncinfer_output=$("$test_build/algo-syncinfer-selfhost")
 [ "$algo_syncinfer_output" = 'algo syncinfer ok' ]
+# `e.algo.syncinfer` coerce_value / coerce_record: the typed value of a cell under four local zones
+# # against appdor's coerceValue / coerceRecord in src/io/infer.js (D4600).
+algo_syncinfer_coerce_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_syncinfer_coerce/src/main.e" "$repo" x64 linux "$test_build/algo-syncinfer-coerce-selfhost" -j 2)
+[ "$algo_syncinfer_coerce_written" = 'executable written' ]
+chmod +x "$test_build/algo-syncinfer-coerce-selfhost"
+algo_syncinfer_coerce_output=$("$test_build/algo-syncinfer-coerce-selfhost")
+[ "$algo_syncinfer_coerce_output" = 'algo syncinfer coerce ok' ]
 # `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
 # # against appdor's src/sync/sql-source.js (900 inputs, D3001).
 algo_sqlsource_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sqlsource/src/main.e" "$repo" x64 linux "$test_build/algo-sqlsource-selfhost" -j 2)

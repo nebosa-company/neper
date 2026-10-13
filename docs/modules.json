@@ -8086,6 +8086,15 @@
    "blocked_by": []
   },
   {
+   "name": "e.net.sftp",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
    "name": "e.net.grpccall",
    "layer": 6,
    "surface": "source",
@@ -8267,6 +8276,43 @@
     "e.algo.ir",
     "e.fmt.json",
     "e.fmt.yaml",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.cloud.awssig",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.bytes",
+    "e.crypto.hash",
+    "e.crypto.mac",
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.cloud.awsreq",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.bytes",
+    "e.data.list",
+    "e.fmt.json",
     "e.mem",
     "e.str"
    ],

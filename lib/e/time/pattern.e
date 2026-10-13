@@ -71,6 +71,37 @@ fn month_text(loc: usize, month: u8, abbr: bool) -> str {
     ret full
 }
 
+// The month name for a pattern with or without a day-of-month field: with one the format (genitive) form, without it the
+// stand-alone (nominative) form, as .NET and NodaTime choose. The invariant English has one form.
+fn month_text_for(loc: usize, month: u8, abbr: bool, standalone: bool) -> str {
+    if loc != 0usize && standalone { ret names.month_standalone(loc, month, abbr) }
+    ret month_text(loc, month, abbr)
+}
+
+// Whether the pattern has a day-of-month field (`d` or `dd` outside quotes and escapes).
+fn has_day_field(pattern: str) -> bool {
+    var at = 0usize
+    while at < pattern.len {
+        let c = pattern[at]
+        if c == 39u8 || c == 34u8 {
+            var j = at + 1usize
+            while j < pattern.len && pattern[j] != c { j += 1usize }
+            at = j + 1usize
+        } else if c == 92u8 {
+            at += 2usize
+        } else if c == 37u8 && at + 1usize < pattern.len && pattern[at + 1usize] == 100u8 {
+            ret true
+        } else if c == 100u8 {
+            let run = run_of(pattern, at)
+            if run <= 2usize { ret true }
+            at += run
+        } else {
+            at += 1usize
+        }
+    }
+    ret false
+}
+
 fn weekday_text(loc: usize, index: i64, abbr: bool) -> str {
     if loc != 0usize { ret names.weekday(loc, index, abbr) }
     let full = weekday_name(index)
@@ -187,6 +218,7 @@ fn format_in(loc: usize, pattern: str, value: calendar.DateTime, dst: []u8) -> (
     if wd_error != ok { ret ("", Invalid) }
     var b: Buf = zero
     b.dst = dst
+    let standalone = !has_day_field(pattern)
     var at = 0usize
     while at < pattern.len {
         let c = pattern[at]
@@ -221,9 +253,9 @@ fn format_in(loc: usize, pattern: str, value: calendar.DateTime, dst: []u8) -> (
                 } else { ret ("", Invalid) }
             } else if letter == 77u8 {
                 if run == 4usize {
-                    push_str(&b, month_text(loc, value.date.month, false))
+                    push_str(&b, month_text_for(loc, value.date.month, false, standalone))
                 } else if run == 3usize {
-                    push_str(&b, month_text(loc, value.date.month, true))
+                    push_str(&b, month_text_for(loc, value.date.month, true, standalone))
                 } else if run == 2usize {
                     push_num(&b, i64(value.date.month), 2usize)
                 } else if run == 1usize {
@@ -317,17 +349,24 @@ fn starts_with_fold(src: str, at: usize, name: str, count: usize) -> bool {
 }
 
 // The month or weekday whose name (`count` letters of it, 0 = whole) is at `at`.
-fn match_month(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize) {
+fn match_month(loc: usize, src: str, at: usize, abbr: bool, standalone: bool) -> (i64, usize) {
+    // the longest name of either form, the one the pattern calls for winning a tie (.NET's ParseExact takes either)
     var best = 0i64
     var best_len = 0usize
-    var m = 1u8
-    while m <= 12u8 {
-        let name = month_text(loc, m, abbr)
-        if name.len > best_len && starts_with_fold(src, at, name, name.len) {
-            best = i64(m)
-            best_len = name.len
+    var pass = 0usize
+    while pass < 2usize {
+        var want = standalone
+        if pass == 1usize { want = !standalone }
+        var m = 1u8
+        while m <= 12u8 {
+            let name = month_text_for(loc, m, abbr, want)
+            if name.len > best_len && starts_with_fold(src, at, name, name.len) {
+                best = i64(m)
+                best_len = name.len
+            }
+            m += 1u8
         }
-        m += 1u8
+        pass += 1usize
     }
     if best == 0i64 { ret (0i64, at) }
     ret (best, at + best_len)
@@ -351,6 +390,7 @@ fn match_weekday(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize) {
 
 // A field slot is set once: -1 marks "unset" until read.
 fn parse_with(loc: usize, pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err) {
+    let standalone = !has_day_field(pattern)
     var f: Fields = zero
     f.year = -1i64
     f.month = -1i64
@@ -409,7 +449,7 @@ fn parse_with(loc: usize, pattern: str, source: str, template: calendar.DateTime
                 if run > 4usize { ret (zero, Invalid) }
                 if f.month >= 0i64 { ret (zero, Invalid) }
                 if run >= 3usize {
-                    let (v, next) = match_month(loc, source, pos, run == 3usize)
+                    let (v, next) = match_month(loc, source, pos, run == 3usize, standalone)
                     if v == 0i64 { ret (zero, Invalid) }
                     f.month = v
                     pos = next

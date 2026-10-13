@@ -207,6 +207,56 @@ fn push_occ(c: *Ctx, item: u32, start_in: i64, minutes: i64, recurring: bool, al
     ret ok
 }
 
+// Where the `EXDATE=` part of a rule text is: the length of the rule before it, where its list starts, whether there
+// is one, and false when it is not the last part (it is the one part this model reads after the rule is read).
+fn exdate_split(rule: str) -> (usize, usize, bool, bool) {
+    var i = 0usize
+    while i < rule.len {
+        var j = i
+        while j < rule.len && rule[j] != 59u8 { j += 1usize }
+        let part = rule[i..j]
+        if key_is(part, "EXDATE") {
+            if j < rule.len { ret (0usize, 0usize, true, false) }
+            var end = i
+            if end > 0usize { end -= 1usize }
+            ret (end, i + 7usize, true, true)
+        }
+        i = j + 1usize
+    }
+    ret (rule.len, rule.len, false, true)
+}
+
+// Whether the list of `EXDATE` values (`YYYYMMDD` or `YYYYMMDDTHHMMSS[Z]`, comma separated) names the occurrence that
+// starts at `at`: by day for an all-day item or a date value, by day, hour and minute otherwise.
+fn is_excluded(list: str, at: calendar.DateTime, all_day: bool) -> bool {
+    var i = 0usize
+    while i < list.len {
+        var j = i
+        while j < list.len && list[j] != 44u8 { j += 1usize }
+        let v = list[i..j]
+        if v.len == 8usize || v.len == 15usize || v.len == 16usize {
+            var digits = true
+            var k = 0usize
+            while k < v.len {
+                if k == 8usize {
+                    if v[k] != 84u8 { digits = false }
+                } else if k == 15usize {
+                    if v[k] != 90u8 { digits = false }
+                } else if v[k] < 48u8 || v[k] > 57u8 {
+                    digits = false
+                }
+                k += 1usize
+            }
+            if digits && digits_value(v, 0usize, 4usize) == i64(at.date.year) && digits_value(v, 4usize, 2usize) == i64(at.date.month) && digits_value(v, 6usize, 2usize) == i64(at.date.day) {
+                if all_day || v.len == 8usize { ret true }
+                if digits_value(v, 9usize, 2usize) == i64(at.time.hour) && digits_value(v, 11usize, 2usize) == i64(at.time.minute) { ret true }
+            }
+        }
+        i = j + 1usize
+    }
+    ret false
+}
+
 fn collect(c: *Ctx, items: []const Item) -> err {
     var i = 0usize
     while i < items.len {
@@ -218,10 +268,22 @@ fn collect(c: *Ctx, items: []const Item) -> err {
             start = calendar.day_count(it.start.date) * 1440i64
             minutes = ((minutes + 1439i64) / 1440i64) * 1440i64
         }
-        if it.rule.len == 0usize {
-            try push_occ(c, u32(i), start, minutes, false, it.all_day)
+        // `EXDATE=` is the last part of the rule text: the occurrences of the series that are cancelled (single-occurrence
+        // exceptions). It is not part of the RFC 5545 rule the expansion reads.
+        var rule_text = it.rule
+        var exdates = ""
+        let (ex_rule_end, ex_from, has_exdate, ex_good) = exdate_split(it.rule)
+        if !ex_good { ret Invalid }
+        if has_exdate {
+            rule_text = it.rule[0usize..ex_rule_end]
+            exdates = it.rule[ex_from..it.rule.len]
+        }
+        if rule_text.len == 0usize {
+            if !is_excluded(exdates, it.start, it.all_day) {
+                try push_occ(c, u32(i), start, minutes, false, it.all_day)
+            }
         } else {
-            let (rule, rule_error) = recur.parse_rule(it.rule)
+            let (rule, rule_error) = recur.parse_rule(rule_text)
             if rule_error != ok { ret Invalid }
             // Occurrences that began up to the item's length before the range still show.
             var back = (minutes + 1439i64) / 1440i64
@@ -234,7 +296,9 @@ fn collect(c: *Ctx, items: []const Item) -> err {
             while k < n {
                 var at = abs_minutes(c.st.stamps[k])
                 if it.all_day { at = calendar.day_count(c.st.stamps[k].date) * 1440i64 }
-                try push_occ(c, u32(i), at, minutes, true, it.all_day)
+                if !is_excluded(exdates, c.st.stamps[k], it.all_day) {
+                    try push_occ(c, u32(i), at, minutes, true, it.all_day)
+                }
                 k += 1usize
             }
             if n == c.st.stamps.len && n > 0usize && abs_minutes(c.st.stamps[n - 1usize]) < (c.first + c.days) * 1440i64 { c.truncated = true }
@@ -1465,6 +1529,17 @@ fn move_series(item: Item, from: calendar.DateTime, to: calendar.DateTime, dst: 
         } else if key_is(part, "UNTIL") {
             series_text(&o, "UNTIL=")
             if !series_until(&o, part[6usize..part.len], delta) { ret (item, Invalid) }
+        } else if key_is(part, "EXDATE") {
+            series_text(&o, "EXDATE=")
+            let list = part[7usize..part.len]
+            var v = 0usize
+            while v < list.len {
+                var w = v
+                while w < list.len && list[w] != 44u8 { w += 1usize }
+                if v > 0usize { series_text(&o, ",") }
+                if !series_until(&o, list[v..w], delta) { ret (item, Invalid) }
+                v = w + 1usize
+            }
         } else if key_is(part, "BYMONTHDAY") || key_is(part, "BYYEARDAY") || key_is(part, "BYWEEKNO") || key_is(part, "BYMONTH") || key_is(part, "BYSETPOS") {
             if day_delta != 0i64 { ret (item, Invalid) }
             series_text(&o, part)
@@ -1479,4 +1554,71 @@ fn move_series(item: Item, from: calendar.DateTime, to: calendar.DateTime, dst: 
     if o.bad { ret (item, TooLarge) }
     out.rule = str_of(dst[0usize..o.n])
     ret (out, ok)
+}
+
+fn series_exdate(o: *SeriesOut, d: calendar.DateTime, all_day: bool) {
+    series_digits(o, i64(d.date.year), 4usize)
+    series_digits(o, i64(d.date.month), 2usize)
+    series_digits(o, i64(d.date.day), 2usize)
+    if !all_day {
+        series_text(o, "T")
+        series_digits(o, i64(d.time.hour), 2usize)
+        series_digits(o, i64(d.time.minute), 2usize)
+        series_digits(o, 0i64, 2usize)
+    }
+}
+
+// Cancels one occurrence of a recurring item (a single-occurrence exception): `original` must be the start of an
+// occurrence of the series (else `Invalid`), and the item's rule text gets `;EXDATE=` (or `,` after one that is there)
+// and the occurrence's date (`YYYYMMDD` for an all-day item, else `YYYYMMDDTHHMMSS`). Cancelling it again answers the
+// item unchanged. The rule text is written to `dst` (`TooLarge` when it does not fit). `move_series` shifts the
+// `EXDATE` values with the series.
+fn cancel_occurrence(item: Item, original: calendar.DateTime, dst: []u8) -> (Item, err) {
+    let (rule_end, list_from, has_exdate, good) = exdate_split(item.rule)
+    if !good { ret (item, Invalid) }
+    var rule_text = item.rule
+    var list = ""
+    if has_exdate {
+        rule_text = item.rule[0usize..rule_end]
+        list = item.rule[list_from..item.rule.len]
+    }
+    if rule_text.len == 0usize { ret (item, Invalid) }
+    let (rule, rule_error) = recur.parse_rule(rule_text)
+    if rule_error != ok { ret (item, Invalid) }
+    var probe: [1]calendar.DateTime = zero
+    var floor_dt = original
+    if item.all_day {
+        floor_dt.time.hour = 0u8
+        floor_dt.time.minute = 0u8
+        floor_dt.time.second = 0u8
+        floor_dt.time.nanos = 0u32
+    }
+    if calendar.compare(floor_dt, item.start) < 0i32 { ret (item, Invalid) }
+    let (n, expand_error) = recur.expand_from(rule, item.start, floor_dt, probe[0usize..1usize])
+    if expand_error != ok || n == 0usize { ret (item, Invalid) }
+    let found = probe[0usize]
+    var same = found.date.year == original.date.year && found.date.month == original.date.month && found.date.day == original.date.day
+    if !item.all_day && (found.time.hour != original.time.hour || found.time.minute != original.time.minute) { same = false }
+    if !same { ret (item, Invalid) }
+    if is_excluded(list, original, item.all_day) { ret (item, ok) }
+    var o = SeriesOut { dst: dst, n: 0usize, bad: false }
+    series_text(&o, item.rule)
+    if has_exdate { series_text(&o, ",") } else { series_text(&o, ";EXDATE=") }
+    series_exdate(&o, original, item.all_day)
+    if o.bad { ret (item, TooLarge) }
+    var out = item
+    out.rule = str_of(dst[0usize..o.n])
+    ret (out, ok)
+}
+
+// Moves one occurrence of a recurring item: the series with that occurrence cancelled (see `cancel_occurrence`) and
+// the occurrence as an item of its own, at `start` for `minutes`, with the series' id, title and all-day kind.
+fn move_occurrence(item: Item, original: calendar.DateTime, start: calendar.DateTime, minutes: u32, dst: []u8) -> (Item, Item, err) {
+    let (series, e) = cancel_occurrence(item, original, dst)
+    if e != ok { ret (item, item, e) }
+    var single = item
+    single.start = start
+    single.minutes = minutes
+    single.rule = ""
+    ret (series, single, ok)
 }

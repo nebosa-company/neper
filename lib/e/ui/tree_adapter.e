@@ -38,7 +38,7 @@
 // Polish `ł` after `l`, Czech `ch` after `h`, ... -- see `tailoring_of`), keyed by the tag's
 // language subtag.
 //
-// ponytail: only the tailorings of nine languages, none per region or traditional (no UCA
+// ponytail: only the tailorings of seventeen languages, none per region or traditional (no UCA
 // contractions beyond Czech `ch`, no Han readings, no `aa` as `å` in Danish), a name is compared on its
 // first 512 NFD scalars; a node's parent is found by a binary search over identity paths, so build is
 // O(n log n) in the entry count; `prev` and the new `Storage` must be different buffers.
@@ -65,7 +65,8 @@ type Rename = struct { from: str, to: str }
 // level (see `name_order`) rather than by ASCII folding.
 // `tailoring`: with `unicode_names`, a language's letters that sort as letters of their own
 // (1 Swedish and Finnish, 2 Danish and Norwegian, 3 German, 4 Spanish, 5 Polish, 6 Czech,
-// 7 Turkish; 0 none), see `policy_language`.
+// 7 Turkish, 8 Slovak, 9 Romanian, 10 Croatian, 11 Slovenian, 12 Lithuanian, 13 Latvian, 14 Estonian, 15 Icelandic;
+// 0 none), see `policy_language`.
 type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool, tailoring: u8 }
 type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize, lazy: bool }
 type Storage = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, order: []u32, scratch: []u8 }
@@ -119,13 +120,24 @@ fn tailoring_of(tag: str) -> u8 {
     if a == 112u8 && b == 108u8 { ret 5u8 }
     if a == 99u8 && b == 115u8 { ret 6u8 }
     if a == 116u8 && b == 114u8 { ret 7u8 }
+    if a == 115u8 && b == 107u8 { ret 8u8 }
+    if a == 114u8 && b == 111u8 { ret 9u8 }
+    if a == 104u8 && b == 114u8 { ret 10u8 }
+    if a == 115u8 && b == 108u8 { ret 11u8 }
+    if a == 108u8 && b == 116u8 { ret 12u8 }
+    if a == 108u8 && b == 118u8 { ret 13u8 }
+    if a == 101u8 && b == 116u8 { ret 14u8 }
+    if a == 105u8 && b == 115u8 { ret 15u8 }
     ret 0u8
 }
 
 // `policy_unicode` with a language's tailoring (D3604): the letters that sort as letters of their own are placed
 // where its alphabet has them -- Swedish and Finnish `å ä ö` after `z`, Danish and Norwegian `æ ø å`, Spanish `ñ` after
 // `n`, Polish `ą ć ę ł ń ó ś ź ż`, Czech `č ř š ž` and the digraph `ch` after `h`, Turkish `ç ğ ö ş ü` and `ı` before
-// `i` (with `I` and `İ` its dotless and dotted pair), German `ß` as `ss`. Where a language has no row of its own the
+// `i` (with `I` and `İ` its dotless and dotted pair), German `ß` as `ss`, Slovak `ä č ô š ž` and `ch`, Romanian `ă â î ș ț`,
+// Croatian `č ć đ š ž` and `dž lj nj`, Slovenian `č š ž`, Lithuanian and Latvian `č š ž` (Latvian `ģ ķ ļ ņ`) with `y` as a variant
+// of `i`, Estonian `š z ž` between `s` and `t` and `õ ä ö ü` after `w`, Icelandic `á ð é í ó ú ý þ æ ö`; accents tie-break in
+// CLDR's order. Where a language has no row of its own the
 // order is `policy_unicode`'s. Regional variants and traditional orders (Spanish `ch` and `ll`, German phone-book
 // `ä` as `ae`, Swedish `v` and `w`) are not distinguished.
 fn policy_language(tag: str, case_sensitive_paths: bool) -> Policy {
@@ -209,6 +221,9 @@ fn fold_keys(name: str, fold: bool, tailoring: u8, all: []u32, base: []u32) -> (
         while k < used {
             var s = parts[k]
             if fold { s = unicode.to_lower_simple(s) }
+            // With a tailoring the accents are ordered as CLDR orders them (acute, grave, breve, circumflex, caron, ring,
+            // diaeresis, double acute, tilde, dot above, cedilla, ogonek, macron), not by code point.
+            if tailoring != 0u8 && unicode.combining_class(parts[k]) != 0u8 { s = 768u32 + mark_rank(tailoring, parts[k]) }
             if n_all < all.len {
                 all[n_all] = s
                 n_all += 1usize
@@ -223,21 +238,52 @@ fn fold_keys(name: str, fold: bool, tailoring: u8, all: []u32, base: []u32) -> (
                     }
                     base[n_base] = key
                     n_base += 1usize
-                    // Czech `ch` is one letter after `h`.
-                    if tailoring == 6u8 && lowered == 104u32 && last_raw == 99u32 && n_base >= 2usize && base[n_base - 2usize] == primary_key(6u8, 99u32) {
-                        base[n_base - 2usize] = primary_key(6u8, 104u32) + 1u32
+                    // Czech and Slovak `ch` is one letter after `h`; Croatian `lj` and `nj` one letter after `l` and `n`.
+                    if (tailoring == 6u8 || tailoring == 8u8) && lowered == 104u32 && last_raw == 99u32 && n_base >= 2usize && base[n_base - 2usize] == primary_key(tailoring, 99u32) {
+                        base[n_base - 2usize] = primary_key(tailoring, 104u32) + 1u32
+                        n_base -= 1usize
+                    } else if tailoring == 10u8 && lowered == 106u32 && (last_raw == 108u32 || last_raw == 110u32) && n_base >= 2usize && base[n_base - 2usize] == primary_key(10u8, last_raw) {
+                        base[n_base - 2usize] = primary_key(10u8, last_raw) + 1u32
                         n_base -= 1usize
                     }
                     last_raw = lowered
                 }
             } else if tailoring != 0u8 && n_base > 0usize {
-                let own = mark_key(tailoring, last_raw, unicode.to_lower_simple(parts[k]))
+                let mark = unicode.to_lower_simple(parts[k])
+                let own = mark_key(tailoring, last_raw, mark)
                 if own != 0u32 { base[n_base - 1usize] = own }
+                // Croatian `dž` is one letter after `d`.
+                if tailoring == 10u8 && own != 0u32 && last_raw == 122u32 && mark == 780u32 && n_base >= 2usize && base[n_base - 2usize] == primary_key(10u8, 100u32) {
+                    base[n_base - 2usize] = primary_key(10u8, 100u32) + 1u32
+                    n_base -= 1usize
+                }
             }
             k += 1usize
         }
     }
     ret (n_all, n_base)
+}
+
+// The secondary order of an accent in the tailored policies (an offset above U+0300: a bare letter stays before a
+// marked one): CLDR's root order of the common marks, Lithuanian's ogonek first, any other mark after them in code point
+// order.
+fn mark_rank(tailoring: u8, m: u32) -> u32 {
+    if m == 808u32 && tailoring == 12u8 { ret 0u32 }
+    if m == 769u32 { ret 1u32 }
+    if m == 768u32 { ret 2u32 }
+    if m == 774u32 { ret 3u32 }
+    if m == 770u32 { ret 4u32 }
+    if m == 780u32 { ret 5u32 }
+    if m == 778u32 { ret 6u32 }
+    if m == 776u32 { ret 7u32 }
+    if m == 779u32 { ret 8u32 }
+    if m == 771u32 { ret 9u32 }
+    if m == 775u32 { ret 10u32 }
+    if m == 807u32 { ret 11u32 }
+    if m == 808u32 { ret 12u32 }
+    if m == 772u32 { ret 13u32 }
+    if m >= 768u32 { ret 100u32 + (m - 768u32) }
+    ret 100u32
 }
 
 // The primary key of a base scalar: itself without a tailoring; with one the keys above the digits are spread by 16 so a
@@ -259,6 +305,18 @@ fn lone_key(tailoring: u8, s: u32) -> u32 {
     }
     if tailoring == 5u8 && s == 322u32 { ret primary_key(5u8, 108u32) + 1u32 }
     if tailoring == 7u8 && s == 305u32 { ret primary_key(7u8, 105u32) - 1u32 }
+    // Croatian `đ` after `d` (and its `dž`).
+    if tailoring == 10u8 && s == 273u32 { ret primary_key(10u8, 100u32) + 2u32 }
+    // Lithuanian and Latvian `y` is a variant of `i` (the second stage orders them).
+    if (tailoring == 12u8 || tailoring == 13u8) && s == 121u32 { ret primary_key(tailoring, 105u32) }
+    // Estonian: `s š z ž t`, so `z` stands after `š`; `õ ä ö ü` follow `w` and come before `x` and `y` (see `mark_key`).
+    if tailoring == 14u8 && s == 122u32 { ret primary_key(14u8, 115u32) + 2u32 }
+    // Icelandic `ð` after `d`, `þ æ` after `z`.
+    if tailoring == 15u8 {
+        if s == 240u32 { ret primary_key(15u8, 100u32) + 1u32 }
+        if s == 254u32 { ret primary_key(15u8, 122u32) + 1u32 }
+        if s == 230u32 { ret primary_key(15u8, 122u32) + 2u32 }
+    }
     ret 0u32
 }
 
@@ -286,6 +344,42 @@ fn mark_key(tailoring: u8, b: u32, m: u32) -> u32 {
         if m == 807u32 && (b == 99u32 || b == 115u32) { ret primary_key(7u8, b) + 1u32 }
         if m == 774u32 && b == 103u32 { ret primary_key(7u8, 103u32) + 1u32 }
         if m == 776u32 && (b == 111u32 || b == 117u32) { ret primary_key(7u8, b) + 1u32 }
+    }
+    // Slovak `ä č ô š ž`.
+    if tailoring == 8u8 {
+        if b == 97u32 && m == 776u32 { ret primary_key(8u8, 97u32) + 1u32 }
+        if b == 111u32 && m == 770u32 { ret primary_key(8u8, 111u32) + 1u32 }
+        if m == 780u32 && (b == 99u32 || b == 115u32 || b == 122u32) { ret primary_key(8u8, b) + 1u32 }
+    }
+    // Romanian `ă â` after `a`, `î` after `i`, `ș` after `s` and `ț` after `t` (comma below or cedilla).
+    if tailoring == 9u8 {
+        if b == 97u32 && m == 774u32 { ret primary_key(9u8, 97u32) + 1u32 }
+        if b == 97u32 && m == 770u32 { ret primary_key(9u8, 97u32) + 2u32 }
+        if b == 105u32 && m == 770u32 { ret primary_key(9u8, 105u32) + 1u32 }
+        if (b == 115u32 || b == 116u32) && (m == 806u32 || m == 807u32) { ret primary_key(9u8, b) + 1u32 }
+    }
+    // Croatian `č ć` after `c`, `š` after `s`, `ž` after `z`.
+    if tailoring == 10u8 {
+        if b == 99u32 && m == 780u32 { ret primary_key(10u8, 99u32) + 1u32 }
+        if b == 99u32 && m == 769u32 { ret primary_key(10u8, 99u32) + 2u32 }
+        if m == 780u32 && (b == 115u32 || b == 122u32) { ret primary_key(10u8, b) + 1u32 }
+    }
+    // Slovenian, Lithuanian and Latvian `č š ž` (Latvian also `ģ ķ ļ ņ`).
+    if (tailoring == 11u8 || tailoring == 12u8 || tailoring == 13u8) && m == 780u32 && (b == 99u32 || b == 115u32 || b == 122u32) { ret primary_key(tailoring, b) + 1u32 }
+    if tailoring == 13u8 && m == 807u32 && (b == 103u32 || b == 107u32 || b == 108u32 || b == 110u32) { ret primary_key(13u8, b) + 1u32 }
+    // Estonian `š` after `s`, `ž` after `z` (which stands after `š`), `õ ä ö ü` after `w`.
+    if tailoring == 14u8 {
+        if b == 115u32 && m == 780u32 { ret primary_key(14u8, 115u32) + 1u32 }
+        if b == 122u32 && m == 780u32 { ret primary_key(14u8, 115u32) + 3u32 }
+        if b == 111u32 && m == 771u32 { ret primary_key(14u8, 119u32) + 1u32 }
+        if b == 97u32 && m == 776u32 { ret primary_key(14u8, 119u32) + 2u32 }
+        if b == 111u32 && m == 776u32 { ret primary_key(14u8, 119u32) + 3u32 }
+        if b == 117u32 && m == 776u32 { ret primary_key(14u8, 119u32) + 4u32 }
+    }
+    // Icelandic acute letters after their base, `ö` after `æ`.
+    if tailoring == 15u8 {
+        if m == 769u32 && (b == 97u32 || b == 101u32 || b == 105u32 || b == 111u32 || b == 117u32 || b == 121u32) { ret primary_key(15u8, b) + 1u32 }
+        if b == 111u32 && m == 776u32 { ret primary_key(15u8, 122u32) + 3u32 }
     }
     ret 0u32
 }

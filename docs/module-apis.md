@@ -7249,6 +7249,25 @@ fn infer_column_type(a: *mem.Arena, values: json.Value, opts: json.Value) -> jso
 fn date_order_of(a: *mem.Arena, values: json.Value) -> json.Value
 fn decimal_separator_of(a: *mem.Arena, values: json.Value) -> json.Value
 fn infer_external_schema(a: *mem.Arena, records: json.Value) -> (json.Value, bool)
+type Parsed = struct { year: i64, month: i64, dom: i64, hour: i64, minute: i64, second: i64, milli: i64, has_zone: bool, offset_sec: i64 }
+fn civil_from_days(days: i64) -> (i64, i64, i64)
+fn coerce_record(a: *mem.Arena, record: json.Value, fields: json.Value, tz_min: i64) -> (json.Value, bool)
+fn coerce_text(a: *mem.Arena, cell: str, kind: str, order: str, decimal: str, tz_min: i64) -> json.Value
+fn coerce_value(a: *mem.Arena, raw: json.Value, kind: str, opts: json.Value, tz_min: i64) -> json.Value
+fn convention_code(s: str) -> u8
+fn date_parse(a: *mem.Arena, text: str, out: *Parsed) -> bool
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64
+fn floor_div(x: i64, y: i64) -> i64
+fn instant_ms(p: *const Parsed) -> i64
+fn int_text(a: *mem.Arena, n: i64) -> str
+fn join2(a: *mem.Arena, x: str, y: str) -> str
+fn join3(a: *mem.Arena, x: str, y: str, z: str, sep: u8) -> str
+fn number_value(a: *mem.Arena, x: f64) -> json.Value
+fn pad_to(a: *mem.Arena, s: str, width: usize) -> str
+fn parse_locale_number(a: *mem.Arena, body: str, pinned: u8) -> (f64, bool)
+fn text_member(v: json.Value, key: str) -> str
+fn to_calendar_date(a: *mem.Arena, s: str, order: str, tz_min: i64) -> (str, bool)
+fn to_iso_string(a: *mem.Arena, s: str, tz_min: i64) -> (str, bool)
 ```
 
 The column types a synced table infers from sample rows (L037, D3703), after appdor's `src/io/infer.js`,
@@ -7508,7 +7527,7 @@ const SLOT_ENDED: u8 = 4u8
 type Hedging = struct { max_attempts: u32, delay_ns: u64, nonfatal: u32 }
 type Slot = struct { state: u8, attempt: u32, stream: u32, started_ns: u64, committed: bool }
 type Action = struct { kind: u8, attempt: u32, stream: u32, at_ns: u64, code: u32 }
-type Call = struct { mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, slots: [5]Slot, started: u32, pending: bool, next_ns: u64, stop: bool, done: bool, code: u32, winner: u32 }
+type Call = struct { mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, slots: [5]Slot, started: u32, pending: bool, next_ns: u64, stop: bool, done: bool, code: u32, winner: u32, transparent: u32, transparent_due: bool }
 fn max_hedges() -> u32
 fn empty_slot() -> Slot
 fn new_call(mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, now_ns: u64) -> Call
@@ -7524,6 +7543,7 @@ fn call_headers(c: *Call, stream: u32)
 fn fail_slot(c: *Call, s: usize, code: u32, pushback: str, has_pushback: bool, now_ns: u64, jitter: f64)
 fn call_status(c: *Call, stream: u32, code: u32, pushback: str, has_pushback: bool, now_ns: u64, jitter: f64)
 fn reset_status(h2_code: u32) -> u32
+fn call_unprocessed(c: *Call, s: usize, now_ns: u64, jitter: f64)
 fn call_event(c: *Call, ev: *const grpc.Event, now_ns: u64, jitter: f64)
 fn min_nonzero(x: u64, y: u64) -> u64
 fn call_poll(c: *Call, now_ns: u64, jitter: f64) -> Action
@@ -7531,6 +7551,92 @@ fn call_poll(c: *Call, now_ns: u64, jitter: f64) -> Action
 
 The loop that carries out gRFC A6 over `e.net.grpc` (L164): a `Call` is a set of attempts, each a stream of one connection, and `call_poll` answers what the transport does next (START a stream and report it with `call_opened`, CANCEL one, WAIT until an instant or an event, DONE with the status); `call_event` turns `e.net.grpc` events into `call_headers` and `call_status`. Retry mode asks `e.net.grpcretry.decide` after each uncommitted failure and starts the next attempt after its delay; hedging mode starts attempts at the hedging delay without waiting, lets a response with headers or `OK` win and cancels the rest, sends the next hedge at once after a non-fatal code, ends the call on a fatal one, and stops on a pushback that forbids more or while the throttle bucket is at most half full. `per_attempt_ns` cancels an attempt with no headers by then and fails it as `DEADLINE_EXCEEDED` (A6 does not define it), and `deadline_ns` ends the call `DEADLINE_EXCEEDED`. The caller owns the clock, the sockets and the jitter. Checked on a virtual clock over the real client and server connections against grpcio (60 retry runs: attempts and status) and an independent model of A6 (271 timed retry and hedging runs) (D3401).
 
+
+### `e.net.sftp`
+
+```neper
+error Incomplete
+error Invalid
+error TooSmall
+error TooLarge
+const FXP_INIT: u8 = 1u8
+const FXP_VERSION: u8 = 2u8
+const FXP_OPEN: u8 = 3u8
+const FXP_CLOSE: u8 = 4u8
+const FXP_READ: u8 = 5u8
+const FXP_WRITE: u8 = 6u8
+const FXP_LSTAT: u8 = 7u8
+const FXP_FSTAT: u8 = 8u8
+const FXP_SETSTAT: u8 = 9u8
+const FXP_FSETSTAT: u8 = 10u8
+const FXP_OPENDIR: u8 = 11u8
+const FXP_READDIR: u8 = 12u8
+const FXP_REMOVE: u8 = 13u8
+const FXP_MKDIR: u8 = 14u8
+const FXP_RMDIR: u8 = 15u8
+const FXP_REALPATH: u8 = 16u8
+const FXP_STAT: u8 = 17u8
+const FXP_RENAME: u8 = 18u8
+const FXP_READLINK: u8 = 19u8
+const FXP_SYMLINK: u8 = 20u8
+const FXP_STATUS: u8 = 101u8
+const FXP_HANDLE: u8 = 102u8
+const FXP_DATA: u8 = 103u8
+const FXP_NAME: u8 = 104u8
+const FXP_ATTRS: u8 = 105u8
+const FXP_EXTENDED: u8 = 200u8
+const FXP_EXTENDED_REPLY: u8 = 201u8
+const FX_OK: u32 = 0u32
+const FX_EOF: u32 = 1u32
+const FX_NO_SUCH_FILE: u32 = 2u32
+const FX_PERMISSION_DENIED: u32 = 3u32
+const FX_FAILURE: u32 = 4u32
+const FX_BAD_MESSAGE: u32 = 5u32
+const FX_NO_CONNECTION: u32 = 6u32
+const FX_CONNECTION_LOST: u32 = 7u32
+const FX_OP_UNSUPPORTED: u32 = 8u32
+const OPEN_READ: u32 = 1u32
+const OPEN_WRITE: u32 = 2u32
+const OPEN_APPEND: u32 = 4u32
+const OPEN_CREAT: u32 = 8u32
+const OPEN_TRUNC: u32 = 16u32
+const OPEN_EXCL: u32 = 32u32
+const ATTR_SIZE: u32 = 1u32
+const ATTR_UIDGID: u32 = 2u32
+const ATTR_PERMISSIONS: u32 = 4u32
+const ATTR_ACMODTIME: u32 = 8u32
+const ATTR_EXTENDED: u32 = 2147483648u32
+const MAX_PACKET: usize = 1048576usize
+type Attrs = struct { flags: u32, size: u64, uid: u32, gid: u32, permissions: u32, atime: u32, mtime: u32, extended: u32 }
+type Name = struct { filename: str, longname: str, attrs: Attrs }
+type Response = struct { kind: u8, id: u32, version: u32, extensions: u32, status: u32, message: str, language: str, handle: []const u8, data: []const u8, count: usize, attrs: Attrs }
+fn no_attrs() -> Attrs
+fn put32(b: []u8, at: usize, v: u32)
+fn put64(b: []u8, at: usize, v: u64)
+fn begin(dst: []u8, kind: u8) -> (usize, err)
+fn finish(dst: []u8, at: usize) -> (usize, err)
+fn add32(dst: []u8, at: *usize, v: u32) -> err
+fn add64(dst: []u8, at: *usize, v: u64) -> err
+fn add_bytes(dst: []u8, at: *usize, s: []const u8) -> err
+fn add_attrs(dst: []u8, at: *usize, a: Attrs) -> err
+fn encode_init(dst: []u8, version: u32) -> (usize, err)
+fn encode_path(dst: []u8, kind: u8, id: u32, path: str) -> (usize, err)
+fn encode_handle(dst: []u8, kind: u8, id: u32, handle: []const u8) -> (usize, err)
+fn encode_open(dst: []u8, id: u32, path: str, flags: u32, attrs: Attrs) -> (usize, err)
+fn encode_read(dst: []u8, id: u32, handle: []const u8, offset: u64, length: u32) -> (usize, err)
+fn encode_write(dst: []u8, id: u32, handle: []const u8, offset: u64, data: []const u8) -> (usize, err)
+fn encode_path_attrs(dst: []u8, kind: u8, id: u32, path: str, attrs: Attrs) -> (usize, err)
+fn encode_fsetstat(dst: []u8, id: u32, handle: []const u8, attrs: Attrs) -> (usize, err)
+fn encode_two_paths(dst: []u8, kind: u8, id: u32, first: str, second: str) -> (usize, err)
+fn encode_extended(dst: []u8, id: u32, name: str, data: []const u8) -> (usize, err)
+fn encode_extended_paths(dst: []u8, id: u32, name: str, first: str, second: str) -> (usize, err)
+fn get32(b: []const u8, at: usize) -> u32
+fn get64(b: []const u8, at: usize) -> u64
+fn take_bytes(p: []const u8, at: *usize) -> ([]const u8, err)
+fn take_attrs(p: []const u8, at: *usize) -> (Attrs, err)
+fn decode(input: []const u8, names: []Name) -> (usize, Response, err)
+fn status_name(code: u32) -> str
+```
 
 ### `e.net.grpctls`
 
@@ -10277,6 +10383,7 @@ fn node_name(c: *const Ctx, i: usize) -> str
 fn rank_of(c: *const Ctx, n: Node) -> u32
 const KEY_CAP: usize = 512usize
 fn fold_keys(name: str, fold: bool, tailoring: u8, all: []u32, base: []u32) -> (usize, usize)
+fn mark_rank(tailoring: u8, m: u32) -> u32
 fn primary_key(tailoring: u8, s: u32) -> u32
 fn lone_key(tailoring: u8, s: u32) -> u32
 fn mark_key(tailoring: u8, b: u32, m: u32) -> u32
@@ -10377,6 +10484,8 @@ fn range_of(cfg: Config) -> (i64, i64)
 type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names, zoned: bool, zone_src: tz.Zone, zone_dst: tz.Zone }
 fn zone_shift(src: tz.Zone, dst: tz.Zone, abs: i64) -> i64
 fn push_occ(c: *Ctx, item: u32, start_in: i64, minutes: i64, recurring: bool, all_day: bool) -> err
+fn exdate_split(rule: str) -> (usize, usize, bool, bool)
+fn is_excluded(list: str, at: calendar.DateTime, all_day: bool) -> bool
 fn collect(c: *Ctx, items: []const Item) -> err
 fn occ_before(c: *const Ctx, x: u32, y: u32) -> bool
 fn put_placed(c: *Ctx, p: Placed) -> err
@@ -10434,6 +10543,9 @@ fn series_until(o: *SeriesOut, value: str, delta: i64) -> bool
 fn key_is(part: str, key: str) -> bool
 fn interval_is_one(rule: str) -> bool
 fn move_series(item: Item, from: calendar.DateTime, to: calendar.DateTime, dst: []u8) -> (Item, err)
+fn series_exdate(o: *SeriesOut, d: calendar.DateTime, all_day: bool)
+fn cancel_occurrence(item: Item, original: calendar.DateTime, dst: []u8) -> (Item, err)
+fn move_occurrence(item: Item, original: calendar.DateTime, start: calendar.DateTime, minutes: u32, dst: []u8) -> (Item, Item, err)
 ```
 
 Scheduler control model (L148, D2882): `build(items, cfg, storage)` lays appointments out
@@ -22834,6 +22946,97 @@ fn observed(a: *mem.Arena, type_: str, live: json.Value) -> json.Value
 The Kubernetes provider's identity and drift rules (L048), after Petcow's `provider/k8s/mod.rs`: the fourteen built-in kinds and an operator manifest of more merged over them by type (`default_defs`, `parse_defs`, `merge_defs`), the kubectl selector and `-n` arguments (`selector`, `ns_args`), the apply manifest with `metadata.name` forced and the `petcow.io/managed` and `petcow.io/name` labels injected over a user's own (`apply_manifest`), the observed state taken from the `last-applied-configuration` annotation when it parses and from the live object otherwise (`observed`), and whether an object is managed or a kubectl error means not found (`is_managed_item`, `is_not_found`). A string field accepts a plain scalar as its text, as the reference's YAML reader does; a number written with a trailing zero or an exponent is read as its shortest text. The kubectl process is host code. Checked against Petcow's own functions, extracted unchanged, with the S3, IAM, EC2, Lightsail and transport helpers, over 600 inputs on Windows (D2922).
 
 
+### `x.cloud.awssig`
+
+```neper
+fn empty_hash() -> str
+fn unsigned_payload() -> str
+type Header = struct { name: str, value: str }
+fn concat_all(a: *mem.Arena, parts: []const str, sep: str) -> str
+fn cat2(a: *mem.Arena, x: str, y: str) -> str
+fn lower_ascii_text(a: *mem.Arena, s: str) -> str
+fn eq_fold(x: str, y: str) -> bool
+fn hex_text(a: *mem.Arena, b: []const u8) -> str
+fn sha256_hex(a: *mem.Arena, data: []const u8) -> str
+fn quote(a: *mem.Arena, s: str, safe: str) -> str
+fn remove_dot_segments(a: *mem.Arena, url: str) -> str
+fn normalize_url_path(a: *mem.Arena, path: str) -> str
+fn py_space(u: u32) -> bool
+fn trimall(a: *mem.Arena, s: str) -> str
+type Url = struct { scheme: str, host: str, port: i64, path: str, query: str, ipv6: bool }
+fn url_parts(a: *mem.Arena, url: str) -> Url
+fn host_from_url(a: *mem.Arena, url: str) -> str
+type Pair = struct { key: str, value: str }
+fn pair_less(x: Pair, y: Pair) -> bool
+fn sort_pairs(p: []Pair)
+fn pairs_text(a: *mem.Arena, p: []const Pair) -> str
+fn canonical_query(a: *mem.Arena, params: []const Pair, have_params: bool, url_query: str) -> str
+fn blacklisted(lname: str) -> bool
+type Signed = struct { canonical_request: str, string_to_sign: str, signature: str, authorization: str, headers: []const Header }
+fn find_header(h: []const Header, name: str) -> (str, bool)
+fn push_header(l: *list.List[Header], name: str, value: str)
+fn headers_to_sign(a: *mem.Arena, headers: []const Header, url: str) -> ([]const Pair, str)
+fn canonical_headers_text(a: *mem.Arena, p: []const Pair) -> str
+fn hmac(a: *mem.Arena, key: []const u8, message: str) -> [32]u8
+fn signature(a: *mem.Arena, secret: str, date: str, region: str, service: str, to_sign: str) -> str
+fn http_date(a: *mem.Arena, timestamp: str) -> str
+type Request = struct  { method: str, url: str, headers: []const Header, params: []const Pair, have_params: bool, body: str, region: str, service: str, access_key: str, secret_key: str, token: str, timestamp: str, s3: bool, payload_signing: bool, streaming_input: bool }
+fn sign_request(a: *mem.Arena, r: Request) -> Signed
+fn text_of(v: json.Value, key: str) -> str
+fn flag_of(v: json.Value, key: str, default_value: bool) -> bool
+fn pairs_of(a: *mem.Arena, v: json.Value) -> []const Pair
+fn headers_of(a: *mem.Arena, v: json.Value) -> []const Header
+fn sign_json(a: *mem.Arena, v: json.Value) -> json.Value
+```
+
+### `x.cloud.awsreq`
+
+```neper
+type Pair = struct { key: str, value: str }
+type Out = struct { a: *mem.Arena, pairs: list.List[Pair], ec2: bool, shapes: json.Value, bad: bool }
+fn cat2(a: *mem.Arena, x: str, y: str) -> str
+fn text_of(v: json.Value, key: str) -> str
+fn flag_of(v: json.Value, key: str) -> bool
+fn attr_text(o: *const Out, ref: json.Value, key: str) -> (str, bool)
+fn attr_flag(o: *const Out, ref: json.Value, key: str) -> bool
+fn shape_of(o: *const Out, ref: json.Value) -> json.Value
+fn type_of(o: *const Out, ref: json.Value) -> str
+fn put(o: *Out, key: str, value: str)
+fn capitalize(a: *mem.Arena, s: str) -> str
+fn wire_name(o: *Out, ref: json.Value, default_name: str) -> str
+fn scalar_text(a: *mem.Arena, v: json.Value) -> str
+fn base64_text(a: *mem.Arena, s: str) -> str
+fn pad2(b: *str.Builder, n: i64)
+fn iso8601(a: *mem.Arena, secs: i64) -> str
+fn number_i64(v: json.Value) -> i64
+fn query_value(o: *Out, v: json.Value, ref: json.Value, prefix: str)
+fn index_text(a: *mem.Arena, n: usize) -> str
+fn quote_plus(a: *mem.Arena, s: str) -> str
+fn form_body(a: *mem.Arena, pairs: []const Pair) -> str
+type Buf = struct { data: []u8, n: usize }
+fn pct(a: *mem.Arena, s: str, safe: str) -> str
+fn rfc822(a: *mem.Arena, secs: i64) -> str
+fn located_text(o: *Out, v: json.Value, ref: json.Value, ts_default: str) -> str
+fn xml_text(b: *Buf, s: str, attribute: bool)
+fn xml_namespace(o: *Out, b: *Buf, ref: json.Value)
+fn attr_value(o: *const Out, ref: json.Value, key: str) -> (json.Value, bool)
+fn xml_scalar(o: *Out, b: *Buf, name: str, ref: json.Value, text: str)
+fn xml_value(o: *Out, b: *Buf, v: json.Value, ref: json.Value, name: str)
+fn render_uri(a: *mem.Arena, template: str, uri: []const Pair) -> str
+fn escape_header_item(a: *mem.Arena, s: str) -> str
+fn join_commas(a: *mem.Arena, parts: []const str) -> str
+fn header_value(o: *Out, v: json.Value, ref: json.Value) -> str
+fn rest_xml(o: *Out, call: json.Value, params: json.Value, out: *ir.Obj) -> bool
+fn bput(b: *Buf, s: str)
+fn bbyte(b: *Buf, c: u8)
+fn bint(b: *Buf, v: i64)
+fn dump_string(b: *Buf, s: str)
+fn dump_u16(b: *Buf, v: u32)
+fn dump_value(o: *Out, b: *Buf, v: json.Value, ref: json.Value)
+fn header(a: *mem.Arena, name: str, value: str) -> json.Value
+fn build(a: *mem.Arena, call: json.Value, params: json.Value) -> (json.Value, bool)
+```
+
 ### `x.cloud.awssdk`
 
 ```neper
@@ -24903,11 +25106,15 @@ The Chinese lunisolar calendar over `e.time`'s day count (days from 1970-01-01),
 ```neper
 fn lower(b: u8) -> u8
 fn locale_count() -> usize
+fn row_count() -> usize
 fn row(loc: usize) -> str
+fn alias(t: str) -> (usize, bool)
 fn field(r: str, n: usize) -> str
 fn item(f: str, n: usize) -> str
+fn language_index(name: str) -> (usize, bool)
 fn locale_index(tag: str) -> (usize, bool)
 fn month(loc: usize, m: u8, abbr: bool) -> str
+fn month_standalone(loc: usize, m: u8, abbr: bool) -> str
 fn weekday(loc: usize, index: i64, abbr: bool) -> str
 fn day_period(loc: usize, pm: bool) -> str
 fn row_0() -> str
@@ -24937,6 +25144,31 @@ fn row_23() -> str
 fn row_24() -> str
 fn row_25() -> str
 fn row_26() -> str
+fn row_27() -> str
+fn row_28() -> str
+fn row_29() -> str
+fn row_30() -> str
+fn row_31() -> str
+fn row_32() -> str
+fn row_33() -> str
+fn row_34() -> str
+fn row_35() -> str
+fn row_36() -> str
+fn row_37() -> str
+fn row_38() -> str
+fn row_39() -> str
+fn row_40() -> str
+fn row_41() -> str
+fn row_42() -> str
+fn row_43() -> str
+fn row_44() -> str
+fn row_45() -> str
+fn row_46() -> str
+fn row_47() -> str
+fn row_48() -> str
+fn row_49() -> str
+fn row_50() -> str
+fn row_51() -> str
 ```
 
 Month and weekday names (wide and abbreviated, CLDR's format context) and the AM/PM marks of 27 locales (`en fr de es it pt nl sv da nb fi pl cs hu ro ru uk tr el ja zh ko id vi ar he hi`), for `e.time.pattern`'s `format_locale` and `parse_locale`. A locale is an index (0 is English); `locale_index` finds it from a BCP 47 tag by its language subtag, case-insensitively (`fr`, `fr-CA`, `FR_ca`), so regional differences (`pt-PT`, `en-GB` abbreviations) are not distinguished. `month`, `weekday` (0 Monday) and `day_period` answer the empty string for an index out of range. Generated from Babel's CLDR by `scripts/gen_time_names.py`; `time_pattern_locales` compares 868 formatted and parsed date-times with Babel's formatter.
@@ -24952,6 +25184,8 @@ fn is_digit(b: u8) -> bool
 fn month_name(month: u8) -> str
 fn weekday_name(index: i64) -> str
 fn month_text(loc: usize, month: u8, abbr: bool) -> str
+fn month_text_for(loc: usize, month: u8, abbr: bool, standalone: bool) -> str
+fn has_day_field(pattern: str) -> bool
 fn weekday_text(loc: usize, index: i64, abbr: bool) -> str
 fn mark_text(loc: usize, pm: bool) -> str
 fn first_scalar(s: str) -> usize
@@ -24967,7 +25201,7 @@ fn format_locale(tag: str, pattern: str, value: calendar.DateTime, dst: []u8) ->
 fn format_in(loc: usize, pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
 fn read_digits(src: str, at: usize, min: usize, max: usize) -> (i64, usize, bool)
 fn starts_with_fold(src: str, at: usize, name: str, count: usize) -> bool
-fn match_month(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize)
+fn match_month(loc: usize, src: str, at: usize, abbr: bool, standalone: bool) -> (i64, usize)
 fn match_weekday(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize)
 fn parse_with(loc: usize, pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err)
 fn parse(pattern: str, source: str) -> (calendar.DateTime, err)

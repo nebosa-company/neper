@@ -1354,12 +1354,24 @@ $ui_markdown_view_fitWritten = & $compiler emit-executable (Join-Path $PSScriptR
 if ($LASTEXITCODE -ne 0 -or $ui_markdown_view_fitWritten -ne 'executable written') { throw 'ui_markdown_view_fit emission failed' }
 & $ui_markdown_view_fitPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_markdown_view_fit check failed: exit $LASTEXITCODE" }
+# `e.ui.markdown_view` at the window: link activation by tap under both policies and the clipboard round trip of a selection (L066, D4607).
+$ui_markdown_view_windowPath = Join-Path $testBuild 'ui-markdown-view-window-selfhost.exe'
+$ui_markdown_view_windowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_markdown_view_window\src\main.e') $repo 'x64' 'windows' $ui_markdown_view_windowPath
+if ($LASTEXITCODE -ne 0 -or $ui_markdown_view_windowWritten -ne 'executable written') { throw 'ui_markdown_view_window emission failed' }
+& $ui_markdown_view_windowPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_markdown_view_window check failed: exit $LASTEXITCODE" }
 # `e.ui.schedule` zones, month bars and series moves against zoneinfo and dateutil (L148).
 $ui_schedule_zonesPath = Join-Path $testBuild 'ui-schedule-zones-selfhost.exe'
 $ui_schedule_zonesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule_zones\src\main.e') $repo 'x64' 'windows' $ui_schedule_zonesPath
 if ($LASTEXITCODE -ne 0 -or $ui_schedule_zonesWritten -ne 'executable written') { throw 'ui_schedule_zones emission failed' }
 & $ui_schedule_zonesPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_schedule_zones check failed: exit $LASTEXITCODE" }
+# `e.ui.schedule` single-occurrence exceptions (EXDATE, cancel_occurrence, move_occurrence) against dateutil (L148, D4606).
+$ui_schedule_exceptionsPath = Join-Path $testBuild 'ui-schedule-exceptions-selfhost.exe'
+$ui_schedule_exceptionsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule_exceptions\src\main.e') $repo 'x64' 'windows' $ui_schedule_exceptionsPath
+if ($LASTEXITCODE -ne 0 -or $ui_schedule_exceptionsWritten -ne 'executable written') { throw 'ui_schedule_exceptions emission failed' }
+& $ui_schedule_exceptionsPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_schedule_exceptions check failed: exit $LASTEXITCODE" }
 # `e.time.pattern` locale names against Babel's CLDR formatter (L150).
 $time_pattern_localesPath = Join-Path $testBuild 'time-pattern-locales-selfhost.exe'
 $time_pattern_localesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_pattern_locales\src\main.e') $repo 'x64' 'windows' $time_pattern_localesPath
@@ -4360,12 +4372,30 @@ if ($LASTEXITCODE -ne 0 -or $netGrpcretryWritten -ne 'executable written') { thr
 $netGrpcretryOutput = & $netGrpcretryPath
 if ($LASTEXITCODE -ne 0 -or $netGrpcretryOutput -ne 'net grpcretry ok') { throw "net_grpcretry answered wrongly: exit $LASTEXITCODE" }
 # `e.net.grpccall`: the A6 retry and hedging loop over the real client and server connections on a virtual clock
-# # (331 runs: 60 against grpcio, the rest against an independent model, D3401).
+# # (401 runs: 101 against grpcio, the rest against an independent model, D3401, D4601).
 $netGrpccallPath = Join-Path $testBuild 'net-grpccall-selfhost.exe'
 $netGrpccallWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpccall\src\main.e') $repo 'x64' 'windows' $netGrpccallPath -j 2
 if ($LASTEXITCODE -ne 0 -or $netGrpccallWritten -ne 'executable written') { throw 'net_grpccall emission failed' }
 $netGrpccallOutput = & $netGrpccallPath
 if ($LASTEXITCODE -ne 0 -or $netGrpccallOutput -ne 'net grpccall ok') { throw "net_grpccall answered wrongly: exit $LASTEXITCODE" }
+# `e.net.sftp`: SFTP v3 packets against OpenSSH's sftp-server (134 transcript lines recorded from a live server, D4602)
+$netSftpPath = Join-Path $testBuild 'net-sftp-selfhost.exe'
+$netSftpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_sftp\src\main.e') $repo 'x64' 'windows' $netSftpPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netSftpWritten -ne 'executable written') { throw 'net_sftp emission failed' }
+$netSftpOutput = & $netSftpPath
+if ($LASTEXITCODE -ne 0 -or $netSftpOutput -ne 'net sftp ok') { throw "net_sftp answered wrongly: exit $LASTEXITCODE" }
+# `x.cloud.awssig`: AWS Signature Version 4 against botocore's SigV4Auth and S3SigV4Auth (1500 generated requests, D4603)
+$xCloudAwssigPath = Join-Path $testBuild 'x-cloud-awssig-selfhost.exe'
+$xCloudAwssigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_cloud_awssig\src\main.e') $repo 'x64' 'windows' $xCloudAwssigPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xCloudAwssigWritten -ne 'executable written') { throw 'x_cloud_awssig emission failed' }
+$xCloudAwssigOutput = & $xCloudAwssigPath
+if ($LASTEXITCODE -ne 0 -or $xCloudAwssigOutput -ne 'x cloud awssig ok') { throw "x_cloud_awssig answered wrongly: exit $LASTEXITCODE" }
+# `x.cloud.awsreq`: query, ec2, json and rest-xml request bodies against botocore's serializers (450 parameter sets over 75 operations, query, ec2, json and rest-xml, D4609, D4610)
+$xCloudAwsreqPath = Join-Path $testBuild 'x-cloud-awsreq-selfhost.exe'
+$xCloudAwsreqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_cloud_awsreq\src\main.e') $repo 'x64' 'windows' $xCloudAwsreqPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xCloudAwsreqWritten -ne 'executable written') { throw 'x_cloud_awsreq emission failed' }
+$xCloudAwsreqOutput = & $xCloudAwsreqPath
+if ($LASTEXITCODE -ne 0 -or $xCloudAwsreqOutput -ne 'x cloud awsreq ok') { throw "x_cloud_awsreq answered wrongly: exit $LASTEXITCODE" }
 # `e.net.grpcstub`: typed gRPC stubs generated from descriptors, round-tripped against Python's protobuf wire bytes
 # # (242 serialised instances, fixed messages, the generator's own output, D3006).
 $netGrpcstubPath = Join-Path $testBuild 'net-grpcstub-selfhost.exe'
@@ -4401,6 +4431,13 @@ $algoSyncinferWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $algoSyncinferWritten -ne 'executable written') { throw 'algo_syncinfer emission failed' }
 $algoSyncinferOutput = & $algoSyncinferPath
 if ($LASTEXITCODE -ne 0 -or $algoSyncinferOutput -ne 'algo syncinfer ok') { throw "algo_syncinfer answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.syncinfer` coerce_value / coerce_record: the typed value of a cell under four local zones
+# # against appdor's coerceValue / coerceRecord in src/io/infer.js (D4600).
+$algoSyncinferCoercePath = Join-Path $testBuild 'algo-syncinfer-coerce-selfhost.exe'
+$algoSyncinferCoerceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_syncinfer_coerce\src\main.e') $repo 'x64' 'windows' $algoSyncinferCoercePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoSyncinferCoerceWritten -ne 'executable written') { throw 'algo_syncinfer_coerce emission failed' }
+$algoSyncinferCoerceOutput = & $algoSyncinferCoercePath
+if ($LASTEXITCODE -ne 0 -or $algoSyncinferCoerceOutput -ne 'algo syncinfer coerce ok') { throw "algo_syncinfer_coerce answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
 # # against appdor's src/sync/sql-source.js (900 inputs, D3001).
 $algoSqlsourcePath = Join-Path $testBuild 'algo-sqlsource-selfhost.exe'
