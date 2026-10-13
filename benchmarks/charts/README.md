@@ -62,13 +62,33 @@ same rows (the file is 11,334 B), matplotlib 33.7 ms on the same host that day.
 The deflate encoder alone is 9.6 ms on the 345,840-byte raster, still about 5x C
 zlib; run `run.py` for the nine-run table.
 
+## The R side (not yet run)
+
+`r_bench.R` draws the same data (the same LCG, computed exactly in doubles by
+splitting the state into 16-bit halves), the same 360x240 image (3.6x2.4 in at
+100 dpi) and the same content with ggplot2, base R graphics and lattice, 200
+charts per pass, SVG through `svglite` (text kept as text, as in the other two
+programs) and PNG through `png()`, and prints the lines `name charts ms bytes`
+(`ggplot2_svg`, `ggplot2_png`, `base_svg`, ... and `import`). `run.py` runs it
+with the same nine-run median protocol when an `Rscript` is found (on PATH, or
+under `C:\Program Files\R`, `/usr/lib/R`, `/opt/R`) and `ggplot2`, `lattice` and
+`svglite` load, adds an `r` object to `results/<host>.json` and prints
+`neper`-relative rows; without them it records `r_unavailable` and says why. To
+fill the table: install R and `install.packages(c("ggplot2", "lattice",
+"svglite"))`, then run the command above. The drawing calls were written
+without an R to run them: the first run should be compared with
+`first-chart.png` (`Rscript r_bench.R first-chart.png` keeps the first ggplot2
+PNG) before the numbers are quoted.
+
 ## Caveats
 
 - One machine, wall-clock time, on a host shared with other work: single runs
   varied by up to 50%, which is why the table uses nine-run medians.
-- Not measured: ggplot2, base R graphics and lattice, which need an R
-  installation this machine does not have; and Linux, where the WSL Python has
-  no matplotlib. `run.py` works on Linux once matplotlib is installed.
+- Not measured here: ggplot2, base R graphics and lattice. The harness is
+  written (`r_bench.R`, below) but this machine has no R, and R was not
+  downloaded; their rows are absent from the table, not estimated. Linux is
+  not measured either: the WSL Python has no matplotlib. `run.py` works on
+  Linux once matplotlib is installed.
 - matplotlib does work Neper does not: it shapes text with its own font
   manager and draws an axes frame. The workload keeps the visible content the
   same, not the internal work.

@@ -4,11 +4,15 @@
 
 Builds the Neper program with the given compiler, runs each side `runs` times
 (default 5) from the repository root, keeps the median of every pass, and
-writes benchmarks/charts/results/<host>.json. ggplot2 and lattice are not
-measured: they need an R installation, which this script does not assume.
+writes benchmarks/charts/results/<host>.json. ggplot2, base R graphics and lattice
+(r_bench.R) are measured when an Rscript is found (on PATH, or under the R
+installation directories of Windows and Linux) and the packages ggplot2,
+lattice and svglite load; otherwise the result carries "r": null and says why.
 """
 import json
+import os
 import platform
+import shutil
 import statistics
 import subprocess
 import sys
@@ -44,6 +48,36 @@ def measure(command, runs):
             for name in samples[0]}
 
 
+def find_rscript():
+    """Rscript on PATH or in the usual install directories, or None."""
+    found = shutil.which("Rscript")
+    if found:
+        return found
+    roots = [os.environ.get("ProgramFiles", r"C:Program Files") + os.sep + "R", "/usr/lib/R/bin", "/usr/local/lib/R/bin", "/opt/R"]
+    for root in roots:
+        path = Path(root)
+        candidates = sorted(path.glob("R-*/bin/Rscript.exe"), reverse=True) + sorted(path.glob("*/bin/Rscript"), reverse=True)
+        candidates += [path / "Rscript"] if (path / "Rscript").exists() else []
+        for candidate in candidates:
+            if candidate.exists():
+                return str(candidate)
+    return None
+
+
+def measure_r(runs):
+    """The r_bench.R rows (median of `runs`), or (None, reason)."""
+    rscript = find_rscript()
+    if rscript is None:
+        return None, "no Rscript found: ggplot2, base R graphics and lattice need an R installation"
+    probe = subprocess.run([rscript, "-e", "for (p in c('ggplot2','lattice','svglite')) library(p, character.only = TRUE); cat(R.version.string)"],
+                           capture_output=True, text=True)
+    if probe.returncode != 0:
+        return None, "R is installed (" + rscript + ") but its packages are not: " + probe.stderr.strip().splitlines()[-1]
+    rows = measure([rscript, str(HERE / "r_bench.R")], runs)
+    rows["version"] = probe.stdout.strip().splitlines()[-1]
+    return rows, ""
+
+
 def main():
     compiler, runs = sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else 5
     host = "windows" if platform.system() == "Windows" else "linux"
@@ -63,6 +97,10 @@ def main():
         "neper": measure([str(exe)], runs),
         "matplotlib_results": measure([sys.executable, str(HERE / "mpl_bench.py")], runs),
     }
+    r_rows, r_reason = measure_r(runs)
+    result["r"] = r_rows
+    if r_rows is None:
+        result["r_unavailable"] = r_reason
     out = HERE / "results" / f"{host}.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8", newline="\n")
@@ -75,6 +113,14 @@ def main():
     print(f"  layout only: neper {neper['layout']['ms'] / 200:.3f}; raster only: neper {neper['raster']['ms'] / 200:.2f}"
           f"; matplotlib import {mpl['import']['ms']:.0f} ms")
     print(f"  whole process: neper {neper['process']['ms']:.0f} ms  matplotlib {mpl['process']['ms']:.0f} ms")
+    if r_rows is None:
+        print(f"  R side not measured: {r_reason}")
+    else:
+        for package in ("ggplot2", "base", "lattice"):
+            for name in ("svg", "png"):
+                row = r_rows[f"{package}_{name}"]
+                n = neper[name]["ms"] / 200
+                print(f"  {name}: {package} {row['ms'] / 200:.2f} ms ({row['ms'] / 200 / n:.1f}x neper)  bytes/chart {row['bytes'] // 200}")
 
 
 if __name__ == "__main__":
