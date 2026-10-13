@@ -69,6 +69,7 @@ use e.ui.gridlook as gl
 use e.ui.input
 use e.gfx.paint
 use e.gfx.geometry
+use e.gfx.scene
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
@@ -139,6 +140,8 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    header_icons: [9]scene.TextureId,
+    has_header_icons: bool,
     cell_menu: []const overlay.MenuCommand,
     menu_open: bool,
     menu_kind: u8,
@@ -744,6 +747,13 @@ type MenuPick = struct { grid: *Grid, id: u8, spec: usize }
 
 // The application's commands for the cell menu (a row under the pointer); the grid adds Show
 // Columns... after them. `commands` must outlive the grid's builds.
+// The pictures of the header popup, in order: sort ascending, descending, clear, group by field,
+// group by box, footer, group footers, field chooser, best fit.
+fn set_header_menu_icons(grid: *Grid, icons: [9]scene.TextureId) {
+    grid.header_icons = icons
+    grid.has_header_icons = true
+}
+
 fn set_cell_menu(grid: *Grid, commands: []const overlay.MenuCommand) {
     grid.cell_menu = commands
 }
@@ -933,6 +943,23 @@ fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
         if ids[k] == CMD_GROUP_BOX {
             commands[n].checkable = true
             commands[n].checked = grid.group_box_visible
+        }
+        if grid.has_header_icons {
+            // icon slots: 0 asc, 1 desc, 2 clear, 3 group field, 4 group box, 5 footer, 6 group footers, 8 chooser, 10 best fit
+            var slot: usize = 99usize
+            if k == 0usize { slot = 0usize }
+            if k == 1usize { slot = 1usize }
+            if k == 2usize { slot = 2usize }
+            if k == 3usize { slot = 3usize }
+            if k == 4usize { slot = 4usize }
+            if k == 5usize { slot = 5usize }
+            if k == 6usize { slot = 6usize }
+            if k == 8usize { slot = 7usize }
+            if k == 10usize { slot = 8usize }
+            if slot < 9usize {
+                commands[n].has_picture = true
+                commands[n].picture = grid.header_icons[slot]
+            }
         }
         n += 1usize
         k += 1usize
@@ -1127,6 +1154,151 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     ret (dropping, ok)
 }
 
+// ---- the popup menu in v3's look (flat #F0F0F0 with a grey frame, 16 px pictures, hover #0078D7) ----
+
+// A hover and a pick of one entry (a pointer over it lights it, a tap runs it).
+type FlatPick = struct { grid: *Grid, action: widget.Submit, enabled: bool }
+
+fn on_flat_tap(ctx: *void, g: widget.Gesture) -> err {
+    let pick = mem.cast[*FlatPick](ctx)
+    switch g {
+    case .Tap as at:
+        if !pick.enabled { ret ok }
+        pick.grid.menu_open = false
+        if widget.submit_set(pick.action.invoke) { ret widget.fire_submit(pick.action) }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn flat_text(a: *mem.Arena, grid: *Grid, text: str, ink: paint.Color) -> (widget.Node, err) {
+    var words = control.text_options()
+    words.wrap = .None
+    words.size = grid.look.text_size
+    let (node, node_error) = control.colored_text(a, 0u64, text, grid.theme, words, ink)
+    ret (node, node_error)
+}
+
+// The commands as a popup at the window point (x, y): `row_h` tall entries, v3's colours.
+fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, x: f32, y: f32, row_h: f32) -> (widget.Node, err) {
+    let (picks, picks_error) = mem.alloc[FlatPick](a, commands.len)
+    if picks_error != ok { ret (zero, control.TooLarge) }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, commands.len * 2usize + 1usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    var widest_label = 0usize
+    var widest_hint = 0usize
+    var k = 0usize
+    while k < commands.len {
+        if commands[k].label.len > widest_label { widest_label = commands[k].label.len }
+        if commands[k].shortcut.len > widest_hint { widest_hint = commands[k].shortcut.len }
+        k += 1usize
+    }
+    // 6.4 logical px a character of the 10 pt face is near enough; the picture column is 27 wide
+    var width = 27.0 + f32(widest_label) * 6.6 + 24.0 + 22.0
+    if widest_hint != 0usize { width += f32(widest_hint) * 6.6 + 16.0 }
+    if width < 120.0 { width = 120.0 }
+    var i = 0usize
+    while i < commands.len {
+        let c = commands[i]
+        if c.separated && i != 0usize {
+            var rule = control.sized_style(width - 2.0, 1.0)
+            rule.background = paint.Brush { Solid: gl.rgb(0xBCBCBCu32) }
+            rule.margin = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 5.0 } }
+            rows[n] = widget.box(0u64, rule, zero)
+            n += 1usize
+        }
+        let key = grid.key + MENU_KEY + 16u64 + u64(i)
+        let state = control.control_state(grid.theme, key, c.enabled, false)
+        let lit = state.hovered && c.enabled
+        var ink = gl.rgb(0x000000u32)
+        if !c.enabled { ink = gl.rgb(0xA0A0A0u32) }
+        if lit { ink = gl.rgb(0xFFFFFFu32) }
+        let (label, label_error) = flat_text(a, grid, c.label, ink)
+        if label_error != ok { ret (zero, label_error) }
+        var parts_n = 0usize
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+        if cells_error != ok { ret (zero, control.TooLarge) }
+        // the picture column: the picture, a check, or nothing
+        var slot = control.sized_style(27.0, row_h)
+        if c.has_picture {
+            let (pic, pic_error) = control.image(a, 0u64, c.picture, 16.0, 16.0, .Contain, "")
+            if pic_error != ok { ret (zero, pic_error) }
+            let (pic_box, pic_box_error) = mem.alloc[widget.Node](a, 1usize)
+            if pic_box_error != ok { ret (zero, control.TooLarge) }
+            pic_box[0usize] = pic
+            cells[parts_n] = widget.aligned(0u64, .Center, .Center, slot, pic_box[0usize..1usize])
+        } else if c.checked {
+            let (tick, tick_error) = gl.mark(a, .Check, ink, ink, 9.0, 9.0)
+            if tick_error != ok { ret (zero, tick_error) }
+            let (tick_box, tick_box_error) = mem.alloc[widget.Node](a, 1usize)
+            if tick_box_error != ok { ret (zero, control.TooLarge) }
+            tick_box[0usize] = tick
+            cells[parts_n] = widget.aligned(0u64, .Center, .Center, slot, tick_box[0usize..1usize])
+        } else {
+            cells[parts_n] = widget.box(0u64, slot, zero)
+        }
+        parts_n += 1usize
+        var label_style = control.sized_style(width - 27.0 - 6.0, row_h)
+        if widest_hint != 0usize { label_style = control.sized_style(f32(widest_label) * 6.6 + 24.0, row_h) }
+        let (label_box, label_box_error) = mem.alloc[widget.Node](a, 1usize)
+        if label_box_error != ok { ret (zero, control.TooLarge) }
+        label_box[0usize] = label
+        cells[parts_n] = widget.aligned(0u64, .Start, .Center, label_style, label_box[0usize..1usize])
+        parts_n += 1usize
+        if widest_hint != 0usize {
+            let (hint, hint_error) = flat_text(a, grid, c.shortcut, ink)
+            if hint_error != ok { ret (zero, hint_error) }
+            let (hint_box, hint_box_error) = mem.alloc[widget.Node](a, 1usize)
+            if hint_box_error != ok { ret (zero, control.TooLarge) }
+            hint_box[0usize] = hint
+            cells[parts_n] = widget.aligned(0u64, .Start, .Center, control.sized_style(f32(widest_hint) * 6.6 + 16.0, row_h), hint_box[0usize..1usize])
+            parts_n += 1usize
+        }
+        var row_style = control.sized_style(width - 2.0, row_h)
+        if lit { row_style.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) } }
+        let (row_inner, row_inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if row_inner_error != ok { ret (zero, control.TooLarge) }
+        row_inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..parts_n])
+        picks[i] = FlatPick { grid: grid, action: c.action, enabled: c.enabled }
+        rows[n] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: on_flat_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, row_style, row_inner[0usize..1usize])
+        n += 1usize
+        i += 1usize
+    }
+    var frame = style.defaults()
+    frame.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    frame.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
+    frame.width = style.Length { Px: width }
+    frame.shadow = style.Shadow { offset: geometry.Point { x: 2.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.25) }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, frame, rows[0usize..n])
+    let (column_box, column_box_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_box_error != ok { ret (zero, control.TooLarge) }
+    let (scoped_box, scoped_box_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_box_error != ok { ret (zero, control.TooLarge) }
+    scoped_box[0usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 3.0, frame, one(a, column))
+    var no_submit: widget.Submit = zero
+    column_box[0usize] = widget.scope(grid.key + MENU_KEY + 2u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: no_submit, cancel_action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss }, keys: zero }, style.defaults(), scoped_box[0usize..1usize])
+    // keep it on the surface
+    var left = x
+    var top = y
+    let size = widget.surface_size(grid.theme.runtime)
+    if left + width > size.width { left = size.width - width }
+    var tall: f32 = 6.0
+    tall += f32(commands.len) * row_h
+    var seps = 0usize
+    var q = 1usize
+    while q < commands.len {
+        if commands[q].separated { seps += 1usize }
+        q += 1usize
+    }
+    tall += f32(seps) * 10.0
+    if top + tall > size.height { top = size.height - tall }
+    if left < 0.0 { left = 0.0 }
+    if top < 0.0 { top = 0.0 }
+    ret (widget.overlay(grid.key + MENU_KEY + 1u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: left, y: top }, modal: true, dismiss: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss } }, style.defaults(), column_box[0usize..1usize]), ok)
+}
+
 // The grid with its context menu target and, open, the menu or the chooser.
 fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, err) {
     if mem.address_of(grid.theme) == 0usize || mem.address_of(grid.theme.runtime) == 0usize { ret (inner, ok) }
@@ -1147,8 +1319,11 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         let (commands, commands_error) = menu_commands(a, grid)
         if commands_error != ok { ret (zero, commands_error) }
         let (at, pointed) = widget.context_point(theme.runtime)
-        let (menu, menu_error) = overlay.context_menu_of(a, grid.key + MENU_KEY + 1u64, theme, grid.key + MENU_KEY, "Data grid", commands, true, &shows[1usize], at, pointed)
+        var row_h: f32 = 20.0
+        if grid.menu_kind == MENU_HEADER { row_h = 22.0 }
+        let (menu, menu_error) = flat_menu(a, grid, commands, at.x, at.y, row_h)
         if menu_error != ok { ret (zero, menu_error) }
+        let _ = pointed
         parts[n] = menu
         n += 1usize
     }

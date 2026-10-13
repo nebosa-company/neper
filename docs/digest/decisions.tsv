@@ -2522,4 +2522,5 @@ D3940	1342	G012: incremental search and the bookmark
 D3941	1408	G012: context menus by hit region and the field chooser
 D3942	1244	G012: a right-click selects the card; the header menu finds its column by semantics; the pool is read-only
 D3943	478	G012: the field chooser is a plain list called Column
-D3944	1630	G012: the field chooser is a window you move, and columns drag in and out
+D3944	1631	G012: the field chooser is a window you move, and columns drag in and out
+D3945	1303	G012: the popup menus drawn in v3's look, with its own pictures
