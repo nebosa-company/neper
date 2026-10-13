@@ -1676,6 +1676,10 @@ fn header_gesture(ctx: *void, g: widget.Gesture) -> err {
     case .DragStart as at:
         ret widget.begin_drag(h.runtime, header_payload_tag() + u64(h.column) + 1u64)
     case .Drop as d:
+        // A hidden column dragged out of a field chooser: `from` is CHOOSER_FROM + its index.
+        if d.payload > chooser_payload_tag() && d.payload <= chooser_payload_tag() + 4096u64 {
+            ret widget.fire_change[Reorder](h.reorder, Reorder { from: CHOOSER_FROM + usize(d.payload - chooser_payload_tag() - 1u64), to: h.column })
+        }
         // (D1345) Only a header's drag reorders: its payload carries the tag.
         if d.payload <= header_payload_tag() || d.payload > header_payload_tag() + 4096u64 { ret ok }
         let from = usize(d.payload - header_payload_tag() - 1u64)
@@ -1690,6 +1694,40 @@ fn header_gesture(ctx: *void, g: widget.Gesture) -> err {
 // document tab's drag (its index plus one) neither lifts nor reorders a header.
 fn header_payload_tag() -> u64 {
     ret 1099511627776u64
+}
+
+// A hidden column dragged out of a field chooser: its payload is this tag plus the column plus one,
+// and a drop on a header reports a Reorder whose `from` is CHOOSER_FROM plus the column.
+const CHOOSER_FROM: usize = 1000000usize
+
+fn chooser_payload_tag() -> u64 {
+    ret 2199023255552u64
+}
+
+// The hidden column being dragged out of a chooser, if one is.
+fn chooser_dragged(t: *const control.Theme) -> (usize, bool) {
+    if mem.address_of(t.runtime) == 0usize { ret (0usize, false) }
+    let (payload, has_payload) = widget.dragging(t.runtime)
+    if !has_payload || payload <= chooser_payload_tag() || payload > chooser_payload_tag() + 4096u64 { ret (0usize, false) }
+    ret (usize(payload - chooser_payload_tag() - 1u64), true)
+}
+
+// The column whose header (keyed `key + 1 + 2 * index`) the pointer is over, for any drag.
+fn column_under_pointer(t: *const control.Theme, key: widget.Key, count: usize) -> (usize, bool) {
+    if mem.address_of(t.runtime) == 0usize { ret (0usize, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (0usize, false) }
+    let at = widget.pointer_position(t.runtime)
+    var look = 0usize
+    while look < count {
+        let (look_id, look_count) = widget.find_by_key(s, key + 1u64 + 2u64 * u64(look))
+        if look_count == 1usize {
+            let (look_box, has_look_box) = widget.bounds_of(t.runtime, look_id)
+            if has_look_box && at.x >= look_box.x && at.x < look_box.x + look_box.width { ret (look, true) }
+        }
+        look += 1usize
+    }
+    ret (0usize, false)
 }
 
 // (D1345) The column whose header is being dragged, if one is.
@@ -2181,6 +2219,51 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             }
         }
     }
+    // A hidden column dragged out of a field chooser over the header: its name follows the pointer
+    // and the v3 arrows mark the edge it would take (before the column under the pointer).
+    let (chosen_spec, has_chosen) = chooser_dragged(t)
+    if has_chosen && look.on && !has_lifted_column && columns.len > 0usize {
+        let (under, has_under) = column_under_pointer(t, key, columns.len)
+        if has_under {
+            let cell_key = key + 1u64 + 2u64 * u64(under)
+            let (cell_box, has_cell_box) = control.keyed_bounds(t.runtime, cell_key)
+            if has_cell_box {
+                var edge_key = cell_key
+                var edge_x: f32 = 0.0 - 4.0
+                if under > 0usize {
+                    edge_key = key + 2u64 + 2u64 * u64(under - 1usize)
+                    edge_x = 3.0 - 4.0
+                }
+                if look.drag_label.len != 0usize {
+                    var ghost_words = control.text_options()
+                    ghost_words.wrap = .None
+                    ghost_words.size = look.text_size
+                    let (ghost_title, ghost_error) = control.colored_text(a, 0u64, look.drag_label, t, ghost_words, control.with_alpha(style.color(t.tokens, .OnSurface), 0.55))
+                    if ghost_error != ok { ret (zero, ghost_error) }
+                    let (ghost_nodes, ghost_nodes_error) = mem.alloc[widget.Node](a, 1usize)
+                    if ghost_nodes_error != ok { ret (zero, TooLarge) }
+                    ghost_nodes[0usize] = ghost_title
+                    let travel = widget.pointer_position(t.runtime).x - cell_box.x
+                    parts[2usize] = widget.overlay(key + 1048600u64, widget.Overlay { anchor: cell_key, placement: .Below, offset: geometry.Point { x: travel, y: 0.0 - cell_box.height }, modal: false, dismiss: zero }, style.defaults(), ghost_nodes[0usize..1usize])
+                    part_count = 3usize
+                } else {
+                    parts[2usize] = widget.box(0u64, style.defaults(), zero)
+                }
+                let (down_arrow, down_error) = gl.mark(a, .ArrowDown, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
+                if down_error != ok { ret (zero, down_error) }
+                let (up_arrow, up_error) = gl.mark(a, .ArrowUp, gl.rgb(0x00FF00u32), gl.rgb(0x00FF00u32), 9.0, 11.0)
+                if up_error != ok { ret (zero, up_error) }
+                let (arrow_nodes, arrow_nodes_error) = mem.alloc[widget.Node](a, 2usize)
+                if arrow_nodes_error != ok { ret (zero, TooLarge) }
+                arrow_nodes[0usize] = down_arrow
+                arrow_nodes[1usize] = up_arrow
+                parts[3usize] = widget.overlay(key + 1048601u64, widget.Overlay { anchor: edge_key, placement: .Below, offset: geometry.Point { x: edge_x, y: 0.0 - inner - 11.0 }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[0usize..1usize])
+                parts[4usize] = widget.overlay(key + 1048602u64, widget.Overlay { anchor: edge_key, placement: .Below, offset: geometry.Point { x: edge_x, y: 0.0 }, modal: false, dismiss: zero }, style.defaults(), arrow_nodes[1usize..2usize])
+                part_count = 5usize
+            }
+        }
+    }
+    let _ = chosen_spec
     let (row_node, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
     row_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
@@ -2417,7 +2500,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
