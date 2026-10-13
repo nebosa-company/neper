@@ -2534,6 +2534,15 @@
    ]
   },
   {
+   "module": "e.gpu.cuda",
+   "milestone": "M3",
+   "schedule": "scheduled",
+   "catalogue": 6,
+   "delivered": 6,
+   "pending": [],
+   "fixtures": []
+  },
+  {
    "module": "e.gpu.tensor",
    "milestone": null,
    "schedule": "later",

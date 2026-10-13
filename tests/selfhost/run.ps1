@@ -7117,6 +7117,15 @@ if ($LASTEXITCODE -ne 0 -or $deviceEditCleanWritten -ne 'executable written') { 
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditHotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditCleanExe).Hash) { throw 'the hot build after a device-reached edit is not the clean build' }
 $deviceEditOutput = & $deviceEditHotExe
 if ($LASTEXITCODE -ne 0 -or $deviceEditOutput -ne 'gpu device edit ok') { throw "the edited device edit fixture answered wrongly: exit $LASTEXITCODE $deviceEditOutput" }
+# (D4704, C107) The portable library compiles for NeperOS: programs that reach the maps, the
+# network modules, the shell family and `target.os`, which need the whole `e.os` surface, the
+# runtime's hash and args, and the target's own variants of `e.os.shell`, `e.os.ident` and
+# `e.proc.sys.host`. Compiling is not running; the boots are in the NeperOS section.
+foreach ($neperosFixture in @('data_map', 'data_tree', 'concurrent_queue_map', 'net', 'net_http', 'os_socket', 'os_poller', 'os_mapping', 'ui_app', 'ui_clipboard', 'os_shell', 'os_ident', 'proc_sys', 'when_target', 'call_moves')) {
+    $neperosImage = Join-Path $testBuild "neperos-compile-$neperosFixture.img"
+    $neperosWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$neperosFixture\src\main.e") $repo 'aarch64' 'neperos' $neperosImage
+    if ($LASTEXITCODE -ne 0 -or $neperosWritten -ne 'executable written') { throw "$neperosFixture did not compile for NeperOS: $neperosWritten" }
+}
 # (D4702) A constant read in an inlined body is part of the body's edge: a release build that
 # inlined `midhelp.mix` into main says the new value after the constant's edit.
 $releaseConstFixture = Join-Path $PSScriptRoot 'fixtures\link\release_const_edge'

@@ -2877,11 +2877,13 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
     arch_members[3usize] = "Spv"
     arch_members[4usize] = "Ptx"
     try seed_target_enum(c, "target.Arch", arch_members[..])
-    var os_members: [4]str = zero
+    var os_members: [5]str = zero
     os_members[0usize] = "Windows"
     os_members[1usize] = "Linux"
     os_members[2usize] = "Macos"
     os_members[3usize] = "None"
+    // (D4704) NeperOS, last so no earlier member moves.
+    os_members[4usize] = "Neperos"
     try seed_target_enum(c, "target.Os", os_members[..])
     let (memory_module, has_memory) = graph.find_module(g, "e.mem")
     if has_memory {
@@ -16139,7 +16141,7 @@ fn target_is(current: str, member: str) -> bool {
 
 fn known_target_member(question: str, member: str) -> bool {
     if same(question, "arch") { ret same(member, "X64") || same(member, "Aarch64") || same(member, "X86") || same(member, "Spv") || same(member, "Ptx") }
-    ret same(member, "Windows") || same(member, "Linux") || same(member, "Macos") || same(member, "None")
+    ret same(member, "Windows") || same(member, "Linux") || same(member, "Macos") || same(member, "None") || same(member, "Neperos")
 }
 
 fn when_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {

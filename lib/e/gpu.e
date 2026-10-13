@@ -53,6 +53,7 @@ use e.str
 use e.sync as locks
 use e.atomic
 use e.gpu.vulkan
+use e.gpu.cuda
 
 type Backend = enum u8 { Cpu, Vulkan, Cuda }
 type DeviceKind = enum u8 { Unknown, Cpu, Integrated, Discrete, Virtual, Other }
@@ -648,6 +649,23 @@ fn inventory_records(a: *mem.Arena, wanted: Backend) -> ([]DeviceInfo, bool, err
     ret (records[0usize..used], true, ok)
 }
 
+// A CUDA device as `devices` reports it (D4705): its name, identity and memory, `supported`
+// false because there is no CUDA compute backend to open it with (M4).
+fn cuda_info(physical: cuda.Physical, index: u32) -> DeviceInfo {
+    var record: DeviceInfo = zero
+    record.key.backend = .Cuda
+    record.key_valid = physical.uuid_valid
+    if physical.uuid_valid { record.key.uuid = physical.uuid }
+    record.index = index
+    record.name = physical.name
+    record.kind = .Discrete
+    if physical.integrated { record.kind = .Integrated }
+    record.memory_bytes = physical.memory_bytes
+    record.memory_known = true
+    record.supported = false
+    ret record
+}
+
 // A mock record opened: the CPU device with the record as its `info`.
 fn open_mock(a: *mem.Arena, record: DeviceInfo) -> (*Device, err) {
     let (device, device_error) = open(a, .Cpu, 0u32)
@@ -700,6 +718,38 @@ fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo
             let (record, record_error) = vulkan_info(a, found[at], u32(at))
             if record_error != ok { ret (zero, record_error) }
             records[at] = record
+            at += 1usize
+        }
+        ret (records, ok)
+    }
+    if backend == .Cuda {
+        // The driver's devices (D4705), reported and not openable: there is no CUDA compute
+        // backend yet. The same bounded, complete snapshot as Vulkan's.
+        let checkpoint = mem.mark(a)
+        let (found, found_error) = cuda.devices(a, limit + 1usize)
+        if found_error == cuda.NoLoader {
+            mem.reset(a, checkpoint)
+            ret (zero, Unsupported)
+        }
+        if found_error == cuda.NoDevice {
+            mem.reset(a, checkpoint)
+            var empty: []const DeviceInfo = zero
+            ret (empty, ok)
+        }
+        if found_error != ok {
+            mem.reset(a, checkpoint)
+            if found_error == mem.Exhausted { ret (zero, found_error) }
+            ret (zero, Lost)
+        }
+        if found.len > limit {
+            mem.reset(a, checkpoint)
+            ret (zero, TooLarge)
+        }
+        let (records, records_error) = mem.alloc[DeviceInfo](a, found.len)
+        if records_error != ok { ret (zero, records_error) }
+        var at = 0usize
+        while at < found.len {
+            records[at] = cuda_info(found[at], u32(at))
             at += 1usize
         }
         ret (records, ok)
@@ -906,6 +956,34 @@ fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err) {
         if picked_error != ok { ret (zero, picked_error) }
         let (device, device_error) = open_mock(a, mocked[picked])
         ret (device, device_error)
+    }
+    if key.backend == .Cuda {
+        // A CUDA key resolves against the driver's devices exactly as a Vulkan one does, so
+        // an absent or duplicated identity says so; a device that is there has no backend to
+        // open it with, which is `Unsupported`.
+        let checkpoint = mem.mark(a)
+        let (found, found_error) = cuda.devices(a, MAX_DEVICES)
+        if found_error == cuda.NoLoader {
+            mem.reset(a, checkpoint)
+            ret (zero, Unsupported)
+        }
+        if found_error == cuda.NoDevice {
+            mem.reset(a, checkpoint)
+            ret (zero, NoDevice)
+        }
+        if found_error != ok {
+            mem.reset(a, checkpoint)
+            ret (zero, Lost)
+        }
+        var cuda_records: [16]DeviceInfo = zero
+        var cuda_at = 0usize
+        while cuda_at < found.len && cuda_at < 16usize {
+            cuda_records[cuda_at] = cuda_info(found[cuda_at], u32(cuda_at))
+            cuda_at += 1usize
+        }
+        let (cuda_chosen, cuda_chosen_error) = resolve_key(cuda_records[..cuda_at], key)
+        if cuda_chosen_error != ok { ret (zero, cuda_chosen_error) }
+        ret (zero, Unsupported)
     }
     if key.backend != .Vulkan { ret (zero, Unsupported) }
     // Enumerate the full set so a duplicate is seen, match, then open that very handle:

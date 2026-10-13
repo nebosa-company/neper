@@ -7019,6 +7019,13 @@ cmp "$test_build/gpu-device-edit-hot" "$test_build/gpu-device-edit-clean"
 chmod +x "$test_build/gpu-device-edit-hot"
 device_edit_output=$("$test_build/gpu-device-edit-hot")
 [ "$device_edit_output" = 'gpu device edit ok' ]
+# (D4704, C107) The portable library compiles for NeperOS: the maps, the network modules, the
+# shell family and `target.os` need the whole `e.os` surface, the runtime's hash and args, and
+# the target's own `e.os.shell`, `e.os.ident` and `e.proc.sys.host`. Compiling is not running.
+for neperos_fixture in data_map data_tree concurrent_queue_map net net_http os_socket os_poller os_mapping ui_app ui_clipboard os_shell os_ident proc_sys when_target call_moves; do
+    neperos_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/$neperos_fixture/src/main.e" "$repo" aarch64 neperos "$test_build/neperos-compile-$neperos_fixture.img")
+    [ "$neperos_written" = 'executable written' ] || { printf '%s\n' "$neperos_fixture did not compile for NeperOS: $neperos_written" >&2; exit 1; }
+done
 # (D4702) A constant read in an inlined body is part of the body's edge: a release build that
 # inlined `midhelp.mix` into main says the new value after the constant's edit.
 release_const_fixture="$repo/tests/selfhost/fixtures/link/release_const_edge"
