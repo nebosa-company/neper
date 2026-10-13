@@ -50,7 +50,7 @@ no-data, drag, conditional formatting and the deck and collection views are stil
 | P011 | v3 frames the grid with a 1 px border; v5 has none | | closed by D3920: 1 px #828790 frame, parts touch (screenshot S01-compare-after-text-frame.png) |
 | P012 | Navigator: v3 flat glyph buttons (|< << < "1 of 120239" > >> >| filter) and a grey scroll bar; v5 text buttons | | closed by D3925: first, previous page, previous, "n of m", next, next page, last, funnel |
 | P013 | Footer: v3 shows summaries in a tinted band only when the footer is on ("Rows: 8" in the collection grid); v5 "Total" row styled differently | | footer band and cells closed by D3920/D3923; labels differ (v3 shows "Count: n" under Name) |
-| P014 | Row ink by rarity: v3 orange (mythic) and red (rare) with the exact palette of the app; v5 uses theme data colours | | open, extract palette |
+| P014 | Row ink by rarity: v3 orange (mythic) and red (rare) with the exact palette of the app; v5 uses theme data colours | | closed by D3928: rows in the card colour palette of card_color.pas (S01-v5-card-ink.png) |
 | P015 | Scrollbar: v3 native thin vertical bar; v5 draws none in the capture | | closed by D3923: 16 dp #F0F0F0 track, slim #858585 thumb 16 dp in from each end (S01-compare-scrollbar.png) |
 | P017 | Header hover: v3 turns the cell #D9EBF9 and shows a filter drop-down glyph; v5 has no hover look | | look applied (D3919); fixture probe pending |
 | P018 | Group rows: v3 `[+]` box, "Field : value (Count: n)" on #F0F0F0 with a dotted focus rectangle; v5 `[+]` text prefix | | closed by D3923: drawn +/- box, "Field : value (Count: n)", label runs over the neighbouring cells, no column lines |

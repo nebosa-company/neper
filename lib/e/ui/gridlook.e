@@ -82,6 +82,32 @@ fn v3() -> Look {
     }
 }
 
+// The ink v3 draws a card's row in, by the card's colour letter (`card_color.pas`, GetForegroundColor):
+// W dirty white, U blue, B black, R red, G green, M multicolour orange, N colourless grey.
+fn card_ink(letter: u8) -> (paint.Color, bool) {
+    if letter == 87u8 { ret (rgb(0x646464u32), true) }
+    if letter == 85u8 { ret (rgb(0x0000FFu32), true) }
+    if letter == 66u8 { ret (rgb(0x000000u32), true) }
+    if letter == 82u8 { ret (rgb(0xFF0000u32), true) }
+    if letter == 71u8 { ret (rgb(0x008000u32), true) }
+    if letter == 77u8 { ret (rgb(0xFF5F11u32), true) }
+    if letter == 78u8 { ret (rgb(0x858585u32), true) }
+    ret (rgb(0x000000u32), false)
+}
+
+// The ink v3 draws a rarity in (`card_rarity.pas`): common black, uncommon silver, rare dark gold,
+// timeshift purple, mythic red-orange, bonus brick red, special pale orange.
+fn rarity_ink(letter: u8) -> (paint.Color, bool) {
+    if letter == 67u8 { ret (rgb(0x000000u32), true) }
+    if letter == 85u8 { ret (rgb(0x8C8C8Cu32), true) }
+    if letter == 82u8 { ret (rgb(0xA07D00u32), true) }
+    if letter == 84u8 { ret (rgb(0x845D99u32), true) }
+    if letter == 77u8 { ret (rgb(0xED9030u32), true) }
+    if letter == 66u8 { ret (rgb(0xB63426u32), true) }
+    if letter == 83u8 { ret (rgb(0xE69D54u32), true) }
+    ret (rgb(0x000000u32), false)
+}
+
 // The theme's own look: `on` false, nothing overridden.
 fn theme() -> Look {
     var look: Look = zero
