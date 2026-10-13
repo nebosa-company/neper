@@ -28,6 +28,7 @@ use e.text.shape
 use e.fmt.json as json
 use e.fmt.cap as alerts
 use bgclient
+use sensorclient
 use appkit
 use text
 use ui
@@ -52,6 +53,7 @@ const ID_UNIT: usize = 700usize
 const ID_ADD: usize = 701usize
 const ID_REMOVE: usize = 702usize
 const ID_CANCEL: usize = 703usize
+const ID_HERE: usize = 704usize
 const ID_RESULT: usize = 800usize
 
 type Forecast = struct {
@@ -1131,6 +1133,8 @@ fn draw_main(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
 fn draw_add(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.put(a, builder, faces.jost_bold, 30.0, "Add place", 24.0, 36.0, ui.light())
     try ui.pill(a, builder, &s.hits, faces, ID_CANCEL, 300.0, 40.0, 96.0, 32.0, "Cancel", ui.soft(), 15.0)
+    // (C156) The place of the device itself, from the location service.
+    try ui.pill(a, builder, &s.hits, faces, ID_HERE, 172.0, 40.0, 118.0, 32.0, "My location", ui.amber(), 14.0)
     try ui.card(a, builder, 16.0, 96.0, 380.0, 56.0, 16.0, ui.cream())
     let shown = ui.field_text(a, &s.entry)
     if shown.len == 0usize {
@@ -1177,6 +1181,21 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 // ----------------------------------------------------------------------------------------------
 // Behaviour.
 
+// (C156) A micro-degree value to the nearest hundredth of a degree (hundredths as an integer).
+fn centi_round(v: i64) -> i64 {
+    if v >= 0i64 { ret (v + 5000i64) / 10000i64 }
+    ret (v - 5000i64) / 10000i64
+}
+
+fn say_signed(value: i64) {
+    if value < 0i64 {
+        ui.say("-")
+        ui.say_num(usize(0i64 - value))
+    } else {
+        ui.say_num(usize(value))
+    }
+}
+
 // What a tap on button `id` did: true when the screen changed.
 fn act(s: *State, id: usize) -> bool {
     // A pending forecast fetch is replaced by the next chip tap; a search or an add is let to finish.
@@ -1202,6 +1221,47 @@ fn act(s: *State, id: usize) -> bool {
         if id == ID_CANCEL {
             s.screen = MAIN_SCREEN
             s.status_len = 0usize
+            ret true
+        }
+        if id == ID_HERE {
+            // (C156) The current location as a place, by the user's choice: the location service's fix (the Location
+            // switch and Weather's coarse permission decide) rounded to a hundredth of a degree, then added as any
+            // found place is.
+            if s.count >= PLACES {
+                say_status(s, "The list is full: remove a place first")
+                ret true
+            }
+            let (status, lat_micro, lon_micro, accuracy, source) = sensorclient.fix(false)
+            if status == sensorclient.STATUS_OK {
+                let here = "My location"
+                var n = 0usize
+                while n < here.len {
+                    s.found_name[n] = here[n]
+                    n += 1usize
+                }
+                s.found_name_len[0usize] = here.len
+                let near = "Near you"
+                n = 0usize
+                while n < near.len {
+                    s.found_where[n] = near[n]
+                    n += 1usize
+                }
+                s.found_where_len[0usize] = near.len
+                s.found_lat[0usize] = i32(centi_round(lat_micro))
+                s.found_lon[0usize] = i32(centi_round(lon_micro))
+                s.found = 1usize
+                ui.say("weather location ")
+                say_signed(lat_micro / 1000i64)
+                ui.say(" ")
+                say_signed(lon_micro / 1000i64)
+                ui.say("\n")
+                s.job = JOB_ADD
+                s.job_pick = 0usize
+                say_status(s, "Getting the forecast...")
+            } else {
+                say_status(s, "Location is off (Settings)")
+                ui.say("weather location off\n")
+            }
             ret true
         }
         if id >= ID_RESULT && id < ID_RESULT + s.found {

@@ -63,8 +63,9 @@ def haversine(lat1, lon1, lat2, lon2):
 
 def osrm_route(path):
     """(C160) /route/v1/foot/lon,lat;lon,lat in OSRM's JSON: an L-shaped way (east-west first, then north-south) with
-    a depart, a turn and an arrive step; lengths by haversine, a walking pace of 1.4 m/s."""
-    coordinates = path.split('/route/v1/foot/')[1].split('?')[0]
+    a depart, a turn and an arrive step; lengths by haversine, a pace by profile (foot 1.4, bike 4.5, car 11 m/s)."""
+    profile, coordinates = path.split('/route/v1/')[1].split('?')[0].split('/', 1)
+    pace = {'foot': 1.4, 'bike': 4.5, 'car': 11.0}.get(profile, 1.4)
     (lon1, lat1), (lon2, lat2) = [tuple(float(v) for v in pair.split(',')) for pair in coordinates.split(';')]
     corner = (lon2, lat1)
     leg1 = haversine(lat1, lon1, lat1, lon2)
@@ -77,14 +78,14 @@ def osrm_route(path):
     return json.dumps({
         'code': 'Ok',
         'routes': [{
-            'distance': round(total, 1), 'duration': round(total / 1.4, 1), 'weight': round(total / 1.4, 1),
+            'distance': round(total, 1), 'duration': round(total / pace, 1), 'weight': round(total / pace, 1),
             'weight_name': 'routability',
             'geometry': {'type': 'LineString', 'coordinates': [[lon1, lat1], [corner[0], corner[1]], [lon2, lat2]]},
-            'legs': [{'distance': round(total, 1), 'duration': round(total / 1.4, 1), 'summary': 'Karl Johans gate',
+            'legs': [{'distance': round(total, 1), 'duration': round(total / pace, 1), 'summary': 'Karl Johans gate',
                       'steps': [
-                          {'distance': round(leg1, 1), 'duration': round(leg1 / 1.4, 1), 'name': 'Karl Johans gate',
+                          {'distance': round(leg1, 1), 'duration': round(leg1 / pace, 1), 'name': 'Karl Johans gate',
                            'maneuver': {'type': 'depart', 'location': [lon1, lat1]}},
-                          {'distance': round(leg2, 1), 'duration': round(leg2 / 1.4, 1), 'name': 'Akersgata',
+                          {'distance': round(leg2, 1), 'duration': round(leg2 / pace, 1), 'name': 'Akersgata',
                            'maneuver': {'type': 'turn', 'modifier': turn, 'location': [corner[0], corner[1]]}},
                           {'distance': 0, 'duration': 0, 'name': '',
                            'maneuver': {'type': 'arrive', 'location': [lon2, lat2]}}]}]}],
@@ -116,7 +117,7 @@ def get(handler, host, path, query):
             body = {'type': 'FeatureCollection', 'features': []}
         handler.reply(200, json.dumps(body).encode('utf-8'), 'application/geo+json')
         return True
-    if host == 'router.project-osrm.org' and path.startswith('/route/v1/foot/'):
+    if host == 'router.project-osrm.org' and path.startswith('/route/v1/'):
         handler.reply(200, osrm_route(handler.path), 'application/json')
         return True
     if host != 'neper.test':

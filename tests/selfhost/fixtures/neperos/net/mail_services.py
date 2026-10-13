@@ -37,7 +37,21 @@ ARCHIVE = [
 UPDATES = [(b"Neper News <news@neper.test>", b"October update", b"Tue, 13 Oct 2026 07:00:00 +0000", b"")]
 ADA_INBOX = [(b"Charles Babbage <cb@neper.test>", b"Engine notes", b"Wed, 07 Oct 2026 10:00:00 +0000",
               b"Dear Ada, the drawings for the engine are done.")]
-ACCOUNTS = {"neper": "secret", "ada": "lovelace"}
+# grace has one message; a second one arrives ARRIVAL_SECONDS after the first time her INBOX was fetched (the push the
+# Mail fixture waits for: the account is only ever used by that fixture, so the clock starts there).
+GRACE_INBOX = [(b"Grace Hopper <gh@neper.test>", b"Compiler notes", b"Thu, 08 Oct 2026 09:00:00 +0000",
+                b"The first compiler is working.")]
+GRACE_LATER = (b"Grace Hopper <gh@neper.test>", b"Bug found", b"Tue, 13 Oct 2026 11:00:00 +0000",
+               b"A moth was found in the relay.")
+ARRIVAL_SECONDS = 20
+GRACE_FIRST_FETCH = []
+# alan is the account of the search / mark-unread / archive fixture: two messages, an Archive that starts empty.
+ALAN_INBOX = [(b"Alan Turing <at@neper.test>", b"Cipher notes", b"Mon, 12 Oct 2026 10:00:00 +0000",
+               b"The enigma settings for Monday are attached to the next message."),
+              (b"Joan Clarke <jc@neper.test>", b"Lunch plans", b"Mon, 12 Oct 2026 11:00:00 +0000",
+               b"Soup in the canteen at one.")]
+ALAN_ARCHIVE = []
+ACCOUNTS = {"neper": "secret", "ada": "lovelace", "grace": "hopper", "alan": "enigma"}
 MENU = b"Friday menu: soup 4, pasta 9, tea 2\n"
 SENT = []
 SEEN = set()
@@ -124,6 +138,19 @@ class Imap(socketserver.StreamRequestHandler):
         """What the selected folder holds, in order: render tuples (a sent message as its raw bytes)."""
         if self.user == "ada":
             return ADA_INBOX if self.folder == "INBOX" else []
+        if self.user == "alan":
+            with LOCK:
+                if self.folder == "INBOX":
+                    return ALAN_INBOX
+                return ALAN_ARCHIVE if self.folder == "Archive" else []
+        if self.user == "grace":
+            import time
+            if self.folder != "INBOX":
+                return []
+            with LOCK:
+                if GRACE_FIRST_FETCH and time.time() - GRACE_FIRST_FETCH[0] >= ARRIVAL_SECONDS:
+                    return GRACE_INBOX + [GRACE_LATER]
+            return GRACE_INBOX
         if self.folder == "INBOX":
             return MESSAGES
         if self.folder == "Archive":
@@ -166,7 +193,11 @@ class Imap(socketserver.StreamRequestHandler):
                     self.user = pair[0]
                 self.reply(tag + (b" OK LOGIN completed" if ok else b" NO LOGIN failed") + CRLF)
             elif command == "LIST":
-                names = ["INBOX"] if self.user == "ada" else ["INBOX", "Archive", "Updates", "Sent"]
+                names = ["INBOX", "Archive", "Updates", "Sent"]
+                if self.user in ("ada", "grace"):
+                    names = ["INBOX"]
+                elif self.user == "alan":
+                    names = ["INBOX", "Archive"]
                 listing = b"".join(b'* LIST (\\HasNoChildren) "/" "' + n.encode() + b'"' + CRLF for n in names)
                 self.reply(listing + tag + b" OK LIST completed" + CRLF)
             elif command in ("SELECT", "EXAMINE"):
@@ -175,7 +206,36 @@ class Imap(socketserver.StreamRequestHandler):
                 self.reply(("* %d EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY 1] valid\r\n* OK [UIDNEXT %d] next\r\n"
                             "* FLAGS (\\Seen \\Flagged \\Deleted)\r\n" % (len(inbox), len(self.items()) + 1)).encode() +
                            tag + b" OK [READ-WRITE] SELECT completed" + CRLF)
+            elif command == "SEARCH":
+                # (C158) SEARCH TEXT "word" (and SUBJECT, FROM, UNSEEN): the matching UIDs of the selected folder.
+                import re
+                criteria = rest.strip()
+                found = []
+                for position, (uid, message) in enumerate(inbox, 1):
+                    raw = render(*message).lower()
+                    match = re.match(r'(?i)(text|subject|from|body)\s+"?([^"]*)"?$', criteria)
+                    with LOCK:
+                        seen = (self.user, self.folder, uid) in SEEN
+                    if match and match.group(2).lower().encode() in raw:
+                        found.append(uid)
+                    elif criteria.upper() == "UNSEEN" and not seen:
+                        found.append(uid)
+                self.reply(b"* SEARCH" + b"".join(b" %d" % u for u in found) + CRLF + tag + b" OK SEARCH completed" + CRLF)
+            elif command == "COPY":
+                # (C158) COPY set mailbox: a copy of the message goes to that mailbox (only Archive is kept).
+                spec, _, target = rest.partition(" ")
+                wanted = {int(x) for x in spec.split(",") if x.isdigit()}
+                for position, (uid, message) in enumerate(inbox, 1):
+                    if (uid if by_uid else position) in wanted and target.strip('"') == "Archive" and self.user == "alan":
+                        with LOCK:
+                            ALAN_ARCHIVE.append(message)
+                self.reply(tag + b" OK COPY completed" + CRLF)
             elif command == "FETCH":
+                if self.user == "grace":
+                    import time
+                    with LOCK:
+                        if not GRACE_FIRST_FETCH:
+                            GRACE_FIRST_FETCH.append(time.time())
                 spec = rest.split(" ", 1)[0]
                 first, _, last = spec.partition(":")
                 low = int(first)
@@ -196,7 +256,9 @@ class Imap(socketserver.StreamRequestHandler):
                 for position, (uid, message) in enumerate(inbox, 1):
                     if (uid if by_uid else position) in wanted:
                         with LOCK:
-                            if "\\Seen" in action:
+                            if "\\Seen" in action and action.lstrip().startswith("-"):
+                                SEEN.discard((self.user, self.folder, uid))
+                            elif "\\Seen" in action:
                                 SEEN.add((self.user, self.folder, uid))
                             if "\\Deleted" in action:
                                 DELETED.add((self.user, self.folder, uid))

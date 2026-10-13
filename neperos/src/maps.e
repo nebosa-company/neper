@@ -111,6 +111,8 @@ type State = struct {
     // (C160) The route the routing service answered: its points (latitude, longitude), length in metres, time in
     // seconds and the first manoeuvres as text; `net_route` says it is that one and not the sample city's.
     net_route: bool,
+    // The way of travelling the route is asked for: 0 on foot, 1 by bicycle, 2 by car (the routing service's profile).
+    profile: usize,
     route_lat: [48]f64,
     route_lon: [48]f64,
     net_points: usize,
@@ -890,7 +892,10 @@ fn route_map(a: *mem.Arena, s: *State) -> bool {
     s.net_points = 0usize
     s.step_total = 0usize
     let mark = mem.mark(a)
-    var path = ui.join(a, "/route/v1/foot/", degrees_text(a, s.me_lon), ",")
+    var profile = "foot"
+    if s.profile == 1usize { profile = "bike" }
+    if s.profile == 2usize { profile = "car" }
+    var path = ui.join(a, ui.join(a, "/route/v1/", profile, "/"), degrees_text(a, s.me_lon), ",")
     path = ui.join(a, path, degrees_text(a, s.me_lat), ";")
     path = ui.join(a, path, degrees_text(a, s.target_lon), ",")
     path = ui.join(a, path, degrees_text(a, s.target_lat), "?overview=full&geometries=geojson&steps=true")
@@ -1173,7 +1178,18 @@ fn draw_card(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         // and its manoeuvres (the first, then the second when Start was pressed).
         try ui.clipped(a, builder, faces.jost_bold, 20.0, ui.text_of(a, s.target_name[0usize..], s.target_len), 24.0, 676.0, 364.0, ui.ink())
         var summary = "Place from search"
-        if s.net_route { summary = ui.join(a, ui.number(a, s.net_metres), " m, ", ui.join(a, ui.number(a, (s.net_seconds + 30usize) / 60usize), " min on foot", "")) }
+        var how = " min on foot"
+        var mode_label = "Walk"
+        if s.profile == 1usize {
+            how = " min by bike"
+            mode_label = "Bike"
+        }
+        if s.profile == 2usize {
+            how = " min by car"
+            mode_label = "Drive"
+        }
+        if s.net_route { summary = ui.join(a, ui.number(a, s.net_metres), " m, ", ui.join(a, ui.number(a, (s.net_seconds + 30usize) / 60usize), how, "")) }
+        try ui.pill(a, builder, &s.hits, faces, 502usize, 316.0, 700.0, 80.0, 30.0, mode_label, ui.soft(), 14.0)
         try ui.put(a, builder, faces.grotesk, 14.0, summary, 24.0, 710.0, ui.muted())
         if s.net_route && s.step_total > 0usize {
             try ui.clipped(a, builder, faces.jost, 15.0, ui.text_of(a, s.step_text[0usize][0usize..], s.step_len[0usize]), 24.0, 736.0, 364.0, ui.amber_dark())
@@ -1456,6 +1472,17 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret true
     }
     if s.selected != NONE {
+        if id == 502usize && s.selected == TARGET {
+            // The way of travelling changes (walk, bike, drive); a route already asked for is asked for again.
+            s.profile = (s.profile + 1usize) % 3usize
+            ui.say("maps profile ")
+            ui.say_num(s.profile)
+            ui.say("\n")
+            if s.route {
+                let rerouted = route_map(a, s)
+            }
+            ret true
+        }
         if id == 500usize && s.selected == TARGET {
             // (C160) Directions to a place the search found: the routing service's route from you to it.
             if !s.route {

@@ -1088,10 +1088,17 @@ fn load_images(a: *mem.Arena, kit: *appkit.Kit, s: *State, final_host: str, now:
         if s.page[at_line].kind == KIND_IMAGE {
             let image_line = s.page[at_line]
             let (image_host, image_path) = split_address(a, s, ui.text_of(a, image_line.href[0usize..], image_line.href_len), final_host)
+            // Each image is fetched and kept inside a mark: its 96 KB reply buffer is given back afterwards.
+            let mark = mem.mark(a)
             let (picture_reply, got_host, got_path, image_error) = fetch_following(a, s, image_host, image_path, now)
             if image_error == ok && picture_reply.status == 200usize && picture_reply.body.len > 0usize && picture_reply.body.len <= 32768usize {
                 keep_picture(a, kit, s, tried, at_line, picture_reply.body)
+            } else {
+                ui.say("browser image not fetched ")
+                ui.say_text(image_path)
+                ui.say("\n")
             }
+            mem.reset(a, mark)
             tried += 1usize
         }
         at_line += 1usize
@@ -1119,11 +1126,20 @@ fn keep_picture(a: *mem.Arena, kit: *appkit.Kit, s: *State, which: usize, line: 
             decoded = png_image
             decode_error = png_error
         }
-        if decode_error != ok { ret }
+        if decode_error != ok {
+            ui.say("browser image decode failed\n")
+            ret
+        }
         let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
-        if view_error != ok { ret }
+        if view_error != ok {
+            ui.say("browser image view failed\n")
+            ret
+        }
         let (texture, upload_error) = scene.upload_image(&kit.renderer, view)
-        if upload_error != ok { ret }
+        if upload_error != ok {
+            ui.say("browser image upload failed\n")
+            ret
+        }
         s.images[which].tex = texture
         s.images[which].w = f32(decoded.width)
         s.images[which].h = f32(decoded.height)

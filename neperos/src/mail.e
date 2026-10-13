@@ -36,6 +36,7 @@ use ui
 use netclient
 use sysettings
 use netproto
+use bgclient
 
 const NONE: usize = 99usize
 const MAX_MAILS: usize = 20usize
@@ -51,6 +52,7 @@ const THREAD_SCREEN: usize = 3usize
 const BOXES_SCREEN: usize = 4usize
 const ACCOUNT_SCREEN: usize = 5usize
 const PICK_SCREEN: usize = 6usize
+const SEARCH_SCREEN: usize = 7usize
 // The kinds of a line of a rich (HTML) message.
 const R_BODY: usize = 0usize
 const R_H1: usize = 1usize
@@ -136,6 +138,19 @@ type State = struct {
     pick_names: [6][24]u8,
     pick_lens: [6]usize,
     pick_total: usize,
+    // (C158) A server-side search: the words typed, and the UIDs the server answered (the list shows only those while
+    // `filtering`); and the polling of the inbox (when it last ran, the highest UID seen).
+    search: ui.Field,
+    filtering: bool,
+    filter_uids: [20]usize,
+    filter_total: usize,
+    filter_words: [24]u8,
+    filter_words_len: usize,
+    last_poll_ms: usize,
+    max_uid: usize,
+    // (C158) The program a file was handed over to (Document is 40): the app leaves and exits with 20000 + it, and the
+    // shell starts that program; the file's path is in /handover.
+    handover: usize,
 }
 
 fn add_mail(s: *State, from: str, subject: str, body: str, folder: usize, unread: bool, ago: usize) -> usize {
@@ -882,6 +897,140 @@ fn verify_sent(a: *mem.Arena, s: *State) -> bool {
     ret verified
 }
 
+// (C158) The whole raw message `i` came from, fetched again from the server by its UID.
+fn fetch_raw(a: *mem.Arena, s: *State, i: usize) -> (str, bool) {
+    let m = s.mails[i]
+    if !m.remote { ret ("", false) }
+    let (link, secure) = mail_connect(8993u16, 8143u16)
+    if link != netproto.R_OK { ret ("", false) }
+    var out = ""
+    var got_it = false
+    let (session, connect_error) = imap.connect(a, net_reader(), net_writer(), 65536usize)
+    if connect_error == ok {
+        var sess = session
+        if imap.login(&sess, account_user(a, s), account_pass(a, s)) == ok {
+            let (picked, select_error) = imap.select(&sess, box_name(a, s))
+            if select_error == ok {
+                let (items, fetch_error) = imap.fetch(&sess, ui.number(a, m.uid), "(BODY.PEEK[])", true)
+                if fetch_error == ok && items.len > 0usize {
+                    let (raw, has_raw) = imap.section(items[0usize], "BODY[]")
+                    if has_raw {
+                        out = raw
+                        got_it = true
+                    }
+                }
+            }
+            let bye = imap.logout(&sess)
+        }
+    }
+    let closed = netclient.close()
+    ret (out, got_it)
+}
+
+// (C158) Open in Document: the message's HTML (or plain text), or with `attachment` its attachment, is written into
+// /Downloads and its path put in /handover; the app then leaves with 20000 + Document's program number and the shell
+// starts Document, which reads the path (how Files opens a file).
+fn open_in_document(a: *mem.Arena, s: *State, i: usize, attachment: bool) -> bool {
+    let (raw, fetched) = fetch_raw(a, s, i)
+    if !fetched { ret false }
+    let made_dir = vaultfs.mkdir("/Downloads")
+    var path = ""
+    var data_text = ""
+    if attachment {
+        var state = io.SliceReader { data: raw, off: 0usize }
+        let (message, message_error) = mailfmt.read_message(a, io.slice_reader(&state), 4096usize)
+        if message_error != ok { ret false }
+        let (file_name, data, found) = find_attachment(a, message.headers, message.body)
+        if !found || data.len == 0usize { ret false }
+        path = ui.join(a, "/Downloads/", file_name, "")
+        data_text = data
+    } else {
+        var found: Found = zero
+        mime_walk(a, &found, raw, 0usize)
+        if found.has_html {
+            path = ui.join(a, ui.join(a, "/Downloads/mail-", ui.number(a, s.mails[i].uid), ""), ".html", "")
+            data_text = found.html_text
+        } else if found.has_plain {
+            path = ui.join(a, ui.join(a, "/Downloads/mail-", ui.number(a, s.mails[i].uid), ""), ".txt", "")
+            data_text = found.plain
+        } else {
+            ret false
+        }
+    }
+    if data_text.len == 0usize || path.len > 63usize { ret false }
+    if !vaultfs.write_big(path, mem.address_of(&data_text[0usize]), data_text.len) { ret false }
+    var buffer: [64]u8 = zero
+    var n = 0usize
+    while n < path.len {
+        buffer[n] = path[n]
+        n += 1usize
+    }
+    if !vaultfs.write("/handover", mem.address_of(&buffer[0usize]), n) { ret false }
+    s.handover = 40usize
+    ui.say("mail handover ")
+    ui.say_text(path)
+    ui.say("\n")
+    ret true
+}
+
+// (C158) A search done on the server (IMAP SEARCH TEXT "words" over the shown mailbox): the UIDs it answered are kept
+// in the state; false when there is no server, no login or the answer is bad.
+fn search_remote(a: *mem.Arena, s: *State, words: str) -> bool {
+    let (link, secure) = mail_connect(8993u16, 8143u16)
+    if link != netproto.R_OK { ret false }
+    var done = false
+    let (session, connect_error) = imap.connect(a, net_reader(), net_writer(), 65536usize)
+    if connect_error == ok {
+        var sess = session
+        if imap.login(&sess, account_user(a, s), account_pass(a, s)) == ok {
+            let (picked, select_error) = imap.select(&sess, box_name(a, s))
+            if select_error == ok {
+                let (found, search_error) = imap.search(&sess, ui.join(a, "TEXT \"", words, "\""), true)
+                if search_error == ok {
+                    s.filter_total = 0usize
+                    var i = 0usize
+                    while i < found.len && s.filter_total < 20usize {
+                        s.filter_uids[s.filter_total] = usize(found[i])
+                        s.filter_total += 1usize
+                        i += 1usize
+                    }
+                    done = true
+                }
+            }
+            let out = imap.logout(&sess)
+        }
+    }
+    let closed = netclient.close()
+    ret done
+}
+
+// (C158) Archive message `uid` on the server: copied to the Archive mailbox, then flagged deleted and expunged from the
+// mailbox shown.
+fn remote_archive(a: *mem.Arena, s: *State, uid: usize) -> bool {
+    let (link, secure) = mail_connect(8993u16, 8143u16)
+    if link != netproto.R_OK { ret false }
+    var done = false
+    let (session, connect_error) = imap.connect(a, net_reader(), net_writer(), 65536usize)
+    if connect_error == ok {
+        var sess = session
+        if imap.login(&sess, account_user(a, s), account_pass(a, s)) == ok {
+            let (picked, select_error) = imap.select(&sess, box_name(a, s))
+            if select_error == ok {
+                let (copied, copy_error) = imap.run(&sess, ui.join(a, "UID COPY ", ui.number(a, uid), " Archive"), "", false)
+                if copy_error == ok {
+                    if imap.store(&sess, ui.number(a, uid), "+FLAGS.SILENT (\\Deleted)", true) == ok {
+                        let (removed, expunge_error) = imap.expunge(&sess)
+                        done = expunge_error == ok
+                    }
+                }
+            }
+            let out = imap.logout(&sess)
+        }
+    }
+    let closed = netclient.close()
+    ret done
+}
+
 // (C158) Save the whole attachment of message `i` into /Downloads: the message is fetched again by its UID, the part
 // decoded and written, and the size read back. The size saved, or 0 when it was not.
 fn save_attachment(a: *mem.Arena, s: *State, i: usize) -> usize {
@@ -923,6 +1072,17 @@ fn save_attachment(a: *mem.Arena, s: *State, i: usize) -> usize {
     let (size, kind_of, extra, found_after) = vaultfs.stat(dest)
     if !found_after || size != m.att_size { ret 0usize }
     ret size
+}
+
+// The highest UID among the messages that came from the server's mailbox shown.
+fn highest_uid(s: *State) -> usize {
+    var top = 0usize
+    var i = 0usize
+    while i < MAX_MAILS {
+        if s.mails[i].used && s.mails[i].remote && s.mails[i].folder == INBOX && s.mails[i].uid > top { top = s.mails[i].uid }
+        i += 1usize
+    }
+    ret top
 }
 
 fn from_of(a: *mem.Arena, s: *State, i: usize) -> str {
@@ -1001,6 +1161,16 @@ fn build_list(a: *mem.Arena, s: *State) {
         if m.used {
             var keep = false
             if s.folder == STARRED { keep = m.starred && m.folder != TRASH } else { keep = m.folder == s.folder }
+            if keep && s.filtering {
+                // (C158) A search is on: only what the server answered.
+                var listed = false
+                var f = 0usize
+                while f < s.filter_total {
+                    if m.remote && s.filter_uids[f] == m.uid { listed = true }
+                    f += 1usize
+                }
+                keep = listed
+            }
             if keep {
                 var at = s.list_total
                 s.list_total += 1usize
@@ -1093,9 +1263,16 @@ fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     var heading = "Mail"
     if s.box != 0usize { heading = box_name(a, s) }
     try ui.put(a, builder, faces.jost_bold, 30.0, heading, 20.0, 20.0, ui.light())
-    if unread_count(s) > 0usize { try ui.put_right(a, builder, faces.grotesk, 13.0, ui.join(a, ui.number(a, unread_count(s)), " unread", ""), 296.0, 34.0, ui.light_muted()) }
-    // (C158) The mailboxes and accounts.
+    if s.filtering {
+        try ui.put(a, builder, faces.grotesk, 12.0, ui.join(a, "Search: ", ui.text_of(a, s.filter_words[0usize..], s.filter_words_len), ""), 22.0, 54.0, ui.amber())
+    } else if unread_count(s) > 0usize {
+        try ui.put(a, builder, faces.grotesk, 12.0, ui.join(a, ui.number(a, unread_count(s)), " unread", ""), 22.0, 54.0, ui.light_muted())
+    }
+    // (C158) The mailboxes and accounts, and the search of the mailbox on the server.
     try ui.pill(a, builder, &s.hits, faces, 160usize, 308.0, 20.0, 88.0, 34.0, "Boxes", ui.soft(), 14.0)
+    var find_label = "Find"
+    if s.filtering { find_label = "Clear" }
+    try ui.pill(a, builder, &s.hits, faces, 170usize, 212.0, 20.0, 88.0, 34.0, find_label, ui.soft(), 14.0)
     var chip = 0usize
     while chip < 4usize {
         var fill = ui.soft()
@@ -1194,12 +1371,20 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     }
     // (C158) An attachment is a chip below the message; a tap saves it into /Downloads.
     if m.att_name_len > 0usize {
-        try ui.card(a, builder, 16.0, 700.0, 380.0, 48.0, 14.0, ui.cream())
-        try ui.put(a, builder, faces.jost, 17.0, ui.join(a, ui.text_of(a, m.att_name[0usize..], m.att_name_len), ui.join(a, " (", ui.number(a, m.att_size), " bytes)"), ""), 32.0, 713.0, ui.ink())
-        ui.hit(&s.hits, 540usize, 16.0, 700.0, 380.0, 48.0)
+        try ui.card(a, builder, 16.0, 700.0, 288.0, 48.0, 14.0, ui.cream())
+        try ui.clipped(a, builder, faces.jost, 16.0, ui.join(a, ui.text_of(a, m.att_name[0usize..], m.att_name_len), ui.join(a, " (", ui.number(a, m.att_size), " bytes)"), ""), 28.0, 714.0, 264.0, ui.ink())
+        ui.hit(&s.hits, 540usize, 16.0, 700.0, 288.0, 48.0)
+        // (C158) Open: the attachment is saved and handed over to Document.
+        try ui.pill(a, builder, &s.hits, faces, 541usize, 316.0, 700.0, 80.0, 48.0, "Open", ui.amber(), 16.0)
     }
     try ui.pill(a, builder, &s.hits, faces, 530usize, 16.0, 830.0, 140.0, 48.0, "Reply", ui.amber(), 17.0)
     try ui.pill(a, builder, &s.hits, faces, 550usize, 172.0, 830.0, 140.0, 48.0, "Copy", ui.amber(), 17.0)
+    // (C158) Done on the server: mark the message unread again, or move it to the Archive mailbox.
+    if m.remote {
+        try ui.pill(a, builder, &s.hits, faces, 560usize, 16.0, 770.0, 140.0, 48.0, "Unread", ui.soft(), 17.0)
+        try ui.pill(a, builder, &s.hits, faces, 570usize, 172.0, 770.0, 140.0, 48.0, "Archive", ui.soft(), 17.0)
+        try ui.pill(a, builder, &s.hits, faces, 580usize, 328.0, 770.0, 68.0, 48.0, "Doc", ui.soft(), 17.0)
+    }
     ret ok
 }
 
@@ -1310,6 +1495,16 @@ fn draw_account(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
     ret ok
 }
 
+// (C158) The search of the shown mailbox on the server: the words and the keyboard.
+fn draw_search(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try ui.put(a, builder, faces.jost_bold, 28.0, "Search mail", 24.0, 14.0, ui.light())
+    s.focus = 0usize
+    try compose_field(a, builder, s, faces, 0usize, ui.join(a, "In ", box_name(a, s), ""), ui.field_text(a, &s.search), 76.0, 44.0)
+    try ui.pill(a, builder, &s.hits, faces, 1770usize, 210.0, 140.0, 186.0, 46.0, "Cancel", ui.soft(), 17.0)
+    try ui.keyboard(a, builder, &s.hits, faces, "Search")
+    ret ok
+}
+
 // (C158) The files of /Downloads, to attach one.
 fn draw_pick(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.put(a, builder, faces.jost_bold, 28.0, "Attach a file", 24.0, 20.0, ui.light())
@@ -1343,6 +1538,8 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         try draw_account(a, builder, s, faces)
     } else if s.screen == PICK_SCREEN {
         try draw_pick(a, builder, s, faces)
+    } else if s.screen == SEARCH_SCREEN {
+        try draw_search(a, builder, s, faces)
     } else {
         try draw_compose(a, builder, s, faces)
     }
@@ -1486,6 +1683,39 @@ fn load_accounts(s: *State) -> usize {
 
 // What a tap on button `id` did: true when the screen changed.
 fn act(a: *mem.Arena, kit: *appkit.Kit, s: *State, id: usize) -> bool {
+    if s.screen == SEARCH_SCREEN {
+        if ui.is_key(id) {
+            if id == 1205usize {
+                let words = ui.field_text(a, &s.search)
+                if words.len > 0usize && words.len <= 24usize && search_remote(a, s, words) {
+                    var w = 0usize
+                    while w < words.len {
+                        s.filter_words[w] = words[w]
+                        w += 1usize
+                    }
+                    s.filter_words_len = w
+                    s.filtering = true
+                    ui.say("mail search ")
+                    ui.say_text(words)
+                    ui.say(" ")
+                    ui.say_num(s.filter_total)
+                    ui.say("\n")
+                    s.folder = INBOX
+                    s.screen = LIST_SCREEN
+                }
+                ret true
+            }
+            ret ui.field_key(&s.search, id, false)
+        }
+        if id == 1500usize {
+            ret false
+        }
+        if id == 1770usize {
+            s.screen = LIST_SCREEN
+            ret true
+        }
+        ret false
+    }
     if s.screen == THREAD_SCREEN {
         if id == 1400usize {
             s.screen = LIST_SCREEN
@@ -1731,6 +1961,36 @@ fn act(a: *mem.Arena, kit: *appkit.Kit, s: *State, id: usize) -> bool {
             ui.say("mail starred\n")
             ret true
         }
+        if id == 541usize && s.mails[s.open].att_name_len > 0usize {
+            let handed = open_in_document(a, s, s.open, true)
+            ret true
+        }
+        if id == 580usize && s.mails[s.open].remote {
+            let handed = open_in_document(a, s, s.open, false)
+            ret true
+        }
+        if id == 560usize && s.mails[s.open].remote {
+            // (C158) Mark unread: the \Seen flag is taken off on the server too.
+            s.mails[s.open].unread = true
+            if remote_flag(a, s, s.mails[s.open].uid, "-FLAGS.SILENT (\\Seen)", false) {
+                ui.say("mail server unread ")
+                ui.say_text(ui.number(a, s.mails[s.open].uid))
+                ui.say("\n")
+            }
+            s.screen = LIST_SCREEN
+            ret true
+        }
+        if id == 570usize && s.mails[s.open].remote {
+            // (C158) Archive: moved to the Archive mailbox on the server, gone from this one.
+            if remote_archive(a, s, s.mails[s.open].uid) {
+                s.mails[s.open].used = false
+                ui.say("mail server archived ")
+                ui.say_text(ui.number(a, s.mails[s.open].uid))
+                ui.say("\n")
+            }
+            s.screen = LIST_SCREEN
+            ret true
+        }
         if id == 520usize {
             s.mails[s.open].folder = TRASH
             s.screen = LIST_SCREEN
@@ -1772,6 +2032,16 @@ fn act(a: *mem.Arena, kit: *appkit.Kit, s: *State, id: usize) -> bool {
     if id == 160usize {
         s.screen = BOXES_SCREEN
         ui.say("mail boxes\n")
+        ret true
+    }
+    if id == 170usize {
+        if s.filtering {
+            s.filtering = false
+            ui.say("mail search cleared\n")
+        } else {
+            s.search.len = 0usize
+            s.screen = SEARCH_SCREEN
+        }
         ret true
     }
     if id >= 200usize && id < 200usize + MAX_MAILS {
@@ -1875,7 +2145,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if tap.ended {
             running = false
         } else if tap.tick {
-            appkit.answer(appkit.ANSWER_NONE)
+            // (C158) Push by polling: with the list in front the inbox is fetched again every 30 s; a message with a
+            // UID above the highest seen is new, and is counted as a notification (once).
+            var fresh = false
+            if s.screen == LIST_SCREEN && s.account_total > 0usize {
+                let (now_mono, mono_error) = time.monotonic()
+                if mono_error == ok {
+                    let now_ms = usize(now_mono.nanos / 1000000i64)
+                    if s.last_poll_ms == 0usize {
+                        s.last_poll_ms = now_ms
+                        s.max_uid = highest_uid(&s)
+                    }
+                    if now_ms - s.last_poll_ms >= 30000usize {
+                        s.last_poll_ms = now_ms
+                        let before = highest_uid(&s)
+                        let polled = sync_inbox(a, &kit, &s)
+                        var arrived = 0usize
+                        var m_at = 0usize
+                        while m_at < MAX_MAILS {
+                            if s.mails[m_at].used && s.mails[m_at].remote && s.mails[m_at].uid > before && s.mails[m_at].folder == INBOX { arrived += 1usize }
+                            m_at += 1usize
+                        }
+                        if arrived > 0usize {
+                            ui.say("mail new ")
+                            ui.say_num(arrived)
+                            ui.say("\n")
+                            bgclient.notify()
+                            ui.say("mail notified ")
+                            ui.say_num(arrived)
+                            ui.say("\n")
+                            fresh = true
+                        }
+                    }
+                }
+            }
+            if fresh {
+                if !show(a, &kit, &s) {
+                    ui.say("mail present failed\n")
+                    appkit.answer(appkit.ANSWER_NONE)
+                }
+            } else {
+                appkit.answer(appkit.ANSWER_NONE)
+            }
         } else if tap.y >= 896.0 {
             ui.say("mail home\n")
             appkit.leave()
@@ -1883,7 +2194,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let id = ui.hit_at(&s.hits, tap.x, tap.y)
             if id != ui.NONE && act(a, &kit, &s, id) {
-                if !show(a, &kit, &s) {
+                if s.handover != 0usize {
+                    appkit.leave()
+                    running = false
+                } else if !show(a, &kit, &s) {
                     ui.say("mail present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)
                 }
@@ -1892,5 +2206,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
     }
+    if s.handover != 0usize { os.exit(i32(20000usize + s.handover)) }
     ret ok
 }
