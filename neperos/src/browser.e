@@ -133,6 +133,12 @@ type State = struct {
     // (C159) What /browser_tabs holds now, so it is written only when the tabs change.
     tabs_saved: [320]u8,
     tabs_saved_len: usize,
+    // (C159) Bookmarks: up to four addresses (host and path), kept in /bookmarks, shown on the start page; and the
+    // program a downloaded file was handed over to (Document is 40), with which the app leaves.
+    marks: [4][48]u8,
+    mark_len: [4]usize,
+    mark_total: usize,
+    handover: usize,
     hits: ui.Hits,
 }
 
@@ -888,6 +894,12 @@ fn download(a: *mem.Arena, s: *State, slot: usize, path: str, body: str) -> bool
     flush_line_text(s, "Downloaded", KIND_H1)
     flush_line_text(s, name, KIND_BODY)
     flush_line_text(s, ui.join(a, ui.number(a, size), " bytes in Downloads", ""), KIND_BODY)
+    // (C159) Open in Document: a link whose target is `~open:<path>` hands the file over (Files' way).
+    if saved && found && dest.len + 6usize <= 48usize {
+        let opener = ui.join(a, "~open:", dest, "")
+        add_text(s, "Open in Document", KIND_LINK, opener)
+        flush_line(s, KIND_LINK, opener)
+    }
     s.loaded = slot
     s.load_error = 0usize
     if !saved || !found || size != body.len {
@@ -1380,7 +1392,79 @@ fn draw_start(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
         ui.hit(&s.hits, 400usize + tile, x, y, 184.0, 96.0)
         tile += 1usize
     }
+    // (C159) The bookmarks, up to four.
+    if s.mark_total > 0usize {
+        try ui.put(a, builder, faces.grotesk, 12.0, "Bookmarks", 24.0, 488.0, ui.light_muted())
+        var row = 0usize
+        while row < s.mark_total {
+            let y: f32 = 512.0 + f32(row) * 52.0
+            try ui.card(a, builder, 16.0, y, 380.0, 44.0, 14.0, ui.cream())
+            try ui.clipped(a, builder, faces.jost, 17.0, ui.text_of(a, s.marks[row][0usize..], s.mark_len[row]), 32.0, y + 11.0, 340.0, ui.ink())
+            ui.hit(&s.hits, 460usize + row, 16.0, y, 380.0, 44.0)
+            row += 1usize
+        }
+    }
     ret ok
+}
+
+// (C159) The address of a page as the address bar shows it: the host and path of a live page, else the site's name.
+fn address_of_page(a: *mem.Arena, s: *State, page: usize) -> str {
+    if page >= LIVE_BASE {
+        let u = s.urls[page - LIVE_BASE]
+        ret ui.join(a, ui.text_of(a, u.host[0usize..], u.host_len), ui.text_of(a, u.path[0usize..], u.path_len), "")
+    }
+    ret page_host(page)
+}
+
+// (C159) The index of the bookmark for `address`, or NONE.
+fn bookmarked(a: *mem.Arena, s: *State, address: str) -> usize {
+    var i = 0usize
+    while i < s.mark_total {
+        if ui.same(ui.text_of(a, s.marks[i][0usize..], s.mark_len[i]), address) { ret i }
+        i += 1usize
+    }
+    ret NONE
+}
+
+// The bookmarks are kept in /bookmarks, one address a line.
+fn save_marks(a: *mem.Arena, s: *State) {
+    var buf: [200]u8 = zero
+    var n = 0usize
+    var i = 0usize
+    while i < s.mark_total {
+        var k = 0usize
+        while k < s.mark_len[i] {
+            buf[n] = s.marks[i][k]
+            n += 1usize
+            k += 1usize
+        }
+        buf[n] = 10u8
+        n += 1usize
+        i += 1usize
+    }
+    let written = vaultfs.write_big("/bookmarks", mem.address_of(&buf[0usize]), n)
+}
+
+fn load_marks(s: *State) -> usize {
+    var buf: [200]u8 = zero
+    let (n, found) = vaultfs.read_big("/bookmarks", mem.address_of(&buf[0usize]), 200usize)
+    if !found || n == 0usize { ret 0usize }
+    var at = 0usize
+    while at < n && s.mark_total < 4usize {
+        var end = at
+        while end < n && buf[end] != 10u8 { end += 1usize }
+        if end > at && end - at <= 48usize {
+            var k = 0usize
+            while at + k < end {
+                s.marks[s.mark_total][k] = buf[at + k]
+                k += 1usize
+            }
+            s.mark_len[s.mark_total] = k
+            s.mark_total += 1usize
+        }
+        at = end + 1usize
+    }
+    ret s.mark_total
 }
 
 fn draw_neper(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
@@ -1614,6 +1698,11 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     if page != START {
         try ui.put(a, builder, faces.grotesk, 14.0, "Copy", 350.0, 36.0, ui.muted())
         ui.hit(&s.hits, 710usize, 340.0, 22.0, 56.0, 46.0)
+        // (C159) Star: the page's address is a bookmark (taken off again by a second tap).
+        var star_label = "Star"
+        if bookmarked(a, s, address_of_page(a, s, page)) != NONE { star_label = "Starred" }
+        try ui.put(a, builder, faces.grotesk, 14.0, star_label, 296.0, 36.0, ui.amber_dark())
+        ui.hit(&s.hits, 711usize, 290.0, 22.0, 50.0, 46.0)
     }
     if page >= LIVE_BASE { try draw_live(a, builder, s, faces) }
     if page == START { try draw_start(a, builder, s, faces) }
@@ -2021,6 +2110,22 @@ fn act(a: *mem.Arena, kit: *appkit.Kit, s: *State, id: usize) -> bool {
             if slot != NONE { go(s, LIVE_BASE + slot) } else { go(s, ERROR) }
             ret true
         }
+        if line.href_len > 6usize && ui.same(ui.text_of(a, line.href[0usize..], 6usize), "~open:") {
+            // (C159) A downloaded file is opened in Document: its path goes in /handover, the app leaves with 20040.
+            var opened_path: [64]u8 = zero
+            var o = 0usize
+            while o + 6usize < line.href_len && o < 63usize {
+                opened_path[o] = line.href[6usize + o]
+                o += 1usize
+            }
+            if vaultfs.write("/handover", mem.address_of(&opened_path[0usize]), o) {
+                s.handover = 40usize
+                ui.say("browser handover ")
+                ui.say_text(ui.text_of(a, opened_path[0usize..], o))
+                ui.say("\n")
+            }
+            ret true
+        }
         if line.href_len > 0usize {
             let current = s.urls[current_page(s) - LIVE_BASE]
             let (host, path) = split_address(a, s, ui.text_of(a, line.href[0usize..], line.href_len), ui.text_of(a, current.host[0usize..], current.host_len))
@@ -2035,6 +2140,47 @@ fn act(a: *mem.Arena, kit: *appkit.Kit, s: *State, id: usize) -> bool {
     }
     if id == 803usize {
         s.screen = TABS_SCREEN
+        ret true
+    }
+    if id == 711usize {
+        // (C159) Star: add the page's address to the bookmarks, or take it off when it is there.
+        let star_address = address_of_page(a, s, current_page(s))
+        let at = bookmarked(a, s, star_address)
+        if at != NONE {
+            var k = at + 1usize
+            while k < s.mark_total {
+                s.marks[k - 1usize] = s.marks[k]
+                s.mark_len[k - 1usize] = s.mark_len[k]
+                k += 1usize
+            }
+            s.mark_total -= 1usize
+            ui.say("browser bookmark removed ")
+        } else if star_address.len <= 48usize {
+            if s.mark_total >= 4usize {
+                var k = 1usize
+                while k < 4usize {
+                    s.marks[k - 1usize] = s.marks[k]
+                    s.mark_len[k - 1usize] = s.mark_len[k]
+                    k += 1usize
+                }
+                s.mark_total = 3usize
+            }
+            var n = 0usize
+            while n < star_address.len {
+                s.marks[s.mark_total][n] = star_address[n]
+                n += 1usize
+            }
+            s.mark_len[s.mark_total] = n
+            s.mark_total += 1usize
+            ui.say("browser bookmark added ")
+        }
+        ui.say_text(star_address)
+        ui.say("\n")
+        save_marks(a, s)
+        ret true
+    }
+    if id >= 460usize && id < 464usize && id - 460usize < s.mark_total {
+        submit(a, kit, s, ui.text_of(a, s.marks[id - 460usize][0usize..], s.mark_len[id - 460usize]))
         ret true
     }
     if id == 710usize {
@@ -2117,6 +2263,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ui.say_num(restored)
         ui.say("\n")
     }
+    let marks_back = load_marks(&s)
+    if marks_back > 0usize {
+        ui.say("browser bookmarks ")
+        ui.say_num(marks_back)
+        ui.say("\n")
+    }
     // (C159) The tabs of the last run come back, each at the page it was on; a live one is fetched as it is shown.
     let tabs_back = load_tabs(a, &s)
     if tabs_back > 0usize {
@@ -2147,7 +2299,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let id = ui.hit_at(&s.hits, tap.x, tap.y)
             if id != ui.NONE && act(a, &kit, &s, id) {
                 save_tabs(a, &s)
-                if !show(a, &kit, &s) {
+                if s.handover != 0usize {
+                    appkit.leave()
+                    running = false
+                } else if !show(a, &kit, &s) {
                     ui.say("browser present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)
                 }
@@ -2156,5 +2311,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
     }
+    if s.handover != 0usize { os.exit(i32(20000usize + s.handover)) }
     ret ok
 }

@@ -589,6 +589,14 @@ fn fill_tiles(a: *mem.Arena, s: *State) -> bool {
                 ui.say_num(t.y)
                 if from_files { ui.say(" files\n") } else { ui.say(" network\n") }
                 good = decode_tile(a, t, raw)
+            } else {
+                ui.say("maps tile unavailable ")
+                ui.say_num(s.lz)
+                ui.say("/")
+                ui.say_num(t.x)
+                ui.say("/")
+                ui.say_num(t.y)
+                ui.say("\n")
             }
             mem.reset(a, mark)
             t.have = good

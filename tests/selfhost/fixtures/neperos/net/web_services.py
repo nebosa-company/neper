@@ -131,6 +131,10 @@ def get(handler, host, path, query):
     if path == '/pages/styled.html':
         handler.reply(200, PAGE_STYLED, 'text/html')
         return True
+    if path == '/pages/notes.txt':
+        # A text file served as a download (octet-stream), 21 bytes: the Browser saves it and can open it in Document.
+        handler.reply(200, b'Neper notes\nline two\n', 'application/octet-stream')
+        return True
     if path == '/pages/logo.png':
         handler.reply(200, (here / 'logo-24.png').read_bytes(), 'image/png')
         return True
