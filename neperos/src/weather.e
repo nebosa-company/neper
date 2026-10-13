@@ -27,6 +27,7 @@ use e.text.layout
 use e.text.shape
 use e.fmt.json as json
 use e.fmt.cap as alerts
+use bgclient
 use appkit
 use text
 use ui
@@ -105,6 +106,8 @@ type State = struct {
     job_place: usize,
     job_pick: usize,
     reason: usize,
+    // (C156) A hash of the alert last notified for each place, so one alert is notified once, not at every refresh.
+    alert_seen: [4]usize,
     hits: ui.Hits,
     status: [72]u8,
     status_len: usize,
@@ -806,14 +809,96 @@ fn remove_place(s: *State, p: usize) {
     if s.place >= s.count { s.place = s.count - 1usize }
 }
 
-// (C156) After a live forecast: the place's alert, if the service has one.
+// (C156) The alerts for a place in the United States from the National Weather Service
+// (`api.weather.gov/alerts/active?point=lat,lon`, GeoJSON): the headline (or the event) of the first feature's
+// properties. false when there is none or the service could not be had.
+fn fetch_alert_nws(a: *mem.Arena, s: *State, p: usize) -> bool {
+    s.fc[p].alert_len = 0usize
+    let kept_reason = s.reason
+    let mark = mem.mark(a)
+    var path = ui.join(a, "/alerts/active?point=", centi_text(a, s.lat[p]), ",")
+    path = ui.join(a, path, centi_text(a, s.lon[p]), "")
+    let (parsed, fetched) = fetch_json(a, s, "api.weather.gov", path)
+    s.reason = kept_reason
+    var kept = false
+    if fetched {
+        switch parsed {
+        case .Object as fields:
+            let (features, has_features) = array_of(fields, "features")
+            if has_features && features.len > 0usize {
+                switch features[0usize] {
+                case .Object as feature:
+                    let (props, has_props) = object_of(feature, "properties")
+                    if has_props {
+                        let (headline_value, has_headline) = member(props, "headline")
+                        let (event_value, has_event) = member(props, "event")
+                        var headline = ""
+                        if has_headline {
+                            let (text_value, is_text) = string_of(headline_value)
+                            if is_text { headline = text_value }
+                        }
+                        if headline.len == 0usize && has_event {
+                            let (event_text, event_is_text) = string_of(event_value)
+                            if event_is_text { headline = event_text }
+                        }
+                        var k = 0usize
+                        while k < headline.len && k < 48usize {
+                            s.fc[p].alert[k] = headline[k]
+                            k += 1usize
+                        }
+                        s.fc[p].alert_len = k
+                        kept = k > 0usize
+                    }
+                default:
+                    kept = false
+                }
+            }
+        default:
+            kept = false
+        }
+    }
+    mem.reset(a, mark)
+    ret kept
+}
+
+// A place in the United States (the NWS covers it): inside the latitudes 17 to 72 north and longitudes 180 to 65 west.
+fn in_united_states(s: *State, p: usize) -> bool {
+    ret s.lat[p] >= 1700i32 && s.lat[p] <= 7200i32 && s.lon[p] >= 0i32 - 18000i32 && s.lon[p] <= 0i32 - 6500i32
+}
+
+// (C156) After a live forecast: the place's alert, if a service has one -- the Norwegian MetAlerts first, then the
+// National Weather Service for a place in the United States. A new alert is counted as a notification, once.
 fn say_alert(a: *mem.Arena, s: *State, p: usize) {
-    if fetch_alert(a, s, p) {
+    var feed = "MET"
+    var found = fetch_alert(a, s, p)
+    if !found && in_united_states(s, p) {
+        found = fetch_alert_nws(a, s, p)
+        feed = "NWS"
+    }
+    if found {
         ui.say("weather alert ")
         ui.say_text(place_name(s, p))
         ui.say(": ")
         ui.say_text(ui.text_of(a, s.fc[p].alert[0usize..], s.fc[p].alert_len))
         ui.say("\n")
+        ui.say("weather alert feed ")
+        ui.say(feed)
+        ui.say("\n")
+        // One notification for each new alert (a hash of its text stands for it).
+        var h = 5381usize
+        var k = 0usize
+        while k < s.fc[p].alert_len {
+            h = (h * 33usize + usize(s.fc[p].alert[k])) % 1000000007usize
+            k += 1usize
+        }
+        h += 1usize
+        if p < 4usize && s.alert_seen[p] != h {
+            s.alert_seen[p] = h
+            bgclient.notify()
+            ui.say("weather notified ")
+            ui.say_text(place_name(s, p))
+            ui.say("\n")
+        }
     }
 }
 

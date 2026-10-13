@@ -116,7 +116,9 @@ fn request(a: *mem.Arena, method: str, host: str, path: str, extra: str, body: s
     n = put(raw, n, "\r\nUser-Agent: NeperOS/1.0\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n")
     n = put(raw, n, extra)
     if body.len > 0usize {
-        n = put(raw, n, "Content-Type: application/json\r\nContent-Length: ")
+        // (C159) A caller that names its own Content-Type (a form post) in `extra` keeps it.
+        if find_text(extra, "content-type:", 0usize, extra.len) == extra.len { n = put(raw, n, "Content-Type: application/json\r\n") }
+        n = put(raw, n, "Content-Length: ")
         n = put_number(raw, n, body.len)
         n = put(raw, n, "\r\n")
     }

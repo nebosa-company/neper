@@ -32,6 +32,8 @@ try:
     import dynamic_services as DYNAMIC
 except ImportError:
     DYNAMIC = None
+# (C159, C160, C156) More web pages, map and weather feeds for the Browser, Maps and Weather fixtures.
+import web_services as WEB
 
 # The test boot's translation "model": a word-for-word dictionary through English, six languages.
 WORDS = [
@@ -120,6 +122,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(url.query)
         # (C151) The Dynamic build server's package and revocation list.
         if DYNAMIC is not None and DYNAMIC.get(self, host, url.path):
+            return
+        if WEB.get(self, host, url.path, query):
             return
         if host == 'api.exchange.coinbase.com' and url.path == '/products':
             # Public, no key: the curated pair list the Add sheet's crypto Find searches.
@@ -304,6 +308,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         host = (self.headers.get('Host') or '').split(':')[0]
         # (C151) The Dynamic build server's routes (dynamic_services.py).
         if DYNAMIC is not None and DYNAMIC.post(self, host, self.path, raw):
+            return
+        if WEB.post(self, host, self.path, raw):
             return
         if host == 'neper.test' and self.path == '/v1/chat/completions':
             if self.headers.get('Authorization') == 'Bearer bad':
