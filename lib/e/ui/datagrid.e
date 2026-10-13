@@ -137,6 +137,13 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    search_spec: usize,
+    has_search: bool,
+    search_within: bool,
+    search_buf: []u8,
+    search_len: usize,
+    bookmark_row: usize,
+    has_bookmark: bool,
     lines: GridLines,
     header_off: bool,
     auto_width: bool,
@@ -274,6 +281,9 @@ fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const Colum
         cleared += 1usize
     }
     grid.marks = marks
+    let (search_buf, search_buf_error) = mem.alloc[u8](a, 64usize)
+    if search_buf_error != ok { ret (zero, search_buf_error) }
+    grid.search_buf = search_buf
     let (editors, editors_error) = mem.alloc[u8](a, specs.len + 1usize)
     if editors_error != ok { ret (zero, editors_error) }
     var edit_at = 0usize
@@ -544,6 +554,149 @@ fn spin_arrow(a: *mem.Arena, grid: *Grid, key: widget.Key, shape: gl.Shape, labe
     look.min_height = 12.0
     let (node, node_error) = control.pressable_states(a, key, grid.theme, 3u8, label, look, true, false, 0u32, 0u32, 0u64, action, mark)
     ret (node, node_error)
+}
+
+// ---- incremental search and the bookmark (v3's search toolbar, Search > Next / Previous / Bookmark) ----
+
+// Typing in the grid searches `spec`'s text: from the start of the cell (begins-with) or anywhere in
+// it (`within`), case-insensitively. The current row moves to the first match from itself on and
+// the view scrolls it to the top; Ctrl+Down and Ctrl+Up go to the next and the previous match
+// (wrapping), Backspace shortens the text and Escape ends the search.
+fn set_search_column(grid: *Grid, spec: usize, within: bool) {
+    grid.search_spec = spec
+    grid.has_search = spec < grid.all.len
+    grid.search_within = within
+    grid.search_len = 0usize
+}
+
+fn search_query(grid: *const Grid) -> str { ret grid.search_buf[0usize..grid.search_len] }
+
+fn cancel_search(grid: *Grid) { grid.search_len = 0usize }
+
+fn lower_ascii(c: u8) -> u8 {
+    if c >= 65u8 && c <= 90u8 { ret c + 32u8 }
+    ret c
+}
+
+// Whether a data row's cell text of the search column matches the typed text.
+fn search_matches(grid: *const Grid, row: usize) -> bool {
+    if !grid.has_search || grid.search_len == 0usize { ret false }
+    let column = grid.all[grid.search_spec].column
+    let kind = table.column_kind(grid.t, column)
+    if kind != table.Kind.Str && kind != table.Kind.Dict { ret false }
+    let text = table.get_str(grid.t, column, row)
+    let n = grid.search_len
+    if text.len < n { ret false }
+    var start = 0usize
+    while start + n <= text.len {
+        var k = 0usize
+        while k < n && lower_ascii(text[start + k]) == lower_ascii(grid.search_buf[k]) { k += 1usize }
+        if k == n { ret true }
+        if !grid.search_within { ret false }
+        start += 1usize
+    }
+    ret false
+}
+
+// The visible position of the next (or previous) match from `from`, wrapping; `inclusive` also
+// tests `from` itself.
+fn search_find(grid: *const Grid, from: usize, forward: bool, inclusive: bool) -> (usize, bool) {
+    let n = grp.visible_len(grid.g)
+    if n == 0usize { ret (0usize, false) }
+    var step = 0usize
+    while step < n {
+        var at = 0usize
+        var offset = step
+        if !inclusive { offset = step + 1usize }
+        if forward {
+            at = (from + offset) % n
+        } else {
+            at = (from + n - (offset % n)) % n
+        }
+        if !grp.visible_is_group(grid.g, at) && search_matches(grid, grp.visible_row(grid.g, at)) { ret (at, true) }
+        step += 1usize
+    }
+    ret (0usize, false)
+}
+
+// Makes the match current with the view scrolled to put it at the top (v3's `TopRecordIndex`).
+fn search_go(grid: *Grid, at: usize) -> err {
+    let moved = go_to(grid, at)
+    grid.offset = f32(at) * grid.row_height
+    // the row the keyboard was on may have scrolled away: the keyboard follows the match
+    grid.rest_row = grid.selected_row
+    grid.rest_pending = true
+    ret moved
+}
+
+fn search_next(grid: *Grid, forward: bool) -> err {
+    var from = 0usize
+    if grid.has_position { from = grid.position }
+    let (at, found) = search_find(grid, from, forward, false)
+    if !found { ret ok }
+    ret search_go(grid, at)
+}
+
+fn on_search_next(ctx: *void) -> err { ret search_next(mem.cast[*Grid](ctx), true) }
+fn on_search_prev(ctx: *void) -> err { ret search_next(mem.cast[*Grid](ctx), false) }
+
+// A typed character (or Backspace, 8) of the search: a shortcut per key, because a scope that takes
+// raw keys would take the navigation keys too.
+type SearchKey = struct { grid: *Grid, ch: u8 }
+
+fn on_search_char(ctx: *void) -> err {
+    let key = mem.cast[*SearchKey](ctx)
+    let grid = key.grid
+    if !grid.has_search || grid.editing { ret ok }
+    if key.ch == 8u8 {
+        if grid.search_len > 0usize { grid.search_len -= 1usize }
+        ret ok
+    }
+    if grid.search_len >= grid.search_buf.len { ret ok }
+    grid.search_buf[grid.search_len] = key.ch
+    grid.search_len += 1usize
+    var from = 0usize
+    if grid.has_position { from = grid.position }
+    let (at, found) = search_find(grid, from, true, true)
+    if !found { ret ok }
+    ret search_go(grid, at)
+}
+
+fn on_search_cancel(ctx: *void) -> err {
+    cancel_search(mem.cast[*Grid](ctx))
+    ret ok
+}
+
+// One bookmark per view, kept on the row so it survives a sort or a filter.
+fn toggle_bookmark(grid: *Grid) {
+    if grid.has_bookmark && grid.has_selection && grid.bookmark_row == grid.selected_row {
+        grid.has_bookmark = false
+        ret
+    }
+    if !grid.has_selection { ret }
+    grid.bookmark_row = grid.selected_row
+    grid.has_bookmark = true
+}
+
+fn goto_bookmark(grid: *Grid) -> (bool, err) {
+    if !grid.has_bookmark { ret (false, ok) }
+    let visible = grp.visible_len(grid.g)
+    var at = 0usize
+    while at < visible && (grp.visible_is_group(grid.g, at) || grp.visible_row(grid.g, at) != grid.bookmark_row) { at += 1usize }
+    if at >= visible { ret (false, ok) }
+    let moved = go_to(grid, at)
+    ret (true, moved)
+}
+
+fn on_bookmark_toggle(ctx: *void) -> err {
+    toggle_bookmark(mem.cast[*Grid](ctx))
+    ret ok
+}
+
+fn on_bookmark_goto(ctx: *void) -> err {
+    let (found, moved) = goto_bookmark(mem.cast[*Grid](ctx))
+    let _ = found
+    ret moved
 }
 
 // ---- view options (v3's View menu: grid lines, header, indicator, columns auto width) ---------
@@ -2153,7 +2306,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err) {
     let (picks, picks_error) = mem.alloc[NavPick](a, 6usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 10usize)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 100usize)
     if shortcuts_error != ok { ret (zero, control.TooLarge) }
     let codes: [6]u32 = [6]u32{ 38u32, 40u32, 33u32, 34u32, 36u32, 35u32 }
     let kinds: [6]Nav = [6]Nav{ Nav.Prev, Nav.Next, Nav.PrevPage, Nav.NextPage, Nav.First, Nav.Last }
@@ -2180,12 +2333,48 @@ fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err
         shortcuts[tab_count + 2usize] = widget.Shortcut { key: 40u32, modifiers: with_shift, action: widget.Submit { ctx: mem.cast[*void](&picks[1usize]), invoke: on_extend } }
         tab_count += 3usize
     }
+    // Ctrl+Down / Ctrl+Up: the next and the previous search match; Ctrl+1 goes to the bookmark,
+    // Ctrl+Shift+1 sets or clears it
+    var ctrl_only: input.Modifiers = zero
+    ctrl_only.control = true
+    var ctrl_shift: input.Modifiers = zero
+    ctrl_shift.control = true
+    ctrl_shift.shift = true
+    shortcuts[tab_count] = widget.Shortcut { key: 40u32, modifiers: ctrl_only, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_search_next } }
+    shortcuts[tab_count + 1usize] = widget.Shortcut { key: 38u32, modifiers: ctrl_only, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_search_prev } }
+    shortcuts[tab_count + 2usize] = widget.Shortcut { key: 49u32, modifiers: ctrl_only, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_bookmark_goto } }
+    shortcuts[tab_count + 3usize] = widget.Shortcut { key: 49u32, modifiers: ctrl_shift, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_bookmark_toggle } }
+    tab_count += 4usize
+    if grid.has_search {
+        // type-ahead: a shortcut per letter, digit and space, plain and with Shift, and Backspace
+        let (chars, chars_error) = mem.alloc[SearchKey](a, 38usize)
+        if chars_error != ok { ret (zero, control.TooLarge) }
+        var typed_at = 0usize
+        var vk = 32u32
+        while vk <= 90u32 {
+            if vk == 32u32 || (vk >= 48u32 && vk <= 57u32) || vk >= 65u32 {
+                var ch = u8(vk)
+                if vk >= 65u32 { ch = u8(vk + 32u32) }
+                chars[typed_at] = SearchKey { grid: grid, ch: ch }
+                shortcuts[tab_count] = widget.Shortcut { key: vk, modifiers: none, action: widget.Submit { ctx: mem.cast[*void](&chars[typed_at]), invoke: on_search_char } }
+                var with_shift: input.Modifiers = zero
+                with_shift.shift = true
+                shortcuts[tab_count + 1usize] = widget.Shortcut { key: vk, modifiers: with_shift, action: widget.Submit { ctx: mem.cast[*void](&chars[typed_at]), invoke: on_search_char } }
+                tab_count += 2usize
+                typed_at += 1usize
+            }
+            vk += 1u32
+        }
+        chars[typed_at] = SearchKey { grid: grid, ch: 8u8 }
+        shortcuts[tab_count] = widget.Shortcut { key: 8u32, modifiers: none, action: widget.Submit { ctx: mem.cast[*void](&chars[typed_at]), invoke: on_search_char } }
+        tab_count += 1usize
+    }
     var held: [1]widget.Node = zero
     let (holder, holder_error) = mem.alloc[widget.Node](a, 1usize)
     if holder_error != ok { ret (zero, control.TooLarge) }
     holder[0usize] = node
     var no_action: widget.Submit = zero
-    let scope = widget.scope(grid.key + KEYBOARD_KEY, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..tab_count], default_action: no_action, cancel_action: no_action, keys: zero }, style.defaults(), holder[0usize..1usize])
+    let scope = widget.scope(grid.key + KEYBOARD_KEY, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..tab_count], default_action: no_action, cancel_action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_search_cancel }, keys: zero }, style.defaults(), holder[0usize..1usize])
     ret (scope, ok)
 }
 

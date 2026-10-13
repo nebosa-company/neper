@@ -2517,4 +2517,5 @@ D3935	968	G012: the button editor as an e.ui control, in-cell editor kinds
 D3936	979	G012: a bare in-cell editor, and the group box as a drop target
 D3937	913	G012: the View menu's grid options
 D3938	778	G012: v3's grid lines recorded; the line colour is #DEDEDE
-D3939	615	G012: pixel probes for the header hover and the footer band
+D3939	616	G012: pixel probes for the header hover and the footer band
+D3940	1341	G012: incremental search and the bookmark

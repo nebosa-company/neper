@@ -1527,6 +1527,52 @@ fn main(a: *mem.Arena, args: []str) -> err {
         foot_x += 2.0
     }
     if !band_seen || !cell_seen { os.exit(528) }
+    // 30. incremental search and the bookmark
+    dg.set_search_column(&grid15, 0usize, false)
+    if dg.navigate(&grid15, dg.Nav.First) != ok { os.exit(529) }
+    let srch_first = table.get_str(&app.tbl, C_NAME, grp.visible_row(&app.grouping, 0usize))
+    var srch_key = dg.SearchKey { grid: &grid15, ch: srch_first[0usize] }
+    if dg.on_search_char(mem.cast[*void](&srch_key)) != ok { os.exit(530) }
+    if dg.search_query(&grid15).len != 1usize { os.exit(531) }
+    let (srch_hit, srch_has) = dg.current_position(&grid15)
+    if !srch_has { os.exit(532) }
+    if !dg.search_matches(&grid15, grp.visible_row(&app.grouping, srch_hit)) { os.exit(533) }
+    // Ctrl+Down: the next match, and the current row moves off the first one unless it is the only one
+    if dg.search_next(&grid15, true) != ok { os.exit(534) }
+    let (srch_next, srch_next_has) = dg.current_position(&grid15)
+    if !srch_next_has || !dg.search_matches(&grid15, grp.visible_row(&app.grouping, srch_next)) { os.exit(535) }
+    if dg.search_next(&grid15, false) != ok { os.exit(536) }
+    let (srch_back, srch_back_has) = dg.current_position(&grid15)
+    if !srch_back_has || srch_back != srch_hit { os.exit(537) }
+    dg.cancel_search(&grid15)
+    if dg.search_query(&grid15).len != 0usize { os.exit(538) }
+    // the bookmark follows the row, not the position
+    dg.toggle_bookmark(&grid15)
+    if !grid15.has_bookmark { os.exit(539) }
+    if dg.navigate(&grid15, dg.Nav.Last) != ok { os.exit(540) }
+    let (srch_went, srch_srch_went_error) = dg.goto_bookmark(&grid15)
+    if !srch_went || srch_srch_went_error != ok { os.exit(541) }
+    let (srch_mark, srch_mark_has) = dg.current_position(&grid15)
+    if !srch_mark_has || srch_mark != srch_back { os.exit(542) }
+    dg.toggle_bookmark(&grid15)
+    if grid15.has_bookmark { os.exit(543) }
+    // the shortcuts: with a row focused, a typed letter searches and Ctrl+Down goes to the next match
+    if dg.navigate(&grid15, dg.Nav.First) != ok { os.exit(544) }
+    dg.cancel_search(&grid15)
+    mem.reset(&f, 0usize)
+    let (root52, build52_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build52_error != ok { os.exit(546) }
+    if settle(&harness, root52, 220000000000i64) != ok { os.exit(547) }
+    if !tap_key(&harness, &runtime, dg.row_key(&grid15, grp.visible_row(&app.grouping, 0usize))) { os.exit(548) }
+    // 'c' (VK 67): every name here starts "Card", so the search keeps the first row
+    if testing.press_key(&harness, 67u32, zero) != ok { os.exit(549) }
+    if dg.search_query(&grid15).len != 1usize || dg.search_query(&grid15)[0usize] != 99u8 { os.exit(553) }
+    var with_control: input.Modifiers = zero
+    with_control.control = true
+    if testing.press_key(&harness, 40u32, with_control) != ok { os.exit(551) }
+    let (ctrl_at, ctrl_has) = dg.current_position(&grid15)
+    if !ctrl_has || ctrl_at != 1usize { os.exit(550) }
+    if !dg.search_matches(&grid15, grp.visible_row(&app.grouping, ctrl_at)) { os.exit(552) }
     os.exit(0)
     ret ok
 }
