@@ -10667,7 +10667,10 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     python3 "$repo/scripts/build-shell-archive.py" "$shell_archive" "$shell_init" "$shell_a" "$shell_b"
     neperos_shell=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$shell_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_shell" in
-        *'shell init up'*'el0 prog A exit 7'*'el0 prog B faulting'*'thread child killed, el0 fault at 0x0000000000000000'*'shell child A code 7'*'shell child B killed'*'shell init done'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        # (D2481) Either child may run first; both must run and the init reaps them in order after both.
+        *'shell init up'*'el0 prog A exit 7'*'shell child A code 7'*'shell child B killed'*'shell init done'*'all threads done'*'neperos: exit 0x0000000000000000'*)
+            case "$neperos_shell" in *'el0 prog B faulting'*) ;; *) echo "NeperOS shell did not fault program B: $neperos_shell" >&2; exit 1 ;; esac
+            case "$neperos_shell" in *'thread child killed, el0 fault at 0x0000000000000000'*) ;; *) echo "NeperOS shell did not contain the fault: $neperos_shell" >&2; exit 1 ;; esac ;;
         *) printf '%s\n' "NeperOS shell did not run its processes: $neperos_shell" >&2; exit 1 ;;
     esac
     # (D2153, C106) The filesystem-server boot: the initrd is an archive of three programs -- an EL0

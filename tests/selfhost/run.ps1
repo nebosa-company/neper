@@ -10938,7 +10938,9 @@ if ($neperosQemu) {
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $shellArchive $shellInit $shellA $shellB
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS shell archive did not assemble' }
     $shellBoot = Invoke-NeperOS $neperosImage @('-initrd', $shellArchive, '-append', 'shell')
-    if ($shellBoot -notmatch '(?s)shell init up.*el0 prog A exit 7.*el0 prog B faulting.*thread child killed, el0 fault at 0x0000000000000000.*shell child A code 7.*shell child B killed.*shell init done.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS shell did not run its processes: $shellBoot" }
+    # (D2481) Which of the two children the scheduler runs first is not what is tested: both must run, B's fault must be
+    # contained, and the init must reap them in order after both.
+    if ($shellBoot -notmatch '(?s)shell init up' -or $shellBoot -notmatch 'el0 prog A exit 7' -or $shellBoot -notmatch 'el0 prog B faulting' -or $shellBoot -notmatch 'thread child killed, el0 fault at 0x0000000000000000' -or $shellBoot -notmatch '(?s)shell child A code 7.*shell child B killed.*shell init done.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS shell did not run its processes: $shellBoot" }
     # (D2153, C106) The filesystem-server boot: the initrd is an archive of three programs -- an EL0
     # filesystem server that alone holds the block device's capability, a client that drives it over
     # IPC (open, read, write, close, list, mkdir, remove), and a client the kernel granted no
