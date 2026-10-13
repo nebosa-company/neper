@@ -228,19 +228,50 @@ fn load(a: *mem.Arena) -> err {
     ret ok
 }
 
+const ENUMERATE_ATTEMPTS: u32 = 3u32
+const VK_INCOMPLETE: i32 = 5i32
+
+// What a list call's status means on attempt `attempt` (from zero): 0 the list is complete,
+// 1 ask the count again, 2 give up. Only VK_INCOMPLETE is worth another attempt, and only
+// while one is left; any other status is a failure.
+fn enumeration_step(status: i32, attempt: u32) -> u32 {
+    if status == 0i32 { ret 0u32 }
+    if status == VK_INCOMPLETE && attempt + 1u32 < ENUMERATE_ATTEMPTS { ret 1u32 }
+    ret 2u32
+}
+
 // The physical devices, each with its name, kind, memory, capabilities and whether section 10's
 // floor holds on it.
 fn devices(a: *mem.Arena, limit: usize) -> ([]Physical, err) {
     var none: []Physical = zero
     let load_error = load(a)
     if load_error != ok { ret (none, load_error) }
+    // The count and the list are two calls, so a device can appear between them: the list
+    // call then answers VK_INCOMPLETE and the count is asked again, three attempts in all
+    // (C093); the snapshot is never a short list presented as complete.
     var count = 0u32
     var no_handles: *usize = zero
-    if api.enumerate_physical_devices(instance, &count, no_handles) != 0i32 { ret (none, Failed) }
-    if count == 0u32 { ret (none, NoDevice) }
-    let (handles, handles_error) = mem.alloc[usize](a, usize(count))
-    if handles_error != ok { ret (none, handles_error) }
-    if api.enumerate_physical_devices(instance, &count, &handles[0usize]) != 0i32 { ret (none, Failed) }
+    var handles: []usize = zero
+    var attempt = 0u32
+    var settled = false
+    while !settled {
+        count = 0u32
+        if api.enumerate_physical_devices(instance, &count, no_handles) != 0i32 { ret (none, Failed) }
+        if count == 0u32 { ret (none, NoDevice) }
+        let checkpoint = mem.mark(a)
+        let (listed, handles_error) = mem.alloc[usize](a, usize(count))
+        if handles_error != ok { ret (none, handles_error) }
+        let status = api.enumerate_physical_devices(instance, &count, &listed[0usize])
+        let step = enumeration_step(status, attempt)
+        if step == 2u32 { ret (none, Failed) }
+        if step == 1u32 {
+            mem.reset(a, checkpoint)
+            attempt += 1u32
+            continue
+        }
+        handles = listed
+        settled = true
+    }
     var total = usize(count)
     if total > limit { total = limit }
     let (found, found_error) = mem.alloc[Physical](a, total)

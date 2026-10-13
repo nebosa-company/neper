@@ -5666,6 +5666,13 @@ foreach ($width in @(8, 16, 32, 64)) {
     $widthRun = & $compiler run (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_width\src\main.e') $repo 'x64' 'windows' (Join-Path $testBuild "gpu-subgroup-width-$width-selfhost.exe") --json --subgroup-width "$width" -- "$width"
     if ($LASTEXITCODE -ne 0 -or ($widthRun -join "`n") -notmatch '"record":"run","process_exit_code":0,"stdout":"gpu subgroup width ok\\n"') { throw "the $width-lane subgroup runtime failed: $($widthRun -join "`n")" }
 }
+# (C093) The mock device inventory `neper run --gpu-inventory FILE` hands e.gpu: duplicate keys,
+# a record without a key, open by index, and the CPU untouched; the same fixture without it
+# checks the VK_INCOMPLETE retry decision alone.
+$gpuInventoryRun = & $compiler run (Join-Path $PSScriptRoot 'fixtures\link\gpu_inventory\src\main.e') $repo 'x64' 'windows' (Join-Path $testBuild 'gpu-inventory-selfhost.exe') --json --gpu-inventory (Join-Path $PSScriptRoot 'fixtures\link\gpu_inventory\inventory.txt')
+if ($LASTEXITCODE -ne 0 -or ($gpuInventoryRun -join "`n") -notmatch '"record":"run","process_exit_code":0,"stdout":"gpu inventory ok\\n"') { throw "the mock GPU inventory failed: $($gpuInventoryRun -join "`n")" }
+$gpuInventoryPlain = & (Join-Path $testBuild 'gpu-inventory-selfhost.exe')
+if ($LASTEXITCODE -ne 0 -or $gpuInventoryPlain -ne 'gpu inventory unconfigured ok') { throw "the unconfigured GPU inventory fixture failed: $gpuInventoryPlain" }
 $gpuSubgroupReducePath = Join-Path $testBuild 'gpu-subgroup-reduce-selfhost.exe'
 $gpuSubgroupReduceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_reduce\src\main.e') $repo 'x64' 'windows' $gpuSubgroupReducePath
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupReduceWritten -ne 'executable written') { throw 'gpu_subgroup_reduce emission failed' }

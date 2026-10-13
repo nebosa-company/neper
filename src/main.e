@@ -779,7 +779,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--fault-dry") || same(flag, "--overlay") || same(flag, "--cpu") || same(flag, "--subgroup-width")
+    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--fault-dry") || same(flag, "--overlay") || same(flag, "--cpu") || same(flag, "--subgroup-width") || same(flag, "--gpu-inventory")
 }
 
 // `--cpu LEVEL` (D765): section 13's x64 levels, `x64-v1` the SSE2 baseline the build
@@ -857,10 +857,15 @@ fn has_flag(args: []str, name: str) -> bool {
 
 // `--project DIR` (D263): the project root, in place of discovering it from the operand.
 fn project_flag(args: []str) -> str {
+    ret string_flag(args, "--project")
+}
+
+// A flag's value spelled as text, or "" when it is not given.
+fn string_flag(args: []str, name: str) -> str {
     var at = 7usize
     while at + 1usize < args.len {
         if same(args[at], "--") { ret "" }
-        if same(args[at], "--project") { ret args[at + 1usize] }
+        if same(args[at], name) { ret args[at + 1usize] }
         if takes_value(args[at]) { at += 1usize }
         at += 1usize
     }
@@ -877,13 +882,14 @@ fn flags_known(args: []str) -> bool {
             let width = args[at + 1usize]
             if !same(width, "8") && !same(width, "16") && !same(width, "32") && !same(width, "64") { ret false }
         }
+        if same(args[at], "--gpu-inventory") && !same(args[1usize], "run") { ret false }
         if same(args[at], "--arena") || same(args[at], "--memory-budget") {
             if at + 1usize >= args.len { ret false }
             let (size, size_ok) = arena_size(args[at + 1usize])
             if !size_ok { ret false }
             at += 1usize
         } else {
-            if same(args[at], "--project") || same(args[at], "--overlay") || same(args[at], "--cpu") {
+            if same(args[at], "--project") || same(args[at], "--overlay") || same(args[at], "--cpu") || same(args[at], "--gpu-inventory") {
                 if at + 1usize >= args.len { ret false }
                 // A level the build does not have is no build (D765).
                 if same(args[at], "--cpu") && cpu_level_of(args[at + 1usize]) == 0usize { ret false }
@@ -1678,6 +1684,13 @@ fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str, comman
         argc += 1usize
         argument += 1usize
     }
+    var inventory_setting = ""
+    let inventory = string_flag(command_args, "--gpu-inventory")
+    if inventory.len > 0usize {
+        let (spelled_setting, inventory_error) = with_suffix(a, "NEPER_GPU_INVENTORY=", inventory)
+        if inventory_error != ok { ret (0i32, "", "", inventory_error) }
+        inventory_setting = spelled_setting
+    }
     // The files are opened last (D345): every exit before this one has nothing to close.
     let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
     let (stdout_file, stdout_open_error) = os.open(a, stdout_path, flags)
@@ -1688,7 +1701,7 @@ fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str, comman
         ret (0i32, "", "", stderr_open_error)
     }
     let (width, configured) = decimal_flag(command_args, "--subgroup-width")
-    var environment: [1]str = zero
+    var environment: [2]str = zero
     var setting = "NEPER_SUBGROUP_WIDTH=32"
     if configured {
         if width == 8usize { setting = "NEPER_SUBGROUP_WIDTH=8" }
@@ -1696,9 +1709,15 @@ fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str, comman
         if width == 64usize { setting = "NEPER_SUBGROUP_WIDTH=64" }
     }
     environment[0usize] = setting
+    // `--gpu-inventory FILE` (C093): e.gpu's mock device inventory, read from the variable.
+    var environment_count = 1usize
+    if inventory_setting.len > 0usize {
+        environment[1usize] = inventory_setting
+        environment_count = 2usize
+    }
     var options: os.SpawnOptions = zero
     options.argv = argv[..argc]
-    options.env = environment[0usize..1usize]
+    options.env = environment[0usize..environment_count]
     options.inherit_env = true
     options.stdio.stdout = stdout_file
     options.stdio.stderr = stderr_file
@@ -14717,7 +14736,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | manifest-em ARTIFACT... --json | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--instances N] [--fault-write N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] [--subgroup-width 8|16|32|64] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | manifest-em ARTIFACT... --json | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--instances N] [--fault-write N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] [--subgroup-width 8|16|32|64] [--gpu-inventory FILE] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

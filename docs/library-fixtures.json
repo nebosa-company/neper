@@ -2405,6 +2405,7 @@
     "gpu_float_modes",
     "gpu_frame_many",
     "gpu_gaps",
+    "gpu_inventory",
     "gpu_present",
     "gpu_reshape",
     "gpu_shared",
@@ -2526,6 +2527,7 @@
    "delivered": 19,
    "pending": [],
    "fixtures": [
+    "gpu_inventory",
     "gpu_vulkan_raw"
    ]
   },
