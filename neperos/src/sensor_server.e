@@ -70,6 +70,8 @@ fn default_mask(app: usize) -> usize {
     if app == sensorclient.APP_COMPASS { ret 1usize | 2usize | 4usize | 8usize | BIT_FINE }
     if app == sensorclient.APP_LEVEL { ret 2usize | 4usize | 16usize }
     if app == sensorclient.APP_STEPS { ret 2usize | 16usize }
+    // (C168) The shell's home-screen step widget reads the counter, and nothing else of the hub.
+    if app == sensorclient.APP_SHELL { ret 16usize }
     // The background services process (kernel-started, app number 2): the step counter's keeper.
     if app == 2usize { ret 16usize }
     if app == sensorclient.APP_MAPS { ret 8usize | BIT_FINE }

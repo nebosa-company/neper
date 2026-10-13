@@ -118,6 +118,20 @@ fn clock_text(a: *mem.Arena, hour: usize, minute: usize) -> str {
 }
 
 // (C126) The brightness setting as a dimming layer over the whole screen, nothing at the level the system starts at.
+// (C168) The status bar's time text kept in a buffer of its own: a string allocated after the home mark is given back by
+// the reset every return to Home makes, so a clock rebuilt in the loop (the time zone changed) lives here instead.
+var clock_store: [12]u8 = zero
+
+fn keep_clock(a: *mem.Arena, hour: usize, minute: usize) -> str {
+    let shown = clock_text(a, hour, minute)
+    var n = 0usize
+    while n < shown.len && n < 12usize {
+        clock_store[n] = shown[n]
+        n += 1usize
+    }
+    ret clock_store[0usize..n]
+}
+
 fn dim_layer(builder: *scene.Builder, logical_h: f32) -> err {
     let alpha = theme.dim_alpha()
     if alpha > 0.0 { try fill(builder, 0.0, 0.0, 412.0, logical_h, paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: alpha }) }
@@ -315,9 +329,119 @@ fn visible_icon(position: usize) -> usize {
     ret 99usize
 }
 
+// (C168) The home screen's step widget: today's count and the goal, read from /steps (what the Steps app kept) plus
+// what the hub counted since, the shell being one of the hub's step-counter readers. `widget_known` is false until a
+// reading arrives (no disk and no hub: no widget). The card sits under the icon grid; a tap on it opens Steps.
+var widget_count: usize = 0usize
+var widget_goal: usize = 8000usize
+var widget_known: bool = false
+// (The card is 84 dp high from y = 700; icon_at's neighbour in the tap handler tests the same band.)
+const STEPS_PROGRAM: usize = 36usize
+
+fn word_at(buf: []const u8, at: usize) -> usize {
+    var v = 0usize
+    var i = 0usize
+    while i < 4usize {
+        v = v | (usize(buf[at + i]) << (8usize * i))
+        i += 1usize
+    }
+    ret v
+}
+
+// Read the widget's numbers; `day` is the wall clock's day (0 with no clock). True when they changed.
+fn read_widget(day: usize) -> bool {
+    var buf: [136]u8 = zero
+    var today = 0usize
+    var goal = 8000usize
+    var base = 0usize
+    let (got, found) = fsproto.read_big(FS_REQ, FS_REP, "/steps", mem.address_of(&buf[0usize]), 136usize)
+    var known = false
+    if found && got >= 8usize {
+        known = true
+        today = word_at(buf[0usize..136usize], 0usize)
+        let kept_goal = word_at(buf[0usize..136usize], 4usize)
+        if kept_goal >= 1000usize && kept_goal <= 100000usize { goal = kept_goal }
+        // A count kept on an earlier day is yesterday's; the Steps app rolls the week when it opens.
+        if got >= 36usize {
+            let kept_day = word_at(buf[0usize..136usize], 8usize)
+            if day > 0usize && kept_day > 0usize && day > kept_day { today = 0usize }
+        }
+        if got >= 136usize { base = word_at(buf[0usize..136usize], 36usize) }
+    }
+    let (count, cadence, status) = sensorclient.steps()
+    if status == sensorclient.STATUS_OK {
+        known = true
+        if count >= base { today += count - base } else { today += count }
+    }
+    var changed = false
+    if known != widget_known || today != widget_count || goal != widget_goal { changed = true }
+    widget_known = known
+    widget_count = today
+    widget_goal = goal
+    ret changed
+}
+
+// The Steps icon's index, or 99 when Settings uninstalled it (then the widget is not drawn).
+fn steps_icon() -> usize {
+    var i = 0usize
+    while i < icons.APP_COUNT {
+        if icons.program_of(i) == STEPS_PROGRAM && ((hidden_mask >> i) & 1usize) == 0usize { ret i }
+        i += 1usize
+    }
+    ret 99usize
+}
+
+// 8,412 with its thousands comma (a count under a million).
+fn with_commas(a: *mem.Arena, value: usize) -> str {
+    if value < 1000usize { ret number_text(a, value) }
+    let low = value % 1000usize
+    var low_text = number_text(a, low)
+    if low < 10usize { low_text = join3(a, "00", low_text, "") } else if low < 100usize { low_text = join3(a, "0", low_text, "") }
+    ret join3(a, number_text(a, (value / 1000usize) % 1000usize), ",", low_text)
+}
+
+// The widget takes the free slots at the end of the icon grid (the rest of the last row, or a row of its own): its
+// left edge in dp, its top and its width.
+fn widget_slot() -> (f32, f32, f32) {
+    var count = visible_count()
+    if installed_len > 0usize { count += 1usize }
+    let col = count % 4usize
+    let row = count / 4usize
+    ret (f32(col) * 103.0 + 5.0, 70.0 + f32(row) * 104.0, f32(4usize - col) * 103.0 - 10.0)
+}
+
+// The card is 84 dp high.
+fn draw_widget(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces) -> err {
+    let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
+    let soft = paint.Color { red: 0.86, green: 0.87, blue: 0.9, alpha: 1.0 }
+    let amber = paint.Color { red: 0.88, green: 0.70, blue: 0.42, alpha: 1.0 }
+    let (left, top, wide) = widget_slot()
+    try card(a, builder, left, top, wide, 84.0, 18.0, paint.Color { red: 0.1, green: 0.1, blue: 0.11, alpha: 0.7 })
+    let (t1, e1) = text.draw(a, builder, faces.grotesk, 13.0, "Steps today", left + 14.0, top + 8.0, 0.0, 0u32, layout.Align.Start, soft)
+    if e1 != ok { ret e1 }
+    let (t2, e2) = text.draw(a, builder, faces.jost_bold, 28.0, with_commas(a, widget_count), left + 14.0, top + 26.0, 0.0, 0u32, layout.Align.Start, white)
+    if e2 != ok { ret e2 }
+    let goal_line = join3(a, "of ", with_commas(a, widget_goal), "")
+    let goal_width = text.measure(a, faces.jost, 14.0, goal_line)
+    let (t3, e3) = text.draw(a, builder, faces.jost, 14.0, goal_line, left + wide - 14.0 - goal_width, top + 36.0, 0.0, 0u32, layout.Align.Start, soft)
+    if e3 != ok { ret e3 }
+    // The bar: the track, and the fill to the share of the goal (at most all of it).
+    let track = wide - 28.0
+    try card(a, builder, left + 14.0, top + 66.0, track, 8.0, 4.0, paint.Color { red: 0.3, green: 0.3, blue: 0.33, alpha: 1.0 })
+    var share: f32 = 1.0
+    if widget_count < widget_goal { share = f32(widget_count) / f32(widget_goal) }
+    if share > 0.0 {
+        var filled = track * share
+        if filled < 8.0 { filled = 8.0 }
+        try card(a, builder, left + 14.0, top + 66.0, filled, 8.0, 4.0, amber)
+    }
+    ret ok
+}
+
 fn draw_home(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, has_fonts: bool, clock: str, snap: [5]usize) -> err {
     try status_bar(a, builder, faces, has_fonts, clock, snap)
     let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
+    if has_fonts && widget_known && steps_icon() != 99usize { try draw_widget(a, builder, faces) }
     var idx = 0usize
     var extra = 0usize
     if installed_len > 0usize { extra = 1usize }
@@ -381,6 +505,35 @@ var theme_word: usize = 5365usize
 const SETTINGS_PROGRAM: usize = 24usize
 var last_scene: scene.SceneId = zero
 var has_last_scene: bool = false
+
+// (C168, D5000) Give every scene slot of the renderer its storage now: a slot takes it from the arena at its first
+// compile, so a first compile after the arena's reset mark would leave it pointing at memory the reset gave back.
+fn prime_scenes(a: *mem.Arena, renderer: *scene.Renderer) {
+    var held: [2]scene.SceneId = zero
+    var made = 0usize
+    var tries = 0usize
+    while tries < 2usize {
+        let (builder_value, builder_error) = scene.builder(a, 16usize)
+        if builder_error == ok {
+            var builder = builder_value
+            let save: scene.Command = .Save
+            let restore: scene.Command = .Restore
+            if scene.push(&builder, save) == ok && scene.push(&builder, restore) == ok {
+                let (id, compile_error) = scene.compile(renderer, scene.finish(&builder))
+                if compile_error == ok {
+                    held[made] = id
+                    made += 1usize
+                }
+            }
+        }
+        tries += 1usize
+    }
+    var i = 0usize
+    while i < made {
+        let released = scene.release_scene(renderer, held[i])
+        i += 1usize
+    }
+}
 
 fn show(renderer: *scene.Renderer, w: *window.Window, drawable: scene.Target, list: scene.DisplayList) -> bool {
     // The renderer holds a few scenes; the one drawn before this is released first.
@@ -758,6 +911,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let scale = f32(os.SURFACE_W) / 412.0
     let logical_h = f32(os.SURFACE_H) / scale
     let ground = paint.Color { red: 0.09, green: 0.11, blue: 0.18, alpha: 1.0 }
+    // (C168) The step widget is first read on a tick of the home screen, not here: the settings server and the
+    // sensor server read their files over the same filesystem endpoints in these first moments, and two
+    // processes' multi-word requests must not interleave on them.
 
     // Tell the compositor this app answers every routed event with a frame signal or a 0, so it can
     // take later frames after it starts routing input (value 2 on the frame endpoint).
@@ -828,6 +984,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // screen a tap unlocks to the home screen. On the home screen a tap on an icon launches that app
     // as a process, waits for it, and redraws Home; a key launches the test app. Keep reading to the
     // sentinel.
+    // (C168, D5000) The renderer takes each scene slot's storage from this arena the first time the slot compiles.
+    // A slot first used after the mark below had its storage given back by the next reset and was then reused
+    // (the home screen redrawn from the tick, as the step widget does, trapped at 0x24 inside scene.compile).
+    // Both slots are compiled once here, before the mark, so their storage lies below it.
+    prime_scenes(a, &renderer)
     // (D2240) Everything the home screen draws after this point is dropped each time an app returns.
     let home_mark = mem.mark(a)
     var pointer_x = 0usize
@@ -837,7 +998,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // (C126) The Screen timeout setting, from the settings server (index 7), and the ticks since the last touch.
     var (timeout_step, timeout_known) = sysettings.get(7usize)
     if !timeout_known { timeout_step = 1usize }
-    var idle_ticks = 0usize
+    // The tick's value is the input server's monotonic milliseconds: the idle time and the widget's refresh are
+    // measured on it, so ticks a slow frame made the server drop do not stretch them. `*_fresh` says the base is
+    // taken from the next tick (after a touch, after an app was in front, after the lock screen came back).
+    var idle_base = 0usize
+    var idle_fresh = true
+    var widget_base = 0usize
+    var widget_fresh = true
     var listening = true
     while listening {
         let word = os.recv(ROUTED, NO_SLOT)
@@ -857,10 +1024,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if code != BTN_LEFT { by_key = true }
             }
             var framed = false
-            if tapped { idle_ticks = 0usize }
+            if tapped { idle_fresh = true }
             if etype == 241usize && home_shown && theme.screen_lock() != 0usize {
-                idle_ticks += 1usize
-                if idle_ticks >= timeout_ticks(timeout_step) {
+                if idle_fresh {
+                    idle_base = value
+                    idle_fresh = false
+                }
+                if ((value + 4294967296usize - idle_base) & LOW32) >= timeout_ticks(timeout_step) * 500usize {
                     // Everything the home screen drew since the last reset goes first, as when an app returns.
                     if has_last_scene {
                         let released_home = scene.release_scene(&renderer, last_scene)
@@ -870,8 +1040,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     if show_lock(a, &renderer, &w, drawable, faces, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale, hour, minute, seconds) {
                         home_shown = false
                         framed = true
-                        idle_ticks = 0usize
+                        idle_fresh = true
                         say("shell screen timeout\n")
+                    }
+                }
+            }
+            // (C168) The step widget follows the count: read every five seconds and redrawn, from a
+            // cleared arena like every return to Home, only when the number moved.
+            if etype == 241usize && home_shown && !prompting && !framed {
+                if widget_fresh {
+                    // The first tick on the home screen reads at once; then every five seconds.
+                    widget_base = (value + 4294967296usize - 5000usize) & LOW32
+                    widget_fresh = false
+                }
+                if ((value + 4294967296usize - widget_base) & LOW32) >= 5000usize {
+                    widget_base = value
+                    if read_widget(utc_seconds / 86400usize) && widget_known && steps_icon() != 99usize {
+                        if has_last_scene {
+                            let released_widget = scene.release_scene(&renderer, last_scene)
+                            has_last_scene = false
+                        }
+                        mem.reset(a, home_mark)
+                        if show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) {
+                            framed = true
+                            say("shell widget steps ")
+                            say_num(widget_count)
+                            say("\n")
+                        }
                     }
                 }
             }
@@ -901,6 +1096,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 // (C176) The fingerprint pad did not accept: off in Settings, or not the enrolled finger. It stays locked.
                 say("shell fingerprint refused\n")
             } else if tapped && !home_shown {
+                // (C168) The step widget's reading goes into the first frame of the home screen.
+                let widget_unlock = read_widget(utc_seconds / 86400usize)
+                widget_fresh = true
                 if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                 home_shown = true
                 framed = true
@@ -927,8 +1125,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 } else if by_key {
                     if !launched_test { app = 98usize }
                 } else {
-                    let position = icon_at(f32(pointer_x) * 412.0 / 32768.0, f32(pointer_y) * logical_h / 32768.0)
-                    let icon = visible_icon(position)
+                    let tap_x = f32(pointer_x) * 412.0 / 32768.0
+                    let tap_y = f32(pointer_y) * logical_h / 32768.0
+                    let widget_icon = steps_icon()
+                    let (slot_left, slot_top, slot_wide) = widget_slot()
+                    if widget_known && widget_icon != 99usize && tap_y >= slot_top && tap_y < slot_top + 84.0 && tap_x >= slot_left && tap_x < slot_left + slot_wide {
+                        say("shell tap widget steps\n")
+                        app = widget_icon
+                    }
+                    let position = icon_at(tap_x, tap_y)
+                    var icon = visible_icon(position)
+                    if app != 99usize { icon = app }
                     if icon < icons.APP_COUNT {
                         say("shell tap ")
                         say(icons.app_label(icon))
@@ -995,7 +1202,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say("shell app code ")
                         say_num(code_app)
                         say("\n")
-                        idle_ticks = 0usize
+                        idle_fresh = true
+                        widget_fresh = true
                         let (step_now, step_known) = sysettings.get(7usize)
                         if step_known { timeout_step = step_now }
                         let (zone_now, zone_ok) = sysettings.get(34usize)
@@ -1005,7 +1213,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             let day_now = seconds % 86400usize
                             hour = day_now / 3600usize
                             minute = (day_now % 3600usize) / 60usize
-                            clock = clock_text(a, hour, minute)
+                            clock = keep_clock(a, hour, minute)
                             say("shell zone ")
                             say_num(hour)
                             say(":")
@@ -1052,9 +1260,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             has_last_scene = false
                         }
                         mem.reset(a, home_mark)
+                        // (C168) What the Steps app kept (and the hub counted) while it was in front.
+                        let widget_back = read_widget(utc_seconds / 86400usize)
                         if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                         framed = true
                         say("shell home\n")
+                        if widget_known {
+                            say("shell widget back ")
+                            say_num(widget_count)
+                            say("\n")
+                        }
                     }
                 }
             }
