@@ -2131,4 +2131,5 @@ D2372	3378	G006: datagrid Tab navigation, column visibility and order
 D2373	1982	G007: single-row reposition, editors by kind, lock, old/new text and batches
 D2374	2303	G008: conditional formatting rules (e.ui.gridrules) and their grid rendering
 D2375	818	G012: the grid is a pixel-perfect equivalent of the v3 grid
-D2376	1350	G012: the grid reads a measured look (e.ui.gridlook)
+D2376	1351	G012: the grid reads a measured look (e.ui.gridlook)
+D2377	534	G012: text size 8 pt and the grid frame
