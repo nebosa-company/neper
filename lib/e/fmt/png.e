@@ -69,9 +69,11 @@ fn crc32_update(crc: u32, d: []const u8) -> u32 {
         table[n] = v
         n += 1usize
     }
+    @nocheck {
     while i < d.len {
         c = table[usize((c ^ u32(d[i])) & 255u32)] ^ (c >> 8u32)
         i += 1usize
+    }
     }
     ret c
 }
@@ -88,10 +90,12 @@ fn adler32_update(state: u32, d: []const u8) -> u32 {
         // Reduce once per 5552 bytes, the most a u32 sum holds before it can wrap.
         var stop = i + 5552usize
         if stop > d.len { stop = d.len }
+        @nocheck {
         while i < stop {
             a += u32(d[i])
             b += a
             i += 1usize
+        }
         }
         a = a % 65521u32
         b = b % 65521u32
@@ -561,6 +565,24 @@ fn encode_row(s: *Sink, e: *deflate.Encoder, value: image.ConstImage, p: Pass, y
     ret ok
 }
 
+// dst[dst_at..dst_at + n] = src[src_at..src_at + n], eight bytes at a time.
+fn copy_bytes(dst: []u8, dst_at: usize, src: []const u8, src_at: usize, n: usize) {
+    if n == 0usize { ret }
+    let tail_dst = dst[dst_at + n - 1usize]
+    let tail_src = src[src_at + n - 1usize]
+    var i = 0usize
+    @nocheck {
+    while i + 8usize <= n {
+        *mem.cast[*u64](&dst[dst_at + i]) = *mem.cast[*u64](&src[src_at + i])
+        i += 8usize
+    }
+    while i < n {
+        dst[dst_at + i] = src[src_at + i]
+        i += 1usize
+    }
+    }
+}
+
 // Gathers `take` pixels of pass row `y`, from pixel `x` on, into `line` as PNG bytes (`channels` each).
 fn gather_row(value: image.ConstImage, p: Pass, y: usize, x: usize, take: usize, channels: usize, line: []u8) {
     let bpp = image.bytes_per_pixel(value.format)
@@ -569,8 +591,24 @@ fn gather_row(value: image.ConstImage, p: Pass, y: usize, x: usize, take: usize,
     if p.dx == 1usize && channels == bpp && value.format != .Bgra8 {
         // Same layout in and out: the run of pixels is one copy.
         let from = row + (p.x0 + x) * bpp
-        mem.copy[u8](line[0..take * bpp], value.pixels[from..from + take * bpp])
+        copy_bytes(line, 0usize, value.pixels, from, take * bpp)
         i = take
+    } else if p.dx == 1usize && channels == 3usize && bpp == 4usize && take > 1usize {
+        // Opaque Rgba8 or Bgra8 to RGB: one four-byte load and store a pixel, the stray
+        // fourth byte overwritten by the next pixel (the last pixel is written bytewise).
+        let from = row + (p.x0 + x) * 4usize
+        let tail_src = value.pixels[from + take * 4usize - 1usize]
+        let tail_dst = line[take * 3usize - 1usize]
+        let swap = value.format == .Bgra8
+        @nocheck {
+        while i + 1usize < take {
+            let w = *mem.cast[*u32](&value.pixels[from + i * 4usize])
+            var o = w
+            if swap { o = ((w >> 16u32) & 255u32) | (w & 65280u32) | ((w & 255u32) << 16u32) }
+            *mem.cast[*u32](&line[i * 3usize]) = o
+            i += 1usize
+        }
+        }
     }
     while i < take {
         let at = row + (p.x0 + (x + i) * p.dx) * bpp
@@ -640,6 +678,12 @@ fn encode_row_adaptive(s: *Sink, e: *deflate.Encoder, value: image.ConstImage, p
     var s2 = 0usize
     var s3 = 0usize
     var s4 = 0usize
+    var tab: [256]u8 = zero
+    var ti = 0usize
+    while ti < 256usize {
+        tab[ti] = u8(signed_abs(u32(ti)) & 255usize)
+        ti += 1usize
+    }
     zero_bytes(buf[0..4usize])
     zero_bytes(buf[4104usize..4108usize])
     var x = 0usize
@@ -650,36 +694,29 @@ fn encode_row_adaptive(s: *Sink, e: *deflate.Encoder, value: image.ConstImage, p
         gather_row(value, p, y, x, take, channels, buf[4usize..4100usize])
         if y > 0usize { gather_row(value, p, y - 1usize, x, take, channels, buf[4108usize..8204usize]) } else { zero_bytes(buf[4108usize..4108usize + n]) }
         var i = 0usize
+        // `tab[v]` is the signed absolute value of a filtered byte; every index is under
+        // the chunk's 4108 + n bytes or masked to 255, so the checks go.
+        @nocheck {
         while i < n {
-            let v = i32(buf[4usize + i])
-            let a = i32(buf[4usize + i - channels])
-            let b = i32(buf[4108usize + i])
-            let c = i32(buf[4108usize + i - channels])
-            var t = v
-            if t > 128 { t = 256 - t }
-            s0 += usize(t)
-            t = (v - a) & 255
-            if t > 128 { t = 256 - t }
-            s1 += usize(t)
-            t = (v - b) & 255
-            if t > 128 { t = 256 - t }
-            s2 += usize(t)
-            t = (v - ((a + b) >> 1)) & 255
-            if t > 128 { t = 256 - t }
-            s3 += usize(t)
-            var pa = b - c
-            var pb = a - c
-            let pc = a + b - c - c
+            let v = usize(buf[4usize + i])
+            let a = usize(buf[4usize + i - channels])
+            let b = usize(buf[4108usize + i])
+            let c = usize(buf[4108usize + i - channels])
+            s0 += usize(tab[v])
+            s1 += usize(tab[(v + 256usize - a) & 255usize])
+            s2 += usize(tab[(v + 256usize - b) & 255usize])
+            s3 += usize(tab[(v + 256usize - ((a + b) >> 1u32)) & 255usize])
+            var pa = i32(b) - i32(c)
+            var pb = i32(a) - i32(c)
+            var qc = i32(a) + i32(b) - i32(c) - i32(c)
             var pr = c
             if pa < 0 { pa = 0 - pa }
             if pb < 0 { pb = 0 - pb }
-            var qc = pc
             if qc < 0 { qc = 0 - qc }
             if pa <= pb && pa <= qc { pr = a } else if pb <= qc { pr = b }
-            t = (v - pr) & 255
-            if t > 128 { t = 256 - t }
-            s4 += usize(t)
+            s4 += usize(tab[(v + 256usize - pr) & 255usize])
             i += 1usize
+        }
         }
         carry_context(buf, 0usize, n)
         carry_context(buf, 4104usize, n)
@@ -713,9 +750,47 @@ fn encode_row_adaptive(s: *Sink, e: *deflate.Encoder, value: image.ConstImage, p
         gather_row(value, p, y, x, take, channels, buf[4usize..4100usize])
         if y > 0usize { gather_row(value, p, y - 1usize, x, take, channels, buf[4108usize..8204usize]) } else { zero_bytes(buf[4108usize..4108usize + n]) }
         var i = 0usize
-        while i < n {
-            buf[8208usize + i] = u8(filtered(best, u32(buf[4usize + i]), u32(buf[4usize + i - channels]), u32(buf[4108usize + i]), u32(buf[4108usize + i - channels])))
-            i += 1usize
+        // One loop a filter, the same bounds as the scoring pass above.
+        @nocheck {
+        if best == 0usize {
+            while i < n {
+                buf[8208usize + i] = buf[4usize + i]
+                i += 1usize
+            }
+        } else if best == 1usize {
+            while i < n {
+                buf[8208usize + i] = u8((usize(buf[4usize + i]) + 256usize - usize(buf[4usize + i - channels])) & 255usize)
+                i += 1usize
+            }
+        } else if best == 2usize {
+            while i < n {
+                buf[8208usize + i] = u8((usize(buf[4usize + i]) + 256usize - usize(buf[4108usize + i])) & 255usize)
+                i += 1usize
+            }
+        } else if best == 3usize {
+            while i < n {
+                let a = usize(buf[4usize + i - channels])
+                let b = usize(buf[4108usize + i])
+                buf[8208usize + i] = u8((usize(buf[4usize + i]) + 256usize - ((a + b) >> 1u32)) & 255usize)
+                i += 1usize
+            }
+        } else {
+            while i < n {
+                let a = usize(buf[4usize + i - channels])
+                let b = usize(buf[4108usize + i])
+                let c = usize(buf[4108usize + i - channels])
+                var pa = i32(b) - i32(c)
+                var pb = i32(a) - i32(c)
+                var qc = i32(a) + i32(b) - i32(c) - i32(c)
+                var pr = c
+                if pa < 0 { pa = 0 - pa }
+                if pb < 0 { pb = 0 - pb }
+                if qc < 0 { qc = 0 - qc }
+                if pa <= pb && pa <= qc { pr = a } else if pb <= qc { pr = b }
+                buf[8208usize + i] = u8((usize(buf[4usize + i]) + 256usize - pr) & 255usize)
+                i += 1usize
+            }
+        }
         }
         carry_context(buf, 0usize, n)
         carry_context(buf, 4104usize, n)
