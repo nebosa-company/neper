@@ -1402,6 +1402,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root42, build42_error) = dg.build(&f, &grid15, &theme, 400.0)
     if build42_error != ok { os.exit(471) }
     if dg.column_width(&grid15, 0usize) >= before_fit { os.exit(472) }
+    // 24. v3 trace G1: grouping keeps the current card current and opens the group that holds it
+    let grouped_row = grid15.selected_row
+    app.group_rarity = true
+    if rebuild(app, 5usize, false) != ok { os.exit(480) }
+    dg.reveal_current(&grid15)
+    mem.reset(&f, 0usize)
+    let (root43, build43_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build43_error != ok { os.exit(481) }
+    if settle(&harness, root43, trace_clock) != ok { os.exit(482) }
+    trace_clock += 2000000000i64
+    if !grid15.has_position || grid15.selected_row != grouped_row { os.exit(483) }
+    if grp.visible_is_group(&app.grouping, grid15.position) || grp.visible_row(&app.grouping, grid15.position) != grouped_row { os.exit(484) }
+    // and removing the grouping again keeps it current too
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(485) }
+    mem.reset(&f, 0usize)
+    let (root44, build44_error) = dg.build(&f, &grid15, &theme, 400.0)
+    if build44_error != ok { os.exit(486) }
+    if !grid15.has_position || grp.visible_row(&app.grouping, grid15.position) != grouped_row { os.exit(487) }
     os.exit(0)
     ret ok
 }

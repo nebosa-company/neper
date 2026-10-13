@@ -86,11 +86,29 @@
    "v3": "Name widens to its longest card name (recorded: A1-best-fit-v3.png)",
    "neper": "a double tap on the resize handle -> best fit (longest content and title in the grid's text)",
    "replayed": "ui_datagrid section 23; live in the sample (A1-best-fit-v5.png)"
+  },
+  {
+   "id": "G1",
+   "name": "grouping and ungrouping keep the current card current and show it",
+   "steps": [
+    "ungrouped: current card Addle, record 82894",
+    "View > Group by Rarity: the card is still current, its group open",
+    "View > Remove Grouping: record 82894 again, the card scrolled into view (at the bottom of the view)"
+   ],
+   "v3": "recorded: docs/grid-parity/G1-group-keeps-current-v3.png",
+   "neper": "dg.reveal_current opens the groups that hold the current card and scrolls the least",
+   "replayed": "ui_datagrid section 24"
+  },
+  {
+   "id": "F1",
+   "name": "filter",
+   "v3": "the card pool has no filter row: the toolbar box is a Find box (typing does nothing until the binoculars or Enter) and the funnel opens the 'Filter Card Pool' dialog with OK/Apply, so there is no delayed apply to record in this view",
+   "neper": "set_filter_action for the funnel; the filter row stays an extra",
+   "replayed": "n/a"
   }
  ],
  "open": [
   "Ctrl+click multi-sort, Shift+click ranges, typeahead search buffer reset time",
-  "delayed filter apply (v3 applies after about 1 s)",
-  "focus and selection after filter, group and edit (sort recorded as S2)"
+  "focus after edit (the card pool is read-only in v3; editing happens in the deck and collection views, not yet recorded)"
  ]
 }

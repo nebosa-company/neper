@@ -129,6 +129,9 @@ type Grid = struct {
     bands: []const Band,
     navigator_visible: bool,
     group_box_visible: bool,
+    ink_ctx: *void,
+    ink_of: fn(*void, usize) -> (paint.Color, bool),
+    has_ink: bool,
     fit_spec: usize,
     fit_pending: bool,
     page_rows: usize,
@@ -289,6 +292,14 @@ fn set_look(grid: *Grid, look: gl.Look) {
 
 // The group box above the header: a chip for each grouping level (the field and its sort
 // triangle), as in v3.
+// The ink of a row's text as a colour (v3 draws a card's row in the card's own colour): `ink` answers
+// the storage row's colour, and false for the theme's text.
+fn set_row_ink(grid: *Grid, ctx: *void, ink: fn(*void, usize) -> (paint.Color, bool)) {
+    grid.ink_ctx = ctx
+    grid.ink_of = ink
+    grid.has_ink = true
+}
+
 fn show_group_box(grid: *Grid, on: bool) { grid.group_box_visible = on }
 
 // The navigator's funnel button calls `action` (v3 opens its filter dialog from it).
@@ -1041,6 +1052,25 @@ fn summary_text(a: *mem.Arena, s: ColumnSpec, summary: grp.Summary) -> (str, err
     ret (str.done(&sb), ok)
 }
 
+// A data cell's text: in the row's own ink when the application gave one (`set_row_ink`), else
+// in `role`.
+fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role: style.ColorRole, row: usize, out: *widget.Node) -> err {
+    if grid.has_ink {
+        let (ink, has_row_ink) = grid.ink_of(grid.ink_ctx, row)
+        if has_row_ink {
+            var options = control.text_options()
+            options.wrap = .None
+            if grid.look.on { options.size = grid.look.text_size }
+            if bold { options.weight = 700u32 }
+            let (coloured, coloured_error) = control.colored_text(a, 0u64, text, grid.theme, options, ink)
+            if coloured_error != ok { ret coloured_error }
+            *out = coloured
+            ret ok
+        }
+    }
+    ret text_node(a, grid, text, bold, role, out)
+}
+
 fn text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role: style.ColorRole, out: *widget.Node) -> err {
     var options = control.text_options()
     options.wrap = .None
@@ -1213,7 +1243,7 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     var role = grid.events.row_role(grid.events.ctx, row)
     let (text, text_error) = cell_text(a, grid, column, row)
     if text_error != ok { ret text_error }
-    if !grid.has_rules { ret text_node(a, grid, text, false, role, out) }
+    if !grid.has_rules { ret cell_text_node(a, grid, text, false, role, row, out) }
     let look = rules.format(grid.rule_set, row, grid.specs[column].column)
     if look.has_ink { role = look.ink }
     var shown = text
@@ -1229,7 +1259,7 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         shown = str.done(&sb)
     }
     var node: widget.Node = zero
-    try text_node(a, grid, shown, look.bold, role, &node)
+    try cell_text_node(a, grid, shown, look.bold, role, row, &node)
     if !look.has_fill && !look.has_bar {
         *out = node
         ret ok
@@ -1772,6 +1802,40 @@ fn best_fit(a: *mem.Arena, grid: *Grid, spec: usize) -> err {
     if width > 1600.0 { width = 1600.0 }
     resize_column(grid, spec, width)
     ret ok
+}
+
+// After a grouping the application calls this: v3 opens the groups that contain the current card
+// and shows it (the card stays current).
+fn reveal_current(grid: *Grid) {
+    if !grid.has_selection { ret }
+    var at = 0usize
+    let total = grp.row_count(grid.g)
+    while at < total && grp.row_at(grid.g, at) != grid.selected_row { at += 1usize }
+    if at >= total { ret }
+    var group = 0usize
+    while group < grp.group_len(grid.g) {
+        if grp.group_first(grid.g, group) <= at && at < grp.group_first(grid.g, group) + grp.group_count(grid.g, group) {
+            let opened = grp.set_expanded(grid.g, group, true)
+        }
+        group += 1usize
+    }
+    var found = 0usize
+    let visible = grp.visible_len(grid.g)
+    while found < visible && (grp.visible_is_group(grid.g, found) || grp.visible_row(grid.g, found) != grid.selected_row) { found += 1usize }
+    if found >= visible {
+        grid.has_position = false
+        ret
+    }
+    grid.has_position = true
+    grid.position = found
+    var page = grid.page_rows
+    if page == 0usize { page = 1usize }
+    let top = usize(grid.offset / grid.row_height)
+    if found < top {
+        grid.offset = f32(found) * grid.row_height
+    } else if found >= top + page {
+        grid.offset = f32(found + 1usize - page) * grid.row_height
+    }
 }
 
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
