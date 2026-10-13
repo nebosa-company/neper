@@ -933,10 +933,10 @@
       "group": "UI",
       "order": 273,
       "title": "pixel-perfect parity with the v3 grid: reference recordings, state catalogue, metric tokens, visual and behavioural diff ledger",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Requirement added by the owner 2026-10-13 (docs/grid.md section 1.1): the grid UI and behaviour must be a pixel-perfect equivalent of MTG Studio v3 (many visual inconsistencies in v5/cardgrid). Record mtgstudio.exe (or owner-supplied screenshots) per state at 100/125/150% DPI; extract metrics into one token table; compare Neper offline renders region by region; replay recorded event traces for keyboard, mouse, timing and focus rules; keep a ledger. Acceptance: every catalogue state within recorded tolerance; traces replay with identical outcomes; no open ledger rows. Blocks G006-G011 from scoring 1."
+      "evidence": "Requirement added by the owner 2026-10-13 (docs/grid.md section 1.1): the grid UI and behaviour must be a pixel-perfect equivalent of MTG Studio v3 (many visual inconsistencies in v5/cardgrid). Record mtgstudio.exe (or owner-supplied screenshots) per state at 100/125/150% DPI; extract metrics into one token table; compare Neper offline renders region by region; replay recorded event traces for keyboard, mouse, timing and focus rules; keep a ledger. Acceptance: every catalogue state within recorded tolerance; traces replay with identical outcomes; no open ledger rows. Blocks G006-G011 from scoring 1. Progress 2026-10-13: first reference state S01 recorded from mtgstudio.exe (150% DPI) next to v5/cardgrid, capture script and ledger in docs/grid-parity.md with 16 measured/observed differences (P001-P016: row pitch 28.5 vs 42 px, header 32 vs 42+18, zebra, selection, separators, indicator columns, insets, frame, navigator, footer, palette, scrollbar, legality painter); 100%/125% recordings, remaining catalogue states, token table and comparison fixtures still open."
     }
   ]
 }
