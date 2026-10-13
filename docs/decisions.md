@@ -40813,3 +40813,7 @@ In v3's collection grid the current row shows its editable cells' buttons withou
 ## D3958 — G012: group footers
 
 The header popup's Group Footers is live (it was listed disabled): `set_group_footers` on the grouping adds one more visible entry after the rows of each expanded leaf group, a header-flagged entry carrying `FOOTER_BIT` (`visible_is_footer`), so every caller that treats a group entry as not a data row (navigation, search, selection, counts) skips it unchanged. The grid draws it with the group's summaries under their columns and no label (B9-group-footers-v5.png: the Bonus group's footer shows its mean CMC, 1.1, under the last row). The popup entry is ticked while on and disabled with no grouping. ui_datagrid section 34 counts the footers (one per group), and that turning them off restores the list.
+
+## D3959 — G012: a ticked popup entry is its picture in a pale blue box
+
+Recorded from v3's header popup (B10-checked-entries-v3.png): a ticked entry with a picture (Group By Box, Footer) draws the picture inside a rounded box filled #CCE8FF with a #99D1FF line, not a tick; Group Footers is enabled and unticked there. The flat popup draws the same for entries that have a picture and are checkable and checked (B10-checked-entries-v5.png); entries without a picture keep the tick. Group Footers on v3 keeps its entry enabled whenever the grid is grouped, as here. The look of v3's group footer rows themselves was not recorded (they sit below the visible rows of every group in the pool and need a scroll the capture could not make).

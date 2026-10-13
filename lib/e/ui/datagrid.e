@@ -1034,6 +1034,7 @@ fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
             commands[n].checked = grid.group_box_visible
         }
         if grid.has_header_icons {
+            // (a ticked entry with a picture shows the picture in a pale blue box)
             // icon slots: 0 asc, 1 desc, 2 clear, 3 group field, 4 group box, 5 footer, 6 group footers, 8 chooser, 10 best fit
             var slot: usize = 99usize
             if k == 0usize { slot = 0usize }
@@ -1439,7 +1440,19 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
             let (pic_box, pic_box_error) = mem.alloc[widget.Node](a, 1usize)
             if pic_box_error != ok { ret (zero, control.TooLarge) }
             pic_box[0usize] = pic
-            cells[parts_n] = widget.aligned(0u64, .Center, .Center, slot, pic_box[0usize..1usize])
+            // v3 marks a ticked picture entry with a pale blue rounded box behind its picture
+            if c.checkable && c.checked {
+                var frame_style = control.sized_style(24.0, row_h - 2.0)
+                frame_style.background = paint.Brush { Solid: gl.rgb(0xCCE8FFu32) }
+                frame_style.border = style.Border { width: 1.0, color: gl.rgb(0x99D1FFu32) }
+                frame_style.radius = 3.0
+                let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+                if framed_error != ok { ret (zero, control.TooLarge) }
+                framed[0usize] = widget.aligned(0u64, .Center, .Center, frame_style, pic_box[0usize..1usize])
+                cells[parts_n] = widget.aligned(0u64, .Center, .Center, slot, framed[0usize..1usize])
+            } else {
+                cells[parts_n] = widget.aligned(0u64, .Center, .Center, slot, pic_box[0usize..1usize])
+            }
         } else if c.checked {
             let (tick, tick_error) = gl.mark(a, .Check, ink, ink, 9.0, 9.0)
             if tick_error != ok { ret (zero, tick_error) }
