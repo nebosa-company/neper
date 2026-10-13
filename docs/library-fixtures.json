@@ -643,12 +643,13 @@
    "module": "e.fmt.png",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 10,
-   "delivered": 10,
+   "catalogue": 12,
+   "delivered": 12,
    "pending": [],
    "fixtures": [
     "fmt_png",
     "fmt_png_adaptive",
+    "fmt_png_quant",
     "gfx_chart_png"
    ]
   },
@@ -1813,6 +1814,7 @@
     "fmt_jpeg",
     "fmt_png",
     "fmt_png_adaptive",
+    "fmt_png_quant",
     "fmt_webp",
     "gfx_core",
     "gfx_paint_plan",

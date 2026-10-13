@@ -98,6 +98,30 @@ colours) is the way to close that, and this benchmark does not use it yet. The
 times were taken on a host also running the lanes' builds, so single numbers
 carry the usual spread; the R ratios are far outside it.
 
+### PNG size (D2482)
+
+R's PNGs are about three times smaller than Neper's because R's `png()` writes an
+81-colour indexed file while the chart has 961 distinct colours (three inks at
+every anti-aliasing coverage level). What we tried on the first chart:
+
+| variant | bytes |
+|---|---:|
+| as written (RGBA, filter none, `.Balanced`) | 11,334 |
+| `.Best` | 11,096 |
+| declared opaque (RGB) | 10,993 |
+| opaque and `.Best` | 10,412 |
+| `encode_adaptive` (libpng's row-filter heuristic) | 14,431 - 15,082 |
+| quantized to 256 colours (`e.fmt.png.quantize`, lossy), indexed, `.Best` | 6,004 |
+| quantized to 128 / 64 / 32 colours | 4,997 / 4,376 / 4,045 |
+
+The largest channel error is 17 of 255 at 256 colours (Pillow's median cut: 16,
+6,047 bytes), 55 at 128 and 109 at 64 and below. The row-filter heuristic makes
+flat-colour pictures worse; filter `None` with a good match finder is best here,
+and a trial deflate of every row's five filters does not beat it. `chart_bench`
+prints `png_opaque_best` and `png_indexed` passes with the exact byte totals; the
+times it prints on a loaded host were 15 / 29 / 45 ms a chart (plain, opaque
+`.Best`, quantized `.Best`), so quantizing is for files that are kept or sent.
+
 ## Caveats
 
 - One machine, wall-clock time, on a host shared with other work: single runs

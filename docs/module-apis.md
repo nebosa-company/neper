@@ -24648,6 +24648,8 @@ fn inspect(source: io.Reader) -> (image.Info, err)
 fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
 fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
 fn encode_adaptive(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
+fn quantize(dst: []u8, value: image.ConstImage, max_colors: usize) -> (image.ConstImage, usize, err)
+fn encode_quantized(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, max_colors: usize, scratch: []u8) -> err
 ```
 
 PNG decoding supports the standard grayscale, RGB, indexed and alpha color types and
@@ -24657,6 +24659,12 @@ pixels and options. `encode` writes filter `None` for every row; `encode_adaptiv
 tRNS when an alpha is below 255, 1, 2, 4 or 8 bits by color count, filter `None`) and
 any other image with libpng's per-row filter heuristic (least sum of signed-absolute
 filtered bytes, ties to the lower filter). The pixels decode identically either way.
+`quantize` (D2482) is the one lossy step: it writes an `Rgba8` copy of an `Rgba8`/`Bgra8` image with at most
+`max_colors` colors by keeping the most frequent ones (ties to the smaller r | g << 8 | b << 16 | a << 24 value) and
+mapping every other color to the nearest kept one (squared distance over four channels, ties to the smaller value),
+refusing an image with more than 3,072 distinct colors (`TooLarge`); `encode_quantized` follows it with
+`encode_adaptive`, so the result is an indexed PNG. On an anti-aliased 360x240 chart (961 colors) 256 colors gave
+6,004 B against 11,334 B lossless at a largest channel error of 17.
 For PNG, JPEG and WebP, each zero dimension limit selects 16,384 and a zero pixel
 limit selects 16,777,216. Explicit nonzero limits can raise or lower these bounds;
 raising one field does not disable defaults in the others. Encoded input buffering

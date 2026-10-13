@@ -5279,6 +5279,9 @@ done
 # (C093) `e.gpu.cuda`: the driver's list, whatever this machine has.
 "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/gpu_cuda/src/main.e" "$repo" x64 linux "$test_build/gpu-cuda-selfhost" >/dev/null || { echo "gpu_cuda emission failed" >&2; exit 1; }
 "$test_build/gpu-cuda-selfhost" || { echo "a gpu_cuda check failed: exit $?" >&2; exit 1; }
+# (D2482) `e.fmt.png.quantize` and `encode_quantized` against a Python model of the colour-reduction rule.
+"$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png_quant/src/main.e" "$repo" x64 linux "$test_build/fmt-png-quant-selfhost" >/dev/null || { echo "fmt_png_quant emission failed" >&2; exit 1; }
+"$test_build/fmt-png-quant-selfhost" || { echo "a fmt_png_quant check failed: exit $?" >&2; exit 1; }
 gpu_inventory_run=$("$test_build/neper-self" run "$repo/tests/selfhost/fixtures/link/gpu_inventory/src/main.e" "$repo" x64 linux "$test_build/gpu-inventory-selfhost" --json --gpu-inventory "$repo/tests/selfhost/fixtures/link/gpu_inventory/inventory.txt")
 printf '%s\n' "$gpu_inventory_run" | grep -Fq '"record":"run","process_exit_code":0,"stdout":"gpu inventory ok\n"' || { printf '%s\n' "the mock GPU inventory failed: $gpu_inventory_run" >&2; exit 1; }
 [ "$("$test_build/gpu-inventory-selfhost")" = 'gpu inventory unconfigured ok' ]

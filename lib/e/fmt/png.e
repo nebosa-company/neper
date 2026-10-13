@@ -1032,3 +1032,176 @@ fn encode_core(writer: *io.Writer, value: image.ConstImage, options: EncodeOptio
     try flush_idat(&sink)
     ret ok
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Quantizing (D2482): a LOSSY step, separate from every encoder above, which stay byte-exact. A chart or any
+// anti-aliased flat-colour picture has a few hundred distinct colours (the blends of a handful of inks with the
+// background at every coverage level), too many for an indexed PNG; keeping the `max_colors` most frequent colours and
+// mapping every other colour to the nearest of them gives a palette image a quarter the size at a small error.
+
+const QUANT_SLOTS: usize = 4096usize
+const QUANT_DISTINCT_LIMIT: usize = 3072usize
+
+fn quant_hash(c: u32) -> usize {
+    ret usize((u64(c) * 2654435761u64) >> 20u64) & 4095usize
+}
+
+// The squared distance between two colours over all four channels.
+fn quant_distance(a: u32, b: u32) -> u64 {
+    var total = 0u64
+    var shift = 0u32
+    while shift < 32u32 {
+        let x = i64((a >> shift) & 255u32)
+        let y = i64((b >> shift) & 255u32)
+        let d = x - y
+        total += u64(d * d)
+        shift += 8u32
+    }
+    ret total
+}
+
+// Writes `value` into `dst` (Rgba8, tightly packed, `width * height * 4` bytes) with at most `max_colors` (1..=256)
+// distinct colours, and returns that image and the number of colours it has. An image that already has no more colours
+// than that is copied exactly. The kept colours are the most frequent ones (ties to the smaller r | g << 8 | b << 16 |
+// a << 24 value) and each other colour goes to the nearest kept one by squared distance over the four channels (ties
+// to the smaller value). Refused with Unsupported for another pixel format and TooLarge when the image has more than
+// 3,072 distinct colours (a photograph: quantize it with a median-cut tool, not this).
+fn quantize(dst: []u8, value: image.ConstImage, max_colors: usize) -> (image.ConstImage, usize, err) {
+    var none: image.ConstImage = zero
+    if value.format != .Rgba8 && value.format != .Bgra8 { ret (none, 0usize, Unsupported) }
+    if max_colors == 0usize || max_colors > 256usize { ret (none, 0usize, Invalid) }
+    let width = usize(value.width)
+    let height = usize(value.height)
+    if width == 0usize || height == 0usize { ret (none, 0usize, Invalid) }
+    let (_, size_error) = image.required_bytes(value.width, value.height, value.format, value.stride)
+    if size_error != ok { ret (none, 0usize, Invalid) }
+    if dst.len < width * height * 4usize { ret (none, 0usize, Invalid) }
+    // The distinct colours: an open-addressed table of slots, each holding its colour and the 1-based position of that
+    // colour in the dense list `dk` (with its count in `dc`); the selection and mapping below walk the dense list.
+    var slot_key: [4096]u32 = zero
+    var slot_at: [4096]u16 = zero
+    var dk: [3072]u32 = zero
+    var dc: [3072]u32 = zero
+    var dm: [3072]u32 = zero
+    var keep: [3072]bool = zero
+    var distinct = 0usize
+    var last_c = 0u32
+    var last_n = 0usize
+    var y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            let c = pixel_color(value, y * value.stride + x * 4usize)
+            var h = quant_hash(c)
+            var placed = false
+            // A run of one colour (the background) is counted without probing.
+            if c == last_c && last_n != 0usize {
+                dc[last_n - 1usize] += 1u32
+                placed = true
+            }
+            while !placed {
+                let at = usize(slot_at[h])
+                if at == 0usize {
+                    if distinct == QUANT_DISTINCT_LIMIT { ret (none, 0usize, TooLarge) }
+                    slot_key[h] = c
+                    dk[distinct] = c
+                    dc[distinct] = 1u32
+                    distinct += 1usize
+                    slot_at[h] = u16(distinct)
+                    last_c = c
+                    last_n = distinct
+                    placed = true
+                } else if slot_key[h] == c {
+                    dc[at - 1usize] += 1u32
+                    last_c = c
+                    last_n = at
+                    placed = true
+                } else {
+                    h = (h + 1usize) & 4095usize
+                }
+            }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    var palette = distinct
+    if distinct <= max_colors {
+        var i = 0usize
+        while i < distinct {
+            dm[i] = dk[i]
+            i += 1usize
+        }
+    } else {
+        palette = max_colors
+        var chosen = 0usize
+        while chosen < max_colors {
+            var best = distinct
+            var i = 0usize
+            while i < distinct {
+                if !keep[i] {
+                    if best == distinct || dc[i] > dc[best] || (dc[i] == dc[best] && dk[i] < dk[best]) { best = i }
+                }
+                i += 1usize
+            }
+            keep[best] = true
+            dm[best] = dk[best]
+            chosen += 1usize
+        }
+        var i = 0usize
+        while i < distinct {
+            if !keep[i] {
+                var near = distinct
+                var near_distance = 0u64
+                var t = 0usize
+                while t < distinct {
+                    if keep[t] {
+                        let d = quant_distance(dk[i], dk[t])
+                        if near == distinct || d < near_distance || (d == near_distance && dk[t] < dk[near]) {
+                            near = t
+                            near_distance = d
+                        }
+                    }
+                    t += 1usize
+                }
+                dm[i] = dk[near]
+            }
+            i += 1usize
+        }
+    }
+    var have_last = false
+    var last_q = 0u32
+    y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            let c = pixel_color(value, y * value.stride + x * 4usize)
+            if !(have_last && c == last_c) {
+                var h = quant_hash(c)
+                while usize(slot_at[h]) == 0usize || slot_key[h] != c { h = (h + 1usize) & 4095usize }
+                last_q = dm[usize(slot_at[h]) - 1usize]
+                last_c = c
+                have_last = true
+            }
+            let q = last_q
+            let at = (y * width + x) * 4usize
+            dst[at] = u8(q & 255u32)
+            dst[at + 1usize] = u8((q >> 8u32) & 255u32)
+            dst[at + 2usize] = u8((q >> 16u32) & 255u32)
+            dst[at + 3usize] = u8((q >> 24u32) & 255u32)
+            x += 1usize
+        }
+        y += 1usize
+    }
+    let (out, out_error) = image.make_const(dst[0..width * height * 4usize], value.width, value.height, width * 4usize, .Rgba8, value.alpha)
+    if out_error != ok { ret (none, 0usize, Invalid) }
+    ret (out, palette, ok)
+}
+
+// `quantize` into the caller's `scratch` (`width * height * 4` bytes, which must not be where `writer` grows: a growing
+// memory writer extends at the top of its arena), then the adaptive encoder: an indexed PNG of at most `max_colors`
+// colours. The pixels are changed (see `quantize`); an image that has no more colours than that is written exactly.
+fn encode_quantized(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, max_colors: usize, scratch: []u8) -> err {
+    let (flat, colors, quant_error) = quantize(scratch, value, max_colors)
+    if quant_error != ok { ret quant_error }
+    ret encode_adaptive(writer, flat, options)
+}
