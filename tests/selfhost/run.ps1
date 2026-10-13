@@ -2956,6 +2956,12 @@ $uiCodeEditorExtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $uiCodeEditorExtWritten -ne 'executable written') { throw 'ui_code_editor_ext emission failed' }
 & $uiCodeEditorExtPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_code_editor_ext check failed: exit $LASTEXITCODE" }
+# `e.ui.code_editor` services: 1,098 generated cases (registry-ID language packs against Pygments, suffix map read from the plan, wrap-aware motion over collapsed folds, per-view fold state through edits and undo, completion sources and refinement, revisioned diagnostics, bracket and JSON lints against Python's json) (D4401).
+$uiCodeEditorSvcPath = Join-Path $testBuild 'ui-code-editor-svc-selfhost.exe'
+$uiCodeEditorSvcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_code_editor_svc\src\main.e') $repo 'x64' 'windows' $uiCodeEditorSvcPath
+if ($LASTEXITCODE -ne 0 -or $uiCodeEditorSvcWritten -ne 'executable written') { throw 'ui_code_editor_svc emission failed' }
+& $uiCodeEditorSvcPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_code_editor_svc check failed: exit $LASTEXITCODE" }
 # `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
 $fmtLzmaPath = Join-Path $testBuild 'fmt-lzma-selfhost.exe'
 $fmtLzmaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_lzma\src\main.e') $repo 'x64' 'windows' $fmtLzmaPath
