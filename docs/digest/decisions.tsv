@@ -2475,3 +2475,11 @@ D3927	794	G012: grouping keeps the current card; the card pool has no delayed fi
 D3928	720	G012: a row in the card's own colour
 D5005	858	Call: the recents are kept in /recents; emergency numbers are named as such
 D3929	938	G012: the collection and deck views
+D5100	1037	C170 Secure scans a QR symbol from the Camera's frames
+D5101	1835	C171: attachments, a tool loop and provider error words in AI
+D5102	1941	C155: SFTP, direct-tcpip, keys in Secure, key rows and scrollback
+D5103	1517	C173, C151: many installed apps, removal, update, roll back, a hand-written app
+D5104	519	The test root and server certificate cover the three model providers
+D5105	1403	C164: accounts, ids, reactions and threads on the server, search, a second client
+D5106	424	C175: the clipboard holds 128 bytes
+D5107	679	C173: a prompt prefix and readable diagnostics on the build server
