@@ -1117,7 +1117,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if b0.height < 18.9 || b0.height > 19.1 || b1.y - b0.y < 18.9 || b1.y - b0.y > 19.1 { os.exit(366) }
     // inside the Cmc cell, clear of its digit: even row, selected row, odd row
     if !is_color(shot_l, px(b0.x + 300.0, b0.y + 9.0), gl.rgb(0xFFFFFFu32)) { os.exit(367) }
-    if !is_color(shot_l, px(b1.x + 300.0, b1.y + 9.0), gl.rgb(0xA6D2FFu32)) { os.exit(368) }
+    // a selection in a grid that has not the focus is the pale #D5E4EE; focused, #A6D2FF
+    if !is_color(shot_l, px(b1.x + 300.0, b1.y + 9.0), gl.rgb(0xD5E4EEu32)) { os.exit(368) }
     if !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xFFFFFFu32)) && !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xEFEFEFu32)) { os.exit(369) }
     // P006: the selected row carries a 1 px dark border on its top and bottom edge
     if !is_color(shot_l, px(b1.x + 300.0, b1.y + 0.5), gl.rgb(0x83878Bu32)) { os.exit(495) }

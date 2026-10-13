@@ -140,6 +140,10 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    menu_cursor: usize,
+    menu_count: usize,
+    menu_enabled: [24]bool,
+    menu_actions: [24]widget.Submit,
     hints: []const str,
     footer_label: str,
     quick_x: f32,
@@ -782,6 +786,7 @@ fn show_chooser(grid: *Grid, on: bool) { grid.chooser_open = on }
 
 fn on_menu_show(ctx: *void) -> err {
     let grid = mem.cast[*Grid](ctx)
+    grid.menu_cursor = 100usize
     grid.chooser_active = false
     grid.menu_open = true
     grid.menu_kind = MENU_CELL
@@ -1169,6 +1174,120 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 
 // ---- the popup menu in v3's look (flat #F0F0F0 with a grey frame, 16 px pictures, hover #0078D7) ----
 
+// The mnemonic of a caption: the character after the first '&' (0 when none).
+fn mnemonic_of(label: str) -> u8 {
+    var i = 0usize
+    while i + 1usize < label.len {
+        if label[i] == 38u8 { ret label[i + 1usize] }
+        i += 1usize
+    }
+    ret 0u8
+}
+
+fn upper_ascii(c: u8) -> u8 {
+    if c >= 97u8 && c <= 122u8 { ret c - 32u8 }
+    ret c
+}
+
+// A caption in the arena without its '&', and where the mnemonic stands (len when none).
+fn plain_caption(a: *mem.Arena, label: str) -> (str, usize, err) {
+    let (buf, buf_error) = mem.alloc[u8](a, label.len + 1usize)
+    if buf_error != ok { ret ("", 0usize, buf_error) }
+    var n = 0usize
+    var at = label.len
+    var i = 0usize
+    while i < label.len {
+        if label[i] == 38u8 && at == label.len && i + 1usize < label.len {
+            at = n
+            i += 1usize
+        } else {
+            buf[n] = label[i]
+            n += 1usize
+            i += 1usize
+        }
+    }
+    ret (buf[0usize..n], at, ok)
+}
+
+// The caption as a node: the mnemonic underlined (v3 draws &Add to Deck as Add to Deck).
+fn caption_node(a: *mem.Arena, grid: *Grid, label: str, ink: paint.Color) -> (widget.Node, err) {
+    let (plain, at, plain_error) = plain_caption(a, label)
+    if plain_error != ok { ret (zero, plain_error) }
+    if at >= plain.len {
+        let (whole, whole_error) = flat_text(a, grid, plain, ink)
+        ret (whole, whole_error)
+    }
+    let (before, before_error) = flat_text(a, grid, plain[0usize..at], ink)
+    if before_error != ok { ret (zero, before_error) }
+    let (mark, mark_error) = flat_text(a, grid, plain[at..at + 1usize], ink)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (after, after_error) = flat_text(a, grid, plain[at + 1usize..], ink)
+    if after_error != ok { ret (zero, after_error) }
+    var rule = control.sized_style(7.0, 1.0)
+    rule.background = paint.Brush { Solid: ink }
+    let (under, under_error) = mem.alloc[widget.Node](a, 2usize)
+    if under_error != ok { ret (zero, control.TooLarge) }
+    under[0usize] = mark
+    under[1usize] = widget.box(0u64, rule, zero)
+    let underlined = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), under[0usize..2usize])
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    if at > 0usize {
+        parts[n] = before
+        n += 1usize
+    }
+    parts[n] = underlined
+    n += 1usize
+    if at + 1usize < plain.len {
+        parts[n] = after
+        n += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..n]), ok)
+}
+
+// A mnemonic letter runs its entry.
+fn on_flat_key(ctx: *void) -> err {
+    let pick = mem.cast[*FlatPick](ctx)
+    if !pick.enabled { ret ok }
+    pick.grid.menu_open = false
+    if widget.submit_set(pick.action.invoke) { ret widget.fire_submit(pick.action) }
+    ret ok
+}
+
+// The cursor of the popup moved by the keyboard: down or up to the next enabled entry.
+fn on_flat_move(ctx: *void) -> err {
+    let step = mem.cast[*FlatStep](ctx)
+    let grid = step.grid
+    let n = grid.menu_count
+    if n == 0usize { ret ok }
+    var at = grid.menu_cursor
+    var tried = 0usize
+    while tried < n {
+        if step.down {
+            at = (at + 1usize) % n
+        } else {
+            at = (at + n - 1usize) % n
+        }
+        if grid.menu_enabled[at] { break }
+        tried += 1usize
+    }
+    grid.menu_cursor = at
+    ret ok
+}
+
+type FlatStep = struct { grid: *Grid, down: bool }
+
+// Enter runs the entry under the cursor.
+fn on_flat_enter(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    if grid.menu_cursor >= grid.menu_count || !grid.menu_enabled[grid.menu_cursor] { ret ok }
+    grid.menu_open = false
+    let action = grid.menu_actions[grid.menu_cursor]
+    if widget.submit_set(action.invoke) { ret widget.fire_submit(action) }
+    ret ok
+}
+
 // A hover and a pick of one entry (a pointer over it lights it, a tap runs it).
 type FlatPick = struct { grid: *Grid, action: widget.Submit, enabled: bool }
 
@@ -1209,6 +1328,8 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
         k += 1usize
     }
     // 6.4 logical px a character of the 10 pt face is near enough; the picture column is 27 wide
+    grid.menu_count = commands.len
+    if grid.menu_count > 24usize { grid.menu_count = 24usize }
     var width = 27.0 + f32(widest_label) * 6.6 + 24.0 + 22.0
     if widest_hint != 0usize { width += f32(widest_hint) * 6.6 + 16.0 }
     if width < 120.0 { width = 120.0 }
@@ -1224,12 +1345,17 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
         }
         let key = grid.key + MENU_KEY + 16u64 + u64(i)
         let state = control.control_state(grid.theme, key, c.enabled, false)
-        let lit = state.hovered && c.enabled
+        if state.hovered && c.enabled { grid.menu_cursor = i }
+        let lit = grid.menu_cursor == i && c.enabled
         var ink = gl.rgb(0x000000u32)
         if !c.enabled { ink = gl.rgb(0xA0A0A0u32) }
         if lit { ink = gl.rgb(0xFFFFFFu32) }
-        let (label, label_error) = flat_text(a, grid, c.label, ink)
+        let (label, label_error) = caption_node(a, grid, c.label, ink)
         if label_error != ok { ret (zero, label_error) }
+        if i < 24usize {
+            grid.menu_enabled[i] = c.enabled
+            grid.menu_actions[i] = c.action
+        }
         var parts_n = 0usize
         let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
         if cells_error != ok { ret (zero, control.TooLarge) }
@@ -1291,7 +1417,31 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
     if scoped_box_error != ok { ret (zero, control.TooLarge) }
     scoped_box[0usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 3.0, frame, one(a, column))
     var no_submit: widget.Submit = zero
-    column_box[0usize] = widget.scope(grid.key + MENU_KEY + 2u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: no_submit, cancel_action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss }, keys: zero }, style.defaults(), scoped_box[0usize..1usize])
+    // Down, Up, Enter, and a plain letter for each mnemonic
+    let (keys, keys_error) = mem.alloc[widget.Shortcut](a, commands.len + 3usize)
+    if keys_error != ok { ret (zero, control.TooLarge) }
+    let (steps, steps_error) = mem.alloc[FlatStep](a, 2usize)
+    if steps_error != ok { ret (zero, control.TooLarge) }
+    steps[0usize] = FlatStep { grid: grid, down: true }
+    steps[1usize] = FlatStep { grid: grid, down: false }
+    var plain_keys: input.Modifiers = zero
+    var key_n = 0usize
+    keys[key_n] = widget.Shortcut { key: 40u32, modifiers: plain_keys, action: widget.Submit { ctx: mem.cast[*void](&steps[0usize]), invoke: on_flat_move } }
+    key_n += 1usize
+    keys[key_n] = widget.Shortcut { key: 38u32, modifiers: plain_keys, action: widget.Submit { ctx: mem.cast[*void](&steps[1usize]), invoke: on_flat_move } }
+    key_n += 1usize
+    keys[key_n] = widget.Shortcut { key: 13u32, modifiers: plain_keys, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_flat_enter } }
+    key_n += 1usize
+    var mi = 0usize
+    while mi < commands.len {
+        let mnemonic = upper_ascii(mnemonic_of(commands[mi].label))
+        if mnemonic != 0u8 && commands[mi].enabled {
+            keys[key_n] = widget.Shortcut { key: u32(mnemonic), modifiers: plain_keys, action: widget.Submit { ctx: mem.cast[*void](&picks[mi]), invoke: on_flat_key } }
+            key_n += 1usize
+        }
+        mi += 1usize
+    }
+    column_box[0usize] = widget.scope(grid.key + MENU_KEY + 2u64, widget.Scope { traps_focus: false, shortcuts: keys[0usize..key_n], default_action: no_submit, cancel_action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss }, keys: zero }, style.defaults(), scoped_box[0usize..1usize])
     // keep it on the surface
     var left = x
     var top = y
@@ -3616,7 +3766,13 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
                 if owner == (grid.key & 65535u64) && dragged_spec < grid.all.len { drag_label = grid.all[dragged_spec].title }
             }
         }
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: lk.selected, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        // v3 paints the selected row of a grid that has not the focus in a pale blue-grey (#D5E4EE)
+        var selected_fill = lk.selected
+        if !grid.editing && !grid.chooser_active && mem.address_of(theme.runtime) != 0usize {
+            let (held, has_held) = widget.focused_key(theme.runtime)
+            if !has_held || !grid.has_selection || held != row_key(grid, grid.selected_row) { selected_fill = gl.rgb(0xD5E4EEu32) }
+        }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     if grid.preview_on {
         table_options.expandable = true
