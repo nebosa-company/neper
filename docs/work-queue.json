@@ -636,10 +636,10 @@
       "group": "NeperOS",
       "order": 161,
       "title": "NeperOS sensors remainder: a sensor server and drivers, the gyroscope, GPS and the location service",
-      "score": 0,
+      "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C131 (D2420): the settings server serves a scripted magnetometer and accelerometer trace, the Compass computes its heading from it with calibration and the model's declination. Acceptance: (1) a sensor server of its own (not the settings server) for the magnetometer, accelerometer and gyroscope, with a scripted source under QEMU and the Pixel's sensor hub later, delivering readings at a fixed rate through its own capability, a rate per client and a permission per sensor; (2) the figure-eight calibration run on live data with the accuracy it reaches shown; (3) a location service (GPS and network) shared by Compass and Maps (C130/C160) with the permission in Settings and a simulated provider; (4) a fixture on QEMU feeding a recorded sensor trace and checking the heading to a degree."
+      "evidence": "Split from C131 (D2420): the settings server serves a scripted magnetometer and accelerometer trace, the Compass computes its heading from it with calibration and the model's declination. Acceptance: (1) a sensor server of its own (not the settings server) for the magnetometer, accelerometer and gyroscope, with a scripted source under QEMU and the Pixel's sensor hub later, delivering readings at a fixed rate through its own capability, a rate per client and a permission per sensor; (2) the figure-eight calibration run on live data with the accuracy it reaches shown; (3) a location service (GPS and network) shared by Compass and Maps (C130/C160) with the permission in Settings and a simulated provider; (4) a fixture on QEMU feeding a recorded sensor trace and checking the heading to a degree. PART (D4000-D4007): sensor server with stamped requests, per-client stream rates and permissions; compass, compass_fix, compass_replay, level_stream, steps_replay, settings_permission boot rows pass (compass_replay flaked under load, passed quiet). Missing: real sensor hardware (the hub is scripted)."
     },
     {
       "id": "C162",
@@ -647,10 +647,10 @@
       "group": "NeperOS",
       "order": 162,
       "title": "NeperOS Level remainder: fast sensor stream, self-test, orientation modes, feedback",
-      "score": 0.25,
+      "score": 0.9,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C132 (D2421): Level filters the accelerometer and gyroscope of the sensor service with a complementary filter and keeps its calibration. Acceptance: (1) the sensors read at 50 Hz or better from the sensor server of C161 (the half-second tick of the scripted source is too slow for a real filter); (2) a Kalman filter in the library next to the complementary one, and a self-test on a flat surface that reports the sensor's noise and bias; (3) Level, Angle and an edge mode switched from the real orientation; (4) the readings in degrees, per cent slope and a ratio, and a beep or vibration when level; (5) a fixture feeding a recorded trace and checking the reading to a tenth of a degree. PART (D2444): e.control Kalman filter (kalman_new/start/step) and noise_bias self-test, checked against an independent 2x2-matrix implementation (control_kalman). Remaining: the 50 Hz stream from the sensor server, Level's modes, readings and feedback, a recorded-trace fixture."
+      "evidence": "Split from C132 (D2421): Level filters the accelerometer and gyroscope of the sensor service with a complementary filter and keeps its calibration. Acceptance: (1) the sensors read at 50 Hz or better from the sensor server of C161 (the half-second tick of the scripted source is too slow for a real filter); (2) a Kalman filter in the library next to the complementary one, and a self-test on a flat surface that reports the sensor's noise and bias; (3) Level, Angle and an edge mode switched from the real orientation; (4) the readings in degrees, per cent slope and a ratio, and a beep or vibration when level; (5) a fixture feeding a recorded trace and checking the reading to a tenth of a degree. PART (D2444): e.control Kalman filter (kalman_new/start/step) and noise_bias self-test, checked against an independent 2x2-matrix implementation (control_kalman). Remaining: the 50 Hz stream from the sensor server, Level's modes, readings and feedback, a recorded-trace fixture. PART: level, level_stream, level_selftest, level_kept, level_kept_again boot rows pass."
     },
     {
       "id": "C163",
@@ -658,10 +658,10 @@
       "group": "NeperOS",
       "order": 163,
       "title": "NeperOS Flashlight remainder: a finer timer, quick toggles, patterns, torch policy",
-      "score": 0,
+      "score": 0.8,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C133 (D2422): the Flashlight drives a simulated torch through the settings server. Acceptance: (1) a finer timer (a 10 ms tick or a timer capability in the kernel) so a Morse unit can be 100 ms and a strobe can reach 10 flashes a second, with a speed control; (2) a quick toggle from the status bar and the lock screen; (3) patterns kept as a list the user can add to; (4) the torch turned off when the camera opens (the camera server of C153) and on a timeout, and the flash-mode permission check; (5) a fixture that sends a message and checks the beat times against the unit."
+      "evidence": "Split from C133 (D2422): the Flashlight drives a simulated torch through the settings server. Acceptance: (1) a finer timer (a 10 ms tick or a timer capability in the kernel) so a Morse unit can be 100 ms and a strobe can reach 10 flashes a second, with a speed control; (2) a quick toggle from the status bar and the lock screen; (3) patterns kept as a list the user can add to; (4) the torch turned off when the camera opens (the camera server of C153) and on a timeout, and the flash-mode permission check; (5) a fixture that sends a message and checks the beat times against the unit. PART (D4014): flashlight, flashlight_beats, flashlight_strobe, flashlight_timer, flashlight_kept(_again), lock_torch, camera_torch and the new status_torch (status-bar Torch pill) pass; flashlight_timer flaked once under load."
     },
     {
       "id": "C164",
@@ -713,10 +713,10 @@
       "group": "NeperOS",
       "order": 168,
       "title": "NeperOS Steps remainder: background counting, history, profile, notifications",
-      "score": 0.3,
+      "score": 0.7,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total. Acceptance: (1) counting in the background at a low-power sensor rate from the sensor server (C161), with the run and walk classification shown; (2) the history of days, weeks and months in storage (C125), the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than a fixed figure per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture that replays a recorded accelerometer walk and checks the count within two per cent. PART (D2444): e.algo.pedometer distance_m and calories_kcal from height and weight (algo_pedometer_energy). Remaining: the Settings profile, background counting, history, notification and widget, the recorded-walk fixture. PART (D2449): the week's history kept in /steps and rolled forward by the days passed (e.algo.pedometer.roll_week; fixtures algo_pedometer_energy, steps_kept, steps_kept_again). Remaining: Settings profile, background counting, month view, notification/widget, recorded-walk fixture."
+      "evidence": "Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total. Acceptance: (1) counting in the background at a low-power sensor rate from the sensor server (C161), with the run and walk classification shown; (2) the history of days, weeks and months in storage (C125), the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than a fixed figure per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture that replays a recorded accelerometer walk and checks the count within two per cent. PART (D2444): e.algo.pedometer distance_m and calories_kcal from height and weight (algo_pedometer_energy). Remaining: the Settings profile, background counting, history, notification and widget, the recorded-walk fixture. PART (D2449): the week's history kept in /steps and rolled forward by the days passed (e.algo.pedometer.roll_week; fixtures algo_pedometer_energy, steps_kept, steps_kept_again). Remaining: Settings profile, background counting, month view, notification/widget, recorded-walk fixture. PART: steps, steps_kept(_again), steps_replay, steps_month pass. Missing: the home-screen step widget (built, reverted: it made the shell stall after an app returned; shell/compositor tick path suspected)."
     },
     {
       "id": "C169",
@@ -724,10 +724,10 @@
       "group": "NeperOS",
       "order": 169,
       "title": "NeperOS Blocks remainder: fast fall, held keys and drags, score board, sound",
-      "score": 0.35,
+      "score": 0.95,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C139 (D2428): Blocks has hold, ghost, kicks and a saved best score. Acceptance: (1) a finer timer (C163) so the fall reaches 20 rows a second at high levels, and auto-repeat on held buttons plus drags and swipes (the touch layer needs press, move and release events); (2) a score board of the best games and the last game kept in storage; (3) sound effects and music through e.audio (C166); (4) a fixture that plays a scripted sequence with the fixed seed and checks the score and the lines; the name stays Blocks (never Tetris). PART (D2445): the score board (five best games and the last game in /blocks, game-over card, fixtures blocks_board and blocks_board_again). Remaining: the finer timer, held keys and drags, sound, the scripted-sequence fixture."
+      "evidence": "Split from C139 (D2428): Blocks has hold, ghost, kicks and a saved best score. Acceptance: (1) a finer timer (C163) so the fall reaches 20 rows a second at high levels, and auto-repeat on held buttons plus drags and swipes (the touch layer needs press, move and release events); (2) a score board of the best games and the last game kept in storage; (3) sound effects and music through e.audio (C166); (4) a fixture that plays a scripted sequence with the fixed seed and checks the score and the lines; the name stays Blocks (never Tetris). PART (D2445): the score board (five best games and the last game in /blocks, game-over card, fixtures blocks_board and blocks_board_again). Remaining: the finer timer, held keys and drags, sound, the scripted-sequence fixture. PART (D4016): blocks, blocks_kept(_again), blocks_board(_again), blocks_script (score 286), blocks_drag, blocks_swipe, blocks_hold pass; Fall: manual restarts with the fixed seed, held keys repeat from the end of a frame. Missing: sound."
     },
     {
       "id": "C170",
@@ -779,10 +779,10 @@
       "group": "NeperOS",
       "order": 174,
       "title": "NeperOS Clock remainder: a background ringer with the app closed",
-      "score": 0,
+      "score": 0.95,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C145 (D2433): the Clock's alarms, timer and stopwatch persist in /clock. Acceptance: (1) a background service started by the kernel in the unified boot reads /clock, owns the schedule and, when an alarm or timer is due, raises a notification through the status server (C111) and starts the ringer even with another app or the home screen in front; (2) Snooze and Dismiss from the notification, written back to /clock; (3) a fixture on QEMU that sets an alarm, leaves the Clock, and sees it ring."
+      "evidence": "Split from C145 (D2433): the Clock's alarms, timer and stopwatch persist in /clock. Acceptance: (1) a background service started by the kernel in the unified boot reads /clock, owns the schedule and, when an alarm or timer is due, raises a notification through the status server (C111) and starts the ringer even with another app or the home screen in front; (2) Snooze and Dismiss from the notification, written back to /clock; (3) a fixture on QEMU that sets an alarm, leaves the Clock, and sees it ring. PART: clock_kept and clock_ring pass (ringing with the app closed via the background services process)."
     },
     {
       "id": "C175",
@@ -790,10 +790,10 @@
       "group": "NeperOS",
       "order": 175,
       "title": "NeperOS clipboard remainder: Paste in every field, a lifetime setting, clear on lock",
-      "score": 0.4,
+      "score": 0.8,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C148 (D2435): the clipboard holds text, Secure copies to it and AI pastes from it. Acceptance: (1) every ui.Field offers Paste when the clipboard holds text (a pill the keyboard draws, not a per-app one); (2) the lifetime (30 s by default) is a setting in Settings, and a fixture that checks a copy is gone after it; (3) the clipboard is cleared when its owner locks (Secure's lock) or leaves; (4) copy from Browser, Mail and Messages text. PART (D2443): a Paste key on the shared keyboard (shown beside space while the clipboard holds text, handled by ui.field_key); fixture clipboard_keyboard; secure fixture unaffected. Remaining: the lifetime as a Settings value, clear on lock, copy from Browser/Mail/Messages."
+      "evidence": "Split from C148 (D2435): the clipboard holds text, Secure copies to it and AI pastes from it. Acceptance: (1) every ui.Field offers Paste when the clipboard holds text (a pill the keyboard draws, not a per-app one); (2) the lifetime (30 s by default) is a setting in Settings, and a fixture that checks a copy is gone after it; (3) the clipboard is cleared when its owner locks (Secure's lock) or leaves; (4) copy from Browser, Mail and Messages text. PART (D2443): a Paste key on the shared keyboard (shown beside space while the clipboard holds text, handled by ui.field_key); fixture clipboard_keyboard; secure fixture unaffected. Remaining: the lifetime as a Settings value, clear on lock, copy from Browser/Mail/Messages. PART (D4015): clipboard, clipboard_keyboard, clipboard_expired and the new messages_copy, mail_copy, browser_copy pass. Missing: Copy takes plain text only, 32 bytes at most."
     },
     {
       "id": "C176",
@@ -801,10 +801,10 @@
       "group": "NeperOS",
       "order": 176,
       "title": "NeperOS settings recipients remainder: audio, fingerprint, radios, battery",
-      "score": 0,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C149 (D2436): notification permission is enforced at the status service. Acceptance: (1) an audio server (virtio-sound or a software mixer behind e.audio) that takes the media, ring and alarm volumes and Vibrate from the settings server, with a fixture on QEMU; (2) a fingerprint or biometric unlock path on the lock screen, or a recorded sensor in the test boots, honouring the Fingerprint switch; (3) Bluetooth and Hotspot recipients in the network stack (a link layer that can be switched), gated like Airplane mode; (4) a real battery provider posting to the status service, and per-app permissions (camera, location, storage) as values per app; (5) apps hold a notification capability so they can post as themselves through OP_POST_APP."
+      "evidence": "Split from C149 (D2436): notification permission is enforced at the status service. Acceptance: (1) an audio server (virtio-sound or a software mixer behind e.audio) that takes the media, ring and alarm volumes and Vibrate from the settings server, with a fixture on QEMU; (2) a fingerprint or biometric unlock path on the lock screen, or a recorded sensor in the test boots, honouring the Fingerprint switch; (3) Bluetooth and Hotspot recipients in the network stack (a link layer that can be switched), gated like Airplane mode; (4) a real battery provider posting to the status service, and per-app permissions (camera, location, storage) as values per app; (5) apps hold a notification capability so they can post as themselves through OP_POST_APP. PART: lock_fingerprint, settings_permission and the audio mixer/ringer/notification paths exercised by clock_ring pass. Missing: Bluetooth/Hotspot recipients, a real battery provider (status_server takes a recorded 78 %)."
     },
     {
       "id": "L164",

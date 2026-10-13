@@ -40249,3 +40249,6 @@ Grouping is a pass over the displayed rows, which `group_by` first sorts by the 
 **Lock, old and new.** `Events.can_edit(ctx, row, spec)` is asked before an editor opens; `false` answers `Locked` (Tab navigation and the tap path treat `Locked` like `NotEditable` and move on). `Events.value_changed(ctx, row, spec, old, new)` is raised before `cell_edited` with the text the cell showed and the text now committed. Between `begin_batch` and `end_batch` both are held back and `end_batch` raises one `batch_done(count)`, so a paste of many cells is one refilter and one re-sort.
 
 **Not here:** an undo stack, validation messages beyond `edit_invalid`, and a multi-cell paste helper.
+
+## D2472 — The kernel's fs-grant list after the lane C merge is one condition
+Merging lane C's grant line (the Flashlight, entry 31) onto master's (Mail, Wallet, Secure and the later entries) left two consecutive `if index == ... {` lines in `neperos/src/main.e`, one body; the file compiled only as a nested condition. The two are now one condition holding the union of the entries (master's list plus 31). No grant was removed.

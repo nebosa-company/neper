@@ -852,8 +852,7 @@ fn launch(frame: *a64.Frame) {
         // (C139) The Blocks app (entry 37) keeps the best score in /blocks.
         // (C163) The Flashlight (entry 31) keeps its saved patterns and speed in /flashlight.
         // (C158) The Mail app (entry 26) saves an attachment into /Downloads.
-        if index == 38usize || index == 26usize || index == 39usize || index == 19usize || index == 41usize || index == 32usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize {
-        if index == 38usize || index == 26usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize || index == 31usize {
+        if index == 38usize || index == 26usize || index == 39usize || index == 19usize || index == 41usize || index == 32usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize || index == 31usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)

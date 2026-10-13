@@ -2346,7 +2346,25 @@ D4104	1383	C155: saved hosts and trusted host keys on the disk; AES-GCM and the 
 D4105	667	C164: Chat over wss, presence, typing, delivered marks and history on the disk
 D4106	809	C173: the strict scan, its report and the app kit's level
 D4107	353	C173: a signed revocation list the device fetches
-D4108	1124	C151: a build server, a package streamed, the icon on the home screen
+D4108	1123	C151: a build server, a package streamed, the icon on the home screen
+D4000	1205	A receive with a deadline: the apps' finer timer, in the destination slot
+D4001	684	A stamped endpoint tells its receiver the sender's app
+D4002	1549	Sensor streams: the hub counts arrivals, the client reads in order
+D4003	419	The servers after the two network servers: entries 44 and 45; the trust store is entry 46
+D4004	218	The test harness holds and drags
+D4005	1076	Level: 50 Hz streams, two filters, a replay and a self-test
+D4006	1174	The torch has a timer and a policy of its own; the Flashlight beat is the receive deadline
+D4007	1731	The background services process: the audio mixer, the clock's ringer, notifications as an app
+D4008	931	Blocks: the fall is a clock, the touch layer has press, move and release
+D4009	811	The clipboard's lifetime is a setting; Secure's lock clears it
+D4010	1068	Steps: the hub counts, the app reads
+D4011	1025	Compass: live streams, a figure eight on the server, the location service
+D4012	675	Permissions per app: one bit a kind, kept by the sensor server, set from Settings only
+D4013	964	The lock screen has a torch toggle and a fingerprint pad; the Camera owns the LED
+D4014	519	The status bar has a Torch pill
+D4015	507	Copy in Messages, Mail and Browser
+D4016	733	Blocks practice starts a game afresh; a held key repeats from the end of its frame
+D4017	843	The idle timeout resets the home screen's arena before it draws the lock screen
 D3800	2001	C172: a spreadsheet is a grid in Document, read by `e.fmt.ooxml.sheet_grid`
 D3801	2086	C152, C172: a PDF page painted from its content stream (`e.fmt.pdf.page_painting`)
 D3802	1220	C172: Markdown tables in Document
@@ -2385,4 +2403,5 @@ D3912	2530	G006: datagrid bands, row indicator and navigator
 D3913	3955	G006: datagrid in-place editors and layout persistence
 D3914	2426	G006: datagrid preview row and pixel probes
 D3915	3378	G006: datagrid Tab navigation, column visibility and order
-D3916	1981	G007: single-row reposition, editors by kind, lock, old/new text and batches
+D3916	1982	G007: single-row reposition, editors by kind, lock, old/new text and batches
+D2472	432	The kernel's fs-grant list after the lane C merge is one condition
