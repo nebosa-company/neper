@@ -40465,3 +40465,5 @@ The sample's status line carries the load time (`loaded from SQLite in N ms`, me
 **Keyboard.** The current row follows the keyboard focus (`follow_focus`): Down, Up, Home, End and the page keys move the table's own focus, and the row that holds it is the current row (`row_picked` fires). Replayed from the v3 trace K1-K4 in `ui_datagrid` section 20. The Debug build of v3 stopped answering after End on 120,239 rows and its Page Down under load moved by two, so those two traces are the grid default, not recordings (`docs/grid-parity/traces.json` says which is which).
 
 **Limits met.** The sample needs a 64 MB frame arena and larger widget limits with 13 columns of real text; the window loop reported only "failed" (`lay_text` out of memory) until the arena was raised. `SCENE_BYTES` is 4 MB.
+
+The owner allowed changing the display scale, so the 100 % and 125 % recordings were made (D3925): `SystemParametersInfo(SPI_SETLOGICALDPIOVERRIDE, -2 / -1)` per user, apps restarted, whole screen captured for `mtgstudio.exe` and the sample, then the scale put back to 150 % (`0`). Row pitch is 19, 23.75 and 28.5 px at 100, 125 and 150 % in both programs.

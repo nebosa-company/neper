@@ -68,4 +68,8 @@ The sample uses v3's own card pool columns and widths in logical pixels, read fr
 confirmed against the recording at 150 % (each column boundary / 1.5): Favorite 23, ES 21, Legal 75, Name 150,
 Edition 70, Color 60, Type 150, Rarity 50, Cost 126, P/T 50, Text 255, CMC 50. Behaviour traces are in
 `docs/grid-parity/traces.json`; the 100 % and 125 % recordings need the display scale changed on the machine
-and are waiting for the owner (the capture and drive scripts take the process name and run unchanged).
+and were made with the owner's permission on 2026-10-13: the display scale was set to 100 % and 125 % through
+`SystemParametersInfo(SPI_SETLOGICALDPIOVERRIDE)` (relative steps -2 and -1, then 0 again to the machine's own
+150 %) and both programs recorded whole-screen: `S100-v3-card-pool-grouped.png`, `S100-v5-cardgrid.png`,
+`S125-v3-card-pool-grouped.png`, `S125-v5-cardgrid.png` (crops `S125-*-crop.png`). The row pitch is 19 px at 100 %
+and 23.75 px at 125 % in both programs (v3's lower grid; the sample's rows).
