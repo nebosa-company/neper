@@ -39172,3 +39172,7 @@ ui_datagrid section 33 replays the two halves of the Column window without a poi
 ## D2415 — G012: the current row of an in-place editing grid shows its editors' buttons
 
 In v3's collection grid the current row shows its editable cells' buttons without an editor open: a step arrow either side of a spin cell's number and the three dots at the end of a button cell. `decorate_editors` does that for the current row of a grid with `set_immediate_edit` (any row's plain or rule-formatted cell), from the column's `set_editor` kind (B8-current-row-editors-v5.png: Qty and Used with arrows, Buy at and Sell at with dots). The decorations are drawings; the editors open on a tap as before.
+
+## D2416 — G012: group footers
+
+The header popup's Group Footers is live (it was listed disabled): `set_group_footers` on the grouping adds one more visible entry after the rows of each expanded leaf group, a header-flagged entry carrying `FOOTER_BIT` (`visible_is_footer`), so every caller that treats a group entry as not a data row (navigation, search, selection, counts) skips it unchanged. The grid draws it with the group's summaries under their columns and no label (B9-group-footers-v5.png: the Bonus group's footer shows its mean CMC, 1.1, under the last row). The popup entry is ticked while on and disabled with no grouping. ui_datagrid section 34 counts the footers (one per group), and that turning them off restores the list.

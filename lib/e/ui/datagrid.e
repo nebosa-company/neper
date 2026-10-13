@@ -772,6 +772,8 @@ const CMD_ALIGN_LEFT: u8 = 15u8
 const CMD_ALIGN_CENTER: u8 = 16u8
 const CMD_ALIGN_RIGHT: u8 = 17u8
 const CMD_GROUP_SWAP: u8 = 18u8
+const CMD_GROUP_FOOTERS: u8 = 19u8
+const FOOTER_KEY_OFFSET: u64 = 1048576u64
 const CHIP_TAG: u64 = 4398046511104u64
 
 // Which menu: the application's cell menu, a header's, the group box's.
@@ -901,6 +903,10 @@ fn on_menu_pick(ctx: *void) -> err {
         grid.footer_visible = !grid.footer_visible
         ret ok
     }
+    if pick.id == CMD_GROUP_FOOTERS {
+        grp.set_group_footers(grid.g, !grid.g.group_footers)
+        ret ok
+    }
     if pick.id == CMD_REMOVE_COLUMN {
         if shown >= grid.specs.len { ret ok }
         grid.hidden[grid.origin[shown]] = true
@@ -1005,18 +1011,23 @@ fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
     // a header: v3's column popup
     let shown = grid.menu_spec
     let labels: [13]str = [13]str{ "Sort Ascending", "Sort Descending", "Clear Sorting", "Group By This Field", "Group By Box", "Footer", "Group Footers", "Remove This Column", "Field Chooser", "Alignment", "Best Fit", "Best Fit (all columns)", "" }
-    let ids: [13]u8 = [13]u8{ CMD_SORT_ASC, CMD_SORT_DESC, CMD_CLEAR_SORT, CMD_GROUP_FIELD, CMD_GROUP_BOX, CMD_FOOTER, 0u8, CMD_REMOVE_COLUMN, CMD_CHOOSER, CMD_ALIGN_MENU, CMD_BEST_FIT, CMD_BEST_FIT_ALL, 0u8 }
+    let ids: [13]u8 = [13]u8{ CMD_SORT_ASC, CMD_SORT_DESC, CMD_CLEAR_SORT, CMD_GROUP_FIELD, CMD_GROUP_BOX, CMD_FOOTER, CMD_GROUP_FOOTERS, CMD_REMOVE_COLUMN, CMD_CHOOSER, CMD_ALIGN_MENU, CMD_BEST_FIT, CMD_BEST_FIT_ALL, 0u8 }
     var k = 0usize
     while k < 12usize {
         picks[k] = MenuPick { grid: grid, id: ids[k], spec: shown }
         let separated = k == 3usize || k == 5usize || k == 7usize || k == 9usize || k == 11usize
         var enabled = ids[k] != 0u8
         if ids[k] == CMD_REMOVE_COLUMN && grid.specs.len < 2usize { enabled = false }
+        if ids[k] == CMD_GROUP_FOOTERS && grid.g.level_count == 0usize { enabled = false }
         commands[n] = menu_item(labels[k], widget.Submit { ctx: mem.cast[*void](&picks[k]), invoke: on_menu_pick }, enabled, separated, "")
         if ids[k] == CMD_ALIGN_MENU { commands[n].supporting = ">" }
         if ids[k] == CMD_FOOTER {
             commands[n].checkable = true
             commands[n].checked = grid.footer_visible
+        }
+        if ids[k] == CMD_GROUP_FOOTERS {
+            commands[n].checkable = true
+            commands[n].checked = grid.g.group_footers
         }
         if ids[k] == CMD_GROUP_BOX {
             commands[n].checkable = true
@@ -2694,6 +2705,7 @@ fn source_count(ctx: *void) -> usize {
 
 fn source_key(ctx: *void, index: usize) -> widget.Key {
     let grid = mem.cast[*Grid](ctx)
+    if grp.visible_is_footer(grid.g, index) { ret group_key(grid, grp.visible_group(grid.g, index)) + FOOTER_KEY_OFFSET }
     if grp.visible_is_group(grid.g, index) { ret group_key(grid, grp.visible_group(grid.g, index)) }
     ret row_key(grid, grp.visible_row(grid.g, index))
 }
@@ -2822,6 +2834,17 @@ fn decorate_editors(a: *mem.Arena, grid: *Grid, column: usize, row: usize, plain
 fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *widget.Node) -> err {
     let grid = mem.cast[*Grid](ctx)
     if column >= grid.specs.len { ret control.TooLarge }
+    if grp.visible_is_footer(grid.g, index) {
+        // the group's summaries under its rows, in the summary cells' look
+        let footer_spec = grid.specs[column]
+        var footer_text = ""
+        if footer_spec.summary >= 0 && usize(footer_spec.summary) < grid.g.specs.len {
+            let (summed, summed_error) = summary_text(a, footer_spec, grp.group_summary(grid.g, grp.visible_group(grid.g, index), usize(footer_spec.summary)))
+            if summed_error != ok { ret summed_error }
+            footer_text = summed
+        }
+        ret text_node(a, grid, footer_text, true, .Text, out)
+    }
     if grp.visible_is_group(grid.g, index) { ret group_cell(a, grid, grp.visible_group(grid.g, index), column, out) }
     let row = grp.visible_row(grid.g, index)
     if grid.editing && grid.edit_row == row && grid.edit_spec == column && grid.specs[column].choice && table.column_kind(grid.t, grid.specs[column].column) == table.Kind.Dict && table.dict_len(grid.t, grid.specs[column].column) <= 24usize && table.dict_len(grid.t, grid.specs[column].column) != 0usize {
