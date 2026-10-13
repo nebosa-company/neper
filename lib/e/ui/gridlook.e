@@ -48,7 +48,7 @@ fn v3() -> Look {
         row_height: 19.0,
         header_height: 21.0,
         pad: 4.0,
-        text_size: 10.6667,
+        text_size: 10.35,
         header: rgb(0xFFFFFFu32),
         header_hover: rgb(0xD9EBF9u32),
         header_line: rgb(0xC6C6C6u32),

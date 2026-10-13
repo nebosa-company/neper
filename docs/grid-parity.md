@@ -39,7 +39,7 @@ no-data, drag, conditional formatting and the deck and collection views are stil
 |---|---|---|---|
 | P001 | Row height is 1.5x v3's | 42 vs 28.5 px | closed by D2376 (pixel-probed, ui_datagrid s15) |
 | P002 | Header (and band) taller than v3's | 42+18 vs 32 px | closed by D2376 (pixel-probed, ui_datagrid s15) |
-| P003 | Text is larger than v3's (Segoe UI 9 pt in v3) | v5 glyphs ~1.35x taller | size set (v3 = Segoe UI 8 pt: 16 px em at 150 %, cap height 12 px); advance widths are GDI-hinted: see P021 |
+| P003 | Text is larger than v3's (Segoe UI 9 pt in v3) | v5 glyphs ~1.35x taller | closed by D2378: size 10.35 logical, header ink widths equal v3 ("Name" 38, "Edition" 44); body strings to be re-checked on the deck/collection views |
 | P004 | v3 stripes rows (#FFFFFF / #EFEFEF); v5 does not | | closed by D2376 (pixel-probed, ui_datagrid s15) |
 | P005 | v5 draws 2 px row separators; v3 has none between rows | | closed by D2376 (pixel-probed, ui_datagrid s15) |
 | P006 | Selected row: v3 #A6D2FF with a dark 1 px border and gradient ends; v5 flat tint, no border | | look applied (D2376); fixture probe pending |
@@ -56,7 +56,7 @@ no-data, drag, conditional formatting and the deck and collection views are stil
 | P018 | Group rows: v3 `[+]` box, "Field : value (Count: n)" on #F0F0F0 with a dotted focus rectangle; v5 `[+]` text prefix | | look applied (D2376); fixture probe pending |
 | P019 | Group box: v3 shows a panel with a draggable chip (field name + sort triangle) above the header; v5 has a button row | | open |
 | P020 | Footer: v3 #FFFFDD band with #E7EAEA summary cells under their columns ("Count: 120239"); v5 plain row | | look applied (D2376); fixture probe pending |
-| P021 | Text advances: v3 draws with GDI-hinted, integer advances ("Ach! Hans, Run!" ~133 px ink at 16 px em; linear advance 124 px); Neper shapes with linear advances, so strings are 0-8 % narrower | measured on S01 | open: shaper needs an integer/hinted advance mode |
+| P021 | Text advances: v3 draws with GDI-hinted, integer advances ("Ach! Hans, Run!" ~133 px ink at 16 px em; linear advance 124 px); Neper shapes with linear advances, so strings are 0-8 % narrower | measured on S01 | withdrawn (D2378): the hinted-advance theory came from a mismeasured string; linear advances at the right size match within 1 px |
 | P016 | Legality cell: v3 paints five coloured "S M E L V" badges; v5 shows no legality column | | open (G008 painter) |
 
 The metrics must move into the single token table the grid reads (grid.md 1.1) and every row above gets a
