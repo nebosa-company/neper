@@ -4634,6 +4634,18 @@ $gfxSvgTextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gfxSvgTextWritten -ne 'executable written') { throw 'gfx_svg_text emission failed' }
 & $gfxSvgTextPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_text check failed: exit $LASTEXITCODE" }
+# e.gfx.svg filter effects (D4503): 33 documents (blur, offset, flood, blend modes, composite operators, colour matrices, merge, drop shadow, units, regions, transform, clip and opacity) against a numpy model over cairosvg's raster of the source graphic.
+$gfxSvgFilterPath = Join-Path $testBuild 'gfx-svg-filter-selfhost.exe'
+$gfxSvgFilterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_filter\src\main.e') $repo 'x64' 'windows' $gfxSvgFilterPath -j 2
+if ($LASTEXITCODE -ne 0 -or $gfxSvgFilterWritten -ne 'executable written') { throw 'gfx_svg_filter emission failed' }
+& $gfxSvgFilterPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_filter check failed: exit $LASTEXITCODE" }
+# e.gfx.svg font selection and text on a path (D4504): family lists, nearest weight, textPath on a line, a semicircle and a quadratic, against Pillow's FreeType over Jost and Exo 2 at 8x.
+$gfxSvgTextFacesPath = Join-Path $testBuild 'gfx-svg-text-faces-selfhost.exe'
+$gfxSvgTextFacesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_text_faces\src\main.e') $repo 'x64' 'windows' $gfxSvgTextFacesPath -j 2
+if ($LASTEXITCODE -ne 0 -or $gfxSvgTextFacesWritten -ne 'executable written') { throw 'gfx_svg_text_faces emission failed' }
+& $gfxSvgTextFacesPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_text_faces check failed: exit $LASTEXITCODE" }
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 $textMathPath = Join-Path $testBuild 'text-math-selfhost.exe'
 $textMathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_math\src\main.e') $repo 'x64' 'windows' $textMathPath -j 2

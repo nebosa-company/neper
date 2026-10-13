@@ -17904,6 +17904,10 @@ error TooComplex
 fn size(text: str) -> (f32, f32, bool)
 fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color) -> err
 fn draw_with_font(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font) -> err
+type Face = struct { family: str, weight: u32, italic: bool, font: fonts.Font }
+fn draw_with_faces(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, faces: []const Face) -> err
+fn draw_filtered(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool, host: *sf.Host) -> err
+fn draw_filtered_faces(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, faces: []const Face, host: *sf.Host) -> err
 ```
 
 `draw` fits the document's viewBox (meet, centred) into `dest` and pushes balanced
@@ -17931,10 +17935,50 @@ in the mask add nothing, overlapping mask shapes add their pieces; masks inside 
 pattern are ignored). `draw_with_font` also sets `<text>` through `e.text.layout` in the
 given font (the caller registers it with the renderer): `x`, `y`, `dx`, `dy` (first value),
 `font-size`, `text-anchor`, `fill`, folded whitespace, entities, and `tspan` with its own
-`x`/`y` as a new chunk; `font-family`, `font-weight`, `text-decoration`, text on a path and
-per-glyph position lists are not read, and `draw` leaves `<text>` undrawn. Filters, an
-object-bounding-box mask or mask region, and a focal radial gradient with translucent stops
-are not drawn as specified.
+`x`/`y` as a new chunk; `text-decoration` and per-glyph position lists are not read, and `draw`
+leaves `<text>` undrawn. Since D4503: `draw_filtered` also draws an element with
+`filter="url(#id)"` through the `<filter>` element's primitives -- `feGaussianBlur`, `feOffset`,
+`feFlood`, `feBlend` (all sixteen modes), `feComposite` (over, in, out, atop, xor, arithmetic),
+`feColorMatrix`, `feMerge` and `feDropShadow`, with filter and primitive units, the filter region
+and primitive subregions, `color-interpolation-filters` (linearRGB by default) -- by rendering the
+element into a scratch target as big as its filter region, clipped to the host's target
+(`e.gfx.svg_filter.Host`), running the primitives over those pixels and drawing the result as an
+image of the host's renderer, before its clip, mask and opacity apply. An unknown filter draws
+nothing; filtered content inside a filtered element, a pattern, a marker or a mask replay is drawn
+unfiltered; `dest` must be in target pixels. Since D4504: `mask` honours `maskUnits`, `maskContentUnits`
+and `x`/`y`/`width`/`height` (box units measure the element), `draw_with_faces` and
+`draw_filtered_faces` choose a `Face` by `font-family` (a list, case-insensitive, quotes optional),
+nearest `font-weight` and `font-style`, and `<textPath>` sets its characters along the first subpath
+of the path its `href` names (`startOffset` in units or percent, `text-anchor`; a character whose middle
+is off the path is dropped). `e.gfx.scene` text now follows the whole linear part of a transform, so
+rotated runs draw. A focal radial gradient with translucent stops is not drawn as specified.
+
+### `e.gfx.svg_filter`
+
+```neper
+type Prim = struct { kind: u32, mode: u32, in1: i32, in2: i32, merge: [8]i32, merge_n: usize, linear: bool, x0: i32, y0: i32, x1: i32, y1: i32, p: [20]f32 }
+type Host = struct { renderer: *scene.Renderer, width: u32, height: u32, max_pixels: usize, textures: [16]scene.TextureId, texture_count: usize }
+type Slot = struct { id: scene.TextureId, bytes: []u8 }
+error TooComplex
+fn host(renderer: *scene.Renderer, width: u32, height: u32, max_pixels: usize) -> Host
+fn release(h: *Host) -> err
+fn run(a: *mem.Arena, prims: []const Prim, source: []const f32, w: usize, h: usize, out: []f32) -> err
+fn render_pixels(a: *mem.Arena, hst: *const Host, list: scene.DisplayList, w: usize, h: usize, registered: []const fonts.Font, out: []f32) -> err
+fn reserve(a: *mem.Arena, hst: *Host, w: usize, h: usize) -> (Slot, err)
+fn fill(hst: *const Host, slot: Slot, pixels: []const f32, w: usize, h: usize) -> err
+```
+
+The pixel half of SVG filter effects (L125, D4503). `e.gfx.svg` parses a `<filter>` into a program of
+`Prim`s (blur, offset, flood, blend, composite, colour matrix, merge, drop shadow, or a pass-through for a
+primitive it does not know) and renders the source graphic into a scratch target; `run` executes the program
+over premultiplied RGBA f32 buffers (linear light when `linear`, the three-box blur of the SVG text for a
+deviation of 2 pixels or more and an exact kernel below, transparent outside the region, results cut to their
+subregion). `Host` names the renderer a result texture is uploaded to (`reserve` takes the texture before the
+scratch so its pixels sit below what is reset; `fill` writes the result) and the scratch's pixel limit;
+`render_pixels` draws a display list into a target of its own renderer on the same device, so the caller's
+renderer and its damage tracking are untouched; `release` frees the host's textures after the scene using them
+has been rendered. Checked by `gfx_svg_filter` (33 documents against a numpy model over cairosvg's raster of
+the source graphic, mean difference at most 0.3 of 255).
 
 ### `e.gfx.curve`
 

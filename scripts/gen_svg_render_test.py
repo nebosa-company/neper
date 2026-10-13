@@ -122,6 +122,28 @@ MASK_CASES = [
      H + '<defs><mask id="m"><rect x="0" y="0" width="30" height="60" fill="#ffffff"/></mask></defs><rect x="0" y="0" width="60" height="60" fill="#ff8000" transform="translate(30 20)" mask="url(#m)"/></svg>',
      H + '<rect x="0" y="0" width="60" height="60" fill="#ff8000" transform="translate(30 20)"/></svg>',
      H + '<rect x="0" y="0" width="30" height="60" fill="#ffffff" transform="translate(30 20)"/></svg>'),
+    # D4504: the mask's region and content units. The element is the content (clipped to the region by
+    # a clip path cairosvg draws); the mask is the mask's own content in the element's user space.
+    ("mask region, userSpaceOnUse: only the part inside the rectangle shows",
+     H + '<defs><mask id="m" maskUnits="userSpaceOnUse" x="20" y="20" width="60" height="60"><rect x="0" y="0" width="100" height="100" fill="#ffffff"/></mask></defs><rect x="10" y="10" width="80" height="80" fill="#0000ff" mask="url(#m)"/></svg>',
+     H + '<defs><clipPath id="c"><rect x="20" y="20" width="60" height="60"/></clipPath></defs><rect x="10" y="10" width="80" height="80" fill="#0000ff" clip-path="url(#c)"/></svg>',
+     H + '<rect x="0" y="0" width="100" height="100" fill="#ffffff"/></svg>'),
+    ("mask region in box fractions: the left half of the element's box",
+     H + '<defs><mask id="m" x="0" y="0" width="0.5" height="1"><rect x="0" y="0" width="100" height="100" fill="#ffffff"/></mask></defs><rect x="10" y="10" width="80" height="80" fill="#c04000" mask="url(#m)"/></svg>',
+     H + '<defs><clipPath id="c"><rect x="10" y="10" width="40" height="80"/></clipPath></defs><rect x="10" y="10" width="80" height="80" fill="#c04000" clip-path="url(#c)"/></svg>',
+     H + '<rect x="0" y="0" width="100" height="100" fill="#ffffff"/></svg>'),
+    ("maskContentUnits objectBoundingBox: the content's rectangle is in box fractions",
+     H + '<defs><mask id="m" maskContentUnits="objectBoundingBox"><rect x="0" y="0" width="0.5" height="1" fill="#ffffff"/></mask></defs><rect x="20" y="20" width="60" height="60" fill="#00a000" mask="url(#m)"/></svg>',
+     H + '<rect x="20" y="20" width="60" height="60" fill="#00a000"/></svg>',
+     H + '<rect x="20" y="20" width="30" height="60" fill="#ffffff"/></svg>'),
+    ("maskContentUnits objectBoundingBox with a gradient across the box",
+     H + '<defs><linearGradient id="g"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></linearGradient><mask id="m" maskContentUnits="objectBoundingBox"><rect x="0" y="0" width="1" height="1" fill="url(#g)"/></mask></defs><rect x="15" y="25" width="70" height="50" fill="#a000a0" mask="url(#m)"/></svg>',
+     H + '<rect x="15" y="25" width="70" height="50" fill="#a000a0"/></svg>',
+     H + '<defs><linearGradient id="g"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></linearGradient></defs><rect x="15" y="25" width="70" height="50" fill="url(#g)"/></svg>'),
+    ("mask region and content units together on a translated element",
+     H + '<defs><mask id="m" x="0.25" y="0" width="0.5" height="1" maskContentUnits="objectBoundingBox"><rect x="0" y="0" width="1" height="1" fill="#ffffff"/></mask></defs><rect x="0" y="0" width="50" height="60" fill="#e08000" transform="translate(30 20)" mask="url(#m)"/></svg>',
+     H + '<defs><clipPath id="c"><rect x="12.5" y="0" width="25" height="60"/></clipPath></defs><rect x="0" y="0" width="50" height="60" fill="#e08000" transform="translate(30 20)" clip-path="url(#c)"/></svg>',
+     H + '<rect x="0" y="0" width="100" height="100" fill="#ffffff"/></svg>'),
 ]
 
 

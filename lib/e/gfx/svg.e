@@ -44,12 +44,30 @@
 // (attributes and content); a radial gradient's focal point (a stack of FOCAL_STEPS circles, opaque
 // stops and pad spread only); `mask` on a shape, group or `use` (the element is replayed under each
 // filled shape of the mask at that shape's luminance times alpha, a linear gradient as MASK_STRIPS
-// strips; strokes and text in the mask add nothing; no mask region); and `<text>` through
+// strips; strokes and text in the mask add nothing); and `<text>` through
 // `draw_with_font` over `e.text.layout` (`x`, `y`, `font-size`, `text-anchor`, `fill`, `tspan`
 // with its own position as a new chunk).
 //
-// Not drawn: filters, text through `draw` (no font), `font-family` and weight, text on a path. Their
-// elements are skipped whole (an unresolvable `url(...)` paint draws nothing).
+// Also (L125, D4503): filter effects through `draw_filtered`. An element with `filter="url(#id)"` is
+// measured (its object bounding box, by a throwaway walk under the inverse of its own transform),
+// its filter region taken in device pixels (`filterUnits`, default -10%/120% of the box; clipped to the
+// host's target), its source graphic rendered into a scratch target of that size, the `<filter>`'s
+// primitives parsed into `e.gfx.svg_filter` programs and run over the pixels, and the result drawn as an
+// image of the host's renderer before the element's own clip, mask and opacity (the opacity and clip
+// are lifted out of the source walk by `Style.filter_skip`). The primitives are `feGaussianBlur`,
+// `feOffset`, `feFlood`, `feBlend`, `feComposite`, `feColorMatrix`, `feMerge` and `feDropShadow`, with
+// `in`/`in2`/`result` names, `x`/`y`/`width`/`height` subregions, `primitiveUnits` and
+// `color-interpolation-filters`; any other `fe*` passes its input through. An unknown filter id draws
+// nothing; inside a replay (mask, pattern, marker) and in the source graphic of another filter the
+// element is drawn unfiltered.
+//
+// Also (L125, D4504): `mask` with `maskUnits`, `maskContentUnits` and `x`/`y`/`width`/`height` (the
+// region clips each mask piece; box units measure the element as for filters); `font-family`,
+// `font-weight` and `font-style` choose among the caller's `Face`s (`draw_with_faces`); and
+// `<textPath>` sets each character on the first subpath of the path its `href` names.
+//
+// Not drawn: text through `draw` (no font). The elements of a definition are skipped whole (an
+// unresolvable `url(...)` paint draws nothing).
 //
 // ponytail: mask pieces composite over each other where the mask's shapes overlap, and every piece
 // replays the masked element (cost: pieces x the element's commands, bounded by the scene's size).
@@ -71,7 +89,7 @@ error TooComplex
 
 const MAX_DEPTH: usize = 16usize
 
-type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color, fill_ref: str, stroke_ref: str, clip_ref: str, clip_ctm: geometry.Transform, dash: str, dash_offset: f32, even_odd: bool, marker_start: str, marker_mid: str, marker_end: str, mask_skip: bool, filter_skip: bool, font_size: f32, anchor: usize }
+type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color, fill_ref: str, stroke_ref: str, clip_ref: str, clip_ctm: geometry.Transform, dash: str, dash_offset: f32, even_odd: bool, marker_start: str, marker_mid: str, marker_end: str, mask_skip: bool, filter_skip: bool, font_size: f32, anchor: usize, font_family: str, font_weight: u32, font_italic: bool }
 // `layers` counts the opacity layers open around the frame's content (a frame that may open no
 // more has 4); `opens` says this frame's own element opened one, closed with its end tag.
 type Frame = struct { style: Style, ctm: geometry.Transform, layers: usize, opens: bool }
@@ -398,7 +416,81 @@ fn apply_style(tag: str, base: Style) -> Style {
     if has_anchor {
         if same(trim(anchor), "middle") { s.anchor = 1usize } else if same(trim(anchor), "end") { s.anchor = 2usize } else { s.anchor = 0usize }
     }
+    let (family, has_family) = prop(tag, "font-family")
+    if has_family { s.font_family = trim(family) }
+    let (weight, has_weight) = prop(tag, "font-weight")
+    if has_weight { s.font_weight = weight_of(trim(weight), s.font_weight) }
+    let (face_style, has_face_style) = prop(tag, "font-style")
+    if has_face_style { s.font_italic = same(trim(face_style), "italic") || same(trim(face_style), "oblique") }
     ret s
+}
+
+// A `font-weight` value: the keywords, a number 1..1000 (clamped), `bolder` and `lighter` a step from the parent.
+fn weight_of(value: str, parent: u32) -> u32 {
+    if same(value, "normal") { ret 400u32 }
+    if same(value, "bold") { ret 700u32 }
+    if same(value, "bolder") {
+        if parent < 600u32 { ret 700u32 }
+        ret 900u32
+    }
+    if same(value, "lighter") {
+        if parent > 500u32 { ret 400u32 }
+        ret 100u32
+    }
+    var at = 0usize
+    var v = 0.0f32
+    if read_number(value, &at, &v) {
+        if v < 1.0 { ret 1u32 }
+        if v > 1000.0 { ret 1000u32 }
+        ret u32(v)
+    }
+    ret parent
+}
+
+fn lower_byte(c: u8) -> u8 {
+    if c >= 65u8 && c <= 90u8 { ret c + 32u8 }
+    ret c
+}
+
+fn same_name(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var i = 0usize
+    while i < left.len {
+        if lower_byte(left[i]) != lower_byte(right[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// The face for `family` (a comma list, quotes optional; the first name any face has) at `weight` and `italic`:
+// among that family's faces the nearest weight, an italic mismatch costing more than any weight gap. Index 0
+// when no name matches.
+fn pick_face(faces: []const Face, family: str, weight: u32, italic: bool) -> usize {
+    var at = 0usize
+    while at < family.len {
+        var end = at
+        while end < family.len && family[end] != 44u8 { end += 1usize }
+        var name = trim(family[at..end])
+        if name.len >= 2usize && (name[0usize] == 34u8 || name[0usize] == 39u8) && name[name.len - 1usize] == name[0usize] { name = name[1usize..name.len - 1usize] }
+        var best = faces.len
+        var best_cost = 0u32
+        var i = 0usize
+        while i < faces.len {
+            if same_name(faces[i].family, name) {
+                var cost = 0u32
+                if faces[i].italic != italic { cost = 100000u32 }
+                if faces[i].weight > weight { cost += faces[i].weight - weight } else { cost += weight - faces[i].weight }
+                if best == faces.len || cost < best_cost {
+                    best = i
+                    best_cost = cost
+                }
+            }
+            i += 1usize
+        }
+        if best < faces.len { ret best }
+        at = end + 1usize
+    }
+    ret 0usize
 }
 
 fn tangent(radians: f32) -> f32 {
@@ -750,11 +842,14 @@ fn color_with(c: paint.Color, alpha: f32) -> paint.Color {
 
 // A masked element being replayed under each piece of its mask (D3701): the element's source, the
 // frame its parent drew it in, and where the replay walks from.
-type Job = struct { text: str, frame: Frame, dest: geometry.Rect, level: usize, anc: []const str }
+type Job = struct { text: str, frame: Frame, dest: geometry.Rect, level: usize, anc: []const str, region: geometry.Path, has_region: bool }
 // The document: its text and the viewport a percentage is taken of; `view` is the viewBox in the
 // root user space (what an opacity layer's bounds are), `job` is set while a mask's content is
 // walked, and `font` is what `<text>` is set in when the caller gave one.
-type Doc = struct { text: str, vw: f32, vh: f32, view: geometry.Rect, job: *Job, has_job: bool, font: fonts.Font, has_font: bool, base_anc: []const str, fit: *geometry.Transform, host: *sf.Host, has_host: bool }
+// A face a caller offers for `font-family`, `font-weight` and `font-style` to choose from (a family name
+// compared without case, a weight 1..1000, whether it is italic).
+type Face = struct { family: str, weight: u32, italic: bool, font: fonts.Font }
+type Doc = struct { text: str, vw: f32, vh: f32, view: geometry.Rect, job: *Job, has_job: bool, font: fonts.Font, has_font: bool, base_anc: []const str, fit: *geometry.Transform, host: *sf.Host, has_host: bool, faces: []const Face }
 // An element found by its `id`: its opening tag, its whole text and its body.
 type Found = struct { tag: str, start: usize, end: usize, body_start: usize, body_end: usize, found: bool }
 
@@ -2266,6 +2361,7 @@ fn mask_piece(a: *mem.Arena, b: *scene.Builder, plain: Doc, job: *Job, shape: ge
     try scene.push(b, save)
     try scene.push(b, scene.Command { Clip: scene.Clip { Path: shape } })
     if has_strip { try scene.push(b, scene.Command { Clip: scene.Clip { Path: strip } }) }
+    if job.has_region { try scene.push(b, scene.Command { Clip: scene.Clip { Path: job.region } }) }
     var frame = job.frame
     var value = k
     if value > 1.0 { value = 1.0 }
@@ -2370,11 +2466,69 @@ fn draw_masked(a: *mem.Arena, b: *scene.Builder, doc: Doc, parent: Frame, frame:
     if !m.found || !same(name_of(m.tag), "mask") { ret (false, ok) }
     var job_frame = parent
     job_frame.style.mask_skip = true
-    var job = Job { text: source, frame: job_frame, dest: dest, level: level, anc: anc }
+    // The mask's region and content units (L125, D4504): a region is given by `x`, `y`, `width`, `height` or
+    // `maskUnits` and clips every piece; box units and a content in box fractions need the element's box.
+    var content_ctm = frame.ctm
+    var region: geometry.Path = zero
+    var has_region = false
+    let (units_text, has_units) = attr(m.tag, "maskUnits")
+    let (content_text, has_content) = attr(m.tag, "maskContentUnits")
+    let (xs, has_x) = attr(m.tag, "x")
+    let (ys, has_y) = attr(m.tag, "y")
+    let (ws, has_w) = attr(m.tag, "width")
+    let (hs, has_h) = attr(m.tag, "height")
+    let region_given = has_x || has_y || has_w || has_h || has_units
+    let obb_region = !has_units || !same(trim(units_text), "userSpaceOnUse")
+    let obb_content = has_content && same(trim(content_text), "objectBoundingBox")
+    if region_given || obb_content {
+        let first = source.len > 0usize && source[0usize] == 60u8
+        var tag_text = source
+        if first { tag_text = source[1usize..tag_end(source, 0usize)] }
+        let (box, has_box, box_error) = measure_element(a, doc, parent, tag_text, source, dest, level)
+        if box_error != ok { ret (false, box_error) }
+        let box_ok = has_box && box.width > 0.0 && box.height > 0.0
+        if (obb_content || (region_given && obb_region)) && !box_ok { ret (true, ok) }
+        if region_given {
+            var rx = 0.0f32 - 0.1 * doc.vw
+            var ry = 0.0f32 - 0.1 * doc.vh
+            var rw = 1.2f32 * doc.vw
+            var rh = 1.2f32 * doc.vh
+            if obb_region {
+                var fx = 0.0f32 - 0.1
+                var fy = 0.0f32 - 0.1
+                var fw = 1.2f32
+                var fh = 1.2f32
+                if has_x { fx = fraction_of(xs, fx) }
+                if has_y { fy = fraction_of(ys, fy) }
+                if has_w { fw = fraction_of(ws, fw) }
+                if has_h { fh = fraction_of(hs, fh) }
+                rx = box.x + fx * box.width
+                ry = box.y + fy * box.height
+                rw = fw * box.width
+                rh = fh * box.height
+            } else {
+                if has_x { rx = length_value(xs, rx, doc.vw) }
+                if has_y { ry = length_value(ys, ry, doc.vh) }
+                if has_w { rw = length_value(ws, rw, doc.vw) }
+                if has_h { rh = length_value(hs, rh, doc.vh) }
+            }
+            if !(rw > 0.0) || !(rh > 0.0) { ret (true, ok) }
+            let (rect, rect_error) = rect_path(a, rx, ry, rw, rh, 0.0, 0.0)
+            if rect_error != ok { ret (false, rect_error) }
+            let (placed, placed_error) = place_path(a, rect, frame.ctm)
+            if placed_error != ok { ret (false, placed_error) }
+            region = placed
+            has_region = true
+        }
+        if obb_content {
+            content_ctm = geometry.transform_multiply(frame.ctm, geometry.transform_multiply(geometry.transform_translate(box.x, box.y), geometry.transform_scale(box.width, box.height)))
+        }
+    }
+    var job = Job { text: source, frame: job_frame, dest: dest, level: level, anc: anc, region: region, has_region: has_region }
     var inner = doc
     inner.job = &job
     inner.has_job = true
-    let content = Frame { style: apply_style(m.tag, default_style(parent.style.current)), ctm: frame.ctm, layers: MAX_LAYERS_SVG, opens: false }
+    let content = Frame { style: apply_style(m.tag, default_style(parent.style.current)), ctm: content_ctm, layers: MAX_LAYERS_SVG, opens: false }
     try walk(a, b, inner, doc.text[m.body_start..m.body_end], content, false, dest, level + 1usize)
     ret (true, ok)
 }
@@ -2814,6 +2968,34 @@ fn filter_prims(doc: Doc, f: Found, region: geometry.Rect, box: geometry.Rect, p
     ret n
 }
 
+// The element at `source`'s geometry box in the user space it establishes (the space inside its own
+// `transform`): the element is walked under the inverse of that transform, without filters, masks or layers,
+// and the display list's bounds taken. False when there is no geometry or the transform cannot be inverted.
+fn measure_element(a: *mem.Arena, doc: Doc, parent: Frame, tag: str, source: str, dest: geometry.Rect, level: usize) -> (geometry.Rect, bool, err) {
+    var local = geometry.transform_identity()
+    let (own_transform, has_own) = attr(tag, "transform")
+    if has_own {
+        let (inverse, invertible) = invert(parse_transform(own_transform))
+        if !invertible { ret (geometry.rect(0.0, 0.0, 0.0, 0.0), false, ok) }
+        local = inverse
+    }
+    var plain = doc
+    plain.has_host = false
+    var measure = parent
+    measure.ctm = local
+    measure.layers = MAX_LAYERS_SVG
+    measure.style.filter_skip = true
+    measure.style.mask_skip = true
+    measure.style.opacity = 1.0
+    let (measured, measured_error) = scene.builder(a, 4096usize)
+    if measured_error != ok { ret (geometry.rect(0.0, 0.0, 0.0, 0.0), false, measured_error) }
+    var mb = measured
+    let walked = walk(a, &mb, plain, source, measure, false, dest, level + 1usize)
+    if walked != ok { ret (geometry.rect(0.0, 0.0, 0.0, 0.0), false, walked) }
+    let (box, has_box) = list_bounds(scene.finish(&mb))
+    ret (box, has_box, ok)
+}
+
 // Draw the element at `source` (its tag and everything inside it) through the filter `filter_id`. The first
 // answer is false when it cannot be filtered here (a replay, no host, no room) and the caller draws it plain; an
 // unknown filter, or an empty box for box units, draws nothing, as the specification says.
@@ -2826,26 +3008,10 @@ fn draw_filtered_element(a: *mem.Arena, b: *scene.Builder, doc: Doc, parent: Fra
     let (fit_inverse, fit_ok) = invert(*doc.fit)
     if !fit_ok { ret (true, ok) }
     let mark = mem.mark(a)
-    // The element's geometry in the user space it establishes: measured under the inverse of its own transform.
-    var local = geometry.transform_identity()
-    let (own_transform, has_own) = attr(tag, "transform")
-    if has_own {
-        let (inverse, invertible) = invert(parse_transform(own_transform))
-        if !invertible { ret (true, ok) }
-        local = inverse
-    }
     var plain = doc
     plain.has_host = false
-    var measure = parent
-    measure.ctm = local
-    measure.layers = MAX_LAYERS_SVG
-    measure.style.filter_skip = true
-    measure.style.opacity = 1.0
-    let (measured, measured_error) = scene.builder(a, 4096usize)
-    if measured_error != ok { ret (false, measured_error) }
-    var mb = measured
-    try walk(a, &mb, plain, source, measure, false, dest, level + 1usize)
-    let (box, has_box) = list_bounds(scene.finish(&mb))
+    let (box, has_box, box_error) = measure_element(a, doc, parent, tag, source, dest, level)
+    if box_error != ok { ret (false, box_error) }
     var obb = true
     let (units, has_units) = attr(f.tag, "filterUnits")
     if has_units && same(trim(units), "userSpaceOnUse") { obb = false }
@@ -2923,7 +3089,18 @@ fn draw_filtered_element(a: *mem.Arena, b: *scene.Builder, doc: Doc, parent: Fra
     try scene.push(&sb, restore)
     let (pixels, pixels_error) = mem.alloc[f32](a, w * h * 4usize)
     if pixels_error != ok { ret (false, pixels_error) }
-    try sf.render_pixels(a, host, scene.finish(&sb), w, h, doc.font, doc.has_font, pixels)
+    var registered: [16]fonts.Font = zero
+    var nreg = 0usize
+    if doc.faces.len > 0usize {
+        while nreg < doc.faces.len && nreg < 16usize {
+            registered[nreg] = doc.faces[nreg].font
+            nreg += 1usize
+        }
+    } else if doc.has_font {
+        registered[0usize] = doc.font
+        nreg = 1usize
+    }
+    try sf.render_pixels(a, host, scene.finish(&sb), w, h, registered[0usize..nreg], pixels)
     var prim_obb = false
     let (prim_units, has_prim_units) = attr(f.tag, "primitiveUnits")
     if has_prim_units && same(trim(prim_units), "objectBoundingBox") { prim_obb = true }
@@ -3020,7 +3197,7 @@ fn size(text: str) -> (f32, f32, bool) {
 }
 
 fn default_style(current: paint.Color) -> Style {
-    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity(), dash: "", dash_offset: 0.0, even_odd: false, marker_start: "", marker_mid: "", marker_end: "", mask_skip: false, filter_skip: false, font_size: 16.0, anchor: 0usize }
+    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity(), dash: "", dash_offset: 0.0, even_odd: false, marker_start: "", marker_mid: "", marker_end: "", mask_skip: false, filter_skip: false, font_size: 16.0, anchor: 0usize, font_family: "", font_weight: 400u32, font_italic: false }
 }
 
 // Draw `text` into `b`, fitted to `dest`. `current` is what `currentColor` and an unset
@@ -3047,20 +3224,41 @@ fn draw_with_font(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Re
 // freed by `svg_filter.release` after the scene has been rendered. Each filtered element takes working
 // memory from `a` only while it is processed.
 fn draw_filtered(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool, host: *sf.Host) -> err {
-    ret draw_core(a, b, text, dest, current, font, has_font, host, true)
+    var none: [1]Face = zero
+    ret draw_core(a, b, text, dest, current, font, has_font, none[0usize..0usize], host, true)
+}
+
+// As `draw_filtered`, with `<text>` set in the face its `font-family`, `font-weight` and `font-style` choose
+// from `faces` (L125, D4504): the family names are tried in order without regard to case, the nearest weight
+// of the matching family wins (an italic mismatch costs more than any weight gap), and with no match the first
+// face is used; the other faces are the fallbacks for glyphs the chosen one lacks. The caller registers every
+// face's font with the renderer.
+fn draw_filtered_faces(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, faces: []const Face, host: *sf.Host) -> err {
+    var font: fonts.Font = zero
+    if faces.len > 0usize { font = faces[0usize].font }
+    ret draw_core(a, b, text, dest, current, font, faces.len > 0usize, faces, host, true)
+}
+
+// Text on faces without filter effects.
+fn draw_with_faces(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, faces: []const Face) -> err {
+    var nowhere: sf.Host = zero
+    var font: fonts.Font = zero
+    if faces.len > 0usize { font = faces[0usize].font }
+    ret draw_core(a, b, text, dest, current, font, faces.len > 0usize, faces, &nowhere, false)
 }
 
 fn draw_with(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool) -> err {
     var nowhere: sf.Host = zero
-    ret draw_core(a, b, text, dest, current, font, has_font, &nowhere, false)
+    var none: [1]Face = zero
+    ret draw_core(a, b, text, dest, current, font, has_font, none[0usize..0usize], &nowhere, false)
 }
 
-fn draw_core(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool, host: *sf.Host, has_host: bool) -> err {
+fn draw_core(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool, faces: []const Face, host: *sf.Host, has_host: bool) -> err {
     let (vw, vh, has_size) = size(text)
     var nothing: [1]str = zero
     var blank: Job = zero
     var fit = geometry.transform_identity()
-    let doc = Doc { text: text, vw: vw, vh: vh, view: view_of(text), job: &blank, has_job: false, font: font, has_font: has_font, base_anc: nothing[0usize..0usize], fit: &fit, host: host, has_host: has_host }
+    let doc = Doc { text: text, vw: vw, vh: vh, view: view_of(text), job: &blank, has_job: false, font: font, has_font: has_font, base_anc: nothing[0usize..0usize], fit: &fit, host: host, has_host: has_host, faces: faces }
     let first = Frame { style: default_style(current), ctm: geometry.transform_identity(), layers: 0usize, opens: false }
     ret walk(a, b, doc, text, first, true, dest, 0usize)
 }
@@ -3119,6 +3317,186 @@ fn push_text(sb: *str.Builder, piece: str, last_space: *bool) -> err {
     ret ok
 }
 
+// The layout style for `s`: the face `font-family`, `font-weight` and `font-style` choose from the caller's
+// faces first (as `doc.font` when there are none), then the other faces as fallbacks for missing glyphs.
+fn text_style(doc: Doc, s: Style, buf: []layout.FontChoice) -> layout.Style {
+    var n = 1usize
+    buf[0usize] = layout.FontChoice { font: doc.font, size: s.font_size }
+    if doc.faces.len > 0usize {
+        let pick = pick_face(doc.faces, s.font_family, s.font_weight, s.font_italic)
+        buf[0usize] = layout.FontChoice { font: doc.faces[pick].font, size: s.font_size }
+        var f = 0usize
+        while f < doc.faces.len && n < buf.len {
+            if f != pick {
+                buf[n] = layout.FontChoice { font: doc.faces[f].font, size: s.font_size }
+                n += 1usize
+            }
+            f += 1usize
+        }
+    }
+    ret layout.Style { fonts: buf[0usize..n], language: "", line_height: 0.0 }
+}
+
+// The advance width of `content` as one line; its layout is not kept.
+fn text_width(a: *mem.Arena, content: str, style: layout.Style, options: layout.Options) -> (f32, err) {
+    if content.len == 0usize { ret (0.0, ok) }
+    let m = mem.mark(a)
+    let (laid, laid_error) = layout.layout(a, content, style, options)
+    if laid_error != ok { ret (0.0, laid_error) }
+    let w = laid.bounds.width
+    mem.reset(a, m)
+    ret (w, ok)
+}
+
+// The advance of `content`, trailing spaces counted at `space` each.
+fn prefix_width(a: *mem.Arena, content: str, space: f32, style: layout.Style, options: layout.Options) -> (f32, err) {
+    var end = content.len
+    var spaces = 0usize
+    while end > 0usize && content[end - 1usize] == 32u8 {
+        end -= 1usize
+        spaces += 1usize
+    }
+    let (base, base_error) = text_width(a, content[0usize..end], style, options)
+    if base_error != ok { ret (0.0, base_error) }
+    ret (base + f32(spaces) * space, ok)
+}
+
+// `<textPath>` (L125, D4504): each character of `content` is set on the path the element's `href` names, its
+// advance taken from the shaped prefix (so kerning counts), centred on the arc length where its middle falls
+// (from `startOffset`, shifted by `text-anchor`) and turned to the path's tangent there; a character whose
+// middle is off either end of the path is not drawn. The first subpath of the path is used, flattened.
+fn draw_path_text(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, tp_tag: str, content: str) -> err {
+    if !doc.has_font { ret ok }
+    let s = apply_style(tp_tag, frame.style)
+    let fill_alpha = s.opacity * s.fill_opacity
+    if !s.fill_on || !(fill_alpha > 0.0) || !(s.font_size > 0.0) { ret ok }
+    let (plain_ref, has_plain) = attr(tp_tag, "href")
+    let (linked_ref, has_linked) = attr(tp_tag, "xlink:href")
+    var reference = plain_ref
+    if !has_plain { reference = linked_ref }
+    let linked_element = find_by_id(doc.text, url_id(reference))
+    if !linked_element.found { ret ok }
+    let (shape, has_shape, shape_error) = shape_path(a, doc, linked_element.tag, name_of(linked_element.tag))
+    if shape_error != ok { ret shape_error }
+    if !has_shape { ret ok }
+    var place = frame.ctm
+    let (transform_text, has_transform) = attr(linked_element.tag, "transform")
+    if has_transform { place = geometry.transform_multiply(frame.ctm, parse_transform(transform_text)) }
+    let (flat, flat_error) = flat_of(a, shape)
+    if flat_error != ok { ret flat_error }
+    let (pts, pts_error) = mem.alloc[geometry.Point](a, flat.points.len + 1usize)
+    if pts_error != ok { ret pts_error }
+    let (lens, lens_error) = mem.alloc[f32](a, flat.points.len + 1usize)
+    if lens_error != ok { ret lens_error }
+    var n = 0usize
+    var pi = 0usize
+    var vi = 0usize
+    var first: geometry.Point = zero
+    var done = false
+    while vi < flat.verbs.len && !done {
+        let verb = flat.verbs[vi]
+        if verb == .Move {
+            if n > 0usize {
+                done = true
+            } else {
+                pts[0usize] = flat.points[pi]
+                first = pts[0usize]
+                n = 1usize
+                pi += 1usize
+            }
+        } else if verb == .Line {
+            pts[n] = flat.points[pi]
+            n += 1usize
+            pi += 1usize
+        } else {
+            if n > 0usize {
+                pts[n] = first
+                n += 1usize
+            }
+            done = true
+        }
+        vi += 1usize
+    }
+    if n < 2usize { ret ok }
+    lens[0usize] = 0.0
+    var k = 1usize
+    while k < n {
+        lens[k] = lens[k - 1usize] + geometry.distance(pts[k - 1usize], pts[k])
+        k += 1usize
+    }
+    let total = lens[n - 1usize]
+    if !(total > 0.0) { ret ok }
+    // The text: whitespace folded, entities decoded.
+    let (made, builder_error) = str.builder(a, 0usize)
+    if builder_error != ok { ret builder_error }
+    var sb = made
+    var last_space = true
+    try push_text(&sb, content, &last_space)
+    var text = str.done(&sb)
+    if text.len > 0usize && text[text.len - 1usize] == 32u8 { text = text[0usize..text.len - 1usize] }
+    if text.len == 0usize { ret ok }
+    var choices: [8]layout.FontChoice = zero
+    let style = text_style(doc, s, choices[0usize..8usize])
+    let options = layout.Options { width: 0.0, max_lines: 0u32, align: layout.Align.Start, wrap: layout.Wrap.None, ellipsis: "", notdef: true }
+    // A layout's width leaves trailing spaces out, so a prefix's is its text before them plus that many spaces.
+    let (nn, nn_error) = text_width(a, "nn", style, options)
+    if nn_error != ok { ret nn_error }
+    let (n_n, n_n_error) = text_width(a, "n n", style, options)
+    if n_n_error != ok { ret n_n_error }
+    let space_advance = n_n - nn
+    let (whole, whole_error) = prefix_width(a, text, space_advance, style, options)
+    if whole_error != ok { ret whole_error }
+    var begin = 0.0f32
+    let (offset_text, has_offset) = attr(tp_tag, "startOffset")
+    if has_offset {
+        var at = 0usize
+        var v = 0.0f32
+        if read_number(offset_text, &at, &v) {
+            if at < offset_text.len && offset_text[at] == 37u8 { begin = total * v / 100.0 } else { begin = v }
+        }
+    }
+    if s.anchor == 1usize { begin = begin - whole / 2.0 }
+    if s.anchor == 2usize { begin = begin - whole }
+    let save: scene.Command = .Save
+    let restore: scene.Command = .Restore
+    var i0 = 0usize
+    while i0 < text.len {
+        var i1 = i0 + 1usize
+        while i1 < text.len && (text[i1] & 192u8) == 128u8 { i1 += 1usize }
+        let (before, before_error) = prefix_width(a, text[0usize..i0], space_advance, style, options)
+        if before_error != ok { ret before_error }
+        let (after, after_error) = prefix_width(a, text[0usize..i1], space_advance, style, options)
+        if after_error != ok { ret after_error }
+        let advance = after - before
+        let centre = begin + before + advance / 2.0
+        if text[i0] != 32u8 && centre >= 0.0 && centre <= total {
+            var seg = 1usize
+            while seg + 1usize < n && lens[seg] < centre { seg += 1usize }
+            let span = lens[seg] - lens[seg - 1usize]
+            var t = 0.0f32
+            if span > 0.0 { t = (centre - lens[seg - 1usize]) / span }
+            let p0 = pts[seg - 1usize]
+            let p1 = pts[seg]
+            let px = p0.x + (p1.x - p0.x) * t
+            let py = p0.y + (p1.y - p0.y) * t
+            let angle = math.atan2[f32](p1.y - p0.y, p1.x - p0.x)
+            let (laid, laid_error) = layout.layout(a, text[i0..i1], style, options)
+            if laid_error != ok { ret laid_error }
+            if laid.lines.len == 1usize {
+                let (held, held_error) = mem.alloc[layout.Layout](a, 1usize)
+                if held_error != ok { ret held_error }
+                held[0usize] = laid
+                try scene.push(b, save)
+                try scene.push(b, scene.Command { Transform: geometry.transform_multiply(place, geometry.transform_multiply(geometry.transform_translate(px, py), geometry.transform_rotate(angle))) })
+                try scene.push(b, scene.Command { Text: scene.DrawText { layout: &held[0usize], origin: pt(0.0 - advance / 2.0, 0.0 - laid.lines[0usize].baseline), brush: paint.Brush { Solid: color_with(s.fill, fill_alpha) } } })
+                try scene.push(b, restore)
+            }
+        }
+        i0 = i1
+    }
+    ret ok
+}
+
 // Draw one `<text>` element: its chunks, each a one-line layout set at its anchor.
 fn draw_text(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, tag: str, body: str) -> err {
     if !doc.has_font { ret ok }
@@ -3165,6 +3543,16 @@ fn draw_text(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, tag: str,
                 last_space = true
             }
         }
+        if begins(inner, 0usize, "textPath") {
+            // Text on a path: its content is set along the path the element names and is not a chunk.
+            var close = find(body, end + 1usize, "</textPath")
+            try draw_path_text(a, b, doc, frame, inner, body[end + 1usize..close])
+            var resume = close
+            if close < body.len { resume = tag_end(body, close) + 1usize }
+            from = resume
+            i = resume
+            continue
+        }
         from = end + 1usize
         i = end + 1usize
     }
@@ -3173,9 +3561,8 @@ fn draw_text(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, tag: str,
         chunks[count] = Chunk { x: pending_x, y: pending_y, text: tail }
         count += 1usize
     }
-    var choices: [1]layout.FontChoice = zero
-    choices[0usize] = layout.FontChoice { font: doc.font, size: s.font_size }
-    let style = layout.Style { fonts: choices[0usize..1usize], language: "", line_height: 0.0 }
+    var choices: [8]layout.FontChoice = zero
+    let style = text_style(doc, s, choices[0usize..8usize])
     let options = layout.Options { width: 0.0, max_lines: 0u32, align: layout.Align.Start, wrap: layout.Wrap.None, ellipsis: "", notdef: true }
     let save: scene.Command = .Save
     let restore: scene.Command = .Restore

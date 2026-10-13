@@ -4131,6 +4131,16 @@ gfx_svg_text_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$gfx_svg_text_written" = 'executable written' ]
 chmod +x "$test_build/gfx-svg-text-selfhost"
 "$test_build/gfx-svg-text-selfhost"
+# e.gfx.svg filter effects (D4503): 33 documents (blur, offset, flood, blend modes, composite operators, colour matrices, merge, drop shadow, units, regions, transform, clip and opacity) against a numpy model over cairosvg's raster of the source graphic.
+gfx_svg_filter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_filter/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-filter-selfhost" -j 2)
+[ "$gfx_svg_filter_written" = 'executable written' ]
+chmod +x "$test_build/gfx-svg-filter-selfhost"
+"$test_build/gfx-svg-filter-selfhost"
+# e.gfx.svg font selection and text on a path (D4504): family lists, nearest weight, textPath on a line, a semicircle and a quadratic, against Pillow's FreeType over Jost and Exo 2 at 8x.
+gfx_svg_text_faces_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_text_faces/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-text-faces-selfhost" -j 2)
+[ "$gfx_svg_text_faces_written" = 'executable written' ]
+chmod +x "$test_build/gfx-svg-text-faces-selfhost"
+"$test_build/gfx-svg-text-faces-selfhost"
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 text_math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_math/src/main.e" "$repo" x64 linux "$test_build/text-math-selfhost" -j 2)
 [ "$text_math_written" = 'executable written' ]

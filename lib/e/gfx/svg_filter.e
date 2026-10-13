@@ -719,7 +719,7 @@ fn run(a: *mem.Arena, prims: []const Prim, source: []const f32, w: usize, h: usi
 // Draws `list` (in the scratch's own pixel space: the origin is the top left of the `w` x `h` target) and reads
 // the pixels back as premultiplied f32 into `out`. A font drawn by the list is registered with the scratch
 // renderer.
-fn render_pixels(a: *mem.Arena, hst: *const Host, list: scene.DisplayList, w: usize, h: usize, font: fonts.Font, has_font: bool, out: []f32) -> err {
+fn render_pixels(a: *mem.Arena, hst: *const Host, list: scene.DisplayList, w: usize, h: usize, registered: []const fonts.Font, out: []f32) -> err {
     if w == 0usize || h == 0usize || w * h > hst.max_pixels || out.len < w * h * 4usize { ret TooComplex }
     let (pixels, pixels_error) = mem.alloc[u32](a, w * h)
     if pixels_error != ok { ret pixels_error }
@@ -729,7 +729,11 @@ fn render_pixels(a: *mem.Arena, hst: *const Host, list: scene.DisplayList, w: us
     let (made, made_error) = scene.renderer(a, state.device, queue, 1u32, 1u32)
     if made_error != ok { ret made_error }
     var scratch = made
-    if has_font { try scene.register_font(&scratch, font) }
+    var f = 0usize
+    while f < registered.len {
+        try scene.register_font(&scratch, registered[f])
+        f += 1usize
+    }
     let (frames, frames_error) = gpu.open_target(queue, gpu.Surface { kind: gpu.SurfaceKind.Offscreen, handle: zero, context: zero }, u32(w), u32(h), gpu.Format.Bgra8)
     if frames_error != ok { ret frames_error }
     defer let _ = gpu.close_target(frames)
