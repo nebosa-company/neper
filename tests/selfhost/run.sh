@@ -5183,6 +5183,18 @@ esac
 subgroup_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/subgroup.e" "$repo" spv none "$test_build/subgroup.spv")
 [ "$subgroup_spirv_written" = 'spir-v written' ]
 cmp "$test_build/subgroup.spv" "$repo/tests/conformance/spirv/subgroup.spv"
+# (C095) `f64` in a kernel: the corpus module byte for byte, then the runtime fixture.
+float64_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/float64.e" "$repo" spv none "$test_build/float64.spv")
+[ "$float64_spirv_written" = 'spir-v written' ]
+cmp "$test_build/float64.spv" "$repo/tests/conformance/spirv/float64.spv"
+gpu_f64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_f64/src/main.e" "$repo" x64 linux "$test_build/gpu-f64-selfhost")
+[ "$gpu_f64_written" = 'executable written' ]
+chmod +x "$test_build/gpu-f64-selfhost"
+gpu_f64_output=$("$test_build/gpu-f64-selfhost")
+case "$gpu_f64_output" in
+    'gpu f64 ok on cpu'|'gpu f64 ok on cpu and '[0-9]' devices ('[0-9]' ran f64)'|'gpu f64 ok on cpu and '1[0-6]' devices ('[0-9]' ran f64)') ;;
+    *) printf '%s\n' "the f64 kernel runtime failed: $gpu_f64_output" >&2; exit 1 ;;
+esac
 gpu_subgroup_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_subgroup_identity/src/main.e" "$repo" x64 linux "$test_build/gpu-subgroup-identity-selfhost")
 [ "$gpu_subgroup_written" = 'executable written' ]
 chmod +x "$test_build/gpu-subgroup-identity-selfhost"

@@ -5656,6 +5656,19 @@ $subgroupSpirv = Join-Path $testBuild 'subgroup.spv'
 $subgroupSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\subgroup.e') $repo 'spv' 'none' $subgroupSpirv
 if ($LASTEXITCODE -ne 0 -or $subgroupSpirvWritten -ne 'spir-v written') { throw 'subgroup SPIR-V emission failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $subgroupSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\subgroup.spv')).Hash) { throw 'the subgroup SPIR-V module differs from the conformance corpus' }
+# (C095) `f64` in a kernel: the Float64 capability, 64-bit device loads and stores, the
+# arithmetic the writer has, `math.fma` and the conversions, byte for byte the corpus module;
+# the runtime fixture runs it on the CPU and on every device with Float64 and denormal
+# preservation, and answers the host's bits.
+$float64Spirv = Join-Path $testBuild 'float64.spv'
+$float64SpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\float64.e') $repo 'spv' 'none' $float64Spirv
+if ($LASTEXITCODE -ne 0 -or $float64SpirvWritten -ne 'spir-v written') { throw 'float64 SPIR-V emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $float64Spirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\float64.spv')).Hash) { throw 'the float64 SPIR-V module differs from the conformance corpus' }
+$gpuF64Path = Join-Path $testBuild 'gpu-f64-selfhost.exe'
+$gpuF64Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_f64\src\main.e') $repo 'x64' 'windows' $gpuF64Path
+if ($LASTEXITCODE -ne 0 -or $gpuF64Written -ne 'executable written') { throw 'gpu_f64 emission failed' }
+$gpuF64Output = & $gpuF64Path
+if ($LASTEXITCODE -ne 0 -or $gpuF64Output -notmatch '^gpu f64 ok on cpu( and [0-9]+ devices \([0-9]+ ran f64\))?$') { throw "the f64 kernel runtime failed: $gpuF64Output" }
 $gpuSubgroupPath = Join-Path $testBuild 'gpu-subgroup-identity-selfhost.exe'
 $gpuSubgroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_identity\src\main.e') $repo 'x64' 'windows' $gpuSubgroupPath
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupWritten -ne 'executable written') { throw 'gpu_subgroup_identity emission failed' }
