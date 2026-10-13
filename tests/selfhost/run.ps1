@@ -4377,6 +4377,13 @@ $algoSyncinferWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $algoSyncinferWritten -ne 'executable written') { throw 'algo_syncinfer emission failed' }
 $algoSyncinferOutput = & $algoSyncinferPath
 if ($LASTEXITCODE -ne 0 -or $algoSyncinferOutput -ne 'algo syncinfer ok') { throw "algo_syncinfer answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.syncinfer` coerce_value / coerce_record: the typed value of a cell under four local zones
+# # against appdor's coerceValue / coerceRecord in src/io/infer.js (D4600).
+$algoSyncinferCoercePath = Join-Path $testBuild 'algo-syncinfer-coerce-selfhost.exe'
+$algoSyncinferCoerceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_syncinfer_coerce\src\main.e') $repo 'x64' 'windows' $algoSyncinferCoercePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoSyncinferCoerceWritten -ne 'executable written') { throw 'algo_syncinfer_coerce emission failed' }
+$algoSyncinferCoerceOutput = & $algoSyncinferCoercePath
+if ($LASTEXITCODE -ne 0 -or $algoSyncinferCoerceOutput -ne 'algo syncinfer coerce ok') { throw "algo_syncinfer_coerce answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
 # # against appdor's src/sync/sql-source.js (900 inputs, D3001).
 $algoSqlsourcePath = Join-Path $testBuild 'algo-sqlsource-selfhost.exe'

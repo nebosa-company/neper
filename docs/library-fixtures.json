@@ -503,6 +503,7 @@
     "algo_sqlsource",
     "algo_sync",
     "algo_syncinfer",
+    "algo_syncinfer_coerce",
     "algo_syncjob",
     "algo_syncpull",
     "algo_syncsource",

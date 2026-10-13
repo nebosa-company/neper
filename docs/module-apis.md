@@ -7209,6 +7209,25 @@ fn infer_column_type(a: *mem.Arena, values: json.Value, opts: json.Value) -> jso
 fn date_order_of(a: *mem.Arena, values: json.Value) -> json.Value
 fn decimal_separator_of(a: *mem.Arena, values: json.Value) -> json.Value
 fn infer_external_schema(a: *mem.Arena, records: json.Value) -> (json.Value, bool)
+type Parsed = struct { year: i64, month: i64, dom: i64, hour: i64, minute: i64, second: i64, milli: i64, has_zone: bool, offset_sec: i64 }
+fn civil_from_days(days: i64) -> (i64, i64, i64)
+fn coerce_record(a: *mem.Arena, record: json.Value, fields: json.Value, tz_min: i64) -> (json.Value, bool)
+fn coerce_text(a: *mem.Arena, cell: str, kind: str, order: str, decimal: str, tz_min: i64) -> json.Value
+fn coerce_value(a: *mem.Arena, raw: json.Value, kind: str, opts: json.Value, tz_min: i64) -> json.Value
+fn convention_code(s: str) -> u8
+fn date_parse(a: *mem.Arena, text: str, out: *Parsed) -> bool
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64
+fn floor_div(x: i64, y: i64) -> i64
+fn instant_ms(p: *const Parsed) -> i64
+fn int_text(a: *mem.Arena, n: i64) -> str
+fn join2(a: *mem.Arena, x: str, y: str) -> str
+fn join3(a: *mem.Arena, x: str, y: str, z: str, sep: u8) -> str
+fn number_value(a: *mem.Arena, x: f64) -> json.Value
+fn pad_to(a: *mem.Arena, s: str, width: usize) -> str
+fn parse_locale_number(a: *mem.Arena, body: str, pinned: u8) -> (f64, bool)
+fn text_member(v: json.Value, key: str) -> str
+fn to_calendar_date(a: *mem.Arena, s: str, order: str, tz_min: i64) -> (str, bool)
+fn to_iso_string(a: *mem.Arena, s: str, tz_min: i64) -> (str, bool)
 ```
 
 The column types a synced table infers from sample rows (L037, D3703), after appdor's `src/io/infer.js`,

@@ -3877,6 +3877,13 @@ algo_syncinfer_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/algo-syncinfer-selfhost"
 algo_syncinfer_output=$("$test_build/algo-syncinfer-selfhost")
 [ "$algo_syncinfer_output" = 'algo syncinfer ok' ]
+# `e.algo.syncinfer` coerce_value / coerce_record: the typed value of a cell under four local zones
+# # against appdor's coerceValue / coerceRecord in src/io/infer.js (D4600).
+algo_syncinfer_coerce_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_syncinfer_coerce/src/main.e" "$repo" x64 linux "$test_build/algo-syncinfer-coerce-selfhost" -j 2)
+[ "$algo_syncinfer_coerce_written" = 'executable written' ]
+chmod +x "$test_build/algo-syncinfer-coerce-selfhost"
+algo_syncinfer_coerce_output=$("$test_build/algo-syncinfer-coerce-selfhost")
+[ "$algo_syncinfer_coerce_output" = 'algo syncinfer coerce ok' ]
 # `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
 # # against appdor's src/sync/sql-source.js (900 inputs, D3001).
 algo_sqlsource_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sqlsource/src/main.e" "$repo" x64 linux "$test_build/algo-sqlsource-selfhost" -j 2)

@@ -391,12 +391,18 @@ fn read_shape(a: *mem.Arena, raw: str) -> Shape {
     if has_fraction { upto = groups - 1usize }
     var g = 0usize
     var lead_text: [16]u32 = zero
+    var sig_text: [16]u32 = zero
+    var sig_count = 0usize
     while g < upto {
         var k = 0usize
         while k < group_len[g] {
             let d = body[group_start[g] + k]
             if digit_count < 16usize { lead_text[digit_count] = d }
             digit_count += 1usize
+            if sig_count > 0usize || d != 48u32 {
+                if sig_count < 16usize { sig_text[sig_count] = d }
+                sig_count += 1usize
+            }
             k += 1usize
         }
         g += 1usize
@@ -406,16 +412,16 @@ fn read_shape(a: *mem.Arena, raw: str) -> Shape {
     // Number.isSafeInteger(Number(intDigits)) when there is no fraction
     var safe = true
     if !has_fraction {
-        if digit_count > 16usize {
+        if sig_count > 16usize {
             safe = false
-        } else if digit_count == 16usize {
+        } else if sig_count == 16usize {
             // compare with 9007199254740991
             let limit = "9007199254740991"
             var cmp = 0i32
             var k = 0usize
             while k < 16usize && cmp == 0i32 {
-                if lead_text[k] < u32(limit[k]) { cmp = 0i32 - 1i32 }
-                if lead_text[k] > u32(limit[k]) { cmp = 1i32 }
+                if sig_text[k] < u32(limit[k]) { cmp = 0i32 - 1i32 }
+                if sig_text[k] > u32(limit[k]) { cmp = 1i32 }
                 k += 1usize
             }
             safe = cmp <= 0i32
@@ -793,12 +799,21 @@ fn parse_es5(s: *Scan, day: *Day, time: *Clock, zone: *Zone, invalid: *bool, fin
 
 // Would `new Date(text)` be a valid date? V8's DateParser: the ES5 date-time string, then the legacy parser.
 fn date_ok(a: *mem.Arena, text: str) -> bool {
+    var out = Parsed { year: 0i64, month: 0i64, dom: 0i64, hour: 0i64, minute: 0i64, second: 0i64, milli: 0i64, has_zone: false, offset_sec: 0i64 }
+    ret date_parse(a, text, &out)
+}
+
+// What `new Date(text)` read: the calendar fields as V8's composers leave them (the day not yet checked against the
+// month), and the zone's offset in seconds when the text named one (else it is local time).
+type Parsed = struct { year: i64, month: i64, dom: i64, hour: i64, minute: i64, second: i64, milli: i64, has_zone: bool, offset_sec: i64 }
+
+fn date_parse(a: *mem.Arena, text: str, out: *Parsed) -> bool {
     let blank = Token { tag: T_END, value: 0i32, length: 0i32, kw: 0u8 }
     var s = Scan { c: cps_of(a, text), at: 0usize, tok: blank, first: blank, has_first: false }
     s.tok = scan_next(&s)
     var day = Day { comp: zero, index: 0i32, named_month: K_NONE, iso: false }
     var time = Clock { comp: zero, index: 0i32, hour_offset: K_NONE }
-    var zone = Zone { sign: K_NONE, hour: K_NONE, minute: K_NONE }
+    var zone = Zone { sign: 0i32, hour: K_NONE, minute: K_NONE }
     var invalid = false
     var finished = false
     parse_es5(&s, &day, &time, &zone, &invalid, &finished)
@@ -935,9 +950,26 @@ fn date_ok(a: *mem.Arena, text: str) -> bool {
     if !is_hour(hour) || !is_minute(minute) || !is_second(second) || !is_millisecond(milli) {
         if hour != 24i32 || minute != 0i32 || second != 0i32 || milli != 0i32 { ret false }
     }
-    // No range check: a year here has at most four digits, and a zone offset is at most a hundred hours, so the
-    // instant is always inside the time clip.
-    ret true
+    out.year = i64(year)
+    out.month = i64(month)
+    out.dom = i64(dom)
+    out.hour = i64(hour)
+    out.minute = i64(minute)
+    out.second = i64(second)
+    out.milli = i64(milli)
+    out.has_zone = zone.sign != 0i32
+    out.offset_sec = 0i64
+    if out.has_zone {
+        var zh = zone.hour
+        var zm = zone.minute
+        if zh == K_NONE { zh = 0i32 }
+        if zm == K_NONE { zm = 0i32 }
+        out.offset_sec = i64(zone.sign) * (i64(zh) * 3600i64 + i64(zm) * 60i64)
+    }
+    // TimeClip: a six-digit year (`+275760-09-13` is the last day) can leave the range of an instant.
+    if out.year > 400000i64 || out.year < 0i64 - 400000i64 { ret false }
+    let ms = instant_ms(out) - out.offset_sec * 1000i64
+    ret ms >= 0i64 - 8640000000000000i64 && ms <= 8640000000000000i64
 }
 
 // --- toCalendarDate --------------------------------------------------------------------------------------------------
@@ -998,6 +1030,373 @@ fn calendar_date_ok(a: *mem.Arena, s: str, order: str) -> bool {
         ret day >= 1i64 && day <= days_in_month(year, month)
     }
     ret date_ok(a, s)
+}
+
+// --- coerceValue / coerceRecord --------------------------------------------------------------------------------------
+
+fn floor_div(x: i64, y: i64) -> i64 {
+    var q = x / y
+    if (x % y != 0i64) && ((x < 0i64) != (y < 0i64)) { q -= 1i64 }
+    ret q
+}
+
+// Days from 1970-01-01 of the proleptic Gregorian date (`day` may run past the month: it rolls over, as `MakeDay` does).
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    var y = year
+    if month <= 2i64 { y -= 1i64 }
+    let era = floor_div(y, 400i64)
+    let yoe = y - era * 400i64
+    var mp = month + 9i64
+    if month > 2i64 { mp = month - 3i64 }
+    let doy = (153i64 * mp + 2i64) / 5i64 + day - 1i64
+    let doe = yoe * 365i64 + yoe / 4i64 - yoe / 100i64 + doy
+    ret era * 146097i64 + doe - 719468i64
+}
+
+fn civil_from_days(days: i64) -> (i64, i64, i64) {
+    let z = days + 719468i64
+    let era = floor_div(z, 146097i64)
+    let doe = z - era * 146097i64
+    let yoe = (doe - doe / 1460i64 + doe / 36524i64 - doe / 146096i64) / 365i64
+    let doy = doe - (365i64 * yoe + yoe / 4i64 - yoe / 100i64)
+    let mp = (5i64 * doy + 2i64) / 153i64
+    let d = doy - (153i64 * mp + 2i64) / 5i64 + 1i64
+    var m = mp + 3i64
+    if mp >= 10i64 { m = mp - 9i64 }
+    var y = yoe + era * 400i64
+    if m <= 2i64 { y += 1i64 }
+    ret (y, m, d)
+}
+
+// The fields read as if they were UTC, in milliseconds.
+fn instant_ms(p: *const Parsed) -> i64 {
+    let days = days_from_civil(p.year, p.month, p.dom)
+    ret days * 86400000i64 + p.hour * 3600000i64 + p.minute * 60000i64 + p.second * 1000i64 + p.milli
+}
+
+fn int_text(a: *mem.Arena, n: i64) -> str {
+    let (b, be) = str.builder(a, 24usize)
+    if be != ok { ret "0" }
+    var builder = b
+    let e = str.push_i64(&builder, n)
+    ret str.done(&builder)
+}
+
+fn pad_to(a: *mem.Arena, s: str, width: usize) -> str {
+    var out = s
+    var neg = false
+    if out.len > 0usize && out[0usize] == 45u8 {
+        neg = true
+        out = out[1usize..out.len]
+    }
+    let (b, be) = str.builder(a, width + out.len + 2usize)
+    if be != ok { ret s }
+    var builder = b
+    if neg { let e0 = str.push_byte(&builder, 45u8) }
+    var n = out.len
+    while n < width {
+        let e1 = str.push_byte(&builder, 48u8)
+        n += 1usize
+    }
+    let e2 = str.push(&builder, out)
+    ret str.done(&builder)
+}
+
+fn join2(a: *mem.Arena, x: str, y: str) -> str {
+    let (out, e) = str.concat(a, x, y)
+    if e != ok { ret x }
+    ret out
+}
+
+fn join3(a: *mem.Arena, x: str, y: str, z: str, sep: u8) -> str {
+    let (b, be) = str.builder(a, x.len + y.len + z.len + 4usize)
+    if be != ok { ret "" }
+    var builder = b
+    let e0 = str.push(&builder, x)
+    let e1 = str.push_byte(&builder, sep)
+    let e2 = str.push(&builder, y)
+    let e3 = str.push_byte(&builder, sep)
+    let e4 = str.push(&builder, z)
+    ret str.done(&builder)
+}
+
+// `toCalendarDate(s, order)`: the `YYYY-MM-DD` text, or false for null. `tz_min` is the local zone's offset east of UTC
+// (a text without a zone is local time, and so is the day it is read back as).
+fn to_calendar_date(a: *mem.Arena, s: str, order: str, tz_min: i64) -> (str, bool) {
+    let c = cps_of(a, s)
+    if iso_date(c) {
+        var at = 0usize
+        while s[at] != 45u8 { at += 1usize }
+        let y = s[0usize..at]
+        var rest = s[at + 1usize..s.len]
+        var k = 0usize
+        while rest[k] != 45u8 { k += 1usize }
+        ret (join3(a, y, pad_to(a, rest[0usize..k], 2usize), pad_to(a, rest[k + 1usize..rest.len], 2usize), 45u8), true)
+    }
+    let (d, m, y, yn, matched) = slash_parts(c)
+    if matched && (str.eq(order, "dmy") || str.eq(order, "mdy")) {
+        var day = i64(m)
+        var month = i64(d)
+        if str.eq(order, "dmy") {
+            day = i64(d)
+            month = i64(m)
+        }
+        var year = i64(y)
+        if yn == 2usize { year = 2000i64 + i64(y) }
+        if year < 100i64 { ret ("", false) }
+        if month < 1i64 || month > 12i64 { ret ("", false) }
+        if day < 1i64 || day > days_in_month(year, month) { ret ("", false) }
+        ret (join3(a, int_text(a, year), pad_to(a, int_text(a, month), 2usize), pad_to(a, int_text(a, day), 2usize), 45u8), true)
+    }
+    var p = Parsed { year: 0i64, month: 0i64, dom: 0i64, hour: 0i64, minute: 0i64, second: 0i64, milli: 0i64, has_zone: false, offset_sec: 0i64 }
+    if !date_parse(a, s, &p) { ret ("", false) }
+    var local = instant_ms(&p)
+    if p.has_zone { local = local - p.offset_sec * 1000i64 + tz_min * 60000i64 }
+    let (yy, mm, dd) = civil_from_days(floor_div(local, 86400000i64))
+    ret (join3(a, int_text(a, yy), pad_to(a, int_text(a, mm), 2usize), pad_to(a, int_text(a, dd), 2usize), 45u8), true)
+}
+
+// `new Date(s).toISOString()`, or false for an invalid date.
+fn to_iso_string(a: *mem.Arena, s: str, tz_min: i64) -> (str, bool) {
+    var p = Parsed { year: 0i64, month: 0i64, dom: 0i64, hour: 0i64, minute: 0i64, second: 0i64, milli: 0i64, has_zone: false, offset_sec: 0i64 }
+    if !date_parse(a, s, &p) { ret ("", false) }
+    var ms = instant_ms(&p)
+    if p.has_zone { ms = ms - p.offset_sec * 1000i64 } else { ms = ms - tz_min * 60000i64 }
+    let day = floor_div(ms, 86400000i64)
+    let rest = ms - day * 86400000i64
+    let (y, mo, d) = civil_from_days(day)
+    // Every piece is made before the builder, which needs to be the arena's last allocation to grow.
+    var year_text = pad_to(a, int_text(a, y), 4usize)
+    if y < 0i64 || y > 9999i64 {
+        var mag = y
+        var sign = "+"
+        if y < 0i64 {
+            mag = 0i64 - y
+            sign = "-"
+        }
+        year_text = join2(a, sign, pad_to(a, int_text(a, mag), 6usize))
+    }
+    let p_month = pad_to(a, int_text(a, mo), 2usize)
+    let p_day = pad_to(a, int_text(a, d), 2usize)
+    let p_hour = pad_to(a, int_text(a, rest / 3600000i64), 2usize)
+    let p_minute = pad_to(a, int_text(a, (rest / 60000i64) % 60i64), 2usize)
+    let p_second = pad_to(a, int_text(a, (rest / 1000i64) % 60i64), 2usize)
+    let p_milli = pad_to(a, int_text(a, rest % 1000i64), 3usize)
+    let (b, be) = str.builder(a, 48usize + year_text.len)
+    if be != ok { ret ("", false) }
+    var builder = b
+    let e0 = str.push(&builder, year_text)
+    let e1 = str.push_byte(&builder, 45u8)
+    let e2 = str.push(&builder, p_month)
+    let e3 = str.push_byte(&builder, 45u8)
+    let e4 = str.push(&builder, p_day)
+    let e5 = str.push_byte(&builder, 84u8)
+    let e6 = str.push(&builder, p_hour)
+    let e7 = str.push_byte(&builder, 58u8)
+    let e8 = str.push(&builder, p_minute)
+    let e9 = str.push_byte(&builder, 58u8)
+    let e10 = str.push(&builder, p_second)
+    let e11 = str.push_byte(&builder, 46u8)
+    let e12 = str.push(&builder, p_milli)
+    let e13 = str.push_byte(&builder, 90u8)
+    ret (str.done(&builder), true)
+}
+
+// `parseLocaleNumber(body, decimal)` for a body `readNumericShape` accepted: false for null (`NaN`). `pinned`: 0 let the
+// text decide, 1 comma, 2 dot.
+fn parse_locale_number(a: *mem.Arena, body: str, pinned: u8) -> (f64, bool) {
+    let c = cps_of(a, view.js_trim(body))
+    var has_comma = false
+    var has_dot = false
+    var last_comma = 0usize
+    var last_dot = 0usize
+    var i = 0usize
+    while i < c.len {
+        if c[i] == 44u32 {
+            has_comma = true
+            last_comma = i
+        }
+        if c[i] == 46u32 {
+            has_dot = true
+            last_dot = i
+        }
+        i += 1usize
+    }
+    // 0 no separator work, 44 comma, 46 dot.
+    var sep = 0u32
+    if pinned == 1u8 {
+        sep = 44u32
+    } else if pinned == 2u8 {
+        sep = 46u32
+    } else if has_comma && has_dot {
+        if last_comma > last_dot { sep = 44u32 } else { sep = 46u32 }
+    } else if has_comma {
+        // `/,\d{3}$/`: a comma before exactly three digits at the end groups them.
+        var groups = false
+        if c.len >= 4usize && c[c.len - 4usize] == 44u32 {
+            groups = is_digit(c[c.len - 3usize]) && is_digit(c[c.len - 2usize]) && is_digit(c[c.len - 1usize])
+        }
+        if !groups { sep = 44u32 }
+    } else {
+        sep = 46u32
+    }
+    var other = 0u32
+    if sep == 44u32 { other = 46u32 }
+    if sep == 46u32 { other = 44u32 }
+    // Keep `[\d.-]` after removing the other separator and turning the first decimal separator into a dot.
+    let (buf, e) = mem.alloc[u8](a, c.len + 4usize)
+    if e != ok { ret (0.0f64, false) }
+    var n = 0usize
+    var seen_sep = false
+    i = 0usize
+    while i < c.len {
+        var u = c[i]
+        if sep != 0u32 && u == other {
+            u = 0u32
+        } else if sep != 0u32 && u == sep && !seen_sep {
+            seen_sep = true
+            u = 46u32
+        }
+        if is_digit(u) || u == 46u32 || u == 45u32 {
+            buf[n] = u8(u)
+            n += 1usize
+        }
+        i += 1usize
+    }
+    // Number(text): an optional minus, digits, an optional dot and digits, at least one digit.
+    var at = 0usize
+    var negative = false
+    if at < n && buf[at] == 45u8 {
+        negative = true
+        at += 1usize
+    }
+    let int_from = at
+    while at < n && buf[at] >= 48u8 && buf[at] <= 57u8 { at += 1usize }
+    let int_to = at
+    var frac_from = at
+    var frac_to = at
+    if at < n && buf[at] == 46u8 {
+        at += 1usize
+        frac_from = at
+        while at < n && buf[at] >= 48u8 && buf[at] <= 57u8 { at += 1usize }
+        frac_to = at
+    }
+    if at != n || (int_to == int_from && frac_to == frac_from) { ret (0.0f64, false) }
+    let (nb, ne) = str.builder(a, n + 4usize)
+    if ne != ok { ret (0.0f64, false) }
+    var builder = nb
+    if negative { let e0 = str.push_byte(&builder, 45u8) }
+    if int_to == int_from { let e1 = str.push_byte(&builder, 48u8) } else { let e2 = str.push(&builder, buf[int_from..int_to]) }
+    let e3 = str.push_byte(&builder, 46u8)
+    if frac_to == frac_from { let e4 = str.push_byte(&builder, 48u8) } else { let e5 = str.push(&builder, buf[frac_from..frac_to]) }
+    let (x, pe) = str.parse_f64(str.done(&builder))
+    if pe != ok { ret (0.0f64, false) }
+    ret (x, true)
+}
+
+fn number_value(a: *mem.Arena, x: f64) -> json.Value {
+    // JSON.stringify writes an infinite number as null.
+    if x - x != 0.0f64 { ret .Null }
+    ret json.Value{ Number: json.Number{ lexeme: f.number_text(a, x) } }
+}
+
+fn convention_code(s: str) -> u8 {
+    if str.eq(s, "comma") { ret 1u8 }
+    if str.eq(s, "dot") { ret 2u8 }
+    ret 0u8
+}
+
+// `coerceValue(raw, type, {dateOrder, decimal})` of one cell, given as the text `String(raw)` (`blank` for null,
+// undefined and an all-space string).
+fn coerce_text(a: *mem.Arena, cell: str, kind: str, order: str, decimal: str, tz_min: i64) -> json.Value {
+    let s = view.js_trim(cell)
+    if s.len == 0usize { ret .Null }
+    if str.eq(kind, "checkbox") {
+        let l = f.lower_text(a, s)
+        if is_bytes4(l, 208u8, 180u8, 208u8, 176u8) || str.eq(l, "true") || str.eq(l, "yes") || str.eq(l, "y") || str.eq(l, "1") {
+            ret sync.flag(true)
+        }
+        if is_bytes4(l, 208u8, 189u8, 208u8, 181u8) || str.eq(l, "false") || str.eq(l, "no") || str.eq(l, "n") || str.eq(l, "0") {
+            ret sync.flag(false)
+        }
+        ret .Null
+    }
+    if str.eq(kind, "number") || str.eq(kind, "currency") || str.eq(kind, "percent") {
+        var body = ""
+        if str.eq(kind, "percent") { body = strip_percent(s).body } else { body = strip_currency(a, s).body }
+        let shape = read_shape(a, body)
+        if !shape.valid { ret .Null }
+        if !shape.has_fraction && !shape.safe { ret .Null }
+        var pinned = convention_code(decimal)
+        if pinned == 0u8 { pinned = shape.decimal }
+        let (x, fine) = parse_locale_number(a, body, pinned)
+        if !fine { ret .Null }
+        ret number_value(a, x)
+    }
+    if str.eq(kind, "date") {
+        let (d, fine) = to_calendar_date(a, s, order, tz_min)
+        if !fine { ret .Null }
+        ret sync.text(d)
+    }
+    if str.eq(kind, "datetime") {
+        let (d, fine) = to_iso_string(a, s, tz_min)
+        if !fine { ret .Null }
+        ret sync.text(d)
+    }
+    ret sync.text(s)
+}
+
+fn text_member(v: json.Value, key: str) -> str {
+    let (x, present) = ir.get(v, key)
+    if !present { ret "" }
+    let (s, is_text) = ir.string_of(x)
+    if !is_text { ret "" }
+    ret s
+}
+
+// `coerceValue(raw, type, opts)`; `opts` is `{dateOrder, decimal}`.
+fn coerce_value(a: *mem.Arena, raw: json.Value, kind: str, opts: json.Value, tz_min: i64) -> json.Value {
+    ret coerce_text(a, cell_text(a, raw, true), kind, text_member(opts, "dateOrder"), text_member(opts, "decimal"), tz_min)
+}
+
+// `coerceRecord(record, fields)`; `ok` is false where appdor throws (a record or a field that is not an object).
+fn coerce_record(a: *mem.Arena, record: json.Value, fields: json.Value, tz_min: i64) -> (json.Value, bool) {
+    let (members, is_object) = ir.members_of(record)
+    if !is_object { ret (.Null, false) }
+    let (fs, is_array) = ir.items_of(fields)
+    if !is_array { ret (.Null, false) }
+    var i = 0usize
+    while i < fs.len {
+        let (m, fine) = ir.members_of(fs[i])
+        if !fine { ret (.Null, false) }
+        i += 1usize
+    }
+    var o = sync.obj(a)
+    var k = 0usize
+    while k < members.len {
+        // The last field of that name wins (a `Map` built from the pairs).
+        var chosen: json.Value = .Null
+        var j = fs.len
+        var found = false
+        while !found && j > 0usize {
+            j -= 1usize
+            let (name, has_name) = ir.get(fs[j], "name")
+            let (nt, is_text) = ir.string_of(name)
+            if has_name && is_text && str.eq(nt, members[k].key) {
+                chosen = fs[j]
+                found = true
+            }
+        }
+        var kind = "text"
+        if found {
+            let t = text_member(chosen, "type")
+            if t.len > 0usize { kind = t }
+        }
+        let value = coerce_text(a, cell_text(a, members[k].value, true), kind, text_member(chosen, "dateOrder"), text_member(chosen, "decimal"), tz_min)
+        sync.put(&o, members[k].key, value)
+        k += 1usize
+    }
+    ret (ir.obj_value(&o), true)
 }
 
 // --- the regular expressions -----------------------------------------------------------------------------------------
