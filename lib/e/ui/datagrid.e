@@ -140,6 +140,8 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    quick_x: f32,
+    quick_y: f32,
     header_icons: [9]scene.TextureId,
     has_header_icons: bool,
     cell_menu: []const overlay.MenuCommand,
@@ -742,6 +744,7 @@ const CMD_CLEAR_GROUPING: u8 = 13u8
 const MENU_CELL: u8 = 1u8
 const MENU_HEADER: u8 = 2u8
 const MENU_GROUP: u8 = 3u8
+const MENU_QUICK: u8 = 4u8
 
 type MenuPick = struct { grid: *Grid, id: u8, spec: usize }
 
@@ -1300,6 +1303,153 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
     ret (widget.overlay(grid.key + MENU_KEY + 1u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: left, y: top }, modal: true, dismiss: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss } }, style.defaults(), column_box[0usize..1usize]), ok)
 }
 
+// ---- the quick column list under the row indicator's header (v3's column quick customization) ----
+
+type QuickPick = struct { grid: *Grid, spec: usize, all: bool }
+
+fn on_quick_tap(ctx: *void, g: widget.Gesture) -> err {
+    let pick = mem.cast[*QuickPick](ctx)
+    let grid = pick.grid
+    switch g {
+    case .Tap as at:
+        if pick.all {
+            var o = 0usize
+            while o < grid.all.len {
+                grid.hidden[o] = false
+                o += 1usize
+            }
+        } else if pick.spec < grid.all.len {
+            // the last shown column stays
+            if !grid.hidden[pick.spec] && grid.specs.len < 3usize { ret ok }
+            grid.hidden[pick.spec] = !grid.hidden[pick.spec]
+        }
+        relayout(grid)
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn quick_check(a: *mem.Arena, grid: *Grid, on: bool, partial: bool) -> (widget.Node, err) {
+    var box = control.sized_style(15.0, 15.0)
+    box.radius = 3.0
+    if on || partial {
+        box.background = paint.Brush { Solid: gl.rgb(0x005FB8u32) }
+    } else {
+        box.background = paint.Brush { Solid: gl.rgb(0xF3F3F3u32) }
+        box.border = style.Border { width: 1.0, color: gl.rgb(0x8A8A8Au32) }
+    }
+    var inner: widget.Node = zero
+    if on {
+        let (tick, tick_error) = gl.mark(a, .Check, gl.rgb(0xFFFFFFu32), gl.rgb(0xFFFFFFu32), 9.0, 9.0)
+        if tick_error != ok { ret (zero, tick_error) }
+        inner = tick
+    } else if partial {
+        let (dash, dash_error) = gl.mark(a, .Minus, gl.rgb(0xFFFFFFu32), gl.rgb(0xFFFFFFu32), 9.0, 9.0)
+        if dash_error != ok { ret (zero, dash_error) }
+        inner = dash
+    } else {
+        inner = widget.box(0u64, style.defaults(), zero)
+    }
+    let (inner_nodes, inner_nodes_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_nodes_error != ok { ret (zero, control.TooLarge) }
+    inner_nodes[0usize] = inner
+    ret (widget.aligned(0u64, .Center, .Center, box, inner_nodes[0usize..1usize]), ok)
+}
+
+// One row of the quick list: a check box and the name, lit blue under the pointer.
+fn quick_row(a: *mem.Arena, grid: *Grid, key: widget.Key, label_text: str, on: bool, partial: bool, pick: *QuickPick, width: f32) -> (widget.Node, err) {
+    let st = control.control_state(grid.theme, key, true, false)
+    var ink = gl.rgb(0x000000u32)
+    if st.hovered { ink = gl.rgb(0xFFFFFFu32) }
+    let (check, check_error) = quick_check(a, grid, on, partial)
+    if check_error != ok { ret (zero, check_error) }
+    let (label, label_error) = flat_text(a, grid, label_text, ink)
+    if label_error != ok { ret (zero, label_error) }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    cells[0usize] = widget.padded(0u64, 3.0, 0.0, 6.0, 0.0, style.defaults(), one(a, check))
+    cells[1usize] = label
+    var row_style = control.sized_style(width - 2.0, 17.0)
+    if st.hovered { row_style.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) } }
+    let (row_inner, row_inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_inner_error != ok { ret (zero, control.TooLarge) }
+    row_inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..2usize])
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](pick), invoke: on_quick_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, row_style, row_inner[0usize..1usize]), ok)
+}
+
+fn quick_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, grid.all.len + 4usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    let (picks, picks_error) = mem.alloc[QuickPick](a, grid.all.len + 3usize)
+    if picks_error != ok { ret (zero, control.TooLarge) }
+    var shown = 0usize
+    var listed = 0usize
+    var o = 0usize
+    while o < grid.all.len {
+        if grid.all[o].kind != CellKind.Indicator && grid.all[o].title.len != 0usize {
+            listed += 1usize
+            if !grid.hidden[o] { shown += 1usize }
+        }
+        o += 1usize
+    }
+    let width: f32 = 92.0
+    var n = 0usize
+    var item = 0usize
+    // (All), then (Sorted), a rule, the columns
+    picks[item] = QuickPick { grid: grid, spec: 0usize, all: true }
+    let (all_row, all_error) = quick_row(a, grid, grid.key + MENU_KEY + 48u64, "(All)", shown == listed, shown != listed && shown != 0usize, &picks[item], width)
+    if all_error != ok { ret (zero, all_error) }
+    rows[n] = all_row
+    n += 1usize
+    item += 1usize
+    picks[item] = QuickPick { grid: grid, spec: 0usize, all: false }
+    let (sorted_row, sorted_error) = quick_row(a, grid, grid.key + MENU_KEY + 49u64, "(Sorted)", false, false, &picks[item], width)
+    if sorted_error != ok { ret (zero, sorted_error) }
+    rows[n] = sorted_row
+    n += 1usize
+    item += 1usize
+    var rule = control.sized_style(width - 10.0, 1.0)
+    rule.background = paint.Brush { Solid: gl.rgb(0x9F9F9Fu32) }
+    rule.margin = style.EdgeLengths { left: style.Length { Px: 5.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 5.0 }, bottom: style.Length { Px: 3.0 } }
+    rows[n] = widget.box(0u64, rule, zero)
+    n += 1usize
+    var order_at = 0usize
+    while order_at < grid.order.len {
+        o = grid.order[order_at]
+        order_at += 1usize
+        if grid.all[o].kind != CellKind.Indicator && grid.all[o].title.len != 0usize {
+            picks[item] = QuickPick { grid: grid, spec: o, all: false }
+            let (col_row, col_error) = quick_row(a, grid, grid.key + MENU_KEY + 50u64 + u64(o), grid.all[o].title, !grid.hidden[o], false, &picks[item], width)
+            if col_error != ok { ret (zero, col_error) }
+            rows[n] = col_row
+            n += 1usize
+            item += 1usize
+        }
+    }
+    var frame = style.defaults()
+    frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    frame.border = style.Border { width: 1.0, color: gl.rgb(0x000000u32) }
+    frame.width = style.Length { Px: width }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, frame, rows[0usize..n])
+    var no_submit: widget.Submit = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, control.TooLarge) }
+    scoped[0usize] = column
+    let scope = widget.scope(grid.key + MENU_KEY + 3u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: no_submit, cancel_action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss }, keys: zero }, style.defaults(), scoped[0usize..1usize])
+    var left = grid.quick_x
+    var top = grid.quick_y
+    let size = widget.surface_size(grid.theme.runtime)
+    let tall = f32(n) * 17.0 + 8.0
+    if top + tall > size.height { top = size.height - tall }
+    if left + width > size.width { left = size.width - width }
+    if top < 0.0 { top = 0.0 }
+    let (holder, holder_error) = mem.alloc[widget.Node](a, 1usize)
+    if holder_error != ok { ret (zero, control.TooLarge) }
+    holder[0usize] = scope
+    ret (widget.overlay(grid.key + MENU_KEY + 1u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: left, y: top }, modal: true, dismiss: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_menu_dismiss } }, style.defaults(), holder[0usize..1usize]), ok)
+}
+
 // The grid with its context menu target and, open, the menu or the chooser.
 fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, err) {
     if mem.address_of(grid.theme) == 0usize || mem.address_of(grid.theme.runtime) == 0usize { ret (inner, ok) }
@@ -1316,7 +1466,12 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
     var n = 0usize
     parts[n] = aimed
     n += 1usize
-    if grid.menu_open {
+    if grid.menu_open && grid.menu_kind == MENU_QUICK {
+        let (quick, quick_error) = quick_panel(a, grid)
+        if quick_error != ok { ret (zero, quick_error) }
+        parts[n] = quick
+        n += 1usize
+    } else if grid.menu_open {
         let (commands, commands_error) = menu_commands(a, grid)
         if commands_error != ok { ret (zero, commands_error) }
         let (at, pointed) = widget.context_point(theme.runtime)
@@ -2547,6 +2702,24 @@ fn on_sort(ctx: *void, shown: usize) -> err {
     let grid = mem.cast[*Grid](ctx)
     grid.chooser_active = false
     if shown >= grid.specs.len { ret ok }
+    if grid.specs[shown].kind == CellKind.Indicator {
+        // the glyph of the row indicator's header: the quick column list under it
+        grid.menu_open = true
+        grid.menu_kind = MENU_QUICK
+        if mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
+            let at = widget.pointer_position(grid.theme.runtime)
+            let (cell_row, cell_column, rect, has_cell) = widget.cell_rect_at(grid.theme.runtime, at)
+            if has_cell && cell_row == 0u32 {
+                grid.quick_x = rect.x
+                grid.quick_y = rect.y + rect.height
+            } else {
+                grid.quick_x = at.x
+                grid.quick_y = at.y
+            }
+            let _ = cell_column
+        }
+        ret ok
+    }
     let spec = grid.origin[shown]
     var descending = false
     if grid.sort_column == spec { descending = !grid.descending }

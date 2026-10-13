@@ -1525,6 +1525,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dg.on_menu_pick(mem.cast[*void](&pick)) != ok || grid2.footer_visible == footer_was { os.exit(579) }
     pick.id = dg.CMD_FOOTER
     if dg.on_menu_pick(mem.cast[*void](&pick)) != ok { os.exit(580) }
+    // 32. a tap on the row indicator's header opens the quick column list
+    var quick_specs: [3]dg.ColumnSpec = zero
+    quick_specs[0usize] = dg.ColumnSpec { title: "", width: 11.3, column: C_NAME, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    quick_specs[1usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    quick_specs[2usize] = dg.ColumnSpec { title: "Cmc", width: 120.0, column: C_CMC, kind: dg.CellKind.Int, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    let (made_q, grid_q_error) = dg.create(a, &app.tbl, &app.grouping, quick_specs[0..], events, 12100u64)
+    if grid_q_error != ok { os.exit(581) }
+    var grid_q = made_q
+    dg.set_look(&grid_q, gl.v3())
+    mem.reset(&f, 0usize)
+    let (root_q, build_q_error) = dg.build(&f, &grid_q, &theme, 400.0)
+    if build_q_error != ok { os.exit(582) }
+    if settle(&harness, root_q, 230000000000i64) != ok { os.exit(583) }
+    if !tap_key(&harness, &runtime, grid_q.key + 1u64) { os.exit(584) }
+    if !grid_q.menu_open || grid_q.menu_kind != dg.MENU_QUICK { os.exit(585) }
     // 29. P017: the hovered header cell turns #D9EBF9; P020: the footer band is #FFFFDD with #E7EAEA cells
     dg.clear_selection(&grid11)
     mem.reset(&f, 0usize)

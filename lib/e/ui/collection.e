@@ -1936,6 +1936,13 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if star_error != ok { ret (zero, star_error) }
             body[0usize] = star
         }
+        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 {
+            glyph_header = true
+            // the customization glyph of the row indicator
+            let (glyph_node, glyph_error) = gl.mark(a, .ListGlyph, gl.rgb(0x2C5B9Eu32), gl.rgb(0x7F96B5u32), 11.0, 11.0)
+            if glyph_error != ok { ret (zero, glyph_error) }
+            body[0usize] = glyph_node
+        }
         var b = 1usize
         if sorted || state.hovered {
             if !sorted { ink = control.with_alpha(muted, 0.5) }
@@ -1984,7 +1991,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         }
         content[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: line_main, cross: .Center, gap: 4.0 }, line_style, body[0usize..b])
         // A tap sorts; a drag begins a reorder; a drop on it ends one.
-        var head_style = control.sized_style(control.max_zero(columns[i].width - grip), inner)
+        // the row indicator's header is a button: no handle, the cell takes the whole column
+        var grip_here = grip
+        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 { grip_here = 0.0 }
+        var head_style = control.sized_style(control.max_zero(columns[i].width - grip_here), inner)
         head_style.background = paint.Brush { Solid: control.with_alpha(strong, control.state_opacity(t, state)) }
         if look.on {
             var head_fill = look.header
@@ -2113,12 +2123,17 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         // inside a node's own bounds) reaches 16 back over its column's header,
         // which is placed before it and so yields; the region fills it, the marks
         // where they were.
-        var grip_outer = control.sized_style(grip + 16.0, inner)
-        grip_outer.margin = style.EdgeLengths { left: style.Length { Px: -16.0 }, top: flat, right: flat, bottom: flat }
+        // (the row indicator's header is a button of its own: its grip keeps no reach over it)
+        var reach: f32 = 16.0
+        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 { reach = 0.0 }
+        // a narrow header keeps most of itself: the handle reaches back over at most a third of it
+        if look.on && columns[i].width < 48.0 { reach = columns[i].width / 3.0 }
+        var grip_outer = control.sized_style(grip_here + reach, inner)
+        grip_outer.margin = style.EdgeLengths { left: style.Length { Px: 0.0 - reach }, top: flat, right: flat, bottom: flat }
         var grip_style = style.defaults()
         grip_style.width = style.Length { Percent: 100.0 }
         grip_style.height = style.Length { Percent: 100.0 }
-        grip_style.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: flat, right: flat, bottom: flat }
+        grip_style.padding = style.EdgeLengths { left: style.Length { Px: reach }, top: flat, right: flat, bottom: flat }
         grip_node[0usize] = widget.region(grip_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&resizes[i]), invoke: resize_drag }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: false }, grip_style, drawn[0usize..1usize])
         let (grip_label, grip_label_error) = mem.alloc[u8](a, columns[i].title.len + 7usize)
         if grip_label_error != ok { ret (zero, TooLarge) }

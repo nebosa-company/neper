@@ -116,7 +116,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape }
 
@@ -189,6 +189,21 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             if hole_error != ok { ret hole_error }
             try scene.push(b, scene.Command { FillPath: scene.FillPath { path: hole, brush: paint.Brush { Solid: m.inner } } })
         }
+        ret ok
+    }
+    if m.shape == Shape.ListGlyph {
+        // v3's customization glyph: four short rows, a dot and a line each, in the header's blue-grey
+        var row_at: f32 = 0.0
+        while row_at < 4.0 {
+            let ry = area.y + area.height * (0.14 + 0.24 * row_at)
+            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: ry, width: area.width * 0.2, height: area.height * 0.12 }, brush: paint.Brush { Solid: m.color } } })
+            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + area.width * 0.35, y: ry, width: area.width * 0.65, height: area.height * 0.12 }, brush: paint.Brush { Solid: m.inner } } })
+            row_at += 1.0
+        }
+        ret ok
+    }
+    if m.shape == Shape.Minus {
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: area.y + area.height * 0.4, width: area.width, height: area.height * 0.2 }, brush: paint.Brush { Solid: m.color } } })
         ret ok
     }
     if m.shape == Shape.Check {
