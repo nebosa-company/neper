@@ -115,5 +115,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e10 != html.TooLarge { os.exit(30) }
     let (too_deep, e11) = html.parse(a, "<div><div><div><div><span>x</span></div></div></div></div>", options(1024usize, 64usize, 4u16, false))
     if e11 != html.TooDeep { os.exit(31) }
+    // (D4804) A page as Markdown: headings, paragraphs with folded white space and entities, a list, a link, an image, a
+    // table with a delimiter row after its header, a pre block; script, style and head dropped.
+    let page = "<html><head><title>T</title><style>p{color:red}</style></head><body><h1>Main  title</h1>\n<p>Some <b>bold</b>   text &amp; more,\n see <a href=\"https://neper.dev/x\">the docs</a> or <a href=\"#top\">top</a>.</p><script>var x = 1;</script><ul><li>one</li><li>two <i>2</i></li></ul><img src=\"a.png\" alt=\"A cat\"><table><tr><th>Name</th><th>Qty</th></tr><tr><td>tea</td><td>3</td></tr></table><h3>Sub</h3><pre>  line 1\n  line 2</pre><div><div>inner</div></div></body></html>"
+    let (markdown, markdown_error) = html.to_markdown(a, page)
+    if markdown_error != ok { os.exit(32) }
+    let wanted = "# Main title\n\nSome bold text & more, see the docs (https://neper.dev/x) or top.\n\n- one\n- two 2\n\n[image: A cat]\n\n| Name | Qty |\n|---|---|\n| tea | 3 |\n\n## Sub\n\n```\n  line 1\n  line 2\n```\n\ninner"
+    if !str.eq(markdown, wanted) { os.exit(33) }
+    let (empty_markdown, empty_error) = html.to_markdown(a, "")
+    if empty_error != ok || empty_markdown.len != 0usize { os.exit(34) }
     ret ok
 }

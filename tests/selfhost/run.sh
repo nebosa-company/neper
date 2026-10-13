@@ -5279,6 +5279,9 @@ done
 # (C093) `e.gpu.cuda`: the driver's list, whatever this machine has.
 "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/gpu_cuda/src/main.e" "$repo" x64 linux "$test_build/gpu-cuda-selfhost" >/dev/null || { echo "gpu_cuda emission failed" >&2; exit 1; }
 "$test_build/gpu-cuda-selfhost" || { echo "a gpu_cuda check failed: exit $?" >&2; exit 1; }
+# (D2482) `e.fmt.png.quantize` and `encode_quantized` against a Python model of the colour-reduction rule.
+"$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png_quant/src/main.e" "$repo" x64 linux "$test_build/fmt-png-quant-selfhost" >/dev/null || { echo "fmt_png_quant emission failed" >&2; exit 1; }
+"$test_build/fmt-png-quant-selfhost" || { echo "a fmt_png_quant check failed: exit $?" >&2; exit 1; }
 gpu_inventory_run=$("$test_build/neper-self" run "$repo/tests/selfhost/fixtures/link/gpu_inventory/src/main.e" "$repo" x64 linux "$test_build/gpu-inventory-selfhost" --json --gpu-inventory "$repo/tests/selfhost/fixtures/link/gpu_inventory/inventory.txt")
 printf '%s\n' "$gpu_inventory_run" | grep -Fq '"record":"run","process_exit_code":0,"stdout":"gpu inventory ok\n"' || { printf '%s\n' "the mock GPU inventory failed: $gpu_inventory_run" >&2; exit 1; }
 [ "$("$test_build/gpu-inventory-selfhost")" = 'gpu inventory unconfigured ok' ]
@@ -11233,6 +11236,73 @@ greeting"
         python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/budget.xlsx=$office_dir/budget.xlsx" "/pic.png=$office_dir/pic.png" "/zbig.txt=$office_dir/zbig.txt" "/zpaint.pdf=$office_dir/zpaint.pdf" "/zrun=$office_dir/zrun" "/zzzzzzzip.zip=$office_dir/zzzzzzzip.zip" > /dev/null
         last_marker="${markers##*;;}"
         boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$seed_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
+    # The more-documents fixtures (D4800 onward): a disk of the files scripts/make_doc_samples.py writes (the Files
+    # list is alphabetical, so the taps depend on the names).
+    doc_dir="$test_build/docsamples"
+    python3 "$repo/scripts/make_doc_samples.py" "$doc_dir" > /dev/null
+    doc_files=()
+    for doc_file in "$doc_dir"/*; do doc_files+=("/$(basename "$doc_file")=$doc_file"); done
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = moredocfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        seed_disk="$test_build/shell-$fixture.disk"
+        python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "${doc_files[@]}" > /dev/null
+        last_marker="${markers##*;;}"
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$seed_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
+    # The scan fixtures (D4812): a disk holding /DCIM/SCAN_0001.png, a page of a passport's two machine-readable lines.
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = scanfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        seed_disk="$test_build/shell-$fixture.disk"
+        python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 2 "/DCIM/SCAN_0001.png=$repo/tests/selfhost/fixtures/neperos/mrz_scan.png" > /dev/null
+        last_marker="${markers##*;;}"
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$seed_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
+    # The external-storage fixtures (D4811): the same disk of documents as the system disk and a second block device
+    # (NEPEROS_DISK2) with /ext.txt, which the second filesystem server serves to the Files app.
+    ext_dir="$test_build/extsamples"
+    python3 "$repo/scripts/make_doc_samples.py" "$doc_dir" "$ext_dir" > /dev/null
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = externalfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        seed_disk="$test_build/shell-$fixture.disk"
+        ext_disk="$test_build/shell-$fixture-ext.disk"
+        python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "${doc_files[@]}" > /dev/null
+        python3 "$repo/scripts/make_fs_image.py" "$ext_disk" 2 "/ext.txt=$ext_dir/ext.txt" > /dev/null
+        last_marker="${markers##*;;}"
+        boot=$(NEPEROS_DISK2="$ext_disk" python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$seed_disk" 0 "$taps" 2>&1 < /dev/null)
         remaining="$boot"
         pending="$markers"
         while [ -n "$pending" ]; do

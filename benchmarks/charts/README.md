@@ -62,7 +62,7 @@ same rows (the file is 11,334 B), matplotlib 33.7 ms on the same host that day.
 The deflate encoder alone is 9.6 ms on the 345,840-byte raster, still about 5x C
 zlib; run `run.py` for the nine-run table.
 
-## The R side (not yet run)
+## The R side
 
 `r_bench.R` draws the same data (the same LCG, computed exactly in doubles by
 splitting the state into 16-bit halves), the same 360x240 image (3.6x2.4 in at
@@ -70,25 +70,64 @@ splitting the state into 16-bit halves), the same 360x240 image (3.6x2.4 in at
 charts per pass, SVG through `svglite` (text kept as text, as in the other two
 programs) and PNG through `png()`, and prints the lines `name charts ms bytes`
 (`ggplot2_svg`, `ggplot2_png`, `base_svg`, ... and `import`). `run.py` runs it
-with the same nine-run median protocol when an `Rscript` is found (on PATH, or
-under `C:\Program Files\R`, `/usr/lib/R`, `/opt/R`) and `ggplot2`, `lattice` and
+with the same median protocol when an `Rscript` is found (on PATH, or under
+`C:\Program Files\R`, `/usr/lib/R`, `/opt/R`) and `ggplot2`, `lattice` and
 `svglite` load, adds an `r` object to `results/<host>.json` and prints
-`neper`-relative rows; without them it records `r_unavailable` and says why. To
-fill the table: install R and `install.packages(c("ggplot2", "lattice",
-"svglite"))`, then run the command above. The drawing calls were written
-without an R to run them: the first run should be compared with
-`first-chart.png` (`Rscript r_bench.R first-chart.png` keeps the first ggplot2
-PNG) before the numbers are quoted.
+`neper`-relative rows; without them it records `r_unavailable` and says why.
+
+Measured 2026-10-13 on the same Windows 11 host with R 4.6.1 (installed under
+`D:	ools\R`; ggplot2, svglite from CRAN, lattice from the R distribution),
+five-run medians, 200 charts per pass; the first ggplot2 chart was checked by
+eye (`Rscript r_bench.R first-chart.png`): the line, the markers, the title and
+the y ticks at -2, 0 and 2 are all there.
+
+| per chart | Neper | base R | lattice | ggplot2 | matplotlib |
+|---|---:|---:|---:|---:|---:|
+| SVG | 3.93 ms | 13.2 ms | 34.9 ms | 288.6 ms | 44.2 ms |
+| PNG | 11.03 ms | 23.6 ms | 51.7 ms | 261.8 ms | 45.9 ms |
+| SVG size | 30,224 B | 41,811 B | 42,468 B | 41,883 B | 44,387 B |
+| PNG size | 11,334 B | 3,185 B | 2,951 B | 3,449 B | 11,217 B |
+| package load | – | 0.76 s (all three) | | | 1.46 s |
+
+Neper is 3.4x faster than base R, 8.9x than lattice and 73x than ggplot2 on SVG,
+and 2.1x, 4.7x and 23.7x on PNG; its SVG is 28-29% smaller. R's PNG files are
+3.5x *smaller* than Neper's: its `png()` device draws without anti-aliased
+text and with few distinct colours, and Neper writes a 32-bit RGBA image;
+`e.fmt.png.encode_adaptive` (D4400, palette output for images of at most 256
+colours) is the way to close that, and this benchmark does not use it yet. The
+times were taken on a host also running the lanes' builds, so single numbers
+carry the usual spread; the R ratios are far outside it.
+
+### PNG size (D2482)
+
+R's PNGs are about three times smaller than Neper's because R's `png()` writes an
+81-colour indexed file while the chart has 961 distinct colours (three inks at
+every anti-aliasing coverage level). What we tried on the first chart:
+
+| variant | bytes |
+|---|---:|
+| as written (RGBA, filter none, `.Balanced`) | 11,334 |
+| `.Best` | 11,096 |
+| declared opaque (RGB) | 10,993 |
+| opaque and `.Best` | 10,412 |
+| `encode_adaptive` (libpng's row-filter heuristic) | 14,431 - 15,082 |
+| quantized to 256 colours (`e.fmt.png.quantize`, lossy), indexed, `.Best` | 6,004 |
+| quantized to 128 / 64 / 32 colours | 4,997 / 4,376 / 4,045 |
+
+The largest channel error is 17 of 255 at 256 colours (Pillow's median cut: 16,
+6,047 bytes), 55 at 128 and 109 at 64 and below. The row-filter heuristic makes
+flat-colour pictures worse; filter `None` with a good match finder is best here,
+and a trial deflate of every row's five filters does not beat it. `chart_bench`
+prints `png_opaque_best` and `png_indexed` passes with the exact byte totals; the
+times it prints on a loaded host were 15 / 29 / 45 ms a chart (plain, opaque
+`.Best`, quantized `.Best`), so quantizing is for files that are kept or sent.
 
 ## Caveats
 
 - One machine, wall-clock time, on a host shared with other work: single runs
   varied by up to 50%, which is why the table uses nine-run medians.
-- Not measured here: ggplot2, base R graphics and lattice. The harness is
-  written (`r_bench.R`, below) but this machine has no R, and R was not
-  downloaded; their rows are absent from the table, not estimated. Linux is
-  not measured either: the WSL Python has no matplotlib. `run.py` works on
-  Linux once matplotlib is installed.
+- Linux is not measured: the WSL Python has no matplotlib or R. `run.py`
+  works on Linux once matplotlib and R are installed.
 - matplotlib does work Neper does not: it shapes text with its own font
   manager and draws an axes frame. The workload keeps the visible content the
   same, not the internal work.

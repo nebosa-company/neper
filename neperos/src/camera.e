@@ -15,6 +15,7 @@ use e.io
 use e.gfx.image
 use e.gfx.vision
 use e.fmt.png
+use e.barcode
 use vaultfs
 use e.gfx.geometry
 use e.gfx.paint
@@ -215,6 +216,7 @@ fn toast_text(toast: usize) -> str {
     if toast == 3usize { ret "Scan saved" }
     if toast == 4usize { ret "Front camera" }
     if toast == 5usize { ret "Rear camera" }
+    if toast == 6usize { ret "Code read" }
     ret ""
 }
 
@@ -568,11 +570,14 @@ fn save_photo(a: *mem.Arena) -> bool {
 // sampled at one pixel in four; the page is the bright (paper) region of the rows above the zoom chips, its corners
 // the extremes of x + y and x - y; a homography maps the 186 x 300 sheet onto those corners and the sheet is
 // sampled bilinearly. False when no page is in view.
-fn save_scan(a: *mem.Arena) -> bool {
+fn save_scan(a: *mem.Arena, code_found: *bool) -> bool {
     let step = 4usize
     let width = 320usize
     let height = 393usize
     let top = 261usize
+    // (D4808) The same samples as 8-bit luminance, for the QR reader.
+    let (luma, luma_error) = mem.alloc[u8](a, width * height)
+    if luma_error != ok { ret false }
     var min_sum = 100000i64
     var max_sum = -100000i64
     var min_diff = 100000i64
@@ -590,6 +595,7 @@ fn save_scan(a: *mem.Arena) -> bool {
             let red = (px >> 16usize) & 255usize
             let green = (px >> 8usize) & 255usize
             let blue = px & 255usize
+            luma[y * width + x] = u8((red * 299usize + green * 587usize + blue * 114usize) / 1000usize)
             if red >= 200usize && green >= 200usize && blue >= 190usize {
                 bright += 1usize
                 let sum = i64(x) + i64(y)
@@ -619,6 +625,24 @@ fn save_scan(a: *mem.Arena) -> bool {
     say_num(bright)
     say(" bright\n")
     if bright < 3000usize { ret false }
+    // (D4808) A QR code on the page is read from the frame (its finder patterns found, the grid sampled, Reed-Solomon
+    // corrected); the text goes to /scancode, which Wallet offers to add. A page with none is only a scan.
+    let (code, code_error) = barcode.qr_scan(a, luma, width, height)
+    if code_error == ok && code.len > 0usize && code.len <= 120usize {
+        var code_bytes: [128]u8 = zero
+        var c = 0usize
+        while c < code.len {
+            code_bytes[c] = code[c]
+            c += 1usize
+        }
+        say("camera scan qr ")
+        say(code_bytes[0usize..code.len])
+        say("\n")
+        if vaultfs.write("/scancode", mem.address_of(&code_bytes[0usize]), code.len) {
+            *code_found = true
+            say("camera saved /scancode\n")
+        }
+    }
     let out_w = 186usize
     let out_h = 300usize
     var from_sheet: [4]vision.Point = zero
@@ -963,7 +987,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
                 if s.save_scan {
                     s.save_scan = false
-                    if !save_scan(a) { say("camera scan found no page\n") }
+                    var code_found = false
+                    if !save_scan(a, &code_found) { say("camera scan found no page\n") }
+                    if code_found { s.toast = 6usize }
                 }
                 if !show(a, &kit, &s) {
                     say("camera present failed\n")

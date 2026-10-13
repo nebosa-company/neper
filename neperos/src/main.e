@@ -73,6 +73,11 @@ var driver_pool_bytes: usize = 131072usize
 // a non-zero value maps a separate EL0 region of that size and points the program's arena at it,
 // for the e.ui/e.gpu stack whose allocations dwarf 64 KB. Set before a start, reset to 0 after.
 var driver_arena_bytes: usize = 0usize
+// (D4811) Which device of the wanted type a driver server takes: 0 the last (as it always did), n the nth in slot
+// order. The first block device is the system disk, the second external storage.
+var driver_nth: usize = 0usize
+// An external storage server is running over the second block device (endpoints 22 and 23).
+var external_present: bool = false
 // (D2239) The arena of the full-screen app launched last, kept for the next one (see with_big_arena).
 var app_arena_region: usize = 0usize
 var app_arena_bytes: usize = 0usize
@@ -554,9 +559,13 @@ fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize,
 fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, host: pci.Host, bar: usize, want_type: usize, name: str) -> (usize, err) {
     var slot = 0usize
     var found = 32usize
+    var seen = 0usize
     while slot < 32usize {
         let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
-        if is_virtio && device_type == want_type { found = slot }
+        if is_virtio && device_type == want_type {
+            seen += 1usize
+            if driver_nth == 0usize || driver_nth == seen { found = slot }
+        }
         slot += 1usize
     }
     if found == 32usize { ret (bar, ok) }
@@ -732,6 +741,10 @@ fn launch(frame: *a64.Frame) {
     // copies it out of the caller's pages into its own buffer and starts it as a full-screen app.
     var image_addr = 0usize
     var image_len = 0usize
+    // (D4810) The number the kernel stamps on an app's words: its archive entry; an installed app's is 100 to 199 by a hash
+    // of its image (the same package is the same number every time), so the filesystem server can keep each in a
+    // directory of its own.
+    var app_number = 0usize
     let installed = (usize(frame.x[0usize]) >> 63usize) != 0usize
     // The capabilities an installed app's manifest declared, as bits 56 (network) and 57 (storage); an archive
     // app has what its entry always had.
@@ -767,6 +780,16 @@ fn launch(frame: *a64.Frame) {
         image_addr = base
         image_len = pages * 4096usize
         index = 99usize
+        // A polynomial hash (mod a prime under 2^32, so no step overflows) of the first 4 KB of the image and its length.
+        var hash = 7u64
+        var hw = 0usize
+        while hw < 4096usize {
+            let word = os.load64(base + hw)
+            hash = (hash * 31u64 + (word & 4294967295u64) + (word >> 32u64)) % 4294967291u64
+            hw += 8usize
+        }
+        hash = (hash * 31u64 + u64(image_len)) % 4294967291u64
+        app_number = 100usize + usize(hash % 100u64)
         console_write("launch installed capabilities ")
         if (declared & 1usize) != 0usize { console_write("network ") }
         if (declared & 2usize) != 0usize { console_write("storage ") }
@@ -811,7 +834,7 @@ fn launch(frame: *a64.Frame) {
         thread.grant(child, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize)
         // (D4003) The kernel stamps the app's number on its words to the sensor server; a launched app is its archive
         // entry, an installed one 99 (which the server holds no sensor for).
-        thread.set_app(child, index)
+        if installed { thread.set_app(child, app_number) } else { thread.set_app(child, index) }
         if sensors_present {
             thread.grant(child, 11usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 14usize)
             thread.grant(child, 12usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 15usize)
@@ -851,6 +874,11 @@ fn launch(frame: *a64.Frame) {
         // (C138) The Steps app (entry 36) keeps today's count and the goal in /steps.
         // (C139) The Blocks app (entry 37) keeps the best score in /blocks.
         // (C163) The Flashlight (entry 31) keeps its saved patterns and speed in /flashlight.
+        // (D4811) The Files app (entry 23) also reaches the external storage server (slots 7 and 8).
+        if external_present && index == 23usize {
+            thread.grant(child, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 22usize)
+            thread.grant(child, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 23usize)
+        }
         // (C158) The Mail app (entry 26) saves an attachment into /Downloads.
         // (C167) The Translate app (entry 35) keeps its history and saved phrases in /translate.
         if index == 38usize || index == 26usize || index == 39usize || index == 19usize || index == 41usize || index == 32usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize || index == 31usize || index == 35usize {
@@ -1272,16 +1300,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     net_present = true
                 }
                 last_server_index = thread.MAX_THREADS
+                // (D4811) The first block device is the system disk (a second one is external storage, below).
+                driver_nth = 1usize
                 let (fs_bar, fs_error) = start_driver_server(a, archive_base + archive_offset[5usize], archive_length[5usize], 7usize, pci_host, net_bar, pci.VIRTIO_BLOCK, "fs")
+                driver_nth = 0usize
                 if fs_error != ok { ret fs_error }
                 if last_server_index != thread.MAX_THREADS {
                     thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 6usize)
                     thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 7usize)
+                    // (D4810) Requests carry the sender's app number in the top byte of every word.
+                    thread.stamp_endpoint(6usize)
                     fs_present = true
                     // (C126) The shell reads the stored system theme at boot, over the same two endpoints
                     // (slots 6 and 7 in the shell; the apps it launches have their own).
                     thread.grant(comp_app, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                     thread.grant(comp_app, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
+                }
+                // (D4811) A second block device is external storage: a second instance of the filesystem server over it,
+                // serving endpoints 22 (requests) and 23 (replies), which only the Files app (entry 23) is granted
+                // (slots 7 and 8). Its address space number is far above the launched apps'.
+                if fs_present {
+                    last_server_index = thread.MAX_THREADS
+                    driver_nth = 2usize
+                    let (external_bar, external_error) = start_driver_server(a, archive_base + archive_offset[5usize], archive_length[5usize], 60000usize, pci_host, fs_bar, pci.VIRTIO_BLOCK, "fsx")
+                    driver_nth = 0usize
+                    if external_error != ok { ret external_error }
+                    if last_server_index != thread.MAX_THREADS {
+                        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 22usize)
+                        thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 23usize)
+                        external_present = true
+                    }
                 }
                 // (C126) The settings server: archive entry 6 (the older boot's wallpaper loader), holding the
                 // settings and the system word. It serves endpoints 12 (requests) and 13 (replies), and reads and

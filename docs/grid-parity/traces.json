@@ -1,0 +1,114 @@
+{
+ "schema": "neper-grid-behaviour-traces",
+ "source": "mtgstudio.exe 3.234 Debug, 2026-10-13, driven by docs/grid-parity/drive.ps1; the status bar's 'Rec: n' is the current record",
+ "traces": [
+  {
+   "id": "K1",
+   "name": "a click makes a row current",
+   "steps": [
+    "click first data row"
+   ],
+   "v3": "Rec: 1",
+   "neper": "tap on a row: current_position 0",
+   "replayed": "ui_datagrid section 20"
+  },
+  {
+   "id": "K2",
+   "name": "Down moves the current row by one",
+   "steps": [
+    "click first data row",
+    "Down",
+    "Down",
+    "Down"
+   ],
+   "v3": "Rec: 1 -> 4",
+   "neper": "current_position 3",
+   "replayed": "ui_datagrid section 20"
+  },
+  {
+   "id": "K3",
+   "name": "Up moves it back by one",
+   "steps": [
+    "...",
+    "Up"
+   ],
+   "v3": "standard grid behaviour (not separately recorded)",
+   "neper": "current_position 2",
+   "replayed": "ui_datagrid section 20"
+  },
+  {
+   "id": "K4",
+   "name": "End goes to the last record, Home to the first",
+   "steps": [
+    "End",
+    "Home"
+   ],
+   "v3": "not recorded: the Debug build stopped answering after End on 120,239 rows; DevExpress grid default",
+   "neper": "last visible row / row 0",
+   "replayed": "ui_datagrid section 20"
+  },
+  {
+   "id": "S1",
+   "name": "a header click sorts ascending, the next descending",
+   "steps": [
+    "click header",
+    "click header"
+   ],
+   "v3": "triangle up, then triangle down (recorded S03, S04)",
+   "neper": "sort_changed(spec, false), sort_changed(spec, true)",
+   "replayed": "ui_datagrid section 2"
+  },
+  {
+   "id": "P1",
+   "name": "Page Down moves by the rows shown",
+   "v3": "unreliable in the recorded session (+2 of about 9 shown rows while card images downloaded)",
+   "neper": "collection's page roving",
+   "replayed": "open"
+  },
+  {
+   "id": "S2",
+   "name": "after a sort the current card stays current and the view moves the least that shows it",
+   "steps": [
+    "current card at the top of Edition order (record 82893)",
+    "click Color header (asc): record 20273, card kept, at the top",
+    "click Color header (desc): record 94403, card kept, at the bottom"
+   ],
+   "v3": "recorded: docs/grid-parity/S2-sort-keeps-current-v3.png; the order is the clicked column, then Edition, then Name (both ascending) whatever the direction",
+   "neper": "follow_row_after_reorder; the sample's keys are clicked, Edition, Name",
+   "replayed": "ui_datagrid section 22"
+  },
+  {
+   "id": "A1",
+   "name": "a double click on a header edge best-fits the column",
+   "steps": [
+    "double click the right edge of Name"
+   ],
+   "v3": "Name widens to its longest card name (recorded: A1-best-fit-v3.png)",
+   "neper": "a double tap on the resize handle -> best fit (longest content and title in the grid's text)",
+   "replayed": "ui_datagrid section 23; live in the sample (A1-best-fit-v5.png)"
+  },
+  {
+   "id": "G1",
+   "name": "grouping and ungrouping keep the current card current and show it",
+   "steps": [
+    "ungrouped: current card Addle, record 82894",
+    "View > Group by Rarity: the card is still current, its group open",
+    "View > Remove Grouping: record 82894 again, the card scrolled into view (at the bottom of the view)"
+   ],
+   "v3": "recorded: docs/grid-parity/G1-group-keeps-current-v3.png",
+   "neper": "dg.reveal_current opens the groups that hold the current card and scrolls the least",
+   "replayed": "ui_datagrid section 24"
+  },
+  {
+   "id": "F1",
+   "name": "filter",
+   "v3": "the card pool has no filter row: the toolbar box is a Find box (typing does nothing until the binoculars or Enter) and the funnel opens the 'Filter Card Pool' dialog with OK/Apply, so there is no delayed apply to record in this view",
+   "neper": "set_filter_action for the funnel; the filter row stays an extra",
+   "replayed": "n/a"
+  }
+ ],
+ "open": [
+  "Ctrl+click multi-sort, Shift+click ranges, typeahead search buffer reset time",
+  "focus after edit (the card pool is read-only in v3; editing happens in the deck and collection views, not yet recorded)"
+ ]
+}

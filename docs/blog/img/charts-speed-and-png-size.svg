@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-labelledby="t d">
+  <title id="t">Neper charts: faster and smaller</title>
+  <desc id="d">SVG chart time, milliseconds per chart: Neper 3.9, base R 13.2, lattice 34.9, matplotlib 44.2, ggplot2 288.6.</desc>
+  <style>
+    .page { fill: #f8f9ff; } .ink { fill: #1a1b20; } .muted { fill: #434653; } .accent { fill: #145db2; } .rival { fill: #737784; }
+    .display { font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", system-ui, sans-serif; }
+    .sans { font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", system-ui, sans-serif; }
+    .mono { font-family: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", Consolas, monospace; }
+    @media (prefers-color-scheme: dark) { .page { fill: #121318; } .ink { fill: #e1e2e9; } .muted { fill: #c3c6d5; } .accent { fill: #b3c5ff; } .rival { fill: #8d909e; } }
+  </style>
+  <rect class="page" width="1200" height="630"/>
+  <text class="display ink" x="64" y="110" font-size="56">Faster charts, smaller SVG</text>
+  <text class="sans muted" x="64" y="160" font-size="28">One 360x240 chart, 1,000 points and 200 markers, written as SVG. Median ms per chart.</text>
+  <text class="sans ink" x="64" y="256" font-size="26">Neper</text><rect class="accent" x="260" y="232" width="41" height="30" rx="6"/><text class="mono ink" x="315" y="256" font-size="24">3.9 ms</text>
+  <text class="sans ink" x="64" y="318" font-size="26">base R</text><rect class="rival" x="260" y="294" width="136" height="30" rx="6"/><text class="mono ink" x="410" y="318" font-size="24">13.2 ms</text>
+  <text class="sans ink" x="64" y="380" font-size="26">lattice</text><rect class="rival" x="260" y="356" width="360" height="30" rx="6"/><text class="mono ink" x="634" y="380" font-size="24">34.9 ms</text>
+  <text class="sans ink" x="64" y="442" font-size="26">matplotlib</text><rect class="rival" x="260" y="418" width="457" height="30" rx="6"/><text class="mono ink" x="731" y="442" font-size="24">44.2 ms</text>
+  <text class="sans ink" x="64" y="504" font-size="26">ggplot2</text><rect class="rival" x="260" y="480" width="620" height="30" rx="6"/><text class="mono ink" x="894" y="504" font-size="24">288.6 ms</text>
+  
+  <text class="sans muted" x="64" y="548" font-size="22">The ggplot2 bar is clipped at 60 ms.</text>
+  <text class="mono muted" x="64" y="590" font-size="20">Windows 11, R 4.6.1, matplotlib 3.9.4, five-run medians (benchmarks/charts)</text>
+</svg>

@@ -47,7 +47,7 @@ error TooLarge
 error OutOfMemory
 error Lost
 
-const SCENE_BYTES: usize = 262144usize
+const SCENE_BYTES: usize = 4194304usize
 const MAX_EDGES: usize = 65536usize
 const MAX_MASKS: usize = 8usize
 const MAX_LAYERS: usize = 4usize
@@ -513,6 +513,15 @@ fn update_image(r: *Renderer, texture: TextureId, image_view: image.ConstImage) 
     if needed_error != ok || image_view.pixels.len < needed { ret Invalid }
     fill_texture(t, image_view)
     ret ok
+}
+
+// The size in texels of an uploaded image (a `DrawImage.source` is in texels).
+fn image_size(r: *Renderer, texture: TextureId) -> (u32, u32, err) {
+    let (s, state_error) = renderer_state(r)
+    if state_error != ok { ret (0u32, 0u32, state_error) }
+    let (slot, slot_error) = texture_slot(s, texture)
+    if slot_error != ok { ret (0u32, 0u32, slot_error) }
+    ret (s.textures[slot].width, s.textures[slot].height, ok)
 }
 
 fn release_image(r: *Renderer, texture: TextureId) -> err {

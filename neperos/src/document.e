@@ -14,7 +14,11 @@
 // queued as C123's remainder, C142.
 use e.mem
 use e.os
+use e.io
+use e.fmt.png
+use e.fmt.jpeg
 use e.gfx.geometry
+use e.gfx.image
 use e.gfx.paint
 use e.gfx.scene
 use e.gfx.svg
@@ -27,6 +31,7 @@ use vaultfs
 use e.fmt.ooxml as ooxml
 use e.fmt.odf as odf
 use e.fmt.pdf as pdf
+use e.fmt.html as html
 use e.fmt.zip as zip
 use e.text.highlight as hl
 
@@ -36,6 +41,7 @@ const LIST_SCREEN: usize = 0usize
 const VIEW_SCREEN: usize = 1usize
 const DISK_SCREEN: usize = 7usize
 const FIND_SCREEN: usize = 8usize
+const OUTLINE_SCREEN: usize = 9usize
 const MD: usize = 0usize
 const TXT: usize = 1usize
 const CODE: usize = 2usize
@@ -46,6 +52,9 @@ const PPTX: usize = 5usize
 const SHEET: usize = 6usize
 // A PDF drawn page by page from its content streams (C152), with its text lines one tap away.
 const PDFPAGE: usize = 7usize
+// A Word document with styled lines and pictures (D4805), and a deck drawn from its shapes.
+const WORD: usize = 8usize
+const SLIDES: usize = 9usize
 
 type State = struct {
     // A file handed over by Files (C125): its name and text, shown as entry FILES of the list.
@@ -77,6 +86,36 @@ type State = struct {
     pdf_pages: usize,
     pdf_text: bool,
     pdf_said: usize,
+    // (D4801) The painted page's images as textures (uploaded once per page; `pdf_tex_page` is the page + 1 they
+    // belong to), the page zoom step (0 fit, 1 1.5x, 2 2x, 3 3x) and the pan in dp (at most 0 up and left).
+    pdf_tex: [6]scene.TextureId,
+    pdf_tex_w: [6]f32,
+    pdf_tex_h: [6]f32,
+    // A Word picture's width in dp (from its extent; 0 when the part gave none).
+    pic_dp_w: [6]f32,
+    pdf_tex_n: usize,
+    pdf_tex_page: usize,
+    pz: usize,
+    pan_x: f32,
+    pan_y: f32,
+    // A finger down on the page: where it went down (a drag pans a zoomed page).
+    drag_on: bool,
+    drag_x: f32,
+    drag_y: f32,
+    // The word Find highlights on the painted page (set when a Find found it) and how many runs carried it.
+    hl_on: bool,
+    // (D4805) A Word file or a deck drawn from its package again each frame: its path; for Word, each text line's
+    // style (0 body, 1 title or heading 1, 2 heading 2, 3 deeper headings, 9 a picture's first line, 8 its others).
+    office_path: [64]u8,
+    office_path_len: usize,
+    deck_slides: usize,
+    line_style: [512]u8,
+    // The outline: up to eleven bookmarks (title bytes, depth, page).
+    ol_n: usize,
+    ol_text: [440]u8,
+    ol_len: [11]usize,
+    ol_page: [11]usize,
+    ol_level: [11]usize,
     big_path: [64]u8,
     big_path_len: usize,
     big_size: usize,
@@ -132,6 +171,7 @@ fn office_text(a: *mem.Arena, s: *State, is_deck: bool, is_odf: bool, raw: []con
     if is_deck {
         let (slides, slides_error) = deck_of(a, is_odf, raw)
         if slides_error != ok { ret 0usize }
+        s.deck_slides = slides.len
         var i = 0usize
         while i < slides.len {
             n = add_line(s, n, ui.join(a, "Slide ", ui.number(a, i + 1usize), ""))
@@ -157,28 +197,67 @@ fn office_text(a: *mem.Arena, s: *State, is_deck: bool, is_odf: bool, raw: []con
                 grids = found_grids
             }
         }
+        // (D4805) Each line's style (Title and Heading n from the paragraph's style) and the lines a picture reserves.
+        var pictures: []ooxml.Picture = zero
+        if !is_odf {
+            let (found_pictures, pictures_error) = ooxml.pictures(a, raw)
+            if pictures_error == ok { pictures = found_pictures }
+        }
+        var line_no = 0usize
         var next_table = 0usize
         var body_count = 0usize
         var i = 0usize
         while i < paragraphs.len {
+            var p = 0usize
+            while p < pictures.len {
+                if pictures[p].paragraph == i && line_no + 4usize < 512usize {
+                    s.line_style[line_no] = 9u8
+                    n = add_line(s, n, ui.number(a, p))
+                    line_no += 1usize
+                    var pad = 0usize
+                    while pad < 3usize {
+                        s.line_style[line_no] = 8u8
+                        n = add_line(s, n, "")
+                        line_no += 1usize
+                        pad += 1usize
+                    }
+                }
+                p += 1usize
+            }
             let in_cell = i < flags.len && flags[i]
             if !in_cell {
                 while next_table < grids.len && grids[next_table].after <= body_count {
                     n = add_grid(s, n, grids[next_table])
+                    line_no += grids[next_table].rows
                     next_table += 1usize
+                }
+                if line_no < 512usize {
+                    var style = 0u8
+                    let name = paragraphs[i].style
+                    if ui.same(name, "Title") || ui.same(name, "Heading1") { style = 1u8 }
+                    if ui.same(name, "Heading2") { style = 2u8 }
+                    if ui.same(name, "Heading3") || ui.same(name, "Heading4") || ui.same(name, "Subtitle") { style = 3u8 }
+                    s.line_style[line_no] = style
                 }
                 if paragraphs[i].list {
                     n = add_line(s, n, ui.join(a, "- ", paragraphs[i].text, ""))
                 } else {
                     n = add_line(s, n, paragraphs[i].text)
                 }
+                line_no += 1usize
                 body_count += 1usize
             }
             i += 1usize
         }
         while next_table < grids.len {
             n = add_grid(s, n, grids[next_table])
+            line_no += grids[next_table].rows
             next_table += 1usize
+        }
+        if pictures.len > 0usize {
+            ui.say("document word pictures ")
+            ui.say_num(pictures.len)
+            ui.say("\n")
         }
         if grids.len > 0usize {
             ui.say("document tables ")
@@ -255,6 +334,31 @@ fn pdf_text(a: *mem.Arena, s: *State, raw: []const u8) -> usize {
     let (found, pages_error) = pdf.pages(a, raw)
     if pages_error != ok { ret 0usize }
     s.pdf_pages = found.len
+    // (D4801) The bookmarks (the first eleven), a new document's zoom and pan, and the old page's textures forgotten.
+    s.ol_n = 0usize
+    s.pz = 0usize
+    s.pan_x = 0.0
+    s.pan_y = 0.0
+    s.hl_on = false
+    s.pdf_tex_page = 0usize
+    let (marks, marks_error) = pdf.outline(a, raw)
+    if marks_error == ok {
+        var m = 0usize
+        while m < marks.len && s.ol_n < 11usize {
+            var len = marks[m].title.len
+            if len > 40usize { len = 40usize }
+            var b = 0usize
+            while b < len {
+                s.ol_text[s.ol_n * 40usize + b] = marks[m].title[b]
+                b += 1usize
+            }
+            s.ol_len[s.ol_n] = len
+            s.ol_page[s.ol_n] = marks[m].page
+            s.ol_level[s.ol_n] = marks[m].level
+            s.ol_n += 1usize
+            m += 1usize
+        }
+    }
     var n = 0usize
     var i = 0usize
     while i < found.len {
@@ -385,6 +489,7 @@ fn hand_lines(s: *State) -> usize {
 // The pages of what is open: a handed file's lines in pages, or a sample's own count.
 fn pages_of(s: *State) -> usize {
     if s.open == FILES && s.hand_kind == PDFPAGE && !s.pdf_text { ret s.pdf_pages }
+    if s.open == FILES && s.hand_kind == SLIDES && s.deck_slides > 0usize { ret s.deck_slides }
     if s.open == FILES { ret (hand_lines(s) + lines_per_page(s) - 1usize) / lines_per_page(s) }
     ret page_count(s.open)
 }
@@ -872,6 +977,10 @@ fn draw_txt(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
             try ui.card(a, builder, 28.0, row_y + 22.0, 356.0, 1.0, 0.5, ui.muted())
         } else {
             try ui.put(a, builder, faces.grotesk, 15.0 * zf, row, 28.0, row_y, ui.ink())
+            // (D4807) An entry of an open zip is a tap target: it extracts that one entry.
+            if s.zip_path_len > 0usize && n >= 1usize && n - 1usize < 200usize {
+                ui.hit(&s.hits, 2000usize + n - 1usize, 12.0, row_y - 4.0, 388.0, 26.0 * zf)
+            }
         }
         n += 1usize
     }
@@ -952,7 +1061,105 @@ fn pdf_color(red: f64, green: f64, blue: f64) -> paint.Color {
 // (C152) A PDF page painted: e.fmt.pdf's shapes (filled rectangles, stroked segments, text at its position and size)
 // laid out on a white sheet scaled to the card. The file is read and the page parsed for each draw (a frame's arena
 // is given back at the next).
-fn draw_pdf_page(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+// The zoom factor of step `pz`.
+fn page_zoom(pz: usize) -> f32 {
+    if pz == 1usize { ret 1.5 }
+    if pz == 2usize { ret 2.0 }
+    if pz == 3usize { ret 3.0 }
+    ret 1.0
+}
+
+// (D4801) Upload the images of a painted page as textures, once per page: a picture over 65536 pixels is averaged
+// down by a whole factor first (a texture is four floats a pixel). The old page's textures are released.
+fn upload_page_images(a: *mem.Arena, kit: *appkit.Kit, s: *State, images: []pdf.Image, page: usize) {
+    if s.pdf_tex_page == page + 1usize { ret }
+    var k = 0usize
+    while k < s.pdf_tex_n {
+        let released = scene.release_image(&kit.renderer, s.pdf_tex[k])
+        k += 1usize
+    }
+    s.pdf_tex_n = 0usize
+    s.pdf_tex_page = page + 1usize
+    var i = 0usize
+    while i < images.len && i < 6usize {
+        let source = images[i]
+        var factor = 1usize
+        while (usize(source.width) / factor) * (usize(source.height) / factor) > 65536usize { factor += 1usize }
+        let w = usize(source.width) / factor
+        let h = usize(source.height) / factor
+        var uploaded = false
+        if w > 0usize && h > 0usize {
+            let (small, small_error) = mem.alloc[u8](a, w * h * 4usize)
+            if small_error == ok {
+                var y = 0usize
+                while y < h {
+                    var x = 0usize
+                    while x < w {
+                        var sum_r = 0usize
+                        var sum_g = 0usize
+                        var sum_b = 0usize
+                        var sum_a = 0usize
+                        var dy = 0usize
+                        while dy < factor {
+                            var dx = 0usize
+                            while dx < factor {
+                                let at = ((y * factor + dy) * usize(source.width) + x * factor + dx) * 4usize
+                                sum_r += usize(source.pixels[at])
+                                sum_g += usize(source.pixels[at + 1usize])
+                                sum_b += usize(source.pixels[at + 2usize])
+                                sum_a += usize(source.pixels[at + 3usize])
+                                dx += 1usize
+                            }
+                            dy += 1usize
+                        }
+                        let n = factor * factor
+                        let o = (y * w + x) * 4usize
+                        small[o] = u8(sum_r / n)
+                        small[o + 1usize] = u8(sum_g / n)
+                        small[o + 2usize] = u8(sum_b / n)
+                        small[o + 3usize] = u8(sum_a / n)
+                        x += 1usize
+                    }
+                    y += 1usize
+                }
+                let (view, view_error) = image.make_const(small, u32(w), u32(h), w * 4usize, .Rgba8, .Straight)
+                if view_error == ok {
+                    let (texture, upload_error) = scene.upload_image(&kit.renderer, view)
+                    if upload_error == ok {
+                        s.pdf_tex[i] = texture
+                        s.pdf_tex_w[i] = f32(w)
+                        s.pdf_tex_h[i] = f32(h)
+                        s.pdf_tex_n = i + 1usize
+                        uploaded = true
+                    }
+                }
+            }
+        }
+        if !uploaded {
+            // Keep the slot count honest: a picture that did not upload is drawn as a placeholder.
+            s.pdf_tex_w[i] = 0.0
+            s.pdf_tex_n = i + 1usize
+        }
+        i += 1usize
+    }
+}
+
+// Whether `needle` (the Find word, no case) is at `at` in `hay`.
+fn same_at(hay: str, at: usize, needle: []const u8, needle_len: usize) -> bool {
+    if needle_len == 0usize || at + needle_len > hay.len { ret false }
+    var k = 0usize
+    while k < needle_len {
+        var c = hay[at + k]
+        if c >= 65u8 && c <= 90u8 { c = c + 32u8 }
+        var q = needle[k]
+        if q >= 65u8 && q <= 90u8 { q = q + 32u8 }
+        if c != q { ret false }
+        k += 1usize
+    }
+    ret true
+}
+
+fn draw_pdf_page(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State, faces: text.Faces) -> err {
     try ui.card(a, builder, 24.0, 84.0, 364.0, 680.0, 8.0, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 })
     let path = ui.text_of(a, s.pdf_path[0usize..], s.pdf_path_len)
     let (size, kind, day, found) = vaultfs.stat(path)
@@ -977,20 +1184,64 @@ fn draw_pdf_page(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
         ui.say("document pdf painted ")
         ui.say_num(painting.shapes.len)
         ui.say(" shapes\n")
+        ui.say("document pdf images ")
+        ui.say_num(painting.images.len)
+        ui.say("\n")
     }
+    upload_page_images(a, kit, s, painting.images, s.page)
+    // The page fits the card at step 0; zoomed, it is larger and panned (the pan is kept inside the page).
     var scale = 364.0 / f32(painting.width)
     let tall = 680.0 / f32(painting.height)
     if tall < scale { scale = tall }
-    let left: f32 = 24.0 + (364.0 - f32(painting.width) * scale) / 2.0
-    let top: f32 = 84.0
+    scale = scale * page_zoom(s.pz)
+    let shown_w = f32(painting.width) * scale
+    let shown_h = f32(painting.height) * scale
+    var left: f32 = 24.0 + (364.0 - shown_w) / 2.0
+    var top: f32 = 84.0
+    if shown_w > 364.0 {
+        if s.pan_x < 364.0 - shown_w { s.pan_x = 364.0 - shown_w }
+        if s.pan_x > 0.0 { s.pan_x = 0.0 }
+        left = 24.0 + s.pan_x
+    }
+    if shown_h > 680.0 {
+        if s.pan_y < 680.0 - shown_h { s.pan_y = 680.0 - shown_h }
+        if s.pan_y > 0.0 { s.pan_y = 0.0 }
+        top = 84.0 + s.pan_y
+    }
     let page_height = f32(painting.height)
+    let save_clip: scene.Command = .Save
+    try scene.push(builder, save_clip)
+    try scene.push(builder, scene.Command { Clip: scene.Clip { Rect: geometry.rect(24.0, 84.0, 364.0, 680.0) } })
+    var highlighted = 0usize
     var i = 0usize
     while i < painting.shapes.len {
         let piece = painting.shapes[i]
         let color = pdf_color(piece.red, piece.green, piece.blue)
         let x0: f32 = left + f32(piece.x0) * scale
         let y0: f32 = top + (page_height - f32(piece.y0)) * scale
-        if piece.kind == pdf.SHAPE_FILL {
+        if piece.kind == pdf.SHAPE_IMAGE {
+            let x1: f32 = left + f32(piece.x1) * scale
+            let y1: f32 = top + (page_height - f32(piece.y1)) * scale
+            var ix = x0
+            var iy = y0
+            var iw = x1 - x0
+            var ih = y1 - y0
+            if iw < 0.0 {
+                ix = x1
+                iw = 0.0 - iw
+            }
+            if ih < 0.0 {
+                iy = y1
+                ih = 0.0 - ih
+            }
+            let slot = i32(piece.size)
+            if slot >= 0i32 && usize(slot) < s.pdf_tex_n && s.pdf_tex_w[usize(slot)] > 0.0 {
+                let k = usize(slot)
+                try scene.push(builder, scene.Command { Image: scene.DrawImage { texture: s.pdf_tex[k], source: geometry.rect(0.0, 0.0, s.pdf_tex_w[k], s.pdf_tex_h[k]), destination: geometry.rect(ix, iy, iw, ih), opacity: 1.0 } })
+            } else {
+                try ui.card(a, builder, ix, iy, iw, ih, 0.0, paint.Color { red: 0.86, green: 0.86, blue: 0.88, alpha: 1.0 })
+            }
+        } else if piece.kind == pdf.SHAPE_FILL {
             let x1: f32 = left + f32(piece.x1) * scale
             let y1: f32 = top + (page_height - f32(piece.y1)) * scale
             var rx = x0
@@ -1037,10 +1288,276 @@ fn draw_pdf_page(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
         } else {
             var size_dp = f32(piece.size) * scale
             if size_dp < 5.0 { size_dp = 5.0 }
+            // (D4801) The Find word, marked behind the run it is in: the run's width is split by characters.
+            if s.hl_on && s.find.len > 0usize {
+                let run_w = (f32(piece.x1) - f32(piece.x0)) * scale
+                var at = 0usize
+                while at + s.find.len <= piece.text.len {
+                    if same_at(piece.text, at, s.find.bytes[0usize..], s.find.len) {
+                        let from = run_w * f32(at) / f32(piece.text.len)
+                        let span = run_w * f32(s.find.len) / f32(piece.text.len)
+                        try ui.card(a, builder, x0 + from - 1.0, y0 - size_dp * 0.95, span + 2.0, size_dp * 1.2, 2.0, paint.Color { red: 1.0, green: 0.88, blue: 0.30, alpha: 1.0 })
+                        highlighted += 1usize
+                        at += s.find.len
+                    } else {
+                        at += 1usize
+                    }
+                }
+            }
             try ui.put(a, builder, faces.jost, size_dp, piece.text, x0, y0 - size_dp * 0.85, color)
         }
         i += 1usize
     }
+    let restore_clip: scene.Command = .Restore
+    try scene.push(builder, restore_clip)
+    if highlighted > 0usize && s.hl_on {
+        ui.say("document pdf highlight ")
+        ui.say_num(highlighted)
+        ui.say("\n")
+    }
+    ret ok
+}
+
+// (D4805) Decode a PNG or JPEG as stored (by its first bytes; at most 262144 pixels) and upload it into texture slot
+// `slot`; false when it is neither, is too large or does not decode.
+fn upload_picture(a: *mem.Arena, kit: *appkit.Kit, s: *State, slot: usize, bytes: []const u8) -> bool {
+    if slot >= 6usize || bytes.len < 8usize { ret false }
+    var reader_state: io.SliceReader = zero
+    reader_state.data = bytes
+    reader_state.off = 0usize
+    var decoded: image.Image = zero
+    var decode_error = ok
+    if bytes[0usize] == 255u8 && bytes[1usize] == 216u8 {
+        let (jpeg_image, jpeg_error) = jpeg.decode(a, io.slice_reader(&reader_state), jpeg.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 262144u64 })
+        decoded = jpeg_image
+        decode_error = jpeg_error
+    } else {
+        let (png_image, png_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 262144u64, verify_crc: true })
+        decoded = png_image
+        decode_error = png_error
+    }
+    if decode_error != ok { ret false }
+    let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+    if view_error != ok { ret false }
+    let (texture, upload_error) = scene.upload_image(&kit.renderer, view)
+    if upload_error != ok { ret false }
+    s.pdf_tex[slot] = texture
+    s.pdf_tex_w[slot] = f32(decoded.width)
+    s.pdf_tex_h[slot] = f32(decoded.height)
+    ret true
+}
+
+// The package at `office_path`, read whole (up to 256 KB); empty when it is missing or larger.
+fn read_office(a: *mem.Arena, s: *State) -> []const u8 {
+    let path = ui.text_of(a, s.office_path[0usize..], s.office_path_len)
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size == 0usize || size > 262144usize { ret "" }
+    let (raw, raw_error) = mem.alloc[u8](a, size)
+    if raw_error != ok { ret "" }
+    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+    if !read_ok || got != size { ret "" }
+    ret raw[0usize..got]
+}
+
+fn release_page_textures(kit: *appkit.Kit, s: *State) {
+    var k = 0usize
+    while k < s.pdf_tex_n {
+        let released = scene.release_image(&kit.renderer, s.pdf_tex[k])
+        k += 1usize
+    }
+    s.pdf_tex_n = 0usize
+}
+
+// A Word document's lines: headings in bold at their size, a table row as cells, a picture (its textures uploaded the
+// first time) at the width of its extent inside the card, the rest as plain lines.
+fn draw_word(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State, faces: text.Faces) -> err {
+    try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, ui.cream())
+    if s.pdf_tex_page != 1usize {
+        release_page_textures(kit, s)
+        s.pdf_tex_page = 1usize
+        let raw = read_office(a, s)
+        if raw.len > 0usize {
+            let (found, found_error) = ooxml.pictures(a, raw)
+            if found_error == ok {
+                var p = 0usize
+                while p < found.len && p < 6usize {
+                    var loaded = upload_picture(a, kit, s, p, found[p].data)
+                    if !loaded { s.pdf_tex_w[p] = 0.0 }
+                    // The size it is drawn at: 52 dp to the inch (a 6.5 inch text width fills the card).
+                    s.pic_dp_w[p] = f32(found[p].cx) / 914400.0 * 52.0
+                    s.pdf_tex_n = p + 1usize
+                    p += 1usize
+                }
+                ui.say("document word pictures drawn ")
+                ui.say_num(s.pdf_tex_n)
+                ui.say("\n")
+            }
+        }
+    }
+    let content = content_of(a, s)
+    let first = first_line(s)
+    var n = first
+    let total = line_total(content)
+    let zf = zoom_factor(s)
+    while n < total && n < first + lines_per_page(s) + 1usize {
+        let row = splitter(a, content, n)
+        let row_y: f32 = 100.0 + f32(n - first) * 26.0 * zf
+        var style = 0u8
+        if n < 512usize { style = s.line_style[n] }
+        if style == 9u8 {
+            // The picture's number is the line's text.
+            var k = 0usize
+            var d = 0usize
+            while d < row.len {
+                k = k * 10usize + usize(row[d] - 48u8)
+                d += 1usize
+            }
+            if k < s.pdf_tex_n && s.pdf_tex_w[k] > 0.0 {
+                var w = s.pic_dp_w[k]
+                if w < 1.0 { w = s.pdf_tex_w[k] * 2.0 }
+                var h = w * s.pdf_tex_h[k] / s.pdf_tex_w[k]
+                let room: f32 = 98.0 * zf
+                if w > 340.0 {
+                    h = h * 340.0 / w
+                    w = 340.0
+                }
+                if h > room {
+                    w = w * room / h
+                    h = room
+                }
+                try scene.push(builder, scene.Command { Image: scene.DrawImage { texture: s.pdf_tex[k], source: geometry.rect(0.0, 0.0, s.pdf_tex_w[k], s.pdf_tex_h[k]), destination: geometry.rect(28.0, row_y, w, h), opacity: 1.0 } })
+            } else {
+                try ui.card(a, builder, 28.0, row_y, 200.0, 80.0, 6.0, paint.Color { red: 0.86, green: 0.86, blue: 0.88, alpha: 1.0 })
+            }
+        } else if style == 8u8 {
+            // The rest of a picture's lines.
+        } else if style == 1u8 {
+            try ui.put(a, builder, faces.jost_bold, 22.0 * zf, row, 28.0, row_y - 4.0, ui.ink())
+        } else if style == 2u8 {
+            try ui.put(a, builder, faces.jost_bold, 18.0 * zf, row, 28.0, row_y - 1.0, ui.amber_dark())
+        } else if style == 3u8 {
+            try ui.put(a, builder, faces.jost_bold, 16.0 * zf, row, 28.0, row_y, ui.ink())
+        } else if field_count(row, 9u8) > 1usize {
+            try draw_cells(a, builder, faces, row, 9u8, field_count(row, 9u8), 28.0, row_y, 356.0, false, ui.ink())
+            try ui.card(a, builder, 28.0, row_y + 22.0, 356.0, 1.0, 0.5, ui.muted())
+        } else {
+            try ui.put(a, builder, faces.grotesk, 15.0 * zf, row, 28.0, row_y, ui.ink())
+        }
+        n += 1usize
+    }
+    ret ok
+}
+
+// The colour of a 0xRRGGBB fill.
+fn rgb_color(value: u32) -> paint.Color {
+    ret paint.Color { red: f32((value >> 16u32) & 255u32) / 255.0, green: f32((value >> 8u32) & 255u32) / 255.0, blue: f32(value & 255u32) / 255.0, alpha: 1.0 }
+}
+
+// (D4805) A slide drawn from its shapes: the slide canvas at the width of the screen, each positioned slide_shape as a
+// rectangle, ellipse, line or picture with its fill and text; shapes with no position of their own (placeholders take
+// theirs from the layout, which is not read) are listed as text under the canvas.
+fn draw_slide_shapes(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State, faces: text.Faces) -> err {
+    let raw = read_office(a, s)
+    var drawn = false
+    if raw.len > 0usize {
+        let (deck_layout, layout_error) = ooxml.slide_layout(a, raw, s.page + 1usize)
+        if layout_error == ok && deck_layout.width > 0usize {
+            if s.pdf_tex_page != s.page + 1usize {
+                release_page_textures(kit, s)
+                s.pdf_tex_page = s.page + 1usize
+                var p = 0usize
+                while p < deck_layout.pictures.len && p < 6usize {
+                    var loaded = upload_picture(a, kit, s, p, deck_layout.pictures[p].data)
+                    if !loaded { s.pdf_tex_w[p] = 0.0 }
+                    s.pdf_tex_n = p + 1usize
+                    p += 1usize
+                }
+                ui.say("document slide shapes ")
+                ui.say_num(deck_layout.shapes.len)
+                ui.say("\n")
+            }
+            let canvas_w: f32 = 380.0
+            let canvas_h: f32 = canvas_w * f32(deck_layout.height) / f32(deck_layout.width)
+            let unit = canvas_w / f32(deck_layout.width)
+            try ui.card(a, builder, 16.0, 96.0, canvas_w, canvas_h, 8.0, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 })
+            var below_y: f32 = 96.0 + canvas_h + 16.0
+            var i = 0usize
+            while i < deck_layout.shapes.len {
+                let slide_shape = deck_layout.shapes[i]
+                if slide_shape.cx == 0usize && slide_shape.cy == 0usize {
+                    // No position: its text goes under the canvas.
+                    var start = 0usize
+                    var at = 0usize
+                    while at <= slide_shape.text.len {
+                        if at == slide_shape.text.len || slide_shape.text[at] == 10u8 {
+                            if at > start && below_y < 800.0 {
+                                try ui.put(a, builder, faces.jost, 17.0, slide_shape.text[start..at], 24.0, below_y, ui.light())
+                                below_y += 26.0
+                            }
+                            start = at + 1usize
+                        }
+                        at += 1usize
+                    }
+                } else {
+                    let x: f32 = 16.0 + f32(slide_shape.x) * unit
+                    let y: f32 = 96.0 + f32(slide_shape.y) * unit
+                    var w: f32 = f32(slide_shape.cx) * unit
+                    var h: f32 = f32(slide_shape.cy) * unit
+                    if w < 1.0 { w = 1.0 }
+                    if h < 1.0 { h = 1.0 }
+                    var ink = ui.ink()
+                    if slide_shape.kind == ooxml.SHAPE_PICTURE {
+                        if slide_shape.picture < s.pdf_tex_n && s.pdf_tex_w[slide_shape.picture] > 0.0 {
+                            let k = slide_shape.picture
+                            try scene.push(builder, scene.Command { Image: scene.DrawImage { texture: s.pdf_tex[k], source: geometry.rect(0.0, 0.0, s.pdf_tex_w[k], s.pdf_tex_h[k]), destination: geometry.rect(x, y, w, h), opacity: 1.0 } })
+                        } else {
+                            try ui.card(a, builder, x, y, w, h, 0.0, paint.Color { red: 0.86, green: 0.86, blue: 0.88, alpha: 1.0 })
+                        }
+                    } else if slide_shape.kind == ooxml.SHAPE_LINE {
+                        if w >= h {
+                            try ui.card(a, builder, x, y, w, 1.5, 0.0, ui.muted())
+                        } else {
+                            try ui.card(a, builder, x, y, 1.5, h, 0.0, ui.muted())
+                        }
+                    } else {
+                        var radius: f32 = 0.0
+                        if slide_shape.kind == ooxml.SHAPE_ELLIPSE {
+                            radius = w / 2.0
+                            if h < w { radius = h / 2.0 }
+                        }
+                        if slide_shape.fill != ooxml.NO_COLOR {
+                            try ui.card(a, builder, x, y, w, h, radius, rgb_color(slide_shape.fill))
+                            // Light text on a dark fill.
+                            let lum = ((slide_shape.fill >> 16u32) & 255u32) + ((slide_shape.fill >> 8u32) & 255u32) + (slide_shape.fill & 255u32)
+                            if lum < 384u32 { ink = ui.light() }
+                        } else if slide_shape.text.len == 0usize {
+                            try ui.card(a, builder, x, y, w, h, radius, paint.Color { red: 0.80, green: 0.80, blue: 0.82, alpha: 1.0 })
+                            try ui.card(a, builder, x + 1.0, y + 1.0, w - 2.0, h - 2.0, radius, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 })
+                        }
+                    }
+                    if slide_shape.kind != ooxml.SHAPE_PICTURE && slide_shape.text.len > 0usize {
+                        var line_y = y + 4.0
+                        var start = 0usize
+                        var at = 0usize
+                        while at <= slide_shape.text.len {
+                            if at == slide_shape.text.len || slide_shape.text[at] == 10u8 {
+                                if at > start {
+                                    try ui.put(a, builder, faces.jost, 14.0, slide_shape.text[start..at], x + 6.0, line_y, ink)
+                                    line_y += 18.0
+                                }
+                                start = at + 1usize
+                            }
+                            at += 1usize
+                        }
+                    }
+                }
+                i += 1usize
+            }
+            drawn = true
+        }
+    }
+    if !drawn { try ui.centred(a, builder, faces.jost, 17.0, "This slide cannot be drawn", 206.0, 300.0, ui.light_muted()) }
+    try ui.put(a, builder, faces.grotesk, 13.0, ui.join(a, "Slide ", ui.number(a, s.page + 1usize), ui.join(a, " of ", ui.number(a, s.deck_slides), "")), 24.0, 78.0, ui.light_muted())
     ret ok
 }
 
@@ -1110,7 +1627,7 @@ fn draw_slide(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     ret ok
 }
 
-fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+fn draw_view(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State, faces: text.Faces) -> err {
     var kind = file_kind(s.open)
     if s.open == FILES { kind = s.hand_kind }
     var painted_pdf = false
@@ -1132,6 +1649,7 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
             var toggle = "Text"
             if s.pdf_text { toggle = "Page" }
             try ui.pill(a, builder, &s.hits, faces, 705usize, 196.0, 50.0, 80.0, 28.0, toggle, ui.amber(), 13.0)
+            if s.ol_n > 0usize { try ui.pill(a, builder, &s.hits, faces, 706usize, 284.0, 50.0, 100.0, 28.0, "Outline", ui.amber(), 13.0) }
         }
         if s.zip_path_len > 0usize { try ui.pill(a, builder, &s.hits, faces, 704usize, 196.0, 50.0, 96.0, 28.0, "Extract", ui.amber(), 13.0) }
     }
@@ -1139,7 +1657,9 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     if kind == TXT { try draw_txt(a, builder, s, faces) }
     if kind == CODE { try draw_code(a, builder, s, faces) }
     if kind == SHEET { try draw_sheet(a, builder, s, faces) }
-    if painted_pdf { try draw_pdf_page(a, builder, s, faces) }
+    if kind == WORD { try draw_word(a, builder, kit, s, faces) }
+    if kind == SLIDES { try draw_slide_shapes(a, builder, kit, s, faces) }
+    if painted_pdf { try draw_pdf_page(a, builder, kit, s, faces) }
     if kind == PDF || kind == DOCX { try draw_page(a, builder, s, faces) }
     if kind == PPTX { try draw_slide(a, builder, s, faces) }
     if pages_of(s) > 1usize || s.big_more || s.big_chunk > 0usize {
@@ -1188,6 +1708,26 @@ fn draw_find(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     ret ok
 }
 
+// (D4801) The bookmarks of the open PDF: each a row indented by its depth with its page; a tap goes to the page.
+fn draw_outline(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
+    ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
+    try ui.put(a, builder, faces.jost_bold, 24.0, "Outline", 62.0, 20.0, ui.light())
+    var i = 0usize
+    while i < s.ol_n {
+        let y: f32 = 84.0 + f32(i) * 58.0
+        let indent: f32 = f32(s.ol_level[i]) * 18.0
+        try ui.card(a, builder, 16.0 + indent, y, 380.0 - indent, 52.0, 16.0, ui.cream())
+        try ui.put(a, builder, faces.jost, 17.0, ui.text_of(a, s.ol_text[i * 40usize..], s.ol_len[i]), 32.0 + indent, y + 14.0, ui.ink())
+        if s.ol_page[i] != pdf.NO_PAGE {
+            try ui.put_right(a, builder, faces.grotesk, 13.0, ui.number(a, s.ol_page[i] + 1usize), 380.0, y + 18.0, ui.muted())
+        }
+        ui.hit(&s.hits, 900usize + i, 16.0, y, 380.0, 52.0)
+        i += 1usize
+    }
+    ret ok
+}
+
 fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
     s.hits.total = 0usize
     let faces = kit.faces
@@ -1198,8 +1738,10 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         try draw_disk(a, builder, s, faces)
     } else if s.screen == FIND_SCREEN {
         try draw_find(a, builder, s, faces)
+    } else if s.screen == OUTLINE_SCREEN {
+        try draw_outline(a, builder, s, faces)
     } else {
-        try draw_view(a, builder, s, faces)
+        try draw_view(a, builder, kit, s, faces)
     }
     try ui.handle(a, builder)
     ret ok
@@ -1218,7 +1760,7 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 
 // Whether `name` is a file the app can show: a document format, Markdown or text, or a language the highlighter knows.
 fn showable(name: str) -> bool {
-    if ends_with(name, ".md") || ends_with(name, ".txt") || ends_with(name, ".docx") || ends_with(name, ".pptx") || ends_with(name, ".pdf") || ends_with(name, ".odt") || ends_with(name, ".odp") || ends_with(name, ".zip") || ends_with(name, ".xlsx") { ret true }
+    if ends_with(name, ".md") || ends_with(name, ".txt") || ends_with(name, ".docx") || ends_with(name, ".pptx") || ends_with(name, ".pdf") || ends_with(name, ".odt") || ends_with(name, ".odp") || ends_with(name, ".zip") || ends_with(name, ".xlsx") || ends_with(name, ".ods") || ends_with(name, ".html") || ends_with(name, ".htm") { ret true }
     let (index, found) = hl.language_for(name)
     ret found
 }
@@ -1255,9 +1797,13 @@ fn do_find(s: *State) -> usize {
     var matches = 0usize
     var found_line = 0usize
     var line = 0usize
+    // (D4801) A PDF's text lines are "Page n" headings and the page's lines: the heading a match follows is its page.
+    var headings = 0usize
+    var found_heading = 0usize
     var i = 0usize
     while i < s.hand_len {
         if s.hand_text[i] == 10u8 { line += 1usize }
+        if s.pdf_path_len > 0usize && (i == 0usize || s.hand_text[i - 1usize] == 10u8) && i + 5usize <= s.hand_len && s.hand_text[i] == 80u8 && s.hand_text[i + 1usize] == 97u8 && s.hand_text[i + 2usize] == 103u8 && s.hand_text[i + 3usize] == 101u8 && s.hand_text[i + 4usize] == 32u8 { headings += 1usize }
         var same = s.find.len > 0usize && i + s.find.len <= s.hand_len
         var k = 0usize
         while same && k < s.find.len {
@@ -1269,12 +1815,22 @@ fn do_find(s: *State) -> usize {
             k += 1usize
         }
         if same {
-            if matches == 0usize { found_line = line }
+            if matches == 0usize {
+                found_line = line
+                found_heading = headings
+            }
             matches += 1usize
         }
         i += 1usize
     }
-    if matches > 0usize { s.page = found_line / lines_per_page(s) }
+    if matches > 0usize {
+        if s.pdf_path_len > 0usize && !s.pdf_text {
+            s.page = 0usize
+            if found_heading > 0usize { s.page = found_heading - 1usize }
+        } else {
+            s.page = found_line / lines_per_page(s)
+        }
+    }
     ret matches
 }
 
@@ -1297,7 +1853,7 @@ fn unsafe_entry(name: str) -> bool {
 // (C150) Extract the open zip archive into a folder named after it, at the root: directories made, files written
 // in pieces; an entry that is unsafe, or larger than 200 KB, is skipped. Says how many files and bytes were written
 // (read back from the disk), and returns the files written.
-fn extract_zip(a: *mem.Arena, s: *State) -> usize {
+fn extract_zip(a: *mem.Arena, s: *State, only: usize) -> usize {
     if s.zip_path_len == 0usize { ret 0usize }
     let path = ui.text_of(a, s.zip_path[0usize..], s.zip_path_len)
     let (size, kind, day, found) = vaultfs.stat(path)
@@ -1326,7 +1882,8 @@ fn extract_zip(a: *mem.Arena, s: *State) -> usize {
     var k = 0usize
     while k < listed.len {
         let name = listed[k].name
-        if !unsafe_entry(name) && listed[k].size <= 204800u64 {
+        // (D4807) One chosen entry (an index into the archive) or all of them (NONE).
+        if (only == NONE || only == k) && !unsafe_entry(name) && listed[k].size <= 204800u64 {
             let dest_path = ui.join(a, base, "/", name)
             // Every directory above the entry (an archive need not list them).
             var j = base.len + 1usize
@@ -1381,6 +1938,27 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         ret false
     }
+    if s.screen == OUTLINE_SCREEN {
+        if id == 500usize {
+            s.screen = VIEW_SCREEN
+            ret true
+        }
+        if id >= 900usize && id < 911usize && id - 900usize < s.ol_n {
+            let k = id - 900usize
+            if s.ol_page[k] != pdf.NO_PAGE && s.ol_page[k] < s.pdf_pages {
+                s.page = s.ol_page[k]
+                s.pdf_text = false
+                s.pan_x = 0.0
+                s.pan_y = 0.0
+            }
+            ui.say("document pdf outline jump ")
+            ui.say_num(s.page + 1usize)
+            ui.say("\n")
+            s.screen = VIEW_SCREEN
+            ret true
+        }
+        ret false
+    }
     if s.screen == FIND_SCREEN {
         if id == 500usize {
             s.screen = VIEW_SCREEN
@@ -1392,6 +1970,14 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         if id == 1205usize {
             let count = do_find(s)
+            // (D4801) On a painted PDF the match is shown on its page, highlighted: the page is the one whose
+            // "Page n" heading the first match follows.
+            s.hl_on = false
+            if s.pdf_path_len > 0usize && !s.pdf_text && count > 0usize {
+                s.hl_on = true
+                s.pan_x = 0.0
+                s.pan_y = 0.0
+            }
             ui.say("document find ")
             ui.say_text(ui.field_text(a, &s.find))
             ui.say(" ")
@@ -1415,9 +2001,15 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == VIEW_SCREEN && s.open == FILES {
         if id == 701usize {
             s.find.len = 0usize
-            // Find looks through the lines of text, so a painted PDF shows them.
-            if s.pdf_path_len > 0usize { s.pdf_text = true }
+            s.hl_on = false
             s.screen = FIND_SCREEN
+            ret true
+        }
+        if id == 706usize && s.ol_n > 0usize {
+            s.screen = OUTLINE_SCREEN
+            ui.say("document pdf outline ")
+            ui.say_num(s.ol_n)
+            ui.say("\n")
             ret true
         }
         if id == 705usize && s.pdf_path_len > 0usize {
@@ -1427,9 +2019,24 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             if s.pdf_text { ui.say("text\n") } else { ui.say("page\n") }
             ret true
         }
+        if id >= 2000usize && id < 2200usize && s.zip_path_len > 0usize {
+            let extracted_one = extract_zip(a, s, id - 2000usize)
+            ret extracted_one > 0usize
+        }
         if id == 704usize && s.zip_path_len > 0usize {
-            let extracted = extract_zip(a, s)
+            let extracted = extract_zip(a, s, NONE)
             ret extracted > 0usize
+        }
+        if (id == 702usize || id == 703usize) && s.pdf_path_len > 0usize && !s.pdf_text {
+            // (D4801) A painted page zooms in steps (fit, 1.5x, 2x, 3x) and is dragged to pan.
+            if id == 702usize && s.pz > 0usize { s.pz -= 1usize }
+            if id == 703usize && s.pz < 3usize { s.pz += 1usize }
+            s.pan_x = 0.0
+            s.pan_y = 0.0
+            ui.say("document pdf zoom ")
+            ui.say_num(s.pz)
+            ui.say("\n")
+            ret true
         }
         if id == 702usize || id == 703usize {
             if id == 702usize && s.zoom > 0usize { s.zoom -= 1usize }
@@ -1503,7 +2110,15 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
     s.hand_has_hl = false
     var text_len = 0usize
     var has_text = false
-    if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") || ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp") || ends_with(hand_path, ".zip") || ends_with(hand_path, ".xlsx") {
+    s.pdf_tex_page = 0usize
+    s.office_path_len = 0usize
+    s.deck_slides = 0usize
+    var cleared = 0usize
+    while cleared < 512usize {
+        s.line_style[cleared] = 0u8
+        cleared += 1usize
+    }
+    if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") || ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp") || ends_with(hand_path, ".zip") || ends_with(hand_path, ".xlsx") || ends_with(hand_path, ".ods") || ends_with(hand_path, ".html") || ends_with(hand_path, ".htm") {
         // An Office file: read it whole (up to 256 KB, in pieces) and take its text.
         let (size, kind, day, found) = vaultfs.stat(hand_path)
         if found && size > 0usize && size <= 262144usize {
@@ -1515,6 +2130,23 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
                         text_len = zip_text(a, s, raw[0usize..got])
                     } else if ends_with(hand_path, ".xlsx") {
                         text_len = xlsx_text(a, s, raw[0usize..got])
+                    } else if ends_with(hand_path, ".ods") {
+                        let (ods_grid, ods_error) = odf.sheet_grid(a, raw[0usize..got], 1usize)
+                        if ods_error == ok && ods_grid.rows > 0usize && ods_grid.columns > 0usize { text_len = add_grid(s, 0usize, ods_grid) }
+                    } else if ends_with(hand_path, ".html") || ends_with(hand_path, ".htm") {
+                        // (D4805) A page as its reading view: Markdown the viewer draws.
+                        let (markdown, markdown_error) = html.to_markdown(a, ui.text_of(a, raw[0usize..], got))
+                        if markdown_error == ok && markdown.len > 0usize {
+                            var copied = 0usize
+                            while copied < markdown.len && copied < 16000usize {
+                                s.hand_text[copied] = markdown[copied]
+                                copied += 1usize
+                            }
+                            text_len = copied
+                            ui.say("document html markdown ")
+                            ui.say_num(markdown.len)
+                            ui.say(" bytes\n")
+                        }
                     } else if ends_with(hand_path, ".pdf") {
                         text_len = pdf_text(a, s, raw[0usize..got])
                     } else {
@@ -1596,7 +2228,19 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
                 s.hand_kind = PDFPAGE
             }
         }
-        if ends_with(hand_path, ".xlsx") { s.hand_kind = SHEET }
+        if ends_with(hand_path, ".xlsx") || ends_with(hand_path, ".ods") { s.hand_kind = SHEET }
+        if ends_with(hand_path, ".html") || ends_with(hand_path, ".htm") { s.hand_kind = MD }
+        if (ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx")) && hand_path.len <= 64usize {
+            // (D4805) A Word file or a deck is drawn from its package: styled lines and pictures, or the shapes.
+            var o = 0usize
+            while o < hand_path.len {
+                s.office_path[o] = hand_path[o]
+                o += 1usize
+            }
+            s.office_path_len = hand_path.len
+            if ends_with(hand_path, ".docx") { s.hand_kind = WORD }
+            if ends_with(hand_path, ".pptx") && s.deck_slides > 0usize { s.hand_kind = SLIDES }
+        }
         // The table-driven highlighter takes any extension it knows that is not a document format.
         let (named_index, named_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
         var hl_index = named_index
@@ -1696,15 +2340,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
     ui.say("document shown\n")
     var running = true
     while running {
-        let tap = appkit.next_tap(&kit)
-        if tap.ended {
+        let tap = appkit.next_touch(&kit, 0usize)
+        let painted_view = s.screen == VIEW_SCREEN && s.open == FILES && s.hand_kind == PDFPAGE && !s.pdf_text
+        if tap.kind == appkit.TOUCH_END {
             running = false
-        } else if tap.tick {
+        } else if tap.kind == appkit.TOUCH_TICK || tap.kind == appkit.TOUCH_MOVE || tap.kind == appkit.TOUCH_TIMEOUT {
             appkit.answer(appkit.ANSWER_NONE)
+        } else if tap.kind == appkit.TOUCH_UP {
+            // (D4801) A drag that began on a zoomed painted page pans it by how far the finger went.
+            var panned = false
+            if s.drag_on {
+                s.drag_on = false
+                let dx = tap.x - s.drag_x
+                let dy = tap.y - s.drag_y
+                if dx > 6.0 || dx < -6.0 || dy > 6.0 || dy < -6.0 {
+                    s.pan_x = s.pan_x + dx
+                    s.pan_y = s.pan_y + dy
+                    ui.say("document pdf pan\n")
+                    panned = true
+                }
+            }
+            if panned {
+                if !show(a, &kit, &s) {
+                    ui.say("document present failed\n")
+                    appkit.answer(appkit.ANSWER_NONE)
+                }
+            } else {
+                appkit.answer(appkit.ANSWER_NONE)
+            }
         } else if tap.y >= 896.0 {
             ui.say("document home\n")
             appkit.leave()
             running = false
+        } else if painted_view && s.pz > 0usize && tap.x >= 24.0 && tap.x < 388.0 && tap.y >= 84.0 && tap.y < 764.0 {
+            s.drag_on = true
+            s.drag_x = tap.x
+            s.drag_y = tap.y
+            appkit.answer(appkit.ANSWER_NONE)
         } else {
             let id = ui.hit_at(&s.hits, tap.x, tap.y)
             if id != ui.NONE && act(a, &s, id) {

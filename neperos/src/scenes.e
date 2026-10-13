@@ -3,6 +3,10 @@
 // mountain -- because the machine has no camera and no photo files. A scene is a function of its kind and
 // a seed, so the same capture draws the same every time. `scene_svg` answers an svg document for e.gfx.svg.
 use e.mem
+use e.barcode
+
+// (D4808) What the QR code on the scanned page says: a loyalty number the Wallet can take.
+fn page_code() -> str { ret "neper.dev/p/4471-0023" }
 
 // The world the scenes are drawn in: the 412 x 560 viewfinder sits at (OX, OY) inside it, so every
 // number is positive and a wide shot (0.5x) can show what lies beyond the frame.
@@ -113,7 +117,7 @@ fn zoom_label(zoom: usize) -> str {
 // of a thumbnail. The picture is `vw` x `vh` units with the scene's centre in its middle, so a square
 // thumbnail shows the middle of a tall scene.
 fn scene_svg(a: *mem.Arena, kind: usize, seed: usize, zoom: usize, wide: bool, vw: usize, vh: usize) -> str {
-    let (b, b_error) = mem.alloc[u8](a, 9000usize)
+    let (b, b_error) = mem.alloc[u8](a, 24000usize)
     if b_error != ok { ret "" }
     var x0 = OX
     var x1 = OX + 412usize
@@ -197,13 +201,38 @@ fn scene_svg(a: *mem.Arena, kind: usize, seed: usize, zoom: usize, wide: bool, v
         n = e_rect(b, n, 470usize, 360usize, 272usize, 440usize, "#f2efe6")
         n = e_rect(b, n, 500usize, 392usize, 120usize, 16usize, "#2b3a55")
         var line = 0usize
-        while line < 10usize {
+        while line < 5usize {
             var w = 200usize
             if line % 4usize == 3usize { w = 140usize }
             n = e_rect(b, n, 500usize, 432usize + line * 30usize, w, 8usize, "#9a9a9a")
             line += 1usize
         }
-        n = e_circle(b, n, 690usize, 750usize, 22usize, "#d9a0a0")
+        // (D4808) A QR code of page_code() in the lower part: white quiet zone, 5 units a module, one path.
+        let (symbol, symbol_error) = barcode.qr_encode(a, page_code(), 1usize)
+        if symbol_error == ok {
+            let qr_x = 500usize
+            let qr_y = 592usize
+            let quiet = 3usize
+            n = e_rect(b, n, qr_x - quiet * 5usize, qr_y - quiet * 5usize, (symbol.size + quiet * 2usize) * 5usize, (symbol.size + quiet * 2usize) * 5usize, "#ffffff")
+            n = emit(b, n, "<path fill='#000' d='")
+            var my = 0usize
+            while my < symbol.size {
+                var mx = 0usize
+                while mx < symbol.size {
+                    if barcode.module_at(symbol, mx, my) == 1usize {
+                        n = emit(b, n, "M")
+                        n = emit_num(b, n, qr_x + mx * 5usize)
+                        n = emit(b, n, " ")
+                        n = emit_num(b, n, qr_y + my * 5usize)
+                        n = emit(b, n, "h5v5h-5z")
+                    }
+                    mx += 1usize
+                }
+                my += 1usize
+            }
+            n = emit(b, n, "'/>")
+        }
+        n = e_circle(b, n, 700usize, 790usize, 14usize, "#d9a0a0")
         n = emit(b, n, "</g>")
     } else if kind == 3usize {
         // A city at night: a dark sky with stars, a glow at the horizon, lit towers.

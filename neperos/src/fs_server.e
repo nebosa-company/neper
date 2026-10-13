@@ -42,6 +42,49 @@ fn reply(result_error: err) {
     }
 }
 
+// (D4810) The apps numbered from here are installed apps, confined to their own directory.
+const CONFINED_FROM: usize = 100usize
+
+// The decimal digits of `n` (at most three) after the `/d` of a confined app's directory: `/d101`; its length.
+fn scope_root_len(app: usize) -> usize {
+    if app >= 100usize { ret 5usize }
+    if app >= 10usize { ret 4usize }
+    ret 3usize
+}
+
+// `path` inside app `app`'s directory: `/d<app>` then the path (a path of "/" or "" is the directory itself); written
+// to `out`, its length.
+fn scoped_path(app: usize, path: str, out: []u8) -> usize {
+    var n = 0usize
+    out[0usize] = 47u8
+    out[1usize] = 100u8
+    n = 2usize
+    if app >= 100usize {
+        out[n] = u8(48usize + app / 100usize % 10usize)
+        n += 1usize
+    }
+    if app >= 10usize {
+        out[n] = u8(48usize + app / 10usize % 10usize)
+        n += 1usize
+    }
+    out[n] = u8(48usize + app % 10usize)
+    n += 1usize
+    var i = 0usize
+    // A path without a leading slash gets one; "/" alone adds nothing.
+    if path.len > 0usize && path[0usize] != 47u8 {
+        out[n] = 47u8
+        n += 1usize
+    }
+    while i < path.len && n < out.len {
+        if !(i == 0usize && path.len == 1usize && path[0usize] == 47u8) {
+            out[n] = path[i]
+            n += 1usize
+        }
+        i += 1usize
+    }
+    ret n
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let device = read_device()
     let (blk, open_error) = virtio.block_open(device)
@@ -68,14 +111,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let data_addr = mem.address_of(&databuf[0usize])
     let name_addr = mem.address_of(&namebuf[0usize])
     let file_addr = mem.address_of(&filebuf[0usize])
+    // (D4810) The kernel stamps the sender's app number in the top byte of every word of a request. An installed app (a
+    // number of 100 and over: the kernel numbers them 100 to 199 by the image) is confined to its own directory `/d<N>`:
+    // every path it sends is that directory's, and it cannot stop the server. Built-in apps (numbers under 100) and the
+    // servers (0) see the whole disk as before.
+    var scope: [80]u8 = zero
+    var scope_two: [80]u8 = zero
+    var made: [256]bool = zero
     var running = true
     while running {
-        let op = os.recv(REQ, fsproto.NO_SLOT)
+        let word = os.recv(REQ, fsproto.NO_SLOT)
+        let op = word & fsproto.STAMP_MASK
+        let app = word >> 56usize
+        let confined = app >= CONFINED_FROM
         // The clock for the entries this request makes or writes.
         let (stamp, clock_error) = time.now()
         if clock_error == ok { fs.set_day(usize(stamp.nanos / 1000000000i64) / 86400usize) }
         if op == fsproto.OP_QUIT {
-            running = false
+            if !confined { running = false }
         } else if op == fsproto.OP_STATS {
             var used = 0usize
             if virtio.block_read(blk, 0u64) == ok { used = usize(os.load32(blk.data + 4usize)) }
@@ -84,20 +137,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let total_sent = os.send(REP, usize(blk.sectors), fsproto.NO_SLOT)
         } else {
             let plen = fsproto.recv_bytes(REQ, path_addr, 64usize)
-            let path = pathbuf[0usize..plen]
+            var path = pathbuf[0usize..plen]
+            if confined {
+                let scoped_len = scoped_path(app, path, scope[0usize..80usize])
+                path = scope[0usize..scoped_len]
+                if !made[app & 255usize] {
+                    made[app & 255usize] = true
+                    let root_made = fs.mkdir(blk, scope[0usize..scope_root_len(app)])
+                }
+            }
             if op == fsproto.OP_RENAME {
                 let nlen = fsproto.recv_bytes(REQ, data_addr, 64usize)
                 reply(fs.rename(blk, path, databuf[0usize..nlen]))
             } else if op == fsproto.OP_RESERVE {
-                let size_word = os.recv(REQ, fsproto.NO_SLOT)
+                let size_word = os.recv(REQ, fsproto.NO_SLOT) & fsproto.STAMP_MASK
                 reply(fs.reserve(blk, path, size_word))
             } else if op == fsproto.OP_WRITE_AT {
-                let offset_word = os.recv(REQ, fsproto.NO_SLOT)
-                let piece = fsproto.recv_packed(REQ, data_addr, 4096usize)
+                let offset_word = os.recv(REQ, fsproto.NO_SLOT) & fsproto.STAMP_MASK
+                let piece = fsproto.recv_packed7(REQ, data_addr, 4096usize)
                 reply(fs.write_at(blk, path, offset_word, data_addr, piece))
             } else if op == fsproto.OP_READ_AT {
-                let offset_word = os.recv(REQ, fsproto.NO_SLOT)
-                var want = os.recv(REQ, fsproto.NO_SLOT)
+                let offset_word = os.recv(REQ, fsproto.NO_SLOT) & fsproto.STAMP_MASK
+                var want = os.recv(REQ, fsproto.NO_SLOT) & fsproto.STAMP_MASK
                 if want > 4096usize { want = 4096usize }
                 let (got, read_error) = fs.read_at(blk, path, offset_word, file_addr, want)
                 var n = got
@@ -110,7 +171,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 fsproto.send_packed(REP, file_addr, n)
             } else if op == fsproto.OP_MOVE {
                 let dlen = fsproto.recv_bytes(REQ, data_addr, 64usize)
-                reply(fs.move(blk, path, databuf[0usize..dlen]))
+                var destination = databuf[0usize..dlen]
+                if confined {
+                    let destination_len = scoped_path(app, destination, scope_two[0usize..80usize])
+                    destination = scope_two[0usize..destination_len]
+                }
+                reply(fs.move(blk, path, destination))
             } else if op == fsproto.OP_STAT {
                 let (size, kind, found) = fs.stat(blk, path)
                 if found {
@@ -126,6 +192,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             } else {
                 if op == fsproto.OP_WRITE {
                     let dlen = fsproto.recv_bytes(REQ, data_addr, 4096usize)
+                    if confined {
+                        say("fs confined write ")
+                        say(path)
+                        say("\n")
+                    }
                     reply(fs.write(blk, path, data_addr, dlen))
                 } else {
                     if op == fsproto.OP_REMOVE {

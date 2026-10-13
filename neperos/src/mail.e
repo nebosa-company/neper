@@ -57,12 +57,13 @@ type Mail = struct {
     // (C128) The message's UID on the server, when it came from there.
     uid: usize,
     remote: bool,
-    // (C158) The first attachment of a multipart/mixed message: its file name and what of its bytes were kept (128).
+    // (C158) The first attachment of a multipart/mixed message: its file name and what of its bytes were kept (D4806:
+    // up to 4096, read from at most 6144 bytes of the part, so an attachment is truncated beyond about 4.5 KB).
     att_name: [24]u8,
     att_name_len: usize,
     att_size: usize,
     att_len: usize,
-    att_data: [128]u8,
+    att_data: [4096]u8,
 }
 
 type State = struct {
@@ -78,6 +79,19 @@ type State = struct {
     message: ui.Field,
     focus: usize,
     hits: ui.Hits,
+    // (D4806) The program to start next (an attachment opened), 0 for none: the app exits with 20000 + it.
+    handover: usize,
+}
+
+// Whether `whole` ends with `suffix`.
+fn ends_with(whole: str, suffix: str) -> bool {
+    if whole.len < suffix.len { ret false }
+    var i = 0usize
+    while i < suffix.len {
+        if whole[whole.len - suffix.len + i] != suffix[i] { ret false }
+        i += 1usize
+    }
+    ret true
 }
 
 fn add_mail(s: *State, from: str, subject: str, body: str, folder: usize, unread: bool, ago: usize) -> usize {
@@ -199,13 +213,13 @@ fn read_attachment(a: *mem.Arena, s: *State, made: usize, headers: []const mime.
         let (disposition, has_disposition) = mime.header(part.headers, "Content-Disposition")
         if has_disposition && extract.starts_fold(disposition, 0usize, "attachment") {
             let file_name = disposition_name(disposition)
-            let (raw_room, raw_error) = mem.alloc[u8](a, 1024usize)
+            let (raw_room, raw_error) = mem.alloc[u8](a, 6144usize)
             if raw_error != ok { ret }
             var part_body = part.body
             var got = 0usize
             var more = true
-            while more && got < 1024usize {
-                let (count, read_error) = io.read(&part_body, raw_room[got..1024usize])
+            while more && got < 6144usize {
+                let (count, read_error) = io.read(&part_body, raw_room[got..6144usize])
                 if read_error != ok || count == 0usize { more = false } else { got += count }
             }
             var data = raw_room[0usize..got]
@@ -238,7 +252,7 @@ fn read_attachment(a: *mem.Arena, s: *State, made: usize, headers: []const mime.
             s.mails[made].att_name_len = n
             s.mails[made].att_size = data.len
             var d = 0usize
-            while d < data.len && d < 128usize {
+            while d < data.len && d < 4096usize {
                 s.mails[made].att_data[d] = data[d]
                 d += 1usize
             }
@@ -569,9 +583,11 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     if body_error != ok { ret body_error }
     // (C158) An attachment is a chip below the message; a tap saves it into /Downloads.
     if m.att_name_len > 0usize {
-        try ui.card(a, builder, 16.0, 700.0, 380.0, 48.0, 14.0, ui.cream())
-        try ui.put(a, builder, faces.jost, 17.0, ui.join(a, ui.text_of(a, m.att_name[0usize..], m.att_name_len), ui.join(a, " (", ui.number(a, m.att_size), " bytes)"), ""), 32.0, 713.0, ui.ink())
-        ui.hit(&s.hits, 540usize, 16.0, 700.0, 380.0, 48.0)
+        try ui.card(a, builder, 16.0, 700.0, 256.0, 48.0, 14.0, ui.cream())
+        try ui.put(a, builder, faces.jost, 15.0, ui.join(a, ui.text_of(a, m.att_name[0usize..], m.att_name_len), ui.join(a, " (", ui.number(a, m.att_size), " bytes)"), ""), 28.0, 715.0, ui.ink())
+        ui.hit(&s.hits, 540usize, 16.0, 700.0, 256.0, 48.0)
+        // (D4806) Open: save it into /Downloads and hand it to the app for its type (Document, or Photos for a picture).
+        try ui.pill(a, builder, &s.hits, faces, 541usize, 280.0, 700.0, 116.0, 48.0, "Open", ui.amber(), 17.0)
     }
     try ui.pill(a, builder, &s.hits, faces, 530usize, 16.0, 830.0, 140.0, 48.0, "Reply", ui.amber(), 17.0)
     try ui.pill(a, builder, &s.hits, faces, 550usize, 172.0, 830.0, 140.0, 48.0, "Copy", ui.amber(), 17.0)
@@ -699,8 +715,9 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             s.screen = LIST_SCREEN
             ret true
         }
-        if id == 540usize && s.mails[s.open].att_name_len > 0usize {
+        if (id == 540usize || id == 541usize) && s.mails[s.open].att_name_len > 0usize {
             // (C158) Save the attachment into Files: /Downloads/<name>, checked by reading its size back.
+            // (D4806) Open does the same and then hands the saved file to the app for its type.
             let m = s.mails[s.open]
             let made_dir = vaultfs.mkdir("/Downloads")
             let dest = ui.join(a, "/Downloads/", ui.text_of(a, m.att_name[0usize..], m.att_name_len), "")
@@ -713,6 +730,22 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                 ui.say(" ")
                 ui.say_num(size)
                 ui.say("\n")
+                if id == 541usize && dest.len <= 63usize {
+                    var program = 40usize
+                    if ends_with(dest, ".png") || ends_with(dest, ".jpg") || ends_with(dest, ".jpeg") { program = 22usize }
+                    var path_bytes: [64]u8 = zero
+                    var b = 0usize
+                    while b < dest.len {
+                        path_bytes[b] = dest[b]
+                        b += 1usize
+                    }
+                    if vaultfs.write("/handover", mem.address_of(&path_bytes[0usize]), dest.len) {
+                        s.handover = program
+                        ui.say("mail attachment handover ")
+                        ui.say_text(dest)
+                        ui.say("\n")
+                    }
+                }
             } else {
                 ui.say("mail attachment not saved\n")
             }
@@ -838,7 +871,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let id = ui.hit_at(&s.hits, tap.x, tap.y)
             if id != ui.NONE && act(a, &s, id) {
-                if !show(a, &kit, &s) {
+                if s.handover != 0usize {
+                    appkit.leave()
+                    running = false
+                } else if !show(a, &kit, &s) {
                     ui.say("mail present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)
                 }
@@ -847,5 +883,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
     }
+    if s.handover != 0usize { os.exit(i32(20000usize + s.handover)) }
     ret ok
 }
