@@ -2203,4 +2203,5 @@ D2439	1268	G012: export and copy as text; the menu mnemonics keep their spaces
 D2440	1075	G012: the New Rule wizard of the rules manager
 D2441	642	G012: Copy Selected and Copy Card Name
 D2442	750	G012: Edit Rule and the column of a new rule
-D2443	770	G012: the grid font size (Options > Grids > Font Size)
+D2443	771	G012: the grid font size (Options > Grids > Font Size)
+D2444	851	G012: v3's font size measured; headers keep their size
