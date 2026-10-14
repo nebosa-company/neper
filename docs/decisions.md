@@ -39360,3 +39360,7 @@ v3's criteria tree nests groups under the root (AF1-advanced-filter-v3-condition
 ## D2462 - G012: the wizard's Preview strip
 
 v3's New Rule window shows a Preview of the rule for the range types (CF2-new-rule-v3.png: a blue gradient bar for the data bar). The wizard now draws a strip under the type list: a bar on a white box for the data bar, three coloured discs for the icon set, eight steps from the low colour to the high one for the two colour scale and through yellow for the three (CF8-preview-v5.png: the two colour scale). The strip follows the type, not the typed Minimum / Maximum or the colours of a Format... dialog, which is not built, and v3's bar is a gradient that this draws as a solid fill. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D2463 - G012: the wizard's Format... colours
+
+v3's New Rule window has a `Format...` button opening a colour dialog for the rule (CF2-new-rule-v3.png). The wizard's `Format...` now steps through four colour sets for the bar and the scales (red to green, orange to blue, white to green, blue to red), the Preview strip follows it and OK writes the colours into the rule's `low`, `high` and bar `fill` (CF9-format-v5.png: the white to green set after two taps). Not matched: v3 opens a colour picker dialog (any colour, the middle colour of a three colour scale, the bar border), which is not built. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
