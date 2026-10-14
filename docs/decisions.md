@@ -41327,3 +41327,7 @@ Built from v3 (HF1, HF2): Header / Footer has Reverse on even pages (a toggle), 
 ## D4085 - G012: the Print group of the card menu in v3's order
 
 The sample's card menu ends with v3's Print group in v3's order: Print... (Ctrl+P, which opens the preview: there is no printer here), Page Setup..., Print Preview... (Ctrl+Shift+P) and Designer... (Alt+P, greyed: the report designer is not built).
+
+## D4086 - G012: popup widths measured against v3
+
+v3's header menu (HM1) is 250 px wide for its longest entry, Best Fit (all columns); ours (the earlier build) was 328 px; v3's collection cell menu (CM3) is 317 px with Ctrl+Alt+T as its widest shortcut, ours 450 px. The width formula charged 6.6 units a character; v3's menus are 4.0 near enough once the picture column (27) and the margins (24 + 22, 16 before a shortcut) are kept: header 241 px (HM2-header-menu-width-v5.png), cell about 325 px. Entry heights already matched (33 px for the header menu, 30 px for the cell menu). v3 sets its two popups in different faces (the cell menu's text is wider than the header menu's); ours has one face for both.

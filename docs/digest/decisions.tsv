@@ -2664,4 +2664,5 @@ D4081	542	G012: the Excel export beyond 2000 rows
 D4082	766	G012: the Page Setup dialog
 D4083	568	G012: the Page Setup Margins tab
 D4084	658	G012: Page Setup Header / Footer and Scaling tabs
-D4085	314	G012: the Print group of the card menu in v3's order
+D4085	315	G012: the Print group of the card menu in v3's order
+D4086	710	G012: popup widths measured against v3
