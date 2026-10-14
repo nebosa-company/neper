@@ -2638,4 +2638,5 @@ D4055	552	G012: data bar Fill mode Solid and Border style in the rule model
 D4056	500	G012: the no-data messages
 D4057	596	G012: an empty grid keeps its header
 D4058	642	G012: the vertical scroll thumb thickens under the pointer
-D4059	365	G012: the navigator's horizontal thumb thickens on hover
+D4059	366	G012: the navigator's horizontal thumb thickens on hover
+D4060	683	G012: v3's table background picture
