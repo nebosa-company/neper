@@ -132,6 +132,9 @@ type Grid = struct {
     extra_desc: [4]bool,
     extra_count: usize,
     sort_dialog_open: bool,
+    has_row_drop: bool,
+    row_drop_ctx: *void,
+    row_drop_fn: fn(*void, usize) -> err,
     rules_dialog_open: bool,
     crit_open: bool,
     crit_pending: bool,
@@ -875,6 +878,30 @@ fn entry_at(grid: *const Grid, offset: f32) -> usize {
         at += 1usize
     }
     ret n
+}
+
+// Cards dragged between grids (v3): `set_row_drop` makes the grid a drop target; `fn` hears the row
+// (of the source grid's table) that was dropped on one of this grid's rows.
+fn set_row_drop(grid: *Grid, ctx: *void, f: fn(*void, usize) -> err) {
+    grid.has_row_drop = true
+    grid.row_drop_ctx = ctx
+    grid.row_drop_fn = f
+}
+
+// The table row a dragged row key stands for in this grid (`found` false for another grid's).
+fn row_of_key(grid: *const Grid, key: u64) -> (usize, bool) {
+    let base = grid.key + KEY_BASE
+    if key < base || key >= base + u64(table.capacity(grid.t)) { ret (0usize, false) }
+    ret (usize(key - base), true)
+}
+
+fn on_row_drop(ctx: *void, key: u64) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    if !grid.has_row_drop { ret ok }
+    // another grid's row: its key, less this grid's own
+    let (own_row, own) = row_of_key(grid, key)
+    if own { ret ok }
+    ret grid.row_drop_fn(grid.row_drop_ctx, usize(key))
 }
 
 // A hint per column (by the column's index in the specs given to `create`), shown after the pointer
@@ -3597,6 +3624,10 @@ fn filter_value(grid: *const Grid, spec: usize) -> str { ret grid.filter_text[sp
 
 const KEY_BASE: u64 = 4096u64
 
+// The name of the card row being dragged, kept for the grid it is dragged over.
+var drag_ghost_text: [96]u8
+var drag_ghost_len: usize
+
 fn row_key(grid: *const Grid, row: usize) -> widget.Key { ret grid.key + KEY_BASE + u64(row) }
 
 fn group_key(grid: *const Grid, group: usize) -> widget.Key { ret grid.key + KEY_BASE + u64(table.capacity(grid.t)) + u64(group) }
@@ -5139,7 +5170,49 @@ fn reveal_current(grid: *Grid) {
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     let (inner, inner_error) = build_parts(a, grid, theme, height)
     if inner_error != ok { ret (zero, inner_error) }
-    let (menus, menus_error) = with_menus(a, grid, inner)
+    var (menus, menus_error) = with_menus(a, grid, inner)
+    if menus_error == ok && grid.look.on && mem.address_of(theme.runtime) != 0usize {
+        // a card row dragged (v3): its name in a green frame under the pointer, drawn by the grid under it;
+        // the stack stands always, so the tree keeps its shape while a drag is under way
+        var layers_count = 1usize
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, control.TooLarge) }
+        layers[0usize] = menus
+        let (drag_payload, dragging_now) = widget.dragging(theme.runtime)
+        if dragging_now && drag_payload > collection.row_drag_tag() && drag_payload < 2u64 * collection.row_drag_tag() {
+            let (source_row, mine) = row_of_key(grid, drag_payload - collection.row_drag_tag())
+            if mine && grid.has_search && grid.search_spec < grid.all.len {
+                let (label_text, label_error) = cell_text_of(a, grid, grid.all[grid.search_spec], source_row)
+                if label_error == ok {
+                    var copied = label_text.len
+                    if copied > 95usize { copied = 95usize }
+                    var at_copy = 0usize
+                    while at_copy < copied {
+                        drag_ghost_text[at_copy] = label_text[at_copy]
+                        at_copy += 1usize
+                    }
+                    drag_ghost_len = copied
+                }
+            }
+            let pointer_now = widget.pointer_position(theme.runtime)
+            let (grid_box, has_grid_box) = control.keyed_bounds(theme.runtime, grid.key)
+            if has_grid_box && drag_ghost_len != 0usize && geometry.contains(grid_box, pointer_now) {
+                let (ghost_label, ghost_error) = flat_text(a, grid, drag_ghost_text[0usize..drag_ghost_len], gl.rgb(0x000000u32))
+                if ghost_error == ok {
+                    var ghost_box = style.defaults()
+                    ghost_box.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.85) }
+                    ghost_box.border = style.Border { width: 2.0, color: gl.rgb(0x66FF66u32) }
+                    let (ghost_held, ghost_held_error) = mem.alloc[widget.Node](a, 1usize)
+                    if ghost_held_error == ok {
+                        ghost_held[0usize] = widget.padded(0u64, 8.0, 6.0, 8.0, 6.0, ghost_box, one(a, ghost_label))
+                        layers[1usize] = widget.positioned(0u64, pointer_now.x - grid_box.x + 6.0, pointer_now.y - grid_box.y + 6.0, style.defaults(), ghost_held[0usize..1usize])
+                        layers_count = 2usize
+                    }
+                }
+            }
+        }
+        menus = widget.stack(0u64, style.defaults(), layers[0usize..layers_count])
+    }
     // v3 draws the current row, never a focus ring: the dotted rectangle and the fill are its focus
     if grid.look.on && mem.address_of(theme.runtime) != 0usize {
         widget.set_focus_ring(theme.runtime, paint.rgba(0.0, 0.0, 0.0, 0.0), theme.tokens.metrics.focus_ring, theme.tokens.metrics.focus_offset)
@@ -5252,7 +5325,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
                 selected_edge = gl.rgb(0x212121u32)
             }
         }
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     // group footers are taller: the list of the entries that are
     if has_extras(grid) && grid.look.on {

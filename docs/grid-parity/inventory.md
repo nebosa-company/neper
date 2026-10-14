@@ -51,7 +51,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Multi-select, row-select, CellSelect=false | matched | M1, M2-shift-range-v3 |
 | Select-ability gate (group rows) | matched | N1-group-row-click, P1 |
 | Editing policy, immediate editor, Tab order | matched | E1 |
-| Drag and drop of cards between grids | untested | |
+| Drag and drop of cards between grids | matched (drag, ghost over the target, drop adds) / differs (v3 shows the card picture) | DD1-card-drag (D2438) |
 | Hints (header, indicator) | matched (header) / untested (indicator) | T1, T2 |
 | Context menus by hit test | matched (cell, header, group box, quick, chooser) | C1-*-v3/v5 |
 | Keyboard: arrows, Page, Home/End over group rows | matched | P1-group-row-keys (D2425) |
@@ -86,5 +86,4 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 1. The conditional formatting rules manager (dialog).
 3. Filter dialog / criteria editor, filter row pixel look.
 4. Image combo drop-down, check box, date edit editors.
-5. Drag and drop of cards between grids.
 6. Export / copy as text / print.
