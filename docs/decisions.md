@@ -39480,3 +39480,7 @@ The position text of the navigator stands on a white 115 by 30 band, as v3's doe
 ## D2492 - G012: the navigator at the last row
 
 Driven live: Last read 120283 of 120283 with Next, Next page and Last greyed and the left three live (NV3-navigator-last-row-v5.png), closing the right-hand disabled state of D2490. The grid has no horizontal scrolling (its columns are fitted to the width), so v3's scroll bar thumb in the navigator row has nothing to show yet; it waits for horizontal scrolling of the table. No code change.
+
+## D2493 - G012: horizontal scrolling tried and withdrawn
+
+An attempt to scroll the table horizontally and to show v3's thumb in the navigator row (hshift clip, `measure_hscroll`, a thumb region with drag) drew the thumb but could not be made to scroll: the pane width read from the grid's keyed bounds (about 812 for a pool pane that spans 1105 screen pixels, and 720 from `auto_total`) disagrees with the column widths (1109), so the range and the clip were wrong, and with them the thumb's length. The change was reverted, nothing of it landed. What it needs first is the pane's real width in the units the column widths use, and a clip around header, rows and footer that leaves the vertical scroll bar fixed. v3's recording (FT2-footer-maximised-v3.png) shows the thumb only when the columns overflow the pane.
