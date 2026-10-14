@@ -2194,4 +2194,5 @@ D2430	607	G012: the header hint appears about a second after the pointer rests
 D2431	909	G012: Card Rules shows the rules text under every card, no disclosure
 D2432	952	G012: the Sort dialog
 D2433	1156	G012: the Conditional Formatting Rules Manager
-D2434	1594	G012: the Advanced Filter (criteria editor)
+D2434	1595	G012: the Advanced Filter (criteria editor)
+D2435	856	G012: one click on a favourite star flips it and makes the row current
