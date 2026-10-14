@@ -2553,4 +2553,5 @@ D3971	669	G012: Ctrl+click on the only sorted column clears the sort
 D3972	607	G012: the header hint appears about a second after the pointer rests
 D3973	909	G012: Card Rules shows the rules text under every card, no disclosure
 D3974	952	G012: the Sort dialog
-D3975	1155	G012: the Conditional Formatting Rules Manager
+D3975	1156	G012: the Conditional Formatting Rules Manager
+D3976	1594	G012: the Advanced Filter (criteria editor)
