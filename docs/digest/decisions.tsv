@@ -2227,4 +2227,5 @@ D2463	665	G012: the wizard's Format... colours
 D2464	1134	G012: secondary windows that move, and the library's controls inside them
 D2465	1019	G012: the scale preview as a gradient, the rule set refreshed by the application
 D2466	575	G012: secondary windows are raised by their title bar
-D2467	685	G012: the wizard's Applies to is the library's select
+D2467	686	G012: the wizard's Applies to is the library's select
+D2468	519	G012: a secondary window rises when its body is tapped

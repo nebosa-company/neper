@@ -1486,6 +1486,14 @@ fn raise_window(grid: *Grid, which: u8) {
     grid.win_rank[usize(which)] = grid.win_top
 }
 
+// The body of a window: a tap on its empty parts raises it above the others.
+fn window_body(a: *mem.Arena, grid: *Grid, which: u8, body: style.Style, inner: []widget.Node) -> (widget.Node, err) {
+    let (drags, drags_error) = mem.alloc[WinDrag](a, 1usize)
+    if drags_error != ok { ret (zero, control.TooLarge) }
+    drags[0usize] = WinDrag { grid: grid, which: which }
+    ret (widget.region(grid.key + MENU_KEY + 899900u64 + u64(which), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[0usize]), invoke: on_window_title }, gestures: 1u8, enabled: true, focusable: false }, body, inner), ok)
+}
+
 fn on_window_close(ctx: *void, g: widget.Gesture) -> err {
     let w = mem.cast[*WinDrag](ctx)
     switch g {
@@ -1756,7 +1764,8 @@ fn sort_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, control.TooLarge) }
     inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
-    ret (widget.box(0u64, body_style, inner[0usize..1usize]), ok)
+    let (framed_body, framed_body_error) = window_body(a, grid, 0u8, body_style, inner[0usize..1usize])
+    ret (framed_body, framed_body_error)
 }
 
 // ---- the Conditional Formatting Rules Manager (v3's View > Conditional Formatting...) ----
@@ -2022,7 +2031,8 @@ fn rules_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, control.TooLarge) }
     inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
-    ret (widget.box(0u64, body_style, inner[0usize..1usize]), ok)
+    let (framed_body, framed_body_error) = window_body(a, grid, 1u8, body_style, inner[0usize..1usize])
+    ret (framed_body, framed_body_error)
 }
 
 // Opens the manager.
@@ -3321,7 +3331,8 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, control.TooLarge) }
     inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
-    ret (widget.box(0u64, body, inner[0usize..1usize]), ok)
+    let (framed_body, framed_body_error) = window_body(a, grid, 2u8, body, inner[0usize..1usize])
+    ret (framed_body, framed_body_error)
 }
 
 fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
