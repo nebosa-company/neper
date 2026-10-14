@@ -41025,3 +41025,7 @@ The Applies to box of the New Rule wizard stepped through the columns on each ta
 ## D4010 - G012: a secondary window rises when its body is tapped
 
 The stacking of D4005 raised a window only when its title bar was tapped or dragged. The body of the Sort dialog, the rules manager and the rule wizard is now a region (`window_body`) whose tap raises the window, so touching any empty part of a window brings it to the front, as it does in v3; controls inside a window keep their own gestures. The Advanced Filter body was left as it was. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D4011 - G012: the Advanced Filter body raises its window
+
+The Advanced Filter's body is wired through `window_body` like the other three windows, so a tap on an empty part raises it (D4010 left it out). The four grid fixtures pass.

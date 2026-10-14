@@ -2612,7 +2612,8 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, control.TooLarge) }
     inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
-    let framed = widget.box(0u64, body_style, inner[0usize..1usize])
+    let (framed, framed_error) = window_body(a, grid, 3u8, body_style, inner[0usize..1usize])
+    if framed_error != ok { ret (zero, framed_error) }
     if !grid.crit_pop { ret (framed, ok) }
     if grid.crit_pop_kind == 3u8 && grid.crit_pop_row < grid.crit_count {
         // the values of the column with a check before each chosen one
