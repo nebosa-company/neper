@@ -39312,3 +39312,7 @@ v3's group word (And) opens a list of And, Or, Not And and Not Or with a ring or
 ## D2450 - G012: the criteria editor's column and operator popups
 
 v3's condition line opens a list under its column word and under its operator word (AF1-advanced-filter-v3-condition.png shows the group list; the same control class serves the other two). The criteria editor's column and operator words cycled; they now open a plain list (the current entry light blue) and a tap picks one: every listed column, and Equals, Does not equal, Is less than, Is greater than, Contains, Does not contain, Begins with, Ends with (AF3-column-operator-popups-v5.png: Contains, then Edition). Not recorded in v3 itself: the exact width and the icons of these two lists. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D2451 - G012: v3's column list of the Advanced Filter recorded and matched in size
+
+Recorded (AF3-column-list-v3.png): the list under a condition's column word is a plain list with an icon gutter before the names (about 32 logical px), 22 px entries, the current one light blue (#99D1FF), twelve entries visible with a scroll bar and a drop shadow; it opens right under the word. The popups of D2450 now use 122 px wide, 22 px entries with the 32 px gutter and show the first twelve entries (no scroll bar, no shadow). The operator list was not opened separately in v3 (its closing dialog took the focus); it is assumed to match. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
