@@ -39504,3 +39504,7 @@ The wizard's Minimum and Maximum now cycle Value, Number, Percent and Percentile
 ## D2498 - G012: the Percentile choice driven live
 
 The wizard's Minimum box, tapped three times, reads Minimum: Percentile with the spin box under it (CF7-wizard-percentile-v5.png), confirming D2497 in the running sample. No code change.
+
+## D2499 - G012: the application menu's size
+
+The View menu of D2480 was 510 px wide with 26 px rows against v3's roughly 315 wide (VM1-view-menu-v3.png, at its scale); an application menu now sets its text at 4.6 px a character (the grid's own popups keep 6.6) with 23 px rows, which gives about 395 px (VM7-view-menu-narrow-v5.png, where the $1433 of D2495 also shows live). Still wider than v3: the text face itself is the grid's, not the 9 pt Segoe v3 uses. The four grid fixtures pass.
