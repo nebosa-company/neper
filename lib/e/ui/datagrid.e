@@ -2906,7 +2906,7 @@ fn on_wiz_cancel(ctx: *void, g: widget.Gesture) -> err {
 
 fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let width: f32 = 520.0
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 20usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 22usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
     let (picks, picks_error) = mem.alloc[WizRow](a, 10usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
@@ -2963,6 +2963,69 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     buttons[1usize] = widget.region(grid.key + MENU_KEY + 850101u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_wiz_cancel }, gestures: 1u8, enabled: true, focusable: false }, cancel_box, cancel_held[0usize..1usize])
     var foot = control.sized_style(width - 24.0, 46.0)
     foot.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    // the Preview strip (v3: a gradient for the colour scales, a bar for the data bar, boxes for the icons)
+    if grid.wiz_type <= 3u8 {
+        var strip_cells: [8]widget.Node = zero
+        var strip_count = 0usize
+        if grid.wiz_type == 0u8 {
+            var bar_back = control.sized_style(240.0, 20.0)
+            bar_back.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            bar_back.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+            var bar_fill = control.sized_style(160.0, 18.0)
+            bar_fill.background = paint.Brush { Solid: gl.rgb(0x63A4EAu32) }
+            let (bar_held, bar_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if bar_held_error != ok { ret (zero, control.TooLarge) }
+            bar_held[0usize] = widget.box(0u64, bar_fill, zero)
+            strip_cells[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar_back, bar_held[0usize..1usize])
+            strip_count = 1usize
+        } else if grid.wiz_type == 1u8 {
+            var icon_colors: [3]u32 = [3]u32{ 0xE05050u32, 0xE0C040u32, 0x50B050u32 }
+            var ic = 0usize
+            while ic < 3usize {
+                var icon_box = control.sized_style(30.0, 20.0)
+                icon_box.background = paint.Brush { Solid: gl.rgb(icon_colors[ic]) }
+                icon_box.radius = 10.0
+                strip_cells[ic] = widget.box(0u64, icon_box, zero)
+                ic += 1usize
+            }
+            strip_count = 3usize
+        } else {
+            // a colour scale: eight steps from the low colour to the high one, through the middle for three
+            var step = 0usize
+            while step < 8usize {
+                let at = f32(step) / 7.0
+                var cr: f32 = 0.99
+                var cg: f32 = 0.74
+                var cb: f32 = 0.74
+                var tr: f32 = 0.70
+                var tg: f32 = 0.90
+                var tb: f32 = 0.70
+                var t = at
+                if grid.wiz_type == 2u8 {
+                    if at < 0.5 {
+                        tr = 1.0
+                        tg = 1.0
+                        tb = 0.8
+                        t = at * 2.0
+                    } else {
+                        cr = 1.0
+                        cg = 1.0
+                        cb = 0.8
+                        t = (at - 0.5) * 2.0
+                    }
+                }
+                var cell = control.sized_style(30.0, 20.0)
+                cell.background = paint.Brush { Solid: paint.rgba(cr + (tr - cr) * t, cg + (tg - cg) * t, cb + (tb - cb) * t, 1.0) }
+                strip_cells[step] = widget.box(0u64, cell, zero)
+                step += 1usize
+            }
+            strip_count = 8usize
+        }
+        var strip_style = control.sized_style(width - 24.0, 24.0)
+        strip_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, strip_style, strip_cells[0usize..strip_count])
+        n += 1usize
+    }
     // the column the rule applies to (the manager shows it in Applies to)
     var target_name = "Applies to: (sorted or clicked column)"
     if grid.has_wiz_target && grid.wiz_target < grid.all.len {
@@ -3068,7 +3131,7 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     }
     rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, foot, buttons[0usize..2usize])
     n += 1usize
-    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0 + 30.0 + 80.0 + 32.0)
+    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0 + 30.0 + 80.0 + 32.0 + 30.0)
     body.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     body.border = style.Border { width: 1.0, color: gl.rgb(0x6D6D6Du32) }
     body.radius = 8.0
