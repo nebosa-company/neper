@@ -131,6 +131,8 @@ type Grid = struct {
     extra_sort: [4]usize,
     extra_desc: [4]bool,
     extra_count: usize,
+    hint_key: widget.Key,
+    hint_since: i64,
     also_marks: []u8,
     has_selection: bool,
     selected_row: usize,
@@ -1821,7 +1823,24 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
             let spec = grid.origin[shown]
             if spec < grid.hints.len && grid.hints[spec].len != 0usize {
                 let header_key = grid.key + 1u64 + 2u64 * u64(shown)
+                var hint_ready = false
                 if overlay.tooltip_wanted(theme, header_key) {
+                    // v3's hint appears about a second after the pointer rests (measured 1045 ms
+                    // against the widget's 500 ms), so the grid waits a further half second
+                    let now = widget.frame_time(theme.runtime).nanos
+                    if grid.hint_key != header_key {
+                        grid.hint_key = header_key
+                        grid.hint_since = now
+                    }
+                    if now - grid.hint_since >= 400000000i64 {
+                        hint_ready = true
+                    } else {
+                        widget.request_animation_frame(theme.runtime)
+                    }
+                } else if grid.hint_key == header_key {
+                    grid.hint_key = 0u64
+                }
+                if hint_ready {
                     let (head_rect, has_head) = control.keyed_bounds(theme.runtime, header_key)
                     if has_head {
                         var words = control.text_options()

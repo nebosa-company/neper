@@ -2189,4 +2189,5 @@ D2425	685	G012: the keyboard visits group rows; the grid shows no focus ring
 D2426	848	G012: Shift+click adds a column to the sort, Ctrl+click takes it out
 D2427	841	G012: the search buffer ignores a letter that matches nothing and marks the typed prefix
 D2428	625	G012: the navigator counts the cards of collapsed groups
-D2429	668	G012: Ctrl+click on the only sorted column clears the sort
+D2429	669	G012: Ctrl+click on the only sorted column clears the sort
+D2430	606	G012: the header hint appears about a second after the pointer rests

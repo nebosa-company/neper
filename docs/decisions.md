@@ -39228,3 +39228,7 @@ Recorded in v3 (N2-navigator-count-v3.png): over seven collapsed Rarity groups t
 ## D2429 — G012: Ctrl+click on the only sorted column clears the sort
 
 v3 (recorded with Ctrl+click in S4): Ctrl+click takes a column's sort out; on the only sorted column it leaves the grid unsorted, in the table's own order. `on_sort` raises the existing `CMD_CLEAR_SORT` command in that case and, like the popup's Clear Sorting, points `sort_column` past the columns (no arrow) and drops the extra sorts; the sample puts the view back in row order (`view.reset_order`) and re-applies its filter. Live in the sample (S6-clear-sort-v5.png: Name sorted, Ctrl+click, natural order, Rare filter over it); ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D2430 — G012: the header hint appears about a second after the pointer rests
+
+Measured with `docs/grid-parity/hint-delay.ps1` (polls the pixels under the pointer every few ms after a move): mtgstudio.exe shows the column hint 1043-1050 ms after the pointer arrives; the sample showed it at 700 ms (the widget's 500 ms plus a frame). The grid now waits 400 ms more after `tooltip_wanted` turns true (`hint_key`, `hint_since`, an animation frame requested meanwhile): 1101 ms measured. A second hover shows it again (T2-hint-delay-v5.png). ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
