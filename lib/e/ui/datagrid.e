@@ -156,6 +156,9 @@ pv_zoom: u8,
 pv_setup: bool,
 pv_tab: u8,
 pv_center: u8,
+pv_fit: bool,
+pv_percent: u8,
+pv_reverse: bool,
 pv_paper: u8,
 pv_orient: u8,
 pv_order: u8,
@@ -3847,6 +3850,9 @@ fn on_setup_tap(ctx: *void, g: widget.Gesture) -> err {
             }
         }
         if tap.kind == 7u8 { tap.grid.pv_center = tap.grid.pv_center ^ tap.value }
+        if tap.kind == 8u8 { tap.grid.pv_reverse = !tap.grid.pv_reverse }
+        if tap.kind == 9u8 { tap.grid.pv_fit = tap.value == 1u8 }
+        if tap.kind == 10u8 { tap.grid.pv_percent = (tap.grid.pv_percent + 1u8) % 21u8 }
         ret ok
     default:
         ret ok
@@ -3955,6 +3961,99 @@ fn page_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node, e
     columns[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, left_style, left[0usize..l])
     columns[1usize] = widget.padded(0u64, 20.0, 0.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), right_nodes[0usize..r])))
     ret (widget.padded(0u64, 14.0, 10.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), columns[0usize..2usize]))), ok)
+}
+
+// A labelled white box of the dialog (a font name, a header cell): `text` inside a bordered box.
+fn setup_box(a: *mem.Arena, grid: *Grid, text: str, width: f32, height: f32, right_aligned: bool) -> (widget.Node, err) {
+    let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if label_error != ok { ret (zero, label_error) }
+    var box = control.sized_style(width, height)
+    box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xABABABu32) }
+    var left_pad: f32 = 6.0
+    if right_aligned { left_pad = width - 104.0 }
+    ret (widget.box(0u64, box, one(a, widget.padded(0u64, left_pad, 4.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
+}
+
+// The Header / Footer tab: Reverse on even pages, then Header and Footer each with its font, its
+// background and three cells, and the vertical alignment and predefined functions row.
+fn header_footer_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 12usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    var reverse = "[ ] Reverse on even pages"
+    if grid.pv_reverse { reverse = "[x] Reverse on even pages" }
+    let (reverse_line, reverse_error) = setup_line(a, grid, taps[0usize..40usize], 0usize, 8u8, 0u8, reverse, false, true, 240.0)
+    if reverse_error != ok { ret (zero, reverse_error) }
+    rows[n] = reverse_line
+    n += 1usize
+    var group = 0usize
+    while group < 2usize {
+        var heading = "Header"
+        if group == 1usize { heading = "Footer" }
+        let (head_label, head_error) = flat_text(a, grid, heading, gl.rgb(0x000000u32))
+        if head_error != ok { ret (zero, head_error) }
+        rows[n] = widget.padded(0u64, 6.0, 8.0, 0.0, 4.0, style.defaults(), one(a, head_label))
+        n += 1usize
+        let (top_parts, top_error) = mem.alloc[widget.Node](a, 3usize)
+        if top_error != ok { ret (zero, control.TooLarge) }
+        let (font_button, font_error) = setup_box(a, grid, "Font...", 80.0, 26.0, false)
+        if font_error != ok { ret (zero, font_error) }
+        let (font_name, font_name_error) = setup_box(a, grid, "8 pt. Tahoma", 190.0, 26.0, false)
+        if font_name_error != ok { ret (zero, font_name_error) }
+        let (background, background_error) = setup_box(a, grid, "Background  [No Fill]", 150.0, 26.0, false)
+        if background_error != ok { ret (zero, background_error) }
+        top_parts[0usize] = widget.padded(0u64, 6.0, 0.0, 0.0, 0.0, style.defaults(), one(a, font_button))
+        top_parts[1usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, style.defaults(), one(a, font_name))
+        top_parts[2usize] = widget.padded(0u64, 20.0, 0.0, 0.0, 0.0, style.defaults(), one(a, background))
+        rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), top_parts[0usize..3usize])
+        n += 1usize
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+        if cells_error != ok { ret (zero, control.TooLarge) }
+        var c = 0usize
+        while c < 3usize {
+            var words = ""
+            if group == 1usize && c == 1usize { words = "[Page #]" }
+            if group == 1usize && c == 2usize { words = "[Date Printed]" }
+            let (cell, cell_error) = setup_box(a, grid, words, 166.0, 70.0, c == 2usize)
+            if cell_error != ok { ret (zero, cell_error) }
+            cells[c] = widget.padded(0u64, 6.0, 0.0, 0.0, 0.0, style.defaults(), one(a, cell))
+            c += 1usize
+        }
+        rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..3usize])
+        n += 1usize
+        group += 1usize
+    }
+    let (foot_label, foot_error) = flat_text(a, grid, "Vertical Alignment      Predefined Functions   Insert AutoText", gl.rgb(0x808080u32))
+    if foot_error != ok { ret (zero, foot_error) }
+    rows[n] = widget.padded(0u64, 10.0, 12.0, 0.0, 0.0, style.defaults(), one(a, foot_label))
+    n += 1usize
+    ret (widget.padded(0u64, 8.0, 8.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n]))), ok)
+}
+
+// The Scaling tab: Adjust To a percent of normal size (a tap steps ten), or Fit To pages wide by tall.
+fn scaling_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 6usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    let (adjust, adjust_error) = setup_line(a, grid, taps[0usize..40usize], 0usize, 9u8, 0u8, "Adjust To:", !grid.pv_fit, false, 240.0)
+    if adjust_error != ok { ret (zero, adjust_error) }
+    rows[0usize] = adjust
+    let (percent_builder, percent_builder_error) = str.builder(a, 32usize)
+    if percent_builder_error != ok { ret (zero, control.TooLarge) }
+    var pb = percent_builder
+    var shown = u64(grid.pv_percent) * 10u64
+    if shown == 0u64 { shown = 100u64 }
+    if str.push_u64(&pb, shown) != ok || str.push(&pb, "  % normal size") != ok { ret (zero, control.TooLarge) }
+    let (percent_line, percent_error) = setup_line(a, grid, taps[0usize..40usize], 1usize, 10u8, 0u8, str.done(&pb), false, true, 240.0)
+    if percent_error != ok { ret (zero, percent_error) }
+    rows[1usize] = widget.padded(0u64, 20.0, 0.0, 0.0, 14.0, style.defaults(), one(a, percent_line))
+    let (fit, fit_error) = setup_line(a, grid, taps[0usize..40usize], 2usize, 9u8, 1u8, "Fit To:", grid.pv_fit, false, 240.0)
+    if fit_error != ok { ret (zero, fit_error) }
+    rows[2usize] = fit
+    let (fit_label, fit_label_error) = flat_text(a, grid, "1   page(s) wide by   0   tall", gl.rgb(0x000000u32))
+    if fit_label_error != ok { ret (zero, fit_label_error) }
+    rows[3usize] = widget.padded(0u64, 30.0, 4.0, 0.0, 0.0, style.defaults(), one(a, fit_label))
+    ret (widget.padded(0u64, 14.0, 12.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..4usize]))), ok)
 }
 
 // The Margins tab: the six margins as steppers (a tap steps a tenth of an inch, as in the preview), the
@@ -4074,10 +4173,14 @@ fn page_setup_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let (page_node, page_error) = page_content(a, grid, taps)
         if page_error != ok { ret (zero, page_error) }
         content = page_node
+    } else if grid.pv_tab == 2u8 {
+        let (hf_node, hf_error) = header_footer_content(a, grid, taps)
+        if hf_error != ok { ret (zero, hf_error) }
+        content = hf_node
     } else {
-        let (other_label, other_error) = flat_text(a, grid, "(Header / Footer and Scaling are not built)", gl.rgb(0x808080u32))
-        if other_error != ok { ret (zero, other_error) }
-        content = widget.padded(0u64, 20.0, 30.0, 0.0, 0.0, style.defaults(), one(a, other_label))
+        let (scale_node, scale_error) = scaling_content(a, grid, taps)
+        if scale_error != ok { ret (zero, scale_error) }
+        content = scale_node
     }
     rows[n] = content
     n += 1usize
