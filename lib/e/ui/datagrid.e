@@ -158,6 +158,7 @@ dz_tab: u8,
 dz_checks: u64,
 dz_ready: bool,
 dz_style: u8,
+dz_dirty: bool,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
 pv_wide: u8,
@@ -9914,7 +9915,11 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
     case .Tap as at:
         if t.kind == 0u8 { t.grid.dz_tab = u8(t.value) }
         if t.kind == 3u8 { t.grid.dz_style = u8(t.value) + 1u8 }
-        if t.kind == 1u8 { t.grid.dz_checks = t.grid.dz_checks ^ (1u64 << u64(t.value)) }
+        if t.kind == 1u8 {
+            t.grid.dz_checks = t.grid.dz_checks ^ (1u64 << u64(t.value))
+            t.grid.dz_dirty = true
+        }
+        if t.kind == 5u8 { t.grid.dz_dirty = false }
         if t.kind == 2u8 {
             t.grid.print_open = false
             t.grid.wiz_open = false
@@ -10052,6 +10057,9 @@ fn dz_preview(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err) {
+    let (apply_tap, apply_tap_error) = mem.alloc[DesignTap](a, 1usize)
+    if apply_tap_error != ok { ret (zero, control.TooLarge) }
+    apply_tap[0usize] = DesignTap { grid: grid, kind: 5u8, value: 0usize }
     let (cells, cells_error) = mem.alloc[widget.Node](a, 5usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
     var i = 0usize
@@ -10061,7 +10069,7 @@ fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err)
         if i == 2usize { words = "OK" }
         if i == 3usize { words = "Cancel" }
         if i == 4usize { words = "Apply" }
-        let (label, label_error) = flat_text(a, grid, words, gl.rgb(dz_button_ink(i)))
+        let (label, label_error) = flat_text(a, grid, words, gl.rgb(dz_button_ink(grid, i)))
         if label_error != ok { ret (zero, label_error) }
         var box = control.sized_style(120.0, 28.0)
         box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
@@ -10069,7 +10077,9 @@ fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err)
         box.radius = 4.0
         box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         let held = widget.padded(0u64, 14.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label))
-        if i >= 2usize && i < 4usize {
+        if i == 4usize && grid.dz_dirty {
+            cells[i] = widget.region(grid.key + MENU_KEY + 851204u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&apply_tap[0usize]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held))
+        } else if i >= 2usize && i < 4usize {
             cells[i] = widget.region(grid.key + MENU_KEY + 851200u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held))
         } else {
             cells[i] = widget.box(0u64, box, one(a, held))
@@ -10205,8 +10215,8 @@ fn dz_extra(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 // Apply is grey (nothing to apply yet), the other buttons black.
-fn dz_button_ink(i: usize) -> u32 {
-    if i == 4usize { ret 0xA0A0A0u32 }
+fn dz_button_ink(grid: *const Grid, i: usize) -> u32 {
+    if i == 4usize && !grid.dz_dirty { ret 0xA0A0A0u32 }
     ret 0x000000u32
 }
 

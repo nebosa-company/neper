@@ -41459,3 +41459,6 @@ A header or footer cell that begins "[Ti" prints the time as H:MM (`time.to_time
 
 ## D4126 - G012: a style can be picked in the Designer's Styles list
 A tap on a row of the Styles list highlights it (light blue) and turns Font..., Color..., Texture... and Clear black, as v3 enables them with a style picked; Restore Defaults and Save As stay grey (DZ-format-report-Styles-picked-v5.png: Content picked). The buttons still change nothing. Alt+P is not a gap of the library: the sample wires no keyboard shortcut at all, every shortcut in its menus is a label.
+
+## D4127 - G012: the Designer's Apply is live after a change
+Unticking a check box turns Apply black (DZ-format-report-Apply-live-v5.png: Caption unticked) and a tap on it greys it again, as v3's Apply is enabled only while a change is pending; nothing is applied to anything since the checks change only the preview.
