@@ -1222,6 +1222,29 @@ fn export_string(a: *mem.Arena, grid: *Grid, format: u8, selected_only: bool, li
     ret (str.done(&sb), ok)
 }
 
+// `text` with the control characters XML cannot hold (all below a space but tab and the line breaks)
+// replaced by spaces; the text itself when it has none (the Excel package refuses the rest).
+fn xml_clean(a: *mem.Arena, text: str) -> (str, err) {
+    var bad = false
+    var i = 0usize
+    while i < text.len && !bad {
+        let c = text[i]
+        if c < 32u8 && c != 9u8 && c != 10u8 && c != 13u8 { bad = true }
+        i += 1usize
+    }
+    if !bad { ret (text, ok) }
+    let (out, out_error) = mem.alloc[u8](a, text.len)
+    if out_error != ok { ret ("", out_error) }
+    i = 0usize
+    while i < text.len {
+        var c = text[i]
+        if c < 32u8 && c != 9u8 && c != 10u8 && c != 13u8 { c = 32u8 }
+        out[i] = c
+        i += 1usize
+    }
+    ret (out[0usize..text.len], ok)
+}
+
 // `text` with every byte outside printable ASCII replaced by a question mark (the PDF's WinAnsi
 // fonts print nothing else here).
 fn ascii_text(a: *mem.Arena, text: str) -> (str, err) {
@@ -1298,6 +1321,10 @@ fn export_rows(a: *mem.Arena, grid: *Grid, limit: usize, ascii: bool) -> ([]cons
                     let (plain, plain_error) = ascii_text(a, text)
                     if plain_error != ok { ret (zero, 0usize, plain_error) }
                     text = plain
+                } else {
+                    let (clean, clean_error) = xml_clean(a, text)
+                    if clean_error != ok { ret (zero, 0usize, clean_error) }
+                    text = clean
                 }
                 cells[out] = text
                 out += 1usize
