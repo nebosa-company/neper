@@ -1,6 +1,6 @@
 # HANDOVER-GRID.md — the data grid parity stream (G012)
 
-Updated every turn. Last update: 2026-10-14, after D5009 (axis for data bars + fallback fonts; local D4070).
+Updated every turn. Last update: 2026-10-14, after D5009 (axis for data bars + fallback fonts; local D4070); axis seen on the grid (AX3), Japanese (NE2) and Chinese (NE4) cards verified, Korean/Cyrillic not looked at.
 
 ## The goal (standing /goal, re-injected by a Stop hook every turn)
 
@@ -82,7 +82,7 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
   the cause; the percent left margin trick (`bar.margin.left`) gives the right-to-left bar with no extra nodes.
 - `patch.exe` reports "patched" even when a hunk did not apply: grep for the result.
 
-- Non-English cards need the extra system fonts the sample registers (Yu Gothic, Malgun, MingLiU, Segoe UI Symbol):
+- Non-English cards need the extra system fonts the sample registers (Segoe UI, Yu Gothic, Malgun, YaHei, SimSun, MingLiU, Segoe UI Symbol):
   `layout` falls back across `Theme.fonts` by cmap; register every font with `scene.register_font`.
 
 ## Status of the tree
