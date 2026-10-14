@@ -41393,3 +41393,6 @@ With the filter row giving a condition, a panel stands between the footer and th
 
 ## D4104 - G012: the View menu's size against v3's
 v3's View menu (VM1-view-menu-v3.png) is 319 px wide with rows 30 px apart; ours was 398 wide and 33 apart. The width now takes the widest label of the rows that have a shortcut plus the widest shortcut, or the widest label alone, whichever is more (v3's shortcut column starts after "Show Columns...", not after the longest label), a row without a shortcut no longer gets an empty hint cell (it squeezed the picture column), a submenu row leaves room for its arrow, and the entries are 21 tall: 306 wide, 31 apart (VM8-view-menu-size-v5.png). Still different: no bold headings, no pictures on the entries.
+
+## D4105 - G012: the shortcut gap of the popup menus
+v3's collection context menu (CM1-collection-context-v3.png) is 316 px wide with a gap of about 18 px between "Remove from Collection" and "Del"; ours was 326 wide with 5 px. The label cell takes ten more units and the shortcut cell ten fewer, and the menu's trailing room shrinks to match, so the width is 313 (CM2-collection-context-v5.png) and the View menu 302. The row pitch (30) already matched. Ours also lists Show Columns... under a rule, which v3's menu (cut at its last visible row in the recording) may or may not have.

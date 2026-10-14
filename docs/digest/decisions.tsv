@@ -2683,4 +2683,5 @@ D4100	668	G012: Page Setup's header and footer print on the preview page
 D4101	550	G012: typed R, G and B for the custom colour
 D4102	705	G012: the empty grid's message and count as v3 draws them
 D4103	723	G012: the filter panel under a filtered grid
-D4104	658	G012: the View menu's size against v3's
+D4104	659	G012: the View menu's size against v3's
+D4105	585	G012: the shortcut gap of the popup menus

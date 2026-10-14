@@ -5739,7 +5739,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
     if grid.menu_kind == MENU_APP { char_width = 4.6 }
     var width = 27.0 + f32(widest_label) * char_width + 24.0 + 22.0
     if widest_hint != 0usize {
-        let with_hint = 27.0 + f32(widest_hint_label) * char_width + 24.0 + f32(widest_hint) * char_width + 16.0 + 22.0
+        let with_hint = 27.0 + f32(widest_hint_label) * char_width + 34.0 + f32(widest_hint) * char_width + 6.0 + 14.0
         if with_hint > width { width = with_hint }
     }
     if width < 120.0 { width = 120.0 }
@@ -5816,7 +5816,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
         parts_n += 1usize
         var label_style = control.sized_style(width - 27.0 - 6.0, row_h)
         if c.supporting.len == 1usize && c.supporting[0usize] == 62u8 { label_style = control.sized_style(width - 27.0 - 24.0, row_h) }
-        if c.shortcut.len != 0usize { label_style = control.sized_style(f32(widest_hint_label) * char_width + 24.0, row_h) }
+        if c.shortcut.len != 0usize { label_style = control.sized_style(f32(widest_hint_label) * char_width + 34.0, row_h) }
         let (label_box, label_box_error) = mem.alloc[widget.Node](a, 1usize)
         if label_box_error != ok { ret (zero, control.TooLarge) }
         label_box[0usize] = label
@@ -5828,7 +5828,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
             let (hint_box, hint_box_error) = mem.alloc[widget.Node](a, 1usize)
             if hint_box_error != ok { ret (zero, control.TooLarge) }
             hint_box[0usize] = hint
-            cells[parts_n] = widget.aligned(0u64, .Start, .Center, control.sized_style(f32(widest_hint) * char_width + 16.0, row_h), hint_box[0usize..1usize])
+            cells[parts_n] = widget.aligned(0u64, .Start, .Center, control.sized_style(f32(widest_hint) * char_width + 6.0, row_h), hint_box[0usize..1usize])
             parts_n += 1usize
         }
         var row_style = control.sized_style(width - 2.0, row_h)
