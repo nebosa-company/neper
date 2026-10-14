@@ -11,6 +11,7 @@ public class AW {
 [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte sc, uint f, UIntPtr e);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
 [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
 public struct RECT { public int L,T,R,B; } }
 "@
 [AW]::SetProcessDPIAware() | Out-Null
@@ -21,7 +22,8 @@ if (-not $h -or $h -eq [IntPtr]::Zero) { throw "no window for ${Proc}: refusing 
 [AW]::keybd_event(0x12,0,0,[UIntPtr]::Zero); [AW]::keybd_event(0x12,0,2,[UIntPtr]::Zero)
 [AW]::SetForegroundWindow($h) | Out-Null
 Start-Sleep -Milliseconds 400
-if ([AW]::GetForegroundWindow() -ne $h) { throw "${Proc} is not in front: refusing to click" }
+function FrontIsTarget { $fp = 0; [AW]::GetWindowThreadProcessId([AW]::GetForegroundWindow(), [ref]$fp) | Out-Null; return ($fp -eq $p.Id) }
+if (-not (FrontIsTarget)) { throw "${Proc} is not in front: refusing to click" }
 function Rect { $r = New-Object AW+RECT; [AW]::GetWindowRect($h, [ref]$r) | Out-Null; $r }
 & (Join-Path $PSScriptRoot 'mouse-warning.ps1') show
 try {
@@ -29,7 +31,7 @@ foreach ($s in ($Script -split ";")) {
   $s = $s.Trim()
   $t = $s -split ' '
   $r = Rect
-  if (($t[0] -ne "wait") -and ($t[0] -ne "shot") -and ([AW]::GetForegroundWindow() -ne $h)) { throw "${Proc} lost the foreground before ${s}: stopping" }
+  if (($t[0] -ne "wait") -and ($t[0] -ne "shot") -and (-not (FrontIsTarget))) { throw "${Proc} lost the foreground before ${s}: stopping" }
   switch ($t[0]) {
     'move'   { [AW]::SetCursorPos($r.L + [int]$t[1], $r.T + [int]$t[2]) | Out-Null; Start-Sleep -Milliseconds 400 }
     'click'  { [AW]::SetCursorPos($r.L + [int]$t[1], $r.T + [int]$t[2]) | Out-Null; Start-Sleep -Milliseconds 150; [AW]::mouse_event(2,0,0,0,[UIntPtr]::Zero); [AW]::mouse_event(4,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 600 }
