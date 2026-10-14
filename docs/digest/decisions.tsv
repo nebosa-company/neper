@@ -2585,4 +2585,5 @@ D4002	939	G012: one nested group in the Advanced Filter
 D4003	459	G012: the nested group is part of the saved filter
 D4004	695	G012: the wizard's Preview strip
 D4005	665	G012: the wizard's Format... colours
-D4006	1133	G012: secondary windows that move, and the library's controls inside them
+D4006	1134	G012: secondary windows that move, and the library's controls inside them
+D4007	1018	G012: the scale preview as a gradient, the rule set refreshed by the application

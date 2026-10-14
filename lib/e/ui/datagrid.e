@@ -142,6 +142,7 @@ type Grid = struct {
     row_drop_fn: fn(*void, usize) -> err,
     rules_dialog_open: bool,
     wiz_open: bool,
+    rules_changed: bool,
     wiz_bar_only: bool,
     wiz_min_number: bool,
     wiz_palette: u8,
@@ -2002,6 +2003,13 @@ fn rules_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 // Opens the manager.
+// Whether rules were added or edited since the last call (the application then refreshes its rule set).
+fn take_rules_changed(grid: *Grid) -> bool {
+    let was = grid.rules_changed
+    grid.rules_changed = false
+    ret was
+}
+
 fn open_rules_manager(grid: *Grid) {
     grid.rules_selected = 0usize
     grid.rules_dialog_open = true
@@ -2971,12 +2979,16 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
                 let last = grid.rule_set.total - 1usize
                 rules.swap(grid.rule_set, at_edit, last)
                 rules.remove(grid.rule_set, last)
+                grid.rules_changed = true
             }
             grid.wiz_edit = false
             ret ok
         }
         let (_added, add_error) = rules.add(grid.rules_arena, grid.rule_set, r)
         if add_error != ok { ret ok }
+        // a scale, bar or icon rule needs its column's lowest and highest value before it is drawn:
+        // the application refreshes the rule set with its own scratch (`take_rules_changed`)
+        grid.rules_changed = true
         ret ok
     default:
         ret ok
@@ -3104,38 +3116,23 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             }
             strip_count = 3usize
         } else {
-            // a colour scale: eight steps from the low colour to the high one, through the middle for three
-            var step = 0usize
-            while step < 8usize {
-                let at = f32(step) / 7.0
-                let low_color = wiz_low(grid.wiz_palette)
-                let high_color = wiz_high(grid.wiz_palette)
-                var cr: f32 = low_color.red
-                var cg: f32 = low_color.green
-                var cb: f32 = low_color.blue
-                var tr: f32 = high_color.red
-                var tg: f32 = high_color.green
-                var tb: f32 = high_color.blue
-                var t = at
-                if grid.wiz_type == 2u8 {
-                    if at < 0.5 {
-                        tr = 1.0
-                        tg = 1.0
-                        tb = 0.8
-                        t = at * 2.0
-                    } else {
-                        cr = 1.0
-                        cg = 1.0
-                        cb = 0.8
-                        t = (at - 0.5) * 2.0
-                    }
-                }
-                var cell = control.sized_style(30.0, 20.0)
-                cell.background = paint.Brush { Solid: paint.rgba(cr + (tr - cr) * t, cg + (tg - cg) * t, cb + (tb - cb) * t, 1.0) }
-                strip_cells[step] = widget.box(0u64, cell, zero)
-                step += 1usize
+            // a colour scale: one linear gradient from the low colour to the high one, through the middle
+            // colour for three (a single node: eight boxes pushed the wizard over what a frame holds)
+            let (stops, stops_error) = mem.alloc[paint.Stop](a, 3usize)
+            if stops_error != ok { ret (zero, control.TooLarge) }
+            var stop_count = 2usize
+            stops[0usize] = paint.Stop { offset: 0.0, color: wiz_low(grid.wiz_palette) }
+            if grid.wiz_type == 2u8 {
+                stops[1usize] = paint.Stop { offset: 0.5, color: paint.rgba(1.0, 1.0, 0.8, 1.0) }
+                stops[2usize] = paint.Stop { offset: 1.0, color: wiz_high(grid.wiz_palette) }
+                stop_count = 3usize
+            } else {
+                stops[1usize] = paint.Stop { offset: 1.0, color: wiz_high(grid.wiz_palette) }
             }
-            strip_count = 8usize
+            var gradient_box = control.sized_style(240.0, 20.0)
+            gradient_box.background = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: 0.0, y: 0.0 }, end: geometry.Point { x: 240.0, y: 0.0 }, stops: stops[0usize..stop_count] } }
+            strip_cells[0usize] = widget.box(0u64, gradient_box, zero)
+            strip_count = 1usize
         }
         var strip_style = control.sized_style(width - 24.0, 24.0)
         strip_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
