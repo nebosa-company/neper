@@ -10042,15 +10042,16 @@ fn dz_preview(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err) {
-    let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 5usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
     var i = 0usize
-    while i < 4usize {
+    while i < 5usize {
         var words = "Title Properties..."
         if i == 1usize { words = "Footnote Properties..." }
         if i == 2usize { words = "OK" }
         if i == 3usize { words = "Cancel" }
-        let (label, label_error) = flat_text(a, grid, words, gl.rgb(0x000000u32))
+        if i == 4usize { words = "Apply" }
+        let (label, label_error) = flat_text(a, grid, words, gl.rgb(dz_button_ink(i)))
         if label_error != ok { ret (zero, label_error) }
         var box = control.sized_style(120.0, 28.0)
         box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
@@ -10058,14 +10059,14 @@ fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err)
         box.radius = 4.0
         box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         let held = widget.padded(0u64, 14.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label))
-        if i >= 2usize {
+        if i >= 2usize && i < 4usize {
             cells[i] = widget.region(grid.key + MENU_KEY + 851200u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held))
         } else {
             cells[i] = widget.box(0u64, box, one(a, held))
         }
         i += 1usize
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(740.0, 36.0), cells[0usize..4usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(880.0, 36.0), cells[0usize..5usize]), ok)
 }
 
 fn designer_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
@@ -10187,4 +10188,10 @@ fn dz_extra(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         ret (count, count_error)
     }
     ret (widget.box(0u64, style.defaults(), zero), ok)
+}
+
+// Apply is grey (nothing to apply yet), the other buttons black.
+fn dz_button_ink(i: usize) -> u32 {
+    if i == 4usize { ret 0xA0A0A0u32 }
+    ret 0x000000u32
 }

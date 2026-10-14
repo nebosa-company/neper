@@ -41438,3 +41438,6 @@ Recorded from v3 (DZ-format-report-{View,Behaviors,Formatting,Styles,Preview}-v3
 
 ## D4119 - G012: the Designer's Styles list, Look and Feel box and line count
 The Styles tab lists v3's thirteen styles (BandHeader ... Selection) with their sample strips and "8 pt. Tahoma" under "Use Native Styles" (DZ-format-report-Styles-v5.png against ...-Styles-v3.png); the Formatting tab has its "Look and Feel" heading with the Flat box above the Refinements; the Preview tab's "Max Line Count: 0" box sits under its two checks. The list's Font..., Color..., Texture..., Clear, Restore Defaults, Save As and the style-sheet row are not drawn, and none of these boxes edits anything.
+
+## D4120 - G012: the Designer's Apply button
+The bottom row ends with v3's Apply, grey like v3's while nothing is pending (DZ-format-report-Apply-v5.png). OK and Cancel close the Designer; the Styles tab's Font/Color/Texture/Clear buttons, Restore Defaults, Save As and the style-sheet row are still not drawn (the list fills the tab's height at this scale).
