@@ -39532,3 +39532,7 @@ The wizard's Format... button of v3 opens "Data Bar Rule Style Settings" (CF10-d
 ## D2505 - G012: a gradient per data bar overruns the frame
 
 v3's data bars are Gradient filled by default (CF10-databar-style-dialog-v3.png). A linear-gradient brush per bar (stops kept in a ring on the grid, so no arena allocation) made `ui_datagrid` exit 95: only the first built rows reached the application's role callback, i.e. the build stopped part-way. This is the frame-size limit that D2460 met with eight preview boxes (a single gradient node was the cure there): every bar's gradient brush and stop list count against the frame, and a page of bars exhausts it. Not adopted; the bars stay solid. A cure needs the renderer's frame budget raised or gradients shared (one brush for all bars of a column, sized by clip), neither in the datagrid.
+
+## D2506 - G012: a gradient brush in a cell breaks the row build, whatever its stops
+
+Correcting D2505: the same linear-gradient bar with its two stops allocated from the frame arena (as the wizard's preview does) still makes `ui_datagrid` exit 95, and with the stops kept in a ring on the grid the live sample drew no bar at all. So the failure is the gradient brush used inside a cell box, not the stop storage or the frame budget. The wizard preview works because its gradient box is a single keyed-less node outside the table. Nothing adopted; the cause (probably the table's virtual row builder or the scene's handling of a gradient on a percent-width box) is not found.
