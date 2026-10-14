@@ -149,6 +149,9 @@ type Grid = struct {
     wiz_open: bool,
 fmt_open: bool,
 print_open: bool,
+wiz_pos_color: u8,
+wiz_neg_color: u8,
+wiz_axis_color: u8,
     rules_changed: bool,
     wiz_bar_only: bool,
     wiz_min_number: bool,
@@ -3381,7 +3384,15 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         r.low = wiz_low(grid.wiz_palette)
         r.mid = paint.rgba(1.0, 1.0, 0.8, 1.0)
         r.high = wiz_high(grid.wiz_palette)
-        if t == 0u8 { r.fill = paint.rgba(wiz_high(grid.wiz_palette).red, wiz_high(grid.wiz_palette).green, wiz_high(grid.wiz_palette).blue, 0.55) }
+        if t == 0u8 { r.fill = bar_palette(grid.wiz_pos_color) }
+        if t == 0u8 && grid.wiz_neg_color != 0u8 {
+            r.has_neg = true
+            r.neg = bar_palette(grid.wiz_neg_color - 1u8)
+        }
+        if t == 0u8 && grid.wiz_axis_color != 0u8 {
+            r.show_axis = true
+            r.axis = axis_palette(grid.wiz_axis_color - 1u8)
+        }
         r.three = t == 2u8
         r.bar_only = t == 0u8 && grid.wiz_bar_only
         r.bar_solid = t == 0u8 && (grid.wiz_bar_style & 1u8) != 0u8
@@ -3536,6 +3547,60 @@ fn on_fmt_axis(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
+// The colours the style window steps through (v3 opens a colour editor): bar colours and axis colours.
+fn bar_palette(i: u8) -> paint.Color {
+    if i == 1u8 { ret paint.rgba(0.388, 0.745, 0.482, 1.0) }
+    if i == 2u8 { ret paint.rgba(0.973, 0.412, 0.420, 1.0) }
+    if i == 3u8 { ret paint.rgba(1.0, 0.753, 0.0, 1.0) }
+    ret paint.rgba(0.0, 0.545, 0.937, 1.0)
+}
+
+fn bar_palette_text(i: u8) -> str {
+    if i == 1u8 { ret "99.190.123" }
+    if i == 2u8 { ret "248.105.107" }
+    if i == 3u8 { ret "255.192.0" }
+    ret "0.139.239"
+}
+
+fn axis_palette(i: u8) -> paint.Color {
+    if i == 1u8 { ret paint.rgba(0.5, 0.5, 0.5, 1.0) }
+    if i == 2u8 { ret paint.rgba(0.85, 0.1, 0.1, 1.0) }
+    ret paint.rgba(0.0, 0.0, 0.0, 1.0)
+}
+
+fn on_fmt_pos_color(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.wiz_pos_color = (grid.wiz_pos_color + 1u8) % 4u8
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_fmt_neg_color(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.wiz_neg_color = (grid.wiz_neg_color + 1u8) % 5u8
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_fmt_axis_color(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.wiz_axis_color = (grid.wiz_axis_color + 1u8) % 4u8
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 fn on_fmt_close(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
     switch g {
@@ -3610,11 +3675,13 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if e4 != ok { ret (zero, e4) }
     let (c5, e5) = fmt_caption(a, grid, "Positive Bar Appearance", 0x000000u32, 12.0)
     if e5 != ok { ret (zero, e5) }
-    let (c6, e6) = fmt_choice(a, grid, "Color:", "0.139.239", 0u64, on_fmt_close, false)
+    let (c6, e6) = fmt_choice(a, grid, "Color:", bar_palette_text(grid.wiz_pos_color), grid.key + MENU_KEY + 850366u64, on_fmt_pos_color, true)
     if e6 != ok { ret (zero, e6) }
     let (c7, e7) = fmt_caption(a, grid, "Negative Bar Appearance", 0x000000u32, 12.0)
     if e7 != ok { ret (zero, e7) }
-    let (c8, e8) = fmt_caption(a, grid, "(o) Apply same fill color as positive bar", 0x000000u32, 6.0)
+    var neg_text = "Apply same fill color as positive bar"
+    if grid.wiz_neg_color != 0u8 { neg_text = bar_palette_text(grid.wiz_neg_color - 1u8) }
+    let (c8, e8) = fmt_choice(a, grid, "Negative:", neg_text, grid.key + MENU_KEY + 850367u64, on_fmt_neg_color, true)
     if e8 != ok { ret (zero, e8) }
     let (c9, e9) = fmt_caption(a, grid, "Axis Settings", 0x000000u32, 12.0)
     if e9 != ok { ret (zero, e9) }
@@ -3623,7 +3690,11 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if ((grid.wiz_bar_style >> 3u8) & 3u8) == 2u8 { axis_mode = "None" }
     let (c10, e10) = fmt_choice(a, grid, "Axis:", axis_mode, grid.key + MENU_KEY + 850365u64, on_fmt_axis, true)
     if e10 != ok { ret (zero, e10) }
-    let (c11, e11) = fmt_choice(a, grid, "Axis color:", "Black", 0u64, on_fmt_close, false)
+    var axis_text = "None"
+    if grid.wiz_axis_color == 1u8 { axis_text = "Black" }
+    if grid.wiz_axis_color == 2u8 { axis_text = "Gray" }
+    if grid.wiz_axis_color == 3u8 { axis_text = "Red" }
+    let (c11, e11) = fmt_choice(a, grid, "Axis color:", axis_text, grid.key + MENU_KEY + 850368u64, on_fmt_axis_color, true)
     if e11 != ok { ret (zero, e11) }
     rows[0usize] = c0
     rows[1usize] = c1
@@ -6591,6 +6662,10 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         if look.bar_left > 0.0 { bar.margin.left = style.Length { Percent: look.bar_left * 100.0 } }
         layers[count] = widget.box(0u64, bar, zero)
         count += 1usize
+        if look.has_axis_line {
+            layers[count] = axis_line_node(look.axis_line, look.bar_axis_at)
+            count += 1usize
+        }
     }
     if look.has_fill { back.background = paint.Brush { Solid: look.fill } }
     // Show Bar Only (v3): the bar alone, the value is not written
@@ -6600,6 +6675,16 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     }
     *out = widget.stack(0u64, back, layers[0usize..count])
     ret ok
+}
+
+// The axis of a data bar (Axis color): a 1 px line at `at` of the cell's width, the cell's height.
+fn axis_line_node(color: paint.Color, at: f32) -> widget.Node {
+    var line = style.defaults()
+    line.width = style.Length { Px: 1.0 }
+    line.height = style.Length { Percent: 100.0 }
+    line.background = paint.Brush { Solid: color }
+    line.margin.left = style.Length { Percent: at * 100.0 }
+    ret widget.box(0u64, line, zero)
 }
 
 // The kind of a visible row for the table look: 1 for a group row.

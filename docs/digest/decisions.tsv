@@ -2654,4 +2654,5 @@ D4071	429	G012: the hovered scroll thumb measured from v3
 D4072	379	G012: the navigator bar measured from v3
 D4073	756	G012: why columns grow while scrolling sideways
 D4074	730	G012: columns keep their widths while scrolling sideways
-D4075	896	G012: Print Preview window
+D4075	897	G012: Print Preview window
+D4076	864	G012: positive colour, negative colour and axis colour in the style window
