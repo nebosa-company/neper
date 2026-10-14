@@ -41141,3 +41141,7 @@ v3 (main.vcl.form.pas, VK_RETURN of the grid site, with `Options > Grids > Enter
 ## D4039 - G012: Percentile bounds in the wizard
 
 The wizard's Minimum and Maximum now cycle Value, Number, Percent and Percentile. A Percentile bound is the value standing that share of the way up the column's sorted values (`Rule.min_ptile` / `max_ptile`, `Stat.p_low` / `p_high` built in `build_stat` from the sorted copy the Top/Bottom rules already use, applied in `apply_range`). Fixture ui_gridrules checks that 0 and 100 give the lowest and highest cells' bars (exits 150-152); the four grid fixtures pass. Formula remains: the rule model has no expression.
+
+## D4040 - G012: the Percentile choice driven live
+
+The wizard's Minimum box, tapped three times, reads Minimum: Percentile with the spin box under it (CF7-wizard-percentile-v5.png), confirming D4039 in the running sample. No code change.
