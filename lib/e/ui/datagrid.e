@@ -904,6 +904,143 @@ fn on_row_drop(ctx: *void, key: u64) -> err {
     ret grid.row_drop_fn(grid.row_drop_ctx, usize(key))
 }
 
+// ---- export and copy as text (v3: Cards > Export ▸ HTML, PDF, Excel, CSV, Plain Text, Xml; Copy as Text ▸ Copy Card Name, Copy Selected, Copy All) ----
+
+const EXPORT_CSV: u8 = 0u8
+const EXPORT_TEXT: u8 = 1u8
+const EXPORT_XML: u8 = 2u8
+const EXPORT_HTML: u8 = 3u8
+
+fn export_escape(sb: *str.Builder, text: str, format: u8) -> err {
+    var at = 0usize
+    while at < text.len {
+        let c = text[at]
+        if format == EXPORT_CSV && c == 34u8 {
+            if str.push(sb, "\"\"") != ok { ret control.TooLarge }
+        } else if (format == EXPORT_XML || format == EXPORT_HTML) && c == 60u8 {
+            if str.push(sb, "&lt;") != ok { ret control.TooLarge }
+        } else if (format == EXPORT_XML || format == EXPORT_HTML) && c == 62u8 {
+            if str.push(sb, "&gt;") != ok { ret control.TooLarge }
+        } else if (format == EXPORT_XML || format == EXPORT_HTML) && c == 38u8 {
+            if str.push(sb, "&amp;") != ok { ret control.TooLarge }
+        } else if format == EXPORT_TEXT && (c == 9u8 || c == 10u8 || c == 13u8) {
+            if str.push(sb, " ") != ok { ret control.TooLarge }
+        } else {
+            if str.push_byte(sb, c) != ok { ret control.TooLarge }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// The grid's shown columns and data rows (in the order and under the filter on screen; group rows
+// and footers are left out) as one text of the chosen format. `selected_only` keeps the selected
+// (multi-select) rows, or the current one.
+fn export_string(a: *mem.Arena, grid: *Grid, format: u8, selected_only: bool, limit: usize) -> (str, err) {
+    var cap = 4096usize
+    var rows_wanted = 0usize
+    let visible = grp.visible_len(grid.g)
+    var at = 0usize
+    while at < visible {
+        if !grp.visible_is_group(grid.g, at) { rows_wanted += 1usize }
+        at += 1usize
+    }
+    if rows_wanted > limit { rows_wanted = limit }
+    cap += (rows_wanted + 2usize) * (grid.specs.len * 24usize + 64usize)
+    let (b, b_error) = str.builder(a, cap)
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    if format == EXPORT_XML { if str.push(&sb, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<cards>\n") != ok { ret ("", control.TooLarge) } }
+    if format == EXPORT_HTML { if str.push(&sb, "<html><body><table border=\"1\">\n") != ok { ret ("", control.TooLarge) } }
+    // the header
+    var col = 0usize
+    var first = true
+    if format == EXPORT_HTML { if str.push(&sb, "<tr>") != ok { ret ("", control.TooLarge) } }
+    while col < grid.specs.len {
+        let s = grid.specs[col]
+        if s.kind != CellKind.Indicator && s.title.len != 0usize && format != EXPORT_XML {
+            if format == EXPORT_HTML {
+                if str.push(&sb, "<th>") != ok { ret ("", control.TooLarge) }
+            } else if !first {
+                if format == EXPORT_CSV { if str.push(&sb, ",") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, "\t") != ok { ret ("", control.TooLarge) } }
+            }
+            if format == EXPORT_CSV { if str.push(&sb, "\"") != ok { ret ("", control.TooLarge) } }
+            if export_escape(&sb, s.title, format) != ok { ret ("", control.TooLarge) }
+            if format == EXPORT_CSV { if str.push(&sb, "\"") != ok { ret ("", control.TooLarge) } }
+            if format == EXPORT_HTML { if str.push(&sb, "</th>") != ok { ret ("", control.TooLarge) } }
+            first = false
+        }
+        col += 1usize
+    }
+    if format == EXPORT_HTML { if str.push(&sb, "</tr>\n") != ok { ret ("", control.TooLarge) } } else if format != EXPORT_XML { if str.push(&sb, "\n") != ok { ret ("", control.TooLarge) } }
+    // the rows
+    var written = 0usize
+    var cell_store: [256]u8 = zero
+    var cell_scratch = mem.arena_from(cell_store[0usize..256usize])
+    at = 0usize
+    while at < visible && written < limit {
+        if !grp.visible_is_group(grid.g, at) {
+            let row = grp.visible_row(grid.g, at)
+            var keep = true
+            if selected_only {
+                keep = false
+                if grid.multi && is_marked(grid, row) { keep = true }
+                if !grid.multi && grid.has_selection && grid.selected_row == row { keep = true }
+            }
+            if keep {
+                if format == EXPORT_XML { if str.push(&sb, "  <card>") != ok { ret ("", control.TooLarge) } }
+                if format == EXPORT_HTML { if str.push(&sb, "<tr>") != ok { ret ("", control.TooLarge) } }
+                first = true
+                col = 0usize
+                while col < grid.specs.len {
+                    let s = grid.specs[col]
+                    if s.kind != CellKind.Indicator && s.title.len != 0usize {
+                        // a cell that draws a picture has no text of its own: an empty field
+                        var text = ""
+                        if s.kind == CellKind.Star {
+                            if !table.is_null(grid.t, s.column, row) && table.get_bool(grid.t, s.column, row) { text = "Yes" }
+                        } else if s.kind != CellKind.Custom && s.kind != CellKind.Picture {
+                            // the text of a number is built in a scratch of its own: the output builder
+                            // grows in place and nothing else may be allocated from its arena meanwhile
+                            mem.reset(&cell_scratch, 0usize)
+                            let (shown_text, text_error) = cell_text_of(&cell_scratch, grid, s, row)
+                            if text_error == ok { text = shown_text }
+                        }
+                        if format == EXPORT_XML {
+                            if str.push(&sb, "<field name=\"") != ok { ret ("", control.TooLarge) }
+                            if export_escape(&sb, s.title, format) != ok { ret ("", control.TooLarge) }
+                            if str.push(&sb, "\">") != ok { ret ("", control.TooLarge) }
+                            if export_escape(&sb, text, format) != ok { ret ("", control.TooLarge) }
+                            if str.push(&sb, "</field>") != ok { ret ("", control.TooLarge) }
+                        } else {
+                            if format == EXPORT_HTML {
+                                if str.push(&sb, "<td>") != ok { ret ("", control.TooLarge) }
+                            } else if !first {
+                                if format == EXPORT_CSV { if str.push(&sb, ",") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, "\t") != ok { ret ("", control.TooLarge) } }
+                            }
+                            if format == EXPORT_CSV { if str.push(&sb, "\"") != ok { ret ("", control.TooLarge) } }
+                            if export_escape(&sb, text, format) != ok { ret ("", control.TooLarge) }
+                            if format == EXPORT_CSV { if str.push(&sb, "\"") != ok { ret ("", control.TooLarge) } }
+                            if format == EXPORT_HTML { if str.push(&sb, "</td>") != ok { ret ("", control.TooLarge) } }
+                        }
+                        first = false
+                    }
+                    col += 1usize
+                }
+                var row_end = "\n"
+                if format == EXPORT_XML { row_end = "</card>\n" }
+                if format == EXPORT_HTML { row_end = "</tr>\n" }
+                if str.push(&sb, row_end) != ok { ret ("", control.TooLarge) }
+                written += 1usize
+            }
+        }
+        at += 1usize
+    }
+    if format == EXPORT_XML { if str.push(&sb, "</cards>\n") != ok { ret ("", control.TooLarge) } }
+    if format == EXPORT_HTML { if str.push(&sb, "</table></body></html>\n") != ok { ret ("", control.TooLarge) } }
+    ret (str.done(&sb), ok)
+}
+
 // A hint per column (by the column's index in the specs given to `create`), shown after the pointer
 // rests on its header (v3's HeaderHint: "Name - the card's name appears in the upper left corner.").
 fn set_header_hints(grid: *Grid, hints: []const str) { grid.hints = hints }
@@ -2157,7 +2294,14 @@ fn caption_node(a: *mem.Arena, grid: *Grid, label: str, ink: paint.Color) -> (wi
         let (whole, whole_error) = flat_text(a, grid, plain, ink)
         ret (whole, whole_error)
     }
-    let (before, before_error) = flat_text(a, grid, plain[0usize..at], ink)
+    // a space before the mark is kept as room: the text layout trims a trailing space
+    var before_end = at
+    var gap: f32 = 0.0
+    if before_end > 0usize && plain[before_end - 1usize] == 32u8 {
+        before_end -= 1usize
+        gap = 4.0
+    }
+    let (before, before_error) = flat_text(a, grid, plain[0usize..before_end], ink)
     if before_error != ok { ret (zero, before_error) }
     let (mark, mark_error) = flat_text(a, grid, plain[at..at + 1usize], ink)
     if mark_error != ok { ret (zero, mark_error) }
@@ -2173,11 +2317,11 @@ fn caption_node(a: *mem.Arena, grid: *Grid, label: str, ink: paint.Color) -> (wi
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
-    if at > 0usize {
+    if before_end > 0usize {
         parts[n] = before
         n += 1usize
     }
-    parts[n] = underlined
+    parts[n] = widget.padded(0u64, gap, 0.0, 0.0, 0.0, style.defaults(), one(a, underlined))
     n += 1usize
     if at + 1usize < plain.len {
         parts[n] = after
