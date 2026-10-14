@@ -2649,4 +2649,5 @@ D4066	912	G012: the background picture, once `build_parts` stops holding the loc
 D4067	720	G012: Format... on a data bar opens the Data Bar Rule Style Settings window
 D4068	789	G012: Bar direction in the Data Bar Rule Style Settings window
 D4069	743	G012: Export as Excel and PDF
-D4070	858	G012: axis for data bars and fallback fonts for non-English cards
+D4070	859	G012: axis for data bars and fallback fonts for non-English cards
+D4071	428	G012: the hovered scroll thumb measured from v3

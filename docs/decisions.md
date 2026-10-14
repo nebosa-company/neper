@@ -41267,3 +41267,7 @@ v3's Cards > Export offers Excel (ExportGridToXLSX) and PDF besides CSV/Text/XML
 ## D4070 - G012: axis for data bars and fallback fonts for non-English cards
 
 Data bars know an axis (Rule.bar_axis from the style window's Axis row: Automatic, Cell midpoint, None): a range that crosses zero puts it at zero and a bar runs from the axis to the value, so negative values grow leftwards; `Format.bar_left` and `bar_span` are the drawn left edge and width as shares of the cell (mirrored for Right To Left). Negative colour and axis colour stay at the positive fill and black. ui_gridrules checks the axis (exits 160-163). Separate finding: the grid showed non-English cards badly because the sample registered one font; the layout already falls back across `Theme.fonts` by cmap, so the sample now loads Yu Gothic, Malgun Gothic, MingLiU and Segoe UI Symbol after Segoe UI (NE2-non-english-cards-v5.png: Japanese name, type and text columns).
+
+## D4071 - G012: the hovered scroll thumb measured from v3
+
+v3's vertical scroll bar thumb (SBv3h shot against the resting one, v3 running with no licence dialog) is 3-4 px at rest and 9 px under the pointer, i.e. 2.7 and 6 layout units at 1.5 px per unit; the estimate of 11 units was too wide. The collection's hovered thumb is now 6 units. The horizontal navigator bar was not measured (its hovered width stays an estimate).

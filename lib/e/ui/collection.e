@@ -4280,7 +4280,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         // the thumb thickens under the pointer (the track keeps its width, so nothing moves)
         let track_key = key + 3300u64
         var thumb_w: f32 = 2.7
-        if control.control_state(t, track_key, true, false).hovered { thumb_w = lk.scroll_width - 4.0 }
+        if control.control_state(t, track_key, true, false).hovered { thumb_w = 6.0 }
         var thumb_style = control.sized_style(thumb_w, thumb_h)
         thumb_style.background = paint.Brush { Solid: lk.thumb }
         thumb_style.radius = thumb_w * 0.5
