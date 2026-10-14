@@ -39444,3 +39444,7 @@ The grid offers `show_footer`, `set_all_groups` (v3's Full Expand and Full Colla
 ## D2483 - G012: the View menu's Show Grid Lines submenu
 
 The View menu's Show Grid Lines entry carries the arrow and opens the four line modes (Vertical Lines, Horizontal Lines, Both, No Lines; the current one ticked) as a second application menu; picking one applies it and closes both (VM4-grid-lines-submenu-v5.png, driven live: Horizontal Lines left the grid with horizontal rules only). The sample only; the library's `show_app_menu` is unchanged. A finding: adding two more `[4]overlay.MenuCommand` fields to the sample's `Model` failed the type check with a locationless E-TYPE-9999, and the same entries stored in the existing, enlarged `view_menu` / `view_picks` compiled; the struct size looks to be the limit, not the code.
+
+## D2484 - G012: View > Group by Type and Group by Color
+
+The sample's grouping gains Type and Color (modes 5 and 6 of `group_mode`, one level each), and the View menu's two entries act and tick; driven live: Group by Color made seven groups with the Color chip in the group box (VM5-group-by-color-v5.png). Sample only.
