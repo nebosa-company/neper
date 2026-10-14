@@ -4697,6 +4697,47 @@ fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8, hund: u8, t
     ret (str.done(&sb), ok)
 }
 
+fn atleast(v: f32, floor: f32) -> f32 {
+    if v < floor { ret floor }
+    ret v
+}
+
+// A header (first = 0) or footer (first = 3) band of the printed page: its three cells from Page Setup,
+// "[Page #]" showing the page number, left, centred and right across the printable width.
+fn print_band(a: *mem.Arena, grid: *Grid, first: usize, lp: f32, across: f32, top: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var c = 0usize
+    while c < 3usize {
+        let slot = first + c
+        let len = usize(grid.pv_cell_len[slot])
+        let (b, b_error) = str.builder(a, 40usize)
+        if b_error != ok { ret (zero, control.TooLarge) }
+        var sb = b
+        var text = str.done(&sb)
+        let seeded = (grid.pv_cell_touched & (1u8 << u8(slot))) != 0u8
+        if (!seeded && slot == 4usize) || (len >= 8usize && grid.pv_cell[slot * 24usize + 1usize] == 80u8 && grid.pv_cell[slot * 24usize + 2usize] == 97u8) {
+            if str.push(&sb, "Page ") != ok || str.push_u64(&sb, u64(grid.pv_page + 1usize)) != ok { ret (zero, control.TooLarge) }
+            text = str.done(&sb)
+        } else {
+            var ch = 0usize
+            while ch < len {
+                if str.push_byte(&sb, grid.pv_cell[slot * 24usize + ch]) != ok { ret (zero, control.TooLarge) }
+                ch += 1usize
+            }
+            text = str.done(&sb)
+        }
+        let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+        if label_error != ok { ret (zero, label_error) }
+        var cell = control.sized_style(across / 3.0, 18.0)
+        cells[c] = widget.box(0u64, cell, one(a, label))
+        c += 1usize
+    }
+    var band = control.sized_style(across, 18.0)
+    band.margin = style.EdgeLengths { left: style.Length { Px: lp }, top: style.Length { Px: top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, band, cells[0usize..3usize]), ok)
+}
+
 // The toolbar picture with tap targets over its first, previous, next and last page icons.
 fn print_toolbar_row(a: *mem.Arena, grid: *Grid, width: f32) -> (widget.Node, err) {
     var tool = control.sized_style(width, 34.0)
@@ -4862,7 +4903,7 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     rows[n] = margin_bar
     n += 1usize
     // twelve rows a page: the page asked for, from the rows up to its end
-    let per_page = 12usize
+    let per_page = 10usize
     var data_rows = 0usize
     var counted = 0usize
     while counted < grp.visible_len(grid.g) {
@@ -4915,7 +4956,11 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (page, page_error) = mem.alloc[widget.Node](a, 40usize)
     if page_error != ok { ret (zero, control.TooLarge) }
     var q = 0usize
-    page[q] = widget.padded(0u64, margin_px(grid, 0usize, sheet_wide) + across * 0.5 - 40.0, margin_px(grid, 1usize, sheet_wide) - 15.0, 0.0, 8.0, style.defaults(), one(a, heading))
+    let (head_band, head_band_error) = print_band(a, grid, 0usize, margin_px(grid, 0usize, sheet_wide), across, atleast(margin_px(grid, 4usize, sheet_wide) - 6.0, 0.0))
+    if head_band_error != ok { ret (zero, head_band_error) }
+    page[q] = head_band
+    q += 1usize
+    page[q] = widget.padded(0u64, margin_px(grid, 0usize, sheet_wide) + across * 0.5 - 40.0, atleast(margin_px(grid, 1usize, sheet_wide) - margin_px(grid, 4usize, sheet_wide) - 12.0, 2.0), 0.0, 8.0, style.defaults(), one(a, heading))
     q += 1usize
     var r = 0usize
     while r < lines.len && q < 30usize && shown > 0usize {
@@ -4931,6 +4976,10 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) }
     strip.margin = style.EdgeLengths { left: style.Length { Px: margin_px(grid, 0usize, sheet_wide) }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     page[q] = widget.box(0u64, strip, one(a, widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, style.defaults(), one(a, filter_text))))
+    q += 1usize
+    let (foot_band, foot_band_error) = print_band(a, grid, 3usize, margin_px(grid, 0usize, sheet_wide), across, 8.0)
+    if foot_band_error != ok { ret (zero, foot_band_error) }
+    page[q] = foot_band
     q += 1usize
     var sheet = control.sized_style(sheet_wide * zoom, sheet_high)
     sheet.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
