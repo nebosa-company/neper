@@ -819,14 +819,31 @@ fn set_footer_label(grid: *Grid, label: str) { grid.footer_label = label }
 // v3's group footers are 29 px in rows of 19: this much taller than a row.
 fn footer_extra() -> f32 { ret 10.0 }
 
-// The scroll offset of the top of visible entry `index`: a row each, a group footer taller.
+// Card Rules (v3's preview): every data row carries its rules text under it, this much taller.
+fn preview_extra() -> f32 { ret 18.0 }
+
+fn preview_detail_height(grid: *const Grid) -> f32 {
+    if grid.preview_on { ret preview_extra() }
+    ret 0.0
+}
+
+// How much taller than a row visible entry `at` is: a group footer, or a data row with its preview.
+fn extra_of(grid: *const Grid, at: usize) -> f32 {
+    if grid.g.group_footers && grp.visible_is_footer(grid.g, at) { ret footer_extra() }
+    if grid.preview_on && grid.look.on && !grp.visible_is_group(grid.g, at) { ret preview_extra() }
+    ret 0.0
+}
+
+fn has_extras(grid: *const Grid) -> bool { ret grid.g.group_footers || (grid.preview_on && grid.look.on) }
+
+// The scroll offset of the top of visible entry `index`: a row each, a group footer or a preview taller.
 fn entry_top(grid: *const Grid, index: usize) -> f32 {
     var top = f32(index) * grid.row_height
-    if grid.g.group_footers {
+    if has_extras(grid) {
         var at = 0usize
         let n = grp.visible_len(grid.g)
         while at < index && at < n {
-            if grp.visible_is_footer(grid.g, at) { top += footer_extra() }
+            top += extra_of(grid, at)
             at += 1usize
         }
     }
@@ -835,13 +852,12 @@ fn entry_top(grid: *const Grid, index: usize) -> f32 {
 
 // The visible entry at scroll offset `offset`.
 fn entry_at(grid: *const Grid, offset: f32) -> usize {
-    if !grid.g.group_footers { ret usize(offset / grid.row_height) }
+    if !has_extras(grid) { ret usize(offset / grid.row_height) }
     var top: f32 = 0.0
     var at = 0usize
     let n = grp.visible_len(grid.g)
     while at < n {
-        var h = grid.row_height
-        if grp.visible_is_footer(grid.g, at) { h += footer_extra() }
+        let h = grid.row_height + extra_of(grid, at)
         if top + h > offset { ret at }
         top += h
         at += 1usize
@@ -2705,10 +2721,41 @@ fn on_expand(ctx: *void, key: widget.Key) -> err {
 fn on_detail(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err {
     let grid = mem.cast[*Grid](ctx)
     var text = ""
+    var row_at = 0usize
+    var has_row = false
     if index < grp.visible_len(grid.g) && !grp.visible_is_group(grid.g, index) {
-        let (shown, shown_error) = cell_text_of(a, grid, grid.all[grid.preview_spec], grp.visible_row(grid.g, index))
+        row_at = grp.visible_row(grid.g, index)
+        has_row = true
+        let (shown, shown_error) = cell_text_of(a, grid, grid.all[grid.preview_spec], row_at)
         if shown_error != ok { ret shown_error }
         text = shown
+    }
+    if grid.look.on {
+        // v3: the rules text under the row from below its Legal column, in the row's ink, one line
+        var line = control.text_options()
+        line.wrap = .None
+        line.size = grid.look.text_size
+        var node: widget.Node = zero
+        var coloured = false
+        if grid.has_ink && has_row {
+            let (ink, has_row_ink) = grid.ink_of(grid.ink_ctx, row_at)
+            if has_row_ink {
+                let (made, made_error) = control.colored_text(a, 0u64, text, grid.theme, line, ink)
+                if made_error != ok { ret made_error }
+                node = made
+                coloured = true
+            }
+        }
+        if !coloured {
+            let (plain, plain_error) = control.text(a, 0u64, text, grid.theme, line)
+            if plain_error != ok { ret plain_error }
+            node = plain
+        }
+        var fill = style.defaults()
+        fill.width = style.Length { Percent: 100.0 }
+        fill.height = style.Length { Percent: 100.0 }
+        *out = widget.padded(0u64, 35.0, 3.0, 8.0, 0.0, fill, one(a, node))
+        ret ok
     }
     var options = control.text_options()
     options.wrap = .Word
@@ -4363,18 +4410,21 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
                 selected_edge = gl.rgb(0x212121u32)
             }
         }
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     // group footers are taller: the list of the entries that are
-    if grid.g.group_footers && grid.look.on {
+    if has_extras(grid) && grid.look.on {
         let visible_now = grp.visible_len(grid.g)
-        let (extra_list, extra_error) = mem.alloc[widget.VirtualExtra](a, grp.group_len(grid.g) + 1usize)
+        var capacity = grp.group_len(grid.g) + 1usize
+        if grid.preview_on { capacity = visible_now + 1usize }
+        let (extra_list, extra_error) = mem.alloc[widget.VirtualExtra](a, capacity)
         if extra_error != ok { ret (zero, extra_error) }
         var extra_count = 0usize
         var scan = 0usize
         while scan < visible_now && extra_count < extra_list.len {
-            if grp.visible_is_footer(grid.g, scan) {
-                extra_list[extra_count] = widget.VirtualExtra { index: scan, extra: footer_extra() }
+            let plus = extra_of(grid, scan)
+            if plus > 0.0 {
+                extra_list[extra_count] = widget.VirtualExtra { index: scan, extra: plus }
                 extra_count += 1usize
             }
             scan += 1usize

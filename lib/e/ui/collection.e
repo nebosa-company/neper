@@ -2494,7 +2494,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8 }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32 }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4031,7 +4031,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         // (D1313, docs/ux/components/TableRow, expandable) The first cell leads with
         // a 24 disclosure (keyed `row_key ^ fnv1a64("row-disclose")`): an 18
         // `chevron-right` in `on-surface-variant`, down while the row is open.
-        if selection.expandable && columns.len > 0usize {
+        if selection.expandable && columns.len > 0usize && !(selection.look.on && selection.look.detail_height > 0.0) {
             let open = is_selected(selection.expanded, row_key)
             expand_presses[i] = TableExpandPress { key: row_key, expand: selection.expand }
             expand_submits[i] = widget.Submit { ctx: ctx_of(&expand_presses[i]), invoke: table_expand_fire }
@@ -4134,7 +4134,9 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     while i < count {
         // (D1313) An open row's detail follows it: full width on
         // `surface-container-low`, 12 over and under, 16 at the end, 68 in.
-        if selection.expandable && mem.address_of(selection.detail.ctx) != 0usize && is_selected(selection.expanded, row_keys[i]) {
+        var detail_always = false
+        if selection.look.on && selection.look.detail_height > 0.0 { detail_always = true }
+        if selection.expandable && mem.address_of(selection.detail.ctx) != 0usize && (detail_always || is_selected(selection.expanded, row_keys[i])) {
             var built: widget.Node = zero
             let built_error = selection.detail.build(selection.detail.ctx, a, first + i, &built)
             if built_error != ok { ret (zero, built_error) }
@@ -4145,6 +4147,15 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             detail_style.width = style.Length { Percent: 100.0 }
             detail_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
             detail_style.padding = style.EdgeLengths { left: style.Length { Px: 68.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 12.0 } }
+            if detail_always {
+                // v3's Card Rules: the text under its row, in the row's own fill, 27 px tall
+                var detail_fill = selection.look.even
+                if (first + i) % 2usize == 1usize { detail_fill = selection.look.odd }
+                if is_selected(selected, row_keys[i]) { detail_fill = selection.look.selected }
+                detail_style.background = paint.Brush { Solid: detail_fill }
+                detail_style.height = style.Length { Px: selection.look.detail_height }
+                detail_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            }
             inner[0usize] = rows[i]
             inner[1usize] = widget.box(row_keys[i] ^ hash.fnv1a64("row-detail"), detail_style, inner[2usize..3usize])
             rows[i] = widget.flex(row_derived(row_keys[i], "row-with-detail"), ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), inner[0usize..2usize])

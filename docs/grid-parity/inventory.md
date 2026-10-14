@@ -13,7 +13,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Text, read-only, centre/right alignment | matched | header Alignment popup, C1 menus |
 | Spin editor, step arrows in the current row | matched | E1-edit-sequence, `decorate_editors`|
 | Button editor (three dots) | matched | E1 |
-| Memo / preview row (Card Rules) | untested | the toggle exists (V1), the text row was not compared |
+| Memo / preview row (Card Rules) | matched | R1-card-rules (D2431); the frame round both lines of the current card is not drawn yet |
 | Image combo (favourite star, condition) | differs | star column drawn; the combo drop-down not recorded |
 | Check box, date edit, hyperlink, label editors | untested | |
 | Header image + header hint | matched | T1/T2 hint (delay measured 1045 ms vs 1101 ms, D2430) |
@@ -77,8 +77,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 
 ## Open differences, in the order they matter
 
-1. Preview row (Card Rules) text and its layout.
-2. Sort dialog and the conditional formatting rules manager (dialogs).
+1. Sort dialog and the conditional formatting rules manager (dialogs).
 3. Filter dialog / criteria editor, filter row pixel look.
 4. Image combo drop-down, check box, date edit editors.
 5. Drag and drop of cards between grids; mouse wheel step.
