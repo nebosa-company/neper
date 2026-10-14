@@ -60,7 +60,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 |---|---|---|
 | Sort by header click, reverse | matched | S1 |
 | Multi-sort Shift+click, Ctrl+click remove / clear | matched | S4-multi-sort, S6-clear-sort (D2426, D2429) |
-| Sort dialog (View > Sort...) | untested | three-state per column list |
+| Sort dialog (View > Sort...) | matched (list, cycle, Clear/OK/Cancel) / differs (scroll, close box, own window) | SD1-sort-dialog (D2432) |
 | Custom comparers (cost, symbol, colour, P/T, collector no.) | app | sample sorts text columns; domain keys not compared |
 | Group by Edition / Type / Colour / Rarity, expand/collapse all | matched | G1, expand all command |
 | Group row focus, double click, box | matched | N1 (D2424) |
@@ -77,7 +77,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 
 ## Open differences, in the order they matter
 
-1. Sort dialog and the conditional formatting rules manager (dialogs).
+1. The conditional formatting rules manager (dialog).
 3. Filter dialog / criteria editor, filter row pixel look.
 4. Image combo drop-down, check box, date edit editors.
 5. Drag and drop of cards between grids; mouse wheel step.

@@ -131,6 +131,8 @@ type Grid = struct {
     extra_sort: [4]usize,
     extra_desc: [4]bool,
     extra_count: usize,
+    sort_dialog_open: bool,
+    sort_marks: [24]u8,
     hint_key: widget.Key,
     hint_since: i64,
     also_marks: []u8,
@@ -1214,6 +1216,226 @@ fn on_chooser_drop(ctx: *void, g: widget.Gesture) -> err {
 }
 
 // The hidden columns in a window called Column: drag one to the header, or a header to the window.
+// ---- the Sort dialog (v3's View > Sort...: every column with None / Ascending / Descending) ----
+
+type SortRow = struct { grid: *Grid, spec: usize }
+type SortAct = struct { grid: *Grid, kind: u8 }
+
+fn sort_row_listed(grid: *const Grid, spec: usize) -> bool {
+    ret grid.all[spec].kind != CellKind.Indicator && grid.all[spec].title.len != 0usize
+}
+
+// Opens the dialog with the grid's current sort (the primary, then the Shift+click ones).
+fn open_sort_dialog(grid: *Grid) {
+    var at = 0usize
+    while at < 24usize {
+        grid.sort_marks[at] = 0u8
+        at += 1usize
+    }
+    if grid.sort_column < grid.all.len && grid.sort_column < 24usize {
+        grid.sort_marks[grid.sort_column] = 1u8
+        if grid.descending { grid.sort_marks[grid.sort_column] = 2u8 }
+    }
+    var extra = 0usize
+    while extra < grid.extra_count {
+        let spec = grid.extra_sort[extra]
+        if spec < 24usize {
+            grid.sort_marks[spec] = 1u8
+            if grid.extra_desc[extra] { grid.sort_marks[spec] = 2u8 }
+        }
+        extra += 1usize
+    }
+    grid.sort_dialog_open = true
+}
+
+fn on_sort_row(ctx: *void, g: widget.Gesture) -> err {
+    let row = mem.cast[*SortRow](ctx)
+    switch g {
+    case .Tap as at:
+        if row.spec < 24usize {
+            row.grid.sort_marks[row.spec] = (row.grid.sort_marks[row.spec] + 1u8) % 3u8
+        }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// Clear (kind 0) empties the list, OK (1) applies it, Cancel (2) closes it.
+fn on_sort_act(ctx: *void, g: widget.Gesture) -> err {
+    let act = mem.cast[*SortAct](ctx)
+    let grid = act.grid
+    switch g {
+    case .Tap as at:
+        if act.kind == 0u8 {
+            var at_mark = 0usize
+            while at_mark < 24usize {
+                grid.sort_marks[at_mark] = 0u8
+                at_mark += 1usize
+            }
+            ret ok
+        }
+        grid.sort_dialog_open = false
+        if act.kind == 2u8 { ret ok }
+        // OK: the marked columns top to bottom, the first is the primary sort
+        var found = 0usize
+        var spec = 0usize
+        grid.extra_count = 0usize
+        var primary = grid.all.len
+        var primary_desc = false
+        while spec < grid.all.len && spec < 24usize {
+            if grid.sort_marks[spec] != 0u8 && sort_row_listed(grid, spec) {
+                if found == 0usize {
+                    primary = spec
+                    primary_desc = grid.sort_marks[spec] == 2u8
+                } else if grid.extra_count < 4usize {
+                    grid.extra_sort[grid.extra_count] = spec
+                    grid.extra_desc[grid.extra_count] = grid.sort_marks[spec] == 2u8
+                    grid.extra_count += 1usize
+                }
+                found += 1usize
+            }
+            spec += 1usize
+        }
+        if found == 0usize {
+            grid.sort_column = grid.all.len
+            grid.command = CMD_CLEAR_SORT
+            grid.command_spec = 0usize
+            ret ok
+        }
+        grid.sort_column = primary
+        grid.descending = primary_desc
+        ret grid.events.sort_changed(grid.events.ctx, primary, primary_desc)
+    default:
+        ret ok
+    }
+}
+
+fn sort_button(a: *mem.Arena, grid: *Grid, key: widget.Key, label_text: str, act: *SortAct, default_button: bool) -> (widget.Node, err) {
+    let (label, label_error) = flat_text(a, grid, label_text, gl.rgb(0x000000u32))
+    if label_error != ok { ret (zero, label_error) }
+    var box = control.sized_style(100.0, 27.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+    box.radius = 4.0
+    var edge = gl.rgb(0xADADADu32)
+    var edge_width: f32 = 1.0
+    if default_button {
+        edge = gl.rgb(0x0078D7u32)
+        edge_width = 2.0
+    }
+    box.border = style.Border { width: edge_width, color: edge }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, control.TooLarge) }
+    var centred = style.defaults()
+    centred.width = style.Length { Percent: 100.0 }
+    centred.height = style.Length { Percent: 100.0 }
+    held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, centred, one(a, label))
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](act), invoke: on_sort_act }, gestures: 1u8, enabled: true, focusable: false }, box, held[0usize..1usize]), ok)
+}
+
+fn sort_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let width: f32 = 528.0
+    let (rows, rows_error) = mem.alloc[widget.Node](a, grid.all.len + 4usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    let (picks, picks_error) = mem.alloc[SortRow](a, grid.all.len + 1usize)
+    if picks_error != ok { ret (zero, control.TooLarge) }
+    let (acts, acts_error) = mem.alloc[SortAct](a, 3usize)
+    if acts_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    // the title bar
+    let (title, title_error) = flat_text(a, grid, "Sort [Card Pool]", gl.rgb(0xFFFFFFu32))
+    if title_error != ok { ret (zero, title_error) }
+    var title_box = control.sized_style(width, 44.0)
+    title_box.background = paint.Brush { Solid: gl.rgb(0x202020u32) }
+    rows[n] = widget.padded(0u64, 44.0, 14.0, 0.0, 0.0, title_box, one(a, title))
+    n += 1usize
+    // the column header
+    let (head_a, head_a_error) = flat_text(a, grid, "Column", gl.rgb(0x000000u32))
+    if head_a_error != ok { ret (zero, head_a_error) }
+    let (head_b, head_b_error) = flat_text(a, grid, "Sort Order", gl.rgb(0x000000u32))
+    if head_b_error != ok { ret (zero, head_b_error) }
+    let (head_cells, head_cells_error) = mem.alloc[widget.Node](a, 2usize)
+    if head_cells_error != ok { ret (zero, control.TooLarge) }
+    head_cells[0usize] = widget.padded(0u64, 4.0, 4.0, 0.0, 0.0, control.sized_style(236.0, 26.0), one(a, head_a))
+    head_cells[1usize] = widget.padded(0u64, 4.0, 4.0, 0.0, 0.0, control.sized_style(230.0, 26.0), one(a, head_b))
+    var head_style = control.sized_style(width - 16.0, 26.0)
+    head_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    head_style.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head_cells[0usize..2usize])
+    n += 1usize
+    var listed = 0usize
+    var spec = 0usize
+    while spec < grid.all.len {
+        if sort_row_listed(grid, spec) {
+            var mark = 0u8
+            if spec < 24usize { mark = grid.sort_marks[spec] }
+            picks[spec] = SortRow { grid: grid, spec: spec }
+            var words = "None"
+            if mark == 1u8 { words = "Ascending" }
+            if mark == 2u8 { words = "Descending" }
+            let (name_node, name_error) = flat_text(a, grid, grid.all[spec].title, gl.rgb(0x000000u32))
+            if name_error != ok { ret (zero, name_error) }
+            let (order_node, order_error) = flat_text(a, grid, words, gl.rgb(0x000000u32))
+            if order_error != ok { ret (zero, order_error) }
+            let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+            if cells_error != ok { ret (zero, control.TooLarge) }
+            cells[0usize] = widget.padded(0u64, 4.0, 6.0, 0.0, 0.0, control.sized_style(236.0, 28.0), one(a, name_node))
+            var icon_text = ""
+            if mark == 1u8 { icon_text = "a-z" }
+            if mark == 2u8 { icon_text = "z-a" }
+            var glyph_style = control.sized_style(30.0, 18.0)
+            if mark != 0u8 {
+                glyph_style.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
+                glyph_style.radius = 4.0
+            }
+            let (glyph_text, glyph_error) = flat_text(a, grid, icon_text, gl.rgb(0x555555u32))
+            if glyph_error != ok { ret (zero, glyph_error) }
+            cells[1usize] = widget.aligned(0u64, .Center, .Center, glyph_style, one(a, glyph_text))
+            cells[2usize] = widget.padded(0u64, 6.0, 6.0, 0.0, 0.0, control.sized_style(200.0, 28.0), one(a, order_node))
+            var row_style = control.sized_style(width - 16.0, 28.0)
+            var zebra = gl.rgb(0xFFFFFFu32)
+            if listed % 2usize == 0usize { zebra = gl.rgb(0xF0F0F0u32) }
+            row_style.background = paint.Brush { Solid: zebra }
+            row_style.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+            let (row_line, row_line_error) = mem.alloc[widget.Node](a, 1usize)
+            if row_line_error != ok { ret (zero, control.TooLarge) }
+            row_line[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..3usize])
+            rows[n] = widget.region(grid.key + MENU_KEY + 700000u64 + u64(spec), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[spec]), invoke: on_sort_row }, gestures: 1u8, enabled: true, focusable: false }, row_style, row_line[0usize..1usize])
+            n += 1usize
+            listed += 1usize
+        }
+        spec += 1usize
+    }
+    // Clear, OK, Cancel
+    acts[0usize] = SortAct { grid: grid, kind: 0u8 }
+    acts[1usize] = SortAct { grid: grid, kind: 1u8 }
+    acts[2usize] = SortAct { grid: grid, kind: 2u8 }
+    let (clear_button, clear_error) = sort_button(a, grid, grid.key + MENU_KEY + 699990u64, "Clear", &acts[0usize], false)
+    if clear_error != ok { ret (zero, clear_error) }
+    let (ok_button, ok_error) = sort_button(a, grid, grid.key + MENU_KEY + 699991u64, "OK", &acts[1usize], true)
+    if ok_error != ok { ret (zero, ok_error) }
+    let (cancel_button, cancel_error) = sort_button(a, grid, grid.key + MENU_KEY + 699992u64, "Cancel", &acts[2usize], false)
+    if cancel_error != ok { ret (zero, cancel_error) }
+    let (buttons, buttons_error) = mem.alloc[widget.Node](a, 3usize)
+    if buttons_error != ok { ret (zero, control.TooLarge) }
+    buttons[0usize] = clear_button
+    buttons[1usize] = ok_button
+    buttons[2usize] = cancel_button
+    var button_row = control.sized_style(width - 16.0, 46.0)
+    button_row.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, button_row, buttons[0usize..3usize])
+    n += 1usize
+    var body_style = control.sized_style(width, 44.0 + 34.0 + f32(listed) * 28.0 + 54.0 + 8.0)
+    body_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    body_style.border = style.Border { width: 1.0, color: gl.rgb(0x6D6D6Du32) }
+    body_style.radius = 8.0
+    body_style.overflow = .Clip
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, control.TooLarge) }
+    inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
+    ret (widget.box(0u64, body_style, inner[0usize..1usize]), ok)
+}
+
 fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let me = mem.cast[*void](grid)
     let (items, items_error) = mem.alloc[widget.Node](a, grid.all.len + 2usize)
@@ -1893,8 +2115,8 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
             shown += 1usize
         }
     }
-    if !grid.menu_open && !grid.chooser_open && !has_hint { ret (aimed, ok) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
+    if !grid.menu_open && !grid.chooser_open && !has_hint && !grid.sort_dialog_open { ret (aimed, ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     parts[n] = aimed
@@ -1958,6 +2180,19 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         if floating_error != ok { ret (zero, control.TooLarge) }
         floating[0usize] = panel
         parts[n] = widget.overlay(grid.key + CHOOSER_KEY, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: x, y: y }, modal: false, dismiss: zero }, style.defaults(), floating[0usize..1usize])
+        n += 1usize
+    }
+    if grid.sort_dialog_open {
+        let (dialog, dialog_error) = sort_dialog_panel(a, grid)
+        if dialog_error != ok { ret (zero, dialog_error) }
+        let size = widget.surface_size(theme.runtime)
+        var dialog_x = (size.width - 528.0) * 0.5
+        let dialog_y: f32 = 190.0
+        if dialog_x < 0.0 { dialog_x = 0.0 }
+        let (shown, shown_error) = mem.alloc[widget.Node](a, 1usize)
+        if shown_error != ok { ret (zero, control.TooLarge) }
+        shown[0usize] = dialog
+        parts[n] = widget.overlay(grid.key + MENU_KEY + 699900u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: dialog_x, y: dialog_y }, modal: false, dismiss: zero }, style.defaults(), shown[0usize..1usize])
         n += 1usize
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..n]), ok)
