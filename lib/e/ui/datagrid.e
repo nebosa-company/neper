@@ -153,6 +153,10 @@ chooser_bands: bool,
 pv_tenths: [6]u8,
 pv_page: usize,
 pv_zoom: u8,
+pv_setup: bool,
+pv_paper: u8,
+pv_orient: u8,
+pv_order: u8,
 band_names: []const str,
 wiz_pos_color: u8,
 wiz_neg_color: u8,
@@ -3790,6 +3794,12 @@ fn set_print_toolbar(texture: scene.TextureId) {
     toolbar_set = true
 }
 
+// Opens v3's Page Setup dialog (it stands in the preview's slot; OK returns to the preview).
+fn show_page_setup(grid: *Grid) {
+    show_print_preview(grid)
+    grid.pv_setup = true
+}
+
 fn show_print_preview(grid: *Grid) {
     grid.wiz_open = true
     grid.fmt_open = false
@@ -3811,6 +3821,165 @@ fn on_print_close(ctx: *void, g: widget.Gesture) -> err {
     default:
         ret ok
     }
+}
+
+// ---- Page Setup (v3: Cards > Print > Page Setup..., DevExpress's "Page Setup: Standard Style") --------
+
+type SetupTap = struct { grid: *Grid, kind: u8, value: u8 }
+
+fn on_setup_tap(ctx: *void, g: widget.Gesture) -> err {
+    let tap = mem.cast[*SetupTap](ctx)
+    switch g {
+    case .Tap as at:
+        if tap.kind == 0u8 { tap.grid.pv_paper = tap.value }
+        if tap.kind == 1u8 { tap.grid.pv_orient = tap.value }
+        if tap.kind == 2u8 { tap.grid.pv_order = tap.value }
+        if tap.kind == 3u8 { tap.grid.pv_setup = false }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn paper_name(i: u8) -> str {
+    if i == 0u8 { ret "Letter" }
+    if i == 1u8 { ret "Tabloid" }
+    if i == 2u8 { ret "Legal" }
+    if i == 3u8 { ret "Statement" }
+    if i == 4u8 { ret "Executive" }
+    if i == 5u8 { ret "A3" }
+    if i == 6u8 { ret "A4" }
+    if i == 7u8 { ret "A5" }
+    if i == 8u8 { ret "B4 (JIS)" }
+    if i == 9u8 { ret "B5 (JIS)" }
+    if i == 10u8 { ret "Envelope #9" }
+    if i == 11u8 { ret "Envelope #10" }
+    ret "C size sheet"
+}
+
+// A line of the dialog: an optional marker ("(o) ") and a text, chosen when `chosen` (blue for a list entry).
+fn setup_line(a: *mem.Arena, grid: *Grid, taps: []SetupTap, at: usize, kind: u8, value: u8, text: str, chosen: bool, listed: bool, width: f32) -> (widget.Node, err) {
+    taps[at] = SetupTap { grid: grid, kind: kind, value: value }
+    var ink = gl.rgb(0x000000u32)
+    var shown = text
+    if !listed {
+        let (b, b_error) = str.builder(a, text.len + 6usize)
+        if b_error != ok { ret (zero, b_error) }
+        var sb = b
+        var mark = "( ) "
+        if chosen { mark = "(o) " }
+        if str.push(&sb, mark) != ok || str.push(&sb, text) != ok { ret (zero, control.TooLarge) }
+        shown = str.done(&sb)
+    }
+    if listed && chosen { ink = gl.rgb(0xFFFFFFu32) }
+    let (label, label_error) = flat_text(a, grid, shown, ink)
+    if label_error != ok { ret (zero, label_error) }
+    var line = control.sized_style(width, 24.0)
+    if listed && chosen { line.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) } }
+    ret (widget.region(grid.key + MENU_KEY + 850400u64 + u64(at), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[at]), invoke: on_setup_tap }, gestures: 1u8, enabled: true, focusable: false }, line, one(a, widget.padded(0u64, 6.0, 3.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
+}
+
+fn page_setup_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let width: f32 = 560.0
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 12usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    let (title, title_error) = window_title(a, grid, 2u8, "Page Setup: Standard Style", width, 32.0, false)
+    if title_error != ok { ret (zero, title_error) }
+    rows[n] = title
+    n += 1usize
+    let (taps, taps_error) = mem.alloc[SetupTap](a, 24usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
+    // the style name (grey, v3's standard style cannot be renamed)
+    let (name_label, name_error) = flat_text(a, grid, "Style Name:   Standard Style", gl.rgb(0x808080u32))
+    if name_error != ok { ret (zero, name_error) }
+    rows[n] = widget.padded(0u64, 14.0, 10.0, 0.0, 6.0, style.defaults(), one(a, name_label))
+    n += 1usize
+    // the tabs: Page chosen
+    let (tab_labels, tab_error) = mem.alloc[str](a, 4usize)
+    if tab_error != ok { ret (zero, control.TooLarge) }
+    tab_labels[0usize] = "Page"
+    tab_labels[1usize] = "Margins"
+    tab_labels[2usize] = "Header / Footer"
+    tab_labels[3usize] = "Scaling"
+    let (tabs, tabs_error) = print_bar(a, grid, tab_labels[0usize..4usize], 0xF0F0F0u32, width)
+    if tabs_error != ok { ret (zero, tabs_error) }
+    rows[n] = tabs
+    n += 1usize
+    // the two columns: the paper list, then the orientation and the print order
+    let (left, left_error) = mem.alloc[widget.Node](a, 14usize)
+    if left_error != ok { ret (zero, control.TooLarge) }
+    var at = 0usize
+    var i = 0usize
+    let (paper_head, paper_head_error) = flat_text(a, grid, "Paper", gl.rgb(0x000000u32))
+    if paper_head_error != ok { ret (zero, paper_head_error) }
+    left[0usize] = widget.padded(0u64, 4.0, 0.0, 0.0, 4.0, style.defaults(), one(a, paper_head))
+    var l = 1usize
+    while i < 13usize {
+        let (line, line_error) = setup_line(a, grid, taps[0usize..24usize], at, 0u8, u8(i), paper_name(u8(i)), grid.pv_paper == u8(i), true, 260.0)
+        if line_error != ok { ret (zero, line_error) }
+        left[l] = line
+        l += 1usize
+        at += 1usize
+        i += 1usize
+    }
+    var left_style = control.sized_style(280.0, 340.0)
+    left_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    left_style.border = style.Border { width: 1.0, color: gl.rgb(0xABABABu32) }
+    let (right_nodes, right_error) = mem.alloc[widget.Node](a, 8usize)
+    if right_error != ok { ret (zero, control.TooLarge) }
+    let (orient_head, orient_head_error) = flat_text(a, grid, "Orientation", gl.rgb(0x000000u32))
+    if orient_head_error != ok { ret (zero, orient_head_error) }
+    right_nodes[0usize] = widget.padded(0u64, 4.0, 0.0, 0.0, 4.0, style.defaults(), one(a, orient_head))
+    var r = 1usize
+    var k = 0usize
+    while k < 3usize {
+        var words = "Portrait"
+        if k == 1usize { words = "Landscape" }
+        if k == 2usize { words = "Auto" }
+        // stored: 0 Landscape (v3's default), 1 Portrait, 2 Auto; listed as Portrait, Landscape, Auto
+        var stored: u8 = 2u8
+        if k < 2usize { stored = u8(k) ^ 1u8 }
+        let (line, line_error) = setup_line(a, grid, taps[0usize..24usize], at, 1u8, stored, words, grid.pv_orient == stored, false, 200.0)
+        if line_error != ok { ret (zero, line_error) }
+        right_nodes[r] = line
+        r += 1usize
+        at += 1usize
+        k += 1usize
+    }
+    let (order_head, order_head_error) = flat_text(a, grid, "Print Order", gl.rgb(0x000000u32))
+    if order_head_error != ok { ret (zero, order_head_error) }
+    right_nodes[r] = widget.padded(0u64, 4.0, 14.0, 0.0, 4.0, style.defaults(), one(a, order_head))
+    r += 1usize
+    k = 0usize
+    while k < 2usize {
+        var words = "Down, then over"
+        if k == 1usize { words = "Over, then down" }
+        // stored: 0 Over, then down (v3's default), 1 Down, then over
+        let order_value = u8(k) ^ 1u8
+        let (line, line_error) = setup_line(a, grid, taps[0usize..24usize], at, 2u8, order_value, words, grid.pv_order == order_value, false, 200.0)
+        if line_error != ok { ret (zero, line_error) }
+        right_nodes[r] = line
+        r += 1usize
+        at += 1usize
+        k += 1usize
+    }
+    let (columns, columns_error) = mem.alloc[widget.Node](a, 2usize)
+    if columns_error != ok { ret (zero, control.TooLarge) }
+    columns[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, left_style, left[0usize..l])
+    columns[1usize] = widget.padded(0u64, 20.0, 0.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), right_nodes[0usize..r])))
+    rows[n] = widget.padded(0u64, 14.0, 10.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), columns[0usize..2usize])))
+    n += 1usize
+    // OK
+    let (ok_line, ok_line_error) = setup_line(a, grid, taps[0usize..24usize], at, 3u8, 0u8, "OK", false, true, 100.0)
+    if ok_line_error != ok { ret (zero, ok_line_error) }
+    rows[n] = widget.padded(0u64, 400.0, 10.0, 0.0, 10.0, style.defaults(), one(a, ok_line))
+    n += 1usize
+    var panel = control.sized_style(width, 0.0)
+    panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    panel.border = style.Border { width: 1.0, color: gl.rgb(0x606060u32) }
+    panel.height = style.Length { Px: 540.0 }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..n]), ok)
 }
 
 // A tap in the preview: 0..5 step a margin by a tenth of an inch (back to its start after nine), 6 the
@@ -4003,6 +4172,15 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     }
     let lines = page_lines[0usize..put]
     var zoom: f32 = 1.0
+    // Portrait (Page Setup) narrows the sheet and its columns
+    var across: f32 = 640.0
+    var sheet_wide: f32 = 690.0
+    var sheet_high: f32 = 400.0
+    if grid.pv_orient == 1u8 {
+        across = 400.0
+        sheet_wide = 450.0
+        sheet_high = 470.0
+    }
     if grid.pv_zoom == 1u8 { zoom = 0.75 }
     if grid.pv_zoom == 2u8 { zoom = 0.5 }
     if grid.pv_zoom == 3u8 { zoom = 1.25 }
@@ -4012,7 +4190,7 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if widths_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
     while k < shown {
-        widths[k] = 640.0 * zoom / f32(shown)
+        widths[k] = across * zoom / f32(shown)
         k += 1usize
     }
     let (heading, heading_error) = flat_text(a, grid, "Collection", gl.rgb(0x000000u32))
@@ -4032,12 +4210,12 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     }
     let (filter_text, filter_error) = flat_text(a, grid, "<Filter is Empty>", gl.rgb(0xFFFFFFu32))
     if filter_error != ok { ret (zero, filter_error) }
-    var strip = control.sized_style(640.0 * zoom, 22.0)
+    var strip = control.sized_style(across * zoom, 22.0)
     strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) }
     strip.margin = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     page[q] = widget.box(0u64, strip, one(a, widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, style.defaults(), one(a, filter_text))))
     q += 1usize
-    var sheet = control.sized_style(690.0 * zoom, 400.0)
+    var sheet = control.sized_style(sheet_wide * zoom, sheet_high)
     sheet.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     sheet.border = style.Border { width: 1.0, color: gl.rgb(0x3C8CDCu32) }
     sheet.margin = style.EdgeLengths { left: style.Length { Px: 36.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
@@ -4086,6 +4264,10 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    if grid.print_open && grid.pv_setup {
+        let (setup_node, setup_error) = page_setup_panel(a, grid)
+        ret (setup_node, setup_error)
+    }
     if grid.print_open {
         let (print_node, print_error) = print_panel(a, grid)
         ret (print_node, print_error)
