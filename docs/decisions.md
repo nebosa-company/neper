@@ -41275,3 +41275,7 @@ v3's vertical scroll bar thumb (SBv3h shot against the resting one, v3 running w
 ## D4072 - G012: the navigator bar measured from v3
 
 v3's navigator thumb (the grey bar after Row n of m) is 13 px tall and 141 px wide in its 1200 px window (HB0, HB1 against the running program) and does not change under the pointer; ours was 10 units resting and 16 hovered. It is now 8.6 units (13 px) both ways. The wider vertical scroll bar thumb of D4071 still thickens.
+
+## D4073 - G012: why columns grow while scrolling sideways
+
+The column shrink seen while scrolling (D2502) is the shifted body being clamped to the pane: a positioned child with a negative left (or a negative margin, or a min_width, all tried) is laid out at most pane + offset wide, so at offset 0 the columns are squeezed to the pane and grow as the offset grows. Hosting the body in a horizontal `widget.scroll` with the grid's own offset keeps the columns at their natural widths (HS4-natural-widths-experiment-v5.png) but carries the table's own vertical scroll bar to the end of the content, out of view; v3 keeps it fixed at the right edge. Not landed: the vertical bar must first be drawn outside the shifted body. The shipped build is unchanged.
