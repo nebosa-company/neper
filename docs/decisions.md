@@ -39424,3 +39424,7 @@ The grid's incremental-search shortcuts also took the letters typed into a filte
 ## D2478 - G012: v3's operator pictures in the filter row
 
 The twelve operator pictures of v3's filter row list are cut from the recording FR2 (26 by 20, at the sizes v3 draws them) into the sample's icons folder (`fop_00.png` .. `fop_11.png`); `set_filter_operator_icons` hands them to the grid, which draws them in the operator list and as the sign of each filter cell, falling back to the text signs without them (FR6-filter-row-operator-icons-v5.png). The sample's `main.e` loads them and passes the operator on to the text columns' filter. The four grid fixtures pass.
+
+## D2479 - G012: the filter row's funnel and focused blue
+
+While one of its editors holds the keyboard the filter row turns light blue (#A6D2FF, v3's FR2 recording) except the editor's own cell, which stays white; the indicator column of the row carries v3's black down-pointing funnel. The operator pictures lose their white background (alpha from the whiteness) so they stand on the blue (FR7-filter-row-focused-v5.png). The four grid fixtures pass.

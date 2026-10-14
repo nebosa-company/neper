@@ -6408,6 +6408,12 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if cells_error != ok { ret (zero, cells_error) }
     let (picks, picks_error) = mem.alloc[FilterPick](a, grid.specs.len)
     if picks_error != ok { ret (zero, picks_error) }
+    // the row turns light blue (v3: #A6D2FF) while its editor holds the keyboard, the editor's cell white
+    var held_spec: usize = grid.all.len + 1usize
+    if mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
+        let (held, has_held) = widget.focused_key(grid.theme.runtime)
+        if has_held && held >= grid.key + FILTER_KEY && held < grid.key + FILTER_KEY + 1024u64 { held_spec = usize(held - grid.key - FILTER_KEY) }
+    }
     var at = 0usize
     while at < grid.specs.len {
         let s = grid.specs[at]
@@ -6415,6 +6421,15 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         picks[at] = FilterPick { grid: grid, spec: orig }
         var cell_style = control.sized_style(grid.columns[at].width, 28.0)
         cell_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        if held_spec <= grid.all.len && held_spec != orig { cell_style.background = paint.Brush { Solid: gl.rgb(0xA6D2FFu32) } }
+        if s.kind == CellKind.Indicator {
+            // the funnel of the filter row stands in the indicator column
+            let (funnel, funnel_error) = flat_text(a, grid, "▼", gl.rgb(0x000000u32))
+            if funnel_error != ok { ret (zero, funnel_error) }
+            cells[at] = widget.padded(0u64, 3.0, 6.0, 0.0, 0.0, cell_style, one(a, funnel))
+            at += 1usize
+            continue
+        }
         if s.filter {
             var sign_text: widget.Node = zero
             if grid.has_filter_op_icons {
@@ -6430,8 +6445,10 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let sign = widget.region(grid.key + FILTER_KEY + 1100u64 + u64(orig), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[at]), invoke: on_filter_sign }, gestures: 1u8, enabled: true, focusable: false }, sign_box, one(a, widget.padded(0u64, 8.0, 4.0, 0.0, 0.0, style.defaults(), one(a, sign_text))))
             let buffer = grid.filter_text[orig * FILTER_TEXT..(orig + 1usize) * FILTER_TEXT]
             var inner_width = grid.columns[at].width - 36.0
+            var field_fill = gl.rgb(0xFFFFFFu32)
+            if held_spec <= grid.all.len && held_spec != orig { field_fill = gl.rgb(0xA6D2FFu32) }
             if inner_width < 8.0 { inner_width = 8.0 }
-            let (field, field_error) = control.bare_field(a, grid.key + FILTER_KEY + u64(orig), grid.theme, s.title, buffer, grid.filter_lens[orig], widget.Change[str] { ctx: mem.cast[*void](&picks[at]), invoke: on_filter }, zero, inner_width, 24.0, grid.look.text_size, gl.rgb(0xFFFFFFu32), gl.rgb(0xFFFFFFu32))
+            let (field, field_error) = control.bare_field(a, grid.key + FILTER_KEY + u64(orig), grid.theme, s.title, buffer, grid.filter_lens[orig], widget.Change[str] { ctx: mem.cast[*void](&picks[at]), invoke: on_filter }, zero, inner_width, 24.0, grid.look.text_size, field_fill, field_fill)
             if field_error != ok { ret (zero, field_error) }
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (zero, control.TooLarge) }
