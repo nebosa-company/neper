@@ -1532,7 +1532,7 @@ fn window_title(a: *mem.Arena, grid: *Grid, which: u8, text: str, width: f32, he
     var bar = control.sized_style(width - 44.0, height)
     if dark { bar.background = paint.Brush { Solid: gl.rgb(0x202020u32) } } else { bar.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
     let bar_key = grid.key + MENU_KEY + 899800u64 + u64(which) * 2u64
-    let title_region = widget.region(bar_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[0usize]), invoke: on_window_title }, gestures: 3u8, enabled: true, focusable: false }, bar, one(a, widget.padded(0u64, 44.0, height * 0.32, 0.0, 0.0, style.defaults(), one(a, label))))
+    let title_region = widget.region(bar_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[0usize]), invoke: on_window_title }, gestures: 3u8, enabled: true, focusable: false }, bar, one(a, widget.padded(0u64, 14.0, height * 0.28, 0.0, 0.0, style.defaults(), one(a, label))))
     let close_key = bar_key + 1u64
     let close_state = control.control_state(grid.theme, close_key, true, false)
     var close_style = control.sized_style(44.0, height)
@@ -1540,7 +1540,7 @@ fn window_title(a: *mem.Arena, grid: *Grid, which: u8, text: str, width: f32, he
     if close_state.hovered { close_style.background = paint.Brush { Solid: gl.rgb(0xE04343u32) } }
     let (cross, cross_error) = flat_text(a, grid, "x", gl.rgb(0xFFFFFFu32))
     if cross_error != ok { ret (zero, cross_error) }
-    let close_region = widget.region(close_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[0usize]), invoke: on_window_close }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, close_style, one(a, widget.aligned(0u64, .Center, .Center, style.defaults(), one(a, cross))))
+    let close_region = widget.region(close_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[0usize]), invoke: on_window_close }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, close_style, one(a, widget.padded(0u64, 16.0, height * 0.22, 0.0, 0.0, style.defaults(), one(a, cross))))
     let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
     if pair_error != ok { ret (zero, control.TooLarge) }
     pair[0usize] = title_region
