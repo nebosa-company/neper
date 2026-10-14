@@ -1734,6 +1734,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     st_set.rules[0usize].stop = false
     let st_open = gr.format(&st_set, 1usize, C_CMC)
     if !st_open.has_fill || !st_open.has_ink { os.exit(636) }
+    // 39. a data bar with a Maximum of its own: values at or above it fill the bar
+    let (mm_made, mm_error) = gr.create(a, &app.tbl, 2usize)
+    if mm_error != ok { os.exit(650) }
+    var mm_set = mm_made
+    var mm_rule = gr.rule(C_CMC, gr.Kind.Bar)
+    mm_rule.fill = paint.rgba(0.1, 0.2, 0.9, 1.0)
+    mm_rule.has_max = true
+    mm_rule.max_value = 0.5
+    let (_mm_at, mm_add_error) = gr.add(a, &mm_set, mm_rule)
+    if mm_add_error != ok || gr.refresh(&mm_set, a) != ok { os.exit(651) }
+    let mm_format = gr.format(&mm_set, 1usize, C_CMC)
+    if !mm_format.has_bar || mm_format.bar < 0.0 || mm_format.bar > 1.0 { os.exit(652) }
     // 38. the Advanced Filter's conditions as text and back
     grid15.crit_count = 2usize
     grid15.crit_group = 1u8

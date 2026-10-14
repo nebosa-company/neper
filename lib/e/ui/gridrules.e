@@ -47,7 +47,11 @@ type Rule = struct {
     three: bool,
     buckets: u8,
     bar_only: bool,
-    stop: bool
+    stop: bool,
+    has_min: bool,
+    min_value: f64,
+    has_max: bool,
+    max_value: f64
 }
 
 // The look of one cell. `bar` is the filled fraction 0..1 of a data bar (0 for none); `icon`
@@ -92,7 +96,7 @@ error BadRule
 
 fn rule(column: usize, kind: Kind) -> Rule {
     let none = paint.rgba(0.0, 0.0, 0.0, 0.0)
-    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false }
+    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false, has_min: false, min_value: 0.0, has_max: false, max_value: 0.0 }
 }
 
 fn create(a: *mem.Arena, t: *const table.Table, capacity: usize) -> (Rules, err) {
@@ -442,8 +446,15 @@ fn apply_range(rs: *const Rules, i: usize, row: usize, f: *Format) {
     let r = &rs.rules[i]
     let s = &rs.stats[i]
     let v = number(t, r.column, table.column_kind(t, r.column), row)
+    // Minimum / Maximum of the wizard: a number replaces the column's lowest or highest value
+    var low = s.low
+    var high = s.high
+    if r.has_min { low = r.min_value }
+    if r.has_max { high = r.max_value }
     var x = 1.0f32
-    if s.high > s.low { x = f32((v - s.low) / (s.high - s.low)) }
+    if high > low { x = f32((v - low) / (high - low)) }
+    if x < 0.0f32 { x = 0.0f32 }
+    if x > 1.0f32 { x = 1.0f32 }
     if r.kind == Kind.Scale {
         if f.has_fill { ret }
         var c = lerp(r.low, r.high, x)
