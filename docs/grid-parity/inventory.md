@@ -92,3 +92,5 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 Verified live 2026-10-14 (screen unlocked): the Advanced Filter's Save As... wrote `cardgrid.filter` (`filter 1 / group 0 / cond ...`) and Open... restored the condition value `mox` (AF4-open-save-v5.png, D2452).
 
 Verified live 2026-10-14: the wizard's Maximum = Number 2 on the CMC data bar makes every bar of a value of 2 or more full width (CF6-max-effect-v5.png, before and after; D2454).
+
+Recorded 2026-10-14 (AF5-operator-list-v3.png): v3's operator list of a condition on the Favorite column holds six entries with an icon each - Equals (=), Does not equal (≠), Is blank (dotted green circle), Is not blank (filled green disc), Is any of (two green discs), Is none of (two red discs) - the current one light blue. The list depends on the column type (this is an image combo column). neper's operator popup (D2450) offers one list of eight text operators for every column; the per-type lists, the icons and the blank / any-of / none-of operators are not built.
