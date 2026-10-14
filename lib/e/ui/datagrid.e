@@ -4522,53 +4522,62 @@ fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8, hund: u8, t
     ret (str.done(&sb), ok)
 }
 
-// The margins row: its label, then each margin as a tappable value and the zoom.
+// The margins rows: the zoom (a tap), then each margin as a typed spin box.
 fn print_margins(a: *mem.Arena, grid: *Grid, width: f32) -> (widget.Node, err) {
-    let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
-    let (taps, taps_error) = mem.alloc[PrintTap](a, 7usize)
-    if taps_error != ok { ret (zero, control.TooLarge) }
+    let (zoom_tap, zoom_tap_error) = mem.alloc[PrintTap](a, 1usize)
+    if zoom_tap_error != ok { ret (zero, control.TooLarge) }
+    var text: str = "Zoom: 100%"
+    if grid.pv_zoom == 1u8 { text = "Zoom: 75%" }
+    if grid.pv_zoom == 2u8 { text = "Zoom: 50%" }
+    if grid.pv_zoom == 3u8 { text = "Zoom: 125%" }
+    let (zoom_label, zoom_label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if zoom_label_error != ok { ret (zero, zoom_label_error) }
+    zoom_tap[0usize] = PrintTap { grid: grid, index: 6u8 }
+    let zoom_padded = widget.padded(0u64, 10.0, 6.0, 0.0, 0.0, style.defaults(), one(a, zoom_label))
+    cells[0usize] = widget.region(grid.key + MENU_KEY + 850386u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&zoom_tap[0usize]), invoke: on_print_tap }, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), one(a, zoom_padded))
+    // the six margins as typed spin boxes (hundredths of an inch), in the order of the row they replace
+    let (pairs, pairs_error) = mem.alloc[widget.Node](a, 12usize)
+    if pairs_error != ok { ret (zero, control.TooLarge) }
+    let (spins, spins_error) = mem.alloc[MarginSpin](a, 6usize)
+    if spins_error != ok { ret (zero, control.TooLarge) }
+    let (buffers, buffers_error) = mem.alloc[u8](a, 72usize)
+    if buffers_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
-    while k < 8usize {
-        var text: str = "Margins"
-        if k >= 1usize && k <= 6usize {
-            var name = "Left: "
-            var base: u8 = 5u8
-            if k == 2usize { name = "Top: " }
-            if k == 3usize { name = "Right: " }
-            if k == 4usize { name = "Bottom: " }
-            if k == 5usize {
-                name = "Header: "
-                base = 2u8
-            }
-            if k == 6usize {
-                name = "Footer: "
-                base = 2u8
-            }
-            let (value, value_error) = margin_text(a, name, base, grid.pv_tenths[k - 1usize], grid.pv_hund[k - 1usize], false)
-            if value_error != ok { ret (zero, value_error) }
-            text = value
+    while k < 6usize {
+        var name = "Left:"
+        var base: u8 = 5u8
+        if k == 1usize { name = "Top:" }
+        if k == 2usize { name = "Right:" }
+        if k == 3usize { name = "Bottom:" }
+        if k == 4usize {
+            name = "Header:"
+            base = 2u8
         }
-        if k == 7usize {
-            text = "Zoom: 100%"
-            if grid.pv_zoom == 1u8 { text = "Zoom: 75%" }
-            if grid.pv_zoom == 2u8 { text = "Zoom: 50%" }
-            if grid.pv_zoom == 3u8 { text = "Zoom: 125%" }
+        if k == 5usize {
+            name = "Footer:"
+            base = 2u8
         }
-        let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+        spins[k] = MarginSpin { grid: grid, slot: u8(k) }
+        let hundredths = i64(grid.pv_tenths[k] + base) * 10i64 + i64(grid.pv_hund[k])
+        let (field, field_error) = control.spin_box_sized(a, grid.key + MENU_KEY + 850600u64 + u64(k) * 8u64, grid.theme, "", buffers[k * 12usize..k * 12usize + 12usize], hundredths, i64(base) * 10i64, 999i64, 5i64, widget.Change[i64] { ctx: mem.cast[*void](&spins[k]), invoke: on_margin_spin }, widget.Change[str] { ctx: mem.cast[*void](&spins[k]), invoke: on_margin_text }, 80.0)
+        if field_error != ok { ret (zero, field_error) }
+        let (label, label_error) = flat_text(a, grid, name, gl.rgb(0x000000u32))
         if label_error != ok { ret (zero, label_error) }
-        let padded_label = widget.padded(0u64, 10.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label))
-        if k == 0usize {
-            cells[k] = padded_label
-        } else {
-            taps[k - 1usize] = PrintTap { grid: grid, index: u8(k - 1usize) }
-            cells[k] = widget.region(grid.key + MENU_KEY + 850380u64 + u64(k), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[k - 1usize]), invoke: on_print_tap }, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_label))
-        }
+        pairs[k * 2usize] = widget.padded(0u64, 8.0, 20.0, 4.0, 0.0, style.defaults(), one(a, label))
+        pairs[k * 2usize + 1usize] = field
         k += 1usize
     }
-    var bar = control.sized_style(width, 28.0)
-    bar.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, bar, cells[0usize..8usize]), ok)
+    var top = control.sized_style(width, 28.0)
+    top.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    var bottom = control.sized_style(width, 58.0)
+    bottom.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    let (bars, bars_error) = mem.alloc[widget.Node](a, 2usize)
+    if bars_error != ok { ret (zero, control.TooLarge) }
+    bars[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, top, cells[0usize..1usize])
+    bars[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, bottom, pairs[0usize..12usize])
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 86.0), bars[0usize..2usize]), ok)
 }
 
 fn print_cell(a: *mem.Arena, grid: *Grid, text: str, width: f32, header: bool) -> (widget.Node, err) {
