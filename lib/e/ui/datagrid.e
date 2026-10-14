@@ -6413,6 +6413,13 @@ fn on_hthumb(ctx: *void, g: widget.Gesture) -> err {
     case .DragStart as at:
         grid.hgrab = grid.hoff
         ret ok
+    case .Wheel as w:
+        var moved = grid.hoff - w.notches * 60.0
+        let most_w = grid.hcontent - grid.hpane
+        if moved > most_w { moved = most_w }
+        if moved < 0.0 { moved = 0.0 }
+        grid.hoff = moved
+        ret ok
     case .DragMove as d:
         let travel = htrack(grid) - hthumb_width(grid)
         if travel > 1.0 {
@@ -6611,7 +6618,7 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var left: f32 = 0.0
         if grid.hcontent > grid.hpane && room > 0.0 { left = room * grid.hoff / (grid.hcontent - grid.hpane) }
         thumb.margin = style.EdgeLengths { left: style.Length { Px: 14.0 + left }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-        cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 3u8, enabled: true, focusable: false }, thumb, zero)
+        cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 35u8, enabled: true, focusable: false }, thumb, zero)
         shown = 9usize
     }
     ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), cells[0usize..shown]), ok)
