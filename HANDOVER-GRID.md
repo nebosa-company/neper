@@ -1,6 +1,6 @@
 # HANDOVER-GRID.md — the data grid parity stream (G012)
 
-Updated every turn. Last update: 2026-10-14, after D5007 (Bar direction live; local D4068).
+Updated every turn. Last update: 2026-10-14, after D5008 (Export as Excel/PDF; local D4069).
 
 ## The goal (standing /goal, re-injected by a Stop hook every turn)
 
@@ -56,7 +56,7 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
    colour edit (the `...` button), the Preview strip. Bar drawing is at `lib/e/ui/datagrid.e` near
    `bar_length` (~line 6205); rule fields live in `gridrules.e` (`bar_solid`, `bar_border`); wizard state in
    `Grid` (`wiz_bar_style` bit0 solid, bit1 border, `fmt_open`). Add Rule fields + `apply` in `on_wiz_ok`.
-2. PDF/Excel export and printing — not started.
+2. Printing / Page Setup / Print Preview — not started. (CSV/Text/XML/HTML/Excel/PDF export done, D5008; the Excel export fails above ~2000 rows with long card texts: `book.encode` error not chased.)
 3. Column widths kept while scrolling a narrow window (D2502 notes).
 4. v3's hovered scroll bar widths: measure from v3 (vertical 2.7→11 units, horizontal 10→16 are estimates).
 5. Remaining DevExpress popup-size comparison; empty-grid message centring/size vs v3.
@@ -84,5 +84,5 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
 
 ## Status of the tree
 
-Committed locally and pushed: through D4068 / D5007. Peers' dirty files in the
+Committed locally; pushed through D4068 / D5007, D4069 / D5008 being pushed. Peers' dirty files in the
 main tree (`lib/e/ui/control.e`, untracked `docs/tasks/...`) are not mine; leave them.
