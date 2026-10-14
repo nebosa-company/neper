@@ -2703,4 +2703,5 @@ D4120	360	G012: the Designer's Apply button
 D4121	392	G012: the Designer's Cards and Charts tabs are out of scope
 D4122	584	G012: the Styles tab's buttons and Style Sheets row (not yet seen)
 D4123	401	G012: drive.ps1 re-checks the foreground window before every click and key
-D4124	585	G012: the rows a preview page holds follow the Top and Bottom margins
+D4124	586	G012: the rows a preview page holds follow the Top and Bottom margins
+D4125	451	G012: "[Time Printed]" prints the time

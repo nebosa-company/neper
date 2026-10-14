@@ -4790,6 +4790,14 @@ fn print_band(a: *mem.Arena, grid: *Grid, first: usize, lp: f32, across: f32, to
             let day = time.to_date(stamp)
             if str.push_u64(&sb, u64(day.month)) != ok || str.push(&sb, "/") != ok || str.push_u64(&sb, u64(day.day)) != ok || str.push(&sb, "/") != ok || str.push_u64(&sb, u64(day.year)) != ok { ret (zero, control.TooLarge) }
             text = str.done(&sb)
+        } else if len >= 3usize && grid.pv_cell[slot * 24usize + 1usize] == 84u8 && grid.pv_cell[slot * 24usize + 2usize] == 105u8 {
+            let (clock, clock_error) = time.now()
+            if clock_error != ok { ret (zero, clock_error) }
+            let now_time = time.to_time(clock)
+            if str.push_u64(&sb, u64(now_time.hour)) != ok || str.push(&sb, ":") != ok { ret (zero, control.TooLarge) }
+            if now_time.minute < 10u8 && str.push(&sb, "0") != ok { ret (zero, control.TooLarge) }
+            if str.push_u64(&sb, u64(now_time.minute)) != ok { ret (zero, control.TooLarge) }
+            text = str.done(&sb)
         } else {
             var ch = 0usize
             while ch < len {
