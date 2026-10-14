@@ -86,6 +86,8 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
 - Non-English cards need the extra system fonts the sample registers (Segoe UI, Yu Gothic, Malgun, YaHei, SimSun, MingLiU, Segoe UI Symbol):
   `layout` falls back across `Theme.fonts` by cmap; register every font with `scene.register_font`.
 
+- Collection grid: Show Columns... in its menu opens the tabbed Customization window (CM2, D5018).
+
 ## Status of the tree
 
 Committed locally; pushed through D4068 / D5007, D4069 / D5008 being pushed. Peers' dirty files in the
