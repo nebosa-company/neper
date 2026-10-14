@@ -2641,4 +2641,5 @@ D4058	642	G012: the vertical scroll thumb thickens under the pointer
 D4059	366	G012: the navigator's horizontal thumb thickens on hover
 D4060	684	G012: v3's table background picture
 D4061	446	G012: the wizard's Format... sets the data bar's Fill mode and Border
-D4062	306	G012: the Format... bar style step is checked by the fixture
+D4062	307	G012: the Format... bar style step is checked by the fixture
+D4063	843	G012: v3's "Use a formula" rule, one comparison

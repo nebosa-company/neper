@@ -41233,3 +41233,9 @@ Without v3's Data Bar Rule Style Settings dialog (D4046: not built), the wizard'
 ## D4062 - G012: the Format... bar style step is checked by the fixture
 
 ui_datagrid taps the wizard's Format... four times and checks the colour set has gone round and the bar style stepped to solid (exits 649-650); the four grid fixtures pass. Replaces the mouse-driven check of D4061 that did not land.
+
+## D4063 - G012: v3's "Use a formula" rule, one comparison
+
+The wizard's tenth rule type no longer does nothing on OK: it shows a formula field and turns `<operator><number>` (optionally behind a cell name, as in `=A1>5`, `>5`, `<=3`, `<>2`) into a Cell Is rule on the chosen column (Gt, Ge, Lt, Le, Ne, Eq). The rule model has no expression evaluator, so a formula of more than one comparison is not read (OK ends with no rule). Not driven live: the sample's layout moves with the filter state and my click coordinates missed the wizard. The four grid fixtures pass.
+
+Also: the sample no longer sets the background picture (D4060) because with it set the Rules > New Rule path ended the window loop with InvalidTree in one of my runs; I could not tell whether that was the picture or my clicks, so it is left off in the sample until checked.

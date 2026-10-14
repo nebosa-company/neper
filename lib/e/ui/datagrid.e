@@ -3123,8 +3123,55 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         if t == 6u8 { kind = rules.Kind.Top }
         if t == 7u8 { kind = rules.Kind.Unique }
         if t == 8u8 { kind = rules.Kind.Above }
-        if t == 9u8 { ret ok }
+        var formula_op = rules.Op.Eq
+        var formula_value: f64 = 0.0
+        if t == 9u8 {
+            // v3's "Use a formula": a comparison of the cell with a number, "=A1>5" or ">5" (the sample's
+            // formulas have one cell and one operator; the rule model has no expression)
+            kind = rules.Kind.CellIs
+            var at_f = 0usize
+            var found_op = false
+            while at_f < grid.wiz_min_len && !found_op {
+                let ch = grid.wiz_min_text[at_f]
+                if ch == 60u8 || ch == 62u8 || (ch == 61u8 && at_f > 0usize) {
+                    found_op = true
+                } else {
+                    at_f += 1usize
+                }
+            }
+            if !found_op { ret ok }
+            var op_end = at_f + 1usize
+            let first = grid.wiz_min_text[at_f]
+            var second: u8 = 0u8
+            if op_end < grid.wiz_min_len { second = grid.wiz_min_text[op_end] }
+            if first == 60u8 {
+                formula_op = rules.Op.Lt
+                if second == 61u8 {
+                    formula_op = rules.Op.Le
+                    op_end += 1usize
+                } else if second == 62u8 {
+                    formula_op = rules.Op.Ne
+                    op_end += 1usize
+                }
+            } else if first == 62u8 {
+                formula_op = rules.Op.Gt
+                if second == 61u8 {
+                    formula_op = rules.Op.Ge
+                    op_end += 1usize
+                }
+            } else {
+                formula_op = rules.Op.Eq
+            }
+            if op_end >= grid.wiz_min_len { ret ok }
+            let (fv, fe) = str.parse_f64(grid.wiz_min_text[op_end..grid.wiz_min_len])
+            if fe != ok { ret ok }
+            formula_value = fv
+        }
         var r = rules.rule(column, kind)
+        if t == 9u8 {
+            r.op = formula_op
+            r.a = formula_value
+        }
         r.fill = paint.rgba(0.55, 0.72, 0.95, 0.55)
         r.has_fill = true
         r.low = wiz_low(grid.wiz_palette)
@@ -3398,6 +3445,22 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     target_row.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
     rows[n] = widget.box(0u64, target_row, one(a, target_select))
     n += 1usize
+    // the formula (v3's last rule type): one text field, the comparison to apply
+    if grid.wiz_type == 9u8 {
+        let (formula_texts, formula_texts_error) = mem.alloc[WizText](a, 1usize)
+        if formula_texts_error != ok { ret (zero, control.TooLarge) }
+        formula_texts[0usize] = WizText { grid: grid, maximum: false }
+        var formula_options = control.field_options()
+        formula_options.placeholder = "=A1>5"
+        formula_options.width = width - 48.0
+        formula_options.height = 44.0
+        let (formula_field, formula_error) = control.text_field(a, grid.key + MENU_KEY + 850340u64, grid.theme, "Format values where this formula is true", grid.wiz_min_text[0usize..16usize], grid.wiz_min_len, widget.Change[str] { ctx: mem.cast[*void](&formula_texts[0usize]), invoke: on_wiz_text }, zero, formula_options)
+        if formula_error != ok { ret (zero, formula_error) }
+        var formula_row = control.sized_style(width - 24.0, 56.0)
+        formula_row.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        rows[n] = widget.box(0u64, formula_row, one(a, formula_field))
+        n += 1usize
+    }
     // Minimum and Maximum (v3: a Lowest / Highest Value choice and a value field, for the range types)
     if grid.wiz_type <= 3u8 {
         let (texts, texts_error) = mem.alloc[WizText](a, 2usize)
