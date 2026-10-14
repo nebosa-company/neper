@@ -72,7 +72,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Group footers (29 px) | matched | F3-group-footer-height (D2423) |
 | Group summaries and footer summaries (format strings) | untested | `Count: #`, `$#0.00` formats compared once, not exhaustively |
 | Filter row (extra, delayed apply 1000 ms) | untested | the pool has none (F1 n/a) |
-| Advanced Filter (criteria editor) | matched (structure, conditions, group operator) / differs (cycles instead of popups, no nesting, no Open/Save) | AF1-advanced-filter (D2434) |
+| Advanced Filter (criteria editor) | matched (structure, conditions, group operator) / differs (the group word opens v3's popup, D2449; the column and operator words still cycle, no nesting, no Open/Save) | AF1-advanced-filter (D2434) |
 | Filter Card Pool dialog (blocks / formats / editions) | app | AF1-filter-card-pool-v3 |
 | Incremental search, next/previous, prefix mark, no timeout | matched | S3, S5-search-prefix (D2427) |
 | Bookmark (one per view) | matched | S3 |
