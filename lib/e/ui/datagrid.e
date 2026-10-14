@@ -139,6 +139,8 @@ type Grid = struct {
     wiz_open: bool,
     wiz_bar_only: bool,
     wiz_min_number: bool,
+    wiz_target: usize,
+    has_wiz_target: bool,
     wiz_max_number: bool,
     wiz_min_text: [16]u8,
     wiz_min_len: usize,
@@ -1703,6 +1705,7 @@ fn on_rule_act(ctx: *void, g: widget.Gesture) -> err {
         if act.kind == 5u8 || act.kind == 6u8 {
             grid.wiz_open = true
             grid.wiz_type = 0u8
+            grid.has_wiz_target = false
             grid.wiz_edit = act.kind == 6u8
             if act.kind == 6u8 && mem.address_of(grid.rule_set) != 0usize && grid.rules_selected < grid.rule_set.total {
                 let edited = grid.rule_set.rules[grid.rules_selected].kind
@@ -2513,6 +2516,10 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
                 found_numeric = true
             }
         }
+        if grid.has_wiz_target && grid.wiz_target < grid.all.len {
+            spec = grid.wiz_target
+            found_numeric = true
+        }
         var scan_spec = 0usize
         while !found_numeric && scan_spec < grid.all.len {
             let scan_kind = table.column_kind(grid.t, grid.all[scan_spec].column)
@@ -2591,6 +2598,21 @@ fn on_wiz_bar_only(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
+// The column the new rule applies to: the next listed column on each tap.
+fn on_wiz_target(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        var from = grid.search_spec
+        if grid.has_wiz_target { from = grid.wiz_target }
+        grid.wiz_target = crit_next_listed(grid, from)
+        grid.has_wiz_target = true
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 fn on_wiz_cancel(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
     switch g {
@@ -2604,7 +2626,7 @@ fn on_wiz_cancel(ctx: *void, g: widget.Gesture) -> err {
 
 fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let width: f32 = 520.0
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 18usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 20usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
     let (picks, picks_error) = mem.alloc[WizRow](a, 10usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
@@ -2661,6 +2683,26 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     buttons[1usize] = widget.region(grid.key + MENU_KEY + 850101u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_wiz_cancel }, gestures: 1u8, enabled: true, focusable: false }, cancel_box, cancel_held[0usize..1usize])
     var foot = control.sized_style(width - 24.0, 46.0)
     foot.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    // the column the rule applies to (the manager shows it in Applies to)
+    var target_name = "Applies to: (sorted or clicked column)"
+    if grid.has_wiz_target && grid.wiz_target < grid.all.len {
+        let (tb, tb_error) = str.builder(a, 48usize + grid.all[grid.wiz_target].title.len)
+        if tb_error != ok { ret (zero, tb_error) }
+        var tsb = tb
+        if str.push(&tsb, "Applies to: ") != ok || str.push(&tsb, grid.all[grid.wiz_target].title) != ok { ret (zero, control.TooLarge) }
+        target_name = str.done(&tsb)
+    }
+    let (target_label, target_label_error) = flat_text(a, grid, target_name, gl.rgb(0x000000u32))
+    if target_label_error != ok { ret (zero, target_label_error) }
+    var target_box = control.sized_style(300.0, 26.0)
+    target_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    target_box.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    target_box.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    let (target_held, target_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if target_held_error != ok { ret (zero, control.TooLarge) }
+    target_held[0usize] = widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, target_label))
+    rows[n] = widget.region(grid.key + MENU_KEY + 850320u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_wiz_target }, gestures: 1u8, enabled: true, focusable: false }, target_box, target_held[0usize..1usize])
+    n += 1usize
     // Minimum and Maximum (v3: a Lowest / Highest Value choice and a value field, for the range types)
     if grid.wiz_type <= 3u8 {
         let (texts, texts_error) = mem.alloc[WizText](a, 2usize)
@@ -2746,7 +2788,7 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     }
     rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, foot, buttons[0usize..2usize])
     n += 1usize
-    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0 + 30.0 + 80.0)
+    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0 + 30.0 + 80.0 + 32.0)
     body.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     body.border = style.Border { width: 1.0, color: gl.rgb(0x6D6D6Du32) }
     body.radius = 8.0

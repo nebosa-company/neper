@@ -40969,3 +40969,7 @@ v3's New Rule window gives the data bar, colour scale and icon set types a Minim
 ## D3996 - G012: Minimum and Maximum pickers of the New Rule wizard
 
 v3's range types (data bar, icon set, colour scales) show Minimum and Maximum, each a Lowest / Highest Value choice with a value field (CF2-new-rule-v3.png). The wizard now shows both for those four types: a tap on the box toggles between Lowest / Highest Value and Number, a Number shows a field, and OK writes `has_min`/`min_value` and `has_max`/`max_value` (D2453) into the new rule. Live in the sample (CF6-min-max-v5.png: Maximum set to Number 5). Not built: v3's percent, percentile and formula choices, the Preview strip and Format.... ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D3997 - G012: the column of a new rule is chosen in the wizard
+
+v3's rule applies to the column chosen in its Applies to (the rule is created from the clicked column and shown in the manager's Applies to column). The wizard now has an `Applies to:` box under the type list: a tap steps through the listed columns (`wiz_target`), and OK puts the rule on that column; unset, it keeps D2442's choice (the header last clicked when numeric, else the sorted or the first numeric column). Live in the sample (CF7-wizard-column-v5.png: three taps, Type). A rule of a numeric kind on a text column is refused by `gridrules.add` without a message (v3 greys those types out per column; not built). ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
