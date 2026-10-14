@@ -672,7 +672,7 @@ fn search_find(grid: *const Grid, from: usize, forward: bool, inclusive: bool) -
 // Makes the match current with the view scrolled to put it at the top (v3's `TopRecordIndex`).
 fn search_go(grid: *Grid, at: usize) -> err {
     let moved = go_to(grid, at)
-    grid.offset = f32(at) * grid.row_height
+    grid.offset = entry_top(grid, at)
     // the row the keyboard was on may have scrolled away: the keyboard follows the match
     grid.rest_row = grid.selected_row
     grid.rest_pending = true
@@ -798,6 +798,39 @@ fn set_header_menu_icons(grid: *Grid, icons: [9]scene.TextureId) {
 // The word before the count in the footer (v3: "Count" in the pool, "Rows" in the collection).
 fn set_footer_label(grid: *Grid, label: str) { grid.footer_label = label }
 
+// v3's group footers are 29 px in rows of 19: this much taller than a row.
+fn footer_extra() -> f32 { ret 10.0 }
+
+// The scroll offset of the top of visible entry `index`: a row each, a group footer taller.
+fn entry_top(grid: *const Grid, index: usize) -> f32 {
+    var top = f32(index) * grid.row_height
+    if grid.g.group_footers {
+        var at = 0usize
+        let n = grp.visible_len(grid.g)
+        while at < index && at < n {
+            if grp.visible_is_footer(grid.g, at) { top += footer_extra() }
+            at += 1usize
+        }
+    }
+    ret top
+}
+
+// The visible entry at scroll offset `offset`.
+fn entry_at(grid: *const Grid, offset: f32) -> usize {
+    if !grid.g.group_footers { ret usize(offset / grid.row_height) }
+    var top: f32 = 0.0
+    var at = 0usize
+    let n = grp.visible_len(grid.g)
+    while at < n {
+        var h = grid.row_height
+        if grp.visible_is_footer(grid.g, at) { h += footer_extra() }
+        if top + h > offset { ret at }
+        top += h
+        at += 1usize
+    }
+    ret n
+}
+
 // A hint per column (by the column's index in the specs given to `create`), shown after the pointer
 // rests on its header (v3's HeaderHint: "Name - the card's name appears in the upper left corner.").
 fn set_header_hints(grid: *Grid, hints: []const str) { grid.hints = hints }
@@ -833,7 +866,7 @@ fn on_menu_show(ctx: *void) -> err {
         ret ok
     }
     // a right-click on a card makes it current (and the only selected one unless it is selected)
-    var look_at = usize(grid.offset / grid.row_height)
+    var look_at = entry_at(grid, grid.offset)
     let look_end = look_at + grid.page_rows + 4usize
     while look_at < grp.visible_len(grid.g) && look_at < look_end {
         if !grp.visible_is_group(grid.g, look_at) {
@@ -2029,7 +2062,7 @@ fn go_to(grid: *Grid, at: usize) -> err {
         grid.anchor = at
         grid.has_anchor = true
     }
-    var top = f32(at) * grid.row_height - 2.0 * grid.row_height
+    var top = entry_top(grid, at) - 2.0 * grid.row_height
     if top < 0.0 { top = 0.0 }
     grid.offset = top
     ret grid.events.row_picked(grid.events.ctx, row)
@@ -3918,11 +3951,11 @@ fn follow_row_after_reorder(grid: *Grid) {
     grid.position = found
     var page = grid.page_rows
     if page == 0usize { page = 1usize }
-    let top = usize(grid.offset / grid.row_height)
+    let top = entry_at(grid, grid.offset)
     if found < top {
-        grid.offset = f32(found) * grid.row_height
+        grid.offset = entry_top(grid, found)
     } else if found >= top + page {
-        grid.offset = f32(found + 1usize - page) * grid.row_height
+        grid.offset = entry_top(grid, found + 1usize - page)
     }
 }
 
@@ -3993,11 +4026,11 @@ fn reveal_current(grid: *Grid) {
     grid.position = found
     var page = grid.page_rows
     if page == 0usize { page = 1usize }
-    let top = usize(grid.offset / grid.row_height)
+    let top = entry_at(grid, grid.offset)
     if found < top {
-        grid.offset = f32(found) * grid.row_height
+        grid.offset = entry_top(grid, found)
     } else if found >= top + page {
-        grid.offset = f32(found + 1usize - page) * grid.row_height
+        grid.offset = entry_top(grid, found + 1usize - page)
     }
 }
 
@@ -4023,7 +4056,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     var selected_count = 0usize
     if grid.multi {
         // the marked rows among those the body shows (it draws only a window)
-        var first = usize(grid.offset / grid.row_height)
+        var first = entry_at(grid, grid.offset)
         if first > 2usize { first -= 2usize } else { first = 0usize }
         var shown = grid.page_rows + 6usize
         if shown > 150usize { shown = 150usize }
@@ -4103,7 +4136,23 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
                 selected_edge = gl.rgb(0x212121u32)
             }
         }
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+    }
+    // group footers are taller: the list of the entries that are
+    if grid.g.group_footers && grid.look.on {
+        let visible_now = grp.visible_len(grid.g)
+        let (extra_list, extra_error) = mem.alloc[widget.VirtualExtra](a, grp.group_len(grid.g) + 1usize)
+        if extra_error != ok { ret (zero, extra_error) }
+        var extra_count = 0usize
+        var scan = 0usize
+        while scan < visible_now && extra_count < extra_list.len {
+            if grp.visible_is_footer(grid.g, scan) {
+                extra_list[extra_count] = widget.VirtualExtra { index: scan, extra: footer_extra() }
+                extra_count += 1usize
+            }
+            scan += 1usize
+        }
+        table_options.extras = extra_list[0usize..extra_count]
     }
     if grid.preview_on {
         table_options.expandable = true

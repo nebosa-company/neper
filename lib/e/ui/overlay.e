@@ -3485,7 +3485,7 @@ fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: tim
     }
     var area = control.sized_style(width, height)
     area.overflow = .Clip
-    ret (widget.scroll(key + 4094u64, widget.Scroll { axis: .Vertical, offset: opening_offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Outline), change: zero, virtual_first: first_row, virtual_count: row_total, virtual_extent: row_height, fades: false }, area, rows[0usize..r]), ok)
+    ret (widget.scroll(key + 4094u64, widget.Scroll { axis: .Vertical, offset: opening_offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Outline), change: zero, virtual_first: first_row, virtual_count: row_total, virtual_extent: row_height, fades: false, virtual_extras: zero }, area, rows[0usize..r]), ok)
 }
 
 fn date_listed(dates: []const time.Date, d: time.Date) -> bool {
@@ -4420,7 +4420,7 @@ fn date_range_fullscreen(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     column[1usize] = widget.padded(0u64, 24.0, 16.0, 24.0, 24.0, style.defaults(), headed[0usize..2usize])
     column[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(width, cell), names[0usize..7usize])
     column[3usize] = rule
-    column[4usize] = widget.scroll(key + 3u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(muted, 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, viewport, listing[0usize..1usize])
+    column[4usize] = widget.scroll(key + 3u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(muted, 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, viewport, listing[0usize..1usize])
     var page = control.sized_style(width, height)
     page.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
     page.overflow = .Clip
@@ -5996,7 +5996,7 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         if column_error != ok { ret (zero, TooLarge) }
         column[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..built])
         let view_style = control.sized_style(options.width, f32(shown) * row_height)
-        column[0usize] = widget.scroll(key + 4u64, widget.Scroll { axis: .Vertical, offset: f32(first) * row_height, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Outline), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view_style, column[1usize..2usize])
+        column[0usize] = widget.scroll(key + 4u64, widget.Scroll { axis: .Vertical, offset: f32(first) * row_height, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Outline), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view_style, column[1usize..2usize])
         var raised = control.surface_options(t)
         raised.background = .SurfaceContainer
         raised.elevation = 2u8

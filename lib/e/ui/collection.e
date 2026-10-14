@@ -123,7 +123,7 @@ fn virtual_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     view_style.overflow = .Clip
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: extent, fades: false }, view_style, rows[0usize..count])
+    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: extent, fades: false, virtual_extras: zero }, view_style, rows[0usize..count])
     // v2 (D979, docs/ux/components/VirtualList): a list with the full count.
     var sem: widget.Semantics = zero
     sem.role = 10u8
@@ -238,7 +238,7 @@ fn virtual_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     view_style.overflow = .Clip
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: row_total, virtual_extent: extent, fades: false }, view_style, rows[0usize..count])
+    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: row_total, virtual_extent: extent, fades: false, virtual_extras: zero }, view_style, rows[0usize..count])
     var sem: widget.Semantics = zero
     sem.role = 30u8
     sem.label = label
@@ -2405,6 +2405,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     }
     var row_style = style.defaults()
     row_style.height = style.Length { Px: extent }
+    // a group footer is taller than a row (v3's 29 px)
+    if look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 2u8 { row_style.height = style.Length { Px: extent + look.footer_extra } }
     row_style.background = paint.Brush { Solid: fill }
     // the current row carries the line (with several rows selected it is the one with the focus)
     var lined_row = selected
@@ -2478,7 +2480,7 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // their selection cell inert, still focusable and Disabled in the tree.
 // (D1501) `pending` marks rows (by key) whose data has not come: each cell is a
 // skeleton line (60% of the cell, 12 tall) and the row is Busy in the tree.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook }
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook }
 
 fn zero_look() -> TableLook {
     var look: TableLook = zero
@@ -2488,7 +2490,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32 }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -3977,7 +3979,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     // (D1341) A grouped tier takes its 40 from the body too.
     var body_height = height - head_height
     if selection.groups.len > 0usize { body_height -= 40.0 }
-    let (first, count) = virtual_range(offset, body_height, total, row_extent)
+    let (first, count) = virtual_range_extras(offset, body_height, total, row_extent, selection.extras)
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (zero, TooLarge) }
     let (row_keys, row_keys_error) = mem.alloc[widget.Key](a, count)
@@ -4188,7 +4190,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     // with a look the drawn bar below replaces the overlay thumb, which stays to be dragged
     var scroll_thumb = control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
     if selection.look.on && selection.look.scroll_width > 0.0 { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
-    parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: scroll_thumb, change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent, fades: false }, view_style, rows[0usize..count])
+    parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: scroll_thumb, change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent, virtual_extras: selection.extras, fades: false }, view_style, rows[0usize..count])
     // (D1248) With no rows the body is the loading or empty state; the header stays.
     // (D1413) A failed load (`failed`) stands in the body whatever the rows.
     if selection.failed.len > 0usize || (total == 0usize && (selection.loading || selection.empty_title.len > 0usize)) {
@@ -4245,7 +4247,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         var view = style.defaults()
         view.width = style.Length { Px: selection.view_width }
         view.overflow = .Clip
-        column_node[0usize] = widget.scroll(key + 2097152u64, widget.Scroll { axis: .Horizontal, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view, wide[0usize..1usize])
+        column_node[0usize] = widget.scroll(key + 2097152u64, widget.Scroll { axis: .Horizontal, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, wide[0usize..1usize])
         // (D1545) Scrolled sideways, the first column stays pinned.
         if !grid && !selecting && !selection.expandable && selection.groups.len == 0usize {
             let (pinned, has_pinned, pinned_error) = pinned_column(a, key, t, columns, source, sort_column, descending, sort, reorder, resize, head_height, pad, below, selection, first, count, offset, row_extent, body_height)
@@ -5363,7 +5365,7 @@ fn treed_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
         let (viewed, viewed_error) = mem.alloc[widget.Node](a, 1usize)
         if viewed_error != ok { ret (zero, TooLarge) }
-        viewed[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.scrolled, virtual_first: window_first, virtual_count: window_total, virtual_extent: row_extent, fades: false }, view_style, rows)
+        viewed[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.scrolled, virtual_first: window_first, virtual_count: window_total, virtual_extent: row_extent, fades: false, virtual_extras: zero }, view_style, rows)
         var view_sem: widget.Semantics = zero
         view_sem.role = 28u8
         view_sem.label = label
@@ -5428,7 +5430,7 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         view_style.width = style.Length { Px: width }
         view_style.height = style.Length { Px: options.height }
         view_style.overflow = .Clip
-        parts[1usize] = widget.scroll(key + 2u64, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.scrolled, virtual_first: table_first, virtual_count: table_total, virtual_extent: row_extent, fades: false }, view_style, rows)
+        parts[1usize] = widget.scroll(key + 2u64, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.scrolled, virtual_first: table_first, virtual_count: table_total, virtual_extent: row_extent, fades: false, virtual_extras: zero }, view_style, rows)
         part_count = 2usize
     } else {
         var r = 0usize
@@ -7948,6 +7950,41 @@ fn virtual_list_options() -> VirtualListOptions {
 }
 
 // Visible rows plus one viewport before and after, clipped to the source.
+// `virtual_range` for entries some of which are taller (`extras`, by index): the first and the count
+// of the entries the viewport and one viewport either side touch.
+fn virtual_range_extras(offset: f32, viewport: f32, total: usize, extent: f32, extras: []const widget.VirtualExtra) -> (usize, usize) {
+    if extras.len == 0usize {
+        let (first, count) = virtual_range(offset, viewport, total, extent)
+        ret (first, count)
+    }
+    var shown = offset
+    if shown < 0.0 { shown = 0.0 }
+    var start = shown - viewport
+    if start < 0.0 { start = 0.0 }
+    let finish = shown + 2.0 * viewport
+    var top: f32 = 0.0
+    var at = 0usize
+    var first = total
+    var end = total
+    var k = 0usize
+    while at < total {
+        var h = extent
+        if k < extras.len && extras[k].index == at {
+            h += extras[k].extra
+            k += 1usize
+        }
+        if first == total && top + h > start { first = at }
+        if top >= finish {
+            end = at
+            break
+        }
+        top += h
+        at += 1usize
+    }
+    if first >= end { ret (first, 0usize) }
+    ret (first, end - first)
+}
+
 fn virtual_range(offset: f32, viewport: f32, total: usize, extent: f32) -> (usize, usize) {
     if total == 0usize || extent <= 0.0 || viewport <= 0.0 {
         let (first, count) = widget.visible_range(offset, viewport, total, extent)
@@ -8066,7 +8103,7 @@ fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     // (D1400) On touch its thumb fades after 1.5 s idle (an overlay scrollbar).
-    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: places, virtual_extent: extent, fades: density_of(t) == 2usize }, view_style, rows[0usize..count])
+    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: places, virtual_extent: extent, fades: density_of(t) == 2usize, virtual_extras: zero }, view_style, rows[0usize..count])
     // (D1324) The pinned section header.
     let (shown_body, shown_body_error) = pinned_header(a, key, t, source, options, total, offset, extent, body[0usize])
     if shown_body_error != ok { ret (zero, shown_body_error) }
@@ -8843,7 +8880,7 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     view_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: 12.0 }, right: flat, bottom: flat }
     let (body, body_error) = mem.alloc[widget.Node](a, 2usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.change, virtual_first: first, virtual_count: row_total, virtual_extent: extent, fades: false }, view_style, rows[0usize..made_rows])
+    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.change, virtual_first: first, virtual_count: row_total, virtual_extent: extent, fades: false, virtual_extras: zero }, view_style, rows[0usize..made_rows])
     if options.levels.len > 1usize {
         let (steps, steps_error) = mem.alloc[PairRemove](a, 2usize)
         let (presses, presses_error) = mem.alloc[widget.Submit](a, 2usize)

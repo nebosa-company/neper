@@ -713,7 +713,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         today_held[0usize] = today_list
         var view_style = control.sized_style(300.0, 200.0)
         view_style.overflow = .Clip
-        let today_view = widget.scroll(9199u64, widget.Scroll { axis: .Vertical, offset: scrolled_by, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: zero, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view_style, today_held[0usize..1usize])
+        let today_view = widget.scroll(9199u64, widget.Scroll { axis: .Vertical, offset: scrolled_by, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: zero, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view_style, today_held[0usize..1usize])
         let (today_page, today_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if today_page_error != ok { os.exit(191i32) }
         today_page[0usize] = today_view
