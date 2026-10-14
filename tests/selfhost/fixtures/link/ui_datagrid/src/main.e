@@ -1652,6 +1652,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (ctrl_at, ctrl_has) = dg.current_position(&grid15)
     if !ctrl_has || ctrl_at != 1usize { os.exit(550) }
     if !dg.search_matches(&grid15, grp.visible_row(&app.grouping, ctrl_at)) { os.exit(552) }
+    // 35. export: the shown columns and the rows on screen as CSV, header first
+    let (csv, csv_error) = dg.export_string(&f, &grid15, dg.EXPORT_CSV, false, 3usize)
+    if csv_error != ok { os.exit(601) }
+    if csv.len < 20usize || csv[0usize] != 34u8 { os.exit(602) }
+    var csv_lines = 0usize
+    var csv_at = 0usize
+    while csv_at < csv.len {
+        if csv[csv_at] == 10u8 { csv_lines += 1usize }
+        csv_at += 1usize
+    }
+    // a header and three rows
+    if csv_lines != 4usize { os.exit(603) }
+    let (plain, plain_error) = dg.export_string(&f, &grid15, dg.EXPORT_TEXT, false, 2usize)
+    if plain_error != ok { os.exit(604) }
+    // several kinds at once: a name, a price, a flag, the rarity
+    let (wide, wide_error) = dg.export_string(&f, &grid2, dg.EXPORT_CSV, false, 4usize)
+    if wide_error != ok { os.exit(607) }
+    if wide.len < 60usize { os.exit(608) }
+    let (markup, markup_error) = dg.export_string(&f, &grid15, dg.EXPORT_HTML, false, 2usize)
+    if markup_error != ok { os.exit(605) }
+    if markup.len < 40usize || markup[0usize] != 60u8 { os.exit(606) }
     os.exit(0)
     ret ok
 }
