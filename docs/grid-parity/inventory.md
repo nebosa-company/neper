@@ -101,3 +101,17 @@ Verified live 2026-10-14: an `Is blank` condition on Favorite filters the pool (
 Verified live 2026-10-14: `Is none of R, G` on Color shows 89225 of 120283 cards, the complement of Is any of's 31058 (AF6-none-of-v5.png, D2457).
 
 Verified live 2026-10-14: a two colour scale created in the wizard with the white-to-green Format... set and Applies to: CMC paints the CMC cells green (CF9-scale-live-v5.png, D2463). All five visible cells came out the same dark green, where a scale over the column's 0..max range should grade them; the scale's statistics for that column (refresh after adding a rule from the wizard) are the first suspect and are not yet looked at.
+
+## Added 2026-10-14 (D2480-D2504)
+
+| Feature | Status | Evidence |
+|---|---|---|
+| View menu (application menu in the flat popup; sort, group, grid lines submenu, footer, group box, expand, best fit, header, indicator, navigator, conditional formatting) | matched (structure, headings, ticks, actions, live) / differs (width 395 against v3's about 315, no bold headings, no pictures; Card Rules greyed, Legality out of scope) | VM1-VM7 |
+| Navigator (v3's button pictures, white position band, funnel, disabled states, last row) | matched (left disabled recorded; right disabled mirrored) / differs (scroll bar thumb track) | NV1-NV3 |
+| Footer (count left, whole numbers centred, amounts right, green collection band, amounts over 999 without cents) | matched | FT1, FT2, D2495 |
+| Check box cell (Foil), click flips | matched | CB1, CB2 |
+| Enter key action (next column / next row) | matched in source and fixture; not exercised live | D2496 |
+| Wizard bounds: Value, Number, Percent, Percentile | matched (model, fixture, caption live) / not built: Formula | CF7, D2497, D2498 |
+| Wizard Format... (Data Bar Rule Style Settings) | recorded, not built | CF10 |
+| Horizontal scrolling with the thumb in the navigator row | partly (scrolls, wheel over the thumb; columns grow while scrolling, thumb track short) | HS1-HS3, D2493-D2503 |
+| PDF / Excel export, printing | not started | |
