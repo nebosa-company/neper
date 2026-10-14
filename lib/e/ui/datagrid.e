@@ -3757,8 +3757,11 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
     // 6.4 logical px a character of the 10 pt face is near enough; the picture column is 27 wide
     grid.menu_count = commands.len
     if grid.menu_count > 40usize { grid.menu_count = 40usize }
-    var width = 27.0 + f32(widest_label) * 6.6 + 24.0 + 22.0
-    if widest_hint != 0usize { width += f32(widest_hint) * 6.6 + 16.0 }
+    // the application's menus (v3's View) are set in a smaller face than the grid's popups
+    var char_width: f32 = 6.6
+    if grid.menu_kind == MENU_APP { char_width = 4.6 }
+    var width = 27.0 + f32(widest_label) * char_width + 24.0 + 22.0
+    if widest_hint != 0usize { width += f32(widest_hint) * char_width + 16.0 }
     if width < 120.0 { width = 120.0 }
     var i = 0usize
     while i < commands.len {
@@ -3832,7 +3835,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
         }
         parts_n += 1usize
         var label_style = control.sized_style(width - 27.0 - 6.0, row_h)
-        if widest_hint != 0usize { label_style = control.sized_style(f32(widest_label) * 6.6 + 24.0, row_h) }
+        if widest_hint != 0usize { label_style = control.sized_style(f32(widest_label) * char_width + 24.0, row_h) }
         let (label_box, label_box_error) = mem.alloc[widget.Node](a, 1usize)
         if label_box_error != ok { ret (zero, control.TooLarge) }
         label_box[0usize] = label
@@ -3844,7 +3847,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
             let (hint_box, hint_box_error) = mem.alloc[widget.Node](a, 1usize)
             if hint_box_error != ok { ret (zero, control.TooLarge) }
             hint_box[0usize] = hint
-            cells[parts_n] = widget.aligned(0u64, .Start, .Center, control.sized_style(f32(widest_hint) * 6.6 + 16.0, row_h), hint_box[0usize..1usize])
+            cells[parts_n] = widget.aligned(0u64, .Start, .Center, control.sized_style(f32(widest_hint) * char_width + 16.0, row_h), hint_box[0usize..1usize])
             parts_n += 1usize
         }
         var row_style = control.sized_style(width - 2.0, row_h)
@@ -4209,7 +4212,7 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         let (at, pointed) = widget.context_point(theme.runtime)
         var row_h: f32 = 20.0
         if grid.menu_kind == MENU_HEADER || grid.menu_kind == MENU_ALIGN { row_h = 22.0 }
-        if grid.menu_kind == MENU_APP { row_h = 26.0 }
+        if grid.menu_kind == MENU_APP { row_h = 23.0 }
         var menu_x = at.x
         var menu_y = at.y
         if grid.menu_kind == MENU_APP {
