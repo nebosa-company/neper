@@ -39630,3 +39630,7 @@ Data bars know an axis (Rule.bar_axis from the style window's Axis row: Automati
 ## D5010 - G012: the hovered scroll thumb measured from v3
 
 v3's vertical scroll bar thumb (SBv3h shot against the resting one, v3 running with no licence dialog) is 3-4 px at rest and 9 px under the pointer, i.e. 2.7 and 6 layout units at 1.5 px per unit; the estimate of 11 units was too wide. The collection's hovered thumb is now 6 units. The horizontal navigator bar was not measured (its hovered width stays an estimate).
+
+## D5011 - G012: the navigator bar measured from v3
+
+v3's navigator thumb (the grey bar after Row n of m) is 13 px tall and 141 px wide in its 1200 px window (HB0, HB1 against the running program) and does not change under the pointer; ours was 10 units resting and 16 hovered. It is now 8.6 units (13 px) both ways. The wider vertical scroll bar thumb of D4071 still thickens.

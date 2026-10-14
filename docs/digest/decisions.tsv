@@ -2289,4 +2289,5 @@ D5006	720	G012: Format... on a data bar opens the Data Bar Rule Style Settings w
 D5007	789	G012: Bar direction in the Data Bar Rule Style Settings window
 D5008	743	G012: Export as Excel and PDF
 D5009	859	G012: axis for data bars and fallback fonts for non-English cards
-D5010	428	G012: the hovered scroll thumb measured from v3
+D5010	429	G012: the hovered scroll thumb measured from v3
+D5011	378	G012: the navigator bar measured from v3
