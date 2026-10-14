@@ -41343,3 +41343,7 @@ The three entries carry v3's pictures (cut from its popup, icons/align_0..2.png)
 ## D4089 - G012: the parent of an open submenu is light blue
 
 The popup an open Alignment submenu came from keeps its Alignment entry in light blue (#BDDCF7) with black text, as v3 does (AL3); `Grid.parent_drawn` marks that build. AL5-align-parent-light-v5.png.
+
+## D4090 - G012: the quick column list wraps into two columns
+
+v3's indicator quick list (QM1) is two columns of ticked names, taller lists continuing in the second column; ours was one column that ran off the window. A list of more than fourteen entries (or taller than the surface) now splits in two halves side by side (QM4-quick-two-columns-v5.png). v3 lists every column in its two columns without the (All) and (Sorted) rows at their top in this view; ours keeps them in the first column.

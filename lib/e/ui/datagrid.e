@@ -5471,11 +5471,32 @@ fn quick_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             item += 1usize
         }
     }
+    // a list taller than the window wraps into two columns, as v3's does (the second starts where the
+    // first would run off)
+    var total_width = width
     var frame = style.defaults()
     frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     frame.border = style.Border { width: 1.0, color: gl.rgb(0x000000u32) }
-    frame.width = style.Length { Px: width }
-    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, frame, rows[0usize..n])
+    let surface = widget.surface_size(grid.theme.runtime)
+    var column: widget.Node = zero
+    if f32(n) * 17.0 + 8.0 > surface.height - 20.0 && n > 6usize || n > 14usize {
+        let half = (n + 1usize) / 2usize
+        var left_style = style.defaults()
+        left_style.width = style.Length { Px: width }
+        var right_style = style.defaults()
+        right_style.width = style.Length { Px: width }
+        let (halves, halves_error) = mem.alloc[widget.Node](a, 2usize)
+        if halves_error != ok { ret (zero, control.TooLarge) }
+        halves[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, left_style, rows[0usize..half])
+        halves[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, right_style, rows[half..n])
+        total_width = width * 2.0
+        frame.width = style.Length { Px: total_width }
+        column = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, frame, halves[0usize..2usize])
+        n = half
+    } else {
+        frame.width = style.Length { Px: width }
+        column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, frame, rows[0usize..n])
+    }
     var no_submit: widget.Submit = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, control.TooLarge) }
@@ -5486,7 +5507,7 @@ fn quick_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let size = widget.surface_size(grid.theme.runtime)
     let tall = f32(n) * 17.0 + 8.0
     if top + tall > size.height { top = size.height - tall }
-    if left + width > size.width { left = size.width - width }
+    if left + total_width > size.width { left = size.width - total_width }
     if top < 0.0 { top = 0.0 }
     let (holder, holder_error) = mem.alloc[widget.Node](a, 1usize)
     if holder_error != ok { ret (zero, control.TooLarge) }
