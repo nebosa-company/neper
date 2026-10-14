@@ -2392,7 +2392,49 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             var entry_box = control.sized_style(122.0, 22.0)
             entry_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
             if entries[ei] == current_entry { entry_box.background = paint.Brush { Solid: gl.rgb(0x99D1FFu32) } }
-            list_rows[ei] = widget.region(grid.key + MENU_KEY + 899930u64 + u64(ei), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&list_picks[ei]), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, entry_box, one(a, widget.padded(0u64, 32.0, 3.0, 0.0, 0.0, style.defaults(), one(a, entry_label))))
+            // v3's icons of the operators: = and the not-equal sign, the blank discs, the pair of discs
+            var icon: widget.Node = zero
+            var has_icon = false
+            if grid.crit_pop_kind == 2u8 {
+                let code = entries[ei]
+                var ink_icon = gl.rgb(0x2E9E2Eu32)
+                if code == 11usize { ink_icon = gl.rgb(0xC62828u32) }
+                if code == 0usize || code == 1usize {
+                    var sign = "="
+                    if code == 1usize { sign = "!=" }
+                    let (sign_node, sign_error) = flat_text(a, grid, sign, gl.rgb(0x000000u32))
+                    if sign_error != ok { ret (zero, sign_error) }
+                    icon = sign_node
+                    has_icon = true
+                } else if code == 8usize || code == 9usize {
+                    var disc = control.sized_style(11.0, 11.0)
+                    disc.radius = 5.5
+                    if code == 9usize { disc.background = paint.Brush { Solid: ink_icon } } else { disc.border = style.Border { width: 1.0, color: ink_icon } }
+                    icon = widget.box(0u64, disc, zero)
+                    has_icon = true
+                } else if code == 10usize || code == 11usize {
+                    var first_disc = control.sized_style(10.0, 10.0)
+                    first_disc.radius = 5.0
+                    first_disc.background = paint.Brush { Solid: ink_icon }
+                    let (pair_nodes, pair_nodes_error) = mem.alloc[widget.Node](a, 2usize)
+                    if pair_nodes_error != ok { ret (zero, control.TooLarge) }
+                    pair_nodes[0usize] = widget.box(0u64, first_disc, zero)
+                    pair_nodes[1usize] = widget.box(0u64, first_disc, zero)
+                    icon = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), pair_nodes[0usize..2usize])
+                    has_icon = true
+                }
+            }
+            let (entry_parts, entry_parts_error) = mem.alloc[widget.Node](a, 2usize)
+            if entry_parts_error != ok { ret (zero, control.TooLarge) }
+            var gutter = control.sized_style(32.0, 22.0)
+            if has_icon {
+                entry_parts[0usize] = widget.aligned(0u64, .Center, .Center, gutter, one(a, icon))
+            } else {
+                entry_parts[0usize] = widget.box(0u64, gutter, zero)
+            }
+            entry_parts[1usize] = entry_label
+            let entry_line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), entry_parts[0usize..2usize])
+            list_rows[ei] = widget.region(grid.key + MENU_KEY + 899930u64 + u64(ei), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&list_picks[ei]), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, entry_box, one(a, entry_line))
             ei += 1usize
         }
         var list_style = style.defaults()
