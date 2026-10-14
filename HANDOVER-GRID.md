@@ -1,6 +1,6 @@
 # HANDOVER-GRID.md — the data grid parity stream (G012)
 
-Updated every turn. Last update: 2026-10-14, after D5013 (sideways scroll fix); earlier D5009 (axis for data bars + fallback fonts; local D4070); axis seen on the grid (AX3), Japanese (NE2) and Chinese (NE4) cards verified, Korean/Cyrillic not looked at.
+Updated every turn. Last update: 2026-10-14, after D5013 (sideways scroll fix); earlier D5009 (axis for data bars + fallback fonts; local D4070); axis seen on the grid (AX3), Japanese (NE2) and Chinese (NE4) cards verified, Cyrillic verified (KO1, Segoe UI covers it); Korean (3 cards) only via Malgun registration, not looked at; right-to-left bar drawn right-anchored but faint at the default gradient (KO2).
 
 ## The goal (standing /goal, re-injected by a Stop hook every turn)
 
