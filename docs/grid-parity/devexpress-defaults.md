@@ -43,3 +43,13 @@ border sizes (`FooterPanelContentOffsets`, `FooterPanelBordersSizeRect`). It fol
 which is why v3's footer grows with the Extra Large grid font (FS1-font-size-xl-v3.png) while the
 headers do not. neper's footer row height is the measured one and scales with `set_font_size`; the
 painter offsets were not summed.
+
+## Group footers
+
+`TcxGridGroupFootersMode = (gfInvisible, gfVisibleWhenExpanded, gfAlwaysVisible)`
+(`cxGridTableView.pas:4131`) is the DevExpress option; MTG Studio uses `gfVisibleWhenExpanded`
+(docs/grid.md section 2.3), which is what neper's `set_group_footers` shows: the footer row stands
+only under an expanded group. A group footer is the same `TcxGridFooterViewInfo` family as the grid
+footer, so its height follows the footer font as in the section above; v3's 29 px (D2423) is the
+measured value of that, with the extra 10 px over a data row coming from the footer panel's content
+offsets and borders, which were not summed from the painter.
