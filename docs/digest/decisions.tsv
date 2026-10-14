@@ -2656,4 +2656,5 @@ D4073	756	G012: why columns grow while scrolling sideways
 D4074	730	G012: columns keep their widths while scrolling sideways
 D4075	897	G012: Print Preview window
 D4076	865	G012: positive colour, negative colour and axis colour in the style window
-D4077	813	G012: the axis line and offset bars seen on the grid; a percent margin paints
+D4077	814	G012: the axis line and offset bars seen on the grid; a percent margin paints
+D4078	403	G012: the Print Preview toolbar from v3's own icons

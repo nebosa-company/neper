@@ -3731,6 +3731,12 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 // ---- Print Preview (v3: Cards > Print > Print Preview..., the DevExpress preview window) --------------
 
 // Opens the preview of the shown rows; it stands in the wizard's window slot.
+// The preview window's toolbar picture (the command icons of v3's DevExpress window, cut from its screen).
+fn set_print_toolbar(texture: scene.TextureId) {
+    toolbar_texture = texture
+    toolbar_set = true
+}
+
 fn show_print_preview(grid: *Grid) {
     grid.wiz_open = true
     grid.fmt_open = false
@@ -3817,7 +3823,13 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var tool = control.sized_style(width, 34.0)
     tool.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     tool.border = style.Border { width: 1.0, color: gl.rgb(0xD0D0D0u32) }
-    rows[n] = widget.box(0u64, tool, zero)
+    if toolbar_set {
+        let (strip, strip_error) = control.image(a, grid.key + 3970u64, toolbar_texture, width, 27.0, .Contain, "")
+        if strip_error != ok { ret (zero, strip_error) }
+        rows[n] = widget.box(0u64, tool, one(a, widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one(a, strip))))
+    } else {
+        rows[n] = widget.box(0u64, tool, zero)
+    }
     n += 1usize
     let (margin_labels, margin_error) = mem.alloc[str](a, 7usize)
     if margin_error != ok { ret (zero, control.TooLarge) }
@@ -5971,6 +5983,8 @@ const KEY_BASE: u64 = 4096u64
 var drag_ghost_text: [96]u8
 var drag_ghost_len: usize
 var backdrop_texture: scene.TextureId
+var toolbar_texture: scene.TextureId
+var toolbar_set: bool
 var backdrop_set: bool
 
 fn row_key(grid: *const Grid, row: usize) -> widget.Key { ret grid.key + KEY_BASE + u64(row) }

@@ -41295,3 +41295,7 @@ The Color row of Data Bar Rule Style Settings steps the bar colour (0.139.239 v3
 ## D4077 - G012: the axis line and offset bars seen on the grid; a percent margin paints
 
 With a test minimum of -3 on CMC and the axis shown (NC9-axis-line-and-offset-bars-v5.png), the grid draws bars that start at the axis (a third-of-a-column-wide share in) and a 1 px black axis line there. Two defects came up and are fixed: the cell's layer array held two nodes and the axis line made it three (a bounds trap in `source_cell`, now three), and a percent *margin* on a box paints its background over the margin (a thick black block from the cell's left edge): offsets are a spacer box of the share before the bar or line (`offset_node`, `axis_line_node`). The right-to-left bar used the same margin and so also painted from the left; it now stands where the spacer puts it. ui_datagrid and ui_gridrules pass.
+
+## D4078 - G012: the Print Preview toolbar from v3's own icons
+
+The preview window's toolbar row is a picture of v3's DevExpress command icons (cut from its screen, `icons/print_toolbar.png`, 1280 by 46 px) drawn at the window's width: `set_print_toolbar` takes the texture, the sample loads it. The icons are not buttons yet; editable margins, zoom and paging remain. PP7-print-preview-toolbar-v5.png.
