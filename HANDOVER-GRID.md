@@ -1,6 +1,6 @@
 # HANDOVER-GRID.md — the data grid parity stream (G012)
 
-Updated every turn. Last update: 2026-10-14, after D5009 (axis for data bars + fallback fonts; local D4070); axis seen on the grid (AX3), Japanese (NE2) and Chinese (NE4) cards verified, Korean/Cyrillic not looked at.
+Updated every turn. Last update: 2026-10-14, after D5013 (sideways scroll fix); earlier D5009 (axis for data bars + fallback fonts; local D4070); axis seen on the grid (AX3), Japanese (NE2) and Chinese (NE4) cards verified, Korean/Cyrillic not looked at.
 
 ## The goal (standing /goal, re-injected by a Stop hook every turn)
 
@@ -57,8 +57,8 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
    `bar_length` (~line 6205); rule fields live in `gridrules.e` (`bar_solid`, `bar_border`); wizard state in
    `Grid` (`wiz_bar_style` bit0 solid, bit1 border, `fmt_open`). Add Rule fields + `apply` in `on_wiz_ok`.
 2. Printing / Page Setup / Print Preview — not started. (CSV/Text/XML/HTML/Excel/PDF export done, D5008; the Excel export fails above ~2000 rows with long card texts: `book.encode` error not chased.)
-3. Column widths kept while scrolling a narrow window (D2502 notes).
-4. v3's hovered scroll bar widths: measure from v3 (vertical 2.7→11 units, horizontal 10→16 are estimates).
+3. (DONE D5013) columns keep widths while scrolling sideways, vertical bar fixed.
+4. (DONE D5010/D5011) hovered scroll widths measured from v3.
 5. Remaining DevExpress popup-size comparison; empty-grid message centring/size vs v3.
 6. Never seen clearly: solid and bordered bar styles live (bar is a few px at CMC width) — use a wider column.
 7. Card Rules View entry: application-level, probably out of scope like Legality (confirm with the user).
