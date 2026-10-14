@@ -250,6 +250,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_rtl, rtl_error) = gr.add(a, &rs_rtl, rtl)
     if rtl_error != ok || gr.refresh(&rs_rtl, a) != ok { os.exit(158) }
     if !gr.format(&rs_rtl, 5usize, C_CMC).bar_rtl { os.exit(159) }
+    // a right-to-left bar stands mirrored: its left edge is where the unfilled share ends; the span is the value
+    let rtl_look = gr.format(&rs_rtl, 5usize, C_CMC)
+    if !near(rtl_look.bar_span, rtl_look.bar) || !near(rtl_look.bar_left, 1.0f32 - rtl_look.bar) { os.exit(160) }
+    // Axis Automatic: a range from -2 to 4 puts the axis a third of the way in; every bar touches it
+    var axis_rule = gr.rule(C_CMC, gr.Kind.Bar)
+    axis_rule.fill = paint.rgba(0.0f32, 0.0f32, 1.0f32, 1.0f32)
+    axis_rule.has_min = true
+    axis_rule.min_value = -2.0
+    axis_rule.has_max = true
+    axis_rule.max_value = 4.0
+    let (made_axis, made_axis_error) = gr.create(a, &t, 2usize)
+    if made_axis_error != ok { os.exit(161) }
+    var rs_axis = made_axis
+    let (_axis, axis_error) = gr.add(a, &rs_axis, axis_rule)
+    if axis_error != ok || gr.refresh(&rs_axis, a) != ok { os.exit(162) }
+    let axis_look = gr.format(&rs_axis, 1usize, C_CMC)
+    if axis_look.bar_left > 0.3334f32 || axis_look.bar_left + axis_look.bar_span < 0.3332f32 { os.exit(163) }
     // the bar's Fill mode Solid and Border style reach the cell's format
     var styled = gr.rule(C_CMC, gr.Kind.Bar)
     styled.bar_solid = true

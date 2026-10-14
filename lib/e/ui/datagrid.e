@@ -3384,6 +3384,7 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         r.bar_solid = t == 0u8 && (grid.wiz_bar_style & 1u8) != 0u8
         r.bar_border = t == 0u8 && (grid.wiz_bar_style & 2u8) != 0u8
         r.bar_rtl = t == 0u8 && (grid.wiz_bar_style & 4u8) != 0u8
+        if t == 0u8 { r.bar_axis = (grid.wiz_bar_style >> 3u8) & 3u8 }
         if t <= 3u8 {
             // Minimum and Maximum of the wizard: Lowest / Highest Value, or a number typed
             if grid.wiz_min_number && grid.wiz_min_len > 0usize {
@@ -3520,6 +3521,18 @@ fn on_fmt_direction(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
+fn on_fmt_axis(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        let step = (((grid.wiz_bar_style >> 3u8) & 3u8) + 1u8) % 3u8
+        grid.wiz_bar_style = (grid.wiz_bar_style & 7u8) | (step << 3u8)
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 fn on_fmt_close(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
     switch g {
@@ -3602,7 +3615,10 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if e8 != ok { ret (zero, e8) }
     let (c9, e9) = fmt_caption(a, grid, "Axis Settings", 0x000000u32, 12.0)
     if e9 != ok { ret (zero, e9) }
-    let (c10, e10) = fmt_caption(a, grid, "(o) Automatic (display at variable position based on negative values)", 0x000000u32, 6.0)
+    var axis_mode = "Automatic"
+    if ((grid.wiz_bar_style >> 3u8) & 3u8) == 1u8 { axis_mode = "Cell midpoint" }
+    if ((grid.wiz_bar_style >> 3u8) & 3u8) == 2u8 { axis_mode = "None" }
+    let (c10, e10) = fmt_choice(a, grid, "Axis:", axis_mode, grid.key + MENU_KEY + 850365u64, on_fmt_axis, true)
     if e10 != ok { ret (zero, e10) }
     let (c11, e11) = fmt_choice(a, grid, "Axis color:", "Black", 0u64, on_fmt_close, false)
     if e11 != ok { ret (zero, e11) }
@@ -6380,14 +6396,14 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     back.height = style.Length { Percent: 100.0 }
     if look.has_bar {
         var bar = style.defaults()
-        bar.width = style.Length { Percent: look.bar * 100.0 }
+        bar.width = style.Length { Percent: look.bar_span * 100.0 }
         bar.height = style.Length { Percent: 100.0 }
         // v3's default Fill mode is Gradient: the bar's colour fades to white along its own length. A
         // gradient's points are in surface space, so the column's left edge comes from its header as
         // laid out the frame before
         bar.background = paint.Brush { Solid: look.bar_color }
         var bar_length: f32 = 0.0
-        if column < grid.columns.len { bar_length = grid.columns[column].width * look.bar }
+        if column < grid.columns.len { bar_length = grid.columns[column].width * look.bar_span }
         // Fill mode Solid and Border style Solid of v3's Data Bar Rule Style Settings
         if look.bar_border { bar.border = style.Border { width: 1.0, color: look.bar_color } }
         if !look.bar_solid && bar_length > 2.0 && mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
@@ -6396,16 +6412,18 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
             if has_head && bar_stops_error == ok {
                 bar_stops[0usize] = paint.Stop { offset: 0.0, color: look.bar_color }
                 bar_stops[1usize] = paint.Stop { offset: 1.0, color: paint.rgba(1.0, 1.0, 1.0, 1.0) }
+                let cell_width = grid.columns[column].width
                 if look.bar_rtl {
-                    let right_edge = head_box.x + head_box.width
+                    let right_edge = head_box.x + (look.bar_left + look.bar_span) * cell_width
                     bar.background = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: right_edge, y: 0.0 }, end: geometry.Point { x: right_edge - bar_length, y: 0.0 }, stops: bar_stops[0usize..2usize] } }
                 } else {
-                    bar.background = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: head_box.x, y: 0.0 }, end: geometry.Point { x: head_box.x + bar_length, y: 0.0 }, stops: bar_stops[0usize..2usize] } }
+                    let left_edge = head_box.x + look.bar_left * cell_width
+                    bar.background = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: left_edge, y: 0.0 }, end: geometry.Point { x: left_edge + bar_length, y: 0.0 }, stops: bar_stops[0usize..2usize] } }
                 }
             }
         }
-        // Bar direction Right To Left (v3): the bar starts where the unfilled part ends
-        if look.bar_rtl { bar.margin.left = style.Length { Percent: 100.0 - look.bar * 100.0 } }
+        // Bar direction and Axis (v3): the bar starts where the axis or the unfilled part ends
+        if look.bar_left > 0.0 { bar.margin.left = style.Length { Percent: look.bar_left * 100.0 } }
         layers[count] = widget.box(0u64, bar, zero)
         count += 1usize
     }

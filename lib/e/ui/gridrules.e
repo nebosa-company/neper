@@ -60,7 +60,8 @@ type Rule = struct {
     ignore_above: f64,
     bar_solid: bool,
     bar_border: bool,
-    bar_rtl: bool
+    bar_rtl: bool,
+    bar_axis: u8
 }
 
 // The look of one cell. `bar` is the filled fraction 0..1 of a data bar (0 for none); `icon`
@@ -76,6 +77,8 @@ type Format = struct {
     bar_solid: bool,
     bar_border: bool,
     bar_rtl: bool,
+    bar_left: f32,
+    bar_span: f32,
     bar: f32,
     bar_color: paint.Color,
     icon: u8,
@@ -110,7 +113,7 @@ error BadRule
 
 fn rule(column: usize, kind: Kind) -> Rule {
     let none = paint.rgba(0.0, 0.0, 0.0, 0.0)
-    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false, has_min: false, min_value: 0.0, has_max: false, max_value: 0.0, min_pct: false, max_pct: false, min_ptile: false, max_ptile: false, has_ignore: false, ignore_above: 0.0, bar_solid: false, bar_border: false, bar_rtl: false }
+    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false, has_min: false, min_value: 0.0, has_max: false, max_value: 0.0, min_pct: false, max_pct: false, min_ptile: false, max_ptile: false, has_ignore: false, ignore_above: 0.0, bar_solid: false, bar_border: false, bar_rtl: false, bar_axis: 0u8 }
 }
 
 fn create(a: *mem.Arena, t: *const table.Table, capacity: usize) -> (Rules, err) {
@@ -510,6 +513,20 @@ fn apply_range(rs: *const Rules, i: usize, row: usize, f: *Format) {
         f.bar_border = r.bar_border
         f.bar_rtl = r.bar_rtl
         f.bar = x
+        // the axis (Axis Settings): Automatic puts it at zero when the range crosses zero, Cell midpoint
+        // in the middle, None at the left edge; the bar runs from the axis to the value
+        var axis = 0.0f32
+        if r.bar_axis == 1u8 { axis = 0.5f32 }
+        if r.bar_axis == 0u8 && low < 0.0 && high > 0.0 { axis = f32((0.0 - low) / (high - low)) }
+        var near_edge = axis
+        var far_edge = x
+        if x < axis {
+            near_edge = x
+            far_edge = axis
+        }
+        f.bar_span = far_edge - near_edge
+        f.bar_left = near_edge
+        if r.bar_rtl { f.bar_left = 1.0f32 - far_edge }
         f.bar_color = r.fill
         ret
     }
