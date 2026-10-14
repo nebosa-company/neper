@@ -34,3 +34,12 @@ setting leaves the header height alone in v3 (FS1-font-size-xl-v3.png), which fo
 header font is the header style's, not the cell font. The source formula was read, its constants
 (offsets, borders of the Windows painter) were not summed, so 21 is the measurement and not a
 derivation.
+
+## Footer height
+
+`TcxGridFooterViewInfo.CalculateHeight` (`cxGridTableView.pas:15227`) is the footer's row count times
+`RowHeight` (one text cell height of the footer font) plus the painter's panel content offsets and
+border sizes (`FooterPanelContentOffsets`, `FooterPanelBordersSizeRect`). It follows the footer font,
+which is why v3's footer grows with the Extra Large grid font (FS1-font-size-xl-v3.png) while the
+headers do not. neper's footer row height is the measured one and scales with `set_font_size`; the
+painter offsets were not summed.
