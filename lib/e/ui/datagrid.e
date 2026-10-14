@@ -155,7 +155,7 @@ band_tabs: bool,
 filter_off: bool,
 pv_design: bool,
 dz_tab: u8,
-dz_checks: u32,
+dz_checks: u64,
 dz_ready: bool,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
@@ -9831,7 +9831,7 @@ fn show_designer(grid: *Grid) {
     show_print_preview(grid)
     grid.pv_design = true
     if !grid.dz_ready {
-        grid.dz_checks = 472961023u32
+        grid.dz_checks = 472961023u64
         grid.dz_ready = true
     }
 }
@@ -9904,7 +9904,7 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         if t.kind == 0u8 { t.grid.dz_tab = u8(t.value) }
-        if t.kind == 1u8 { t.grid.dz_checks = t.grid.dz_checks ^ (1u32 << u32(t.value)) }
+        if t.kind == 1u8 { t.grid.dz_checks = t.grid.dz_checks ^ (1u64 << u64(t.value)) }
         if t.kind == 2u8 {
             t.grid.print_open = false
             t.grid.wiz_open = false
@@ -9918,7 +9918,7 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
 
 // One check box and its words: a 15 px square, blue with a tick when on, grey words when disabled.
 fn dz_check(a: *mem.Arena, grid: *Grid, tap: *DesignTap, k: usize) -> (widget.Node, err) {
-    let on = ((grid.dz_checks >> u32(k)) & 1u32) != 0u32
+    let on = ((grid.dz_checks >> u64(k)) & 1u64) != 0u64
     var ink: u32 = 0x000000u32
     if !dz_enabled(k) { ink = 0xA0A0A0u32 }
     let (words, words_error) = flat_text(a, grid, dz_label(k), gl.rgb(ink))
@@ -10026,7 +10026,7 @@ fn dz_preview(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         n += 1usize
         r += 1usize
     }
-    if ((grid.dz_checks >> 6u32) & 1u32) != 0u32 {
+    if ((grid.dz_checks >> 6u64) & 1u64) != 0u64 {
         let (filter_text, filter_error) = flat_text(a, grid, "<Filter is Empty>", gl.rgb(0xFFFFFFu32))
         if filter_error != ok { ret (zero, filter_error) }
         var strip = control.sized_style(330.0, 22.0)

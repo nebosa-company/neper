@@ -41441,3 +41441,6 @@ The Styles tab lists v3's thirteen styles (BandHeader ... Selection) with their 
 
 ## D4120 - G012: the Designer's Apply button
 The bottom row ends with v3's Apply, grey like v3's while nothing is pending (DZ-format-report-Apply-v5.png). OK and Cancel close the Designer; the Styles tab's Font/Color/Texture/Clear buttons, Restore Defaults, Save As and the style-sheet row are still not drawn (the list fills the tab's height at this scale).
+
+## D4121 - G012: the Designer's Cards and Charts tabs are out of scope
+v3's Format Report has Cards and Charts tabs (recorded once: card sizes, spacing, framing and shadow; a Transparent check beside a chart), but MTG Studio uses neither, so the user ruled them out: the tabs stay as labels without content. `dz_checks` is a u64 now so more items could be added later without a type change.
