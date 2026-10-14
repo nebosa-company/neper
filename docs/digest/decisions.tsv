@@ -2634,4 +2634,5 @@ D4051	669	G012: a gradient bar anchored at the cell's x passes the fixtures and 
 D4052	762	G012: the Enter key ended the program
 D4053	899	G012: the bar that never showed was the data, and v3's gradient fill
 D4054	556	G012: a rule can ignore values above a bound (Gleemax)
-D4055	551	G012: data bar Fill mode Solid and Border style in the rule model
+D4055	552	G012: data bar Fill mode Solid and Border style in the rule model
+D4056	499	G012: the no-data messages

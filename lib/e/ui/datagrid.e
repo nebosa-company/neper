@@ -961,6 +961,9 @@ fn set_navigator_icons(grid: *Grid, enabled: [7]scene.TextureId, disabled: [6]sc
 // The word before the count in the footer (v3: "Count" in the pool, "Rows" in the collection).
 fn set_footer_label(grid: *Grid, label: str) { grid.footer_label = label }
 
+// The message of an empty grid (v3's NoDataToDisplayInfoText: "<No cards in card pool>" and so on).
+fn set_empty_text(grid: *Grid, text: str) { grid.empty_text = text }
+
 // v3's group footers are 29 px in rows of 19: this much taller than a row.
 fn footer_extra() -> f32 { ret 10.0 }
 
