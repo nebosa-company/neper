@@ -287,6 +287,8 @@ type Grid = struct {
     has_rules: bool,
     filter_text: []u8,
     filter_lens: []usize,
+    filter_ops: []u8,
+    filter_pop: usize,
     theme: *const control.Theme
 }
 
@@ -362,6 +364,14 @@ fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const Colum
             at += 1usize
         }
         grid.filter_lens = lens
+        let (ops, ops_error) = mem.alloc[u8](a, specs.len)
+        if ops_error != ok { ret (grid, ops_error) }
+        var op_at = 0usize
+        while op_at < specs.len {
+            ops[op_at] = 0u8
+            op_at += 1usize
+        }
+        grid.filter_ops = ops
     }
     let (marks, marks_error) = mem.alloc[u8](a, (table.capacity(t) + 7usize) / 8usize)
     if marks_error != ok { ret (zero, marks_error) }
@@ -4056,8 +4066,8 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
             shown += 1usize
         }
     }
-    if !grid.menu_open && !grid.chooser_open && !has_hint && !grid.sort_dialog_open && !grid.rules_dialog_open && !grid.crit_open && !grid.wiz_open { ret (aimed, ok) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 10usize)
+    if !grid.menu_open && !grid.chooser_open && !has_hint && !grid.sort_dialog_open && !grid.rules_dialog_open && !grid.crit_open && !grid.wiz_open && grid.filter_pop == 0usize { ret (aimed, ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 12usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     parts[n] = aimed
@@ -4121,6 +4131,53 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         if floating_error != ok { ret (zero, control.TooLarge) }
         floating[0usize] = panel
         parts[n] = widget.overlay(grid.key + CHOOSER_KEY, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: x, y: y }, modal: false, dismiss: zero }, style.defaults(), floating[0usize..1usize])
+        n += 1usize
+    }
+    if grid.filter_pop != 0usize && grid.filter_visible && grid.look.on {
+        let pop_spec = grid.filter_pop - 1usize
+        let (op_rows, op_rows_error) = mem.alloc[widget.Node](a, 12usize)
+        if op_rows_error != ok { ret (zero, control.TooLarge) }
+        let (op_picks, op_picks_error) = mem.alloc[FilterOpPick](a, 12usize)
+        if op_picks_error != ok { ret (zero, control.TooLarge) }
+        let (op_submits, op_submits_error) = mem.alloc[widget.Submit](a, 12usize)
+        if op_submits_error != ok { ret (zero, control.TooLarge) }
+        var oi = 0usize
+        while oi < 12usize {
+            op_picks[oi] = FilterOpPick { grid: grid, spec: pop_spec, op: u8(oi) }
+            op_submits[oi] = widget.Submit { ctx: mem.cast[*void](&op_picks[oi]), invoke: on_filter_op }
+            let (sign_node, sign_node_error) = flat_text(a, grid, filter_op_sign(u8(oi)), gl.rgb(0x2E5EA8u32))
+            if sign_node_error != ok { ret (zero, sign_node_error) }
+            let (words_node, words_node_error) = flat_text(a, grid, filter_op_words(u8(oi)), gl.rgb(0x000000u32))
+            if words_node_error != ok { ret (zero, words_node_error) }
+            let (op_parts, op_parts_error) = mem.alloc[widget.Node](a, 2usize)
+            if op_parts_error != ok { ret (zero, control.TooLarge) }
+            op_parts[0usize] = widget.padded(0u64, 8.0, 3.0, 0.0, 0.0, control.sized_style(40.0, 26.0), one(a, sign_node))
+            op_parts[1usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one(a, words_node))
+            var op_style = control.sized_style(250.0, 26.0)
+            if u8(oi) == grid.filter_ops[pop_spec] { op_style.background = paint.Brush { Solid: gl.rgb(0x99D1FFu32) } }
+            let (op_line, op_line_error) = mem.alloc[widget.Node](a, 1usize)
+            if op_line_error != ok { ret (zero, control.TooLarge) }
+            op_line[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), op_parts[0usize..2usize])
+            op_rows[oi] = widget.region(grid.key + MENU_KEY + 700100u64 + u64(oi), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&op_submits[oi]), invoke: on_filter_op_tap }, gestures: 1u8, enabled: true, focusable: false }, op_style, op_line[0usize..1usize])
+            oi += 1usize
+        }
+        var op_frame = style.defaults()
+        op_frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        op_frame.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+        let op_column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, op_frame, op_rows[0usize..12usize])
+        let (op_held, op_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if op_held_error != ok { ret (zero, control.TooLarge) }
+        op_held[0usize] = op_column
+        var pop_x: f32 = 100.0
+        var pop_y: f32 = 300.0
+        if mem.address_of(theme.runtime) != 0usize {
+            let (sign_rect, has_sign) = control.keyed_bounds(theme.runtime, grid.key + FILTER_KEY + 1100u64 + u64(pop_spec))
+            if has_sign {
+                pop_x = sign_rect.x
+                pop_y = sign_rect.y + sign_rect.height
+            }
+        }
+        parts[n] = widget.overlay(grid.key + MENU_KEY + 700099u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: pop_x, y: pop_y }, modal: true, dismiss: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_filter_pop_dismiss } }, style.defaults(), op_held[0usize..1usize])
         n += 1usize
     }
     // the secondary windows from the back to the front: the one touched last stands on top
@@ -5036,6 +5093,11 @@ fn on_detail(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err 
 fn show_filter_row(grid: *Grid, on: bool) { grid.filter_visible = on }
 
 // The text typed in a column's filter field.
+// The operator of a filter row cell, in v3's order: 0 Equals (its default sign), 1 Does not equal,
+// 2 Is less than, 3 Is less than or equal to, 4 Is greater than, 5 Is greater than or equal to,
+// 6 Is like, 7 Is not like, 8 Contains, 9 Does not contain, 10 Begins with, 11 Ends with.
+fn filter_operator(grid: *const Grid, spec: usize) -> u8 { ret grid.filter_ops[spec] }
+
 fn filter_value(grid: *const Grid, spec: usize) -> str { ret grid.filter_text[spec * FILTER_TEXT..spec * FILTER_TEXT + grid.filter_lens[spec]] }
 
 const KEY_BASE: u64 = 4096u64
@@ -5959,6 +6021,69 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
 // One filter field changed: the grid keeps the text (its buffer is the field's) and reports it.
 type FilterPick = struct { grid: *Grid, spec: usize }
 
+fn filter_op_sign(op: u8) -> str {
+    if op == 1u8 { ret "≠" }
+    if op == 2u8 { ret "<" }
+    if op == 3u8 { ret "≤" }
+    if op == 4u8 { ret ">" }
+    if op == 5u8 { ret "≥" }
+    if op == 6u8 || op == 7u8 { ret "A%C" }
+    if op == 8u8 || op == 9u8 { ret "ABC" }
+    if op == 10u8 || op == 11u8 { ret "ABC" }
+    ret "="
+}
+
+fn filter_op_words(op: u8) -> str {
+    if op == 0u8 { ret "Equals" }
+    if op == 1u8 { ret "Does not equal" }
+    if op == 2u8 { ret "Is less than" }
+    if op == 3u8 { ret "Is less than or equal to" }
+    if op == 4u8 { ret "Is greater than" }
+    if op == 5u8 { ret "Is greater than or equal to" }
+    if op == 6u8 { ret "Is like" }
+    if op == 7u8 { ret "Is not like" }
+    if op == 8u8 { ret "Contains" }
+    if op == 9u8 { ret "Does not contain" }
+    if op == 10u8 { ret "Begins with" }
+    ret "Ends with"
+}
+
+type FilterOpPick = struct { grid: *Grid, spec: usize, op: u8 }
+
+fn on_filter_op_tap(ctx: *void, g: widget.Gesture) -> err {
+    switch g {
+    case .Tap as at:
+        let submit = mem.cast[*widget.Submit](ctx)
+        ret submit.invoke(submit.ctx)
+    default:
+        ret ok
+    }
+}
+
+fn on_filter_sign(ctx: *void, g: widget.Gesture) -> err {
+    let pick = mem.cast[*FilterPick](ctx)
+    switch g {
+    case .Tap as at:
+        if pick.grid.filter_pop == pick.spec + 1usize { pick.grid.filter_pop = 0usize } else { pick.grid.filter_pop = pick.spec + 1usize }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_filter_op(ctx: *void) -> err {
+    let pick = mem.cast[*FilterOpPick](ctx)
+    pick.grid.filter_ops[pick.spec] = pick.op
+    pick.grid.filter_pop = 0usize
+    ret pick.grid.events.filter_changed(pick.grid.events.ctx, pick.spec, filter_value(pick.grid, pick.spec))
+}
+
+fn on_filter_pop_dismiss(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    grid.filter_pop = 0usize
+    ret ok
+}
+
 fn on_filter(ctx: *void, value: str) -> err {
     let pick = mem.cast[*FilterPick](ctx)
     pick.grid.filter_lens[pick.spec] = value.len
@@ -6269,16 +6394,18 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var cell_style = control.sized_style(grid.columns[at].width, 28.0)
         cell_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
         if s.filter {
-            let (sign, sign_error) = flat_text(a, grid, "=", gl.rgb(0x404040u32))
+            let (sign_text, sign_error) = flat_text(a, grid, filter_op_sign(grid.filter_ops[orig]), gl.rgb(0x404040u32))
             if sign_error != ok { ret (zero, sign_error) }
+            var sign_box = control.sized_style(34.0, 28.0)
+            let sign = widget.region(grid.key + FILTER_KEY + 1100u64 + u64(orig), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[at]), invoke: on_filter_sign }, gestures: 1u8, enabled: true, focusable: false }, sign_box, one(a, widget.padded(0u64, 8.0, 4.0, 0.0, 0.0, style.defaults(), one(a, sign_text))))
             let buffer = grid.filter_text[orig * FILTER_TEXT..(orig + 1usize) * FILTER_TEXT]
-            var inner_width = grid.columns[at].width - 26.0
+            var inner_width = grid.columns[at].width - 36.0
             if inner_width < 8.0 { inner_width = 8.0 }
             let (field, field_error) = control.bare_field(a, grid.key + FILTER_KEY + u64(orig), grid.theme, s.title, buffer, grid.filter_lens[orig], widget.Change[str] { ctx: mem.cast[*void](&picks[at]), invoke: on_filter }, zero, inner_width, 24.0, grid.look.text_size, gl.rgb(0xFFFFFFu32), gl.rgb(0xFFFFFFu32))
             if field_error != ok { ret (zero, field_error) }
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (zero, control.TooLarge) }
-            pair[0usize] = widget.padded(0u64, 8.0, 4.0, 4.0, 0.0, control.sized_style(24.0, 28.0), one(a, sign))
+            pair[0usize] = sign
             pair[1usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one(a, field))
             cells[at] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, cell_style, pair[0usize..2usize])
         } else {
