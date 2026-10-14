@@ -41021,3 +41021,7 @@ The four secondary windows (D2464) share one level; they are now stacked by when
 ## D4009 - G012: the wizard's Applies to is the library's select
 
 The Applies to box of the New Rule wizard stepped through the columns on each tap (a hand-drawn box). It is now `control.select` (the library's combo box: a field with a chevron, a popup list with the current entry checked), over the listed columns, with `on_wiz_pick` setting the column and `wiz_select_open` its state (WN3-library-select-v5.png). It has the Material look (floating label, 48 px entries) rather than v3's flat white list; the grid's own v3-flat select of D2446 is the other candidate, and the choice between the two is left to the owner. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D4010 - G012: a secondary window rises when its body is tapped
+
+The stacking of D4005 raised a window only when its title bar was tapped or dragged. The body of the Sort dialog, the rules manager and the rule wizard is now a region (`window_body`) whose tap raises the window, so touching any empty part of a window brings it to the front, as it does in v3; controls inside a window keep their own gestures. The Advanced Filter body was left as it was. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
