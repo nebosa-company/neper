@@ -3714,16 +3714,12 @@ fn on_swatch(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         let grid = t.grid
-        if t.value >= 201u8 && t.value <= 203u8 {
-            // R, G or B up by 32 (wrapping), and the row takes the custom colour
-            var shift: u32 = 16u32
-            if t.value == 202u8 { shift = 8u32 }
-            if t.value == 203u8 { shift = 0u32 }
-            let channel = ((grid.cust_rgb >> shift) + 32u32) & 255u32
-            grid.cust_rgb = (grid.cust_rgb & ~(255u32 << shift)) | (channel << shift)
+        if t.value == 201u8 {
+            // the row takes the custom colour, whose R, G and B are typed in the style window
             if grid.fmt_pick == 1u8 { grid.wiz_pos_color = 200u8 }
             if grid.fmt_pick == 2u8 { grid.wiz_neg_color = 201u8 }
             if grid.fmt_pick == 3u8 { grid.wiz_axis_color = 201u8 }
+            grid.fmt_pick = 0u8
             ret ok
         }
         if grid.fmt_pick == 1u8 && t.value != 255u8 { grid.wiz_pos_color = t.value }
@@ -3738,6 +3734,74 @@ fn on_swatch(ctx: *void, g: widget.Gesture) -> err {
     default:
         ret ok
     }
+}
+
+// A channel of the custom colour set (0 red, 1 green, 2 blue); the row being edited takes the custom colour.
+fn set_channel(grid: *Grid, channel: u8, value: i64) {
+    var v = value
+    if v < 0i64 { v = 0i64 }
+    if v > 255i64 { v = 255i64 }
+    var shift: u32 = 16u32
+    if channel == 1u8 { shift = 8u32 }
+    if channel == 2u8 { shift = 0u32 }
+    grid.cust_rgb = (grid.cust_rgb & ~(255u32 << shift)) | (u32(v) << shift)
+    if grid.fmt_pick == 1u8 { grid.wiz_pos_color = 200u8 }
+    if grid.fmt_pick == 2u8 { grid.wiz_neg_color = 201u8 }
+    if grid.fmt_pick == 3u8 { grid.wiz_axis_color = 201u8 }
+}
+
+fn on_rgb_spin(ctx: *void, value: i64) -> err {
+    let t = mem.cast[*SwatchTap](ctx)
+    set_channel(t.grid, t.value, value)
+    ret ok
+}
+
+fn on_rgb_text(ctx: *void, value: str) -> err {
+    let t = mem.cast[*SwatchTap](ctx)
+    var v: i64 = 0i64
+    var i = 0usize
+    while i < value.len && i < 3usize {
+        if value[i] >= 48u8 && value[i] <= 57u8 { v = v * 10i64 + i64(value[i] - 48u8) }
+        i += 1usize
+    }
+    set_channel(t.grid, t.value, v)
+    ret ok
+}
+
+// The three spin boxes under the swatches, 62 wide each.
+fn rgb_spins(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    let (ctxs, ctxs_error) = mem.alloc[SwatchTap](a, 3usize)
+    if ctxs_error != ok { ret (zero, control.TooLarge) }
+    let (buffers, buffers_error) = mem.alloc[u8](a, 12usize)
+    if buffers_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < 3usize {
+        ctxs[k] = SwatchTap { grid: grid, value: u8(k) }
+        var shift: u32 = 16u32
+        if k == 1usize { shift = 8u32 }
+        if k == 2usize { shift = 0u32 }
+        let channel = i64((grid.cust_rgb >> shift) & 255u32)
+        let (field, field_error) = control.spin_box_sized(a, grid.key + MENU_KEY + 850840u64 + u64(k) * 8u64, grid.theme, "", buffers[k * 4usize..k * 4usize + 4usize], channel, 0i64, 255i64, 8i64, widget.Change[i64] { ctx: mem.cast[*void](&ctxs[k]), invoke: on_rgb_spin }, widget.Change[str] { ctx: mem.cast[*void](&ctxs[k]), invoke: on_rgb_text }, 60.0)
+        if field_error != ok { ret (zero, field_error) }
+        cells[k] = field
+        k += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..3usize]), ok)
+}
+
+// "Custom color:" and its typed R, G and B, under the axis settings of the style window.
+fn fmt_custom_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    let (cap, cap_error) = fmt_caption_cell(a, grid, "Custom color:", 0x000000u32)
+    if cap_error != ok { ret (zero, cap_error) }
+    cells[0usize] = cap
+    let (spins, spins_error) = rgb_spins(a, grid)
+    if spins_error != ok { ret (zero, spins_error) }
+    cells[1usize] = spins
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..2usize]), ok)
 }
 
 // The palette popup: six swatches across, four down, and None / Same as positive under them.
@@ -3764,25 +3828,10 @@ fn swatch_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         lines[row] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..6usize])
         row += 1usize
     }
-    // R + G + B +: steps the custom colour by 32 a tap
-    let (steps, steps_error) = mem.alloc[widget.Node](a, 3usize)
-    if steps_error != ok { ret (zero, control.TooLarge) }
-    var step = 0usize
-    while step < 3usize {
-        taps[25usize + step] = SwatchTap { grid: grid, value: u8(201usize + step) }
-        var words = "R +"
-        if step == 1usize { words = "G +" }
-        if step == 2usize { words = "B +" }
-        let (step_label, step_error) = flat_text(a, grid, words, gl.rgb(0x000000u32))
-        if step_error != ok { ret (zero, step_error) }
-        var step_style = control.sized_style(52.0, 22.0)
-        step_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
-        step_style.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
-        step_style.margin = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-        steps[step] = widget.region(grid.key + MENU_KEY + 850540u64 + u64(step), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[25usize + step]), invoke: on_swatch }, gestures: 1u8, enabled: true, focusable: false }, step_style, one(a, widget.padded(0u64, 14.0, 3.0, 0.0, 0.0, style.defaults(), one(a, step_label))))
-        step += 1usize
-    }
-    lines[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), steps[0usize..3usize])
+    taps[25usize] = SwatchTap { grid: grid, value: 201u8 }
+    let (custom_label, custom_error) = flat_text(a, grid, "Custom color", gl.rgb(0x000000u32))
+    if custom_error != ok { ret (zero, custom_error) }
+    lines[4usize] = widget.region(grid.key + MENU_KEY + 850531u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[25usize]), invoke: on_swatch }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(180.0, 24.0), one(a, widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, custom_label))))
     var count = 5usize
     if grid.fmt_pick != 1u8 {
         taps[24usize] = SwatchTap { grid: grid, value: 255u8 }
@@ -3794,8 +3843,8 @@ fn swatch_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         count += 1usize
     }
     var frame = control.sized_style(190.0, 0.0)
-    frame.height = style.Length { Px: 136.0 }
-    if count == 6usize { frame.height = style.Length { Px: 162.0 } }
+    frame.height = style.Length { Px: 140.0 }
+    if count == 6usize { frame.height = style.Length { Px: 140.0 } }
     frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     frame.border = style.Border { width: 1.0, color: gl.rgb(0x606060u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, lines[0usize..count]), ok)
@@ -4090,7 +4139,10 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     rows[15usize] = r1
     rows[16usize] = r2
     rows[17usize] = c11
-    n = 18usize
+    let (cust, cust_error) = fmt_custom_row(a, grid)
+    if cust_error != ok { ret (zero, cust_error) }
+    rows[18usize] = cust
+    n = 19usize
     let (buttons, buttons_error) = mem.alloc[widget.Node](a, 2usize)
     if buttons_error != ok { ret (zero, control.TooLarge) }
     let (ok_button, ok_button_error) = fmt_button(a, grid, "OK", grid.key + MENU_KEY + 850362u64)
@@ -4103,7 +4155,7 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     button_style.margin = style.EdgeLengths { left: style.Length { Px: 150.0 }, top: style.Length { Px: 14.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, button_style, buttons[0usize..2usize])
     n += 1usize
-    var panel = control.sized_style(380.0, 600.0)
+    var panel = control.sized_style(380.0, 680.0)
     panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..n]), ok)
