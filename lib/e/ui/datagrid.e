@@ -2401,7 +2401,7 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
                 if code == 11usize { ink_icon = gl.rgb(0xC62828u32) }
                 if code == 0usize || code == 1usize {
                     var sign = "="
-                    if code == 1usize { sign = "!=" }
+                    if code == 1usize { sign = "≠" }
                     let (sign_node, sign_error) = flat_text(a, grid, sign, gl.rgb(0x000000u32))
                     if sign_error != ok { ret (zero, sign_error) }
                     icon = sign_node
