@@ -39710,3 +39710,7 @@ v3's indicator quick list (QM1) is two columns of ticked names, taller lists con
 ## D5030 - G012: the quick list's size checked against v3's pool grid
 
 v3's pool quick list (QM5) is one column 135 px wide (92 units) with 25.5 px (17 unit) rows and a black frame: ours already is. It wraps into two columns only when the list is long (the collection's, QM1), as the D4090 change does. Nothing to change; the filter-operator popup was matched earlier (FR series).
+
+## D5031 - G012: the filter-operator popup measured and sized from v3
+
+v3's popup (FR2) is 280 px wide with 33 px rows; ours was 375 by 39. Now 187 by 22 units (280 by 33 px at 1.5 per unit), pictures 22 by 18 in a 36 unit column (FO5-operator-popup-size-v5.png).

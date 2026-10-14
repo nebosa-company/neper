@@ -2309,4 +2309,5 @@ D5026	337	G012: the Alignment submenu in v3's words and order
 D5027	249	G012: pictures in the Alignment submenu
 D5028	263	G012: the parent of an open submenu is light blue
 D5029	496	G012: the quick column list wraps into two columns
-D5030	381	G012: the quick list's size checked against v3's pool grid
+D5030	382	G012: the quick list's size checked against v3's pool grid
+D5031	264	G012: the filter-operator popup measured and sized from v3
