@@ -6087,7 +6087,7 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
             while star_at < grid.specs.len {
                 star_edge += grid.widths[grid.origin[star_at]]
                 if star_point.x < star_edge {
-                    if grid.specs[star_at].kind == CellKind.Star && grid.specs[star_at].editable {
+                    if (grid.specs[star_at].kind == CellKind.Star || grid.specs[star_at].kind == CellKind.Bool) && grid.specs[star_at].editable {
                         let flipped = begin_edit(grid, usize(at), grid.origin[star_at])
                         if flipped != ok && flipped != Locked && flipped != NotEditable { ret flipped }
                         ret grid.events.row_picked(grid.events.ctx, usize(at))
