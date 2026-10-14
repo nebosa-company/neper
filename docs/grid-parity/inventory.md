@@ -42,7 +42,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Font size scale | untested | sizes small/medium/large/extra-large |
 | Zebra, selection, inactive colours | matched | (selection #D5E4EE, frame #212121) |
 | Row colour by card colour / rarity | app | sample `ink_of`, compared by eye |
-| Conditional formatting rules manager | untested | rules model exists, manager UI not recorded |
+| Conditional formatting rules manager | matched (list, delete, order) / differs (New/Edit rule wizard, stop-if-true, working copy) | CF1-rules-manager (D2433) |
 | Customisation form (Column) | matched | chooser panel, close block colours |
 | Multi-select, row-select, CellSelect=false | matched | M1, M2-shift-range-v3 |
 | Select-ability gate (group rows) | matched | N1-group-row-click, P1 |

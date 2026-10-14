@@ -229,6 +229,29 @@ fn add(a: *mem.Arena, rs: *Rules, r: Rule) -> (usize, err) {
 
 fn remove_all(rs: *Rules) { rs.total = 0usize }
 
+// Takes rule `at` out; the rules after it move up (statistics with them).
+fn remove(rs: *Rules, at: usize) {
+    if at >= rs.total { ret }
+    var i = at
+    while i + 1usize < rs.total {
+        rs.rules[i] = rs.rules[i + 1usize]
+        rs.stats[i] = rs.stats[i + 1usize]
+        i += 1usize
+    }
+    rs.total -= 1usize
+}
+
+// Exchanges two rules (their order is the order they are applied in).
+fn swap(rs: *Rules, x: usize, y: usize) {
+    if x >= rs.total || y >= rs.total { ret }
+    let r = rs.rules[x]
+    rs.rules[x] = rs.rules[y]
+    rs.rules[y] = r
+    let st = rs.stats[x]
+    rs.stats[x] = rs.stats[y]
+    rs.stats[y] = st
+}
+
 // Recomputes the statistics of the rules whose column (or row set) changed.
 fn refresh(rs: *Rules, scratch: *mem.Arena) -> err {
     let t = rs.t
