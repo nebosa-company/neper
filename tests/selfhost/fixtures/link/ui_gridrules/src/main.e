@@ -207,6 +207,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if two_error != ok || gr.refresh(&rs2, a) != ok { os.exit(112) }
     let blend = gr.format(&rs2, 4usize, C_CMC)
     if !near(blend.fill.red, 0.5f32) || !near(blend.fill.green, 0.5f32) { os.exit(113) }
+    // a Percent bound is a share of the way from the lowest to the highest value: 75% .. 100% of
+    // a range whose middle cell sits at 50% leaves the middle cell empty and the top cell full
+    var pct = gr.rule(C_CMC, gr.Kind.Bar)
+    pct.fill = paint.rgba(0.0f32, 0.0f32, 1.0f32, 1.0f32)
+    pct.has_min = true
+    pct.min_value = 75.0
+    pct.min_pct = true
+    pct.has_max = true
+    pct.max_value = 100.0
+    pct.max_pct = true
+    let (made_pct, made_pct_error) = gr.create(a, &t, 2usize)
+    if made_pct_error != ok { os.exit(147) }
+    var rs_pct = made_pct
+    let (_pb, pct_error) = gr.add(a, &rs_pct, pct)
+    if pct_error != ok || gr.refresh(&rs_pct, a) != ok { os.exit(148) }
+    if !near(gr.format(&rs_pct, 4usize, C_CMC).bar, 0.0f32) || !near(gr.format(&rs_pct, 5usize, C_CMC).bar, 1.0f32) { os.exit(149) }
     // priority: the first rule that sets a field wins; the other field still merges in
     let (made3, made3_error) = gr.create(a, &t, 4usize)
     if made3_error != ok { os.exit(114) }

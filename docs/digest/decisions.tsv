@@ -2233,4 +2233,5 @@ D2469	236	G012: the Advanced Filter body raises its window
 D2470	444	G012: window title text and close box placed, raise verified live
 D2471	347	G012: the Applies to select verified live
 D2472	384	G012: a new rule's Applies to starts on the first numeric column
-D2473	522	G012: the wizard's Minimum and Maximum take a Percent
+D2473	523	G012: the wizard's Minimum and Maximum take a Percent
+D2474	246	G012: a Percent bound is checked by a fixture
