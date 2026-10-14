@@ -1800,6 +1800,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         format_taps += 1usize
     }
     if grid15.wiz_palette != 0u8 { os.exit(653) }
+    // Export > Excel and PDF: a package (a zip: "PK") and a document ("%PDF")
+    let (export_book, export_book_error) = dg.export_xlsx(a, &grid15, 100usize)
+    if export_book_error != ok || export_book.len < 100usize || export_book[0usize] != 80u8 || export_book[1usize] != 75u8 { os.exit(654) }
+    let (export_pdf, export_pdf_error) = dg.export_pdf(a, &grid15, 100usize)
+    if export_pdf_error != ok || export_pdf.len < 200usize || export_pdf[0usize] != 37u8 || export_pdf[1usize] != 80u8 { os.exit(655) }
     // v3's Enter key action: Move to next column steps the focused column (the last one wraps and goes down a row)
     dg.set_enter_action(&grid15, 0u8)
     grid15.focus_column = 0usize

@@ -80,7 +80,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Selection API (select all, Ctrl+A, Shift+arrows) | matched | M1 |
 | Layout persistence (column order, widths, hidden, filter row, navigator across runs) | matched (own `cardgrid.layout` text via `save_layout` / `load_layout`, now with the Shift+click sorts, D2437) / differs (v3 also keeps grouping, expansion, view toggles) | LP1-layout-restored |
 | Export: CSV, Plain Text, XML, HTML; Copy as Text (Copy All) | matched (content, via `export_string`; sample menu; Copy Selected and Copy Card Name in the fixture, D2441, clipboard not read back) | EX1 (D2439) |
-| Export: PDF, Excel; Print, Page Setup, Print Preview, Designer | untested | EX1-cards-menu-v3 |
+| Export: PDF, Excel (xlsx via `export_xlsx`, A4 ruled table via `export_pdf`, sample menu, D4069); Print, Page Setup, Print Preview, Designer | PDF and Excel matched (content), printing untested | EX1-cards-menu-v3 |
 | Best fit | matched | A1 |
 
 ## Open differences, in the order they matter
