@@ -4288,13 +4288,13 @@ fn margins_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node
         if spins_error != ok { ret (zero, control.TooLarge) }
         spins[0usize] = MarginSpin { grid: grid, slot: u8(slot) }
         let hundredths = i64(grid.pv_tenths[slot] + base) * 10i64 + i64(grid.pv_hund[slot])
-        let (field, field_error) = control.spin_box_sized(a, grid.key + MENU_KEY + 850400u64 + u64(k) * 8u64, grid.theme, "Margin in hundredths of an inch", buffer[0usize..12usize], hundredths, i64(base) * 10i64, 999i64, 5i64, widget.Change[i64] { ctx: mem.cast[*void](&spins[0usize]), invoke: on_margin_spin }, widget.Change[str] { ctx: mem.cast[*void](&spins[0usize]), invoke: on_margin_text }, 110.0)
+        let (field, field_error) = control.spin_box_sized(a, grid.key + MENU_KEY + 850400u64 + u64(k) * 8u64, grid.theme, "1/100 in", buffer[0usize..12usize], hundredths, i64(base) * 10i64, 999i64, 5i64, widget.Change[i64] { ctx: mem.cast[*void](&spins[0usize]), invoke: on_margin_spin }, widget.Change[str] { ctx: mem.cast[*void](&spins[0usize]), invoke: on_margin_text }, 110.0)
         if field_error != ok { ret (zero, field_error) }
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, control.TooLarge) }
-        pair[0usize] = widget.padded(0u64, 0.0, 8.0, 6.0, 0.0, style.defaults(), one(a, label))
+        pair[0usize] = widget.padded(0u64, 0.0, 20.0, 6.0, 0.0, style.defaults(), one(a, label))
         pair[1usize] = field
-        let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(240.0, 36.0), pair[0usize..2usize])
+        let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(240.0, 58.0), pair[0usize..2usize])
         lines[n] = line
         n += 1usize
         k += 1usize
