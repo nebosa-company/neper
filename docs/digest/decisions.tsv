@@ -2628,4 +2628,5 @@ D4045	834	G012: the table's own sideways scroll is not the answer here
 D4046	972	G012: v3's Format... dialog recorded, not built
 D4047	755	G012: a gradient per data bar overruns the frame
 D4048	677	G012: a gradient brush in a cell breaks the row build, whatever its stops
-D4049	657	G012: the gradient fixture failure is an error code, not a check
+D4049	658	G012: the gradient fixture failure is an error code, not a check
+D4050	913	G012: why a gradient bar shows nothing
