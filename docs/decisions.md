@@ -39276,3 +39276,7 @@ Recorded in v3 (CF2-new-rule-v3.png): New Rule... opens `Conditional Formatting 
 ## D2441 - G012: Copy Selected and Copy Card Name
 
 v3's Cards > Copy as Text offers Copy Card Name (Ctrl+F9), Copy Selected and Copy All (EX1-cards-menu-v3.png). `export_string(..., selected_only, ...)` already keeps the selected rows (or the current one); `datagrid.card_name` gives the name column text of the current row. The sample's card menu has Copy Card Name and Copy Selected as Text next to Copy All (clipboard). ui_datagrid section 35 checks that Copy Selected yields a header and one row and that the name is not empty; ui_gridrules, ui_collections_v2, ui_tabular pass. Not checked live: the clipboard content was not read back.
+
+## D2442 - G012: Edit Rule and the column of a new rule
+
+v3's rules manager enables Edit Rule... with a rule selected and opens the same wizard on it (CF2-new-rule-v3.png). `rules_manager` now enables it: it opens the wizard with the type of the selected rule chosen and OK replaces that rule in its place, keeping its column (`wiz_edit`, `gridrules.swap` and `remove`). A new rule goes on the column whose header was last clicked when that holds numbers (`head_spec`), else the sorted one, else the first numeric column. Live in the sample (CF3-edit-rule-v5.png: Above Average edited to Unique Values). Not matched: the per-type fields and a column picker in the wizard, stop-if-true. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
