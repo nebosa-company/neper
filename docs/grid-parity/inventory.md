@@ -80,7 +80,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Selection API (select all, Ctrl+A, Shift+arrows) | matched | M1 |
 | Layout persistence (column order, widths, hidden, filter row, navigator across runs) | matched (own `cardgrid.layout` text via `save_layout` / `load_layout`, now with the Shift+click sorts, D2437) / differs (v3 also keeps grouping, expansion, view toggles) | LP1-layout-restored |
 | Export: CSV, Plain Text, XML, HTML; Copy as Text (Copy All) | matched (content, via `export_string`; sample menu; Copy Selected and Copy Card Name in the fixture, D2441, clipboard not read back) | EX1 (D2439) |
-| Export: PDF, Excel; Print, Page Setup, Print Preview, Designer | untested | EX1-cards-menu-v3 |
+| Export: PDF, Excel (xlsx via `export_xlsx`, A4 ruled table via `export_pdf`, sample menu, D4069); Print, Page Setup, Print Preview, Designer | PDF and Excel matched (content), printing untested | EX1-cards-menu-v3 |
 | Best fit | matched | A1 |
 
 ## Open differences, in the order they matter
@@ -137,4 +137,4 @@ Verified live 2026-10-14: a two colour scale created in the wizard with the whit
 | Narrow-window column growth, thumb track length | open | D2502 |
 | PDF / Excel export, printing | not started | |
 | Background images of the table (v3 paints a card-back picture behind the collection rows and the empty area; seen faintly under the rows in the recordings) | to do: extract the picture from v3's resources, draw it behind the rows with v3's opacity | FT2, NV1 |
-| Messages shown when the grid has no data (v3's NoDataToDisplayInfoText) | matched: v3's three texts (D2514), header kept, plain text without a picture (D2515); the message sits a little right of centre and is larger than v3's | ND1, ND2 |
+| Messages shown when the grid has no data (v3's NoDataToDisplayInfoText) | matched: v3's three texts (D2514), header kept, plain text without a picture (D2515); the message sits a little right of centre and larger than v3's | ND1, ND2 |

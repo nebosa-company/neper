@@ -63,6 +63,9 @@ use e.str
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.ui.collection
+use e.fmt.xlsx as xlsx
+use e.fmt.xlsx.book as book
+use e.fmt.pdf.write as pdfw
 use e.ui.control
 use e.ui.gridrules as rules
 use e.ui.gridlook as gl
@@ -1207,6 +1210,172 @@ fn export_string(a: *mem.Arena, grid: *Grid, format: u8, selected_only: bool, li
     if format == EXPORT_XML { if str.push(&sb, "</cards>\n") != ok { ret ("", control.TooLarge) } }
     if format == EXPORT_HTML { if str.push(&sb, "</table></body></html>\n") != ok { ret ("", control.TooLarge) } }
     ret (str.done(&sb), ok)
+}
+
+// `text` with every byte outside printable ASCII replaced by a question mark (the PDF's WinAnsi
+// fonts print nothing else here).
+fn ascii_text(a: *mem.Arena, text: str) -> (str, err) {
+    var n = text.len
+    if n > 48usize { n = 48usize }
+    let (out, out_error) = mem.alloc[u8](a, n)
+    if out_error != ok { ret ("", out_error) }
+    var i = 0usize
+    while i < n {
+        var c = text[i]
+        if c < 32u8 || c > 126u8 { c = 63u8 }
+        out[i] = c
+        i += 1usize
+    }
+    ret (out[0usize..n], ok)
+}
+
+// The listed columns' titles and the shown data rows as arrays of text, the header first (the
+// source of the Excel and PDF exports: v3 sends the same view through DevExpress's exporters).
+fn export_rows(a: *mem.Arena, grid: *Grid, limit: usize, ascii: bool) -> ([]const []const str, usize, err) {
+    var wide = 0usize
+    var c = 0usize
+    while c < grid.specs.len {
+        if grid.specs[c].kind != CellKind.Indicator && grid.specs[c].title.len != 0usize { wide += 1usize }
+        c += 1usize
+    }
+    let visible = grp.visible_len(grid.g)
+    var rows_wanted = 0usize
+    var at = 0usize
+    while at < visible && rows_wanted < limit {
+        if !grp.visible_is_group(grid.g, at) && !grp.visible_is_footer(grid.g, at) { rows_wanted += 1usize }
+        at += 1usize
+    }
+    let (rows, rows_error) = mem.alloc[[]const str](a, rows_wanted + 1usize)
+    if rows_error != ok { ret (zero, 0usize, rows_error) }
+    var written = 0usize
+    var line = 0usize
+    while line <= rows_wanted {
+        let (cells, cells_error) = mem.alloc[str](a, wide)
+        if cells_error != ok { ret (zero, 0usize, cells_error) }
+        var out = 0usize
+        var row = 0usize
+        var drawn = line == 0usize
+        if line != 0usize {
+            // the next data row in view order
+            var seen = 0usize
+            var scan = 0usize
+            while scan < visible && !drawn {
+                if !grp.visible_is_group(grid.g, scan) && !grp.visible_is_footer(grid.g, scan) {
+                    seen += 1usize
+                    if seen == line {
+                        row = grp.visible_row(grid.g, scan)
+                        drawn = true
+                    }
+                }
+                scan += 1usize
+            }
+        }
+        c = 0usize
+        while c < grid.specs.len && drawn {
+            let s = grid.specs[c]
+            if s.kind != CellKind.Indicator && s.title.len != 0usize {
+                var text = s.title
+                if line != 0usize {
+                    text = ""
+                    if s.kind == CellKind.Star {
+                        if !table.is_null(grid.t, s.column, row) && table.get_bool(grid.t, s.column, row) { text = "Yes" }
+                    } else if s.kind != CellKind.Custom && s.kind != CellKind.Picture {
+                        let (shown_text, text_error) = cell_text_of(a, grid, s, row)
+                        if text_error == ok { text = shown_text }
+                    }
+                }
+                if ascii {
+                    let (plain, plain_error) = ascii_text(a, text)
+                    if plain_error != ok { ret (zero, 0usize, plain_error) }
+                    text = plain
+                }
+                cells[out] = text
+                out += 1usize
+            }
+            c += 1usize
+        }
+        rows[line] = cells[0usize..wide]
+        written += 1usize
+        line += 1usize
+    }
+    ret (rows[0usize..written], wide, ok)
+}
+
+// Export > Excel (v3 ExportGridToXLSX): one sheet, the header row bold, numbers as numbers.
+fn export_xlsx(a: *mem.Arena, grid: *Grid, limit: usize) -> ([]u8, err) {
+    let (rows, wide, rows_error) = export_rows(a, grid, limit, false)
+    if rows_error != ok { ret (zero, rows_error) }
+    let (grid_cells, grid_error) = mem.alloc[[]const xlsx.Cell](a, rows.len)
+    if grid_error != ok { ret (zero, grid_error) }
+    var r = 0usize
+    while r < rows.len {
+        let (cells, cells_error) = mem.alloc[xlsx.Cell](a, wide)
+        if cells_error != ok { ret (zero, cells_error) }
+        var k = 0usize
+        while k < wide {
+            cells[k] = xlsx.text_cell(rows[r][k])
+            if r != 0usize && rows[r][k].len != 0usize {
+                let (number, number_error) = str.parse_f64(rows[r][k])
+                if number_error == ok { cells[k] = xlsx.number_cell(number) }
+            }
+            k += 1usize
+        }
+        grid_cells[r] = cells[0usize..wide]
+        r += 1usize
+    }
+    let (sheets, sheets_error) = mem.alloc[xlsx.Sheet](a, 1usize)
+    if sheets_error != ok { ret (zero, sheets_error) }
+    sheets[0usize] = xlsx.Sheet { name: "Cards", grid: grid_cells[0usize..rows.len] }
+    let (layouts, layouts_error) = mem.alloc[book.Layout](a, 1usize)
+    if layouts_error != ok { ret (zero, layouts_error) }
+    var layout = book.no_layout()
+    layout.bold_header = true
+    layouts[0usize] = layout
+    let (package, package_error) = book.encode(a, sheets[0usize..1usize], layouts[0usize..1usize])
+    ret (package, package_error)
+}
+
+// Export > PDF: the shown rows as a ruled table over A4 pages (595 x 842 pt), columns of equal width.
+fn export_pdf(a: *mem.Arena, grid: *Grid, limit: usize) -> (str, err) {
+    let (rows, wide, rows_error) = export_rows(a, grid, limit, true)
+    if rows_error != ok { ret ("", rows_error) }
+    if wide == 0usize { ret ("", control.TooLarge) }
+    let per_page = 44usize
+    let pages = (rows.len + per_page - 1usize) / per_page
+    let (d, d_error) = pdfw.document(a, pages + 1usize, 4194304usize, 595.0, 842.0, "MTG Studio")
+    if d_error != ok { ret ("", d_error) }
+    var doc = d
+    let (widths, widths_error) = mem.alloc[f64](a, wide)
+    if widths_error != ok { ret ("", widths_error) }
+    // the grid's column widths, scaled to the 510 pt between the margins
+    var total: f64 = 0.0
+    var w = 0usize
+    var shown = 0usize
+    while w < grid.specs.len {
+        if grid.specs[w].kind != CellKind.Indicator && grid.specs[w].title.len != 0usize && shown < wide {
+            widths[shown] = f64(grid.specs[w].width) + 8.0
+            total += widths[shown]
+            shown += 1usize
+        }
+        w += 1usize
+    }
+    w = 0usize
+    while w < wide {
+        widths[w] = widths[w] * 510.0 / total
+        w += 1usize
+    }
+    var from = 0usize
+    while from < rows.len {
+        var to = from + per_page
+        if to > rows.len { to = rows.len }
+        if pdfw.begin_page(&doc) != ok { ret ("", control.TooLarge) }
+        let (_bottom, table_error) = pdfw.put_table(&doc, 42.0, 42.0, widths[0usize..wide], rows[from..to], 7.0, 12.0, 2.0, true, pdfw.black(), pdfw.rgb(160u8, 160u8, 160u8))
+        if table_error != ok { ret ("", table_error) }
+        if pdfw.end_page(&doc) != ok { ret ("", control.TooLarge) }
+        from = to
+    }
+    let (document, document_error) = pdfw.finish(a, &doc)
+    ret (document, document_error)
 }
 
 // Copy Card Name (v3's Ctrl+F9): the search column text of the current row, empty with none.
