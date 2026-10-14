@@ -2263,7 +2263,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
 }
 
 // A row's tap reporting its key; a caller may add one double-tap command.
-type RowPick = struct { key: widget.Key, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool }
+type RowPick = struct { key: widget.Key, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, runtime: *widget.Runtime, drag: u64, dropped: widget.Change[u64], has_drop: bool }
+
+// A row dragged out of a data grid carries this tag plus its key (v3 drags cards between its grids).
+fn row_drag_tag() -> u64 { ret 4398046511104u64 }
 
 fn submit_semantic_action(ctx: *void, action: u32) -> err {
     if action != accessibility.ACTION_PRESS { ret ok }
@@ -2280,7 +2283,14 @@ fn row_pick_gesture(ctx: *void, g: widget.Gesture) -> err {
     let r = mem.cast[*RowPick](ctx)
     if g.tag == .Tap { ret widget.fire_change[widget.Key](r.pick, r.key) }
     if g.tag == .DoubleTap && r.has_double { ret widget.fire_change[widget.Key](r.double, r.key) }
-    ret ok
+    if g.tag == .DragStart && r.drag != 0u64 { ret widget.begin_drag(r.runtime, r.drag) }
+    switch g {
+    case .Drop as d:
+        if r.has_drop && d.payload > row_drag_tag() && d.payload < 2u64 * row_drag_tag() && d.payload != r.drag { ret widget.fire_change[u64](r.dropped, d.payload - row_drag_tag()) }
+        ret ok
+    default:
+        ret ok
+    }
 }
 
 // One row of cells `extent` tall: the cells sized by their columns in a row, the
@@ -2389,10 +2399,10 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     }
     let (picks, picks_error) = mem.alloc[RowPick](a, 1usize)
     if picks_error != ok { ret (zero, TooLarge) }
-    picks[0usize] = RowPick { key: row_key, pick: pick, double: double, has_double: has_double }
+    picks[0usize] = RowPick { key: row_key, pick: pick, double: double, has_double: has_double, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
     if disabled {
         var inert: widget.Change[widget.Key] = zero
-        picks[0usize] = RowPick { key: row_key, pick: inert, double: inert, has_double: false }
+        picks[0usize] = RowPick { key: row_key, pick: inert, double: inert, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
     }
     let state = control.control_state(t, row_key, !disabled, selected)
     var fill = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
@@ -2437,6 +2447,22 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     control.focus_look(t)
     var gestures = 5u8
     if owned { gestures = 4u8 }
+    // v3 drags cards between its grids: a data row of the measured look is a drag source and a drop target
+    var data_row = false
+    if look.on && look.row_drag && !owned {
+        data_row = true
+        if mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8 { data_row = false }
+    }
+    if data_row {
+        picks[0usize].runtime = t.runtime
+        picks[0usize].drag = row_drag_tag() + row_key
+        gestures = gestures | 2u8
+        if look.has_row_drop {
+            picks[0usize].dropped = look.row_drop
+            picks[0usize].has_drop = true
+            gestures = gestures | 8u8
+        }
+    }
     region[0usize] = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&picks[0usize]), invoke: row_pick_gesture }, gestures: gestures, enabled: true, focusable: !owned }, row_style, lined[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = role
@@ -2494,7 +2520,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32 }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4844,7 +4870,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         // The twisty, or its blank for a leaf.
         var twisty = widget.box(0u64, control.sized_style(24.0, 24.0), zero)
         if entry.branch {
-            toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false }
+            toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
             var kind: control.GlyphKind = .ChevronRight
             if open && t.tokens.motion.reduced { kind = .ChevronDown }
             // The 18 icon (its 1.5 inset kept) centred in the 24 box.
@@ -4937,7 +4963,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             var no_pick: widget.Change[widget.Key] = zero
             row_pick = no_pick
         }
-        picks[i] = RowPick { key: entry.key, pick: row_pick, double: toggle, has_double: entry.branch }
+        picks[i] = RowPick { key: entry.key, pick: row_pick, double: toggle, has_double: entry.branch, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
         var made: widget.Node = zero
         if tabled {
             let (cells, cells_error) = mem.alloc[widget.Node](a, columns.len)
@@ -5054,7 +5080,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         if has_child { child_key = visible[i + 1usize].key }
         keys[i] = TreeKeys { key: entry.key, open: open, branch: entry.branch, has_parent: has_parent, has_child: has_child, parent: control.FocusTo { runtime: t.runtime, key: parent_key }, child: control.FocusTo { runtime: t.runtime, key: child_key }, toggle: toggle, pick: pick }
         // (D1342) F2 asks to rename the node.
-        renames[i] = RowPick { key: entry.key, pick: options.rename, double: zero, has_double: false }
+        renames[i] = RowPick { key: entry.key, pick: options.rename, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
         let base = 9usize * i
         shortcuts[base] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_collapse } }
         shortcuts[base + 1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_expand } }
