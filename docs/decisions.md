@@ -39638,3 +39638,7 @@ v3's navigator thumb (the grey bar after Row n of m) is 13 px tall and 141 px wi
 ## D5012 - G012: why columns grow while scrolling sideways
 
 The column shrink seen while scrolling (D2502) is the shifted body being clamped to the pane: a positioned child with a negative left (or a negative margin, or a min_width, all tried) is laid out at most pane + offset wide, so at offset 0 the columns are squeezed to the pane and grow as the offset grows. Hosting the body in a horizontal `widget.scroll` with the grid's own offset keeps the columns at their natural widths (HS4-natural-widths-experiment-v5.png) but carries the table's own vertical scroll bar to the end of the content, out of view; v3 keeps it fixed at the right edge. Not landed: the vertical bar must first be drawn outside the shifted body. The shipped build is unchanged.
+
+## D5013 - G012: columns keep their widths while scrolling sideways
+
+D4073's open piece, landed. The shifted body is hosted in a horizontal `widget.scroll` with the grid's own offset, so the columns stay at their natural widths (no shrink to the pane); the table's vertical bar track is drawn over the table at the pane's right edge (`TableLook.bar_margin`: `collection` stands it in a stack at `width + bar_margin` instead of at the end of the columns; the margin is the offset, read when the table is built, plus a base from the pane measured by the layout pass). HS5-natural-widths-fixed-bar-v5.png: scrolled partway and to the end, the bar stays put. ui_datagrid, ui_gridrules, ui_collection and two collections suites pass.

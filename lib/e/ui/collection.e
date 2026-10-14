@@ -2522,7 +2522,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32 }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32 }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4294,7 +4294,19 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         if bar_error != ok { ret (zero, TooLarge) }
         bar_parts[0usize] = column_node[0usize]
         bar_parts[1usize] = widget.region(track_key, widget.Region { gesture: zero, gestures: 4u8, enabled: true, focusable: false }, track_style, thumb_holder[0usize..1usize])
-        column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bar_parts[0usize..2usize])
+        if lk.bar_margin != 0.0 {
+            // a table shifted sideways keeps its bar at the view's right edge: the track stands over the
+            // table (out of the row, which would be shortened by a negative margin) at the offset's place
+            let (over_held, over_error) = mem.alloc[widget.Node](a, 1usize)
+            if over_error != ok { ret (zero, TooLarge) }
+            over_held[0usize] = bar_parts[1usize]
+            bar_parts[1usize] = widget.positioned(0u64, width + lk.bar_margin, 0.0, style.defaults(), over_held[0usize..1usize])
+            var over_style = style.defaults()
+            over_style.width = style.Length { Px: width + lk.scroll_width + 18.0 }
+            column_node[0usize] = widget.stack(0u64, over_style, bar_parts[0usize..2usize])
+        } else {
+            column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bar_parts[0usize..2usize])
+        }
     }
     // (D1283) Wider than its view, the table scrolls sideways (keyed
     // `key + 2097152`), its overlay thumb under the body.

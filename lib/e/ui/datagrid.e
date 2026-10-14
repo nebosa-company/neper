@@ -228,6 +228,7 @@ fmt_open: bool,
     filter_op_icons: [12]scene.TextureId,
     has_filter_op_icons: bool,
     hoff: f32,
+    bar_shift: f32,
     hgrab: f32,
     hon: bool,
     hcontent: f32,
@@ -6879,6 +6880,13 @@ fn htrack(grid: *const Grid) -> f32 {
     ret track
 }
 
+// Where the vertical bar stands in a sideways-shifted body, relative to the end of the columns: the
+// offset (read now: it moves between frames) plus the base measured with the pane.
+fn bar_margin_of(grid: *const Grid) -> f32 {
+    if !grid.hon { ret 0.0 }
+    ret grid.hoff + grid.bar_shift
+}
+
 fn hthumb_width(grid: *const Grid) -> f32 {
     var w = htrack(grid)
     if grid.hcontent > 0.0 { w = htrack(grid) * grid.hpane / grid.hcontent }
@@ -6894,14 +6902,13 @@ fn hshift(a: *mem.Arena, grid: *Grid, node: widget.Node, content: f32, h: f32) -
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, control.TooLarge) }
     held[0usize] = widget.box(0u64, inner_style, one(a, node))
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 1usize)
-    if layers_error != ok { ret (zero, control.TooLarge) }
-    layers[0usize] = widget.positioned(0u64, 0.0 - grid.hoff, 0.0, style.defaults(), held[0usize..1usize])
+    // a scroll view lets the content keep its columns' widths (a positioned child is clamped to the pane
+    // plus the offset and the columns shrink, D2502); the offset is the grid's own
     var clip = style.defaults()
     clip.width = style.Length { Percent: 100.0 }
     clip.height = style.Length { Px: h }
     clip.overflow = .Clip
-    ret (widget.stack(0u64, clip, layers[0usize..1usize]), ok)
+    ret (widget.scroll(grid.key + 3960u64 + u64(h), widget.Scroll { axis: .Horizontal, offset: grid.hoff, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: gl.rgb(0x000000u32), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, clip, held[0usize..1usize]), ok)
 }
 
 fn on_hthumb(ctx: *void, g: widget.Gesture) -> err {
@@ -6954,8 +6961,12 @@ fn measure_hscroll(grid: *Grid, theme: *const control.Theme) {
         let most = content - pane
         if grid.hoff > most { grid.hoff = most }
         if grid.hoff < 0.0 { grid.hoff = 0.0 }
+        // the vertical bar stays at the pane's right edge: where it would stand, at the end of the
+        // columns, moved by the offset and the pane's width
+        grid.bar_shift = pane - grid.look.scroll_width - (content - 18.0)
     } else {
         grid.hoff = 0.0
+        grid.bar_shift = 0.0
     }
 }
 
@@ -7862,7 +7873,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             if made_filter_error != ok { ret (zero, made_filter_error) }
             v3_filter = made_filter
         }
-        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 28.0, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 28.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     // group footers are taller: the list of the entries that are
     if has_extras(grid) && grid.look.on {
