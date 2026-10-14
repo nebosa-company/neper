@@ -2626,4 +2626,5 @@ D4043	374	G012: the wheel over the horizontal thumb
 D4044	796	G012: the columns grow while the table scrolls
 D4045	834	G012: the table's own sideways scroll is not the answer here
 D4046	972	G012: v3's Format... dialog recorded, not built
-D4047	754	G012: a gradient per data bar overruns the frame
+D4047	755	G012: a gradient per data bar overruns the frame
+D4048	676	G012: a gradient brush in a cell breaks the row build, whatever its stops
