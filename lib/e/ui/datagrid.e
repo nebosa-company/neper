@@ -160,6 +160,9 @@ dz_ready: bool,
 dz_style: u8,
 dz_dirty: bool,
 dz_dlg: u8,
+dz_title: [48]u8,
+dz_title_len: usize,
+dz_title_set: bool,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
 pv_wide: u8,
@@ -5032,7 +5035,9 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if widths_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
     while k < shown {
-        widths[k] = across * zoom / f32(shown)
+    let (heading_text, heading_text_error) = report_title(a, grid)
+    if heading_text_error != ok { ret (zero, heading_text_error) }
+    let (heading, heading_error) = flat_text(a, grid, heading_text, gl.rgb(0x000000u32))
         k += 1usize
     }
     let (heading, heading_error) = flat_text(a, grid, "Collection", gl.rgb(0x000000u32))
@@ -10380,6 +10385,11 @@ fn dz_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     area.border = style.Border { width: 1.0, color: gl.rgb(0xC8C8C8u32) }
     area.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     rows[3usize] = widget.box(0u64, area, one(a, widget.padded(0u64, 4.0, 4.0, 0.0, 0.0, style.defaults(), one(a, words))))
+    if grid.dz_dlg == 1u8 {
+        let (title_field, title_field_error) = dz_title_field(a, grid)
+        if title_field_error != ok { ret (zero, title_field_error) }
+        rows[3usize] = widget.padded(0u64, 8.0, 6.0, 0.0, 0.0, style.defaults(), one(a, title_field))
+    }
     let (ok_button, ok_error) = dz_dialog_button(a, grid, "OK", &close[0usize], grid.key + MENU_KEY + 851250u64)
     if ok_error != ok { ret (zero, ok_error) }
     let (cancel_button, cancel_error) = dz_dialog_button(a, grid, "Cancel", &close[0usize], grid.key + MENU_KEY + 851251u64)
@@ -10393,4 +10403,52 @@ fn dz_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..5usize]), ok)
+}
+
+// The report's title: what Title Properties holds, "Collection" until it has been opened.
+fn report_title(a: *mem.Arena, grid: *const Grid) -> (str, err) {
+    if !grid.dz_title_set { ret ("Collection", ok) }
+    let (b, b_error) = str.builder(a, 56usize)
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    var i = 0usize
+    while i < grid.dz_title_len {
+        if str.push_byte(&sb, grid.dz_title[i]) != ok { ret ("", control.TooLarge) }
+        i += 1usize
+    }
+    ret (str.done(&sb), ok)
+}
+
+fn on_title_text(ctx: *void, value: str) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    var n = value.len
+    if n > 48usize { n = 48usize }
+    var i = 0usize
+    while i < n {
+        grid.dz_title[i] = value[i]
+        i += 1usize
+    }
+    grid.dz_title_len = n
+    grid.dz_title_set = true
+    ret ok
+}
+
+// The text area of Title Properties: an editable field seeded with "Card Pool".
+fn dz_title_field(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    if !grid.dz_title_set {
+        var i = 0usize
+        let seed = "Card Pool"
+        while i < seed.len {
+            grid.dz_title[i] = seed[i]
+            i += 1usize
+        }
+        grid.dz_title_len = seed.len
+    }
+    var options = control.field_options()
+    options.rows = 12u32
+    options.filled = false
+    options.width = 550.0
+    options.height = 300.0
+    let (field, field_error) = control.text_field(a, grid.key + MENU_KEY + 851260u64, grid.theme, "", grid.dz_title[0usize..48usize], grid.dz_title_len, widget.Change[str] { ctx: mem.cast[*void](grid), invoke: on_title_text }, zero, options)
+    ret (field, field_error)
 }
