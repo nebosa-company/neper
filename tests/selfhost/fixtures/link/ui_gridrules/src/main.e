@@ -239,6 +239,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_pt, pt_error) = gr.add(a, &rs_pt, ptile)
     if pt_error != ok || gr.refresh(&rs_pt, a) != ok { os.exit(151) }
     if !near(gr.format(&rs_pt, 1usize, C_CMC).bar, 0.0f32) || !near(gr.format(&rs_pt, 5usize, C_CMC).bar, 1.0f32) { os.exit(152) }
+    // Bar direction Right To Left (the style window) reaches the cell's look
+    if gr.format(&rs_pt, 5usize, C_CMC).bar_rtl { os.exit(156) }
+    var rtl = gr.rule(C_CMC, gr.Kind.Bar)
+    rtl.fill = paint.rgba(0.0f32, 0.0f32, 1.0f32, 1.0f32)
+    rtl.bar_rtl = true
+    let (made_rtl, made_rtl_error) = gr.create(a, &t, 2usize)
+    if made_rtl_error != ok { os.exit(157) }
+    var rs_rtl = made_rtl
+    let (_rtl, rtl_error) = gr.add(a, &rs_rtl, rtl)
+    if rtl_error != ok || gr.refresh(&rs_rtl, a) != ok { os.exit(158) }
+    if !gr.format(&rs_rtl, 5usize, C_CMC).bar_rtl { os.exit(159) }
     // the bar's Fill mode Solid and Border style reach the cell's format
     var styled = gr.rule(C_CMC, gr.Kind.Bar)
     styled.bar_solid = true

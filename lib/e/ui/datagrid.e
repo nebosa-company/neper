@@ -1959,6 +1959,7 @@ fn on_rule_act(ctx: *void, g: widget.Gesture) -> err {
         }
         if act.kind == 5u8 || act.kind == 6u8 {
             grid.wiz_open = true
+            grid.fmt_open = false
             raise_window(grid, 2u8)
             grid.wiz_type = 0u8
             grid.has_wiz_target = false
@@ -3213,6 +3214,7 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         r.bar_only = t == 0u8 && grid.wiz_bar_only
         r.bar_solid = t == 0u8 && (grid.wiz_bar_style & 1u8) != 0u8
         r.bar_border = t == 0u8 && (grid.wiz_bar_style & 2u8) != 0u8
+        r.bar_rtl = t == 0u8 && (grid.wiz_bar_style & 4u8) != 0u8
         if t <= 3u8 {
             // Minimum and Maximum of the wizard: Lowest / Highest Value, or a number typed
             if grid.wiz_min_number && grid.wiz_min_len > 0usize {
@@ -3338,6 +3340,17 @@ fn on_fmt_border(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
+fn on_fmt_direction(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.wiz_bar_style = grid.wiz_bar_style ^ 4u8
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 fn on_fmt_close(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
     switch g {
@@ -3406,7 +3419,9 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if e2 != ok { ret (zero, e2) }
     let (c3, e3) = fmt_choice(a, grid, "Border style:", border, grid.key + MENU_KEY + 850361u64, on_fmt_border, true)
     if e3 != ok { ret (zero, e3) }
-    let (c4, e4) = fmt_choice(a, grid, "Bar direction:", "Context", 0u64, on_fmt_close, false)
+    var direction = "Context"
+    if (grid.wiz_bar_style & 4u8) != 0u8 { direction = "Right To Left" }
+    let (c4, e4) = fmt_choice(a, grid, "Bar direction:", direction, grid.key + MENU_KEY + 850364u64, on_fmt_direction, true)
     if e4 != ok { ret (zero, e4) }
     let (c5, e5) = fmt_caption(a, grid, "Positive Bar Appearance", 0x000000u32, 12.0)
     if e5 != ok { ret (zero, e5) }
@@ -6212,9 +6227,16 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
             if has_head && bar_stops_error == ok {
                 bar_stops[0usize] = paint.Stop { offset: 0.0, color: look.bar_color }
                 bar_stops[1usize] = paint.Stop { offset: 1.0, color: paint.rgba(1.0, 1.0, 1.0, 1.0) }
-                bar.background = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: head_box.x, y: 0.0 }, end: geometry.Point { x: head_box.x + bar_length, y: 0.0 }, stops: bar_stops[0usize..2usize] } }
+                if look.bar_rtl {
+                    let right_edge = head_box.x + head_box.width
+                    bar.background = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: right_edge, y: 0.0 }, end: geometry.Point { x: right_edge - bar_length, y: 0.0 }, stops: bar_stops[0usize..2usize] } }
+                } else {
+                    bar.background = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: head_box.x, y: 0.0 }, end: geometry.Point { x: head_box.x + bar_length, y: 0.0 }, stops: bar_stops[0usize..2usize] } }
+                }
             }
         }
+        // Bar direction Right To Left (v3): the bar starts where the unfilled part ends
+        if look.bar_rtl { bar.margin.left = style.Length { Percent: 100.0 - look.bar * 100.0 } }
         layers[count] = widget.box(0u64, bar, zero)
         count += 1usize
     }

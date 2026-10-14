@@ -2285,4 +2285,5 @@ D2521	844	G012: v3's "Use a formula" rule, one comparison
 D2522	982	G012: the Grid struct outgrew something; the background picture is withdrawn, the formula rule is live
 D2523	714	G012: correction to D2522, the background picture breaks the wizard by its drawing
 D2524	912	G012: the background picture, once `build_parts` stops holding the locals
-D5006	719	G012: Format... on a data bar opens the Data Bar Rule Style Settings window
+D5006	720	G012: Format... on a data bar opens the Data Bar Rule Style Settings window
+D5007	788	G012: Bar direction in the Data Bar Rule Style Settings window
