@@ -39192,3 +39192,7 @@ DevExpress's column quick customization has a "(Sorted)" entry (ColumnsQuickCust
 ## D2420 — G012: the current row of a grid without the focus is framed in near black
 
 On v3's collection grid with the card pool focused the current row is #D5E4EE inside a one-pixel near-black frame (#212121 measured at its top edge), where a focused grid's selection has the #83878B line. A grid without the focus (D3950's pale selection) now draws that frame as well (B11-unfocused-frame-v5.png: the collection's current row with its editor buttons); the fixture's P006 probe expects it, its grid never having the focus.
+
+## D2421 — G012: closing the per-cell focus rectangle by v3's own settings
+
+v3's grids set `OptionsSelection.CellSelect := false` (docs/grid.md section 2.3, "Multi-select, row-select"), so DevExpress draws no frame around a focused cell: the selection is the whole row (the near-black frame of D2420 on a grid without the focus, the #83878B line on one with it). There is nothing further to match; the item "a per-cell focus rectangle" is closed by that setting, not by a recording. The group row, which is not a data row, keeps v3's dotted focus rectangle: recorded in S100-v3-card-pool-grouped.png, not drawn yet. Two items stay structural and documented: the group footer's 29 px height (the grid's virtual list has one row extent) and the hint tooltip's 500 ms hover clock (the runtime's, verified live).
