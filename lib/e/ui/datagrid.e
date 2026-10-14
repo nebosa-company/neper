@@ -243,6 +243,8 @@ wiz_axis_color: u8,
     quick_y: f32,
     header_icons: [9]scene.TextureId,
     has_header_icons: bool,
+    align_icons: [3]scene.TextureId,
+    has_align_icons: bool,
     filter_op_icons: [12]scene.TextureId,
     has_filter_op_icons: bool,
     hoff: f32,
@@ -962,6 +964,12 @@ type MenuPick = struct { grid: *Grid, id: u8, spec: usize }
 // Columns... after them. `commands` must outlive the grid's builds.
 // The pictures of the header popup, in order: sort ascending, descending, clear, group by field,
 // group by box, footer, group footers, field chooser, best fit.
+// The pictures of the Alignment submenu: Align Left, Align Right, Align Center.
+fn set_align_menu_icons(grid: *Grid, icons: [3]scene.TextureId) {
+    grid.align_icons = icons
+    grid.has_align_icons = true
+}
+
 fn set_header_menu_icons(grid: *Grid, icons: [9]scene.TextureId) {
     grid.header_icons = icons
     grid.has_header_icons = true
@@ -1654,6 +1662,10 @@ fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
             if q == 1usize { slot_value = 3u8 }
             if q == 2usize { slot_value = 2u8 }
             commands[q].checked = slot_value == current
+            if grid.has_align_icons {
+                commands[q].has_picture = true
+                commands[q].picture = grid.align_icons[q]
+            }
             q += 1usize
         }
         ret (commands[0usize..3usize], ok)
