@@ -2306,4 +2306,5 @@ D5023	658	G012: Page Setup Header / Footer and Scaling tabs
 D5024	315	G012: the Print group of the card menu in v3's order
 D5025	711	G012: popup widths measured against v3
 D5026	337	G012: the Alignment submenu in v3's words and order
-D5027	248	G012: pictures in the Alignment submenu
+D5027	249	G012: pictures in the Alignment submenu
+D5028	262	G012: the parent of an open submenu is light blue
