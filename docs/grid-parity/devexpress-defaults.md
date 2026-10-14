@@ -53,3 +53,13 @@ only under an expanded group. A group footer is the same `TcxGridFooterViewInfo`
 footer, so its height follows the footer font as in the section above; v3's 29 px (D2423) is the
 measured value of that, with the extra 10 px over a data row coming from the footer panel's content
 offsets and borders, which were not summed from the painter.
+
+## Navigator
+
+The grid navigator is `TcxGridViewNavigator` over `cxNavigator.pas` (`ExpressEditors Library`): the
+button set is the `NBDI_*` indexes (First, PriorPage, Prior, Next, NextPage, Last, Insert, Append,
+Delete, Edit, Post, Cancel, Refresh, Save, Filter...), and MTG Studio shows First, PriorPage, Prior,
+Next, NextPage, Last plus its own Filter button (docs/grid.md section 2.3), which is the order neper
+draws. The button width and the bar height come from the button glyph size plus the painter's
+navigator offsets; they were not found as constants in `cxNavigator.pas`, so neper keeps the measured
+recordings (the 18 px bar of the v3 captures).
