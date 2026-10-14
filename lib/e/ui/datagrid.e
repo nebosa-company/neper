@@ -5676,7 +5676,7 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
             op_submits[oi] = widget.Submit { ctx: mem.cast[*void](&op_picks[oi]), invoke: on_filter_op }
             var sign_node: widget.Node = zero
             if grid.has_filter_op_icons {
-                let (pic, pic_error) = control.image(a, 0u64, grid.filter_op_icons[oi], 26.0, 20.0, .Contain, "")
+                let (pic, pic_error) = control.image(a, 0u64, grid.filter_op_icons[oi], 22.0, 18.0, .Contain, "")
                 if pic_error != ok { ret (zero, pic_error) }
                 sign_node = pic
             } else {
@@ -5688,9 +5688,10 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
             if words_node_error != ok { ret (zero, words_node_error) }
             let (op_parts, op_parts_error) = mem.alloc[widget.Node](a, 2usize)
             if op_parts_error != ok { ret (zero, control.TooLarge) }
-            op_parts[0usize] = widget.padded(0u64, 8.0, 2.0, 0.0, 0.0, control.sized_style(40.0, 26.0), one(a, sign_node))
-            op_parts[1usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one(a, words_node))
-            var op_style = control.sized_style(250.0, 26.0)
+            // measured on v3 (FR2): 280 px wide, 33 px rows at 1.5 px a unit
+            op_parts[0usize] = widget.padded(0u64, 6.0, 1.0, 0.0, 0.0, control.sized_style(36.0, 22.0), one(a, sign_node))
+            op_parts[1usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one(a, words_node))
+            var op_style = control.sized_style(187.0, 22.0)
             if u8(oi) == grid.filter_ops[pop_spec] { op_style.background = paint.Brush { Solid: gl.rgb(0x99D1FFu32) } }
             let (op_line, op_line_error) = mem.alloc[widget.Node](a, 1usize)
             if op_line_error != ok { ret (zero, control.TooLarge) }
