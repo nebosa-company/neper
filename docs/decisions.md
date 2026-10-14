@@ -41189,3 +41189,7 @@ Settles D4047 to D4049. The fixture's exit 95 is its exit 351 (`wide_blue == 0 |
 ## D4051 - G012: a gradient bar anchored at the cell's x passes the fixtures and kills the sample
 
 Following D4050: with the bar's gradient start and end moved to the column header's left edge (`keyed_bounds` of the header, the frame before) and the fixture's pixel check made colour-independent (`is_inked`), all four grid fixtures pass. In the running sample the same build ends with "the window loop failed" as soon as a Data Bar rule exists, so some frame path (scene or build) fails with many gradient bars on a page that the harness's few rows do not reach. Reverted, not adopted; the bars stay solid. The check against the harness's row count is the next step.
+
+## D4052 - G012: the Enter key ended the program
+
+The cause of the sample's "window loop failed" (D4047 to D4051 chased it as the gradient bar): the Enter shortcut of D4038 answers `InvalidTree` when the next row is not in the tree to take the focus, and an error out of a shortcut ends the window loop. The sample was killed by pressing Enter with the Rules window open, with solid bars and no gradient at all. `on_row_enter` now discards the navigation's error. The sample prints the failing error's name (DuplicateKey, InvalidTree, TooLarge...) with its "window loop failed". This also removes the premise of D4051: a gradient bar anchored at the cell's x (D4051) passes the four grid fixtures and may be adopted; not done here. The four grid fixtures pass.
