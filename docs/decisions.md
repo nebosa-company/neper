@@ -41429,3 +41429,6 @@ Under "Custom color" the popup has twelve hue chips (red, orange, yellow ... mag
 
 ## D4116 - G012: pictures on the View menu's entries
 The sample gives the View menu v3's pictures from the same image list as its popups (icons folder, `view_icons`; the file number is the list position plus the gaps, not the sheet index): both sort orders, Sort..., Clear Sort Order, Legality, Card Rules, Show Columns, Best Fit, Auto Width, Group Box, Expand, Collapse, Header, Indicator, Grid Lines, Summary Footer and Navigator; a ticked entry keeps v3's pale blue box behind its picture (VM9-view-menu-pictures-v5.png; Show Summary Footer uses a stand-in picture, the Sigma of v3 is not in the extracted set). A picture that fails to load must not stop the loader: a zero texture made the menu's tree invalid, and an early return left the other pictures unloaded. Library unchanged; the change is the sample's main.e (mtg.studio repo).
+
+## D4117 - G012: bold headings in the View menu
+The headings (Sort Order, Group By, Cards) are drawn twice, the second copy 0.8 px to the right (`faux_bold`): v3's bold look without a bold face, which the sample does not register and the layout cannot synthesize (VM10-view-menu-bold-headings-v5.png). Replaces the note in D4115 that bold needed a registered face; a real bold face would still be sharper.

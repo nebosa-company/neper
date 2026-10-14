@@ -5779,7 +5779,9 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
             if heading_error != ok { ret (zero, heading_error) }
             var head_style = control.sized_style(width - 2.0, row_h + 4.0)
             head_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
-            rows[n] = widget.padded(0u64, 10.0, 6.0, 0.0, 0.0, head_style, one(a, heading))
+            let (bold_heading, bold_heading_error) = faux_bold(a, grid, c.head, heading)
+            if bold_heading_error != ok { ret (zero, bold_heading_error) }
+            rows[n] = widget.padded(0u64, 10.0, 6.0, 0.0, 0.0, head_style, one(a, bold_heading))
             n += 1usize
             var head_rule = control.sized_style(width - 2.0, 1.0)
             head_rule.background = paint.Brush { Solid: gl.rgb(0xBCBCBCu32) }
@@ -9795,4 +9797,16 @@ fn hue_strip(a: *mem.Arena, grid: *Grid, taps: []SwatchTap) -> (widget.Node, err
         k += 1usize
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..12usize]), ok)
+}
+
+// Bold words from one face: the text drawn twice, the second copy a pixel to the right (the sample
+// registers a single face per font, and the layout has no synthetic bold).
+fn faux_bold(a: *mem.Arena, grid: *Grid, text: str, first: widget.Node) -> (widget.Node, err) {
+    let (second, second_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if second_error != ok { ret (zero, second_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, control.TooLarge) }
+    layers[0usize] = first
+    layers[1usize] = widget.positioned(0u64, 0.8, 0.0, style.defaults(), one(a, second))
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
