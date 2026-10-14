@@ -41061,3 +41061,7 @@ Clicking the sign of a filter row cell opens v3's twelve operators (Equals, Does
 ## D4019 - G012: typing into the filter row is not a search
 
 The grid's incremental-search shortcuts also took the letters typed into a filter row editor: the first letter reached the field and the search together, the search jumped to a row and focused it, and the rest of the word went to the search (found by taking the application's filtering out: the field still kept only its first letter). `on_search_char` now ignores a letter while the focus is in the filter row's key range, so "bea" is typed whole and the application filters on it (FR5-filter-row-typed-v5.png: 960 of 120283). This was the focus loss of D4018. The four grid fixtures pass.
+
+## D4020 - G012: v3's operator pictures in the filter row
+
+The twelve operator pictures of v3's filter row list are cut from the recording FR2 (26 by 20, at the sizes v3 draws them) into the sample's icons folder (`fop_00.png` .. `fop_11.png`); `set_filter_operator_icons` hands them to the grid, which draws them in the operator list and as the sign of each filter cell, falling back to the text signs without them (FR6-filter-row-operator-icons-v5.png). The sample's `main.e` loads them and passes the operator on to the text columns' filter. The four grid fixtures pass.
