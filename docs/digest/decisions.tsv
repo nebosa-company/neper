@@ -2555,4 +2555,5 @@ D3973	909	G012: Card Rules shows the rules text under every card, no disclosure
 D3974	952	G012: the Sort dialog
 D3975	1156	G012: the Conditional Formatting Rules Manager
 D3976	1595	G012: the Advanced Filter (criteria editor)
-D3977	856	G012: one click on a favourite star flips it and makes the row current
+D3977	857	G012: one click on a favourite star flips it and makes the row current
+D3978	906	G012: the mouse wheel reaches the grid and turns three rows a notch

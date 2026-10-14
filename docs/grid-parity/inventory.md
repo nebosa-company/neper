@@ -53,7 +53,8 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Context menus by hit test | matched (cell, header, group box, quick, chooser) | C1-*-v3/v5 |
 | Keyboard: arrows, Page, Home/End over group rows | matched | P1-group-row-keys (D2425) |
 | Keyboard: Ins/Enter/Space add, Del remove (deck) | app | |
-| Mouse: wheel, hover preview | untested | wheel step and preview hover |
+| Mouse: wheel (3 rows a notch) | matched | W1-wheel (D2436) |
+| Mouse: hover preview | untested | |
 
 ## Data controller level
 
@@ -82,5 +83,5 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 1. The conditional formatting rules manager (dialog).
 3. Filter dialog / criteria editor, filter row pixel look.
 4. Image combo drop-down, check box, date edit editors.
-5. Drag and drop of cards between grids; mouse wheel step.
+5. Drag and drop of cards between grids.
 6. Export / copy as text / print.
