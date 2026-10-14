@@ -40,7 +40,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Header, indicator, auto width toggles | matched | V1 |
 | Cell end ellipsis | matched | every captured grid |
 | "No data" text | untested | |
-| Font size scale (Options > Grids > Font Size: Small, Medium, Large, Extra Large) | untested | dialog recorded (O1-options-grids-v3, O1-options-fontsize-v3); choosing Extra Large + OK did not change the open v3 window in my run, so the size change itself was not recorded |
+| Font size scale (Options > Grids > Font Size: Small, Medium, Large, Extra Large) | built (`set_font_size`, sample button) / differs (v3's own effect not recorded, scaling assumed points / 8) | FS1-font-size-v5, O1-options-fontsize-v3 (D2443) |
 | Options > Grids: Row Color (Against Card Color / Rarity / none), Show Foil Symbol | app | O1-options-grids-v3 |
 | Options > Grids: Incremental search from start / within | matched | `search_within` in the grid; S3, S5 |
 | Options > Grids: Enter key action (move to next column / next row) | untested | O1-options-grids-v3 |

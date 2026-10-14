@@ -2202,4 +2202,5 @@ D2438	1174	G012: cards dragged from one grid to another
 D2439	1268	G012: export and copy as text; the menu mnemonics keep their spaces
 D2440	1075	G012: the New Rule wizard of the rules manager
 D2441	642	G012: Copy Selected and Copy Card Name
-D2442	749	G012: Edit Rule and the column of a new rule
+D2442	750	G012: Edit Rule and the column of a new rule
+D2443	770	G012: the grid font size (Options > Grids > Font Size)
