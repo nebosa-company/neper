@@ -41456,3 +41456,6 @@ After a run's first check passed, another window (a browser) came in front mid-s
 
 ## D4125 - G012: "[Time Printed]" prints the time
 A header or footer cell that begins "[Ti" prints the time as H:MM (`time.to_time` of `time.now`); typing "[Ti" in the footer's left cell of Page Setup printed 23:42 at the left of the preview's footer (PP14-footer-time-typed-v5.png), which also shows typed cell text reaching the page. "[User Name]" is not built (the library has no user-name call); "[Page #]" and "[Date Printed]" were done (D4111).
+
+## D4126 - G012: a style can be picked in the Designer's Styles list
+A tap on a row of the Styles list highlights it (light blue) and turns Font..., Color..., Texture... and Clear black, as v3 enables them with a style picked; Restore Defaults and Save As stay grey (DZ-format-report-Styles-picked-v5.png: Content picked). The buttons still change nothing. Alt+P is not a gap of the library: the sample wires no keyboard shortcut at all, every shortcut in its menus is a label.

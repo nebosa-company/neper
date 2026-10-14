@@ -157,6 +157,7 @@ pv_design: bool,
 dz_tab: u8,
 dz_checks: u64,
 dz_ready: bool,
+dz_style: u8,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
 pv_wide: u8,
@@ -9912,6 +9913,7 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         if t.kind == 0u8 { t.grid.dz_tab = u8(t.value) }
+        if t.kind == 3u8 { t.grid.dz_style = u8(t.value) + 1u8 }
         if t.kind == 1u8 { t.grid.dz_checks = t.grid.dz_checks ^ (1u64 << u64(t.value)) }
         if t.kind == 2u8 {
             t.grid.print_open = false
@@ -10148,8 +10150,11 @@ fn dz_field(a: *mem.Arena, grid: *Grid, text: str, width: f32) -> (widget.Node, 
 fn dz_style_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (rows, rows_error) = mem.alloc[widget.Node](a, 13usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
+    let (picks, picks_error) = mem.alloc[DesignTap](a, 13usize)
+    if picks_error != ok { ret (zero, control.TooLarge) }
     var i = 0usize
     while i < 13usize {
+        picks[i] = DesignTap { grid: grid, kind: 3u8, value: i }
         let (name, name_error) = flat_text(a, grid, dz_style_name(i), gl.rgb(0x000000u32))
         if name_error != ok { ret (zero, name_error) }
         let (face, face_error) = flat_text(a, grid, "8 pt. Tahoma", gl.rgb(0x000000u32))
@@ -10164,7 +10169,8 @@ fn dz_style_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         cells[0usize] = widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, control.sized_style(104.0, 20.0), one(a, name))
         cells[1usize] = widget.box(0u64, strip, zero)
         cells[2usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one(a, face))
-        rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(250.0, 20.0), cells[0usize..3usize])
+        let row_line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, dz_row_style(grid, i), cells[0usize..3usize])
+        rows[i] = widget.region(grid.key + MENU_KEY + 851300u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(250.0, 20.0), one(a, row_line))
         i += 1usize
     }
     var frame = control.sized_style(250.0, 264.0)
@@ -10206,7 +10212,7 @@ fn dz_button_ink(i: usize) -> u32 {
 
 // A grey, inert button of the Styles tab (v3 enables them with a style picked).
 fn dz_grey_button(a: *mem.Arena, grid: *Grid, text: str, width: f32, top: f32) -> (widget.Node, err) {
-    let (words, words_error) = flat_text(a, grid, text, gl.rgb(0xA0A0A0u32))
+    let (words, words_error) = flat_text(a, grid, text, gl.rgb(dz_button_ink_for(grid, width)))
     if words_error != ok { ret (zero, words_error) }
     var box = control.sized_style(width, 24.0)
     box.background = paint.Brush { Solid: gl.rgb(0xF4F4F4u32) }
@@ -10291,4 +10297,23 @@ fn page_rows(grid: *const Grid) -> usize {
 fn if_f(c: bool, a: f32, b: f32) -> f32 {
     if c { ret a }
     ret b
+}
+
+// A row of the Styles list: light blue while picked.
+fn dz_row_style(grid: *const Grid, i: usize) -> style.Style {
+    var s = control.sized_style(250.0, 20.0)
+    if usize(grid.dz_style) == i + 1usize { s.background = paint.Brush { Solid: gl.rgb(0xCCE8FFu32) } }
+    ret s
+}
+
+// Font..., Color..., Texture... and Clear turn black once a style is picked (they still change nothing).
+fn dz_style_ink(grid: *const Grid) -> u32 {
+    if grid.dz_style != 0u8 { ret 0x000000u32 }
+    ret 0xA0A0A0u32
+}
+
+// The four 80 px buttons follow the picked style; Restore Defaults and Save As stay grey.
+fn dz_button_ink_for(grid: *const Grid, width: f32) -> u32 {
+    if width < 90.0 { ret dz_style_ink(grid) }
+    ret 0xA0A0A0u32
 }
