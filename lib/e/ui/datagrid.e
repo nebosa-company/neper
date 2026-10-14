@@ -60,6 +60,7 @@
 
 use e.mem
 use e.str
+use e.time
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.ui.collection
@@ -4772,6 +4773,12 @@ fn print_band(a: *mem.Arena, grid: *Grid, first: usize, lp: f32, across: f32, to
         let seeded = (grid.pv_cell_touched & (1u8 << u8(slot))) != 0u8
         if (!seeded && slot == 4usize) || (len >= 8usize && grid.pv_cell[slot * 24usize + 1usize] == 80u8 && grid.pv_cell[slot * 24usize + 2usize] == 97u8) {
             if str.push(&sb, "Page ") != ok || str.push_u64(&sb, u64(grid.pv_page + 1usize)) != ok { ret (zero, control.TooLarge) }
+            text = str.done(&sb)
+        } else if (!seeded && slot == 5usize) || (len >= 5usize && grid.pv_cell[slot * 24usize + 1usize] == 68u8 && grid.pv_cell[slot * 24usize + 2usize] == 97u8) {
+            let (stamp, stamp_error) = time.now()
+            if stamp_error != ok { ret (zero, stamp_error) }
+            let day = time.to_date(stamp)
+            if str.push_u64(&sb, u64(day.month)) != ok || str.push(&sb, "/") != ok || str.push_u64(&sb, u64(day.day)) != ok || str.push(&sb, "/") != ok || str.push_u64(&sb, u64(day.year)) != ok { ret (zero, control.TooLarge) }
             text = str.done(&sb)
         } else {
             var ch = 0usize

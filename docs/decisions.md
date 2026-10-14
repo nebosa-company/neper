@@ -41411,3 +41411,6 @@ The tick of the filter panel (blue = applied, grey = suspended) flips `filter_of
 
 ## D4110 - G012: header and footer cells align as v3 prints them
 The three cells of a printed header or footer sit left, centred and right across the printable width (`print_band`): the footer's "Page 1" is centred under the table (PP11-footer-centred-v5.png). "[Date Printed]" still prints as typed.
+
+## D4111 - G012: "[Date Printed]" prints the date
+A header or footer cell that begins "[Da" prints today's date as M/D/YYYY (`time.to_date` of `time.now`; `datagrid.e` now uses e.time), and an untouched footer's right cell defaults to it, as v3's (PP12-footer-date-v5.png: "Page 1" centred, 10/14/2026 at the right). "[Time Printed]", "[User Name]" and the other predefined functions are not built.
