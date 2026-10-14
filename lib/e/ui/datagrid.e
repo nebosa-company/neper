@@ -5279,6 +5279,8 @@ fn summary_text(a: *mem.Arena, s: ColumnSpec, summary: grp.Summary) -> (str, err
         kind = CellKind.Real
         if decimals == 0u8 { decimals = 1u8 }
     }
+    // v3 (main.vcl.form.pas, the summaries' OnGetText): an amount over 999 is written without cents
+    if kind == CellKind.Currency && value > 999.0 { decimals = 0u8 }
     if push_number(&sb, kind, decimals, value) != ok { ret ("", control.TooLarge) }
     ret (str.done(&sb), ok)
 }

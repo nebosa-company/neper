@@ -410,7 +410,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (sb_made, sb_error) = str.builder(&f, 40usize)
     if sb_error != ok { os.exit(36) }
     var sb = sb_made
-    if str.push(&sb, "$") != ok || str.push_f64_fixed(&sb, sum, 2u8) != ok { os.exit(37) }
+    // v3 writes an amount over 999 without cents
+    var cents: u8 = 2u8
+    if sum > 999.0 { cents = 0u8 }
+    if str.push(&sb, "$") != ok || str.push_f64_fixed(&sb, sum, cents) != ok { os.exit(37) }
     if testing.by_text(&harness, str.done(&sb)).count == 0usize { os.exit(38) }
 
     // 2. a header tap: the grid reports the sort, the application re-sorts, the next frame follows
