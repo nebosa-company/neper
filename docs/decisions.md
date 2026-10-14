@@ -41017,3 +41017,7 @@ Two defects found while checking a wizard colour scale live. (1) The Preview str
 ## D4008 - G012: secondary windows are raised by their title bar
 
 The four secondary windows (D2464) share one level; they are now stacked by when they were last touched: opening a window or tapping or dragging its title bar raises it (`raise_window`, `win_rank`), and the overlays are emitted from the back to the front. Live in the sample (WN2-raise-v5.png: the Sort window over the rules manager, then a tap on the manager's title brings it to the front). A tap inside a window's body does not raise it yet. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D4009 - G012: the wizard's Applies to is the library's select
+
+The Applies to box of the New Rule wizard stepped through the columns on each tap (a hand-drawn box). It is now `control.select` (the library's combo box: a field with a chevron, a popup list with the current entry checked), over the listed columns, with `on_wiz_pick` setting the column and `wiz_select_open` its state (WN3-library-select-v5.png). It has the Material look (floating label, 48 px entries) rather than v3's flat white list; the grid's own v3-flat select of D2446 is the other candidate, and the choice between the two is left to the owner. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
