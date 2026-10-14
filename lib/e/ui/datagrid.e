@@ -222,6 +222,11 @@ type Grid = struct {
     has_header_icons: bool,
     filter_op_icons: [12]scene.TextureId,
     has_filter_op_icons: bool,
+    hoff: f32,
+    hgrab: f32,
+    hon: bool,
+    hcontent: f32,
+    hpane: f32,
     nav_icons: [7]scene.TextureId,
     nav_disabled: [6]scene.TextureId,
     has_nav_icons: bool,
@@ -6368,6 +6373,88 @@ fn band_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 
 type NavPick = struct { grid: *Grid, kind: Nav }
 
+// ---- horizontal scrolling (v3: the columns wider than the pane scroll, a thumb in the navigator row) ----
+
+// The room of the thumb's track in the navigator row, after its buttons and the position text.
+fn htrack(grid: *const Grid) -> f32 {
+    var track = grid.hpane - 450.0
+    if track < 40.0 { track = 40.0 }
+    ret track
+}
+
+fn hthumb_width(grid: *const Grid) -> f32 {
+    var w = htrack(grid)
+    if grid.hcontent > 0.0 { w = htrack(grid) * grid.hpane / grid.hcontent }
+    if w < 24.0 { w = 24.0 }
+    ret w
+}
+
+// The node moved left by the scroll offset inside a clip of `h` high: the header, rows and footer
+// shift together; the content is `content` wide.
+fn hshift(a: *mem.Arena, grid: *Grid, node: widget.Node, content: f32, h: f32) -> (widget.Node, err) {
+    var inner_style = style.defaults()
+    inner_style.width = style.Length { Px: content }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, control.TooLarge) }
+    held[0usize] = widget.box(0u64, inner_style, one(a, node))
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 1usize)
+    if layers_error != ok { ret (zero, control.TooLarge) }
+    layers[0usize] = widget.positioned(0u64, 0.0 - grid.hoff, 0.0, style.defaults(), held[0usize..1usize])
+    var clip = style.defaults()
+    clip.width = style.Length { Percent: 100.0 }
+    clip.height = style.Length { Px: h }
+    clip.overflow = .Clip
+    ret (widget.stack(0u64, clip, layers[0usize..1usize]), ok)
+}
+
+fn on_hthumb(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .DragStart as at:
+        grid.hgrab = grid.hoff
+        ret ok
+    case .DragMove as d:
+        let travel = htrack(grid) - hthumb_width(grid)
+        if travel > 1.0 {
+            var next = grid.hgrab + d.delta.x * (grid.hcontent - grid.hpane) / travel
+            if next < 0.0 { next = 0.0 }
+            let most = grid.hcontent - grid.hpane
+            if next > most { next = most }
+            grid.hoff = next
+        }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// The measure of the scrolling for this frame: whether the columns outgrow the pane.
+fn measure_hscroll(grid: *Grid, theme: *const control.Theme) {
+    var content: f32 = 0.0
+    var c = 0usize
+    while c < grid.columns.len {
+        content += grid.columns[c].width
+        c += 1usize
+    }
+    content += 18.0
+    var pane: f32 = 0.0
+    if mem.address_of(theme.runtime) != 0usize {
+        let (box, has_box) = control.keyed_bounds(theme.runtime, grid.key + 3900u64)
+        if has_box { pane = box.width }
+    }
+    grid.hon = false
+    if grid.look.on && pane > 100.0 && content > pane + 1.0 && !grid.auto_width {
+        grid.hon = true
+        grid.hcontent = content
+        grid.hpane = pane
+        let most = content - pane
+        if grid.hoff > most { grid.hoff = most }
+        if grid.hoff < 0.0 { grid.hoff = 0.0 }
+    } else {
+        grid.hoff = 0.0
+    }
+}
+
 fn on_select_all(ctx: *void) -> err {
     select_all(mem.cast[*Grid](ctx))
     ret ok
@@ -6447,7 +6534,7 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if picks_error != ok { ret (zero, picks_error) }
     let (submits, submits_error) = mem.alloc[widget.Submit](a, 6usize)
     if submits_error != ok { ret (zero, submits_error) }
-    let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 9usize)
     if cells_error != ok { ret (zero, cells_error) }
     var at = 0usize
     while at < 6usize {
@@ -6515,7 +6602,19 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (funnel, funnel_node_error) = control.pressable_states(a, funnel_key, grid.theme, 3u8, "Filter", funnel_look, grid.has_filter_action, false, 0u32, 0u32, 0u64, &grid.filter_action, funnel_mark)
     if funnel_node_error != ok { ret (zero, funnel_node_error) }
     cells[7usize] = funnel
-    ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), cells[0usize..8usize]), ok)
+    var shown = 8usize
+    if grid.hon {
+        // v3's scroll bar: a dark grey thumb to the right of the funnel, as long as the pane is of the columns
+        var thumb = control.sized_style(hthumb_width(grid), 10.0)
+        thumb.background = paint.Brush { Solid: gl.rgb(0x808080u32) }
+        var room = htrack(grid) - hthumb_width(grid)
+        var left: f32 = 0.0
+        if grid.hcontent > grid.hpane && room > 0.0 { left = room * grid.hoff / (grid.hcontent - grid.hpane) }
+        thumb.margin = style.EdgeLengths { left: style.Length { Px: 14.0 + left }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 3u8, enabled: true, focusable: false }, thumb, zero)
+        shown = 9usize
+    }
+    ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), cells[0usize..shown]), ok)
 }
 
 fn navigator_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
@@ -7283,6 +7382,13 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     }
     let (body, body_error) = collection.table_with(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: on_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: on_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height, table_options)
     if body_error != ok { ret (zero, body_error) }
+    measure_hscroll(grid, theme)
+    var shown_body = body
+    if grid.hon {
+        let (shifted_body, shifted_body_error) = hshift(a, grid, body, grid.hcontent, body_height)
+        if shifted_body_error != ok { ret (zero, shifted_body_error) }
+        shown_body = shifted_body
+    }
     var part_count = 1usize
     let with_footer = grid.footer_visible && grid.g.specs.len != 0usize
     let with_bands = grid.bands.len != 0usize
@@ -7292,8 +7398,9 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     if with_bands { part_count += 1usize }
     if grid.navigator_visible { part_count += 1usize }
     if grid.group_box_visible { part_count += 1usize }
+    if grid.look.on { part_count += 1usize }
     if part_count == 1usize {
-        let (keyed_body, keyed_body_error) = with_keys(a, grid, body)
+        let (keyed_body, keyed_body_error) = with_keys(a, grid, shown_body)
         ret (keyed_body, keyed_body_error)
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, part_count)
@@ -7317,12 +7424,26 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         parts[at] = filter
         at += 1usize
     }
-    parts[at] = body
+    if grid.look.on {
+        // an unseen full-width rule whose width is the pane's, for the horizontal scroll range
+        var gauge = style.defaults()
+        gauge.width = style.Length { Percent: 100.0 }
+        gauge.height = style.Length { Px: 0.0 }
+        parts[at] = widget.box(grid.key + 3900u64, gauge, zero)
+        at += 1usize
+    }
+    parts[at] = shown_body
     at += 1usize
     if with_footer {
         let (footer, footer_error) = footer_row(a, grid)
         if footer_error != ok { ret (zero, footer_error) }
-        parts[at] = footer
+        if grid.hon {
+            let (shifted_footer, shifted_footer_error) = hshift(a, grid, footer, grid.hcontent, grid.row_height + 8.0)
+            if shifted_footer_error != ok { ret (zero, shifted_footer_error) }
+            parts[at] = shifted_footer
+        } else {
+            parts[at] = footer
+        }
         at += 1usize
     }
     if grid.navigator_visible {
