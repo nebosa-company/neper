@@ -115,3 +115,14 @@ Verified live 2026-10-14: a two colour scale created in the wizard with the whit
 | Wizard Format... (Data Bar Rule Style Settings) | recorded, not built | CF10 |
 | Horizontal scrolling with the thumb in the navigator row | partly (scrolls, wheel over the thumb; columns grow while scrolling, thumb track short) | HS1-HS3, D2493-D2503 |
 | PDF / Excel export, printing | not started | |
+
+
+## Added 2026-10-14, second pass (D2505-D2512)
+
+| Feature | Status | Evidence |
+|---|---|---|
+| Data bar fill: gradient to white along the bar (v3's default Fill mode) | matched in code and fixtures; faint at the narrow CMC cell, fade not yet seen at a usable width | D2511, DB1 |
+| Rules ignore values above a bound (Gleemax) | done, sample sets it on CMC rules | D2512 |
+| Data bar border, negative bars, axis; Format... dialog | recorded (CF10), not built; the pool has no negative values | D2504 |
+| Enter key must not end the program | fixed | D2510 |
+| Legality, Card Rules (View menu) | app-level (the card side panel), out of scope per the owner for Legality; Card Rules is the same kind | |
