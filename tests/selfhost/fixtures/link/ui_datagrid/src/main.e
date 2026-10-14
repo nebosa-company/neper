@@ -1811,6 +1811,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     dg.show_page_setup(&grid15)
     var setup_tap = dg.SetupTap { grid: &grid15, kind: 1u8, value: 1u8 }
     if !grid15.pv_setup || dg.on_setup_tap(mem.cast[*void](&setup_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_orient != 1u8 { os.exit(661) }
+    setup_tap.kind = 4u8
+    setup_tap.value = 1u8
+    if dg.on_setup_tap(mem.cast[*void](&setup_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_tab != 1u8 { os.exit(663) }
+    setup_tap.kind = 5u8
+    setup_tap.value = 2u8
+    if dg.on_setup_tap(mem.cast[*void](&setup_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_tenths[2usize] != 1u8 { os.exit(664) }
+    setup_tap.kind = 6u8
+    if dg.on_setup_tap(mem.cast[*void](&setup_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_tenths[2usize] != 0u8 { os.exit(665) }
+    grid15.pv_tab = 0u8
     setup_tap.kind = 3u8
     if dg.on_setup_tap(mem.cast[*void](&setup_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_setup { os.exit(662) }
     pv_tap.index = 6u8

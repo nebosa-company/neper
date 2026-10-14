@@ -154,6 +154,8 @@ pv_tenths: [6]u8,
 pv_page: usize,
 pv_zoom: u8,
 pv_setup: bool,
+pv_tab: u8,
+pv_center: u8,
 pv_paper: u8,
 pv_orient: u8,
 pv_order: u8,
@@ -3835,6 +3837,16 @@ fn on_setup_tap(ctx: *void, g: widget.Gesture) -> err {
         if tap.kind == 1u8 { tap.grid.pv_orient = tap.value }
         if tap.kind == 2u8 { tap.grid.pv_order = tap.value }
         if tap.kind == 3u8 { tap.grid.pv_setup = false }
+        if tap.kind == 4u8 { tap.grid.pv_tab = tap.value }
+        if tap.kind == 5u8 { tap.grid.pv_tenths[usize(tap.value)] = (tap.grid.pv_tenths[usize(tap.value)] + 1u8) % 10u8 }
+        if tap.kind == 6u8 {
+            var z = 0usize
+            while z < 6usize {
+                tap.grid.pv_tenths[z] = 0u8
+                z += 1usize
+            }
+        }
+        if tap.kind == 7u8 { tap.grid.pv_center = tap.grid.pv_center ^ tap.value }
         ret ok
     default:
         ret ok
@@ -3879,34 +3891,8 @@ fn setup_line(a: *mem.Arena, grid: *Grid, taps: []SetupTap, at: usize, kind: u8,
     ret (widget.region(grid.key + MENU_KEY + 850400u64 + u64(at), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[at]), invoke: on_setup_tap }, gestures: 1u8, enabled: true, focusable: false }, line, one(a, widget.padded(0u64, 6.0, 3.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
 }
 
-fn page_setup_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
-    let width: f32 = 560.0
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 12usize)
-    if rows_error != ok { ret (zero, control.TooLarge) }
-    var n = 0usize
-    let (title, title_error) = window_title(a, grid, 2u8, "Page Setup: Standard Style", width, 32.0, false)
-    if title_error != ok { ret (zero, title_error) }
-    rows[n] = title
-    n += 1usize
-    let (taps, taps_error) = mem.alloc[SetupTap](a, 24usize)
-    if taps_error != ok { ret (zero, control.TooLarge) }
-    // the style name (grey, v3's standard style cannot be renamed)
-    let (name_label, name_error) = flat_text(a, grid, "Style Name:   Standard Style", gl.rgb(0x808080u32))
-    if name_error != ok { ret (zero, name_error) }
-    rows[n] = widget.padded(0u64, 14.0, 10.0, 0.0, 6.0, style.defaults(), one(a, name_label))
-    n += 1usize
-    // the tabs: Page chosen
-    let (tab_labels, tab_error) = mem.alloc[str](a, 4usize)
-    if tab_error != ok { ret (zero, control.TooLarge) }
-    tab_labels[0usize] = "Page"
-    tab_labels[1usize] = "Margins"
-    tab_labels[2usize] = "Header / Footer"
-    tab_labels[3usize] = "Scaling"
-    let (tabs, tabs_error) = print_bar(a, grid, tab_labels[0usize..4usize], 0xF0F0F0u32, width)
-    if tabs_error != ok { ret (zero, tabs_error) }
-    rows[n] = tabs
-    n += 1usize
-    // the two columns: the paper list, then the orientation and the print order
+// The Page tab of the dialog: the paper list, the orientation and the print order.
+fn page_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node, err) {
     let (left, left_error) = mem.alloc[widget.Node](a, 14usize)
     if left_error != ok { ret (zero, control.TooLarge) }
     var at = 0usize
@@ -3916,7 +3902,7 @@ fn page_setup_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     left[0usize] = widget.padded(0u64, 4.0, 0.0, 0.0, 4.0, style.defaults(), one(a, paper_head))
     var l = 1usize
     while i < 13usize {
-        let (line, line_error) = setup_line(a, grid, taps[0usize..24usize], at, 0u8, u8(i), paper_name(u8(i)), grid.pv_paper == u8(i), true, 260.0)
+        let (line, line_error) = setup_line(a, grid, taps[0usize..40usize], at, 0u8, u8(i), paper_name(u8(i)), grid.pv_paper == u8(i), true, 260.0)
         if line_error != ok { ret (zero, line_error) }
         left[l] = line
         l += 1usize
@@ -3940,7 +3926,7 @@ fn page_setup_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         // stored: 0 Landscape (v3's default), 1 Portrait, 2 Auto; listed as Portrait, Landscape, Auto
         var stored: u8 = 2u8
         if k < 2usize { stored = u8(k) ^ 1u8 }
-        let (line, line_error) = setup_line(a, grid, taps[0usize..24usize], at, 1u8, stored, words, grid.pv_orient == stored, false, 200.0)
+        let (line, line_error) = setup_line(a, grid, taps[0usize..40usize], at, 1u8, stored, words, grid.pv_orient == stored, false, 200.0)
         if line_error != ok { ret (zero, line_error) }
         right_nodes[r] = line
         r += 1usize
@@ -3957,7 +3943,7 @@ fn page_setup_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if k == 1usize { words = "Over, then down" }
         // stored: 0 Over, then down (v3's default), 1 Down, then over
         let order_value = u8(k) ^ 1u8
-        let (line, line_error) = setup_line(a, grid, taps[0usize..24usize], at, 2u8, order_value, words, grid.pv_order == order_value, false, 200.0)
+        let (line, line_error) = setup_line(a, grid, taps[0usize..40usize], at, 2u8, order_value, words, grid.pv_order == order_value, false, 200.0)
         if line_error != ok { ret (zero, line_error) }
         right_nodes[r] = line
         r += 1usize
@@ -3968,10 +3954,135 @@ fn page_setup_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if columns_error != ok { ret (zero, control.TooLarge) }
     columns[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, left_style, left[0usize..l])
     columns[1usize] = widget.padded(0u64, 20.0, 0.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), right_nodes[0usize..r])))
-    rows[n] = widget.padded(0u64, 14.0, 10.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), columns[0usize..2usize])))
+    ret (widget.padded(0u64, 14.0, 10.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), columns[0usize..2usize]))), ok)
+}
+
+// The Margins tab: the six margins as steppers (a tap steps a tenth of an inch, as in the preview), the
+// page drawn with its margin lines, Restore Original and Center on page.
+fn margins_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node, err) {
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 10usize)
+    if lines_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    var k = 0usize
+    while k < 6usize {
+        // v3's order: Top, Bottom, Left, Right, Header, Footer
+        var slot: usize = 1usize
+        var name = "Top: "
+        var base: u8 = 5u8
+        if k == 1usize {
+            slot = 3usize
+            name = "Bottom: "
+        }
+        if k == 2usize {
+            slot = 0usize
+            name = "Left: "
+        }
+        if k == 3usize {
+            slot = 2usize
+            name = "Right: "
+        }
+        if k == 4usize {
+            slot = 4usize
+            name = "Header: "
+            base = 2u8
+        }
+        if k == 5usize {
+            slot = 5usize
+            name = "Footer: "
+            base = 2u8
+        }
+        let (text, text_error) = margin_text(a, name, base, grid.pv_tenths[slot], true)
+        if text_error != ok { ret (zero, text_error) }
+        let (line, line_error) = setup_line(a, grid, taps[0usize..40usize], k, 5u8, u8(slot), text, false, true, 240.0)
+        if line_error != ok { ret (zero, line_error) }
+        lines[n] = line
+        n += 1usize
+        k += 1usize
+    }
+    let (restore, restore_error) = setup_line(a, grid, taps[0usize..40usize], 6usize, 6u8, 0u8, "Restore Original", false, true, 240.0)
+    if restore_error != ok { ret (zero, restore_error) }
+    lines[n] = restore
+    n += 1usize
+    var mark_h = "( ) Center horizontally"
+    if (grid.pv_center & 1u8) != 0u8 { mark_h = "(x) Center horizontally" }
+    var mark_v = "( ) Center vertically"
+    if (grid.pv_center & 2u8) != 0u8 { mark_v = "(x) Center vertically" }
+    let (center_h, center_h_error) = setup_line(a, grid, taps[0usize..40usize], 7usize, 7u8, 1u8, mark_h, false, true, 240.0)
+    if center_h_error != ok { ret (zero, center_h_error) }
+    lines[n] = center_h
+    n += 1usize
+    let (center_v, center_v_error) = setup_line(a, grid, taps[0usize..40usize], 8usize, 7u8, 2u8, mark_v, false, true, 240.0)
+    if center_v_error != ok { ret (zero, center_v_error) }
+    lines[n] = center_v
+    n += 1usize
+    // the page, drawn as a sheet with a dashed inner frame
+    var sheet = control.sized_style(300.0, 190.0)
+    sheet.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    sheet.border = style.Border { width: 2.0, color: gl.rgb(0x000000u32) }
+    sheet.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 40.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    var inner = control.sized_style(260.0, 150.0)
+    inner.border = style.Border { width: 1.0, color: gl.rgb(0x808080u32) }
+    inner.margin = style.EdgeLengths { left: style.Length { Px: 18.0 }, top: style.Length { Px: 18.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let (drawing, drawing_error) = mem.alloc[widget.Node](a, 1usize)
+    if drawing_error != ok { ret (zero, control.TooLarge) }
+    drawing[0usize] = widget.box(0u64, inner, zero)
+    let (halves, halves_error) = mem.alloc[widget.Node](a, 2usize)
+    if halves_error != ok { ret (zero, control.TooLarge) }
+    halves[0usize] = widget.box(0u64, sheet, drawing[0usize..1usize])
+    halves[1usize] = widget.padded(0u64, 24.0, 0.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), lines[0usize..n])))
+    ret (widget.padded(0u64, 14.0, 16.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), halves[0usize..2usize]))), ok)
+}
+
+fn page_setup_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let width: f32 = 560.0
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 12usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    let (title, title_error) = window_title(a, grid, 2u8, "Page Setup: Standard Style", width, 32.0, false)
+    if title_error != ok { ret (zero, title_error) }
+    rows[n] = title
+    n += 1usize
+    let (taps, taps_error) = mem.alloc[SetupTap](a, 40usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
+    // the style name (grey, v3's standard style cannot be renamed)
+    let (name_label, name_error) = flat_text(a, grid, "Style Name:   Standard Style", gl.rgb(0x808080u32))
+    if name_error != ok { ret (zero, name_error) }
+    rows[n] = widget.padded(0u64, 14.0, 10.0, 0.0, 6.0, style.defaults(), one(a, name_label))
+    n += 1usize
+    // the tabs: each a tap that chooses its page
+    let (tab_cells, tab_error) = mem.alloc[widget.Node](a, 4usize)
+    if tab_error != ok { ret (zero, control.TooLarge) }
+    var tab_at = 0usize
+    while tab_at < 4usize {
+        var tab_words = "Page"
+        if tab_at == 1usize { tab_words = "Margins" }
+        if tab_at == 2usize { tab_words = "Header / Footer" }
+        if tab_at == 3usize { tab_words = "Scaling" }
+        let (tab_line, tab_line_error) = setup_line(a, grid, taps[0usize..40usize], 24usize + tab_at, 4u8, u8(tab_at), tab_words, grid.pv_tab == u8(tab_at), true, 110.0)
+        if tab_line_error != ok { ret (zero, tab_line_error) }
+        tab_cells[tab_at] = tab_line
+        tab_at += 1usize
+    }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 26.0), tab_cells[0usize..4usize])
+    n += 1usize
+    var content: widget.Node = zero
+    if grid.pv_tab == 1u8 {
+        let (margins_node, margins_error) = margins_content(a, grid, taps)
+        if margins_error != ok { ret (zero, margins_error) }
+        content = margins_node
+    } else if grid.pv_tab == 0u8 {
+        let (page_node, page_error) = page_content(a, grid, taps)
+        if page_error != ok { ret (zero, page_error) }
+        content = page_node
+    } else {
+        let (other_label, other_error) = flat_text(a, grid, "(Header / Footer and Scaling are not built)", gl.rgb(0x808080u32))
+        if other_error != ok { ret (zero, other_error) }
+        content = widget.padded(0u64, 20.0, 30.0, 0.0, 0.0, style.defaults(), one(a, other_label))
+    }
+    rows[n] = content
     n += 1usize
     // OK
-    let (ok_line, ok_line_error) = setup_line(a, grid, taps[0usize..24usize], at, 3u8, 0u8, "OK", false, true, 100.0)
+    let (ok_line, ok_line_error) = setup_line(a, grid, taps[0usize..40usize], 28usize, 3u8, 0u8, "OK", false, true, 100.0)
     if ok_line_error != ok { ret (zero, ok_line_error) }
     rows[n] = widget.padded(0u64, 400.0, 10.0, 0.0, 10.0, style.defaults(), one(a, ok_line))
     n += 1usize
@@ -4007,7 +4118,7 @@ fn on_print_tap(ctx: *void, g: widget.Gesture) -> err {
 }
 
 // "Left: 0.5 in": the label and the value of a margin, in the arena.
-fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8) -> (str, err) {
+fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8, two: bool) -> (str, err) {
     let (b, b_error) = str.builder(a, 24usize)
     if b_error != ok { ret ("", b_error) }
     var sb = b
@@ -4016,6 +4127,7 @@ fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8) -> (str, er
     if str.push_u64(&sb, u64(tenths / 10u8)) != ok { ret ("", control.TooLarge) }
     if str.push(&sb, ".") != ok { ret ("", control.TooLarge) }
     if str.push_u64(&sb, u64(tenths % 10u8)) != ok { ret ("", control.TooLarge) }
+    if two && str.push(&sb, "0") != ok { ret ("", control.TooLarge) }
     if str.push(&sb, " in") != ok { ret ("", control.TooLarge) }
     ret (str.done(&sb), ok)
 }
@@ -4043,7 +4155,7 @@ fn print_margins(a: *mem.Arena, grid: *Grid, width: f32) -> (widget.Node, err) {
                 name = "Footer: "
                 base = 2u8
             }
-            let (value, value_error) = margin_text(a, name, base, grid.pv_tenths[k - 1usize])
+            let (value, value_error) = margin_text(a, name, base, grid.pv_tenths[k - 1usize], false)
             if value_error != ok { ret (zero, value_error) }
             text = value
         }
