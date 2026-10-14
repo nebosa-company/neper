@@ -2297,4 +2297,5 @@ D5014	897	G012: Print Preview window
 D5015	865	G012: positive colour, negative colour and axis colour in the style window
 D5016	814	G012: the axis line and offset bars seen on the grid; a percent margin paints
 D5017	404	G012: the Print Preview toolbar from v3's own icons
-D5018	590	G012: the Customization window of a band grid has its Bands and Columns tabs
+D5018	591	G012: the Customization window of a band grid has its Bands and Columns tabs
+D5019	615	G012: Print Preview margins, zoom and page turning

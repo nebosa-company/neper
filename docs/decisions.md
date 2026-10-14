@@ -39662,3 +39662,7 @@ The preview window's toolbar row is a picture of v3's DevExpress command icons (
 ## D5018 - G012: the Customization window of a band grid has its Bands and Columns tabs
 
 v3's collection grid is a band table view, so its Customization window is titled Customization and has a Bands and a Columns tab (CT4); the pool grid's is the plain Column window. `set_band_names` gives a grid the names for the Bands tab (the band row itself stays hidden, as in v3's collection); the window then shows the two tabs, Columns chosen first, Bands listing the band names. CT3-customization-tabs-v5.png. Tapping a band name does nothing (v3's list is for dragging a band into the header).
+
+## D5019 - G012: Print Preview margins, zoom and page turning
+
+The preview's margins row is live: a tap on Left / Top / Right / Bottom / Header / Footer steps the value by a tenth of an inch (back to its start after nine), Zoom cycles 100, 75, 50 and 125 per cent (the page and its columns scale), and a page row under the sheet turns the pages (twelve rows a page, `Page n of m` from the visible rows). PV2-print-preview-margins-zoom-pages-v5.png: page 3 of 10024 at 75 per cent with Left 0.7 in. v3's margin fields are typed boxes and its zoom a combo; these are tap steppers. ui_datagrid passes (exits 658-660).

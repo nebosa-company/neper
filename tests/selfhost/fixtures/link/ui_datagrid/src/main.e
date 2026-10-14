@@ -1803,6 +1803,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Cards > Print > Print Preview opens the preview window in the wizard's slot
     dg.show_print_preview(&grid15)
     if !grid15.print_open || !grid15.wiz_open { os.exit(657) }
+    // the preview's margins step a tenth of an inch, the zoom and the page turn
+    var pv_tap = dg.PrintTap { grid: &grid15, index: 0u8 }
+    if dg.on_print_tap(mem.cast[*void](&pv_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_tenths[0usize] != 1u8 { os.exit(658) }
+    pv_tap.index = 8u8
+    if dg.on_print_tap(mem.cast[*void](&pv_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_page != 1usize { os.exit(659) }
+    pv_tap.index = 6u8
+    if dg.on_print_tap(mem.cast[*void](&pv_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_zoom != 1u8 { os.exit(660) }
     grid15.print_open = false
     grid15.wiz_open = false
     // Export > Excel and PDF: a package (a zip: "PK") and a document ("%PDF")
