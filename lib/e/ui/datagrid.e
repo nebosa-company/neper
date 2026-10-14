@@ -147,6 +147,8 @@ type Grid = struct {
     rules_arena: *mem.Arena,
     crit_open: bool,
     crit_pop: bool,
+    crit_pop_kind: u8,
+    crit_pop_row: usize,
     crit_pending: bool,
     crit_group: u8,
     crit_count: usize,
@@ -1960,10 +1962,21 @@ fn on_crit_tap(ctx: *void, g: widget.Gesture) -> err {
         if row.part == 9u8 {
             // v3 opens a list of the four group operators under the word
             grid.crit_pop = !grid.crit_pop
+            grid.crit_pop_kind = 0u8
             ret ok
         }
         if row.part == 20u8 || row.part == 21u8 || row.part == 22u8 || row.part == 23u8 {
             grid.crit_group = row.part - 20u8
+            grid.crit_pop = false
+            ret ok
+        }
+        if row.part >= 40u8 && row.part < 40u8 + 8u8 && grid.crit_pop_row < grid.crit_count {
+            grid.crit_op[grid.crit_pop_row] = row.part - 40u8
+            grid.crit_pop = false
+            ret ok
+        }
+        if row.part >= 60u8 && row.part < 60u8 + 40u8 && grid.crit_pop_row < grid.crit_count {
+            grid.crit_spec[grid.crit_pop_row] = usize(row.part - 60u8)
             grid.crit_pop = false
             ret ok
         }
@@ -1984,8 +1997,12 @@ fn on_crit_tap(ctx: *void, g: widget.Gesture) -> err {
             }
             grid.crit_count -= 1usize
         }
-        if row.part == 1u8 { grid.crit_spec[row.index] = crit_next_listed(grid, grid.crit_spec[row.index]) }
-        if row.part == 2u8 { grid.crit_op[row.index] = (grid.crit_op[row.index] + 1u8) % 8u8 }
+        if row.part == 1u8 || row.part == 2u8 {
+            // v3 opens a list under the column or the operator word
+            grid.crit_pop = !grid.crit_pop
+            grid.crit_pop_kind = row.part
+            grid.crit_pop_row = row.index
+        }
         ret ok
     default:
         ret ok
@@ -2210,6 +2227,66 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
     let framed = widget.box(0u64, body_style, inner[0usize..1usize])
     if !grid.crit_pop { ret (framed, ok) }
+    if grid.crit_pop_kind == 1u8 || grid.crit_pop_kind == 2u8 {
+        // the columns or the operators of a condition, as a plain list under its word
+        var entries: [40]usize = zero
+        var entry_count = 0usize
+        var current_entry = 0usize
+        if grid.crit_pop_kind == 2u8 {
+            var oi = 0usize
+            while oi < 8usize {
+                entries[oi] = oi
+                oi += 1usize
+            }
+            entry_count = 8usize
+            if grid.crit_pop_row < grid.crit_count { current_entry = usize(grid.crit_op[grid.crit_pop_row]) }
+        } else {
+            var ci = 0usize
+            while ci < grid.all.len && entry_count < 40usize {
+                if sort_row_listed(grid, ci) {
+                    entries[entry_count] = ci
+                    entry_count += 1usize
+                }
+                ci += 1usize
+            }
+            if grid.crit_pop_row < grid.crit_count { current_entry = grid.crit_spec[grid.crit_pop_row] }
+        }
+        let (list_rows, list_rows_error) = mem.alloc[widget.Node](a, entry_count + 1usize)
+        if list_rows_error != ok { ret (zero, control.TooLarge) }
+        let (list_picks, list_picks_error) = mem.alloc[CritRow](a, entry_count + 1usize)
+        if list_picks_error != ok { ret (zero, control.TooLarge) }
+        var ei = 0usize
+        while ei < entry_count {
+            var part_code = 60u8 + u8(entries[ei])
+            var label_text = grid.all[entries[ei]].title
+            if grid.crit_pop_kind == 2u8 {
+                part_code = 40u8 + u8(entries[ei])
+                label_text = crit_op_words(u8(entries[ei]))
+            }
+            list_picks[ei] = CritRow { grid: grid, index: 0usize, part: part_code }
+            let (entry_label, entry_label_error) = flat_text(a, grid, label_text, gl.rgb(0x000000u32))
+            if entry_label_error != ok { ret (zero, entry_label_error) }
+            var entry_box = control.sized_style(150.0, 22.0)
+            entry_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            if entries[ei] == current_entry { entry_box.background = paint.Brush { Solid: gl.rgb(0x99D1FFu32) } }
+            list_rows[ei] = widget.region(grid.key + MENU_KEY + 899930u64 + u64(ei), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&list_picks[ei]), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, entry_box, one(a, widget.padded(0u64, 8.0, 3.0, 0.0, 0.0, style.defaults(), one(a, entry_label))))
+            ei += 1usize
+        }
+        var list_style = style.defaults()
+        list_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        list_style.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+        let word_list = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, list_style, list_rows[0usize..entry_count])
+        let (word_held, word_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if word_held_error != ok { ret (zero, control.TooLarge) }
+        word_held[0usize] = word_list
+        let (word_layers, word_layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if word_layers_error != ok { ret (zero, control.TooLarge) }
+        word_layers[0usize] = framed
+        var list_x: f32 = 96.0
+        if grid.crit_pop_kind == 2u8 { list_x = 200.0 }
+        word_layers[1usize] = widget.positioned(0u64, list_x, 84.0 + 34.0 * f32(grid.crit_pop_row) + 26.0, style.defaults(), word_held[0usize..1usize])
+        ret (widget.stack(0u64, style.defaults(), word_layers[0usize..2usize]), ok)
+    }
     // the group operators as v3's popup: a ring or a filled pair of circles, the name, the current one light blue
     let (pop_rows, pop_rows_error) = mem.alloc[widget.Node](a, 4usize)
     if pop_rows_error != ok { ret (zero, control.TooLarge) }

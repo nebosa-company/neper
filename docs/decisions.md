@@ -39308,3 +39308,7 @@ v3's rules manager has a `Stop If True` column (CF2-rules-manager-empty-v3.png):
 ## D2449 - G012: the Advanced Filter's group operator popup
 
 v3's group word (And) opens a list of And, Or, Not And and Not Or with a ring or a filled disc before each (green and red for the or / negated ones) and the current one light blue (AF1-advanced-filter-v3-condition.png). The criteria editor cycled the word on every tap; it now opens that list under the word and a tap picks one (`crit_pop`, AF2-group-popup-v5.png: And, Or, Not And, Not Or; Or picked). The column and operator words still cycle (v3 opens lists for them too). ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D2450 - G012: the criteria editor's column and operator popups
+
+v3's condition line opens a list under its column word and under its operator word (AF1-advanced-filter-v3-condition.png shows the group list; the same control class serves the other two). The criteria editor's column and operator words cycled; they now open a plain list (the current entry light blue) and a tap picks one: every listed column, and Equals, Does not equal, Is less than, Is greater than, Contains, Does not contain, Begins with, Ends with (AF3-column-operator-popups-v5.png: Contains, then Edition). Not recorded in v3 itself: the exact width and the icons of these two lists. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.

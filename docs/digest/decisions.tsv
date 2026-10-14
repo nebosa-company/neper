@@ -2209,4 +2209,5 @@ D2445	973	G012: a tap finds its column from the headers, not from the stored wid
 D2446	881	G012: the select editor in v3's drop-down look
 D2447	808	G012: Show Bar Only in the data bar wizard
 D2448	658	G012: Stop If True
-D2449	600	G012: the Advanced Filter's group operator popup
+D2449	601	G012: the Advanced Filter's group operator popup
+D2450	723	G012: the criteria editor's column and operator popups
