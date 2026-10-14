@@ -41157,3 +41157,7 @@ The columns of a measured-look grid that outgrow the pane (the column widths sum
 ## D4043 - G012: the wheel over the horizontal thumb
 
 The thumb of D4042 answers the mouse wheel too: three notches over it moved the pool's columns by 180 units (HS3-wheel-scroll-v5.png), clamped to the range. The wheel over the rows still scrolls vertically; v3 scrolls horizontally with the wheel over the navigator row's bar only, as here. The four grid fixtures pass.
+
+## D4044 - G012: the columns grow while the table scrolls
+
+Measured with the header cells' bounds on the pool (a debug read-out, reverted): after one wheel notch (60 units) the Edition, Type and Cost cells read 44, 40 and 77 and after two 47, 44 and 84, each step about 7-10% wider. The columns therefore stretch to fill the width the shifted node is offered, which is the pane plus the scroll offset, instead of keeping their nominal widths: `hshift`'s positioned node at x = -hoff is offered `pane + hoff`, and a fixed `width` on the box or on the positioned node did not change it. This is the 13% of D4043. A cure needs the table to take its columns' own widths (a table option that turns off the fill) or a clip that offers the content width, which the widget layer must support; not done.
