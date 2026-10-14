@@ -149,6 +149,7 @@ type Grid = struct {
     wiz_min_number: bool,
     wiz_select_open: bool,
     wiz_palette: u8,
+    wiz_bar_style: u8,
     wiz_target: usize,
     has_wiz_target: bool,
     wiz_max_number: bool,
@@ -2976,6 +2977,8 @@ fn on_wiz_format(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         grid.wiz_palette = (grid.wiz_palette + 1u8) % 4u8
+        // a data bar's Fill mode and Border style (Data Bar Rule Style Settings) step once the colours have gone round
+        if grid.wiz_palette == 0u8 { grid.wiz_bar_style = (grid.wiz_bar_style + 1u8) % 4u8 }
         ret ok
     default:
         ret ok
@@ -3130,6 +3133,8 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         if t == 0u8 { r.fill = paint.rgba(wiz_high(grid.wiz_palette).red, wiz_high(grid.wiz_palette).green, wiz_high(grid.wiz_palette).blue, 0.55) }
         r.three = t == 2u8
         r.bar_only = t == 0u8 && grid.wiz_bar_only
+        r.bar_solid = t == 0u8 && (grid.wiz_bar_style & 1u8) != 0u8
+        r.bar_border = t == 0u8 && (grid.wiz_bar_style & 2u8) != 0u8
         if t <= 3u8 {
             // Minimum and Maximum of the wizard: Lowest / Highest Value, or a number typed
             if grid.wiz_min_number && grid.wiz_min_len > 0usize {
