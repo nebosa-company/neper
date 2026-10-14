@@ -137,4 +137,4 @@ Verified live 2026-10-14: a two colour scale created in the wizard with the whit
 | Narrow-window column growth, thumb track length | open | D2502 |
 | PDF / Excel export, printing | not started | |
 | Background images of the table (v3 paints a card-back picture behind the collection rows and the empty area; seen faintly under the rows in the recordings) | to do: extract the picture from v3's resources, draw it behind the rows with v3's opacity | FT2, NV1 |
-| Messages shown when the grid has no data (v3's NoDataToDisplayInfoText) | text matched from v3's source (`<No cards in card pool>`, `<No cards in collection>`, `<No cards in deck...>`, set with `set_empty_text`) / differs (v3 keeps the header and centres the text under it; the grid shows the text alone, small and top-left) | ND1-no-data-v5 |
+| Messages shown when the grid has no data (v3's NoDataToDisplayInfoText) | matched: v3's three texts (D2514), header kept, plain text without a picture (D2515); the message sits a little right of centre and is larger than v3's | ND1, ND2 |
