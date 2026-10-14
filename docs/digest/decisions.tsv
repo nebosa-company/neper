@@ -2281,4 +2281,5 @@ D2517	366	G012: the navigator's horizontal thumb thickens on hover
 D2518	684	G012: v3's table background picture
 D2519	446	G012: the wizard's Format... sets the data bar's Fill mode and Border
 D2520	307	G012: the Format... bar style step is checked by the fixture
-D2521	843	G012: v3's "Use a formula" rule, one comparison
+D2521	844	G012: v3's "Use a formula" rule, one comparison
+D2522	981	G012: the Grid struct outgrew something; the background picture is withdrawn, the formula rule is live
