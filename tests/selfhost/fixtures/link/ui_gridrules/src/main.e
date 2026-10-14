@@ -260,6 +260,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     axis_rule.min_value = -2.0
     axis_rule.has_max = true
     axis_rule.max_value = 4.0
+    axis_rule.show_axis = true
     let (made_axis, made_axis_error) = gr.create(a, &t, 2usize)
     if made_axis_error != ok { os.exit(161) }
     var rs_axis = made_axis
@@ -267,6 +268,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if axis_error != ok || gr.refresh(&rs_axis, a) != ok { os.exit(162) }
     let axis_look = gr.format(&rs_axis, 1usize, C_CMC)
     if axis_look.bar_left > 0.3334f32 || axis_look.bar_left + axis_look.bar_span < 0.3332f32 { os.exit(163) }
+    // Axis color: the axis stands as a line a third of the way in
+    if !axis_look.has_axis_line || !near(axis_look.bar_axis_at, 0.33333f32) { os.exit(164) }
     // the bar's Fill mode Solid and Border style reach the cell's format
     var styled = gr.rule(C_CMC, gr.Kind.Bar)
     styled.bar_solid = true
