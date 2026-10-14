@@ -88,3 +88,5 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 3. Filter dialog / criteria editor, filter row pixel look.
 4. Image combo drop-down, check box, date edit editors.
 6. PDF / Excel export, printing.
+
+Verified live 2026-10-14 (screen unlocked): the Advanced Filter's Save As... wrote `cardgrid.filter` (`filter 1 / group 0 / cond ...`) and Open... restored the condition value `mox` (AF4-open-save-v5.png, D2452).
