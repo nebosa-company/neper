@@ -151,6 +151,7 @@ fmt_open: bool,
 print_open: bool,
 chooser_bands: bool,
 band_tabs: bool,
+filter_off: bool,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
 pv_wide: u8,
@@ -7276,7 +7277,10 @@ fn show_filter_row(grid: *Grid, on: bool) { grid.filter_visible = on }
 // 6 Is like, 7 Is not like, 8 Contains, 9 Does not contain, 10 Begins with, 11 Ends with.
 fn filter_operator(grid: *const Grid, spec: usize) -> u8 { ret grid.filter_ops[spec] }
 
-fn filter_value(grid: *const Grid, spec: usize) -> str { ret grid.filter_text[spec * FILTER_TEXT..spec * FILTER_TEXT + grid.filter_lens[spec]] }
+fn filter_value(grid: *const Grid, spec: usize) -> str {
+    if grid.filter_off { ret "" }
+    ret grid.filter_text[spec * FILTER_TEXT..spec * FILTER_TEXT + grid.filter_lens[spec]]
+}
 
 const KEY_BASE: u64 = 4096u64
 
@@ -8370,6 +8374,7 @@ fn on_filter_pop_dismiss(ctx: *void) -> err {
 fn on_filter(ctx: *void, value: str) -> err {
     let pick = mem.cast[*FilterPick](ctx)
     pick.grid.filter_lens[pick.spec] = value.len
+    pick.grid.filter_off = false
     ret pick.grid.events.filter_changed(pick.grid.events.ctx, pick.spec, value)
 }
 
@@ -8927,6 +8932,29 @@ fn on_filter_clear(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
+// The tick of the filter panel: suspends the filter-row conditions (the grid shows every row, the conditions
+// stay in their cells) or applies them again.
+fn on_filter_toggle(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.filter_off = !grid.filter_off
+        var spec = 0usize
+        while spec < grid.all.len {
+            if grid.filter_lens[spec] != 0usize {
+                var value = filter_value(grid, spec)
+                if grid.filter_off { value = "" }
+                let changed_error = grid.events.filter_changed(grid.events.ctx, spec, value)
+                if changed_error != ok { ret changed_error }
+            }
+            spec += 1usize
+        }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 // Customize... on the filter panel opens the Advanced Filter.
 fn on_filter_customize(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
@@ -8948,6 +8976,7 @@ fn filter_panel_button(a: *mem.Arena, grid: *Grid, text: str, fill: u32, ink: u3
     box.margin = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     let held = widget.padded(0u64, 6.0, 2.0, 0.0, 0.0, style.defaults(), one(a, label))
     if kind == 0u8 { ret (widget.box(0u64, box, one(a, held)), ok) }
+    if kind == 3u8 { ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_filter_toggle }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held)), ok) }
     if kind == 2u8 { ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_filter_customize }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held)), ok) }
     ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_filter_clear }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held)), ok)
 }
@@ -8959,7 +8988,7 @@ fn filter_panel_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (clear, clear_error) = filter_panel_button(a, grid, "x", 0xC85050u32, 0xFFFFFFu32, 22.0, grid.key + MENU_KEY + 850880u64, 1u8)
     if clear_error != ok { ret (zero, clear_error) }
     cells[0usize] = clear
-    let (tick, tick_error) = filter_panel_button(a, grid, "v", 0x0F5FBFu32, 0xFFFFFFu32, 22.0, 0u64, 0u8)
+    let (tick, tick_error) = filter_panel_button(a, grid, "v", tick_fill(grid), 0xFFFFFFu32, 22.0, grid.key + MENU_KEY + 850882u64, 3u8)
     if tick_error != ok { ret (zero, tick_error) }
     cells[1usize] = tick
     let (summary, summary_error) = filter_summary(a, grid)
@@ -9691,4 +9720,10 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     let stacked = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap }, frame, parts[0usize..part_count])
     let (keyed, keyed_error) = with_keys(a, grid, stacked)
     ret (keyed, keyed_error)
+}
+
+// Blue while the filter-row conditions apply, grey while they are suspended.
+fn tick_fill(grid: *const Grid) -> u32 {
+    if grid.filter_off { ret 0xB0B0B0u32 }
+    ret 0x0F5FBFu32
 }

@@ -41405,3 +41405,6 @@ Recorded in v3: the Alignment submenu of the column popup (AL1-alignment-submenu
 
 ## D4108 - G012: Customize... on the filter panel opens the Advanced Filter
 The Customize... box of the filter panel (D4103) is a button now: a tap calls `open_criteria_editor`, the same window as Search > Advanced Filter... (FP2-customize-opens-advanced-filter-v5.png). The blue tick is still a picture (v3 uses it to suspend the filter; ours has no suspended state).
+
+## D4109 - G012: the filter panel's tick suspends the filter
+The tick of the filter panel (blue = applied, grey = suspended) flips `filter_off`: every row shows again, the conditions stay typed in their cells and the panel keeps naming them (FP3-filter-suspended-v5.png: "zz" still in the Name cell, 120283 cards); `filter_value` answers "" while suspended, so a host's refilter needs no change, and typing in a cell applies the filter again.
