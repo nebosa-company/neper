@@ -2223,4 +2223,5 @@ D2459	786	G012: the checked value list of Is any of / Is none of
 D2460	939	G012: one nested group in the Advanced Filter
 D2461	459	G012: the nested group is part of the saved filter
 D2462	695	G012: the wizard's Preview strip
-D2463	664	G012: the wizard's Format... colours
+D2463	665	G012: the wizard's Format... colours
+D2464	1133	G012: secondary windows that move, and the library's controls inside them

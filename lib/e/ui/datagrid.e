@@ -132,6 +132,11 @@ type Grid = struct {
     extra_desc: [4]bool,
     extra_count: usize,
     sort_dialog_open: bool,
+    win_x: [4]f32,
+    win_y: [4]f32,
+    win_gx: [4]f32,
+    win_gy: [4]f32,
+    win_placed: [4]bool,
     has_row_drop: bool,
     row_drop_ctx: *void,
     row_drop_fn: fn(*void, usize) -> err,
@@ -1437,6 +1442,82 @@ fn on_chooser_drop(ctx: *void, g: widget.Gesture) -> err {
 }
 
 // The hidden columns in a window called Column: drag one to the header, or a header to the window.
+// ---- secondary windows: a title bar to drag them by and a close box (the chooser's concept) ----
+
+type WinDrag = struct { grid: *Grid, which: u8 }
+
+// 0 the Sort dialog, 1 the rules manager, 2 the rule wizard, 3 the Advanced Filter.
+fn on_window_title(ctx: *void, g: widget.Gesture) -> err {
+    let w = mem.cast[*WinDrag](ctx)
+    let i = usize(w.which)
+    switch g {
+    case .DragStart as at:
+        w.grid.win_gx[i] = at.x - w.grid.win_x[i]
+        w.grid.win_gy[i] = at.y - w.grid.win_y[i]
+        ret ok
+    case .DragMove as d:
+        w.grid.win_x[i] = d.position.x - w.grid.win_gx[i]
+        w.grid.win_y[i] = d.position.y - w.grid.win_gy[i]
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_window_close(ctx: *void, g: widget.Gesture) -> err {
+    let w = mem.cast[*WinDrag](ctx)
+    switch g {
+    case .Tap as at:
+        if w.which == 0u8 { w.grid.sort_dialog_open = false }
+        if w.which == 1u8 { w.grid.rules_dialog_open = false }
+        if w.which == 2u8 { w.grid.wiz_open = false }
+        if w.which == 3u8 { w.grid.crit_open = false }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// Where window `which` stands: where the user left it, else centred at `y`.
+fn window_place(grid: *Grid, which: u8, width: f32, y: f32, surface: f32) {
+    let i = usize(which)
+    if grid.win_placed[i] { ret }
+    var x = (surface - width) * 0.5
+    if x < 0.0 { x = 0.0 }
+    grid.win_x[i] = x
+    grid.win_y[i] = y
+    grid.win_placed[i] = true
+}
+
+// The title bar of a window: its text, dragged to move it, and a close box (pale red, darker under
+// the pointer) at the right end.
+fn window_title(a: *mem.Arena, grid: *Grid, which: u8, text: str, width: f32, height: f32, dark: bool) -> (widget.Node, err) {
+    let (drags, drags_error) = mem.alloc[WinDrag](a, 1usize)
+    if drags_error != ok { ret (zero, control.TooLarge) }
+    drags[0usize] = WinDrag { grid: grid, which: which }
+    var ink = gl.rgb(0x000000u32)
+    if dark { ink = gl.rgb(0xFFFFFFu32) }
+    let (label, label_error) = flat_text(a, grid, text, ink)
+    if label_error != ok { ret (zero, label_error) }
+    var bar = control.sized_style(width - 44.0, height)
+    if dark { bar.background = paint.Brush { Solid: gl.rgb(0x202020u32) } } else { bar.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
+    let bar_key = grid.key + MENU_KEY + 899800u64 + u64(which) * 2u64
+    let title_region = widget.region(bar_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[0usize]), invoke: on_window_title }, gestures: 3u8, enabled: true, focusable: false }, bar, one(a, widget.padded(0u64, 44.0, height * 0.32, 0.0, 0.0, style.defaults(), one(a, label))))
+    let close_key = bar_key + 1u64
+    let close_state = control.control_state(grid.theme, close_key, true, false)
+    var close_style = control.sized_style(44.0, height)
+    close_style.background = paint.Brush { Solid: gl.rgb(0xC75050u32) }
+    if close_state.hovered { close_style.background = paint.Brush { Solid: gl.rgb(0xE04343u32) } }
+    let (cross, cross_error) = flat_text(a, grid, "x", gl.rgb(0xFFFFFFu32))
+    if cross_error != ok { ret (zero, cross_error) }
+    let close_region = widget.region(close_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[0usize]), invoke: on_window_close }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, close_style, one(a, widget.aligned(0u64, .Center, .Center, style.defaults(), one(a, cross))))
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, control.TooLarge) }
+    pair[0usize] = title_region
+    pair[1usize] = close_region
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), pair[0usize..2usize]), ok)
+}
+
 // ---- the Sort dialog (v3's View > Sort...: every column with None / Ascending / Descending) ----
 
 type SortRow = struct { grid: *Grid, spec: usize }
@@ -1564,11 +1645,9 @@ fn sort_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if acts_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     // the title bar
-    let (title, title_error) = flat_text(a, grid, "Sort [Card Pool]", gl.rgb(0xFFFFFFu32))
+    let (title_row, title_error) = window_title(a, grid, 0u8, "Sort [Card Pool]", width, 44.0, true)
     if title_error != ok { ret (zero, title_error) }
-    var title_box = control.sized_style(width, 44.0)
-    title_box.background = paint.Brush { Solid: gl.rgb(0x202020u32) }
-    rows[n] = widget.padded(0u64, 44.0, 14.0, 0.0, 0.0, title_box, one(a, title))
+    rows[n] = title_row
     n += 1usize
     // the column header
     let (head_a, head_a_error) = flat_text(a, grid, "Column", gl.rgb(0x000000u32))
@@ -1788,11 +1867,9 @@ fn rules_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     }
     var n = 0usize
     // the title
-    let (title, title_error) = flat_text(a, grid, "Conditional Formatting Rules Manager", gl.rgb(0x000000u32))
+    let (title_row, title_error) = window_title(a, grid, 1u8, "Conditional Formatting Rules Manager", width, 40.0, false)
     if title_error != ok { ret (zero, title_error) }
-    var title_box = control.sized_style(width, 40.0)
-    title_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
-    rows[n] = widget.padded(0u64, 44.0, 12.0, 0.0, 0.0, title_box, one(a, title))
+    rows[n] = title_row
     n += 1usize
     // Show formatting rules for: All
     let (show_label, show_label_error) = flat_text(a, grid, "Show formatting rules for:   All", gl.rgb(0x000000u32))
@@ -2332,11 +2409,9 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         k += 1usize
     }
     var n = 0usize
-    let (title, title_error) = flat_text(a, grid, "Advanced Filter", gl.rgb(0x000000u32))
+    let (title_row, title_error) = window_title(a, grid, 3u8, "Advanced Filter", width, 40.0, false)
     if title_error != ok { ret (zero, title_error) }
-    var title_box = control.sized_style(width, 40.0)
-    title_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
-    rows[n] = widget.padded(0u64, 44.0, 12.0, 0.0, 0.0, title_box, one(a, title))
+    rows[n] = title_row
     n += 1usize
     // Filter  And  <root>
     let (filter_label, filter_error) = flat_text(a, grid, "Filter", gl.rgb(0x000000u32))
@@ -2761,6 +2836,19 @@ fn on_wiz_text(ctx: *void, value: str) -> err {
     ret ok
 }
 
+fn on_wiz_spin(ctx: *void, value: i64) -> err {
+    let t = mem.cast[*WizText](ctx)
+    var digits: [16]u8 = zero
+    let written = control.write_i64(digits[0usize..16usize], value)
+    var i = 0usize
+    while i < written && i < 16usize {
+        if t.maximum { t.grid.wiz_max_text[i] = digits[i] } else { t.grid.wiz_min_text[i] = digits[i] }
+        i += 1usize
+    }
+    if t.maximum { t.grid.wiz_max_len = written } else { t.grid.wiz_min_len = written }
+    ret ok
+}
+
 fn on_wiz_mode(ctx: *void, g: widget.Gesture) -> err {
     let t = mem.cast[*WizText](ctx)
     switch g {
@@ -2939,11 +3027,9 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (picks, picks_error) = mem.alloc[WizRow](a, 10usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
-    let (title, title_error) = flat_text(a, grid, "Conditional Formatting Rule", gl.rgb(0x000000u32))
+    let (title_row, title_error) = window_title(a, grid, 2u8, "Conditional Formatting Rule", width, 40.0, false)
     if title_error != ok { ret (zero, title_error) }
-    var title_box = control.sized_style(width, 40.0)
-    title_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
-    rows[n] = widget.padded(0u64, 44.0, 12.0, 0.0, 0.0, title_box, one(a, title))
+    rows[n] = title_row
     n += 1usize
     let (head, head_error) = flat_text(a, grid, "Select a Rule Type:", gl.rgb(0x000000u32))
     if head_error != ok { ret (zero, head_error) }
@@ -3129,10 +3215,13 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
                     buffer = grid.wiz_max_text[0usize..16usize]
                     length = grid.wiz_max_len
                 }
-                var field_options = control.field_options()
-                field_options.width = 180.0
-                field_options.height = 30.0
-                let (field, field_error) = control.text_field(a, grid.key + MENU_KEY + 850310u64 + u64(side), grid.theme, "Value", buffer, length, widget.Change[str] { ctx: mem.cast[*void](&texts[side]), invoke: on_wiz_text }, zero, field_options)
+                // the library's spin box: arrows and typing, for the number of the Minimum or Maximum
+                var spun: i64 = 0i64
+                if length > 0usize {
+                    let (parsed, parse_error) = str.parse_f64(buffer[0usize..length])
+                    if parse_error == ok { spun = i64(parsed) }
+                }
+                let (field, field_error) = control.spin_box_sized(a, grid.key + MENU_KEY + 850310u64 + u64(side), grid.theme, "Value", buffer, spun, -1000000i64, 1000000i64, 1i64, widget.Change[i64] { ctx: mem.cast[*void](&texts[side]), invoke: on_wiz_spin }, widget.Change[str] { ctx: mem.cast[*void](&texts[side]), invoke: on_wiz_text }, 180.0)
                 if field_error != ok { ret (zero, field_error) }
                 column_nodes[1usize] = field
                 column_count = 2usize
@@ -3942,49 +4031,44 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         let (crit_node, crit_error) = criteria_panel(a, grid)
         if crit_error != ok { ret (zero, crit_error) }
         let crit_size = widget.surface_size(theme.runtime)
-        var crit_x = (crit_size.width - 540.0) * 0.5
-        if crit_x < 0.0 { crit_x = 0.0 }
+        window_place(grid, 3u8, 540.0, 140.0, crit_size.width)
         let (crit_held, crit_held_error) = mem.alloc[widget.Node](a, 1usize)
         if crit_held_error != ok { ret (zero, control.TooLarge) }
         crit_held[0usize] = crit_node
-        parts[n] = widget.overlay(grid.key + MENU_KEY + 699902u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: crit_x, y: 140.0 }, modal: false, dismiss: zero }, style.defaults(), crit_held[0usize..1usize])
+        parts[n] = widget.overlay(grid.key + MENU_KEY + 699902u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: grid.win_x[3usize], y: grid.win_y[3usize] }, modal: false, dismiss: zero }, style.defaults(), crit_held[0usize..1usize])
         n += 1usize
     }
     if grid.rules_dialog_open {
         let (rules_panel, rules_panel_error) = rules_dialog_panel(a, grid)
         if rules_panel_error != ok { ret (zero, rules_panel_error) }
         let rules_size = widget.surface_size(theme.runtime)
-        var rules_x = (rules_size.width - 640.0) * 0.5
-        if rules_x < 0.0 { rules_x = 0.0 }
+        window_place(grid, 1u8, 640.0, 120.0, rules_size.width)
         let (rules_held, rules_held_error) = mem.alloc[widget.Node](a, 1usize)
         if rules_held_error != ok { ret (zero, control.TooLarge) }
         rules_held[0usize] = rules_panel
-        parts[n] = widget.overlay(grid.key + MENU_KEY + 699901u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: rules_x, y: 120.0 }, modal: false, dismiss: zero }, style.defaults(), rules_held[0usize..1usize])
+        parts[n] = widget.overlay(grid.key + MENU_KEY + 699901u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: grid.win_x[1usize], y: grid.win_y[1usize] }, modal: false, dismiss: zero }, style.defaults(), rules_held[0usize..1usize])
         n += 1usize
     }
     if grid.sort_dialog_open {
         let (dialog, dialog_error) = sort_dialog_panel(a, grid)
         if dialog_error != ok { ret (zero, dialog_error) }
         let size = widget.surface_size(theme.runtime)
-        var dialog_x = (size.width - 528.0) * 0.5
-        let dialog_y: f32 = 190.0
-        if dialog_x < 0.0 { dialog_x = 0.0 }
+        window_place(grid, 0u8, 528.0, 190.0, size.width)
         let (shown, shown_error) = mem.alloc[widget.Node](a, 1usize)
         if shown_error != ok { ret (zero, control.TooLarge) }
         shown[0usize] = dialog
-        parts[n] = widget.overlay(grid.key + MENU_KEY + 699900u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: dialog_x, y: dialog_y }, modal: false, dismiss: zero }, style.defaults(), shown[0usize..1usize])
+        parts[n] = widget.overlay(grid.key + MENU_KEY + 699900u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: grid.win_x[0usize], y: grid.win_y[0usize] }, modal: false, dismiss: zero }, style.defaults(), shown[0usize..1usize])
         n += 1usize
     }
     if grid.wiz_open {
         let (wiz_node, wiz_error) = wiz_panel(a, grid)
         if wiz_error != ok { ret (zero, wiz_error) }
         let wiz_size = widget.surface_size(theme.runtime)
-        var wiz_x = (wiz_size.width - 520.0) * 0.5
-        if wiz_x < 0.0 { wiz_x = 0.0 }
+        window_place(grid, 2u8, 520.0, 90.0, wiz_size.width)
         let (wiz_held, wiz_held_error) = mem.alloc[widget.Node](a, 1usize)
         if wiz_held_error != ok { ret (zero, control.TooLarge) }
         wiz_held[0usize] = wiz_node
-        parts[n] = widget.overlay(grid.key + MENU_KEY + 699904u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: wiz_x, y: 90.0 }, modal: false, dismiss: zero }, style.defaults(), wiz_held[0usize..1usize])
+        parts[n] = widget.overlay(grid.key + MENU_KEY + 699904u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: grid.win_x[2usize], y: grid.win_y[2usize] }, modal: false, dismiss: zero }, style.defaults(), wiz_held[0usize..1usize])
         n += 1usize
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..n]), ok)
