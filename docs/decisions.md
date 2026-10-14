@@ -41045,3 +41045,7 @@ The wizard's Applies to showed Favorite (the first column) although OK would hav
 ## D4015 - G012: the wizard's Minimum and Maximum take a Percent
 
 The Minimum and Maximum boxes of the wizard cycled Lowest/Highest Value and Number; they now cycle Value, Number, Percent. A Percent bound is a share of the way from the column's lowest to its highest value (`Rule.min_pct`/`max_pct`, applied in `apply_range`), as v3's Percent choice. Percentile and Formula are not offered: the statistics keep no sorted values and the rule model has no expression. WN7-wizard-percent-v5.png; the four grid fixtures pass.
+
+## D4016 - G012: a Percent bound is checked by a fixture
+
+ui_gridrules now checks D4015's Percent bound: a data bar with Minimum 75% and Maximum 100% of the range leaves the middle cell (50%) empty and fills the top cell (exits 147-149). Passes.
