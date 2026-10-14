@@ -166,6 +166,7 @@ band_names: []const str,
 wiz_pos_color: u8,
 wiz_neg_color: u8,
 wiz_axis_color: u8,
+fmt_pick: u8,
     rules_changed: bool,
     wiz_bar_only: bool,
     wiz_min_number: bool,
@@ -3625,32 +3626,43 @@ fn on_fmt_axis(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
-// The colours the style window steps through (v3 opens a colour editor): bar colours and axis colours.
+// The colour editor of the style window: a palette of 24 colours (v3 opens the DevExpress colour editor
+// with the same kind of swatches); the first is v3's default bar blue.
+fn palette_value(i: u8) -> u32 {
+    if i == 0u8 { ret 0x008BEFu32 }
+    // the rest: every mix of 0, 128 and 255 on the three channels (27 colours, 24 listed)
+    let k = u32(i)
+    let red = (k % 3u32) * 127u32 + (k % 3u32) / 2u32
+    let green = ((k / 3u32) % 3u32) * 127u32 + ((k / 3u32) % 3u32) / 2u32
+    let blue = ((k / 9u32) % 3u32) * 127u32 + ((k / 9u32) % 3u32) / 2u32
+    ret (red << 16u32) | (green << 8u32) | blue
+}
+
 fn bar_palette(i: u8) -> paint.Color {
-    if i == 1u8 { ret paint.rgba(0.388, 0.745, 0.482, 1.0) }
-    if i == 2u8 { ret paint.rgba(0.973, 0.412, 0.420, 1.0) }
-    if i == 3u8 { ret paint.rgba(1.0, 0.753, 0.0, 1.0) }
-    ret paint.rgba(0.0, 0.545, 0.937, 1.0)
+    let v = palette_value(i)
+    ret paint.rgba(f32((v >> 16u32) & 255u32) / 255.0, f32((v >> 8u32) & 255u32) / 255.0, f32(v & 255u32) / 255.0, 1.0)
 }
 
-fn bar_palette_text(i: u8) -> str {
-    if i == 1u8 { ret "99.190.123" }
-    if i == 2u8 { ret "248.105.107" }
-    if i == 3u8 { ret "255.192.0" }
-    ret "0.139.239"
+fn axis_palette(i: u8) -> paint.Color { ret bar_palette(i) }
+
+// "R.G.B" of a palette colour, as v3's colour box writes it.
+fn palette_text(a: *mem.Arena, i: u8) -> (str, err) {
+    let v = palette_value(i)
+    let (b, b_error) = str.builder(a, 16usize)
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    if str.push_u64(&sb, u64((v >> 16u32) & 255u32)) != ok || str.push(&sb, ".") != ok { ret ("", control.TooLarge) }
+    if str.push_u64(&sb, u64((v >> 8u32) & 255u32)) != ok || str.push(&sb, ".") != ok { ret ("", control.TooLarge) }
+    if str.push_u64(&sb, u64(v & 255u32)) != ok { ret ("", control.TooLarge) }
+    ret (str.done(&sb), ok)
 }
 
-fn axis_palette(i: u8) -> paint.Color {
-    if i == 1u8 { ret paint.rgba(0.5, 0.5, 0.5, 1.0) }
-    if i == 2u8 { ret paint.rgba(0.85, 0.1, 0.1, 1.0) }
-    ret paint.rgba(0.0, 0.0, 0.0, 1.0)
-}
-
+// Opens the editor for a row: 1 positive, 2 negative, 3 axis.
 fn on_fmt_pos_color(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
     switch g {
     case .Tap as at:
-        grid.wiz_pos_color = (grid.wiz_pos_color + 1u8) % 4u8
+        grid.fmt_pick = 1u8
         ret ok
     default:
         ret ok
@@ -3661,7 +3673,7 @@ fn on_fmt_neg_color(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
     switch g {
     case .Tap as at:
-        grid.wiz_neg_color = (grid.wiz_neg_color + 1u8) % 5u8
+        grid.fmt_pick = 2u8
         ret ok
     default:
         ret ok
@@ -3672,11 +3684,75 @@ fn on_fmt_axis_color(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
     switch g {
     case .Tap as at:
-        grid.wiz_axis_color = (grid.wiz_axis_color + 1u8) % 4u8
+        grid.fmt_pick = 3u8
         ret ok
     default:
         ret ok
     }
+}
+
+type SwatchTap = struct { grid: *Grid, value: u8 }
+
+// A swatch (value 0..23) or the none/same entry (255).
+fn on_swatch(ctx: *void, g: widget.Gesture) -> err {
+    let t = mem.cast[*SwatchTap](ctx)
+    switch g {
+    case .Tap as at:
+        let grid = t.grid
+        if grid.fmt_pick == 1u8 && t.value != 255u8 { grid.wiz_pos_color = t.value }
+        if grid.fmt_pick == 2u8 {
+            if t.value == 255u8 { grid.wiz_neg_color = 0u8 } else { grid.wiz_neg_color = t.value + 1u8 }
+        }
+        if grid.fmt_pick == 3u8 {
+            if t.value == 255u8 { grid.wiz_axis_color = 0u8 } else { grid.wiz_axis_color = t.value + 1u8 }
+        }
+        grid.fmt_pick = 0u8
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// The palette popup: six swatches across, four down, and None / Same as positive under them.
+fn swatch_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (taps, taps_error) = mem.alloc[SwatchTap](a, 25usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 6usize)
+    if lines_error != ok { ret (zero, control.TooLarge) }
+    var row = 0usize
+    while row < 4usize {
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 6usize)
+        if cells_error != ok { ret (zero, control.TooLarge) }
+        var col = 0usize
+        while col < 6usize {
+            let index = row * 6usize + col
+            taps[index] = SwatchTap { grid: grid, value: u8(index) }
+            var swatch = control.sized_style(26.0, 22.0)
+            swatch.background = paint.Brush { Solid: bar_palette(u8(index)) }
+            swatch.border = style.Border { width: 1.0, color: gl.rgb(0x606060u32) }
+            swatch.margin = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            cells[col] = widget.region(grid.key + MENU_KEY + 850500u64 + u64(index), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[index]), invoke: on_swatch }, gestures: 1u8, enabled: true, focusable: false }, swatch, zero)
+            col += 1usize
+        }
+        lines[row] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..6usize])
+        row += 1usize
+    }
+    var count = 4usize
+    if grid.fmt_pick != 1u8 {
+        taps[24usize] = SwatchTap { grid: grid, value: 255u8 }
+        var caption = "None"
+        if grid.fmt_pick == 2u8 { caption = "Same as positive bar" }
+        let (none_label, none_error) = flat_text(a, grid, caption, gl.rgb(0x000000u32))
+        if none_error != ok { ret (zero, none_error) }
+        lines[count] = widget.region(grid.key + MENU_KEY + 850530u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[24usize]), invoke: on_swatch }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(180.0, 24.0), one(a, widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, none_label))))
+        count += 1usize
+    }
+    var frame = control.sized_style(190.0, 0.0)
+    frame.height = style.Length { Px: 110.0 }
+    if count == 5usize { frame.height = style.Length { Px: 136.0 } }
+    frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    frame.border = style.Border { width: 1.0, color: gl.rgb(0x606060u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, lines[0usize..count]), ok)
 }
 
 fn on_fmt_close(ctx: *void, g: widget.Gesture) -> err {
@@ -3684,6 +3760,7 @@ fn on_fmt_close(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         grid.fmt_open = false
+        grid.fmt_pick = 0u8
         ret ok
     default:
         ret ok
@@ -3731,6 +3808,36 @@ fn fmt_button(a: *mem.Arena, grid: *Grid, text: str, key: u64) -> (widget.Node, 
     ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_fmt_close }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, widget.padded(0u64, 36.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
 }
 
+// The three colour rows of the style window, each its caption and the colour as v3 writes it.
+fn fmt_pos_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (text, text_error) = palette_text(a, grid.wiz_pos_color)
+    if text_error != ok { ret (zero, text_error) }
+    let (row, row_error) = fmt_choice(a, grid, "Color:", text, grid.key + MENU_KEY + 850366u64, on_fmt_pos_color, true)
+    ret (row, row_error)
+}
+
+fn fmt_neg_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    var text = "Apply same fill color as positive bar"
+    if grid.wiz_neg_color != 0u8 {
+        let (named, named_error) = palette_text(a, grid.wiz_neg_color - 1u8)
+        if named_error != ok { ret (zero, named_error) }
+        text = named
+    }
+    let (row, row_error) = fmt_choice(a, grid, "Negative:", text, grid.key + MENU_KEY + 850367u64, on_fmt_neg_color, true)
+    ret (row, row_error)
+}
+
+fn fmt_axis_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    var text = "None"
+    if grid.wiz_axis_color != 0u8 {
+        let (named, named_error) = palette_text(a, grid.wiz_axis_color - 1u8)
+        if named_error != ok { ret (zero, named_error) }
+        text = named
+    }
+    let (row, row_error) = fmt_choice(a, grid, "Axis color:", text, grid.key + MENU_KEY + 850368u64, on_fmt_axis_color, true)
+    ret (row, row_error)
+}
+
 fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (rows, rows_error) = mem.alloc[widget.Node](a, 16usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
@@ -3753,13 +3860,11 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if e4 != ok { ret (zero, e4) }
     let (c5, e5) = fmt_caption(a, grid, "Positive Bar Appearance", 0x000000u32, 12.0)
     if e5 != ok { ret (zero, e5) }
-    let (c6, e6) = fmt_choice(a, grid, "Color:", bar_palette_text(grid.wiz_pos_color), grid.key + MENU_KEY + 850366u64, on_fmt_pos_color, true)
+    let (c6, e6) = fmt_pos_row(a, grid)
     if e6 != ok { ret (zero, e6) }
     let (c7, e7) = fmt_caption(a, grid, "Negative Bar Appearance", 0x000000u32, 12.0)
     if e7 != ok { ret (zero, e7) }
-    var neg_text = "Apply same fill color as positive bar"
-    if grid.wiz_neg_color != 0u8 { neg_text = bar_palette_text(grid.wiz_neg_color - 1u8) }
-    let (c8, e8) = fmt_choice(a, grid, "Negative:", neg_text, grid.key + MENU_KEY + 850367u64, on_fmt_neg_color, true)
+    let (c8, e8) = fmt_neg_row(a, grid)
     if e8 != ok { ret (zero, e8) }
     let (c9, e9) = fmt_caption(a, grid, "Axis Settings", 0x000000u32, 12.0)
     if e9 != ok { ret (zero, e9) }
@@ -3768,11 +3873,7 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if ((grid.wiz_bar_style >> 3u8) & 3u8) == 2u8 { axis_mode = "None" }
     let (c10, e10) = fmt_choice(a, grid, "Axis:", axis_mode, grid.key + MENU_KEY + 850365u64, on_fmt_axis, true)
     if e10 != ok { ret (zero, e10) }
-    var axis_text = "None"
-    if grid.wiz_axis_color == 1u8 { axis_text = "Black" }
-    if grid.wiz_axis_color == 2u8 { axis_text = "Gray" }
-    if grid.wiz_axis_color == 3u8 { axis_text = "Red" }
-    let (c11, e11) = fmt_choice(a, grid, "Axis color:", axis_text, grid.key + MENU_KEY + 850368u64, on_fmt_axis_color, true)
+    let (c11, e11) = fmt_axis_row(a, grid)
     if e11 != ok { ret (zero, e11) }
     rows[0usize] = c0
     rows[1usize] = c1
@@ -4494,6 +4595,25 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..n]), ok)
 }
 
+// The style window over the wizard, and over it the colour editor of the row asked for.
+fn fmt_layers(a: *mem.Arena, grid: *Grid, base: widget.Node) -> (widget.Node, err) {
+    let (over, over_error) = fmt_panel(a, grid)
+    if over_error != ok { ret (zero, over_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, control.TooLarge) }
+    layers[0usize] = base
+    layers[1usize] = widget.padded(0u64, 70.0, 20.0, 0.0, 0.0, style.defaults(), one(a, over))
+    if grid.fmt_pick == 0u8 { ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok) }
+    // the colour editor of the row asked for, over the dialog
+    let (swatches, swatches_error) = swatch_panel(a, grid)
+    if swatches_error != ok { ret (zero, swatches_error) }
+    var down: f32 = 186.0
+    if grid.fmt_pick == 2u8 { down = 222.0 }
+    if grid.fmt_pick == 3u8 { down = 258.0 }
+    layers[2usize] = widget.padded(0u64, 250.0, down, 0.0, 0.0, style.defaults(), one(a, swatches))
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..3usize]), ok)
+}
+
 fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if grid.print_open && grid.pv_setup {
         let (setup_node, setup_error) = page_setup_panel(a, grid)
@@ -4506,13 +4626,8 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (base, base_error) = wiz_panel_base(a, grid)
     if base_error != ok { ret (zero, base_error) }
     if !grid.fmt_open { ret (base, ok) }
-    let (over, over_error) = fmt_panel(a, grid)
-    if over_error != ok { ret (zero, over_error) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
-    if layers_error != ok { ret (zero, control.TooLarge) }
-    layers[0usize] = base
-    layers[1usize] = widget.padded(0u64, 70.0, 20.0, 0.0, 0.0, style.defaults(), one(a, over))
-    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+    let (layered, layered_error) = fmt_layers(a, grid, base)
+    ret (layered, layered_error)
 }
 
 fn wiz_panel_base(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {

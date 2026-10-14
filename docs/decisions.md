@@ -41355,3 +41355,7 @@ v3's pool quick list (QM5) is one column 135 px wide (92 units) with 25.5 px (17
 ## D4092 - G012: the filter-operator popup measured and sized from v3
 
 v3's popup (FR2) is 280 px wide with 33 px rows; ours was 375 by 39. Now 187 by 22 units (280 by 33 px at 1.5 per unit), pictures 22 by 18 in a 36 unit column (FO5-operator-popup-size-v5.png).
+
+## D4093 - G012: a colour editor behind the style window's colour rows
+
+The Color, Negative and Axis color rows open a palette of 24 colours (`swatch_panel`, six across, four down; v3's default bar blue first, the rest every mix of 0, 128 and 255 on the channels) with None / Same as positive bar under it for the last two; a tap sets the colour and the row shows it as R.G.B (CE14-colour-editor-v5.png). It is a palette, not v3's full colour editor (no custom RGB). Trap found: `f32(grid.fmt_pick)` on a u8 in the picker's position made the whole style window trap in `style.amount` the moment it opened, though the branch was not taken; a compare chain replaced it. ui_datagrid passes.
