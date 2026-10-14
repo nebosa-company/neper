@@ -6577,13 +6577,20 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var cell_style = style.defaults()
         cell_style.width = style.Length { Px: grid.columns[at].width }
         if grid.look.on && text.len != 0usize { cell_style.background = paint.Brush { Solid: grid.look.footer_cell } }
-        if at == count_at && grid.look.on {
-            // centred in its cell
-            let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
-            if centred_error != ok { ret (zero, control.TooLarge) }
-            centred[0usize] = inner
+        if grid.look.on && text.len != 0usize {
+            // v3 (FR-footer recording): the count sits at the left of its cell, a whole number is
+            // centred, an amount stands at the right
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, control.TooLarge) }
+            held[0usize] = inner
             cell_style.height = style.Length { Px: grid.look.row_height + 4.0 }
-            cells[at] = widget.aligned(0u64, .Center, .Center, cell_style, centred[0usize..1usize])
+            if at == count_at {
+                cells[at] = widget.padded(0u64, 4.0, 3.0, 0.0, 0.0, cell_style, held[0usize..1usize])
+            } else if s.kind == CellKind.Currency || s.kind == CellKind.Real {
+                cells[at] = widget.aligned(0u64, .End, .Center, cell_style, held[0usize..1usize])
+            } else {
+                cells[at] = widget.aligned(0u64, .Center, .Center, cell_style, held[0usize..1usize])
+            }
         } else {
             cells[at] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
         }
