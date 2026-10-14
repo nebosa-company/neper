@@ -41381,3 +41381,6 @@ The sheet scales the Left, Top and Right margins to pixels (`margin_hund`, `marg
 
 ## D4100 - G012: Page Setup's header and footer print on the preview page
 The preview page draws a header band above the heading and a footer band under the filter strip, from the six cells typed in Page Setup (`print_band`; "[Page #]" shows "Page n", untouched cells use the defaults: only the footer's centre cell, "Page n"); the heading sits under the header by the Header margin (`atleast`). A page holds ten rows now (twelve pushed the footer off the sheet, so 12029 pages for the sample). Cells are left-aligned within their third, not centred or right-aligned as v3 does; "[Date Printed]" prints as typed; Bottom and Footer margins still do not move anything.
+
+## D4101 - G012: typed R, G and B for the custom colour
+The style window has a "Custom color:" row of three spin boxes (0..255, step 8, typed entry; `rgb_spins`, `set_channel`) that edit `cust_rgb`, and the colour popup's R+/G+/B+ steppers became one "Custom color" entry that gives the row that colour (CR3: 48.24.0 typed by arrow taps, taken by the positive row). A spin box in the popup layer itself ended the window loop with scene.Invalid (not diagnosed: the same box works inside the dialog), hence the row in the dialog. Still no hue square.
