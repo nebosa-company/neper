@@ -41177,3 +41177,7 @@ v3's data bars are Gradient filled by default (CF10-databar-style-dialog-v3.png)
 ## D4048 - G012: a gradient brush in a cell breaks the row build, whatever its stops
 
 Correcting D4047: the same linear-gradient bar with its two stops allocated from the frame arena (as the wizard's preview does) still makes `ui_datagrid` exit 95, and with the stops kept in a ring on the grid the live sample drew no bar at all. So the failure is the gradient brush used inside a cell box, not the stop storage or the frame budget. The wizard preview works because its gradient box is a single keyed-less node outside the table. Nothing adopted; the cause (probably the table's virtual row builder or the scene's handling of a gradient on a percent-width box) is not found.
+
+## D4049 - G012: the gradient fixture failure is an error code, not a check
+
+A closer look at D4048: with a gradient brush on the data bar the fixture's exit 95 is not its `role_data >= role_calls` check (that site changed to 201 still exits 95, and 95 occurs nowhere else in the fixture as an exit); the exit status comes from an error value returned out of the run, some `try` path failing as the gradient is built or painted. The earlier diagnoses (D4047, D4048) read the exit as that check and are withdrawn. Next: find the failing call by returning the error from the build and the pump with a distinct code each. Nothing adopted; the bars stay solid.
