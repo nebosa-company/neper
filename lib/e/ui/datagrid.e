@@ -5937,7 +5937,9 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         bar.background = paint.Brush { Solid: look.bar_color }
         var bar_length: f32 = 0.0
         if column < grid.columns.len { bar_length = grid.columns[column].width * look.bar }
-        if bar_length > 2.0 && mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
+        // Fill mode Solid and Border style Solid of v3's Data Bar Rule Style Settings
+        if look.bar_border { bar.border = style.Border { width: 1.0, color: look.bar_color } }
+        if !look.bar_solid && bar_length > 2.0 && mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
             let (head_box, has_head) = control.keyed_bounds(grid.theme.runtime, grid.key + 1u64 + 2u64 * u64(column))
             let (bar_stops, bar_stops_error) = mem.alloc[paint.Stop](a, 2usize)
             if has_head && bar_stops_error == ok {

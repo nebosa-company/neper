@@ -126,3 +126,13 @@ Verified live 2026-10-14: a two colour scale created in the wizard with the whit
 | Data bar border, negative bars, axis; Format... dialog | recorded (CF10), not built; the pool has no negative values | D2504 |
 | Enter key must not end the program | fixed | D2510 |
 | Legality, Card Rules (View menu) | app-level (the card side panel), out of scope per the owner for Legality; Card Rules is the same kind | |
+
+## To do (owner's list, 2026-10-14)
+
+| Item | Status | Evidence |
+|---|---|---|
+| Scroll bars change size when hovered over (v3's bars thicken under the pointer; the grid's bars keep one width) | to do: record the thin and the hovered widths in v3, then animate `scroll_width` for the vertical bar and the navigator thumb | |
+| Format... dialog (data bar fill mode, border, negative bars, axis; colour edit) | model has fill mode Solid and border (D4055), no dialog | CF10 |
+| Formula for the wizard bounds | not built | |
+| Narrow-window column growth, thumb track length | open | D2502 |
+| PDF / Excel export, printing | not started | |

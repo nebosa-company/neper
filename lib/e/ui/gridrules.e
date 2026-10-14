@@ -57,7 +57,9 @@ type Rule = struct {
     min_ptile: bool,
     max_ptile: bool,
     has_ignore: bool,
-    ignore_above: f64
+    ignore_above: f64,
+    bar_solid: bool,
+    bar_border: bool
 }
 
 // The look of one cell. `bar` is the filled fraction 0..1 of a data bar (0 for none); `icon`
@@ -70,6 +72,8 @@ type Format = struct {
     bold: bool,
     has_bar: bool,
     bar_only: bool,
+    bar_solid: bool,
+    bar_border: bool,
     bar: f32,
     bar_color: paint.Color,
     icon: u8,
@@ -104,7 +108,7 @@ error BadRule
 
 fn rule(column: usize, kind: Kind) -> Rule {
     let none = paint.rgba(0.0, 0.0, 0.0, 0.0)
-    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false, has_min: false, min_value: 0.0, has_max: false, max_value: 0.0, min_pct: false, max_pct: false, min_ptile: false, max_ptile: false, has_ignore: false, ignore_above: 0.0 }
+    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false, has_min: false, min_value: 0.0, has_max: false, max_value: 0.0, min_pct: false, max_pct: false, min_ptile: false, max_ptile: false, has_ignore: false, ignore_above: 0.0, bar_solid: false, bar_border: false }
 }
 
 fn create(a: *mem.Arena, t: *const table.Table, capacity: usize) -> (Rules, err) {
@@ -500,6 +504,8 @@ fn apply_range(rs: *const Rules, i: usize, row: usize, f: *Format) {
         if f.has_bar { ret }
         f.has_bar = true
         f.bar_only = r.bar_only
+        f.bar_solid = r.bar_solid
+        f.bar_border = r.bar_border
         f.bar = x
         f.bar_color = r.fill
         ret
