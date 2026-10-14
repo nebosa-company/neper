@@ -16,7 +16,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Memo / preview row (Card Rules) | matched | R1-card-rules (D2431); the frame round both lines of the current card is not drawn yet |
 | Image combo: favourite star (two values) | matched | ST1-favourite-star (D2435) |
 | Image combo: desired (drop-down: Junk, Needed, Needed Badly, Normal, Not Needed, Unassigned) | recorded in v3 (IC1-desired-dropdown-v3.png: the cell shows its value with a down-arrow button while edited, the list opens below with the current value highlighted blue, each value has a small picture); neper's `choice` editor (select with picks, dictionaries of up to 24 entries, covered by ui_datagrid section 27) has the same structure; no sample column uses it, the pool grid is read-only and the collection's dictionaries (editions) exceed 24 entries, a tap now opens the select editor in the sample (D2445, IC2-select-editor-v5.png) and and with the v3 look it is now v3's box with arrow button and plain list, current value highlighted blue (IC3-select-v3-look-v5.png, D2446); per-value pictures not built | IC1, IC2, IC3 |
-| Check box, date edit, hyperlink, label editors | untested | |
+| Check box editor (Foil) | matched (look, centred; click flips, D2488 and D2489) / date edit, hyperlink, label editors: no such column in v3's pool or collection grid (FT2-footer-maximised-v3) | CB1, CB2 |
 | Focused row editors of the collection (Qty spin, Used spin, Buy at and Sell at buttons) | matched | ED1-collection-row-editors-v3 / v5 |
 | Header image + header hint | matched | T1/T2 hint (delay measured 1045 ms vs 1101 ms, D2430) |
 | Per-column alignment of header, cell, footer, group summary | matched (cell, header) / untested (footer, group summary) | A-series |
@@ -30,13 +30,13 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 
 | Feature | Status | Evidence |
 |---|---|---|
-| Bands (fixed left band) | untested | `set_bands` exists, no v3 recording |
+| Bands (fixed left band) | n/a in v3 (neither grid shows a band row, FT2-footer-maximised-v3) | FT2 |
 | Navigator (buttons, n of N, filter button) | matched | N2-navigator-count (D2428) |
 | Footer, summary text, footer count | matched | P020 footer probes |
 | Group-by box and its chips | matched | D1-group-box-drop, chip tap/drag |
 | Row indicator, quick column list | matched | quick list, C1 |
 | Row indicator custom-drawn warnings (deck) | untested | deck grid only |
-| Preview row | untested | |
+| Preview row | n/a in v3 (the View menu has no preview entry, VM1-view-menu-v3; the sample's Preview is an addition) | VM1 |
 | Grid lines Both/Horizontal/Vertical/None | matched | V1-view-toggles, P017 |
 | Header, indicator, auto width toggles | matched | V1 |
 | Cell end ellipsis | matched | every captured grid |
