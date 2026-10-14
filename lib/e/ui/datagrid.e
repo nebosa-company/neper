@@ -720,7 +720,11 @@ fn on_search_char(ctx: *void) -> err {
     var from = 0usize
     if grid.has_position { from = grid.position }
     let (at, found) = search_find(grid, from, true, true)
-    if !found { ret ok }
+    if !found {
+        // v3 ignores a letter that matches nothing: the buffer keeps what it had
+        grid.search_len -= 1usize
+        ret ok
+    }
     ret search_go(grid, at)
 }
 
@@ -2763,6 +2767,59 @@ fn summary_text(a: *mem.Arena, s: ColumnSpec, summary: grp.Summary) -> (str, err
 // A data cell's text: in the row's own ink when the application gave one (`set_row_ink`), else
 // in `role`.
 fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role: style.ColorRole, row: usize, out: *widget.Node) -> err {
+    // v3 marks the typed prefix in the current row's search cell (white on #0078D7)
+    if grid.look.on && grid.has_search && grid.search_len > 0usize && grid.has_selection && grid.selected_row == row && search_matches(grid, row) {
+        let column = grid.all[grid.search_spec].column
+        let cell = table.get_str(grid.t, column, row)
+        let n = grid.search_len
+        if cell.len == text.len && cell.len >= n {
+            var same = true
+            var k = 0usize
+            while k < cell.len && same {
+                if cell[k] != text[k] { same = false }
+                k += 1usize
+            }
+            if same {
+                var options = control.text_options()
+                options.wrap = .None
+                options.size = grid.look.text_size
+                let (head, head_error) = control.colored_text(a, 0u64, text[0usize..n], grid.theme, options, gl.rgb(0xFFFFFFu32))
+                if head_error != ok { ret head_error }
+                var tail_options = options
+                tail_options.color = role
+                if bold { tail_options.weight = 700u32 }
+                var tail: widget.Node = zero
+                var tail_error: err = ok
+                var has_tail_ink = false
+                if grid.has_ink {
+                    let (tail_ink, has_row_ink) = grid.ink_of(grid.ink_ctx, row)
+                    if has_row_ink {
+                        has_tail_ink = true
+                        let (colored, colored_error) = control.colored_text(a, 0u64, text[n..], grid.theme, tail_options, tail_ink)
+                        tail = colored
+                        tail_error = colored_error
+                    }
+                }
+                if !has_tail_ink {
+                    let (plain_tail, plain_tail_error) = control.text(a, 0u64, text[n..], grid.theme, tail_options)
+                    tail = plain_tail
+                    tail_error = plain_tail_error
+                }
+                if tail_error != ok { ret tail_error }
+                var mark_style = style.defaults()
+                mark_style.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) }
+                let (head_box, head_box_error) = mem.alloc[widget.Node](a, 1usize)
+                if head_box_error != ok { ret control.TooLarge }
+                head_box[0usize] = head
+                let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+                if parts_error != ok { ret control.TooLarge }
+                parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, mark_style, head_box[0usize..1usize])
+                parts[1usize] = tail
+                *out = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+                ret ok
+            }
+        }
+    }
     if grid.has_ink {
         let (ink, has_row_ink) = grid.ink_of(grid.ink_ctx, row)
         if has_row_ink {

@@ -2186,4 +2186,5 @@ D2422	691	G012: the dotted focus rectangle on the current group row
 D2423	920	G012: per-entry heights in a lazy viewport, v3's 29 px group footer
 D2424	742	G012: a click on a group row focuses it, the box or a double click toggles it
 D2425	685	G012: the keyboard visits group rows; the grid shows no focus ring
-D2426	847	G012: Shift+click adds a column to the sort, Ctrl+click takes it out
+D2426	848	G012: Shift+click adds a column to the sort, Ctrl+click takes it out
+D2427	840	G012: the search buffer ignores a letter that matches nothing and marks the typed prefix
