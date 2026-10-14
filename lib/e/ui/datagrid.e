@@ -3208,6 +3208,20 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         n += 1usize
     }
     // the column the rule applies to (the manager shows it in Applies to): the library's select
+    if !grid.has_wiz_target {
+        // a new rule starts on the first numeric column, which is what OK would pick
+        var default_at = 0usize
+        while default_at < grid.all.len {
+            let default_kind = grid.all[default_at].kind
+            if sort_row_listed(grid, default_at) && (default_kind == CellKind.Int || default_kind == CellKind.Real || default_kind == CellKind.Currency) {
+                grid.wiz_target = default_at
+                grid.has_wiz_target = true
+                default_at = grid.all.len
+            } else {
+                default_at += 1usize
+            }
+        }
+    }
     let (target_names, target_names_error) = mem.alloc[str](a, grid.all.len + 1usize)
     if target_names_error != ok { ret (zero, control.TooLarge) }
     let (target_picks, target_picks_error) = mem.alloc[WizPick](a, grid.all.len + 1usize)

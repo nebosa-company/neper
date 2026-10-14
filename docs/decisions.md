@@ -41037,3 +41037,7 @@ The title text of a secondary window stood 64 px in (a leftover 44 px pad) and t
 ## D4013 - G012: the Applies to select verified live
 
 Driven in cardgrid: New Rule opens the wizard, the Applies to select lists the columns, picking CMC sets the rule's column and OK adds a Data Bar rule on CMC to the manager (WN5-applies-to-picked-v5.png, WN5-rule-added-v5.png). The four grid fixtures pass after the title placement of D4012.
+
+## D4014 - G012: a new rule's Applies to starts on the first numeric column
+
+The wizard's Applies to showed Favorite (the first column) although OK would have used a numeric one. The panel now sets the target to the first listed Int, Real or Currency column when none was chosen, so what is shown is what OK applies (WN6-wizard-default-cmc-v5.png: CMC). The four grid fixtures pass.
