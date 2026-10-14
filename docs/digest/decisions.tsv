@@ -2560,4 +2560,5 @@ D3978	907	G012: the mouse wheel reaches the grid and turns three rows a notch
 D3979	722	G012: the saved layout keeps the Shift+click sorts and drives the order
 D3980	1174	G012: cards dragged from one grid to another
 D3981	1315	G012: export and copy as text; the menu mnemonics keep their spaces
-D3981	1267	G012: export and copy as text; the menu mnemonics keep their spaces
+D3981	1268	G012: export and copy as text; the menu mnemonics keep their spaces
+D3982	1074	G012: the New Rule wizard of the rules manager
