@@ -218,6 +218,9 @@ type Grid = struct {
     has_header_icons: bool,
     filter_op_icons: [12]scene.TextureId,
     has_filter_op_icons: bool,
+    nav_icons: [7]scene.TextureId,
+    nav_disabled: [6]scene.TextureId,
+    has_nav_icons: bool,
     cell_menu: []const overlay.MenuCommand,
     menu_open: bool,
     menu_kind: u8,
@@ -936,6 +939,14 @@ fn set_header_menu_icons(grid: *Grid, icons: [9]scene.TextureId) {
 fn set_filter_operator_icons(grid: *Grid, icons: [12]scene.TextureId) {
     grid.filter_op_icons = icons
     grid.has_filter_op_icons = true
+}
+
+// v3's navigator pictures: the enabled First, Previous page, Previous, Next, Next page, Last and the
+// funnel, and the disabled First .. Last (each 28 by 32, with the button's own bevel).
+fn set_navigator_icons(grid: *Grid, enabled: [7]scene.TextureId, disabled: [6]scene.TextureId) {
+    grid.nav_icons = enabled
+    grid.nav_disabled = disabled
+    grid.has_nav_icons = true
 }
 
 // The word before the count in the footer (v3: "Count" in the pool, "Rows" in the collection).
@@ -6345,8 +6356,24 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
     }
     var ink = gl.rgb(0x2C7BD6u32)
     if !enabled { ink = gl.rgb(0xC9D3E0u32) }
-    let (mark, mark_error) = gl.mark(a, shape, ink, ink, 12.0, 12.0)
-    if mark_error != ok { ret (zero, mark_error) }
+    var mark: widget.Node = zero
+    if grid.has_nav_icons {
+        var picture_at = 0usize
+        if kind == Nav.PrevPage { picture_at = 1usize }
+        if kind == Nav.Prev { picture_at = 2usize }
+        if kind == Nav.Next { picture_at = 3usize }
+        if kind == Nav.NextPage { picture_at = 4usize }
+        if kind == Nav.Last { picture_at = 5usize }
+        var picture = grid.nav_icons[picture_at]
+        if !enabled { picture = grid.nav_disabled[picture_at] }
+        let (nav_picture, nav_picture_error) = control.image(a, 0u64, picture, 24.0, 30.0, .Contain, "")
+        if nav_picture_error != ok { ret (zero, nav_picture_error) }
+        mark = nav_picture
+    } else {
+        let (shape_mark, shape_error) = gl.mark(a, shape, ink, ink, 12.0, 12.0)
+        if shape_error != ok { ret (zero, shape_error) }
+        mark = shape_mark
+    }
     let state = control.control_state(grid.theme, key, enabled, false)
     var look = style.resolve(grid.theme.tokens, .Plain, state)
     look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -6356,6 +6383,10 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
     look.custom_padding = true
     look.padding = 4.0
     look.padding_y = 3.0
+    if grid.has_nav_icons {
+        look.padding = 0.0
+        look.padding_y = 0.0
+    }
     look.min_width = 20.0
     look.min_height = 18.0
     let (node, node_error) = control.pressable_states(a, key, grid.theme, 3u8, label, look, enabled, false, 0u32, 0u32, 0u64, action, mark)
@@ -6404,8 +6435,16 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     // the funnel
     var funnel_ink = gl.rgb(0x8A8A8Au32)
     let funnel_key = navigator_key(grid) + 7u64
-    let (funnel_mark, funnel_error) = control.icon_square(a, funnel_ink, .Filter, 16.0)
-    if funnel_error != ok { ret (zero, funnel_error) }
+    var funnel_mark: widget.Node = zero
+    if grid.has_nav_icons {
+        let (funnel_picture, funnel_picture_error) = control.image(a, 0u64, grid.nav_icons[6usize], 24.0, 30.0, .Contain, "")
+        if funnel_picture_error != ok { ret (zero, funnel_picture_error) }
+        funnel_mark = funnel_picture
+    } else {
+        let (funnel_shape, funnel_error) = control.icon_square(a, funnel_ink, .Filter, 16.0)
+        if funnel_error != ok { ret (zero, funnel_error) }
+        funnel_mark = funnel_shape
+    }
     let funnel_state = control.control_state(grid.theme, funnel_key, grid.has_filter_action, false)
     var funnel_look = style.resolve(grid.theme.tokens, .Plain, funnel_state)
     funnel_look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -6415,6 +6454,10 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     funnel_look.custom_padding = true
     funnel_look.padding = 2.0
     funnel_look.padding_y = 1.0
+    if grid.has_nav_icons {
+        funnel_look.padding = 0.0
+        funnel_look.padding_y = 0.0
+    }
     funnel_look.min_width = 20.0
     funnel_look.min_height = 18.0
     let (funnel, funnel_node_error) = control.pressable_states(a, funnel_key, grid.theme, 3u8, "Filter", funnel_look, grid.has_filter_action, false, 0u32, 0u32, 0u64, &grid.filter_action, funnel_mark)
