@@ -2548,4 +2548,5 @@ D3966	742	G012: a click on a group row focuses it, the box or a double click tog
 D3967	685	G012: the keyboard visits group rows; the grid shows no focus ring
 D3968	848	G012: Shift+click adds a column to the sort, Ctrl+click takes it out
 D3969	841	G012: the search buffer ignores a letter that matches nothing and marks the typed prefix
-D3970	624	G012: the navigator counts the cards of collapsed groups
+D3970	625	G012: the navigator counts the cards of collapsed groups
+D3971	668	G012: Ctrl+click on the only sorted column clears the sort

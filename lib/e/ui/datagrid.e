@@ -934,6 +934,10 @@ fn on_menu_pick(ctx: *void) -> err {
         ret grid.events.sort_changed(grid.events.ctx, spec, grid.descending)
     }
     if pick.id == CMD_CLEAR_SORT || pick.id == CMD_CLEAR_GROUPING {
+        if pick.id == CMD_CLEAR_SORT {
+            grid.sort_column = grid.all.len
+            grid.extra_count = 0usize
+        }
         grid.command = pick.id
         grid.command_spec = shown
         ret ok
@@ -3370,6 +3374,12 @@ fn on_sort(ctx: *void, shown: usize) -> err {
             if removed { grid.extra_count = kept }
         }
         if removed { ret grid.events.sort_changed(grid.events.ctx, grid.sort_column, grid.descending) }
+        if grid.sort_column == spec {
+            // the only sorted column: v3 clears the sort (the application reads the command)
+            grid.sort_column = grid.all.len
+            grid.command = CMD_CLEAR_SORT
+            grid.command_spec = shown
+        }
         ret ok
     }
     grid.extra_count = 0usize
