@@ -858,7 +858,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         tall_boxes[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(80.0, 400.0), tall_boxes[1usize..2usize])
         var fading_ground = control.sized_style(80.0, 100.0)
         fading_ground.background = paint.Brush { Solid: style.color(&tokens, .Surface) }
-        let fading = widget.scroll(8500u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: paint.rgba(1.0, 0.0, 0.0, 1.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: true }, fading_ground, tall_boxes[0usize..1usize])
+        let fading = widget.scroll(8500u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: paint.rgba(1.0, 0.0, 0.0, 1.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: true, virtual_extras: zero }, fading_ground, tall_boxes[0usize..1usize])
         let (fading_page, fading_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if fading_page_error != ok { os.exit(218i32) }
         fading_page[0usize] = fading

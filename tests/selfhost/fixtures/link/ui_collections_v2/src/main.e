@@ -812,7 +812,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var padded_look = control.sized_style(200.0, 176.0)
         let pad16 = style.Length { Px: 16.0 }
         padded_look.padding = style.EdgeLengths { left: pad16, top: pad16, right: pad16, bottom: pad16 }
-        let padded_view = widget.scroll(3000u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: style.color(&tokens, .OnSurfaceVariant), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, padded_look, padded_content[0usize..1usize])
+        let padded_view = widget.scroll(3000u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: style.color(&tokens, .OnSurfaceVariant), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, padded_look, padded_content[0usize..1usize])
         let (padded_page, padded_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if padded_page_error != ok { os.exit(239i32) }
         padded_page[0usize] = padded_view
@@ -1068,7 +1068,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (paged_held, paged_held_error) = mem.alloc[widget.Node](&f, 1usize)
         if paged_list_error != ok || paged_held_error != ok { os.exit(252i32) }
         paged_held[0usize] = paged_list
-        let paged_view = widget.scroll(7000u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: zero, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, control.sized_style(300.0, 150.0), paged_held[0usize..1usize])
+        let paged_view = widget.scroll(7000u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: zero, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, control.sized_style(300.0, 150.0), paged_held[0usize..1usize])
         let (paged_page, paged_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if paged_page_error != ok { os.exit(252i32) }
         paged_page[0usize] = paged_view

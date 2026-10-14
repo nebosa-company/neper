@@ -53,7 +53,11 @@ type Image = struct { texture: scene.TextureId, fit: Fit }
 type Overscroll = enum u8 { Clamp, Bounce }
 // (D1400) `fades`: an overlay-scrollbar host's thumb, shown while scrolling and
 // fading out after 1.5 s idle.
-type Scroll = struct { axis: ui_layout.Axis, offset: f32, overscroll: Overscroll, momentum: bool, scrollbar: bool, thumb: paint.Color, change: Change[f32], virtual_first: usize, virtual_count: usize, virtual_extent: f32, fades: bool }
+// Entries of a lazy viewport taller than `virtual_extent` by `extra` (sorted by index): v3's group
+// footers are about 29 px in rows of 19.
+type VirtualExtra = struct { index: usize, extra: f32 }
+
+type Scroll = struct { axis: ui_layout.Axis, offset: f32, overscroll: Overscroll, momentum: bool, scrollbar: bool, thumb: paint.Color, change: Change[f32], virtual_first: usize, virtual_count: usize, virtual_extent: f32, fades: bool, virtual_extras: []const VirtualExtra }
 // A custom's `state` is the bytes its measure and paint read through `ctx` and
 // nothing else (D917): with them the runtime can tell an unchanged custom from a
 // changed one and skip its subtree; empty, the custom is painted every frame.
@@ -621,7 +625,7 @@ fn scroll_view(a: *mem.Arena, key: Key, axis: ui_layout.Axis, value_style: style
     if stacked_error != ok { ret (zero, TooLarge) }
     stacked[0usize] = flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), children)
     let thumb = paint.rgba(0.5, 0.5, 0.5, 0.6)
-    ret (scroll(key, Scroll { axis: axis, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, value_style, stacked[0usize..1usize]), ok)
+    ret (scroll(key, Scroll { axis: axis, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, value_style, stacked[0usize..1usize]), ok)
 }
 
 fn zoom(key: Key, value: Zoom, value_style: style.Style, children: []const Node) -> Node {
@@ -1807,7 +1811,7 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         let (content, content_error) = measure_stack(s, a, node, open)
         if content_error != ok { ret (zero, content_error) }
         if sc.virtual_count != 0usize {
-            let total = f32(sc.virtual_count) * sc.virtual_extent
+            let total = f32(sc.virtual_count) * sc.virtual_extent + virtual_extra_total(sc.virtual_extras)
             if sc.axis == .Vertical { ret (ui_layout.constrain(geometry.Size { width: content.width, height: total }, inner), ok) }
             ret (ui_layout.constrain(geometry.Size { width: total, height: content.height }, inner), ok)
         }
@@ -2159,6 +2163,34 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
 // A viewport: its content measured for the extents, the offset clamped to them
 // (unless it may overshoot), the children placed shifted and clipped -- a lazy
 // viewport's at their item positions -- and the scrollbar thumb over them.
+// The extra length of every entry of a lazy viewport, before an index, at it, and in all.
+fn virtual_extra_total(extras: []const VirtualExtra) -> f32 {
+    var sum: f32 = 0.0
+    var k = 0usize
+    while k < extras.len {
+        sum += extras[k].extra
+        k += 1usize
+    }
+    ret sum
+}
+
+fn virtual_extra_before(extras: []const VirtualExtra, index: usize) -> f32 {
+    var sum: f32 = 0.0
+    var k = 0usize
+    while k < extras.len && extras[k].index < index {
+        sum += extras[k].extra
+        k += 1usize
+    }
+    ret sum
+}
+
+fn virtual_extra_of(extras: []const VirtualExtra, index: usize) -> f32 {
+    var k = 0usize
+    while k < extras.len && extras[k].index < index { k += 1usize }
+    if k < extras.len && extras[k].index == index { ret extras[k].extra }
+    ret 0.0
+}
+
 fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc: Scroll, inner: geometry.Rect, limits: ui_layout.Constraints, b: *scene.Builder, depth: usize) -> err {
     var save: scene.Command = .Save
     var restore: scene.Command = .Restore
@@ -2167,7 +2199,7 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
     if vertical { open.max_height = 3.0e38 } else { open.max_width = 3.0e38 }
     var content: f32 = 0.0
     if sc.virtual_count != 0usize {
-        content = f32(sc.virtual_count) * sc.virtual_extent
+        content = f32(sc.virtual_count) * sc.virtual_extent + virtual_extra_total(sc.virtual_extras)
     } else {
         let (measured, measure_error) = measure_stack(s, a, node, open)
         if measure_error != ok { ret measure_error }
@@ -2191,9 +2223,11 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
     if sc.virtual_count != 0usize {
         var i = 0usize
         while i < node.children.len {
-            let at = f32(sc.virtual_first + i) * sc.virtual_extent - offset
-            var slot = geometry.Rect { x: inner.x, y: inner.y + at, width: inner.width, height: sc.virtual_extent }
-            if !vertical { slot = geometry.Rect { x: inner.x + at, y: inner.y, width: sc.virtual_extent, height: inner.height } }
+            let item = sc.virtual_first + i
+            let at = f32(item) * sc.virtual_extent + virtual_extra_before(sc.virtual_extras, item) - offset
+            let tall = sc.virtual_extent + virtual_extra_of(sc.virtual_extras, item)
+            var slot = geometry.Rect { x: inner.x, y: inner.y + at, width: inner.width, height: tall }
+            if !vertical { slot = geometry.Rect { x: inner.x + at, y: inner.y, width: tall, height: inner.height } }
             try place(s, a, &node.children[i], child_element(s, element, i), slot, b, depth + 1usize)
             i += 1usize
         }
