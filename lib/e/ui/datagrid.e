@@ -2266,16 +2266,19 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             list_picks[ei] = CritRow { grid: grid, index: 0usize, part: part_code }
             let (entry_label, entry_label_error) = flat_text(a, grid, label_text, gl.rgb(0x000000u32))
             if entry_label_error != ok { ret (zero, entry_label_error) }
-            var entry_box = control.sized_style(150.0, 22.0)
+            var entry_box = control.sized_style(122.0, 22.0)
             entry_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
             if entries[ei] == current_entry { entry_box.background = paint.Brush { Solid: gl.rgb(0x99D1FFu32) } }
-            list_rows[ei] = widget.region(grid.key + MENU_KEY + 899930u64 + u64(ei), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&list_picks[ei]), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, entry_box, one(a, widget.padded(0u64, 8.0, 3.0, 0.0, 0.0, style.defaults(), one(a, entry_label))))
+            list_rows[ei] = widget.region(grid.key + MENU_KEY + 899930u64 + u64(ei), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&list_picks[ei]), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, entry_box, one(a, widget.padded(0u64, 32.0, 3.0, 0.0, 0.0, style.defaults(), one(a, entry_label))))
             ei += 1usize
         }
         var list_style = style.defaults()
         list_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
         list_style.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
-        let word_list = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, list_style, list_rows[0usize..entry_count])
+        // v3 shows twelve entries and a scroll bar; the list here shows the first twelve
+        var visible_entries = entry_count
+        if visible_entries > 12usize { visible_entries = 12usize }
+        let word_list = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, list_style, list_rows[0usize..visible_entries])
         let (word_held, word_held_error) = mem.alloc[widget.Node](a, 1usize)
         if word_held_error != ok { ret (zero, control.TooLarge) }
         word_held[0usize] = word_list
