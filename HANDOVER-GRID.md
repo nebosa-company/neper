@@ -1,6 +1,6 @@
 # HANDOVER-GRID.md — the data grid parity stream (G012)
 
-Updated every turn. Last update: 2026-10-14, after D5013 (sideways scroll fix); earlier D5009 (axis for data bars + fallback fonts; local D4070); axis seen on the grid (AX3), Japanese (NE2) and Chinese (NE4) cards verified, Cyrillic verified (KO1, Segoe UI covers it); Korean (3 cards) only via Malgun registration, not looked at; right-to-left bar drawn right-anchored but faint at the default gradient (KO2).
+Updated every turn. Last update: 2026-10-14, after D5033 (colour editor steppers); earlier D5013 (axis for data bars + fallback fonts; local D4070); axis seen on the grid (AX3), Japanese (NE2) and Chinese (NE4) cards verified, Cyrillic verified (KO1, Segoe UI covers it); Korean (3 cards) only via Malgun registration, not looked at; right-to-left bar drawn right-anchored but faint at the default gradient (KO2).
 
 ## The goal (standing /goal, re-injected by a Stop hook every turn)
 
@@ -93,6 +93,21 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
 - Filter-operator popup sized from v3 (D5031); colour editor is a 24-colour palette (D5032): custom RGB, report
   Designer, typed spin boxes for Page Setup / Preview margins, Korean row and a negative-value bar seen on
   the grid are what remains.
+
+## Where it stopped (2026-10-14, by the user's request: tokens)
+
+Last landed: D5033 (custom RGB steppers in the colour editor, `98dd7a24`). Tree clean for my files.
+Not started in the tree (only read): typed margin boxes. The plan, so the next session can do it:
+- `pv_tenths: [6]u8` is "extra tenths over the base" (bases 5,5,5,5,2,2). Make it absolute hundredths
+  (`[6]u16`, a `pv_ready` flag to init 50,50,50,50,20,20), change `margin_text(a, name, hund, two)`, the
+  three step sites (`on_setup_tap` kind 5/6, `on_print_tap`, `print_margins`) and in `margins_content` use
+  `control.spin_box_sized` (see the wizard's value field in `wiz_panel_base`) with a `{grid, slot}` ctx.
+- Then Header/Footer cells and Fit To counts as text fields; Print Preview margin boxes the same way.
+- Colour editor: typed R,G,B (or a hue square) instead of the R+/G+/B+ steppers.
+- Report Designer: not built (menu entry is greyed). Korean row and a negative-value data bar not seen on
+  the grid (no data; fixture guards only).
+Before editing datagrid.e: `taskkill //IM cardgrid.exe`, avoid `f32(u8field)` and extra locals in
+`build_parts`/`fmt_panel`; build with `build/windows/neper-self.exe emit-executable .../main.e ...`.
 
 ## Status of the tree
 
