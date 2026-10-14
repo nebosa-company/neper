@@ -149,6 +149,8 @@ type Grid = struct {
     wiz_open: bool,
 fmt_open: bool,
 print_open: bool,
+chooser_bands: bool,
+band_names: []const str,
 wiz_pos_color: u8,
 wiz_neg_color: u8,
 wiz_axis_color: u8,
@@ -1690,6 +1692,27 @@ fn on_open_chooser(ctx: *void) -> err {
     grid.chooser_open = true
     grid.chooser_active = true
     ret ok
+}
+
+// The Bands / Columns tabs of a band grid's Customization window.
+fn on_chooser_tab_bands(ctx: *void, g: widget.Gesture) -> err {
+    switch g {
+    case .Tap as at:
+        mem.cast[*Grid](ctx).chooser_bands = true
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_chooser_tab_columns(ctx: *void, g: widget.Gesture) -> err {
+    switch g {
+    case .Tap as at:
+        mem.cast[*Grid](ctx).chooser_bands = false
+        ret ok
+    default:
+        ret ok
+    }
 }
 
 fn on_chooser_close(ctx: *void) -> err {
@@ -4214,7 +4237,9 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     title_words.size = grid.look.text_size
     var title_ink = gl.rgb(0xA0A0A0u32)
     if grid.chooser_active { title_ink = gl.rgb(0x000000u32) }
-    let (title, title_error) = control.colored_text(a, 0u64, "Column", grid.theme, title_words, title_ink)
+    var title_caption = "Column"
+    if grid.band_names.len > 0usize { title_caption = "Customization" }
+    let (title, title_error) = control.colored_text(a, 0u64, title_caption, grid.theme, title_words, title_ink)
     if title_error != ok { ret (zero, title_error) }
     var title_style = style.defaults()
     title_style.width = style.Length { Px: 130.0 }
@@ -4258,13 +4283,33 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var n = 0usize
     items[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, bar_style, bar[0usize..2usize])
     n += 1usize
+    if grid.band_names.len > 0usize {
+        let (tabs, tabs_error) = chooser_tabs(a, grid)
+        if tabs_error != ok { ret (zero, tabs_error) }
+        items[n] = tabs
+        n += 1usize
+    }
     // the list: white, the hidden columns by name in the order of their titles
-    let (rows, rows_error) = mem.alloc[widget.Node](a, grid.all.len + 1usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, grid.all.len + grid.band_names.len + 1usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
     var listed = 0usize
     var o = 0usize
+    while o < grid.band_names.len && grid.chooser_bands {
+        // the Bands tab names the bands
+        var band_label: widget.Node = zero
+        let band_error = text_node(a, grid, grid.band_names[o], false, .Text, &band_label)
+        if band_error != ok { ret (zero, band_error) }
+        var band_style = style.defaults()
+        band_style.width = style.Length { Percent: 100.0 }
+        band_style.height = style.Length { Px: 19.0 }
+        band_style.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        rows[listed] = widget.box(0u64, band_style, one(a, band_label))
+        listed += 1usize
+        o += 1usize
+    }
+    o = 0usize
     while o < grid.all.len {
-        if grid.hidden[o] && grid.all[o].kind != CellKind.Indicator && grid.all[o].title.len != 0usize {
+        if !grid.chooser_bands && grid.hidden[o] && grid.all[o].kind != CellKind.Indicator && grid.all[o].title.len != 0usize {
             picks[listed] = ChooserItem { grid: grid, spec: o }
             var label: widget.Node = zero
             let label_error = text_node(a, grid, grid.all[o].title, false, .Text, &label)
@@ -4303,6 +4348,40 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     window_nodes[0usize] = padded_window
     let dropping = widget.region(grid.key + CHOOSER_KEY + 3u64, widget.Region { gesture: widget.GestureAction { ctx: me, invoke: on_chooser_drop }, gestures: widget.GESTURE_DROP, enabled: true, focusable: false }, style.defaults(), window_nodes[0usize..1usize])
     ret (dropping, ok)
+}
+
+// The tab row under the title bar of a band grid's Customization window: Bands and Columns, the
+// chosen one white over the rest.
+fn chooser_tabs(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < 2usize {
+        var caption = "Bands"
+        var on_tap = on_chooser_tab_bands
+        var chosen = grid.chooser_bands
+        if k == 1usize {
+            caption = "Columns"
+            on_tap = on_chooser_tab_columns
+            chosen = !grid.chooser_bands
+        }
+        var label: widget.Node = zero
+        let label_error = text_node(a, grid, caption, false, .Text, &label)
+        if label_error != ok { ret (zero, label_error) }
+        var tab = style.defaults()
+        tab.width = style.Length { Px: 60.0 }
+        tab.height = style.Length { Px: 22.0 }
+        tab.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        tab.border = style.Border { width: 1.0, color: gl.rgb(0xBABABAu32) }
+        tab.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+        if chosen { tab.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, control.TooLarge) }
+        held[0usize] = label
+        cells[k] = widget.region(grid.key + CHOOSER_KEY + 6u64 + u64(k), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_tap }, gestures: 1u8, enabled: true, focusable: false }, tab, held[0usize..1usize])
+        k += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..2usize]), ok)
 }
 
 // ---- the popup menu in v3's look (flat #F0F0F0 with a grey frame, 16 px pictures, hover #0078D7) ----
@@ -5219,6 +5298,10 @@ fn extend_selection(grid: *Grid, kind: Nav) -> err {
 
 // Puts a row of band titles above the header (an empty slice removes it).
 fn set_bands(grid: *Grid, bands: []const Band) { grid.bands = bands }
+
+// The band names of a grid whose band row is not shown (v3's collection): the Customization window
+// still has its Bands tab.
+fn set_band_names(grid: *Grid, names: []const str) { grid.band_names = names }
 
 fn show_navigator(grid: *Grid, on: bool) { grid.navigator_visible = on }
 
