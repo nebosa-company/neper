@@ -6624,7 +6624,7 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     // a fill or a data bar: the text over a box of the colour (the bar a fraction of its width)
     var layers: []widget.Node = zero
     var count = 0usize
-    let (made, made_error) = mem.alloc[widget.Node](a, 2usize)
+    let (made, made_error) = mem.alloc[widget.Node](a, 3usize)
     if made_error != ok { ret control.TooLarge }
     layers = made
     var back = style.defaults()
@@ -6659,11 +6659,18 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
             }
         }
         // Bar direction and Axis (v3): the bar starts where the axis or the unfilled part ends
-        if look.bar_left > 0.0 { bar.margin.left = style.Length { Percent: look.bar_left * 100.0 } }
         layers[count] = widget.box(0u64, bar, zero)
+        if look.bar_left > 0.0 {
+            // a spacer of the offset's share before the bar (a percent margin would paint over the cell)
+            let (offset_bar, offset_error) = offset_node(a, bar, look.bar_left)
+            if offset_error != ok { ret offset_error }
+            layers[count] = offset_bar
+        }
         count += 1usize
         if look.has_axis_line {
-            layers[count] = axis_line_node(look.axis_line, look.bar_axis_at)
+            let (axis_node, axis_error) = axis_line_node(a, look.axis_line, look.bar_axis_at)
+            if axis_error != ok { ret axis_error }
+            layers[count] = axis_node
             count += 1usize
         }
     }
@@ -6677,14 +6684,39 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     ret ok
 }
 
-// The axis of a data bar (Axis color): a 1 px line at `at` of the cell's width, the cell's height.
-fn axis_line_node(color: paint.Color, at: f32) -> widget.Node {
+// The bar `left` of the cell's width in: a spacer, then the bar.
+fn offset_node(a: *mem.Arena, bar: style.Style, left: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    var spacer = style.defaults()
+    spacer.width = style.Length { Percent: left * 100.0 }
+    spacer.height = style.Length { Percent: 100.0 }
+    parts[0usize] = widget.box(0u64, spacer, zero)
+    parts[1usize] = widget.box(0u64, bar, zero)
+    var row = style.defaults()
+    row.width = style.Length { Percent: 100.0 }
+    row.height = style.Length { Percent: 100.0 }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row, parts[0usize..2usize]), ok)
+}
+
+// The axis of a data bar (Axis color): a 1 px line `at` of the cell's width in, over the cell's height; a
+// spacer before it takes the distance (a percent margin on the line itself painted over the cell).
+fn axis_line_node(a: *mem.Arena, color: paint.Color, at: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    var spacer = style.defaults()
+    spacer.width = style.Length { Percent: at * 100.0 }
+    spacer.height = style.Length { Percent: 100.0 }
     var line = style.defaults()
     line.width = style.Length { Px: 1.0 }
     line.height = style.Length { Percent: 100.0 }
     line.background = paint.Brush { Solid: color }
-    line.margin.left = style.Length { Percent: at * 100.0 }
-    ret widget.box(0u64, line, zero)
+    parts[0usize] = widget.box(0u64, spacer, zero)
+    parts[1usize] = widget.box(0u64, line, zero)
+    var row = style.defaults()
+    row.width = style.Length { Percent: 100.0 }
+    row.height = style.Length { Percent: 100.0 }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row, parts[0usize..2usize]), ok)
 }
 
 // The kind of a visible row for the table look: 1 for a group row.

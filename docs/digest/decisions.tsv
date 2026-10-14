@@ -2294,4 +2294,5 @@ D5011	379	G012: the navigator bar measured from v3
 D5012	756	G012: why columns grow while scrolling sideways
 D5013	730	G012: columns keep their widths while scrolling sideways
 D5014	897	G012: Print Preview window
-D5015	864	G012: positive colour, negative colour and axis colour in the style window
+D5015	865	G012: positive colour, negative colour and axis colour in the style window
+D5016	813	G012: the axis line and offset bars seen on the grid; a percent margin paints
