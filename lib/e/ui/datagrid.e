@@ -140,6 +140,7 @@ type Grid = struct {
     immediate_edit: bool,
     edit_focus_pending: bool,
     multi: bool,
+    quick_sorted: bool,
     flat_left: f32,
     flat_top: f32,
     flat_width: f32,
@@ -1580,6 +1581,9 @@ fn on_quick_tap(ctx: *void, g: widget.Gesture) -> err {
                 grid.hidden[o] = false
                 o += 1usize
             }
+        } else if pick.spec == 1000000usize {
+            // (Sorted): the list in alphabetical order instead of the grid's
+            grid.quick_sorted = !grid.quick_sorted
         } else if pick.spec < grid.all.len {
             // the last shown column stays
             if !grid.hidden[pick.spec] && grid.specs.len < 3usize { ret ok }
@@ -1590,6 +1594,18 @@ fn on_quick_tap(ctx: *void, g: widget.Gesture) -> err {
     default:
         ret ok
     }
+}
+
+// Whether `x` sorts before `y` (case-insensitive, by bytes).
+fn str_less(x: str, y: str) -> bool {
+    var i = 0usize
+    while i < x.len && i < y.len {
+        let cx = lower_ascii(x[i])
+        let cy = lower_ascii(y[i])
+        if cx != cy { ret cx < cy }
+        i += 1usize
+    }
+    ret x.len < y.len
 }
 
 fn quick_check(a: *mem.Arena, grid: *Grid, on: bool, partial: bool) -> (widget.Node, err) {
@@ -1665,8 +1681,8 @@ fn quick_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     rows[n] = all_row
     n += 1usize
     item += 1usize
-    picks[item] = QuickPick { grid: grid, spec: 0usize, all: false }
-    let (sorted_row, sorted_error) = quick_row(a, grid, grid.key + MENU_KEY + 49u64, "(Sorted)", false, false, &picks[item], width)
+    picks[item] = QuickPick { grid: grid, spec: 1000000usize, all: false }
+    let (sorted_row, sorted_error) = quick_row(a, grid, grid.key + MENU_KEY + 49u64, "(Sorted)", grid.quick_sorted, false, &picks[item], width)
     if sorted_error != ok { ret (zero, sorted_error) }
     rows[n] = sorted_row
     n += 1usize
@@ -1676,9 +1692,30 @@ fn quick_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     rule.margin = style.EdgeLengths { left: style.Length { Px: 5.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 5.0 }, bottom: style.Length { Px: 3.0 } }
     rows[n] = widget.box(0u64, rule, zero)
     n += 1usize
+    // the list's order: the grid's, or by title when (Sorted) is ticked
+    let (listing, listing_error) = mem.alloc[usize](a, grid.order.len + 1usize)
+    if listing_error != ok { ret (zero, control.TooLarge) }
+    var li = 0usize
+    while li < grid.order.len {
+        listing[li] = grid.order[li]
+        li += 1usize
+    }
+    if grid.quick_sorted {
+        var si = 1usize
+        while si < grid.order.len {
+            let moving = listing[si]
+            var sj = si
+            while sj > 0usize && str_less(grid.all[moving].title, grid.all[listing[sj - 1usize]].title) {
+                listing[sj] = listing[sj - 1usize]
+                sj -= 1usize
+            }
+            listing[sj] = moving
+            si += 1usize
+        }
+    }
     var order_at = 0usize
     while order_at < grid.order.len {
-        o = grid.order[order_at]
+        o = listing[order_at]
         order_at += 1usize
         if grid.all[o].kind != CellKind.Indicator && grid.all[o].title.len != 0usize {
             picks[item] = QuickPick { grid: grid, spec: o, all: false }
