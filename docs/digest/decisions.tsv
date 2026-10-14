@@ -2218,4 +2218,5 @@ D2454	676	G012: Minimum and Maximum pickers of the New Rule wizard
 D2455	754	G012: the column of a new rule is chosen in the wizard
 D2456	818	G012: Is blank and Is not blank, and a short operator list for flag columns
 D2457	664	G012: Is any of and Is none of
-D2458	638	G012: icons in the operator list
+D2458	639	G012: icons in the operator list
+D2459	785	G012: the checked value list of Is any of / Is none of
