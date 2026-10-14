@@ -6429,8 +6429,15 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if str.push(&sb, " of ") != ok || str.push_usize(&sb, total) != ok { ret (zero, control.TooLarge) }
     var text_options = control.text_options()
     text_options.size = grid.look.text_size
-    let (info, info_error) = control.text(a, 0u64, str.done(&sb), grid.theme, text_options)
+    let (info_text, info_error) = control.text(a, 0u64, str.done(&sb), grid.theme, text_options)
     if info_error != ok { ret (zero, info_error) }
+    var info = info_text
+    if grid.has_nav_icons {
+        // v3 sets the position on a white band as wide as the gap between its buttons
+        var band = control.sized_style(115.0, 30.0)
+        band.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        info = widget.padded(0u64, 10.0, 8.0, 0.0, 0.0, band, one(a, info_text))
+    }
     cells[3usize] = info
     // the funnel
     var funnel_ink = gl.rgb(0x8A8A8Au32)
