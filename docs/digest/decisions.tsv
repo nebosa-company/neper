@@ -2605,4 +2605,5 @@ D4022	807	G012: v3's View menu as an application menu of the grid
 D4023	642	G012: the View menu's grid entries act
 D4024	524	G012: the View menu's sort entries
 D4025	737	G012: the View menu's Show Grid Lines submenu
-D4026	321	G012: View > Group by Type and Group by Color
+D4026	322	G012: View > Group by Type and Group by Color
+D4027	555	G012: the View menu entries driven live
