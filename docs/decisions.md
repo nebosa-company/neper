@@ -41339,3 +41339,7 @@ v3's submenu (AL3) lists Align Left, Align Right, Align Center in that order, wi
 ## D4088 - G012: pictures in the Alignment submenu
 
 The three entries carry v3's pictures (cut from its popup, icons/align_0..2.png): `set_align_menu_icons`; AL4-align-submenu-icons-v5.png. The parent entry is still the strong blue, v3's is light.
+
+## D4089 - G012: the parent of an open submenu is light blue
+
+The popup an open Alignment submenu came from keeps its Alignment entry in light blue (#BDDCF7) with black text, as v3 does (AL3); `Grid.parent_drawn` marks that build. AL5-align-parent-light-v5.png.

@@ -244,6 +244,7 @@ wiz_axis_color: u8,
     header_icons: [9]scene.TextureId,
     has_header_icons: bool,
     align_icons: [3]scene.TextureId,
+    parent_drawn: bool,
     has_align_icons: bool,
     filter_op_icons: [12]scene.TextureId,
     has_filter_op_icons: bool,
@@ -5165,7 +5166,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
         let lit = grid.menu_cursor == i && c.enabled
         var ink = gl.rgb(0x000000u32)
         if !c.enabled { ink = gl.rgb(0xA0A0A0u32) }
-        if lit { ink = gl.rgb(0xFFFFFFu32) }
+        if lit && !grid.parent_drawn { ink = gl.rgb(0xFFFFFFu32) }
         let (label, label_error) = caption_node(a, grid, c.label, ink)
         if label_error != ok { ret (zero, label_error) }
         if i < 40usize {
@@ -5224,7 +5225,9 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
             parts_n += 1usize
         }
         var row_style = control.sized_style(width - 2.0, row_h)
-        if lit { row_style.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) } }
+        if lit && !grid.parent_drawn { row_style.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) } }
+        // the popup an open submenu came from keeps its entry in a light blue
+        if lit && grid.parent_drawn { row_style.background = paint.Brush { Solid: gl.rgb(0xBDDCF7u32) } }
         if c.supporting.len == 1usize && c.supporting[0usize] == 62u8 {
             // an entry with a submenu ends in a small right arrow
             let (arrow, arrow_error) = gl.mark(a, .Right, ink, ink, 5.0, 9.0)
@@ -5606,7 +5609,9 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
             grid.menu_kind = MENU_HEADER
             let (parent_commands, parent_error) = menu_commands(a, grid)
             if parent_error != ok { ret (zero, parent_error) }
+            grid.parent_drawn = true
             let (parent, parent_menu_error) = flat_menu(a, grid, parent_commands, at.x, at.y, 22.0)
+            grid.parent_drawn = false
             if parent_menu_error != ok { ret (zero, parent_menu_error) }
             grid.menu_kind = kept
             parts[n] = parent
