@@ -133,6 +133,14 @@ type Grid = struct {
     extra_count: usize,
     sort_dialog_open: bool,
     rules_dialog_open: bool,
+    crit_open: bool,
+    crit_pending: bool,
+    crit_group: u8,
+    crit_count: usize,
+    crit_spec: [6]usize,
+    crit_op: [6]u8,
+    crit_len: [6]usize,
+    crit_text: [192]u8,
     rules_selected: usize,
     sort_marks: [24]u8,
     hint_key: widget.Key,
@@ -1684,6 +1692,296 @@ fn open_rules_manager(grid: *Grid) {
     grid.rules_dialog_open = true
 }
 
+// ---- the Advanced Filter (v3's Search > Advanced Filter...: And / Or over column conditions) ----
+
+type CritRow = struct { grid: *Grid, index: usize, part: u8 }
+type CritAct = struct { grid: *Grid, kind: u8 }
+type CritValue = struct { grid: *Grid, index: usize }
+
+const CRIT_MAX: usize = 6usize
+const CRIT_TEXT: usize = 32usize
+
+fn crit_op_words(op: u8) -> str {
+    if op == 0u8 { ret "Equals" }
+    if op == 1u8 { ret "Does not equal" }
+    if op == 2u8 { ret "Is less than" }
+    if op == 3u8 { ret "Is greater than" }
+    if op == 4u8 { ret "Contains" }
+    if op == 5u8 { ret "Does not contain" }
+    if op == 6u8 { ret "Begins with" }
+    ret "Ends with"
+}
+
+fn crit_group_words(kind: u8) -> str {
+    if kind == 0u8 { ret "And" }
+    if kind == 1u8 { ret "Or" }
+    if kind == 2u8 { ret "Not And" }
+    ret "Not Or"
+}
+
+fn crit_next_listed(grid: *const Grid, from: usize) -> usize {
+    var step = 1usize
+    while step <= grid.all.len {
+        let at = (from + step) % grid.all.len
+        if sort_row_listed(grid, at) { ret at }
+        step += 1usize
+    }
+    ret from
+}
+
+fn on_crit_tap(ctx: *void, g: widget.Gesture) -> err {
+    let row = mem.cast[*CritRow](ctx)
+    let grid = row.grid
+    switch g {
+    case .Tap as at:
+        if row.part == 9u8 {
+            grid.crit_group = (grid.crit_group + 1u8) % 4u8
+            ret ok
+        }
+        if row.index >= grid.crit_count { ret ok }
+        if row.part == 0u8 {
+            // the "..." button: takes the condition out
+            var i = row.index
+            while i + 1usize < grid.crit_count {
+                grid.crit_spec[i] = grid.crit_spec[i + 1usize]
+                grid.crit_op[i] = grid.crit_op[i + 1usize]
+                grid.crit_len[i] = grid.crit_len[i + 1usize]
+                var c = 0usize
+                while c < CRIT_TEXT {
+                    grid.crit_text[i * CRIT_TEXT + c] = grid.crit_text[(i + 1usize) * CRIT_TEXT + c]
+                    c += 1usize
+                }
+                i += 1usize
+            }
+            grid.crit_count -= 1usize
+        }
+        if row.part == 1u8 { grid.crit_spec[row.index] = crit_next_listed(grid, grid.crit_spec[row.index]) }
+        if row.part == 2u8 { grid.crit_op[row.index] = (grid.crit_op[row.index] + 1u8) % 8u8 }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_crit_value(ctx: *void, value: str) -> err {
+    let pick = mem.cast[*CritValue](ctx)
+    let grid = pick.grid
+    if pick.index >= grid.crit_count { ret ok }
+    var n = value.len
+    if n > CRIT_TEXT { n = CRIT_TEXT }
+    var c = 0usize
+    while c < n {
+        grid.crit_text[pick.index * CRIT_TEXT + c] = value[c]
+        c += 1usize
+    }
+    grid.crit_len[pick.index] = n
+    ret ok
+}
+
+// 0 add a condition, 1 OK, 2 Cancel, 3 Apply.
+fn on_crit_act(ctx: *void, g: widget.Gesture) -> err {
+    let act = mem.cast[*CritAct](ctx)
+    let grid = act.grid
+    switch g {
+    case .Tap as at:
+        if act.kind == 0u8 {
+            if grid.crit_count < CRIT_MAX {
+                grid.crit_spec[grid.crit_count] = crit_next_listed(grid, grid.all.len - 1usize)
+                grid.crit_op[grid.crit_count] = 0u8
+                grid.crit_len[grid.crit_count] = 0usize
+                grid.crit_count += 1usize
+            }
+            ret ok
+        }
+        if act.kind == 1u8 || act.kind == 3u8 { grid.crit_pending = true }
+        if act.kind != 3u8 { grid.crit_open = false }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn open_criteria_editor(grid: *Grid) { grid.crit_open = true }
+
+// The application takes the conditions once after OK or Apply.
+fn take_criteria(grid: *Grid) -> bool {
+    if !grid.crit_pending { ret false }
+    grid.crit_pending = false
+    ret true
+}
+
+fn criteria_group(grid: *const Grid) -> u8 { ret grid.crit_group }
+fn criteria_len(grid: *const Grid) -> usize { ret grid.crit_count }
+fn criteria_column(grid: *const Grid, index: usize) -> usize { ret grid.all[grid.crit_spec[index]].column }
+fn criteria_op(grid: *const Grid, index: usize) -> u8 { ret grid.crit_op[index] }
+fn criteria_value(grid: *const Grid, index: usize) -> str { ret grid.crit_text[index * CRIT_TEXT..index * CRIT_TEXT + grid.crit_len[index]] }
+
+fn crit_word(a: *mem.Arena, grid: *Grid, key: widget.Key, text: str, ink: paint.Color, row: *CritRow) -> (widget.Node, err) {
+    let (label, label_error) = flat_text(a, grid, text, ink)
+    if label_error != ok { ret (zero, label_error) }
+    let (underline, underline_error) = mem.alloc[widget.Node](a, 2usize)
+    if underline_error != ok { ret (zero, control.TooLarge) }
+    underline[0usize] = label
+    var rule = control.sized_style(f32(text.len) * 6.6, 1.0)
+    rule.background = paint.Brush { Solid: ink }
+    underline[1usize] = widget.box(0u64, rule, zero)
+    let stacked = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), underline[0usize..2usize])
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, control.TooLarge) }
+    held[0usize] = stacked
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](row), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), held[0usize..1usize]), ok)
+}
+
+fn crit_button(a: *mem.Arena, grid: *Grid, key: widget.Key, text: str, w: f32, act: *CritAct, default_button: bool) -> (widget.Node, err) {
+    let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if label_error != ok { ret (zero, label_error) }
+    var box = control.sized_style(w, 27.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+    box.radius = 4.0
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, control.TooLarge) }
+    var centred = style.defaults()
+    centred.width = style.Length { Percent: 100.0 }
+    centred.height = style.Length { Percent: 100.0 }
+    held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, centred, one(a, label))
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](act), invoke: on_crit_act }, gestures: 1u8, enabled: true, focusable: false }, box, held[0usize..1usize]), ok)
+}
+
+fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let width: f32 = 540.0
+    let (rows, rows_error) = mem.alloc[widget.Node](a, CRIT_MAX + 6usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    let (parts, parts_error) = mem.alloc[CritRow](a, CRIT_MAX * 3usize + 2usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (values, values_error) = mem.alloc[CritValue](a, CRIT_MAX)
+    if values_error != ok { ret (zero, control.TooLarge) }
+    let (acts, acts_error) = mem.alloc[CritAct](a, 4usize)
+    if acts_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < 4usize {
+        acts[k] = CritAct { grid: grid, kind: u8(k) }
+        k += 1usize
+    }
+    var n = 0usize
+    let (title, title_error) = flat_text(a, grid, "Advanced Filter", gl.rgb(0x000000u32))
+    if title_error != ok { ret (zero, title_error) }
+    var title_box = control.sized_style(width, 40.0)
+    title_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    rows[n] = widget.padded(0u64, 44.0, 12.0, 0.0, 0.0, title_box, one(a, title))
+    n += 1usize
+    // Filter  And  <root>
+    let (filter_label, filter_error) = flat_text(a, grid, "Filter", gl.rgb(0x000000u32))
+    if filter_error != ok { ret (zero, filter_error) }
+    parts[0usize] = CritRow { grid: grid, index: 0usize, part: 9u8 }
+    let (group_word, group_error) = crit_word(a, grid, grid.key + MENU_KEY + 899900u64, crit_group_words(grid.crit_group), gl.rgb(0xFF0000u32), &parts[0usize])
+    if group_error != ok { ret (zero, group_error) }
+    let (root_label, root_error) = flat_text(a, grid, "<root>", gl.rgb(0x000000u32))
+    if root_error != ok { ret (zero, root_error) }
+    let (head, head_error) = mem.alloc[widget.Node](a, 3usize)
+    if head_error != ok { ret (zero, control.TooLarge) }
+    var filter_box = control.sized_style(44.0, 22.0)
+    filter_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    filter_box.border = style.Border { width: 1.0, color: gl.rgb(0x9A9A9Au32) }
+    filter_box.radius = 4.0
+    head[0usize] = widget.aligned(0u64, .Center, .Center, filter_box, one(a, filter_label))
+    head[1usize] = group_word
+    head[2usize] = root_label
+    var head_style = control.sized_style(width - 24.0, 30.0)
+    head_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, head_style, head[0usize..3usize])
+    n += 1usize
+    var i = 0usize
+    while i < grid.crit_count {
+        parts[1usize + i * 3usize] = CritRow { grid: grid, index: i, part: 0u8 }
+        parts[2usize + i * 3usize] = CritRow { grid: grid, index: i, part: 1u8 }
+        parts[3usize + i * 3usize] = CritRow { grid: grid, index: i, part: 2u8 }
+        values[i] = CritValue { grid: grid, index: i }
+        let (dots_text, dots_error) = flat_text(a, grid, "...", gl.rgb(0x000000u32))
+        if dots_error != ok { ret (zero, dots_error) }
+        var dots_box = control.sized_style(24.0, 20.0)
+        dots_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        dots_box.border = style.Border { width: 1.0, color: gl.rgb(0x9A9A9Au32) }
+        dots_box.radius = 4.0
+        let (dots_held, dots_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if dots_held_error != ok { ret (zero, control.TooLarge) }
+        dots_held[0usize] = widget.aligned(0u64, .Center, .Center, style.defaults(), one(a, dots_text))
+        let dots = widget.region(grid.key + MENU_KEY + 899910u64 + u64(i) * 4u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&parts[1usize + i * 3usize]), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, dots_box, dots_held[0usize..1usize])
+        let (column_word, column_error) = crit_word(a, grid, grid.key + MENU_KEY + 899911u64 + u64(i) * 4u64, grid.all[grid.crit_spec[i]].title, gl.rgb(0x008000u32), &parts[2usize + i * 3usize])
+        if column_error != ok { ret (zero, column_error) }
+        let (op_word, op_error) = crit_word(a, grid, grid.key + MENU_KEY + 899912u64 + u64(i) * 4u64, crit_op_words(grid.crit_op[i]), gl.rgb(0x8B0000u32), &parts[3usize + i * 3usize])
+        if op_error != ok { ret (zero, op_error) }
+        var options = control.field_options()
+        let buffer = grid.crit_text[i * CRIT_TEXT..(i + 1usize) * CRIT_TEXT]
+        let (field, field_error) = control.text_field(a, grid.key + MENU_KEY + 899913u64 + u64(i) * 4u64, grid.theme, "Value", buffer, grid.crit_len[i], widget.Change[str] { ctx: mem.cast[*void](&values[i]), invoke: on_crit_value }, zero, options)
+        if field_error != ok { ret (zero, field_error) }
+        var field_box = control.sized_style(180.0, 28.0)
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+        if cells_error != ok { ret (zero, control.TooLarge) }
+        cells[0usize] = dots
+        cells[1usize] = column_word
+        cells[2usize] = op_word
+        cells[3usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 0.0, field_box, one(a, field))
+        var line_style = control.sized_style(width - 24.0, 30.0)
+        line_style.margin = style.EdgeLengths { left: style.Length { Px: 32.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, line_style, cells[0usize..4usize])
+        n += 1usize
+        i += 1usize
+    }
+    // "press the button to add a new condition"
+    let (add_button, add_error) = crit_button(a, grid, grid.key + MENU_KEY + 899990u64, "press the button to add a new condition", 280.0, &acts[0usize], false)
+    if add_error != ok { ret (zero, add_error) }
+    var add_style = control.sized_style(280.0, 27.0)
+    add_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let (add_held, add_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if add_held_error != ok { ret (zero, control.TooLarge) }
+    add_held[0usize] = add_button
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, add_style, add_held[0usize..1usize])
+    n += 1usize
+    var filler_height = 190.0 - f32(grid.crit_count) * 34.0
+    if filler_height < 0.0 { filler_height = 0.0 }
+    var filler = control.sized_style(width - 24.0, filler_height)
+    filler.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.box(0u64, filler, zero)
+    n += 1usize
+    let (b_open, e_open) = crit_button(a, grid, grid.key + MENU_KEY + 899991u64, "Open...", 80.0, &acts[2usize], false)
+    if e_open != ok { ret (zero, e_open) }
+    let (b_save, e_save) = crit_button(a, grid, grid.key + MENU_KEY + 899992u64, "Save As...", 80.0, &acts[2usize], false)
+    if e_save != ok { ret (zero, e_save) }
+    let (b_ok, e_ok) = crit_button(a, grid, grid.key + MENU_KEY + 899993u64, "OK", 80.0, &acts[1usize], true)
+    if e_ok != ok { ret (zero, e_ok) }
+    let (b_cancel, e_cancel) = crit_button(a, grid, grid.key + MENU_KEY + 899994u64, "Cancel", 80.0, &acts[2usize], false)
+    if e_cancel != ok { ret (zero, e_cancel) }
+    let (b_apply, e_apply) = crit_button(a, grid, grid.key + MENU_KEY + 899995u64, "Apply", 80.0, &acts[3usize], false)
+    if e_apply != ok { ret (zero, e_apply) }
+    let (left_foot, left_foot_error) = mem.alloc[widget.Node](a, 2usize)
+    if left_foot_error != ok { ret (zero, control.TooLarge) }
+    left_foot[0usize] = b_open
+    left_foot[1usize] = b_save
+    let (right_foot, right_foot_error) = mem.alloc[widget.Node](a, 3usize)
+    if right_foot_error != ok { ret (zero, control.TooLarge) }
+    right_foot[0usize] = b_ok
+    right_foot[1usize] = b_cancel
+    right_foot[2usize] = b_apply
+    let (foot, foot_error) = mem.alloc[widget.Node](a, 2usize)
+    if foot_error != ok { ret (zero, control.TooLarge) }
+    foot[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), left_foot[0usize..2usize])
+    foot[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), right_foot[0usize..3usize])
+    var foot_style = control.sized_style(width - 24.0, 46.0)
+    foot_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, foot_style, foot[0usize..2usize])
+    n += 1usize
+    var body_style = control.sized_style(width, 360.0)
+    body_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    body_style.border = style.Border { width: 1.0, color: gl.rgb(0x6D6D6Du32) }
+    body_style.radius = 8.0
+    body_style.overflow = .Clip
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, control.TooLarge) }
+    inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
+    ret (widget.box(0u64, body_style, inner[0usize..1usize]), ok)
+}
+
 fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let me = mem.cast[*void](grid)
     let (items, items_error) = mem.alloc[widget.Node](a, grid.all.len + 2usize)
@@ -2363,8 +2661,8 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
             shown += 1usize
         }
     }
-    if !grid.menu_open && !grid.chooser_open && !has_hint && !grid.sort_dialog_open && !grid.rules_dialog_open { ret (aimed, ok) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    if !grid.menu_open && !grid.chooser_open && !has_hint && !grid.sort_dialog_open && !grid.rules_dialog_open && !grid.crit_open { ret (aimed, ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 9usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     parts[n] = aimed
@@ -2428,6 +2726,18 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         if floating_error != ok { ret (zero, control.TooLarge) }
         floating[0usize] = panel
         parts[n] = widget.overlay(grid.key + CHOOSER_KEY, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: x, y: y }, modal: false, dismiss: zero }, style.defaults(), floating[0usize..1usize])
+        n += 1usize
+    }
+    if grid.crit_open {
+        let (crit_node, crit_error) = criteria_panel(a, grid)
+        if crit_error != ok { ret (zero, crit_error) }
+        let crit_size = widget.surface_size(theme.runtime)
+        var crit_x = (crit_size.width - 540.0) * 0.5
+        if crit_x < 0.0 { crit_x = 0.0 }
+        let (crit_held, crit_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if crit_held_error != ok { ret (zero, control.TooLarge) }
+        crit_held[0usize] = crit_node
+        parts[n] = widget.overlay(grid.key + MENU_KEY + 699902u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: crit_x, y: 140.0 }, modal: false, dismiss: zero }, style.defaults(), crit_held[0usize..1usize])
         n += 1usize
     }
     if grid.rules_dialog_open {
