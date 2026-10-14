@@ -1652,6 +1652,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (ctrl_at, ctrl_has) = dg.current_position(&grid15)
     if !ctrl_has || ctrl_at != 1usize { os.exit(550) }
     if !dg.search_matches(&grid15, grp.visible_row(&app.grouping, ctrl_at)) { os.exit(552) }
+    // 36. the sample's setup: the v3 look and the immediate editor; a tap on a Rarity cell with a select editor
+    var tap_specs: [2]dg.ColumnSpec = zero
+    tap_specs[0usize] = dg.ColumnSpec { title: "Name", width: 160.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    tap_specs[1usize] = dg.ColumnSpec { title: "Rarity", width: 160.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: true, choice: true }
+    let (made_cx, grid_cx_error) = dg.create(a, &app.tbl, &app.grouping, tap_specs[0..], events, 12100u64)
+    if grid_cx_error != ok { os.exit(620) }
+    var grid_cx = made_cx
+    dg.set_look(&grid_cx, gl.v3())
+    dg.set_immediate_edit(&grid_cx, true)
+    mem.reset(&f, 0usize)
+    let (root_cx, build_cx_error) = dg.build(&f, &grid_cx, &theme, 400.0)
+    if build_cx_error != ok { os.exit(621) }
+    if settle(&harness, root_cx, 230000000000i64) != ok { os.exit(622) }
+    if !tap_key(&harness, &runtime, dg.row_key(&grid_cx, grp.visible_row(&app.grouping, 1usize))) { os.exit(623) }
+    if !grid_cx.editing { os.exit(624) }
     // 35. export: the shown columns and the rows on screen as CSV, header first
     let (csv, csv_error) = dg.export_string(&f, &grid15, dg.EXPORT_CSV, false, 3usize)
     if csv_error != ok { os.exit(601) }
