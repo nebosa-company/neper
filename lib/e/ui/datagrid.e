@@ -152,6 +152,8 @@ type Grid = struct {
     wiz_target: usize,
     has_wiz_target: bool,
     wiz_max_number: bool,
+    wiz_min_pct: bool,
+    wiz_max_pct: bool,
     wiz_min_text: [16]u8,
     wiz_min_len: usize,
     wiz_max_text: [16]u8,
@@ -2899,7 +2901,19 @@ fn on_wiz_mode(ctx: *void, g: widget.Gesture) -> err {
     let t = mem.cast[*WizText](ctx)
     switch g {
     case .Tap as at:
-        if t.maximum { t.grid.wiz_max_number = !t.grid.wiz_max_number } else { t.grid.wiz_min_number = !t.grid.wiz_min_number }
+        // Lowest/Highest Value -> Number -> Percent -> Lowest/Highest Value
+        let wg = t.grid
+        if t.maximum {
+            if !wg.wiz_max_number { wg.wiz_max_number = true } else if !wg.wiz_max_pct { wg.wiz_max_pct = true } else {
+                wg.wiz_max_number = false
+                wg.wiz_max_pct = false
+            }
+        } else {
+            if !wg.wiz_min_number { wg.wiz_min_number = true } else if !wg.wiz_min_pct { wg.wiz_min_pct = true } else {
+                wg.wiz_min_number = false
+                wg.wiz_min_pct = false
+            }
+        }
         ret ok
     default:
         ret ok
@@ -2997,6 +3011,7 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
                 let (mv, me) = str.parse_f64(grid.wiz_min_text[0usize..grid.wiz_min_len])
                 if me == ok {
                     r.has_min = true
+                    r.min_pct = grid.wiz_min_pct
                     r.min_value = mv
                 }
             }
@@ -3004,6 +3019,7 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
                 let (xv, xe) = str.parse_f64(grid.wiz_max_text[0usize..grid.wiz_max_len])
                 if xe == ok {
                     r.has_max = true
+                    r.max_pct = grid.wiz_max_pct
                     r.max_value = xv
                 }
             }
@@ -3269,6 +3285,10 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             if is_number {
                 caption = "Minimum: Number"
                 if side == 1usize { caption = "Maximum: Number" }
+                if (side == 0usize && grid.wiz_min_pct) || (side == 1usize && grid.wiz_max_pct) {
+                    caption = "Minimum: Percent"
+                    if side == 1usize { caption = "Maximum: Percent" }
+                }
             }
             let (mode_label, mode_error) = flat_text(a, grid, caption, gl.rgb(0x000000u32))
             if mode_error != ok { ret (zero, mode_error) }

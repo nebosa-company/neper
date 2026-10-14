@@ -41041,3 +41041,7 @@ Driven in cardgrid: New Rule opens the wizard, the Applies to select lists the c
 ## D4014 - G012: a new rule's Applies to starts on the first numeric column
 
 The wizard's Applies to showed Favorite (the first column) although OK would have used a numeric one. The panel now sets the target to the first listed Int, Real or Currency column when none was chosen, so what is shown is what OK applies (WN6-wizard-default-cmc-v5.png: CMC). The four grid fixtures pass.
+
+## D4015 - G012: the wizard's Minimum and Maximum take a Percent
+
+The Minimum and Maximum boxes of the wizard cycled Lowest/Highest Value and Number; they now cycle Value, Number, Percent. A Percent bound is a share of the way from the column's lowest to its highest value (`Rule.min_pct`/`max_pct`, applied in `apply_range`), as v3's Percent choice. Percentile and Formula are not offered: the statistics keep no sorted values and the rule model has no expression. WN7-wizard-percent-v5.png; the four grid fixtures pass.

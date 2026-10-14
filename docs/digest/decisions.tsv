@@ -2593,4 +2593,5 @@ D4010	520	G012: a secondary window rises when its body is tapped
 D4011	236	G012: the Advanced Filter body raises its window
 D4012	444	G012: window title text and close box placed, raise verified live
 D4013	347	G012: the Applies to select verified live
-D4014	383	G012: a new rule's Applies to starts on the first numeric column
+D4014	384	G012: a new rule's Applies to starts on the first numeric column
+D4015	522	G012: the wizard's Minimum and Maximum take a Percent
