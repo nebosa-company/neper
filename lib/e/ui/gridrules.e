@@ -45,7 +45,8 @@ type Rule = struct {
     mid: paint.Color,
     high: paint.Color,
     three: bool,
-    buckets: u8
+    buckets: u8,
+    bar_only: bool
 }
 
 // The look of one cell. `bar` is the filled fraction 0..1 of a data bar (0 for none); `icon`
@@ -57,6 +58,7 @@ type Format = struct {
     fill: paint.Color,
     bold: bool,
     has_bar: bool,
+    bar_only: bool,
     bar: f32,
     bar_color: paint.Color,
     icon: u8,
@@ -89,7 +91,7 @@ error BadRule
 
 fn rule(column: usize, kind: Kind) -> Rule {
     let none = paint.rgba(0.0, 0.0, 0.0, 0.0)
-    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8 }
+    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false }
 }
 
 fn create(a: *mem.Arena, t: *const table.Table, capacity: usize) -> (Rules, err) {
@@ -452,6 +454,7 @@ fn apply_range(rs: *const Rules, i: usize, row: usize, f: *Format) {
     if r.kind == Kind.Bar {
         if f.has_bar { ret }
         f.has_bar = true
+        f.bar_only = r.bar_only
         f.bar = x
         f.bar_color = r.fill
         ret
