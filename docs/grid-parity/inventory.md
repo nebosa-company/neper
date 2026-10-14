@@ -134,7 +134,7 @@ Verified live 2026-10-14: a two colour scale created in the wizard with the whit
 | Scroll bars change size when hovered over | vertical thumb thickens under the pointer (2.7 to 11 units, the track keeps its width); the sizes are a Windows 11 estimate, v3's hovered width not measured; the navigator's horizontal thumb does not yet | SB1 |
 | Format... dialog (data bar fill mode, border, negative bars, axis; colour edit) | model has fill mode Solid and border (D4055), no dialog | CF10 |
 | Formula for the wizard bounds | not built | |
-| Narrow-window column growth, thumb track length | open: cause found (D4073): the shifted body is clamped to the pane, so columns shrink to pane + offset and grow as the offset grows; a `widget.scroll` view keeps natural widths (HS4) but carries the vertical bar out of view, so a fixed vertical bar outside the shifted body is needed first | D2502, HS4 |
+| Columns keep their widths while scrolling sideways; the vertical bar stays at the pane's right edge | matched (D4074; the thumb track length of the navigator bar is v3's shorter 141 px estimate) | HS5 |
 | PDF / Excel export, printing | not started | |
 | Background images of the table (v3 paints a card-back picture behind the collection rows and the empty area; seen faintly under the rows in the recordings) | to do: extract the picture from v3's resources, draw it behind the rows with v3's opacity | FT2, NV1 |
 | Messages shown when the grid has no data (v3's NoDataToDisplayInfoText) | matched: v3's three texts (D2514), header kept, plain text without a picture (D2515); the message sits a little right of centre and larger than v3's | ND1, ND2 |
