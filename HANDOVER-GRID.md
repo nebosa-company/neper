@@ -56,7 +56,7 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
    colour edit (the `...` button), the Preview strip. Bar drawing is at `lib/e/ui/datagrid.e` near
    `bar_length` (~line 6205); rule fields live in `gridrules.e` (`bar_solid`, `bar_border`); wizard state in
    `Grid` (`wiz_bar_style` bit0 solid, bit1 border, `fmt_open`). Add Rule fields + `apply` in `on_wiz_ok`.
-2. Print Preview window built (D5014, `print_panel`: no toolbar icons, margins not editable, no zoom/paging); Print, Page Setup, Designer not built. (CSV/Text/XML/HTML/Excel/PDF export done, D5008; the Excel export fails above ~2000 rows with long card texts: `book.encode` error not chased.)
+2. Print Preview window built (D5014, `print_panel`: no toolbar icons, margins not editable, no zoom/paging); Print, Page Setup, Designer not built. (CSV/Text/XML/HTML/Excel/PDF export done, D5008; Excel export of 30000 rows works with a 96 MB scratch, D5020.)
 3. (DONE D5013) columns keep widths while scrolling sideways, vertical bar fixed.
 4. (DONE D5010/D5011) hovered scroll widths measured from v3.
 5. Remaining DevExpress popup-size comparison; empty-grid message centring/size vs v3.
