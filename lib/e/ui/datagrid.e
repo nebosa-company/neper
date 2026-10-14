@@ -147,6 +147,7 @@ type Grid = struct {
     rules_arena: *mem.Arena,
     crit_open: bool,
     crit_pop: bool,
+    crit_io: u8,
     crit_pop_kind: u8,
     crit_pop_row: usize,
     crit_pending: bool,
@@ -2039,6 +2040,11 @@ fn on_crit_act(ctx: *void, g: widget.Gesture) -> err {
             }
             ret ok
         }
+        if act.kind == 4u8 || act.kind == 5u8 {
+            // Open... (4) and Save As... (5): the application reads or writes the text of the conditions
+            grid.crit_io = act.kind - 3u8
+            ret ok
+        }
         if act.kind == 1u8 || act.kind == 3u8 { grid.crit_pending = true }
         if act.kind != 3u8 { grid.crit_open = false }
         ret ok
@@ -2048,6 +2054,90 @@ fn on_crit_act(ctx: *void, g: widget.Gesture) -> err {
 }
 
 fn open_criteria_editor(grid: *Grid) { grid.crit_open = true }
+
+// 0 none, 1 the user asked to open a saved filter, 2 to save the conditions; taken once.
+fn take_criteria_io(grid: *Grid) -> u8 {
+    let kind = grid.crit_io
+    grid.crit_io = 0u8
+    ret kind
+}
+
+// The conditions as text: the group operator, then one line `column-index operator-index value`.
+fn criteria_text(a: *mem.Arena, grid: *const Grid) -> (str, err) {
+    let (b, b_error) = str.builder(a, 64usize + grid.crit_count * (CRIT_TEXT + 24usize))
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    if str.push(&sb, "filter 1\ngroup ") != ok || str.push_usize(&sb, usize(grid.crit_group)) != ok { ret ("", control.TooLarge) }
+    var i = 0usize
+    while i < grid.crit_count {
+        if str.push(&sb, "\ncond ") != ok || str.push_usize(&sb, grid.crit_spec[i]) != ok || str.push(&sb, " ") != ok || str.push_usize(&sb, usize(grid.crit_op[i])) != ok || str.push(&sb, " ") != ok { ret ("", control.TooLarge) }
+        if str.push(&sb, grid.crit_text[i * CRIT_TEXT..i * CRIT_TEXT + grid.crit_len[i]]) != ok { ret ("", control.TooLarge) }
+        i += 1usize
+    }
+    if str.push(&sb, "\n") != ok { ret ("", control.TooLarge) }
+    ret (str.done(&sb), ok)
+}
+
+// Takes conditions written by `criteria_text`; a text that is not one changes nothing.
+fn load_criteria(grid: *Grid, text: str) -> bool {
+    if text.len < 9usize { ret false }
+    var rest = text
+    var first = true
+    var count = 0usize
+    var group = grid.crit_group
+    var specs: [6]usize = zero
+    var ops: [6]u8 = zero
+    var lens: [6]usize = zero
+    var values: [192]u8 = zero
+    while rest.len > 0usize {
+        var end = 0usize
+        while end < rest.len && rest[end] != 10u8 { end += 1usize }
+        let line = rest[0usize..end]
+        if end < rest.len { rest = rest[end + 1usize..] } else { rest = rest[rest.len..] }
+        let (head, tail) = next_token(line)
+        if first {
+            if !same_text(head, "filter") { ret false }
+            first = false
+        } else if same_text(head, "group") {
+            let (n, ok_n) = str.parse_u64(tail)
+            if ok_n != ok || n > 3u64 { ret false }
+            group = u8(n)
+        } else if same_text(head, "cond") && count < 6usize {
+            let (spec_word, after_spec) = next_token(tail)
+            let (op_word, value_text) = next_token(after_spec)
+            let (spec_n, spec_ok) = str.parse_u64(spec_word)
+            let (op_n, op_ok) = str.parse_u64(op_word)
+            if spec_ok != ok || op_ok != ok || usize(spec_n) >= grid.all.len || op_n > 7u64 { ret false }
+            specs[count] = usize(spec_n)
+            ops[count] = u8(op_n)
+            var m = value_text.len
+            if m > CRIT_TEXT { m = CRIT_TEXT }
+            var c = 0usize
+            while c < m {
+                values[count * CRIT_TEXT + c] = value_text[c]
+                c += 1usize
+            }
+            lens[count] = m
+            count += 1usize
+        }
+    }
+    if first { ret false }
+    grid.crit_group = group
+    grid.crit_count = count
+    var k = 0usize
+    while k < count {
+        grid.crit_spec[k] = specs[k]
+        grid.crit_op[k] = ops[k]
+        grid.crit_len[k] = lens[k]
+        var c2 = 0usize
+        while c2 < lens[k] {
+            grid.crit_text[k * CRIT_TEXT + c2] = values[k * CRIT_TEXT + c2]
+            c2 += 1usize
+        }
+        k += 1usize
+    }
+    ret true
+}
 
 // The application takes the conditions once after OK or Apply.
 fn take_criteria(grid: *Grid) -> bool {
@@ -2102,10 +2192,10 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if parts_error != ok { ret (zero, control.TooLarge) }
     let (values, values_error) = mem.alloc[CritValue](a, CRIT_MAX)
     if values_error != ok { ret (zero, control.TooLarge) }
-    let (acts, acts_error) = mem.alloc[CritAct](a, 4usize)
+    let (acts, acts_error) = mem.alloc[CritAct](a, 6usize)
     if acts_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
-    while k < 4usize {
+    while k < 6usize {
         acts[k] = CritAct { grid: grid, kind: u8(k) }
         k += 1usize
     }
@@ -2190,9 +2280,9 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     filler.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
     rows[n] = widget.box(0u64, filler, zero)
     n += 1usize
-    let (b_open, e_open) = crit_button(a, grid, grid.key + MENU_KEY + 899991u64, "Open...", 80.0, &acts[2usize], false)
+    let (b_open, e_open) = crit_button(a, grid, grid.key + MENU_KEY + 899991u64, "Open...", 80.0, &acts[4usize], false)
     if e_open != ok { ret (zero, e_open) }
-    let (b_save, e_save) = crit_button(a, grid, grid.key + MENU_KEY + 899992u64, "Save As...", 80.0, &acts[2usize], false)
+    let (b_save, e_save) = crit_button(a, grid, grid.key + MENU_KEY + 899992u64, "Save As...", 80.0, &acts[5usize], false)
     if e_save != ok { ret (zero, e_save) }
     let (b_ok, e_ok) = crit_button(a, grid, grid.key + MENU_KEY + 899993u64, "OK", 80.0, &acts[1usize], true)
     if e_ok != ok { ret (zero, e_ok) }
