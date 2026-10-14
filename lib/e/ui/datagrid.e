@@ -153,6 +153,10 @@ print_open: bool,
 chooser_bands: bool,
 band_tabs: bool,
 filter_off: bool,
+pv_design: bool,
+dz_tab: u8,
+dz_checks: u32,
+dz_ready: bool,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
 pv_wide: u8,
@@ -4189,6 +4193,7 @@ fn show_print_preview(grid: *Grid) {
     grid.wiz_open = true
     grid.fmt_open = false
     grid.print_open = true
+    grid.pv_design = false
     grid.pv_page = 0usize
     grid.win_x[2usize] = 30.0
     grid.win_y[2usize] = 20.0
@@ -5117,6 +5122,10 @@ fn fmt_layers(a: *mem.Arena, grid: *Grid, base: widget.Node) -> (widget.Node, er
 }
 
 fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    if grid.print_open && grid.pv_design {
+        let (design_node, design_error) = designer_panel(a, grid)
+        ret (design_node, design_error)
+    }
     if grid.print_open && grid.pv_setup {
         let (setup_node, setup_error) = page_setup_panel(a, grid)
         ret (setup_node, setup_error)
@@ -9809,4 +9818,285 @@ fn faux_bold(a: *mem.Arena, grid: *Grid, text: str, first: widget.Node) -> (widg
     layers[0usize] = first
     layers[1usize] = widget.positioned(0u64, 0.8, 0.0, style.defaults(), one(a, second))
     ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+}
+
+// ---- the report Designer (v3: Cards > Print > Designer..., DevExpress's Format Report window) ----
+
+type DesignTap = struct { grid: *Grid, kind: u8, value: usize }
+
+const DZ_ITEMS: usize = 29usize
+
+// Opens the Designer in the print window's slot.
+fn show_designer(grid: *Grid) {
+    show_print_preview(grid)
+    grid.pv_design = true
+    if !grid.dz_ready {
+        grid.dz_checks = 472961023u32
+        grid.dz_ready = true
+    }
+}
+
+// The tab an item sits on: 0 View, 1 Behaviors, 2 Formatting, 3 Styles, 4 Preview.
+fn dz_tab_of(k: usize) -> u8 {
+    if k <= 11usize { ret 0u8 }
+    if k <= 17usize { ret 1u8 }
+    if k <= 25usize { ret 2u8 }
+    if k == 28usize { ret 3u8 }
+    ret 4u8
+}
+
+// The group heading an item stands under; items with the same number share one.
+fn dz_group_of(k: usize) -> u8 {
+    if k <= 6usize { ret 1u8 }
+    if k <= 11usize { ret 2u8 }
+    if k <= 13usize { ret 3u8 }
+    if k <= 16usize { ret 4u8 }
+    if k == 17usize { ret 5u8 }
+    if k <= 23usize { ret 6u8 }
+    if k <= 25usize { ret 7u8 }
+    if k <= 27usize { ret 8u8 }
+    ret 0u8
+}
+
+fn dz_group_name(group: u8) -> str {
+    if group == 1u8 { ret "Show" }
+    if group == 2u8 { ret "On Every Page" }
+    if group == 3u8 { ret "Selection" }
+    if group == 4u8 { ret "Expanding" }
+    if group == 5u8 { ret "Size" }
+    if group == 6u8 { ret "Refinements" }
+    if group == 7u8 { ret "Pagination" }
+    if group == 8u8 { ret "Options" }
+    ret ""
+}
+
+fn dz_label(k: usize) -> str {
+    if k == 0usize || k == 7usize { ret "Caption" }
+    if k == 1usize || k == 8usize { ret "Bands" }
+    if k == 2usize || k == 9usize { ret "Headers" }
+    if k == 3usize || k == 10usize { ret "Footers" }
+    if k == 4usize { ret "Group Footers" }
+    if k == 5usize { ret "Expand Buttons" }
+    if k == 6usize || k == 11usize { ret "Filter Bar" }
+    if k == 12usize { ret "Process Selection" }
+    if k == 13usize { ret "Process Exact Selection" }
+    if k == 14usize { ret "Groups" }
+    if k == 15usize { ret "Details" }
+    if k == 16usize { ret "Cards" }
+    if k == 17usize { ret "Auto Width" }
+    if k == 18usize { ret "Transparent Graphics" }
+    if k == 19usize { ret "Display Graphic As Text" }
+    if k == 20usize { ret "Flat CheckMarks" }
+    if k == 21usize { ret "Display Track Bars As Text" }
+    if k == 22usize { ret "Suppress Background Textures" }
+    if k == 23usize { ret "Consume Selection Style" }
+    if k == 24usize { ret "By TopLevel Groups" }
+    if k == 25usize { ret "One Group Per Page" }
+    if k == 26usize { ret "Visible" }
+    if k == 27usize { ret "Auto Height" }
+    ret "Use Native Styles"
+}
+
+fn dz_enabled(k: usize) -> bool { ret k != 13usize && k != 25usize }
+
+fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
+    let t = mem.cast[*DesignTap](ctx)
+    switch g {
+    case .Tap as at:
+        if t.kind == 0u8 { t.grid.dz_tab = u8(t.value) }
+        if t.kind == 1u8 { t.grid.dz_checks = t.grid.dz_checks ^ (1u32 << u32(t.value)) }
+        if t.kind == 2u8 {
+            t.grid.print_open = false
+            t.grid.wiz_open = false
+            t.grid.pv_design = false
+        }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// One check box and its words: a 15 px square, blue with a tick when on, grey words when disabled.
+fn dz_check(a: *mem.Arena, grid: *Grid, tap: *DesignTap, k: usize) -> (widget.Node, err) {
+    let on = ((grid.dz_checks >> u32(k)) & 1u32) != 0u32
+    var ink: u32 = 0x000000u32
+    if !dz_enabled(k) { ink = 0xA0A0A0u32 }
+    let (words, words_error) = flat_text(a, grid, dz_label(k), gl.rgb(ink))
+    if words_error != ok { ret (zero, words_error) }
+    var mark = "v"
+    if !on { mark = "" }
+    let (tick, tick_error) = flat_text(a, grid, mark, gl.rgb(0xFFFFFFu32))
+    if tick_error != ok { ret (zero, tick_error) }
+    var box = control.sized_style(15.0, 15.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    if on { box.background = paint.Brush { Solid: gl.rgb(0x1F6FCFu32) } }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    box.radius = 3.0
+    box.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    cells[0usize] = widget.aligned(0u64, .Center, .Center, box, one(a, tick))
+    cells[1usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one(a, words))
+    let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(300.0, 23.0), cells[0usize..2usize])
+    if !dz_enabled(k) { ret (line, ok) }
+    ret (widget.region(grid.key + MENU_KEY + 851000u64 + u64(k), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(300.0, 23.0), one(a, line)), ok)
+}
+
+fn dz_heading(a: *mem.Arena, grid: *Grid, text: str) -> (widget.Node, err) {
+    let (words, words_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if words_error != ok { ret (zero, words_error) }
+    ret (widget.padded(0u64, 4.0, 10.0, 0.0, 4.0, style.defaults(), one(a, words)), ok)
+}
+
+// The left page of the current tab: headings and check boxes in the items' order.
+fn dz_page(a: *mem.Arena, grid: *Grid, taps: []DesignTap) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 24usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    var last: u8 = 255u8
+    var k = 0usize
+    while k < DZ_ITEMS {
+        if dz_tab_of(k) == grid.dz_tab {
+            let group = dz_group_of(k)
+            if group != last && group != 0u8 {
+                let (head, head_error) = dz_heading(a, grid, dz_group_name(group))
+                if head_error != ok { ret (zero, head_error) }
+                rows[n] = head
+                n += 1usize
+            }
+            last = group
+            taps[k] = DesignTap { grid: grid, kind: 1u8, value: k }
+            let (line, line_error) = dz_check(a, grid, &taps[k], k)
+            if line_error != ok { ret (zero, line_error) }
+            rows[n] = line
+            n += 1usize
+        }
+        k += 1usize
+    }
+    ret (widget.padded(0u64, 14.0, 4.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n]))), ok)
+}
+
+fn dz_tab_name(i: usize) -> str {
+    if i == 0usize { ret "View" }
+    if i == 1usize { ret "Behaviors" }
+    if i == 2usize { ret "Formatting" }
+    if i == 3usize { ret "Styles" }
+    if i == 4usize { ret "Preview" }
+    if i == 5usize { ret "Cards" }
+    ret "Charts"
+}
+
+fn dz_tabs(a: *mem.Arena, grid: *Grid, taps: []DesignTap) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 7usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var i = 0usize
+    while i < 7usize {
+        taps[40usize + i] = DesignTap { grid: grid, kind: 0u8, value: i }
+        let (words, words_error) = flat_text(a, grid, dz_tab_name(i), gl.rgb(0x000000u32))
+        if words_error != ok { ret (zero, words_error) }
+        var tab = control.sized_style(76.0, 24.0)
+        if usize(grid.dz_tab) == i { tab.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
+        cells[i] = widget.region(grid.key + MENU_KEY + 851100u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[40usize + i]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, tab, one(a, widget.padded(0u64, 8.0, 4.0, 0.0, 0.0, style.defaults(), one(a, words))))
+        i += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(560.0, 26.0), cells[0usize..7usize]), ok)
+}
+
+// The grid's first rows as the report would print them, in the right half.
+fn dz_preview(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (lines, wide, lines_error) = export_rows(a, grid, 6usize, false)
+    if lines_error != ok { ret (zero, lines_error) }
+    var shown = wide
+    if shown > 5usize { shown = 5usize }
+    let (widths, widths_error) = mem.alloc[f32](a, shown + 1usize)
+    if widths_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < shown {
+        widths[k] = 330.0 / f32(shown)
+        k += 1usize
+    }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 10usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    var r = 0usize
+    while r < lines.len && r < 6usize && shown > 0usize {
+        let (row, row_error) = print_row(a, grid, lines[r][0usize..shown], widths[0usize..shown], r == 0usize)
+        if row_error != ok { ret (zero, row_error) }
+        rows[n] = row
+        n += 1usize
+        r += 1usize
+    }
+    if ((grid.dz_checks >> 6u32) & 1u32) != 0u32 {
+        let (filter_text, filter_error) = flat_text(a, grid, "<Filter is Empty>", gl.rgb(0xFFFFFFu32))
+        if filter_error != ok { ret (zero, filter_error) }
+        var strip = control.sized_style(330.0, 22.0)
+        strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) }
+        strip.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 150.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        rows[n] = widget.box(0u64, strip, one(a, widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, style.defaults(), one(a, filter_text))))
+        n += 1usize
+    }
+    var frame = control.sized_style(340.0, 330.0)
+    frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    frame.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, rows[0usize..n]), ok)
+}
+
+fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var i = 0usize
+    while i < 4usize {
+        var words = "Title Properties..."
+        if i == 1usize { words = "Footnote Properties..." }
+        if i == 2usize { words = "OK" }
+        if i == 3usize { words = "Cancel" }
+        let (label, label_error) = flat_text(a, grid, words, gl.rgb(0x000000u32))
+        if label_error != ok { ret (zero, label_error) }
+        var box = control.sized_style(120.0, 28.0)
+        box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+        box.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
+        box.radius = 4.0
+        box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        let held = widget.padded(0u64, 14.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label))
+        if i >= 2usize {
+            cells[i] = widget.region(grid.key + MENU_KEY + 851200u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held))
+        } else {
+            cells[i] = widget.box(0u64, box, one(a, held))
+        }
+        i += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(740.0, 36.0), cells[0usize..4usize]), ok)
+}
+
+fn designer_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (taps, taps_error) = mem.alloc[DesignTap](a, 48usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
+    taps[47usize] = DesignTap { grid: grid, kind: 2u8, value: 0usize }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    let (title, title_error) = window_title(a, grid, 2u8, "Format Report", 770.0, 36.0, false)
+    if title_error != ok { ret (zero, title_error) }
+    rows[0usize] = title
+    let (tabs, tabs_error) = dz_tabs(a, grid, taps)
+    if tabs_error != ok { ret (zero, tabs_error) }
+    let (page, page_error) = dz_page(a, grid, taps)
+    if page_error != ok { ret (zero, page_error) }
+    let (look, look_error) = dz_preview(a, grid)
+    if look_error != ok { ret (zero, look_error) }
+    let (halves, halves_error) = mem.alloc[widget.Node](a, 2usize)
+    if halves_error != ok { ret (zero, control.TooLarge) }
+    let (left, left_error) = mem.alloc[widget.Node](a, 2usize)
+    if left_error != ok { ret (zero, control.TooLarge) }
+    left[0usize] = tabs
+    left[1usize] = page
+    halves[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(370.0, 380.0), left[0usize..2usize])
+    halves[1usize] = widget.padded(0u64, 8.0, 4.0, 0.0, 0.0, style.defaults(), one(a, look))
+    rows[1usize] = widget.padded(0u64, 14.0, 10.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(740.0, 390.0), halves[0usize..2usize])))
+    let (buttons, buttons_error) = dz_buttons(a, grid, &taps[47usize])
+    if buttons_error != ok { ret (zero, buttons_error) }
+    rows[2usize] = widget.padded(0u64, 14.0, 6.0, 0.0, 0.0, style.defaults(), one(a, buttons))
+    var panel = control.sized_style(770.0, 500.0)
+    panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..3usize]), ok)
 }
