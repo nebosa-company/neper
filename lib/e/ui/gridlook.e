@@ -116,7 +116,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape }
 
@@ -213,6 +213,24 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.line_to(&ab, geometry.Point { x: area.x + area.width * 0.55, y: area.y + area.height })
         try geometry.close_path(&ab)
         try scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&ab), brush: paint.Brush { Solid: m.color } } })
+        ret ok
+    }
+    if m.shape == Shape.DotLine || m.shape == Shape.DotEdges {
+        // v3's dotted focus rectangle of a group row: 1 px dots every 2 px along the top and bottom
+        // edges (DotEdges also its left and right ends)
+        var dx: f32 = 0.0
+        while dx < area.width {
+            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + dx, y: area.y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: m.color } } })
+            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + dx, y: area.y + area.height - 1.0, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: m.color } } })
+            dx += 2.0
+        }
+        if m.shape == Shape.DotEdges {
+            var dy: f32 = 0.0
+            while dy < area.height {
+                try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: area.y + dy, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: m.color } } })
+                dy += 2.0
+            }
+        }
         ret ok
     }
     if m.shape == Shape.Minus {
