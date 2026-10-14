@@ -959,6 +959,39 @@ fn set_navigator_icons(grid: *Grid, enabled: [7]scene.TextureId, disabled: [6]sc
     grid.has_nav_icons = true
 }
 
+fn set_backdrop(grid: *Grid, texture: scene.TextureId) {
+    backdrop_texture = texture
+    backdrop_set = true
+}
+
+// The body as the pane shows it: shifted by the horizontal scroll, over v3's background picture. A
+// function of its own: `build_parts` has no room for more locals (the compiler build silently
+// corrupts the rule wizard's styles past it, D2524).
+fn shown_in_pane(a: *mem.Arena, grid: *Grid, body: widget.Node, body_height: f32) -> (widget.Node, err) {
+    var shown = body
+    if grid.hon {
+        let (shifted, shifted_error) = hshift(a, grid, body, grid.hcontent, body_height)
+        if shifted_error != ok { ret (zero, shifted_error) }
+        shown = shifted
+    }
+    if backdrop_set && grid.look.on {
+        let (picture, picture_error) = control.image(a, grid.key + 3950u64, backdrop_texture, 233.0, 168.0, .Contain, "")
+        if picture_error != ok { ret (zero, picture_error) }
+        let (flow, flow_error) = mem.alloc[widget.Node](a, 2usize)
+        if flow_error != ok { ret (zero, control.TooLarge) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, control.TooLarge) }
+        var spacer_h = body_height - 168.0
+        if !(spacer_h > 0.0) { spacer_h = 0.0 }
+        flow[0usize] = widget.box(grid.key + 3951u64, control.sized_style(1.0, spacer_h), zero)
+        flow[1usize] = picture
+        layers[0usize] = widget.flex(grid.key + 3952u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), flow[0usize..2usize])
+        layers[1usize] = shown
+        shown = widget.stack(grid.key + 3953u64, style.defaults(), layers[0usize..2usize])
+    }
+    ret (shown, ok)
+}
+
 // The word before the count in the footer (v3: "Count" in the pool, "Rows" in the collection).
 fn set_footer_label(grid: *Grid, label: str) { grid.footer_label = label }
 
@@ -5340,6 +5373,8 @@ const KEY_BASE: u64 = 4096u64
 // The name of the card row being dragged, kept for the grid it is dragged over.
 var drag_ghost_text: [96]u8
 var drag_ghost_len: usize
+var backdrop_texture: scene.TextureId
+var backdrop_set: bool
 
 fn row_key(grid: *const Grid, row: usize) -> widget.Key { ret grid.key + KEY_BASE + u64(row) }
 
@@ -7487,12 +7522,8 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     let (body, body_error) = collection.table_with(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: on_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: on_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height, table_options)
     if body_error != ok { ret (zero, body_error) }
     measure_hscroll(grid, theme)
-    var shown_body = body
-    if grid.hon {
-        let (shifted_body, shifted_body_error) = hshift(a, grid, body, grid.hcontent, body_height)
-        if shifted_body_error != ok { ret (zero, shifted_body_error) }
-        shown_body = shifted_body
-    }
+    let (shown_body, shown_body_error) = shown_in_pane(a, grid, body, body_height)
+    if shown_body_error != ok { ret (zero, shown_body_error) }
     var part_count = 1usize
     let with_footer = grid.footer_visible && grid.g.specs.len != 0usize
     let with_bands = grid.bands.len != 0usize
