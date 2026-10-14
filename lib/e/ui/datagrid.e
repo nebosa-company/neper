@@ -213,6 +213,8 @@ type Grid = struct {
     quick_y: f32,
     header_icons: [9]scene.TextureId,
     has_header_icons: bool,
+    filter_op_icons: [12]scene.TextureId,
+    has_filter_op_icons: bool,
     cell_menu: []const overlay.MenuCommand,
     menu_open: bool,
     menu_kind: u8,
@@ -892,6 +894,13 @@ type MenuPick = struct { grid: *Grid, id: u8, spec: usize }
 fn set_header_menu_icons(grid: *Grid, icons: [9]scene.TextureId) {
     grid.header_icons = icons
     grid.has_header_icons = true
+}
+
+// The pictures of the filter row's twelve operators (v3's list order: Equals, Does not equal, ...,
+// Begins with, Ends with), about 26 by 20; without them the list shows signs in text.
+fn set_filter_operator_icons(grid: *Grid, icons: [12]scene.TextureId) {
+    grid.filter_op_icons = icons
+    grid.has_filter_op_icons = true
 }
 
 // The word before the count in the footer (v3: "Count" in the pool, "Rows" in the collection).
@@ -4150,13 +4159,21 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         while oi < 12usize {
             op_picks[oi] = FilterOpPick { grid: grid, spec: pop_spec, op: u8(oi) }
             op_submits[oi] = widget.Submit { ctx: mem.cast[*void](&op_picks[oi]), invoke: on_filter_op }
-            let (sign_node, sign_node_error) = flat_text(a, grid, filter_op_sign(u8(oi)), gl.rgb(0x2E5EA8u32))
-            if sign_node_error != ok { ret (zero, sign_node_error) }
+            var sign_node: widget.Node = zero
+            if grid.has_filter_op_icons {
+                let (pic, pic_error) = control.image(a, 0u64, grid.filter_op_icons[oi], 26.0, 20.0, .Contain, "")
+                if pic_error != ok { ret (zero, pic_error) }
+                sign_node = pic
+            } else {
+                let (sign_text_node, sign_text_error) = flat_text(a, grid, filter_op_sign(u8(oi)), gl.rgb(0x2E5EA8u32))
+                if sign_text_error != ok { ret (zero, sign_text_error) }
+                sign_node = sign_text_node
+            }
             let (words_node, words_node_error) = flat_text(a, grid, filter_op_words(u8(oi)), gl.rgb(0x000000u32))
             if words_node_error != ok { ret (zero, words_node_error) }
             let (op_parts, op_parts_error) = mem.alloc[widget.Node](a, 2usize)
             if op_parts_error != ok { ret (zero, control.TooLarge) }
-            op_parts[0usize] = widget.padded(0u64, 8.0, 3.0, 0.0, 0.0, control.sized_style(40.0, 26.0), one(a, sign_node))
+            op_parts[0usize] = widget.padded(0u64, 8.0, 2.0, 0.0, 0.0, control.sized_style(40.0, 26.0), one(a, sign_node))
             op_parts[1usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one(a, words_node))
             var op_style = control.sized_style(250.0, 26.0)
             if u8(oi) == grid.filter_ops[pop_spec] { op_style.background = paint.Brush { Solid: gl.rgb(0x99D1FFu32) } }
@@ -6399,8 +6416,16 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var cell_style = control.sized_style(grid.columns[at].width, 28.0)
         cell_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
         if s.filter {
-            let (sign_text, sign_error) = flat_text(a, grid, filter_op_sign(grid.filter_ops[orig]), gl.rgb(0x404040u32))
-            if sign_error != ok { ret (zero, sign_error) }
+            var sign_text: widget.Node = zero
+            if grid.has_filter_op_icons {
+                let (cell_pic, cell_pic_error) = control.image(a, 0u64, grid.filter_op_icons[usize(grid.filter_ops[orig])], 26.0, 20.0, .Contain, "")
+                if cell_pic_error != ok { ret (zero, cell_pic_error) }
+                sign_text = cell_pic
+            } else {
+                let (sign_words, sign_error) = flat_text(a, grid, filter_op_sign(grid.filter_ops[orig]), gl.rgb(0x404040u32))
+                if sign_error != ok { ret (zero, sign_error) }
+                sign_text = sign_words
+            }
             var sign_box = control.sized_style(34.0, 28.0)
             let sign = widget.region(grid.key + FILTER_KEY + 1100u64 + u64(orig), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[at]), invoke: on_filter_sign }, gestures: 1u8, enabled: true, focusable: false }, sign_box, one(a, widget.padded(0u64, 8.0, 4.0, 0.0, 0.0, style.defaults(), one(a, sign_text))))
             let buffer = grid.filter_text[orig * FILTER_TEXT..(orig + 1usize) * FILTER_TEXT]

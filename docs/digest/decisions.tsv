@@ -2237,4 +2237,5 @@ D2473	523	G012: the wizard's Minimum and Maximum take a Percent
 D2474	247	G012: a Percent bound is checked by a fixture
 D2475	889	G012: the filter row stands under the header, in v3's look
 D2476	1039	G012: the filter row's operator list
-D2477	652	G012: typing into the filter row is not a search
+D2477	653	G012: typing into the filter row is not a search
+D2478	574	G012: v3's operator pictures in the filter row
