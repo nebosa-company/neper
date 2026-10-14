@@ -1353,6 +1353,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                         framed = true
                     } else {
+                        // The prompt's frame and the home screen under it are rebuilt from the floor, as on every return
+                        // to Home: after a roll back the floor sits high (it keeps the version's image) and the prompt's
+                        // own allocations left no room for a second home screen.
+                        if has_last_scene {
+                            let released_prompt = scene.release_scene(&renderer, last_scene)
+                            has_last_scene = false
+                        }
+                        mem.reset(a, home_floor)
                         if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                         framed = true
                         say("shell prompt cancelled\n")
