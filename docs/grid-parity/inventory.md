@@ -77,7 +77,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Incremental search, next/previous, prefix mark, no timeout | matched | S3, S5-search-prefix (D2427) |
 | Bookmark (one per view) | matched | S3 |
 | Selection API (select all, Ctrl+A, Shift+arrows) | matched | M1 |
-| Layout persistence | untested | |
+| Layout persistence (column order, widths, hidden, filter row, navigator across runs) | matched (own `cardgrid.layout` text via `save_layout` / `load_layout`, now with the Shift+click sorts, D2437) / differs (v3 also keeps grouping, expansion, view toggles) | LP1-layout-restored |
 | Export, copy as text, print | untested | |
 | Best fit | matched | A1 |
 
