@@ -205,8 +205,11 @@ type Grid = struct {
     center_flags: []bool,
     menu_cursor: usize,
     menu_count: usize,
-    menu_enabled: [24]bool,
-    menu_actions: [24]widget.Submit,
+    menu_enabled: [40]bool,
+    menu_actions: [40]widget.Submit,
+    app_menu: []const overlay.MenuCommand,
+    app_menu_x: f32,
+    app_menu_y: f32,
     hints: []const str,
     footer_label: str,
     quick_x: f32,
@@ -884,6 +887,7 @@ const MENU_HEADER: u8 = 2u8
 const MENU_GROUP: u8 = 3u8
 const MENU_QUICK: u8 = 4u8
 const MENU_ALIGN: u8 = 5u8
+const MENU_APP: u8 = 6u8
 
 type MenuPick = struct { grid: *Grid, id: u8, spec: usize }
 
@@ -1191,6 +1195,17 @@ fn on_menu_show(ctx: *void) -> err {
     ret ok
 }
 
+// The application's own menu (v3's View menu) as a popup at the window point (x, y): the grid draws
+// it in its flat look, with section headings from `head` of the commands.
+fn show_app_menu(grid: *Grid, commands: []const overlay.MenuCommand, x: f32, y: f32) {
+    grid.app_menu = commands
+    grid.app_menu_x = x
+    grid.app_menu_y = y
+    grid.menu_kind = MENU_APP
+    grid.menu_open = true
+    grid.menu_cursor = 0usize
+}
+
 fn on_menu_dismiss(ctx: *void) -> err {
     let grid = mem.cast[*Grid](ctx)
     grid.menu_open = false
@@ -1299,11 +1314,20 @@ fn menu_item(label: str, action: widget.Submit, enabled: bool, separated: bool, 
 fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
     let (picks, picks_error) = mem.alloc[MenuPick](a, 16usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
-    let (commands, commands_error) = mem.alloc[overlay.MenuCommand](a, 16usize + grid.cell_menu.len)
+    let (commands, commands_error) = mem.alloc[overlay.MenuCommand](a, 16usize + grid.cell_menu.len + grid.app_menu.len)
     if commands_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     var p = 0usize
     let me = mem.cast[*void](grid)
+    if grid.menu_kind == MENU_APP {
+        var ai = 0usize
+        while ai < grid.app_menu.len {
+            commands[n] = grid.app_menu[ai]
+            n += 1usize
+            ai += 1usize
+        }
+        ret (commands[0usize..n], ok)
+    }
     if grid.menu_kind == MENU_CELL {
         var i = 0usize
         while i < grid.cell_menu.len {
@@ -3522,7 +3546,12 @@ fn plain_caption(a: *mem.Arena, label: str) -> (str, usize, err) {
     var at = label.len
     var i = 0usize
     while i < label.len {
-        if label[i] == 38u8 && at == label.len && i + 1usize < label.len {
+        if label[i] == 38u8 && i + 1usize < label.len && label[i + 1usize] == 38u8 {
+            // && is a literal ampersand
+            buf[n] = 38u8
+            n += 1usize
+            i += 2usize
+        } else if label[i] == 38u8 && at == label.len && i + 1usize < label.len {
             at = n
             i += 1usize
         } else {
@@ -3648,7 +3677,7 @@ fn flat_text(a: *mem.Arena, grid: *Grid, text: str, ink: paint.Color) -> (widget
 fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, x: f32, y: f32, row_h: f32) -> (widget.Node, err) {
     let (picks, picks_error) = mem.alloc[FlatPick](a, commands.len)
     if picks_error != ok { ret (zero, control.TooLarge) }
-    let (rows, rows_error) = mem.alloc[widget.Node](a, commands.len * 2usize + 1usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, commands.len * 4usize + 1usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     var widest_label = 0usize
@@ -3661,7 +3690,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
     }
     // 6.4 logical px a character of the 10 pt face is near enough; the picture column is 27 wide
     grid.menu_count = commands.len
-    if grid.menu_count > 24usize { grid.menu_count = 24usize }
+    if grid.menu_count > 40usize { grid.menu_count = 40usize }
     var width = 27.0 + f32(widest_label) * 6.6 + 24.0 + 22.0
     if widest_hint != 0usize { width += f32(widest_hint) * 6.6 + 16.0 }
     if width < 120.0 { width = 120.0 }
@@ -3675,6 +3704,19 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
             rows[n] = widget.box(0u64, rule, zero)
             n += 1usize
         }
+        if c.head.len != 0usize {
+            // a section heading: bold words over a rule (v3's View menu)
+            let (heading, heading_error) = flat_text(a, grid, c.head, gl.rgb(0x000000u32))
+            if heading_error != ok { ret (zero, heading_error) }
+            var head_style = control.sized_style(width - 2.0, row_h + 4.0)
+            head_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+            rows[n] = widget.padded(0u64, 10.0, 6.0, 0.0, 0.0, head_style, one(a, heading))
+            n += 1usize
+            var head_rule = control.sized_style(width - 2.0, 1.0)
+            head_rule.background = paint.Brush { Solid: gl.rgb(0xBCBCBCu32) }
+            rows[n] = widget.box(0u64, head_rule, zero)
+            n += 1usize
+        }
         let key = grid.key + MENU_KEY + 16u64 + u64(i)
         let state = control.control_state(grid.theme, key, c.enabled, false)
         if state.hovered && c.enabled { grid.menu_cursor = i }
@@ -3684,7 +3726,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
         if lit { ink = gl.rgb(0xFFFFFFu32) }
         let (label, label_error) = caption_node(a, grid, c.label, ink)
         if label_error != ok { ret (zero, label_error) }
-        if i < 24usize {
+        if i < 40usize {
             grid.menu_enabled[i] = c.enabled
             grid.menu_actions[i] = c.action
         }
@@ -4101,8 +4143,13 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         let (at, pointed) = widget.context_point(theme.runtime)
         var row_h: f32 = 20.0
         if grid.menu_kind == MENU_HEADER || grid.menu_kind == MENU_ALIGN { row_h = 22.0 }
+        if grid.menu_kind == MENU_APP { row_h = 26.0 }
         var menu_x = at.x
         var menu_y = at.y
+        if grid.menu_kind == MENU_APP {
+            menu_x = grid.app_menu_x
+            menu_y = grid.app_menu_y
+        }
         if grid.menu_kind == MENU_ALIGN {
             // beside the popup it came from, at the height of its Alignment entry
             menu_x = grid.flat_left + grid.flat_width - 2.0

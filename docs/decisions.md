@@ -39428,3 +39428,7 @@ The twelve operator pictures of v3's filter row list are cut from the recording 
 ## D2479 - G012: the filter row's funnel and focused blue
 
 While one of its editors holds the keyboard the filter row turns light blue (#A6D2FF, v3's FR2 recording) except the editor's own cell, which stays white; the indicator column of the row carries v3's black down-pointing funnel. The operator pictures lose their white background (alpha from the whiteness) so they stand on the blue (FR7-filter-row-focused-v5.png). The four grid fixtures pass.
+
+## D2480 - G012: v3's View menu as an application menu of the grid
+
+v3's main menu View (VM1-view-menu-v3.png) has three sections, Sort Order, Group By and Cards, with a heading over each, pictures, shortcuts, ticks and a rule between entries. `show_app_menu(grid, commands, x, y)` shows an application's own command list in the grid's flat popup (kind `MENU_APP`, up to 40 entries, a `head` on a command puts a section heading with a rule over it, `&&` is a literal ampersand). The sample gets a View button whose menu lists the 23 entries; the ones the sample can answer act (Sort..., Group by Edition / Rarity, Remove Grouping, Show Columns..., Columns Auto Width, Show Header / Indicator / Navigator, Conditional Formatting...), the rest are greyed (VM1-view-menu-v5.png). The four grid fixtures pass.

@@ -2239,4 +2239,5 @@ D2475	889	G012: the filter row stands under the header, in v3's look
 D2476	1039	G012: the filter row's operator list
 D2477	653	G012: typing into the filter row is not a search
 D2478	575	G012: v3's operator pictures in the filter row
-D2479	452	G012: the filter row's funnel and focused blue
+D2479	453	G012: the filter row's funnel and focused blue
+D2480	806	G012: v3's View menu as an application menu of the grid
