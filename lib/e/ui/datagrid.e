@@ -137,6 +137,8 @@ type Grid = struct {
     win_gx: [4]f32,
     win_gy: [4]f32,
     win_placed: [4]bool,
+    win_rank: [4]u8,
+    win_top: u8,
     has_row_drop: bool,
     row_drop_ctx: *void,
     row_drop_fn: fn(*void, usize) -> err,
@@ -1452,7 +1454,11 @@ fn on_window_title(ctx: *void, g: widget.Gesture) -> err {
     let w = mem.cast[*WinDrag](ctx)
     let i = usize(w.which)
     switch g {
+    case .Tap as at:
+        raise_window(w.grid, w.which)
+        ret ok
     case .DragStart as at:
+        raise_window(w.grid, w.which)
         w.grid.win_gx[i] = at.x - w.grid.win_x[i]
         w.grid.win_gy[i] = at.y - w.grid.win_y[i]
         ret ok
@@ -1463,6 +1469,20 @@ fn on_window_title(ctx: *void, g: widget.Gesture) -> err {
     default:
         ret ok
     }
+}
+
+fn raise_window(grid: *Grid, which: u8) {
+    if grid.win_top == 255u8 {
+        // the ranks start over, keeping their order
+        var k = 0usize
+        while k < 4usize {
+            grid.win_rank[k] = 0u8
+            k += 1usize
+        }
+        grid.win_top = 0u8
+    }
+    grid.win_top += 1u8
+    grid.win_rank[usize(which)] = grid.win_top
 }
 
 fn on_window_close(ctx: *void, g: widget.Gesture) -> err {
@@ -1530,6 +1550,7 @@ fn sort_row_listed(grid: *const Grid, spec: usize) -> bool {
 
 // Opens the dialog with the grid's current sort (the primary, then the Shift+click ones).
 fn open_sort_dialog(grid: *Grid) {
+    raise_window(grid, 0u8)
     var at = 0usize
     while at < 24usize {
         grid.sort_marks[at] = 0u8
@@ -1787,6 +1808,7 @@ fn on_rule_act(ctx: *void, g: widget.Gesture) -> err {
         }
         if act.kind == 5u8 || act.kind == 6u8 {
             grid.wiz_open = true
+            raise_window(grid, 2u8)
             grid.wiz_type = 0u8
             grid.has_wiz_target = false
             grid.wiz_edit = act.kind == 6u8
@@ -2011,6 +2033,7 @@ fn take_rules_changed(grid: *Grid) -> bool {
 }
 
 fn open_rules_manager(grid: *Grid) {
+    raise_window(grid, 1u8)
     grid.rules_selected = 0usize
     grid.rules_dialog_open = true
 }
@@ -2248,7 +2271,10 @@ fn on_crit_act(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
-fn open_criteria_editor(grid: *Grid) { grid.crit_open = true }
+fn open_criteria_editor(grid: *Grid) {
+    raise_window(grid, 3u8)
+    grid.crit_open = true
+}
 
 // 0 none, 1 the user asked to open a saved filter, 2 to save the conditions; taken once.
 fn take_criteria_io(grid: *Grid) -> u8 {
@@ -4024,7 +4050,26 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         parts[n] = widget.overlay(grid.key + CHOOSER_KEY, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: x, y: y }, modal: false, dismiss: zero }, style.defaults(), floating[0usize..1usize])
         n += 1usize
     }
-    if grid.crit_open {
+    // the secondary windows from the back to the front: the one touched last stands on top
+    var window_order: [4]u8 = [4]u8{ 0u8, 1u8, 2u8, 3u8 }
+    var w_a = 0usize
+    while w_a < 4usize {
+        var w_b = w_a + 1usize
+        while w_b < 4usize {
+            if grid.win_rank[usize(window_order[w_b])] < grid.win_rank[usize(window_order[w_a])] {
+                let swap_w = window_order[w_a]
+                window_order[w_a] = window_order[w_b]
+                window_order[w_b] = swap_w
+            }
+            w_b += 1usize
+        }
+        w_a += 1usize
+    }
+    var window_pass = 0usize
+    while window_pass < 4usize {
+    let which = window_order[window_pass]
+    window_pass += 1usize
+    if which == 3u8 && grid.crit_open {
         let (crit_node, crit_error) = criteria_panel(a, grid)
         if crit_error != ok { ret (zero, crit_error) }
         let crit_size = widget.surface_size(theme.runtime)
@@ -4035,7 +4080,7 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         parts[n] = widget.overlay(grid.key + MENU_KEY + 699902u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: grid.win_x[3usize], y: grid.win_y[3usize] }, modal: false, dismiss: zero }, style.defaults(), crit_held[0usize..1usize])
         n += 1usize
     }
-    if grid.rules_dialog_open {
+    if which == 1u8 && grid.rules_dialog_open {
         let (rules_panel, rules_panel_error) = rules_dialog_panel(a, grid)
         if rules_panel_error != ok { ret (zero, rules_panel_error) }
         let rules_size = widget.surface_size(theme.runtime)
@@ -4046,7 +4091,7 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         parts[n] = widget.overlay(grid.key + MENU_KEY + 699901u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: grid.win_x[1usize], y: grid.win_y[1usize] }, modal: false, dismiss: zero }, style.defaults(), rules_held[0usize..1usize])
         n += 1usize
     }
-    if grid.sort_dialog_open {
+    if which == 0u8 && grid.sort_dialog_open {
         let (dialog, dialog_error) = sort_dialog_panel(a, grid)
         if dialog_error != ok { ret (zero, dialog_error) }
         let size = widget.surface_size(theme.runtime)
@@ -4057,7 +4102,7 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         parts[n] = widget.overlay(grid.key + MENU_KEY + 699900u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: grid.win_x[0usize], y: grid.win_y[0usize] }, modal: false, dismiss: zero }, style.defaults(), shown[0usize..1usize])
         n += 1usize
     }
-    if grid.wiz_open {
+    if which == 2u8 && grid.wiz_open {
         let (wiz_node, wiz_error) = wiz_panel(a, grid)
         if wiz_error != ok { ret (zero, wiz_error) }
         let wiz_size = widget.surface_size(theme.runtime)
@@ -4067,6 +4112,7 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         wiz_held[0usize] = wiz_node
         parts[n] = widget.overlay(grid.key + MENU_KEY + 699904u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: grid.win_x[2usize], y: grid.win_y[2usize] }, modal: false, dismiss: zero }, style.defaults(), wiz_held[0usize..1usize])
         n += 1usize
+    }
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..n]), ok)
 }
