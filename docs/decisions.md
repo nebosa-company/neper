@@ -41117,3 +41117,7 @@ Compared with v3 (NV1-navigator-v3.png): its navigator buttons are 24 by 30 beve
 ## D4033 - G012: the navigator's white band, driven live
 
 The position text of the navigator stands on a white 115 by 30 band, as v3's does (the gap between its Previous and Next buttons), when the v3 pictures are given. Driven live with the pictures: Next three times read 3 of 120283, Previous 2 of, First 1 of with the left three buttons greyed (NV2-navigator-clicks-v5.png). The horizontal scroll bar thumb of v3's navigator row is still not moved there. The four grid fixtures pass.
+
+## D4034 - G012: the navigator at the last row
+
+Driven live: Last read 120283 of 120283 with Next, Next page and Last greyed and the left three live (NV3-navigator-last-row-v5.png), closing the right-hand disabled state of D4032. The grid has no horizontal scrolling (its columns are fitted to the width), so v3's scroll bar thumb in the navigator row has nothing to show yet; it waits for horizontal scrolling of the table. No code change.
