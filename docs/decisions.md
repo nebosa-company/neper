@@ -41408,3 +41408,6 @@ The Customize... box of the filter panel (D4103) is a button now: a tap calls `o
 
 ## D4109 - G012: the filter panel's tick suspends the filter
 The tick of the filter panel (blue = applied, grey = suspended) flips `filter_off`: every row shows again, the conditions stay typed in their cells and the panel keeps naming them (FP3-filter-suspended-v5.png: "zz" still in the Name cell, 120283 cards); `filter_value` answers "" while suspended, so a host's refilter needs no change, and typing in a cell applies the filter again.
+
+## D4110 - G012: header and footer cells align as v3 prints them
+The three cells of a printed header or footer sit left, centred and right across the printable width (`print_band`): the footer's "Page 1" is centred under the table (PP11-footer-centred-v5.png). "[Date Printed]" still prints as typed.

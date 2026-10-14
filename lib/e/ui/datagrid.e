@@ -4784,7 +4784,9 @@ fn print_band(a: *mem.Arena, grid: *Grid, first: usize, lp: f32, across: f32, to
         let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
         if label_error != ok { ret (zero, label_error) }
         var cell = control.sized_style(across / 3.0, 18.0)
-        cells[c] = widget.box(0u64, cell, one(a, label))
+        if c == 0usize { cells[c] = widget.box(0u64, cell, one(a, label)) }
+        if c == 1usize { cells[c] = widget.aligned(0u64, .Center, .Center, cell, one(a, label)) }
+        if c == 2usize { cells[c] = widget.aligned(0u64, .End, .Center, cell, one(a, label)) }
         c += 1usize
     }
     var band = control.sized_style(across, 18.0)

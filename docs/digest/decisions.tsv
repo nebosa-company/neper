@@ -2688,4 +2688,5 @@ D4105	586	G012: the shortcut gap of the popup menus
 D4106	308	G012: the column popup's width
 D4107	1037	G012: the Alignment submenu and the Customization window against v3
 D4108	370	G012: Customize... on the filter panel opens the Advanced Filter
-D4109	443	G012: the filter panel's tick suspends the filter
+D4109	444	G012: the filter panel's tick suspends the filter
+D4110	301	G012: header and footer cells align as v3 prints them
