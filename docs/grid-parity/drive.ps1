@@ -33,6 +33,7 @@ foreach ($s in ($Script -split ";")) {
     'down'   { [AW]::SetCursorPos($r.L + [int]$t[1], $r.T + [int]$t[2]) | Out-Null; Start-Sleep -Milliseconds 200; [AW]::mouse_event(2,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 300 }
     'drag'   { $x0 = [int]$t[1]; $y0 = [int]$t[2]; $x1 = [int]$t[3]; $y1 = [int]$t[4]; foreach ($i in 1..12) { [AW]::SetCursorPos($r.L + $x0 + [int](($x1-$x0)*$i/12), $r.T + $y0 + [int](($y1-$y0)*$i/12)) | Out-Null; Start-Sleep -Milliseconds 60 }; Start-Sleep -Milliseconds 400 }
     'up'     { [AW]::mouse_event(4,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 500 }
+    'wheel'  { [AW]::SetCursorPos($r.L + [int]$t[1], $r.T + [int]$t[2]) | Out-Null; Start-Sleep -Milliseconds 200; [AW]::mouse_event(0x0800,0,0,[BitConverter]::ToUInt32([BitConverter]::GetBytes([int]([int]$t[3] * 120)),0),[UIntPtr]::Zero); Start-Sleep -Milliseconds 600 }
     'wait'   { Start-Sleep -Milliseconds ([int]$t[1]) }
     'shot'   {
       # the full screen, so popup menus (separate windows) are in it; cropped to the window plus margin

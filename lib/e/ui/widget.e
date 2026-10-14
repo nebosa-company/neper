@@ -238,6 +238,7 @@ type Element = struct {
     // placement, its momentum, and how it behaves past its ends.
     node_offset: f32,
     content_extent: f32,
+    wheel_step: f32,
     viewport_extent: f32,
     // (D1487) A viewport's padded inside, where its thumb strip stands.
     viewport_rect: geometry.Rect,
@@ -2207,6 +2208,9 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
     }
     let e = &s.elements[element]
     e.content_extent = content
+    // a lazy list or table turns three of its rows per wheel notch (v3, Windows' three lines)
+    e.wheel_step = 0.0
+    if sc.virtual_count != 0usize && sc.virtual_extent > 0.0 { e.wheel_step = 3.0 * sc.virtual_extent }
     if vertical { e.viewport_extent = inner.height } else { e.viewport_extent = inner.width }
     e.viewport_rect = inner
     let most = max_f(content - e.viewport_extent, 0.0)
@@ -5264,7 +5268,9 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if has_found {
             // The notch count rides in `device` as its bits (D797); a notch is 40 px.
             let notches = f32(mem.bitcast[i32](p.device)) / 120.0
-            ret scroll_by(s, found, 0.0 - notches * 40.0, false)
+            var step: f32 = 40.0
+            if s.elements[found].wheel_step > 0.0 { step = s.elements[found].wheel_step }
+            ret scroll_by(s, found, 0.0 - notches * step, false)
         }
     case .KeyDown as k:
         // Enter or Space on a focused tap region is a tap at its centre.

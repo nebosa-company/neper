@@ -3356,6 +3356,12 @@ fn window_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) -
     }
     if message == 522u32 {
         var scroll = window_pointer(.Scroll, handle, lparam, 0u8)
+        // WM_MOUSEWHEEL carries the pointer in screen coordinates; every other event, in client ones
+        var origin = UiaPoint { x: 0, y: 0 }
+        if raw_client_to_screen(handle, &origin) != 0 {
+            scroll.x -= origin.x
+            scroll.y -= origin.y
+        }
         scroll.delta = i32(mem.bitcast[i16](u16((wparam >> 16usize) & 65535usize)))
         window_push(scroll)
         ret 0isize
