@@ -1670,6 +1670,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (wide, wide_error) = dg.export_string(&f, &grid2, dg.EXPORT_CSV, false, 4usize)
     if wide_error != ok { os.exit(607) }
     if wide.len < 60usize { os.exit(608) }
+    // Copy Selected: the current row only (header and one row); Copy Card Name: its name
+    let (picked, picked_error) = dg.export_string(&f, &grid15, dg.EXPORT_TEXT, true, 5usize)
+    if picked_error != ok { os.exit(609) }
+    var picked_lines = 0usize
+    var picked_at = 0usize
+    while picked_at < picked.len {
+        if picked[picked_at] == 10u8 { picked_lines += 1usize }
+        picked_at += 1usize
+    }
+    if picked_lines != 2usize { os.exit(610) }
+    let (named, named_error) = dg.card_name(&f, &grid15)
+    if named_error != ok || named.len == 0usize { os.exit(611) }
     let (markup, markup_error) = dg.export_string(&f, &grid15, dg.EXPORT_HTML, false, 2usize)
     if markup_error != ok { os.exit(605) }
     if markup.len < 40usize || markup[0usize] != 60u8 { os.exit(606) }

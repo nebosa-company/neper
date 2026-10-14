@@ -1044,6 +1044,13 @@ fn export_string(a: *mem.Arena, grid: *Grid, format: u8, selected_only: bool, li
     ret (str.done(&sb), ok)
 }
 
+// Copy Card Name (v3's Ctrl+F9): the search column text of the current row, empty with none.
+fn card_name(a: *mem.Arena, grid: *const Grid) -> (str, err) {
+    if !grid.has_selection || !grid.has_search || grid.search_spec >= grid.all.len { ret ("", ok) }
+    let (name_text, name_error) = cell_text_of(a, grid, grid.all[grid.search_spec], grid.selected_row)
+    ret (name_text, name_error)
+}
+
 // A hint per column (by the column's index in the specs given to `create`), shown after the pointer
 // rests on its header (v3's HeaderHint: "Name - the card's name appears in the upper left corner.").
 fn set_header_hints(grid: *Grid, hints: []const str) { grid.hints = hints }
