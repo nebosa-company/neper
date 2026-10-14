@@ -39564,3 +39564,7 @@ Per the owner: ignore Gleemax (CMC 1000000) for the data bar. `Rule.has_ignore` 
 ## D2513 - G012: data bar Fill mode Solid and Border style in the rule model
 
 `Rule.bar_solid` and `Rule.bar_border` (v3's Data Bar Rule Style Settings, CF10: Fill mode Gradient by default, Border style None by default) reach the cell's `Format` and are drawn: solid fill when set, a 1 px border in the bar's colour when set. The wizard's Format... does not set them yet (no dialog). ui_gridrules checks the fields (exits 153-155); the four grid fixtures pass. The owner's list gains: the scroll bars change size when hovered over (inventory, To do).
+
+## D2514 - G012: the no-data messages
+
+v3 sets `NoDataToDisplayInfoText` per grid in main.vcl.form.pas: `<No cards in card pool>`, `<No cards in collection>` and `<No cards in deck. To create a new deck use File | Deck menu.>`. `set_empty_text` hands the text to the grid and the sample sets the three (ND1-no-data-v5.png: a name filter matching nothing). Not matched: v3 keeps the header row and centres the message under it, the grid replaces itself with the message. The four grid fixtures pass.
