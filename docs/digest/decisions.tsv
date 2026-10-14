@@ -2677,4 +2677,5 @@ D4094	398	G012: custom RGB steppers in the colour editor
 D4095	558	G012: typed margin boxes in Page Setup
 D4096	633	G012: typed Header/Footer cells and Fit To counts in Page Setup
 D4097	424	G012: typed margin boxes in Print Preview
-D4098	1054	G012: the Data Bar style window in v3's layout
+D4098	1055	G012: the Data Bar style window in v3's layout
+D4099	803	G012: the preview page follows its margins; the toolbar's page icons work

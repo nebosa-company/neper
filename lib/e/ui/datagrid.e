@@ -4422,6 +4422,20 @@ fn scaling_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node
 
 type MarginSpin = struct { grid: *Grid, slot: u8 }
 
+// A margin in hundredths of an inch (slots: Left, Top, Right, Bottom, Header, Footer).
+fn margin_hund(grid: *const Grid, slot: usize) -> i64 {
+    var base: i64 = 5i64
+    if slot >= 4usize { base = 2i64 }
+    ret (i64(grid.pv_tenths[slot]) + base) * 10i64 + i64(grid.pv_hund[slot])
+}
+
+// The margin in sheet pixels: the sheet is the paper (11 in landscape, 8.5 in portrait) across.
+fn margin_px(grid: *const Grid, slot: usize, sheet: f32) -> f32 {
+    var paper: f32 = 11.0
+    if grid.pv_orient == 1u8 { paper = 8.5 }
+    ret sheet / paper * f32(margin_hund(grid, slot)) / 100.0
+}
+
 fn on_cell_text(ctx: *void, value: str) -> err {
     let m = mem.cast[*MarginSpin](ctx)
     var n = value.len
@@ -4655,6 +4669,10 @@ fn on_print_tap(ctx: *void, g: widget.Gesture) -> err {
             grid.pv_zoom = (grid.pv_zoom + 1u8) % 4u8
         } else if tap.index == 7u8 {
             if grid.pv_page > 0usize { grid.pv_page -= 1usize }
+        } else if tap.index == 9u8 {
+            grid.pv_page = 0usize
+        } else if tap.index == 10u8 {
+            grid.pv_page = 1000000usize
         } else {
             grid.pv_page += 1usize
         }
@@ -4677,6 +4695,43 @@ fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8, hund: u8, t
     if (two || hund != 0u8) && str.push_u64(&sb, u64(hund)) != ok { ret ("", control.TooLarge) }
     if str.push(&sb, " in") != ok { ret ("", control.TooLarge) }
     ret (str.done(&sb), ok)
+}
+
+// The toolbar picture with tap targets over its first, previous, next and last page icons.
+fn print_toolbar_row(a: *mem.Arena, grid: *Grid, width: f32) -> (widget.Node, err) {
+    var tool = control.sized_style(width, 34.0)
+    tool.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    tool.border = style.Border { width: 1.0, color: gl.rgb(0xD0D0D0u32) }
+    if !toolbar_set { ret (widget.box(0u64, tool, zero), ok) }
+    let (strip, strip_error) = control.image(a, grid.key + 3970u64, toolbar_texture, width, 27.0, .Contain, "")
+    if strip_error != ok { ret (zero, strip_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
+    if layers_error != ok { ret (zero, control.TooLarge) }
+    let (taps, taps_error) = mem.alloc[PrintTap](a, 4usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
+    layers[0usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one(a, strip))
+    var k = 0usize
+    while k < 4usize {
+        // first, previous, next, last
+        var at: f32 = 611.0
+        var index: u8 = 9u8
+        if k == 1usize {
+            at = 633.0
+            index = 7u8
+        }
+        if k == 2usize {
+            at = 727.0
+            index = 8u8
+        }
+        if k == 3usize {
+            at = 749.0
+            index = 10u8
+        }
+        taps[k] = PrintTap { grid: grid, index: index }
+        layers[k + 1usize] = widget.positioned(0u64, at, 3.0, style.defaults(), one(a, widget.region(grid.key + MENU_KEY + 850820u64 + u64(k), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[k]), invoke: on_print_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(22.0, 27.0), zero)))
+        k += 1usize
+    }
+    ret (widget.stack(0u64, tool, layers[0usize..5usize]), ok)
 }
 
 // The margins rows: the zoom (a tap), then each margin as a typed spin box.
@@ -4798,16 +4853,9 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if menu_bar_error != ok { ret (zero, menu_bar_error) }
     rows[n] = menu_bar
     n += 1usize
-    var tool = control.sized_style(width, 34.0)
-    tool.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
-    tool.border = style.Border { width: 1.0, color: gl.rgb(0xD0D0D0u32) }
-    if toolbar_set {
-        let (strip, strip_error) = control.image(a, grid.key + 3970u64, toolbar_texture, width, 27.0, .Contain, "")
-        if strip_error != ok { ret (zero, strip_error) }
-        rows[n] = widget.box(0u64, tool, one(a, widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one(a, strip))))
-    } else {
-        rows[n] = widget.box(0u64, tool, zero)
-    }
+    let (tool_row, tool_row_error) = print_toolbar_row(a, grid, width)
+    if tool_row_error != ok { ret (zero, tool_row_error) }
+    rows[n] = tool_row
     n += 1usize
     let (margin_bar, margin_bar_error) = print_margins(a, grid, width)
     if margin_bar_error != ok { ret (zero, margin_bar_error) }
@@ -4849,6 +4897,7 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         sheet_wide = 450.0
         sheet_high = 470.0
     }
+    across = sheet_wide - margin_px(grid, 0usize, sheet_wide) - margin_px(grid, 2usize, sheet_wide) - 4.0
     if grid.pv_zoom == 1u8 { zoom = 0.75 }
     if grid.pv_zoom == 2u8 { zoom = 0.5 }
     if grid.pv_zoom == 3u8 { zoom = 1.25 }
@@ -4866,13 +4915,13 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (page, page_error) = mem.alloc[widget.Node](a, 40usize)
     if page_error != ok { ret (zero, control.TooLarge) }
     var q = 0usize
-    page[q] = widget.padded(0u64, 270.0, 16.0, 0.0, 8.0, style.defaults(), one(a, heading))
+    page[q] = widget.padded(0u64, margin_px(grid, 0usize, sheet_wide) + across * 0.5 - 40.0, margin_px(grid, 1usize, sheet_wide) - 15.0, 0.0, 8.0, style.defaults(), one(a, heading))
     q += 1usize
     var r = 0usize
     while r < lines.len && q < 30usize && shown > 0usize {
         let (line_node, line_error) = print_row(a, grid, lines[r][0usize..shown], widths[0usize..shown], r == 0usize)
         if line_error != ok { ret (zero, line_error) }
-        page[q] = widget.padded(0u64, 24.0, 0.0, 0.0, 0.0, style.defaults(), one(a, line_node))
+        page[q] = widget.padded(0u64, margin_px(grid, 0usize, sheet_wide), 0.0, 0.0, 0.0, style.defaults(), one(a, line_node))
         q += 1usize
         r += 1usize
     }
@@ -4880,7 +4929,7 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if filter_error != ok { ret (zero, filter_error) }
     var strip = control.sized_style(across * zoom, 22.0)
     strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) }
-    strip.margin = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    strip.margin = style.EdgeLengths { left: style.Length { Px: margin_px(grid, 0usize, sheet_wide) }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     page[q] = widget.box(0u64, strip, one(a, widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, style.defaults(), one(a, filter_text))))
     q += 1usize
     var sheet = control.sized_style(sheet_wide * zoom, sheet_high)
