@@ -39460,3 +39460,7 @@ Recorded from v3 (FT1-footer-v3.png): the count ("Count: 120281", "Rows: 8") sta
 ## D2487 - G012: the footer of the maximised v3 confirms D2486
 
 With v3 maximised (FT2-footer-maximised-v3.png) every column of the collection grid shows: the green band runs under all of them, `Rows: 8` stands at the left of its cell, 450 and 19 are centred and the amounts ($0.00, $38.77, $65.59, $1433) are at the right, which is what D2486 does. The grouped pool's rows (Rarity : B (Count: 10)) carry no summary in any visible column, so group-summary alignment has nothing to compare in the pool; the sample's CMC mean in the group rows is the application's own. No code change.
+
+## D2488 - G012: the check box cell and the collection's last columns
+
+v3's collection grid (FT2-footer-maximised-v3.png) goes on past Price High with Condition, Foil (a check box) and Notes; the sample's collection grid gains them with v3's rows (Unknown, Proof, Mint, Laminated; Foil set on Tangle and Silkgard; the notes), v3's Price Low / Market Price / Price High values and their footer sums. A boolean column of a measured look draws v3's check box: 19 px, rounded 4, #005FB8 with a white tick when set, white with a grey edge when not, centred (CB1-foil-check-box-v5.png). Toggling it by a click is not done (the column is read-only in the sample). Note: v3 prints the Price High sum as $1433 where the sample prints $1432.63, the other sums keep two decimals; the format is unexplained. The four grid fixtures pass.

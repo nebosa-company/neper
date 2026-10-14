@@ -5789,6 +5789,34 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         }
         ret text_node(a, grid, "", false, .Text, out)
     }
+    if grid.specs[column].kind == CellKind.Bool && grid.look.on {
+        // v3's check box (cxCheckBox, recorded in FT2): a 19 px rounded square, blue with a white
+        // tick when set, white with a grey edge when not, centred in its cell
+        var checked = false
+        if !table.is_null(grid.t, grid.specs[column].column, row) { checked = table.get_bool(grid.t, grid.specs[column].column, row) }
+        var box = control.sized_style(19.0, 19.0)
+        box.radius = 4.0
+        let (tick_holder, tick_holder_error) = mem.alloc[widget.Node](a, 1usize)
+        if tick_holder_error != ok { ret control.TooLarge }
+        var inner: []widget.Node = zero
+        if checked {
+            box.background = paint.Brush { Solid: gl.rgb(0x005FB8u32) }
+            let (tick, tick_error) = gl.mark(a, .Check, gl.rgb(0xFFFFFFu32), gl.rgb(0xFFFFFFu32), 11.0, 11.0)
+            if tick_error != ok { ret tick_error }
+            tick_holder[0usize] = tick
+            inner = tick_holder[0usize..1usize]
+        } else {
+            box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            box.border = style.Border { width: 1.0, color: gl.rgb(0x757575u32) }
+        }
+        let (box_holder, box_holder_error) = mem.alloc[widget.Node](a, 1usize)
+        if box_holder_error != ok { ret control.TooLarge }
+        box_holder[0usize] = widget.aligned(0u64, .Center, .Center, box, inner)
+        var wide = style.defaults()
+        wide.width = style.Length { Percent: 100.0 }
+        *out = widget.aligned(0u64, .Center, .Center, wide, box_holder[0usize..1usize])
+        ret ok
+    }
     if grid.specs[column].kind == CellKind.Custom || grid.specs[column].kind == CellKind.Picture { ret grid.events.custom_cell(grid.events.ctx, a, grid.theme, row, grid.origin[column], out) }
     var role = grid.events.row_role(grid.events.ctx, row)
     let (text, text_error) = cell_text(a, grid, column, row)
