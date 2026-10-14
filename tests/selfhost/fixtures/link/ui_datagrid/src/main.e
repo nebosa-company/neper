@@ -1764,6 +1764,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     grid15.crit_group = 0u8
     if !dg.load_criteria(&grid15, crit_saved) { os.exit(641) }
     if grid15.crit_count != 2usize || grid15.crit_group != 1u8 || grid15.crit_op[0usize] != 4u8 || grid15.crit_len[0usize] != 3usize || grid15.crit_text[0usize] != 109u8 { os.exit(642) }
+    // the nested group and its operator survive a save and a load
+    grid15.crit_sub[1usize] = true
+    grid15.crit_sub_group = 2u8
+    let (nest_saved, nest_saved_error) = dg.criteria_text(&f, &grid15)
+    if nest_saved_error != ok { os.exit(644) }
+    grid15.crit_sub[1usize] = false
+    grid15.crit_sub_group = 0u8
+    if !dg.load_criteria(&grid15, nest_saved) { os.exit(645) }
+    if !grid15.crit_sub[1usize] || grid15.crit_sub[0usize] || grid15.crit_sub_group != 2u8 { os.exit(646) }
     if dg.load_criteria(&grid15, "nonsense") { os.exit(643) }
     os.exit(0)
     ret ok

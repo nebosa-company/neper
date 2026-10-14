@@ -2581,4 +2581,5 @@ D3998	818	G012: Is blank and Is not blank, and a short operator list for flag co
 D3999	664	G012: Is any of and Is none of
 D4000	639	G012: icons in the operator list
 D4001	786	G012: the checked value list of Is any of / Is none of
-D4002	938	G012: one nested group in the Advanced Filter
+D4002	939	G012: one nested group in the Advanced Filter
+D4003	458	G012: the nested group is part of the saved filter

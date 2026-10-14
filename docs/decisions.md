@@ -40993,3 +40993,7 @@ v3 gives Is any of and Is none of a list of the column's values with a check box
 ## D4002 - G012: one nested group in the Advanced Filter
 
 v3's criteria tree nests groups under the root (AF1-advanced-filter-v3-condition.png shows the tree lines of a root with conditions). The criteria editor has one nested group: a `Move the last condition into / out of the nested group` button puts the last condition in it (drawn indented, `crit_sub`), and a button with its own operator word cycles And / Or / Not And / Not Or (`crit_sub_group`). The sample builds the root condition group's children as the plain conditions followed by one nested group node. Live in the sample (AF8-nested-group-v5.png: root Or, Color Equals r, nested Color Equals g: 31058 of 120283 cards). Not built: more than one nested group, deeper nesting, v3's tree lines and its `...` menu for adding a group, the nested state in the saved filter text and a way to move a middle condition. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D4003 - G012: the nested group is part of the saved filter
+
+`criteria_text` now writes `subgroup n` and a `sub i` line for each condition standing in the nested group, and `load_criteria` reads them back, so Open and Save As (D2452) keep the nested state of D2460. ui_datagrid section 38 round-trips a nested condition and the group operator; ui_gridrules, ui_collections_v2, ui_tabular pass. Not checked live (the format is covered by the fixture only).
