@@ -2673,4 +2673,5 @@ D4090	496	G012: the quick column list wraps into two columns
 D4091	382	G012: the quick list's size checked against v3's pool grid
 D4092	265	G012: the filter-operator popup measured and sized from v3
 D4093	689	G012: a colour editor behind the style window's colour rows
-D4094	397	G012: custom RGB steppers in the colour editor
+D4094	398	G012: custom RGB steppers in the colour editor
+D4095	514	G012: typed margin boxes in Page Setup
