@@ -2681,4 +2681,5 @@ D4098	1055	G012: the Data Bar style window in v3's layout
 D4099	804	G012: the preview page follows its margins; the toolbar's page icons work
 D4100	668	G012: Page Setup's header and footer print on the preview page
 D4101	550	G012: typed R, G and B for the custom colour
-D4102	704	G012: the empty grid's message and count as v3 draws them
+D4102	705	G012: the empty grid's message and count as v3 draws them
+D4103	722	G012: the filter panel under a filtered grid

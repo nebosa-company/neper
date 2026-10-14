@@ -8863,6 +8863,92 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     ret (widget.flex(grid.key + FILTER_KEY - 1u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..grid.specs.len]), ok)
 }
 
+fn row_filter_active(grid: *const Grid) -> bool {
+    var at = 0usize
+    while at < grid.all.len {
+        if grid.filter_lens[at] != 0usize { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// "(Name Equals zzzq)": the filter row's conditions as v3's filter panel writes them.
+fn filter_summary(a: *mem.Arena, grid: *const Grid) -> (str, err) {
+    let (b, b_error) = str.builder(a, 200usize)
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    if str.push(&sb, "(") != ok { ret ("", control.TooLarge) }
+    var first = true
+    var at = 0usize
+    while at < grid.all.len {
+        if grid.filter_lens[at] != 0usize {
+            if !first && str.push(&sb, " And ") != ok { ret ("", control.TooLarge) }
+            first = false
+            if str.push(&sb, grid.all[at].title) != ok || str.push(&sb, " ") != ok || str.push(&sb, filter_op_words(grid.filter_ops[at])) != ok || str.push(&sb, " ") != ok { ret ("", control.TooLarge) }
+            if str.push(&sb, grid.filter_text[at * FILTER_TEXT..at * FILTER_TEXT + grid.filter_lens[at]]) != ok { ret ("", control.TooLarge) }
+        }
+        at += 1usize
+    }
+    if str.push(&sb, ")") != ok { ret ("", control.TooLarge) }
+    ret (str.done(&sb), ok)
+}
+
+// The x of the filter panel: clears every filter-row condition.
+fn on_filter_clear(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        var spec = 0usize
+        while spec < grid.all.len {
+            if grid.filter_lens[spec] != 0usize {
+                grid.filter_lens[spec] = 0usize
+                let changed_error = grid.events.filter_changed(grid.events.ctx, spec, "")
+                if changed_error != ok { ret changed_error }
+            }
+            spec += 1usize
+        }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn filter_panel_button(a: *mem.Arena, grid: *Grid, text: str, fill: u32, ink: u32, width: f32, key: u64, live: bool) -> (widget.Node, err) {
+    let (label, label_error) = flat_text(a, grid, text, gl.rgb(ink))
+    if label_error != ok { ret (zero, label_error) }
+    var box = control.sized_style(width, 22.0)
+    box.background = paint.Brush { Solid: gl.rgb(fill) }
+    box.radius = 3.0
+    box.margin = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let held = widget.padded(0u64, 6.0, 2.0, 0.0, 0.0, style.defaults(), one(a, label))
+    if !live { ret (widget.box(0u64, box, one(a, held)), ok) }
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_filter_clear }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held)), ok)
+}
+
+// v3's filter panel above the navigator: clear, enabled, the conditions, Customize...
+fn filter_panel_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    let (clear, clear_error) = filter_panel_button(a, grid, "x", 0xC85050u32, 0xFFFFFFu32, 22.0, grid.key + MENU_KEY + 850880u64, true)
+    if clear_error != ok { ret (zero, clear_error) }
+    cells[0usize] = clear
+    let (tick, tick_error) = filter_panel_button(a, grid, "v", 0x0F5FBFu32, 0xFFFFFFu32, 22.0, 0u64, false)
+    if tick_error != ok { ret (zero, tick_error) }
+    cells[1usize] = tick
+    let (summary, summary_error) = filter_summary(a, grid)
+    if summary_error != ok { ret (zero, summary_error) }
+    let (words, words_error) = flat_text(a, grid, summary, gl.rgb(0x000000u32))
+    if words_error != ok { ret (zero, words_error) }
+    cells[2usize] = widget.padded(0u64, 12.0, 8.0, 0.0, 0.0, style.defaults(), one(a, words))
+    let (custom, custom_error) = filter_panel_button(a, grid, "Customize...", 0xFDFDFDu32, 0x000000u32, 100.0, 0u64, false)
+    if custom_error != ok { ret (zero, custom_error) }
+    cells[3usize] = widget.padded(0u64, 40.0, 0.0, 0.0, 0.0, style.defaults(), one(a, custom))
+    var bar = style.defaults()
+    bar.height = style.Length { Px: 30.0 }
+    bar.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, bar, cells[0usize..4usize]), ok)
+}
+
 // A row of the footer: the column summaries under their columns.
 fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, grid.specs.len)
@@ -9499,6 +9585,8 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     let separate_filter = grid.filter_visible && !grid.look.on
     if separate_filter { part_count += 1usize }
     if with_bands { part_count += 1usize }
+    let with_filter_panel = grid.look.on
+    if with_filter_panel { part_count += 1usize }
     if grid.navigator_visible { part_count += 1usize }
     if grid.group_box_visible { part_count += 1usize }
     if grid.look.on { part_count += 1usize }
@@ -9546,6 +9634,17 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             parts[at] = shifted_footer
         } else {
             parts[at] = footer
+        }
+        at += 1usize
+    }
+    if with_filter_panel {
+        // the slot stays when no condition is active, so the editors above keep their focus
+        if row_filter_active(grid) {
+            let (filter_panel, filter_panel_error) = filter_panel_row(a, grid)
+            if filter_panel_error != ok { ret (zero, filter_panel_error) }
+            parts[at] = filter_panel
+        } else {
+            parts[at] = widget.box(0u64, style.defaults(), zero)
         }
         at += 1usize
     }
