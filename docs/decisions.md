@@ -39440,3 +39440,7 @@ The grid offers `show_footer`, `set_all_groups` (v3's Full Expand and Full Colla
 ## D2482 - G012: the View menu's sort entries
 
 `clear_sort(grid)` drops the header marks and the extra sort keys and raises `CMD_CLEAR_SORT` for the application; the sample's View menu acts on Sort by Edition & Card Name, Sort by Card Name & Edition (the named column first, then the other, ascending, with its header mark) and Clear Sort Order. Driven live: the first sorted the pool by Edition with the arrow on that header (VM3-sort-edition-name-v5.png), the third restored the table order. The four grid fixtures pass.
+
+## D2483 - G012: the View menu's Show Grid Lines submenu
+
+The View menu's Show Grid Lines entry carries the arrow and opens the four line modes (Vertical Lines, Horizontal Lines, Both, No Lines; the current one ticked) as a second application menu; picking one applies it and closes both (VM4-grid-lines-submenu-v5.png, driven live: Horizontal Lines left the grid with horizontal rules only). The sample only; the library's `show_app_menu` is unchanged. A finding: adding two more `[4]overlay.MenuCommand` fields to the sample's `Model` failed the type check with a locationless E-TYPE-9999, and the same entries stored in the existing, enlarged `view_menu` / `view_picks` compiled; the struct size looks to be the limit, not the code.
