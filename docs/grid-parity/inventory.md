@@ -106,7 +106,7 @@ Verified live 2026-10-14: a two colour scale created in the wizard with the whit
 
 | Feature | Status | Evidence |
 |---|---|---|
-| View menu (application menu in the flat popup; sort, group, grid lines submenu, footer, group box, expand, best fit, header, indicator, navigator, conditional formatting) | matched (structure, headings, ticks, actions, live) / differs (width 395 against v3's about 315, no bold headings, no pictures; Card Rules greyed, Legality out of scope) | VM1-VM7 |
+| View menu (application menu in the flat popup; sort, group, grid lines submenu, footer, group box, expand, best fit, header, indicator, navigator, conditional formatting) | matched (structure, headings, ticks, actions, live) / differs (width 306 px against v3's 319 and rows 31 against 30, no bold headings, no pictures; Card Rules greyed, Legality out of scope, D4104) | VM1-VM7 |
 | Navigator (v3's button pictures, white position band, funnel, disabled states, last row) | matched (left disabled recorded; right disabled mirrored) / differs (scroll bar thumb track) | NV1-NV3 |
 | Footer (count left, whole numbers centred, amounts right, green collection band, amounts over 999 without cents) | matched | FT1, FT2, D2495 |
 | Check box cell (Foil), click flips | matched | CB1, CB2 |

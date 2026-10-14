@@ -5723,10 +5723,12 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
     var n = 0usize
     var widest_label = 0usize
     var widest_hint = 0usize
+    var widest_hint_label = 0usize
     var k = 0usize
     while k < commands.len {
         if commands[k].label.len > widest_label { widest_label = commands[k].label.len }
         if commands[k].shortcut.len > widest_hint { widest_hint = commands[k].shortcut.len }
+        if commands[k].shortcut.len != 0usize && commands[k].label.len > widest_hint_label { widest_hint_label = commands[k].label.len }
         k += 1usize
     }
     // 6.4 logical px a character of the 10 pt face is near enough; the picture column is 27 wide
@@ -5736,7 +5738,10 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
     var char_width: f32 = 4.0
     if grid.menu_kind == MENU_APP { char_width = 4.6 }
     var width = 27.0 + f32(widest_label) * char_width + 24.0 + 22.0
-    if widest_hint != 0usize { width += f32(widest_hint) * char_width + 16.0 }
+    if widest_hint != 0usize {
+        let with_hint = 27.0 + f32(widest_hint_label) * char_width + 24.0 + f32(widest_hint) * char_width + 16.0 + 22.0
+        if with_hint > width { width = with_hint }
+    }
     if width < 120.0 { width = 120.0 }
     var i = 0usize
     while i < commands.len {
@@ -5810,13 +5815,14 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
         }
         parts_n += 1usize
         var label_style = control.sized_style(width - 27.0 - 6.0, row_h)
-        if widest_hint != 0usize { label_style = control.sized_style(f32(widest_label) * char_width + 24.0, row_h) }
+        if c.supporting.len == 1usize && c.supporting[0usize] == 62u8 { label_style = control.sized_style(width - 27.0 - 24.0, row_h) }
+        if c.shortcut.len != 0usize { label_style = control.sized_style(f32(widest_hint_label) * char_width + 24.0, row_h) }
         let (label_box, label_box_error) = mem.alloc[widget.Node](a, 1usize)
         if label_box_error != ok { ret (zero, control.TooLarge) }
         label_box[0usize] = label
         cells[parts_n] = widget.aligned(0u64, .Start, .Center, label_style, label_box[0usize..1usize])
         parts_n += 1usize
-        if widest_hint != 0usize {
+        if c.shortcut.len != 0usize {
             let (hint, hint_error) = flat_text(a, grid, c.shortcut, ink)
             if hint_error != ok { ret (zero, hint_error) }
             let (hint_box, hint_box_error) = mem.alloc[widget.Node](a, 1usize)
@@ -6210,7 +6216,7 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         let (at, pointed) = widget.context_point(theme.runtime)
         var row_h: f32 = 20.0
         if grid.menu_kind == MENU_HEADER || grid.menu_kind == MENU_ALIGN { row_h = 22.0 }
-        if grid.menu_kind == MENU_APP { row_h = 23.0 }
+        if grid.menu_kind == MENU_APP { row_h = 21.0 }
         var menu_x = at.x
         var menu_y = at.y
         if grid.menu_kind == MENU_APP {
