@@ -2623,4 +2623,5 @@ D4040	240	G012: the Percentile choice driven live
 D4041	492	G012: the application menu's size
 D4042	924	G012: horizontal scrolling and v3's thumb
 D4043	374	G012: the wheel over the horizontal thumb
-D4044	795	G012: the columns grow while the table scrolls
+D4044	796	G012: the columns grow while the table scrolls
+D4045	833	G012: the table's own sideways scroll is not the answer here
