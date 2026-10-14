@@ -2317,4 +2317,5 @@ D5034	558	G012: typed margin boxes in Page Setup
 D5035	633	G012: typed Header/Footer cells and Fit To counts in Page Setup
 D5036	424	G012: typed margin boxes in Print Preview
 D5037	1055	G012: the Data Bar style window in v3's layout
-D5038	803	G012: the preview page follows its margins; the toolbar's page icons work
+D5038	804	G012: the preview page follows its margins; the toolbar's page icons work
+D5039	1618	C170: Secure exports, shows a QR symbol, checks breaches and locks itself
