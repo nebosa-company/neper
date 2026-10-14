@@ -2566,4 +2566,5 @@ D3983	642	G012: Copy Selected and Copy Card Name
 D3984	750	G012: Edit Rule and the column of a new rule
 D3985	771	G012: the grid font size (Options > Grids > Font Size)
 D3986	852	G012: v3's font size measured; headers keep their size
-D3987	972	G012: a tap finds its column from the headers, not from the stored widths
+D3987	973	G012: a tap finds its column from the headers, not from the stored widths
+D3988	880	G012: the select editor in v3's drop-down look

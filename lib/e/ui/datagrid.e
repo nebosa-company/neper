@@ -3607,6 +3607,27 @@ fn on_select_toggle(ctx: *void) -> err {
     ret ok
 }
 
+fn on_select_tap(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.select_open = !grid.select_open
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_select_tap_pick(ctx: *void, g: widget.Gesture) -> err {
+    let pick = mem.cast[*SelectPick](ctx)
+    switch g {
+    case .Tap as at:
+        ret on_select_pick(ctx)
+    default:
+        ret ok
+    }
+}
+
 fn on_select_pick(ctx: *void) -> err {
     let pick = mem.cast[*SelectPick](ctx)
     let grid = pick.grid
@@ -4384,6 +4405,82 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         let (toggle, toggle_error) = mem.alloc[widget.Submit](a, 1usize)
         if toggle_error != ok { ret toggle_error }
         toggle[0usize] = widget.Submit { ctx: mem.cast[*void](grid), invoke: on_select_toggle }
+        if grid.look.on {
+            // v3's image combo: the value with a down-arrow button in a bordered box; the list opens
+            // under it, the current value in blue
+            let (value_text, value_error) = flat_text(a, grid, options[current], gl.rgb(0x000000u32))
+            if value_error != ok { ret value_error }
+            let (arrow, arrow_error) = gl.mark(a, .ArrowDown, gl.rgb(0x000000u32), gl.rgb(0x000000u32), 7.0, 4.0)
+            if arrow_error != ok { ret arrow_error }
+            var button_style = control.sized_style(17.0, grid.look.row_height - 6.0)
+            button_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+            button_style.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+            let (arrow_held, arrow_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if arrow_held_error != ok { ret arrow_held_error }
+            arrow_held[0usize] = arrow
+            let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+            if parts_error != ok { ret parts_error }
+            parts[0usize] = widget.padded(0u64, 4.0, 0.0, 0.0, 0.0, control.sized_style(grid.columns[column].width - 28.0, grid.look.row_height - 4.0), one(a, value_text))
+            parts[1usize] = widget.aligned(0u64, .Center, .Center, button_style, arrow_held[0usize..1usize])
+            var box_style = control.sized_style(grid.columns[column].width - 2.0, grid.look.row_height - 2.0)
+            box_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            box_style.border = style.Border { width: 1.0, color: gl.rgb(0x0078D7u32) }
+            let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if box_held_error != ok { ret box_held_error }
+            box_held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+            var closed = widget.region(grid.key + EDIT_KEY, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_select_tap }, gestures: 1u8, enabled: true, focusable: false }, box_style, box_held[0usize..1usize])
+            if grid.select_open {
+                var rows_list: [32]widget.Node = zero
+                var shown_n = n
+                if shown_n > 32usize { shown_n = 32usize }
+                var r = 0usize
+                while r < shown_n {
+                    var ink = gl.rgb(0x000000u32)
+                    var row_box = control.sized_style(grid.columns[column].width + 40.0, 19.0)
+                    row_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+                    if r == current {
+                        row_box.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) }
+                        ink = gl.rgb(0xFFFFFFu32)
+                    }
+                    let (entry_text, entry_error) = flat_text(a, grid, options[r], ink)
+                    if entry_error != ok { ret entry_error }
+                    let (entry_held, entry_held_error) = mem.alloc[widget.Node](a, 1usize)
+                    if entry_held_error != ok { ret entry_held_error }
+                    entry_held[0usize] = widget.padded(0u64, 4.0, 1.0, 0.0, 0.0, style.defaults(), one(a, entry_text))
+                    rows_list[r] = widget.region(grid.key + EDIT_KEY + 1u64 + u64(r), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[r]), invoke: on_select_tap_pick }, gestures: 1u8, enabled: true, focusable: false }, row_box, entry_held[0usize..1usize])
+                    r += 1usize
+                }
+                let (list_nodes, list_nodes_error) = mem.alloc[widget.Node](a, shown_n)
+                if list_nodes_error != ok { ret list_nodes_error }
+                r = 0usize
+                while r < shown_n {
+                    list_nodes[r] = rows_list[r]
+                    r += 1usize
+                }
+                var list_style = style.defaults()
+                list_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+                list_style.border = style.Border { width: 1.0, color: gl.rgb(0x0078D7u32) }
+                let list = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, list_style, list_nodes[0usize..shown_n])
+                let (box_rect, has_box) = control.keyed_bounds(grid.theme.runtime, grid.key + EDIT_KEY)
+                var list_x: f32 = 0.0
+                var list_y: f32 = 0.0
+                if has_box {
+                    list_x = box_rect.x
+                    list_y = box_rect.y + box_rect.height
+                }
+                let (list_held, list_held_error) = mem.alloc[widget.Node](a, 1usize)
+                if list_held_error != ok { ret list_held_error }
+                list_held[0usize] = list
+                let (stack_parts, stack_parts_error) = mem.alloc[widget.Node](a, 2usize)
+                if stack_parts_error != ok { ret stack_parts_error }
+                stack_parts[0usize] = closed
+                stack_parts[1usize] = widget.overlay(grid.key + EDIT_KEY + 100u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: list_x, y: list_y }, modal: false, dismiss: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_select_toggle } }, style.defaults(), list_held[0usize..1usize])
+                *out = widget.stack(0u64, style.defaults(), stack_parts[0usize..2usize])
+                ret ok
+            }
+            *out = closed
+            ret ok
+        }
         let (chooser, chooser_error) = control.select(a, grid.key + EDIT_KEY, grid.theme, grid.specs[column].title, options, current, grid.select_open, &toggle[0usize], submits)
         if chooser_error != ok { ret chooser_error }
         *out = chooser
