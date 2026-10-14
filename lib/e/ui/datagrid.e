@@ -137,6 +137,10 @@ type Grid = struct {
     row_drop_fn: fn(*void, usize) -> err,
     rules_dialog_open: bool,
     wiz_open: bool,
+    wiz_edit: bool,
+    wiz_column: usize,
+    has_wiz_column: bool,
+    head_spec: usize,
     wiz_type: u8,
     rules_arena: *mem.Arena,
     crit_open: bool,
@@ -1661,9 +1665,21 @@ fn on_rule_act(ctx: *void, g: widget.Gesture) -> err {
             grid.rules_dialog_open = false
             ret ok
         }
-        if act.kind == 5u8 {
+        if act.kind == 5u8 || act.kind == 6u8 {
             grid.wiz_open = true
             grid.wiz_type = 0u8
+            grid.wiz_edit = act.kind == 6u8
+            if act.kind == 6u8 && mem.address_of(grid.rule_set) != 0usize && grid.rules_selected < grid.rule_set.total {
+                let edited = grid.rule_set.rules[grid.rules_selected].kind
+                if edited == rules.Kind.Bar { grid.wiz_type = 0u8 }
+                if edited == rules.Kind.Icons { grid.wiz_type = 1u8 }
+                if edited == rules.Kind.Scale { grid.wiz_type = 2u8 }
+                if edited == rules.Kind.Blank { grid.wiz_type = 4u8 }
+                if edited == rules.Kind.Duplicate { grid.wiz_type = 5u8 }
+                if edited == rules.Kind.Top || edited == rules.Kind.Bottom { grid.wiz_type = 6u8 }
+                if edited == rules.Kind.Unique { grid.wiz_type = 7u8 }
+                if edited == rules.Kind.Above || edited == rules.Kind.Below { grid.wiz_type = 8u8 }
+            }
             ret ok
         }
         if mem.address_of(grid.rule_set) == 0usize { ret ok }
@@ -1722,10 +1738,10 @@ fn rules_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if rows_error != ok { ret (zero, control.TooLarge) }
     let (picks, picks_error) = mem.alloc[RuleRow](a, count + 1usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
-    let (acts, acts_error) = mem.alloc[RuleAct](a, 6usize)
+    let (acts, acts_error) = mem.alloc[RuleAct](a, 7usize)
     if acts_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
-    while k < 6usize {
+    while k < 7usize {
         acts[k] = RuleAct { grid: grid, kind: u8(k) }
         k += 1usize
     }
@@ -1748,7 +1764,7 @@ fn rules_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var has_selection = count > 0usize && grid.rules_selected < count
     let (b_new, e_new) = rules_button(a, grid, grid.key + MENU_KEY + 799980u64, "New Rule...", 130.0, &acts[5usize], true, false)
     if e_new != ok { ret (zero, e_new) }
-    let (b_edit, e_edit) = rules_button(a, grid, grid.key + MENU_KEY + 799981u64, "Edit Rule...", 130.0, &acts[3usize], false, false)
+    let (b_edit, e_edit) = rules_button(a, grid, grid.key + MENU_KEY + 799981u64, "Edit Rule...", 130.0, &acts[6usize], has_selection, false)
     if e_edit != ok { ret (zero, e_edit) }
     let (b_delete, e_delete) = rules_button(a, grid, grid.key + MENU_KEY + 799982u64, "Delete Rule", 130.0, &acts[0usize], has_selection, false)
     if e_delete != ok { ret (zero, e_delete) }
@@ -2202,7 +2218,14 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         // the sorted column when it holds numbers, else the first numeric one, else the search column
         var spec = grid.search_spec
         var found_numeric = false
-        if grid.sort_column < grid.all.len {
+        if grid.head_spec < grid.all.len {
+            let hk = table.column_kind(grid.t, grid.all[grid.head_spec].column)
+            if grid.all[grid.head_spec].kind != CellKind.Indicator && (hk == table.Kind.I32 || hk == table.Kind.I64 || hk == table.Kind.F64) {
+                spec = grid.head_spec
+                found_numeric = true
+            }
+        }
+        if !found_numeric && grid.sort_column < grid.all.len {
             let sk = table.column_kind(grid.t, grid.all[grid.sort_column].column)
             if sk == table.Kind.I32 || sk == table.Kind.I64 || sk == table.Kind.F64 {
                 spec = grid.sort_column
@@ -2237,6 +2260,19 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         r.mid = paint.rgba(1.0, 1.0, 0.8, 1.0)
         r.high = paint.rgba(0.7, 0.9, 0.7, 1.0)
         r.three = t == 2u8
+        if grid.wiz_edit && grid.rules_selected < grid.rule_set.total {
+            // Edit Rule: the same column, the new type, in the same place
+            r.column = grid.rule_set.rules[grid.rules_selected].column
+            let at_edit = grid.rules_selected
+            let (_added_edit, add_edit_error) = rules.add(grid.rules_arena, grid.rule_set, r)
+            if add_edit_error == ok {
+                let last = grid.rule_set.total - 1usize
+                rules.swap(grid.rule_set, at_edit, last)
+                rules.remove(grid.rule_set, last)
+            }
+            grid.wiz_edit = false
+            ret ok
+        }
         let (_added, add_error) = rules.add(grid.rules_arena, grid.rule_set, r)
         if add_error != ok { ret ok }
         ret ok
@@ -4574,6 +4610,7 @@ fn on_sort(ctx: *void, shown: usize) -> err {
         ret ok
     }
     let spec = grid.origin[shown]
+    grid.head_spec = spec
     // v3 (DevExpress): Shift+click adds the column to the sort or reverses it there, Ctrl+click takes
     // it out, a plain click sorts by it alone
     var mods: input.Modifiers = zero
