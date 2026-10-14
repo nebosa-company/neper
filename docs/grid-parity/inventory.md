@@ -131,7 +131,7 @@ Verified live 2026-10-14: a two colour scale created in the wizard with the whit
 
 | Item | Status | Evidence |
 |---|---|---|
-| Scroll bars change size when hovered over (v3's bars thicken under the pointer; the grid's bars keep one width) | to do: record the thin and the hovered widths in v3, then animate `scroll_width` for the vertical bar and the navigator thumb | |
+| Scroll bars change size when hovered over | vertical thumb thickens under the pointer (2.7 to 11 units, the track keeps its width); the sizes are a Windows 11 estimate, v3's hovered width not measured; the navigator's horizontal thumb does not yet | SB1 |
 | Format... dialog (data bar fill mode, border, negative bars, axis; colour edit) | model has fill mode Solid and border (D4055), no dialog | CF10 |
 | Formula for the wizard bounds | not built | |
 | Narrow-window column growth, thumb track length | open | D2502 |

@@ -4277,10 +4277,14 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             if share > 1.0 { share = 1.0 }
             thumb_y = (room - thumb_h) * share
         }
-        var thumb_style = control.sized_style(2.7, thumb_h)
+        // the thumb thickens under the pointer (the track keeps its width, so nothing moves)
+        let track_key = key + 3300u64
+        var thumb_w: f32 = 2.7
+        if control.control_state(t, track_key, true, false).hovered { thumb_w = lk.scroll_width - 4.0 }
+        var thumb_style = control.sized_style(thumb_w, thumb_h)
         thumb_style.background = paint.Brush { Solid: lk.thumb }
-        thumb_style.radius = 1.3
-        thumb_style.margin = style.EdgeLengths { left: style.Length { Px: (lk.scroll_width - 2.7) * 0.5 }, top: style.Length { Px: 16.0 + thumb_y }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        thumb_style.radius = thumb_w * 0.5
+        thumb_style.margin = style.EdgeLengths { left: style.Length { Px: (lk.scroll_width - thumb_w) * 0.5 }, top: style.Length { Px: 16.0 + thumb_y }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         let (thumb_holder, thumb_error) = mem.alloc[widget.Node](a, 1usize)
         if thumb_error != ok { ret (zero, TooLarge) }
         thumb_holder[0usize] = widget.box(0u64, thumb_style, zero)
@@ -4289,7 +4293,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         let (bar_parts, bar_error) = mem.alloc[widget.Node](a, 2usize)
         if bar_error != ok { ret (zero, TooLarge) }
         bar_parts[0usize] = column_node[0usize]
-        bar_parts[1usize] = widget.box(0u64, track_style, thumb_holder[0usize..1usize])
+        bar_parts[1usize] = widget.region(track_key, widget.Region { gesture: zero, gestures: 4u8, enabled: true, focusable: false }, track_style, thumb_holder[0usize..1usize])
         column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bar_parts[0usize..2usize])
     }
     // (D1283) Wider than its view, the table scrolls sideways (keyed
