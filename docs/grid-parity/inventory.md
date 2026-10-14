@@ -90,3 +90,5 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 6. PDF / Excel export, printing.
 
 Verified live 2026-10-14 (screen unlocked): the Advanced Filter's Save As... wrote `cardgrid.filter` (`filter 1 / group 0 / cond ...`) and Open... restored the condition value `mox` (AF4-open-save-v5.png, D2452).
+
+Verified live 2026-10-14: the wizard's Maximum = Number 2 on the CMC data bar makes every bar of a value of 2 or more full width (CF6-max-effect-v5.png, before and after; D2454).
