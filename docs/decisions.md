@@ -39674,3 +39674,7 @@ The 30000-row export failed only in the sample: its scratch arena was 32 MB and 
 ## D5021 - G012: the Page Setup dialog
 
 v3's Cards > Print > Page Setup... is DevExpress's "Page Setup: Standard Style" (PS1): Style Name, the tabs Page / Margins / Header / Footer / Scaling, a Paper list (Letter, Tabloid, Legal, Statement, Executive, A3, A4, A5, B4 (JIS), B5 (JIS), Envelope #9, Envelope #10, C size sheet), Orientation (Portrait, Landscape chosen, Auto) and Print Order (Over, then down chosen). `show_page_setup` opens the Page page of it in the preview's slot (PS3), the paper, orientation and order are tap-chosen with v3's defaults, OK returns to the preview, and Portrait narrows the sheet (PS9). The other tabs, the Width/Height fields and the style list are not built. The card menu has Page Setup.... ui_datagrid passes (exits 661, 662).
+
+## D5022 - G012: the Page Setup Margins tab
+
+The dialog's tabs are taps now. Margins (MG2 is v3's) lists Top, Bottom, Left, Right, Header and Footer as steppers with two decimals (0.50 in; a tap steps a tenth, as in the preview, and they are the same values), Restore Original puts them back, Center on page Horizontally and Vertically toggle (`pv_center`), and the sheet is drawn with its inner frame (MG1-page-setup-margins-v5.png). Header / Footer and Scaling show a note. v3's fields are typed spin boxes and Fix is not built. ui_datagrid passes (exits 663-665).
