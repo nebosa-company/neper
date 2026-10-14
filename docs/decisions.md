@@ -40981,3 +40981,7 @@ Recorded in v3 (AF5-operator-list-v3.png): the operator list depends on the colu
 ## D3999 - G012: Is any of and Is none of
 
 v3's operator list has Is any of (two green discs) and Is none of (two red discs) (AF5-operator-list-v3.png). The criteria editor's operator codes 10 and 11 are those; the value is a comma separated list, and the sample builds a `view.Op.In` / `NotIn` list node from it (up to eight entries per condition, spaces trimmed). Live in the sample (AF6-any-of-v5.png: Color is any of R, G shows 31058 of 120283 cards, only red and green rows). The list is typed as text; v3 offers a checked list of the column's values, which is not built, nor are the two discs. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D4000 - G012: icons in the operator list
+
+v3's operator list puts an icon in front of the operators it knows (AF5-operator-list-v3.png): = for Equals, a not-equal sign, a dotted ring for Is blank, a filled green disc for Is not blank, two green discs for Is any of and two red discs for Is none of. The criteria editor's list now has them in its 32 px gutter (AF5-operator-icons-v5.png; the not-equal sign is drawn as !=, the gutter's text glyph, and the rings are drawn boxes). The other operators (is less than, contains, ...) have no icon recorded in v3 and none here. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
