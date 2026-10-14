@@ -2182,4 +2182,5 @@ D2418	628	G012: the group footer's look, recorded from v3
 D2419	577	G012: "(Sorted)" in the quick column list
 D2420	527	G012: the current row of a grid without the focus is framed in near black
 D2421	812	G012: closing the per-cell focus rectangle by v3's own settings
-D2422	690	G012: the dotted focus rectangle on the current group row
+D2422	691	G012: the dotted focus rectangle on the current group row
+D2423	919	G012: per-entry heights in a lazy viewport, v3's 29 px group footer
