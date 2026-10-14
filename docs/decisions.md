@@ -39560,3 +39560,7 @@ The wizard-made Data Bar on CMC drew nothing in the sample for the whole of D250
 ## D2512 - G012: a rule can ignore values above a bound (Gleemax)
 
 Per the owner: ignore Gleemax (CMC 1000000) for the data bar. `Rule.has_ignore` / `ignore_above` keep the rows above the bound out of a rule's statistics (low, high, average, sorted copy), so a bar or scale spans the real range; the bound is not a filter, the cell still shows its value and takes the top of the range. The sample sets it to 100 on every CMC rule as the rules change (DB1-databar-ignoring-gleemax-v5.png: the CMC bars of 1, 4, 4, 5 now show). The four grid fixtures pass.
+
+## D2513 - G012: data bar Fill mode Solid and Border style in the rule model
+
+`Rule.bar_solid` and `Rule.bar_border` (v3's Data Bar Rule Style Settings, CF10: Fill mode Gradient by default, Border style None by default) reach the cell's `Format` and are drawn: solid fill when set, a 1 px border in the bar's colour when set. The wizard's Format... does not set them yet (no dialog). ui_gridrules checks the fields (exits 153-155); the four grid fixtures pass. The owner's list gains: the scroll bars change size when hovered over (inventory, To do).

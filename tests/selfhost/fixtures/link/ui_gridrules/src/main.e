@@ -239,6 +239,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_pt, pt_error) = gr.add(a, &rs_pt, ptile)
     if pt_error != ok || gr.refresh(&rs_pt, a) != ok { os.exit(151) }
     if !near(gr.format(&rs_pt, 1usize, C_CMC).bar, 0.0f32) || !near(gr.format(&rs_pt, 5usize, C_CMC).bar, 1.0f32) { os.exit(152) }
+    // the bar's Fill mode Solid and Border style reach the cell's format
+    var styled = gr.rule(C_CMC, gr.Kind.Bar)
+    styled.bar_solid = true
+    styled.bar_border = true
+    let (made_sty, made_sty_error) = gr.create(a, &t, 2usize)
+    if made_sty_error != ok { os.exit(153) }
+    var rs_sty = made_sty
+    let (_sty, sty_error) = gr.add(a, &rs_sty, styled)
+    if sty_error != ok || gr.refresh(&rs_sty, a) != ok { os.exit(154) }
+    let sty_look = gr.format(&rs_sty, 5usize, C_CMC)
+    if !sty_look.has_bar || !sty_look.bar_solid || !sty_look.bar_border { os.exit(155) }
     // priority: the first rule that sets a field wins; the other field still merges in
     let (made3, made3_error) = gr.create(a, &t, 4usize)
     if made3_error != ok { os.exit(114) }
