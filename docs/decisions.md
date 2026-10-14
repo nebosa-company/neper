@@ -41153,3 +41153,7 @@ The View menu of D4022 was 510 px wide with 26 px rows against v3's roughly 315 
 ## D4042 - G012: horizontal scrolling and v3's thumb
 
 The columns of a measured-look grid that outgrow the pane (the column widths summed, 1109 units, against the pane's 736) keep their widths and scroll: `hshift` puts the header, rows and footer inside a clip moved by `hoff`, `measure_hscroll` takes the pane from an unseen full-width zero-height gauge (key +3900; a key on the stacking node itself stole the editor's Enter and failed ui_datagrid exit 171), and the navigator row carries v3's dark grey thumb to the right of the funnel, as long as the pane is of the columns, dragged to scroll (HS2-horizontal-scroll-v5.png: the pool scrolled past Legal). D4035's reading of the numbers was the unit confusion of D4036. Known: the pool at rest still draws the columns squeezed until the first drag, and the lower grid shows a thumb whose columns also overflow; the vertical scroll bar stays. The four grid fixtures pass.
+
+## D4043 - G012: the wheel over the horizontal thumb
+
+The thumb of D4042 answers the mouse wheel too: three notches over it moved the pool's columns by 180 units (HS3-wheel-scroll-v5.png), clamped to the range. The wheel over the rows still scrolls vertically; v3 scrolls horizontally with the wheel over the navigator row's bar only, as here. The four grid fixtures pass.
