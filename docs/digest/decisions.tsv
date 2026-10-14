@@ -2263,4 +2263,5 @@ D2499	492	G012: the application menu's size
 D2500	924	G012: horizontal scrolling and v3's thumb
 D2501	374	G012: the wheel over the horizontal thumb
 D2502	796	G012: the columns grow while the table scrolls
-D2503	833	G012: the table's own sideways scroll is not the answer here
+D2503	834	G012: the table's own sideways scroll is not the answer here
+D2504	971	G012: v3's Format... dialog recorded, not built
