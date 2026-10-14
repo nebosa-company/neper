@@ -1800,6 +1800,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         format_taps += 1usize
     }
     if grid15.wiz_palette != 0u8 { os.exit(653) }
+    // Cards > Print > Print Preview opens the preview window in the wizard's slot
+    dg.show_print_preview(&grid15)
+    if !grid15.print_open || !grid15.wiz_open { os.exit(657) }
+    grid15.print_open = false
+    grid15.wiz_open = false
     // Export > Excel and PDF: a package (a zip: "PK") and a document ("%PDF")
     let (export_book, export_book_error) = dg.export_xlsx(a, &grid15, 100usize)
     if export_book_error != ok || export_book.len < 100usize || export_book[0usize] != 80u8 || export_book[1usize] != 75u8 { os.exit(654) }
