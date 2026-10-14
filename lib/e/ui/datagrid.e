@@ -138,6 +138,12 @@ type Grid = struct {
     rules_dialog_open: bool,
     wiz_open: bool,
     wiz_bar_only: bool,
+    wiz_min_number: bool,
+    wiz_max_number: bool,
+    wiz_min_text: [16]u8,
+    wiz_min_len: usize,
+    wiz_max_text: [16]u8,
+    wiz_max_len: usize,
     base_look: gl.Look,
     wiz_edit: bool,
     wiz_column: usize,
@@ -2430,6 +2436,31 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 // ---- the Conditional Formatting Rule wizard (New Rule... of the rules manager: ten rule types) ----
 
 type WizRow = struct { grid: *Grid, index: u8 }
+type WizText = struct { grid: *Grid, maximum: bool }
+
+fn on_wiz_text(ctx: *void, value: str) -> err {
+    let t = mem.cast[*WizText](ctx)
+    var n = value.len
+    if n > 16usize { n = 16usize }
+    var i = 0usize
+    while i < n {
+        if t.maximum { t.grid.wiz_max_text[i] = value[i] } else { t.grid.wiz_min_text[i] = value[i] }
+        i += 1usize
+    }
+    if t.maximum { t.grid.wiz_max_len = n } else { t.grid.wiz_min_len = n }
+    ret ok
+}
+
+fn on_wiz_mode(ctx: *void, g: widget.Gesture) -> err {
+    let t = mem.cast[*WizText](ctx)
+    switch g {
+    case .Tap as at:
+        if t.maximum { t.grid.wiz_max_number = !t.grid.wiz_max_number } else { t.grid.wiz_min_number = !t.grid.wiz_min_number }
+        ret ok
+    default:
+        ret ok
+    }
+}
 
 fn wiz_words(i: u8) -> str {
     if i == 0u8 { ret "Format all cells based on their values via data bar" }
@@ -2511,6 +2542,23 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         r.high = paint.rgba(0.7, 0.9, 0.7, 1.0)
         r.three = t == 2u8
         r.bar_only = t == 0u8 && grid.wiz_bar_only
+        if t <= 3u8 {
+            // Minimum and Maximum of the wizard: Lowest / Highest Value, or a number typed
+            if grid.wiz_min_number && grid.wiz_min_len > 0usize {
+                let (mv, me) = str.parse_f64(grid.wiz_min_text[0usize..grid.wiz_min_len])
+                if me == ok {
+                    r.has_min = true
+                    r.min_value = mv
+                }
+            }
+            if grid.wiz_max_number && grid.wiz_max_len > 0usize {
+                let (xv, xe) = str.parse_f64(grid.wiz_max_text[0usize..grid.wiz_max_len])
+                if xe == ok {
+                    r.has_max = true
+                    r.max_value = xv
+                }
+            }
+        }
         if grid.wiz_edit && grid.rules_selected < grid.rule_set.total {
             // Edit Rule: the same column, the new type, in the same place
             r.column = grid.rule_set.rules[grid.rules_selected].column
@@ -2556,7 +2604,7 @@ fn on_wiz_cancel(ctx: *void, g: widget.Gesture) -> err {
 
 fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let width: f32 = 520.0
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 16usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 18usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
     let (picks, picks_error) = mem.alloc[WizRow](a, 10usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
@@ -2613,6 +2661,62 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     buttons[1usize] = widget.region(grid.key + MENU_KEY + 850101u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_wiz_cancel }, gestures: 1u8, enabled: true, focusable: false }, cancel_box, cancel_held[0usize..1usize])
     var foot = control.sized_style(width - 24.0, 46.0)
     foot.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    // Minimum and Maximum (v3: a Lowest / Highest Value choice and a value field, for the range types)
+    if grid.wiz_type <= 3u8 {
+        let (texts, texts_error) = mem.alloc[WizText](a, 2usize)
+        if texts_error != ok { ret (zero, control.TooLarge) }
+        texts[0usize] = WizText { grid: grid, maximum: false }
+        texts[1usize] = WizText { grid: grid, maximum: true }
+        var side = 0usize
+        let (pair_cells, pair_cells_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_cells_error != ok { ret (zero, control.TooLarge) }
+        while side < 2usize {
+            var is_number = grid.wiz_min_number
+            var caption = "Minimum: Lowest Value"
+            if side == 1usize {
+                is_number = grid.wiz_max_number
+                caption = "Maximum: Highest Value"
+            }
+            if is_number {
+                caption = "Minimum: Number"
+                if side == 1usize { caption = "Maximum: Number" }
+            }
+            let (mode_label, mode_error) = flat_text(a, grid, caption, gl.rgb(0x000000u32))
+            if mode_error != ok { ret (zero, mode_error) }
+            var mode_box = control.sized_style(180.0, 26.0)
+            mode_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            mode_box.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+            let (mode_held, mode_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if mode_held_error != ok { ret (zero, control.TooLarge) }
+            mode_held[0usize] = widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, mode_label))
+            let mode_node = widget.region(grid.key + MENU_KEY + 850300u64 + u64(side), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&texts[side]), invoke: on_wiz_mode }, gestures: 1u8, enabled: true, focusable: false }, mode_box, mode_held[0usize..1usize])
+            let (column_nodes, column_nodes_error) = mem.alloc[widget.Node](a, 2usize)
+            if column_nodes_error != ok { ret (zero, control.TooLarge) }
+            column_nodes[0usize] = mode_node
+            var column_count = 1usize
+            if is_number {
+                var buffer = grid.wiz_min_text[0usize..16usize]
+                var length = grid.wiz_min_len
+                if side == 1usize {
+                    buffer = grid.wiz_max_text[0usize..16usize]
+                    length = grid.wiz_max_len
+                }
+                var field_options = control.field_options()
+                field_options.width = 180.0
+                field_options.height = 30.0
+                let (field, field_error) = control.text_field(a, grid.key + MENU_KEY + 850310u64 + u64(side), grid.theme, "Value", buffer, length, widget.Change[str] { ctx: mem.cast[*void](&texts[side]), invoke: on_wiz_text }, zero, field_options)
+                if field_error != ok { ret (zero, field_error) }
+                column_nodes[1usize] = field
+                column_count = 2usize
+            }
+            pair_cells[side] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), column_nodes[0usize..column_count])
+            side += 1usize
+        }
+        var pair_style = control.sized_style(width - 24.0, 70.0)
+        pair_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 24.0 }, pair_style, pair_cells[0usize..2usize])
+        n += 1usize
+    }
     // the data bar's own option (v3: Show Bar Only), a check box under the list
     if grid.wiz_type == 0u8 {
         var box_ink = gl.rgb(0x000000u32)
@@ -2642,7 +2746,7 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     }
     rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, foot, buttons[0usize..2usize])
     n += 1usize
-    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0 + 30.0)
+    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0 + 30.0 + 80.0)
     body.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     body.border = style.Border { width: 1.0, color: gl.rgb(0x6D6D6Du32) }
     body.radius = 8.0

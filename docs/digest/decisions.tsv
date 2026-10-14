@@ -2574,4 +2574,5 @@ D3991	601	G012: the Advanced Filter's group operator popup
 D3992	724	G012: the criteria editor's column and operator popups
 D3993	697	G012: v3's column list of the Advanced Filter recorded and matched in size
 D3994	800	G012: Open and Save As of the Advanced Filter
-D3995	708	G012: Minimum and Maximum of a range rule
+D3995	709	G012: Minimum and Maximum of a range rule
+D3996	675	G012: Minimum and Maximum pickers of the New Rule wizard
