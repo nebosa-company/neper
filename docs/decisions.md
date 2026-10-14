@@ -41033,3 +41033,7 @@ The Advanced Filter's body is wired through `window_body` like the other three w
 ## D4012 - G012: window title text and close box placed, raise verified live
 
 The title text of a secondary window stood 64 px in (a leftover 44 px pad) and the close box's x sat at its top edge; the title now pads 14 px and the x is placed like the title text. Verified live in cardgrid: with Sort stacked over the rules manager, a tap in the rules manager's body brings it to the front (WN4-sort-over-rules-v5.png, WN4-rules-raised-v5.png).
+
+## D4013 - G012: the Applies to select verified live
+
+Driven in cardgrid: New Rule opens the wizard, the Applies to select lists the columns, picking CMC sets the rule's column and OK adds a Data Bar rule on CMC to the manager (WN5-applies-to-picked-v5.png, WN5-rule-added-v5.png). The four grid fixtures pass after the title placement of D4012.
