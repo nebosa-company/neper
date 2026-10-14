@@ -2266,4 +2266,5 @@ D2502	796	G012: the columns grow while the table scrolls
 D2503	834	G012: the table's own sideways scroll is not the answer here
 D2504	972	G012: v3's Format... dialog recorded, not built
 D2505	755	G012: a gradient per data bar overruns the frame
-D2506	676	G012: a gradient brush in a cell breaks the row build, whatever its stops
+D2506	677	G012: a gradient brush in a cell breaks the row build, whatever its stops
+D2507	657	G012: the gradient fixture failure is an error code, not a check
