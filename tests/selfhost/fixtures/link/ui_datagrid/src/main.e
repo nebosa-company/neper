@@ -1711,6 +1711,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bo_add_error != ok || gr.refresh(&bo_set, a) != ok { os.exit(631) }
     let bo_format = gr.format(&bo_set, 1usize, C_CMC)
     if !bo_format.has_bar || !bo_format.bar_only { os.exit(632) }
+    // Stop If True: a rule that holds and stops keeps the one after it from applying
+    let (st_made, st_error) = gr.create(a, &app.tbl, 3usize)
+    if st_error != ok { os.exit(633) }
+    var st_set = st_made
+    var st_first = gr.rule(C_CMC, gr.Kind.CellIs)
+    st_first.op = gr.Op.Ge
+    st_first.a = 0.0
+    st_first.has_fill = true
+    st_first.fill = paint.rgba(1.0, 0.0, 0.0, 1.0)
+    st_first.stop = true
+    var st_second = gr.rule(C_CMC, gr.Kind.CellIs)
+    st_second.op = gr.Op.Ge
+    st_second.a = 0.0
+    st_second.has_ink = true
+    st_second.ink = .Primary
+    let (_st1, st1_error) = gr.add(a, &st_set, st_first)
+    let (_st2, st2_error) = gr.add(a, &st_set, st_second)
+    if st1_error != ok || st2_error != ok || gr.refresh(&st_set, a) != ok { os.exit(634) }
+    let st_format = gr.format(&st_set, 1usize, C_CMC)
+    if !st_format.has_fill || st_format.has_ink { os.exit(635) }
+    st_set.rules[0usize].stop = false
+    let st_open = gr.format(&st_set, 1usize, C_CMC)
+    if !st_open.has_fill || !st_open.has_ink { os.exit(636) }
     os.exit(0)
     ret ok
 }

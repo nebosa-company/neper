@@ -39300,3 +39300,7 @@ v3's image combo (IC1-desired-dropdown-v3.png) shows, while the cell is edited, 
 ## D2447 - G012: Show Bar Only in the data bar wizard
 
 v3's wizard shows, for the data bar type, Minimum / Maximum pickers, a Preview, Format... and a `Show Bar Only` check box (CF2-new-rule-v3.png). `gridrules.Rule` gained `bar_only` (and `Format.bar_only`); the grid draws the bar without the value when it is set, and the wizard's data bar type has the check box (CF4-show-bar-only-v5.png), written to the new rule on OK. ui_datagrid section 37 checks the rule's format carries it; ui_gridrules, ui_collections_v2, ui_tabular pass. Not built: the Minimum / Maximum pickers, Preview and Format... (colours) of the wizard. Not verified live: with the rule on a numeric column the sample draws the bar without text; my live attempt put the rule on the Legal column (no header click reached the CMC header).
+
+## D2448 - G012: Stop If True
+
+v3's rules manager has a `Stop If True` column (CF2-rules-manager-empty-v3.png): a rule that holds and has it set keeps the rules after it from applying to that cell. `gridrules.Rule.stop` does that in `format` (the rules are applied in the order of the list, which Up and Down change); the manager shows Yes or No and a tap in that column flips it (CF5-stop-if-true-v5.png). ui_datagrid section 37 checks that a stopping fill rule hides the ink rule after it and that clearing it lets both apply; ui_gridrules, ui_collections_v2, ui_tabular pass. Not built: setting it in the New Rule window (v3 has it in the manager only).

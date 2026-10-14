@@ -2207,4 +2207,5 @@ D2443	771	G012: the grid font size (Options > Grids > Font Size)
 D2444	852	G012: v3's font size measured; headers keep their size
 D2445	973	G012: a tap finds its column from the headers, not from the stored widths
 D2446	881	G012: the select editor in v3's drop-down look
-D2447	807	G012: Show Bar Only in the data bar wizard
+D2447	808	G012: Show Bar Only in the data bar wizard
+D2448	657	G012: Stop If True
