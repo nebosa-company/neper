@@ -39448,3 +39448,7 @@ The View menu's Show Grid Lines entry carries the arrow and opens the four line 
 ## D2484 - G012: View > Group by Type and Group by Color
 
 The sample's grouping gains Type and Color (modes 5 and 6 of `group_mode`, one level each), and the View menu's two entries act and tick; driven live: Group by Color made seven groups with the Color chip in the group box (VM5-group-by-color-v5.png). Sample only.
+
+## D2485 - G012: the View menu entries driven live
+
+Group by Type (6307 groups), Full Collapse (no change on groups already closed), Show Group Box (the box row leaves the grid, VM6-group-box-off-v5.png) and Best Fit (all columns) (every column shrinks to its content, VM6-best-fit-all-v5.png) were driven live from the sample's View menu, completing the live check of D2481 and D2484. Best Fit leaves the Name column narrower than its longest card name; v3's best fit measures the visible rows, as the grid's single-column best fit does. No code change.
