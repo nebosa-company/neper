@@ -41307,3 +41307,7 @@ v3's collection grid is a band table view, so its Customization window is titled
 ## D4080 - G012: Print Preview margins, zoom and page turning
 
 The preview's margins row is live: a tap on Left / Top / Right / Bottom / Header / Footer steps the value by a tenth of an inch (back to its start after nine), Zoom cycles 100, 75, 50 and 125 per cent (the page and its columns scale), and a page row under the sheet turns the pages (twelve rows a page, `Page n of m` from the visible rows). PV2-print-preview-margins-zoom-pages-v5.png: page 3 of 10024 at 75 per cent with Left 0.7 in. v3's margin fields are typed boxes and its zoom a combo; these are tap steppers. ui_datagrid passes (exits 658-660).
+
+## D4081 - G012: the Excel export beyond 2000 rows
+
+The 30000-row export failed only in the sample: its scratch arena was 32 MB and the package of 30000 rows (14.6 MB, with the shared-strings table and the sheet text built beside it) did not fit. With a 96 MB scratch `export_xlsx` writes A1:L30001 (zip test clean). The library gained `xml_clean`: control characters XML cannot hold are replaced by spaces in a cell before the package is built, so a card text cannot make the encoder refuse a sheet. The sample's limit is 30000 rows again.
