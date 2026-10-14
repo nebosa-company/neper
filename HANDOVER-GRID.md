@@ -1,6 +1,6 @@
 # HANDOVER-GRID.md — the data grid parity stream (G012)
 
-Updated every turn. Last update: 2026-10-14, after D5008 (Export as Excel/PDF; local D4069).
+Updated every turn. Last update: 2026-10-14, after D5009 (axis for data bars + fallback fonts; local D4070).
 
 ## The goal (standing /goal, re-injected by a Stop hook every turn)
 
@@ -52,7 +52,7 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
 ## Open (in priority order)
 
 1. **Data Bar dialog rows that are drawn but inert** (Bar direction is LIVE since D5007: Context / Right To Left):
-   negative bar colour and "apply same fill", axis (Automatic / Cell midpoint / None) and axis colour, positive
+   negative bar colour and "apply same fill", axis colour (the Axis mode row is live since D5009), positive
    colour edit (the `...` button), the Preview strip. Bar drawing is at `lib/e/ui/datagrid.e` near
    `bar_length` (~line 6205); rule fields live in `gridrules.e` (`bar_solid`, `bar_border`); wizard state in
    `Grid` (`wiz_bar_style` bit0 solid, bit1 border, `fmt_open`). Add Rule fields + `apply` in `on_wiz_ok`.
@@ -81,6 +81,9 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
   layer in `wiz_panel`. Helper functions that take `style.Style` by value and return nodes were suspected but not
   the cause; the percent left margin trick (`bar.margin.left`) gives the right-to-left bar with no extra nodes.
 - `patch.exe` reports "patched" even when a hunk did not apply: grep for the result.
+
+- Non-English cards need the extra system fonts the sample registers (Yu Gothic, Malgun, MingLiU, Segoe UI Symbol):
+  `layout` falls back across `Theme.fonts` by cmap; register every font with `scene.register_font`.
 
 ## Status of the tree
 

@@ -2287,4 +2287,5 @@ D2523	714	G012: correction to D2522, the background picture breaks the wizard by
 D2524	912	G012: the background picture, once `build_parts` stops holding the locals
 D5006	720	G012: Format... on a data bar opens the Data Bar Rule Style Settings window
 D5007	789	G012: Bar direction in the Data Bar Rule Style Settings window
-D5008	742	G012: Export as Excel and PDF
+D5008	743	G012: Export as Excel and PDF
+D5009	858	G012: axis for data bars and fallback fonts for non-English cards
