@@ -136,3 +136,5 @@ Verified live 2026-10-14: a two colour scale created in the wizard with the whit
 | Formula for the wizard bounds | not built | |
 | Narrow-window column growth, thumb track length | open | D2502 |
 | PDF / Excel export, printing | not started | |
+| Background images of the table (v3 paints a card-back picture behind the collection rows and the empty area; seen faintly under the rows in the recordings) | to do: extract the picture from v3's resources, draw it behind the rows with v3's opacity | FT2, NV1 |
+| Messages shown when the grid has no data (DevExpress NoDataToDisplayInfoText; the inventory's "No data" text row is untested) | to do: record v3's text and position for an empty pool, collection and deck, then show it from `empty_text` in v3's face and place | |
