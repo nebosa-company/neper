@@ -39658,3 +39658,7 @@ With a test minimum of -3 on CMC and the axis shown (NC9-axis-line-and-offset-ba
 ## D5017 - G012: the Print Preview toolbar from v3's own icons
 
 The preview window's toolbar row is a picture of v3's DevExpress command icons (cut from its screen, `icons/print_toolbar.png`, 1280 by 46 px) drawn at the window's width: `set_print_toolbar` takes the texture, the sample loads it. The icons are not buttons yet; editable margins, zoom and paging remain. PP7-print-preview-toolbar-v5.png.
+
+## D5018 - G012: the Customization window of a band grid has its Bands and Columns tabs
+
+v3's collection grid is a band table view, so its Customization window is titled Customization and has a Bands and a Columns tab (CT4); the pool grid's is the plain Column window. `set_band_names` gives a grid the names for the Bands tab (the band row itself stays hidden, as in v3's collection); the window then shows the two tabs, Columns chosen first, Bands listing the band names. CT3-customization-tabs-v5.png. Tapping a band name does nothing (v3's list is for dragging a band into the header).
