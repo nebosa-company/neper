@@ -3349,6 +3349,13 @@ fn save_layout(a: *mem.Arena, grid: *const Grid) -> (str, err) {
     }
     if str.push(&sb, "\nsort ") != ok || str.push_usize(&sb, grid.sort_column) != ok { ret ("", control.TooLarge) }
     if grid.descending { if str.push(&sb, " desc") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, " asc") != ok { ret ("", control.TooLarge) } }
+    // the Shift+click sorts after the primary one
+    var extra_at = 0usize
+    while extra_at < grid.extra_count {
+        if str.push(&sb, "\nsortx ") != ok || str.push_usize(&sb, grid.extra_sort[extra_at]) != ok { ret ("", control.TooLarge) }
+        if grid.extra_desc[extra_at] { if str.push(&sb, " desc") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, " asc") != ok { ret ("", control.TooLarge) } }
+        extra_at += 1usize
+    }
     if grid.filter_visible { if str.push(&sb, "\nfilterrow 1") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, "\nfilterrow 0") != ok { ret ("", control.TooLarge) } }
     if grid.navigator_visible { if str.push(&sb, "\nnavigator 1") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, "\nnavigator 0") != ok { ret ("", control.TooLarge) } }
     at = 0usize
@@ -3385,6 +3392,7 @@ fn same_text(x: str, y: str) -> bool {
 // does not have is ignored and a column the text does not mention keeps its width, so a layout
 // from an older or newer column set loads. `BadLayout` is a text without the version line.
 fn load_layout(grid: *Grid, text: str) -> err {
+    grid.extra_count = 0usize
     var rest = text
     var first = true
     while rest.len > 0usize {
@@ -3412,6 +3420,14 @@ fn load_layout(grid: *Grid, text: str) -> err {
             if parse_error == ok && usize(value) <= grid.all.len {
                 grid.sort_column = usize(value)
                 grid.descending = same_text(after, "desc")
+            }
+        } else if same_text(head, "sortx") {
+            let (number, after) = next_token(tail)
+            let (value, parse_error) = str.parse_u64(number)
+            if parse_error == ok && usize(value) < grid.all.len && grid.extra_count < 4usize {
+                grid.extra_sort[grid.extra_count] = usize(value)
+                grid.extra_desc[grid.extra_count] = same_text(after, "desc")
+                grid.extra_count += 1usize
             }
         } else if same_text(head, "order") {
             // the listed columns first, in that order; the grid's others after them, as they were
