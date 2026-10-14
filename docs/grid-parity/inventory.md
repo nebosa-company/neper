@@ -57,7 +57,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Keyboard: arrows, Page, Home/End over group rows | matched | P1-group-row-keys (D2425) |
 | Keyboard: Ins/Enter/Space add, Del remove (deck) | app | |
 | Mouse: wheel (3 rows a notch) | matched | W1-wheel (D2436) |
-| Mouse: hover preview | untested | |
+| Mouse: hover over a row | matched (v3 draws no hover fill on a row and the side card panel shows the current card, not the hovered one: HV1-hover-v3, 2.5 s over two rows) / app (the card panel and the optional preview tooltip) | HV1 |
 
 ## Data controller level
 
