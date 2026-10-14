@@ -39508,3 +39508,7 @@ The wizard's Minimum box, tapped three times, reads Minimum: Percentile with the
 ## D2499 - G012: the application menu's size
 
 The View menu of D2480 was 510 px wide with 26 px rows against v3's roughly 315 wide (VM1-view-menu-v3.png, at its scale); an application menu now sets its text at 4.6 px a character (the grid's own popups keep 6.6) with 23 px rows, which gives about 395 px (VM7-view-menu-narrow-v5.png, where the $1433 of D2495 also shows live). Still wider than v3: the text face itself is the grid's, not the 9 pt Segoe v3 uses. The four grid fixtures pass.
+
+## D2500 - G012: horizontal scrolling and v3's thumb
+
+The columns of a measured-look grid that outgrow the pane (the column widths summed, 1109 units, against the pane's 736) keep their widths and scroll: `hshift` puts the header, rows and footer inside a clip moved by `hoff`, `measure_hscroll` takes the pane from an unseen full-width zero-height gauge (key +3900; a key on the stacking node itself stole the editor's Enter and failed ui_datagrid exit 171), and the navigator row carries v3's dark grey thumb to the right of the funnel, as long as the pane is of the columns, dragged to scroll (HS2-horizontal-scroll-v5.png: the pool scrolled past Legal). D2493's reading of the numbers was the unit confusion of D2494. Known: the pool at rest still draws the columns squeezed until the first drag, and the lower grid shows a thumb whose columns also overflow; the vertical scroll bar stays. The four grid fixtures pass.
