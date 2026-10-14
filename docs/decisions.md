@@ -39184,3 +39184,7 @@ Recorded from v3's header popup (B10-checked-entries-v3.png): a ticked entry wit
 ## D2418 — G012: the group footer's look, recorded from v3
 
 v3's group footer (F2-group-footer-v3.png, with Group Footers on and a small group scrolled to its end) is a full-width row in the footer band's yellow (#FFFFDD) under the group's last card, no column lines, the group's summaries in grey cells under their columns. The footer entries are drawn as that (`TableLook.footer_fill`, row kind 2; a summary cell is #E7EAEA, the others empty; F2-group-footer-v5.png: the Bonus group's mean CMC 1.1 in the CMC column). v3's footer row is about 29 px; ours has the row height of the grid (the virtual list takes one extent).
+
+## D2419 — G012: "(Sorted)" in the quick column list
+
+DevExpress's column quick customization has a "(Sorted)" entry (ColumnsQuickCustomizationSorted) that lists the columns alphabetically instead of in the grid's order; v3's list shows it above the rule. It is now a toggle: ticked, the list is ordered by title (case-insensitive); the grid's own column order is unchanged (Q2-quick-sorted-v5.png: CMC, Color, Cost, Edition, ES, Favorite, Legal, Name, P/T, Rarity, Text, Type). The list holds the grid's columns (13 in the pool) in its fixed height, so it does not scroll.

@@ -2178,4 +2178,5 @@ D2414	497	G012: fixture coverage of the Column window's drag in and out
 D2415	606	G012: the current row of an in-place editing grid shows its editors' buttons
 D2416	743	G012: group footers
 D2417	739	G012: a ticked popup entry is its picture in a pale blue box
-D2418	627	G012: the group footer's look, recorded from v3
+D2418	628	G012: the group footer's look, recorded from v3
+D2419	576	G012: "(Sorted)" in the quick column list
