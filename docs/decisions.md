@@ -39456,3 +39456,7 @@ Group by Type (6307 groups), Full Collapse (no change on groups already closed),
 ## D2486 - G012: footer alignment and the collection's green band
 
 Recorded from v3 (FT1-footer-v3.png): the count ("Count: 120281", "Rows: 8") stands at the left of its #E7EAEA cell, a whole-number summary is centred and an amount is at the right; the collection grid's summary band is green (#C0DCC0) where the pool's is pale yellow (#FFFFDD). `footer_row` aligns by kind (count start with 4 px, Currency and Real end, others centre) and the sample gives the collection grid its band colour through `Look.footer_band` (FT1-footer-v5.png). Group-summary alignment is not recorded yet. The four grid fixtures pass.
+
+## D2487 - G012: the footer of the maximised v3 confirms D2486
+
+With v3 maximised (FT2-footer-maximised-v3.png) every column of the collection grid shows: the green band runs under all of them, `Rows: 8` stands at the left of its cell, 450 and 19 are centred and the amounts ($0.00, $38.77, $65.59, $1433) are at the right, which is what D2486 does. The grouped pool's rows (Rarity : B (Count: 10)) carry no summary in any visible column, so group-summary alignment has nothing to compare in the pool; the sample's CMC mean in the group rows is the application's own. No code change.
