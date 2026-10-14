@@ -167,6 +167,7 @@ wiz_pos_color: u8,
 wiz_neg_color: u8,
 wiz_axis_color: u8,
 fmt_pick: u8,
+cust_rgb: u32,
     rules_changed: bool,
     wiz_bar_only: bool,
     wiz_min_number: bool,
@@ -3463,14 +3464,14 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         r.low = wiz_low(grid.wiz_palette)
         r.mid = paint.rgba(1.0, 1.0, 0.8, 1.0)
         r.high = wiz_high(grid.wiz_palette)
-        if t == 0u8 { r.fill = bar_palette(grid.wiz_pos_color) }
+        if t == 0u8 { r.fill = picked_color(grid, grid.wiz_pos_color) }
         if t == 0u8 && grid.wiz_neg_color != 0u8 {
             r.has_neg = true
-            r.neg = bar_palette(grid.wiz_neg_color - 1u8)
+            r.neg = picked_color(grid, grid.wiz_neg_color - 1u8)
         }
         if t == 0u8 && grid.wiz_axis_color != 0u8 {
             r.show_axis = true
-            r.axis = axis_palette(grid.wiz_axis_color - 1u8)
+            r.axis = picked_color(grid, grid.wiz_axis_color - 1u8)
         }
         r.three = t == 2u8
         r.bar_only = t == 0u8 && grid.wiz_bar_only
@@ -3645,9 +3646,17 @@ fn bar_palette(i: u8) -> paint.Color {
 
 fn axis_palette(i: u8) -> paint.Color { ret bar_palette(i) }
 
+// The colour a stored index stands for: 200 is the custom colour of the editor's R / G / B steppers.
+fn picked_color(grid: *const Grid, i: u8) -> paint.Color {
+    if i != 200u8 { ret bar_palette(i) }
+    let v = grid.cust_rgb
+    ret paint.rgba(f32((v >> 16u32) & 255u32) / 255.0, f32((v >> 8u32) & 255u32) / 255.0, f32(v & 255u32) / 255.0, 1.0)
+}
+
 // "R.G.B" of a palette colour, as v3's colour box writes it.
-fn palette_text(a: *mem.Arena, i: u8) -> (str, err) {
-    let v = palette_value(i)
+fn palette_text(a: *mem.Arena, grid: *const Grid, i: u8) -> (str, err) {
+    var v = palette_value(i)
+    if i == 200u8 { v = grid.cust_rgb }
     let (b, b_error) = str.builder(a, 16usize)
     if b_error != ok { ret ("", b_error) }
     var sb = b
@@ -3699,6 +3708,18 @@ fn on_swatch(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         let grid = t.grid
+        if t.value >= 201u8 && t.value <= 203u8 {
+            // R, G or B up by 32 (wrapping), and the row takes the custom colour
+            var shift: u32 = 16u32
+            if t.value == 202u8 { shift = 8u32 }
+            if t.value == 203u8 { shift = 0u32 }
+            let channel = ((grid.cust_rgb >> shift) + 32u32) & 255u32
+            grid.cust_rgb = (grid.cust_rgb & ~(255u32 << shift)) | (channel << shift)
+            if grid.fmt_pick == 1u8 { grid.wiz_pos_color = 200u8 }
+            if grid.fmt_pick == 2u8 { grid.wiz_neg_color = 201u8 }
+            if grid.fmt_pick == 3u8 { grid.wiz_axis_color = 201u8 }
+            ret ok
+        }
         if grid.fmt_pick == 1u8 && t.value != 255u8 { grid.wiz_pos_color = t.value }
         if grid.fmt_pick == 2u8 {
             if t.value == 255u8 { grid.wiz_neg_color = 0u8 } else { grid.wiz_neg_color = t.value + 1u8 }
@@ -3715,9 +3736,9 @@ fn on_swatch(ctx: *void, g: widget.Gesture) -> err {
 
 // The palette popup: six swatches across, four down, and None / Same as positive under them.
 fn swatch_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
-    let (taps, taps_error) = mem.alloc[SwatchTap](a, 25usize)
+    let (taps, taps_error) = mem.alloc[SwatchTap](a, 28usize)
     if taps_error != ok { ret (zero, control.TooLarge) }
-    let (lines, lines_error) = mem.alloc[widget.Node](a, 6usize)
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 7usize)
     if lines_error != ok { ret (zero, control.TooLarge) }
     var row = 0usize
     while row < 4usize {
@@ -3737,7 +3758,26 @@ fn swatch_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         lines[row] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..6usize])
         row += 1usize
     }
-    var count = 4usize
+    // R + G + B +: steps the custom colour by 32 a tap
+    let (steps, steps_error) = mem.alloc[widget.Node](a, 3usize)
+    if steps_error != ok { ret (zero, control.TooLarge) }
+    var step = 0usize
+    while step < 3usize {
+        taps[25usize + step] = SwatchTap { grid: grid, value: u8(201usize + step) }
+        var words = "R +"
+        if step == 1usize { words = "G +" }
+        if step == 2usize { words = "B +" }
+        let (step_label, step_error) = flat_text(a, grid, words, gl.rgb(0x000000u32))
+        if step_error != ok { ret (zero, step_error) }
+        var step_style = control.sized_style(52.0, 22.0)
+        step_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+        step_style.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+        step_style.margin = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        steps[step] = widget.region(grid.key + MENU_KEY + 850540u64 + u64(step), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[25usize + step]), invoke: on_swatch }, gestures: 1u8, enabled: true, focusable: false }, step_style, one(a, widget.padded(0u64, 14.0, 3.0, 0.0, 0.0, style.defaults(), one(a, step_label))))
+        step += 1usize
+    }
+    lines[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), steps[0usize..3usize])
+    var count = 5usize
     if grid.fmt_pick != 1u8 {
         taps[24usize] = SwatchTap { grid: grid, value: 255u8 }
         var caption = "None"
@@ -3748,8 +3788,8 @@ fn swatch_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         count += 1usize
     }
     var frame = control.sized_style(190.0, 0.0)
-    frame.height = style.Length { Px: 110.0 }
-    if count == 5usize { frame.height = style.Length { Px: 136.0 } }
+    frame.height = style.Length { Px: 136.0 }
+    if count == 6usize { frame.height = style.Length { Px: 162.0 } }
     frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     frame.border = style.Border { width: 1.0, color: gl.rgb(0x606060u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, lines[0usize..count]), ok)
@@ -3810,7 +3850,7 @@ fn fmt_button(a: *mem.Arena, grid: *Grid, text: str, key: u64) -> (widget.Node, 
 
 // The three colour rows of the style window, each its caption and the colour as v3 writes it.
 fn fmt_pos_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
-    let (text, text_error) = palette_text(a, grid.wiz_pos_color)
+    let (text, text_error) = palette_text(a, grid, grid.wiz_pos_color)
     if text_error != ok { ret (zero, text_error) }
     let (row, row_error) = fmt_choice(a, grid, "Color:", text, grid.key + MENU_KEY + 850366u64, on_fmt_pos_color, true)
     ret (row, row_error)
@@ -3819,7 +3859,7 @@ fn fmt_pos_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn fmt_neg_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var text = "Apply same fill color as positive bar"
     if grid.wiz_neg_color != 0u8 {
-        let (named, named_error) = palette_text(a, grid.wiz_neg_color - 1u8)
+        let (named, named_error) = palette_text(a, grid, grid.wiz_neg_color - 1u8)
         if named_error != ok { ret (zero, named_error) }
         text = named
     }
@@ -3830,7 +3870,7 @@ fn fmt_neg_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn fmt_axis_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var text = "None"
     if grid.wiz_axis_color != 0u8 {
-        let (named, named_error) = palette_text(a, grid.wiz_axis_color - 1u8)
+        let (named, named_error) = palette_text(a, grid, grid.wiz_axis_color - 1u8)
         if named_error != ok { ret (zero, named_error) }
         text = named
     }

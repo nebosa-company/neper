@@ -2311,4 +2311,5 @@ D5028	263	G012: the parent of an open submenu is light blue
 D5029	496	G012: the quick column list wraps into two columns
 D5030	382	G012: the quick list's size checked against v3's pool grid
 D5031	265	G012: the filter-operator popup measured and sized from v3
-D5032	688	G012: a colour editor behind the style window's colour rows
+D5032	689	G012: a colour editor behind the style window's colour rows
+D5033	397	G012: custom RGB steppers in the colour editor
