@@ -41366,3 +41366,6 @@ Under the 24 swatches the editor has R +, G + and B + boxes that step the custom
 
 ## D4095 - G012: typed margin boxes in Page Setup
 The Margins tab shows each of the six margins as a spin box (hundredths of an inch, step 5, floor at v3's base 0.50 / 0.20) with a typed field, in place of the tap-to-step text. `pv_hund` holds the last digit beside `pv_tenths`; `set_margin` clamps and splits a typed value; Restore Original clears both; the Print Preview margin cells show the hundredths when set. Seen (MG3-page-setup-margin-spin-v5.png: two arrow taps 50 -> 60); Header/Footer cells, Fit To counts and the Print Preview boxes stay taps.
+
+## D4096 - G012: typed Header/Footer cells and Fit To counts in Page Setup
+The six Header/Footer cells are single-line text fields stored in `Grid` (`pv_cell`, 24 bytes each, `pv_cell_len`; the footer's [Page #] and [Date Printed] are the initial text, seeded once through `pv_cell_touched`), and Fit To's pages wide / tall are spin boxes (`pv_wide` stored minus one, `pv_tall`, 0 = as many as needed) with typed entry. Seen: SC1 (wide 1 -> 3 by two arrow taps), HF5 (typed "hi" in the first header cell). Print does not use either yet; the Print Preview margin cells are still taps and the cells are one line, not v3's multi-line.
