@@ -2632,4 +2632,5 @@ D4049	658	G012: the gradient fixture failure is an error code, not a check
 D4050	914	G012: why a gradient bar shows nothing
 D4051	669	G012: a gradient bar anchored at the cell's x passes the fixtures and kills the sample
 D4052	762	G012: the Enter key ended the program
-D4053	898	G012: the bar that never showed was the data, and v3's gradient fill
+D4053	899	G012: the bar that never showed was the data, and v3's gradient fill
+D4054	555	G012: a rule can ignore values above a bound (Gleemax)
