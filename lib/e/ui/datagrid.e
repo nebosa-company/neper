@@ -4976,7 +4976,7 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     rows[n] = margin_bar
     n += 1usize
     // twelve rows a page: the page asked for, from the rows up to its end
-    let per_page = 10usize
+    let per_page = page_rows(grid)
     var data_rows = 0usize
     var counted = 0usize
     while counted < grp.visible_len(grid.g) {
@@ -10264,4 +10264,23 @@ fn dz_style_list(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(350.0, 268.0), top[0usize..2usize])
     parts[1usize] = foot
     ret (widget.padded(0u64, 14.0, 8.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(350.0, 400.0), parts[0usize..2usize]))), ok)
+}
+
+// Rows a preview page holds: ten at the default Top and Bottom margins (0.50 in each), one fewer for
+// each 27 sheet pixels the two margins take beyond that, one more for each 27 they give back.
+fn page_rows(grid: *const Grid) -> usize {
+    var sheet: f32 = 690.0
+    if grid.pv_orient == 1u8 { sheet = 450.0 }
+    let default_px = sheet / (if_f(grid.pv_orient == 1u8, 8.5, 11.0)) * 0.5
+    let extra = margin_px(grid, 1usize, sheet) + margin_px(grid, 3usize, sheet) - 2.0 * default_px
+    var rows: i64 = 10i64 - i64(extra / 27.0)
+    if extra < 0.0 { rows = 10i64 + i64(-extra / 27.0) }
+    if rows < 1i64 { rows = 1i64 }
+    if rows > 14i64 { rows = 14i64 }
+    ret usize(rows)
+}
+
+fn if_f(c: bool, a: f32, b: f32) -> f32 {
+    if c { ret a }
+    ret b
 }

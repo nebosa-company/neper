@@ -41450,3 +41450,6 @@ Beside the style list: Font..., Color..., Texture..., Clear (grey, as v3 draws t
 
 ## D4123 - G012: drive.ps1 re-checks the foreground window before every click and key
 After a run's first check passed, another window (a browser) came in front mid-script and a screenshot captured it, so clicks may have landed there. The script now throws before any step but wait and shot when the target is no longer the foreground window. With it the Styles tab was checked (D4122 text updated).
+
+## D4124 - G012: the rows a preview page holds follow the Top and Bottom margins
+`page_rows`: ten rows at the default 0.50 in Top and Bottom, one fewer for every 27 sheet pixels the two margins take beyond that (one more for every 27 they give back), 1 to 14. Bottom 1.10 in gives nine rows and 13365 pages instead of 12029 (PP13-rows-follow-margins-v5.png). The boundaries are the sheet's, not v3's (v3's own pagination was not recorded). Recording v3's Title/Footnote Properties still failed: v3 does not come to the foreground for the guarded script, so those dialogs stay unbuilt.
