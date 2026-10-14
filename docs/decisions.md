@@ -41423,3 +41423,6 @@ Twice a scripted run clicked into another application (Discord) because the samp
 
 ## D4114 - G012: the three-row Page Setup cells seen; drive.ps1 raises the window itself
 HF6-page-setup-cells-three-rows-v5.png: the six header and footer cells are tall boxes with the two footer defaults ("[Page #]", "[Date Printed]") in them; they are grey like the other fields, where v3's are white, and the text starts at the top-left only for the first line (a field of rows shows one line high here). `drive.ps1` presses and releases Alt before SetForegroundWindow so Windows lets it come to the front; its guard (D4113) still refuses to click when it does not.
+
+## D4115 - G012: a hue strip in the colour popup
+Under "Custom color" the popup has twelve hue chips (red, orange, yellow ... magenta, `hue_rgb`); a tap sets the custom colour and the row takes it, the popup staying open (CR4-hue-strip-v5.png: the yellow chip gives 255.255.0 in the positive row and the spin boxes). It stands in for v3's hue square (one dimension, full saturation and value). Bold menu headings were tried (weight 700 through `control.colored_text`) and changed nothing: the sample registers one face per font and the layout has no synthetic bold, so they need a bold face registered for the heading text.

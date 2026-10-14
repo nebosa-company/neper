@@ -3809,9 +3809,9 @@ fn fmt_custom_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 
 // The palette popup: six swatches across, four down, and None / Same as positive under them.
 fn swatch_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
-    let (taps, taps_error) = mem.alloc[SwatchTap](a, 28usize)
+    let (taps, taps_error) = mem.alloc[SwatchTap](a, 40usize)
     if taps_error != ok { ret (zero, control.TooLarge) }
-    let (lines, lines_error) = mem.alloc[widget.Node](a, 7usize)
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 8usize)
     if lines_error != ok { ret (zero, control.TooLarge) }
     var row = 0usize
     while row < 4usize {
@@ -3836,6 +3836,10 @@ fn swatch_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if custom_error != ok { ret (zero, custom_error) }
     lines[4usize] = widget.region(grid.key + MENU_KEY + 850531u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[25usize]), invoke: on_swatch }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(180.0, 24.0), one(a, widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, custom_label))))
     var count = 5usize
+    let (hues, hues_error) = hue_strip(a, grid, taps[28usize..40usize])
+    if hues_error != ok { ret (zero, hues_error) }
+    lines[count] = hues
+    count += 1usize
     if grid.fmt_pick != 1u8 {
         taps[24usize] = SwatchTap { grid: grid, value: 255u8 }
         var caption = "None"
@@ -3846,8 +3850,9 @@ fn swatch_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         count += 1usize
     }
     var frame = control.sized_style(190.0, 0.0)
-    frame.height = style.Length { Px: 140.0 }
-    if count == 6usize { frame.height = style.Length { Px: 140.0 } }
+    frame.height = style.Length { Px: 164.0 }
+    frame.height = style.Length { Px: 164.0 }
+    if count == 7usize { frame.height = style.Length { Px: 190.0 } }
     frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     frame.border = style.Border { width: 1.0, color: gl.rgb(0x606060u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, lines[0usize..count]), ok)
@@ -9744,4 +9749,50 @@ fn cell_field_options() -> control.FieldOptions {
     options.width = 166.0
     options.height = 70.0
     ret options
+}
+
+// The colour of hue step k (0..11) at full saturation and value, as 0xRRGGBB.
+fn hue_rgb(k: u8) -> u32 {
+    let sector = k / 2u8
+    let rising = (k % 2u8) == 1u8
+    var up: u32 = 0u32
+    if rising { up = 128u32 }
+    // six sectors of 60 degrees, each cut in two: the middle channel sits at 128 on odd steps
+    if sector == 0u8 { ret (255u32 << 16u32) | (up << 8u32) }
+    if sector == 1u8 { ret ((255u32 - up) << 16u32) | (255u32 << 8u32) }
+    if sector == 2u8 { ret (255u32 << 8u32) | up }
+    if sector == 3u8 { ret ((255u32 - up) << 8u32) | 255u32 }
+    if sector == 4u8 { ret (up << 16u32) | 255u32 }
+    ret (255u32 << 16u32) | (127u32 - up / 2u32)
+}
+
+fn on_hue_chip(ctx: *void, g: widget.Gesture) -> err {
+    let t = mem.cast[*SwatchTap](ctx)
+    switch g {
+    case .Tap as at:
+        let grid = t.grid
+        grid.cust_rgb = hue_rgb(t.value)
+        if grid.fmt_pick == 1u8 { grid.wiz_pos_color = 200u8 }
+        if grid.fmt_pick == 2u8 { grid.wiz_neg_color = 201u8 }
+        if grid.fmt_pick == 3u8 { grid.wiz_axis_color = 201u8 }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// A strip of twelve hues across the colour popup (v3's editor has a hue square).
+fn hue_strip(a: *mem.Arena, grid: *Grid, taps: []SwatchTap) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 12usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < 12usize {
+        taps[k] = SwatchTap { grid: grid, value: u8(k) }
+        var chip = control.sized_style(14.0, 18.0)
+        chip.background = paint.Brush { Solid: gl.rgb(hue_rgb(u8(k))) }
+        chip.margin = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        cells[k] = widget.region(grid.key + MENU_KEY + 850900u64 + u64(k), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[k]), invoke: on_hue_chip }, gestures: 1u8, enabled: true, focusable: false }, chip, zero)
+        k += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..12usize]), ok)
 }
