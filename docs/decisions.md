@@ -39694,3 +39694,7 @@ v3's header menu (HM1) is 250 px wide for its longest entry, Best Fit (all colum
 ## D5026 - G012: the Alignment submenu in v3's words and order
 
 v3's submenu (AL3) lists Align Left, Align Right, Align Center in that order, with pictures, and the parent entry stays light blue (ours: Left, Center, Right, parent in the strong blue; AL2). Words and order now match; the pictures and the light-blue parent are not done.
+
+## D5027 - G012: pictures in the Alignment submenu
+
+The three entries carry v3's pictures (cut from its popup, icons/align_0..2.png): `set_align_menu_icons`; AL4-align-submenu-icons-v5.png. The parent entry is still the strong blue, v3's is light.
