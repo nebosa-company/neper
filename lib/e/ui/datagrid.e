@@ -5040,7 +5040,7 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     strip.margin = style.EdgeLengths { left: style.Length { Px: margin_px(grid, 0usize, sheet_wide) }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     page[q] = widget.box(0u64, strip, one(a, widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, style.defaults(), one(a, filter_text))))
     q += 1usize
-    let (foot_band, foot_band_error) = print_band(a, grid, 3usize, margin_px(grid, 0usize, sheet_wide), across, 8.0)
+    let (foot_band, foot_band_error) = print_band(a, grid, 3usize, margin_px(grid, 0usize, sheet_wide), across, atleast(margin_px(grid, 3usize, sheet_wide) - margin_px(grid, 5usize, sheet_wide) - 22.0, 0.0) + 8.0)
     if foot_band_error != ok { ret (zero, foot_band_error) }
     page[q] = foot_band
     q += 1usize

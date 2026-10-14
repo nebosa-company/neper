@@ -41414,3 +41414,6 @@ The three cells of a printed header or footer sit left, centred and right across
 
 ## D4111 - G012: "[Date Printed]" prints the date
 A header or footer cell that begins "[Da" prints today's date as M/D/YYYY (`time.to_date` of `time.now`; `datagrid.e` now uses e.time), and an untouched footer's right cell defaults to it, as v3's (PP12-footer-date-v5.png: "Page 1" centred, 10/14/2026 at the right). "[Time Printed]", "[User Name]" and the other predefined functions are not built.
+
+## D4112 - G012: the Bottom and Footer margins place the footer band
+The footer band's distance below the filter strip grows with Bottom minus Footer (beyond their defaults of 50 and 20 hundredths) so a larger Bottom margin lowers it on the sheet; at the defaults it is where D4111 drew it. The row count a page holds still does not depend on the margins (ten rows a page).
