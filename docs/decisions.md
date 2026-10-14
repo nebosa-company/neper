@@ -41311,3 +41311,7 @@ The preview's margins row is live: a tap on Left / Top / Right / Bottom / Header
 ## D4081 - G012: the Excel export beyond 2000 rows
 
 The 30000-row export failed only in the sample: its scratch arena was 32 MB and the package of 30000 rows (14.6 MB, with the shared-strings table and the sheet text built beside it) did not fit. With a 96 MB scratch `export_xlsx` writes A1:L30001 (zip test clean). The library gained `xml_clean`: control characters XML cannot hold are replaced by spaces in a cell before the package is built, so a card text cannot make the encoder refuse a sheet. The sample's limit is 30000 rows again.
+
+## D4082 - G012: the Page Setup dialog
+
+v3's Cards > Print > Page Setup... is DevExpress's "Page Setup: Standard Style" (PS1): Style Name, the tabs Page / Margins / Header / Footer / Scaling, a Paper list (Letter, Tabloid, Legal, Statement, Executive, A3, A4, A5, B4 (JIS), B5 (JIS), Envelope #9, Envelope #10, C size sheet), Orientation (Portrait, Landscape chosen, Auto) and Print Order (Over, then down chosen). `show_page_setup` opens the Page page of it in the preview's slot (PS3), the paper, orientation and order are tap-chosen with v3's defaults, OK returns to the preview, and Portrait narrows the sheet (PS9). The other tabs, the Width/Height fields and the style list are not built. The card menu has Page Setup.... ui_datagrid passes (exits 661, 662).

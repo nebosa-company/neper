@@ -1808,6 +1808,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dg.on_print_tap(mem.cast[*void](&pv_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_tenths[0usize] != 1u8 { os.exit(658) }
     pv_tap.index = 8u8
     if dg.on_print_tap(mem.cast[*void](&pv_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_page != 1usize { os.exit(659) }
+    dg.show_page_setup(&grid15)
+    var setup_tap = dg.SetupTap { grid: &grid15, kind: 1u8, value: 1u8 }
+    if !grid15.pv_setup || dg.on_setup_tap(mem.cast[*void](&setup_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_orient != 1u8 { os.exit(661) }
+    setup_tap.kind = 3u8
+    if dg.on_setup_tap(mem.cast[*void](&setup_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_setup { os.exit(662) }
     pv_tap.index = 6u8
     if dg.on_print_tap(mem.cast[*void](&pv_tap), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.pv_zoom != 1u8 { os.exit(660) }
     grid15.print_open = false

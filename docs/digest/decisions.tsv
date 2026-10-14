@@ -2660,4 +2660,5 @@ D4077	814	G012: the axis line and offset bars seen on the grid; a percent margin
 D4078	404	G012: the Print Preview toolbar from v3's own icons
 D4079	591	G012: the Customization window of a band grid has its Bands and Columns tabs
 D4080	616	G012: Print Preview margins, zoom and page turning
-D4081	541	G012: the Excel export beyond 2000 rows
+D4081	542	G012: the Excel export beyond 2000 rows
+D4082	765	G012: the Page Setup dialog
