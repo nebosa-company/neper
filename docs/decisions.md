@@ -39588,3 +39588,7 @@ v3 (main.vcl.form.pas, BackgroundBitmaps.Background of the pool, deck and collec
 ## D2519 - G012: the wizard's Format... sets the data bar's Fill mode and Border
 
 Without v3's Data Bar Rule Style Settings dialog (D2504: not built), the wizard's Format... button still steps the colour set (D2476) and, once the four colour sets have gone round, a bar style: gradient, solid, gradient with border, solid with border, handed to the rule as `bar_solid` / `bar_border` (D2513) on OK. Not driven live. The four grid fixtures pass.
+
+## D2520 - G012: the Format... bar style step is checked by the fixture
+
+ui_datagrid taps the wizard's Format... four times and checks the colour set has gone round and the bar style stepped to solid (exits 649-650); the four grid fixtures pass. Replaces the mouse-driven check of D2519 that did not land.
