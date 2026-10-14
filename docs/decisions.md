@@ -39678,3 +39678,7 @@ v3's Cards > Print > Page Setup... is DevExpress's "Page Setup: Standard Style" 
 ## D5022 - G012: the Page Setup Margins tab
 
 The dialog's tabs are taps now. Margins (MG2 is v3's) lists Top, Bottom, Left, Right, Header and Footer as steppers with two decimals (0.50 in; a tap steps a tenth, as in the preview, and they are the same values), Restore Original puts them back, Center on page Horizontally and Vertically toggle (`pv_center`), and the sheet is drawn with its inner frame (MG1-page-setup-margins-v5.png). Header / Footer and Scaling show a note. v3's fields are typed spin boxes and Fix is not built. ui_datagrid passes (exits 663-665).
+
+## D5023 - G012: Page Setup Header / Footer and Scaling tabs
+
+Built from v3 (HF1, HF2): Header / Footer has Reverse on even pages (a toggle), Header and Footer each with Font... and its "8 pt. Tahoma", Background [No Fill] and three cells (the footer holds [Page #] centred and [Date Printed] right), the Vertical Alignment and Predefined Functions row greyed; Scaling has Adjust To (a tap steps ten per cent) and Fit To radios with the page counts. HF34-page-setup-header-footer-scaling-v5.png. The cells are not editable, the font and background buttons do nothing and the scaling does not reach the preview; v3's predefined function icons are not drawn.
