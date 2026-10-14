@@ -2691,4 +2691,5 @@ D4108	370	G012: Customize... on the filter panel opens the Advanced Filter
 D4109	444	G012: the filter panel's tick suspends the filter
 D4110	302	G012: header and footer cells align as v3 prints them
 D4111	400	G012: "[Date Printed]" prints the date
-D4112	374	G012: the Bottom and Footer margins place the footer band
+D4112	375	G012: the Bottom and Footer margins place the footer band
+D4113	555	G012: drive.ps1 refuses to click unless the target window is in front; Page Setup cells are three lines tall

@@ -4404,7 +4404,7 @@ fn header_footer_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widge
             let (cell_ctx, cell_ctx_error) = mem.alloc[MarginSpin](a, 1usize)
             if cell_ctx_error != ok { ret (zero, control.TooLarge) }
             cell_ctx[0usize] = MarginSpin { grid: grid, slot: u8(slot) }
-            let (cell, cell_error) = control.text_field(a, grid.key + MENU_KEY + 850500u64 + u64(slot) * 8u64, grid.theme, "", grid.pv_cell[slot * 24usize..slot * 24usize + 24usize], usize(grid.pv_cell_len[slot]), widget.Change[str] { ctx: mem.cast[*void](&cell_ctx[0usize]), invoke: on_cell_text }, zero, control.field_options())
+            let (cell, cell_error) = control.text_field(a, grid.key + MENU_KEY + 850500u64 + u64(slot) * 8u64, grid.theme, "", grid.pv_cell[slot * 24usize..slot * 24usize + 24usize], usize(grid.pv_cell_len[slot]), widget.Change[str] { ctx: mem.cast[*void](&cell_ctx[0usize]), invoke: on_cell_text }, zero, cell_field_options())
             if cell_error != ok { ret (zero, cell_error) }
             cells[c] = widget.padded(0u64, 6.0, 0.0, 0.0, 0.0, style.defaults(), one(a, cell))
             c += 1usize
@@ -9735,4 +9735,13 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
 fn tick_fill(grid: *const Grid) -> u32 {
     if grid.filter_off { ret 0xB0B0B0u32 }
     ret 0x0F5FBFu32
+}
+
+// A header or footer cell of Page Setup: v3's boxes are 166 x 70, several lines tall.
+fn cell_field_options() -> control.FieldOptions {
+    var options = control.field_options()
+    options.rows = 3u32
+    options.width = 166.0
+    options.height = 70.0
+    ret options
 }

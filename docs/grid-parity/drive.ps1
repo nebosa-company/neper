@@ -10,13 +10,17 @@ public class AW {
 [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, UIntPtr e);
 [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte sc, uint f, UIntPtr e);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
 public struct RECT { public int L,T,R,B; } }
 "@
 [AW]::SetProcessDPIAware() | Out-Null
 New-Item -ItemType Directory -Force $Dir | Out-Null
 $p = Get-Process $Proc | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 $h = $p.MainWindowHandle
+if (-not $h -or $h -eq [IntPtr]::Zero) { throw "no window for ${Proc}: refusing to click" }
 [AW]::SetForegroundWindow($h) | Out-Null
+Start-Sleep -Milliseconds 400
+if ([AW]::GetForegroundWindow() -ne $h) { throw "${Proc} is not in front: refusing to click" }
 function Rect { $r = New-Object AW+RECT; [AW]::GetWindowRect($h, [ref]$r) | Out-Null; $r }
 & (Join-Path $PSScriptRoot 'mouse-warning.ps1') show
 try {

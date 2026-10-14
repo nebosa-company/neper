@@ -41417,3 +41417,6 @@ A header or footer cell that begins "[Da" prints today's date as M/D/YYYY (`time
 
 ## D4112 - G012: the Bottom and Footer margins place the footer band
 The footer band's distance below the filter strip grows with Bottom minus Footer (beyond their defaults of 50 and 20 hundredths) so a larger Bottom margin lowers it on the sheet; at the defaults it is where D4111 drew it. The row count a page holds still does not depend on the margins (ten rows a page).
+
+## D4113 - G012: drive.ps1 refuses to click unless the target window is in front; Page Setup cells are three lines tall
+Twice a scripted run clicked into another application (Discord) because the sample was behind it or had not started: `drive.ps1` now throws when the process has no window or is not the foreground window after SetForegroundWindow, before any click or key. The header and footer cells of Page Setup ask for three rows of 166 x 70 (`cell_field_options`, v3's box size); the fixture passes but the result has not been looked at on screen.
