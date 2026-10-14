@@ -55,7 +55,9 @@ type Rule = struct {
     min_pct: bool,
     max_pct: bool,
     min_ptile: bool,
-    max_ptile: bool
+    max_ptile: bool,
+    has_ignore: bool,
+    ignore_above: f64
 }
 
 // The look of one cell. `bar` is the filled fraction 0..1 of a data bar (0 for none); `icon`
@@ -102,7 +104,7 @@ error BadRule
 
 fn rule(column: usize, kind: Kind) -> Rule {
     let none = paint.rgba(0.0, 0.0, 0.0, 0.0)
-    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false, has_min: false, min_value: 0.0, has_max: false, max_value: 0.0, min_pct: false, max_pct: false, min_ptile: false, max_ptile: false }
+    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false, has_min: false, min_value: 0.0, has_max: false, max_value: 0.0, min_pct: false, max_pct: false, min_ptile: false, max_ptile: false, has_ignore: false, ignore_above: 0.0 }
 }
 
 fn create(a: *mem.Arena, t: *const table.Table, capacity: usize) -> (Rules, err) {
@@ -325,7 +327,7 @@ fn build_stat(rs: *Rules, scratch: *mem.Arena, index: usize) -> err {
     var high = 0.0f64
     var row = 0usize
     while row < rows {
-        if table.is_live(t, row) && !table.is_null(t, r.column, row) {
+        if table.is_live(t, row) && !table.is_null(t, r.column, row) && !(r.has_ignore && number(t, r.column, kind, row) > r.ignore_above) {
             let v = number(t, r.column, kind, row)
             if live == 0usize {
                 low = v
@@ -355,7 +357,7 @@ fn build_stat(rs: *Rules, scratch: *mem.Arena, index: usize) -> err {
     var n = 0usize
     row = 0usize
     while row < rows {
-        if table.is_live(t, row) && !table.is_null(t, r.column, row) {
+        if table.is_live(t, row) && !table.is_null(t, r.column, row) && !(r.has_ignore && number(t, r.column, kind, row) > r.ignore_above) {
             values[n] = number(t, r.column, kind, row)
             n += 1usize
         }

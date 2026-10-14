@@ -39556,3 +39556,7 @@ The cause of the sample's "window loop failed" (D2505 to D2509 chased it as the 
 ## D2511 - G012: the bar that never showed was the data, and v3's gradient fill
 
 The wizard-made Data Bar on CMC drew nothing in the sample for the whole of D2505 to D2509 because the pool's CMC range is 0 to 1000000 (the Gleemax card, noted in D2457's tests): a card of CMC 4 is 0.0004% of the bar. The rule, its statistics and `gr.format` were right all along (read live: rules 2, low 0, high 1000000, has_bar). v3 draws the same sliver; the Maximum = Number choice of D2459 is how one makes it visible. The gradient chase of D2505 to D2509 is withdrawn the same way: the "window loop failed" was the Enter key (D2510). Data bars now fade from their colour to white along the bar's own length (v3's default Fill mode Gradient, CF10), the gradient's points anchored at the column header's x from the frame before; `ui_datagrid`'s bar check counts any non-white pixel. The four grid fixtures pass.
+
+## D2512 - G012: a rule can ignore values above a bound (Gleemax)
+
+Per the owner: ignore Gleemax (CMC 1000000) for the data bar. `Rule.has_ignore` / `ignore_above` keep the rows above the bound out of a rule's statistics (low, high, average, sorted copy), so a bar or scale spans the real range; the bound is not a filter, the cell still shows its value and takes the top of the range. The sample sets it to 100 on every CMC rule as the rules change (DB1-databar-ignoring-gleemax-v5.png: the CMC bars of 1, 4, 4, 5 now show). The four grid fixtures pass.
