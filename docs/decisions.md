@@ -39224,3 +39224,7 @@ Recorded in v3 (S5-search-prefix-v3.png, M2-shift-range-v3.png): typing Mox in a
 ## D2428 — G012: the navigator counts the cards of collapsed groups
 
 Recorded in v3 (N2-navigator-count-v3.png): over seven collapsed Rarity groups the navigator reads `1 of 120281` on the first group, `38637 of 120281` on the third and `92554 of 120281` on the last (next buttons disabled there) - the position is the cards before the current row plus one, the total is every card. `data_counts` counted visible data rows only (`1 of 0`); with the measured look it adds the card count of each collapsed group. Live in the sample (N2-navigator-count-v5.png); ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D2429 — G012: Ctrl+click on the only sorted column clears the sort
+
+v3 (recorded with Ctrl+click in S4): Ctrl+click takes a column's sort out; on the only sorted column it leaves the grid unsorted, in the table's own order. `on_sort` raises the existing `CMD_CLEAR_SORT` command in that case and, like the popup's Clear Sorting, points `sort_column` past the columns (no arrow) and drops the extra sorts; the sample puts the view back in row order (`view.reset_order`) and re-applies its filter. Live in the sample (S6-clear-sort-v5.png: Name sorted, Ctrl+click, natural order, Rare filter over it); ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
