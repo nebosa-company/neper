@@ -5931,7 +5931,21 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         var bar = style.defaults()
         bar.width = style.Length { Percent: look.bar * 100.0 }
         bar.height = style.Length { Percent: 100.0 }
+        // v3's default Fill mode is Gradient: the bar's colour fades to white along its own length. A
+        // gradient's points are in surface space, so the column's left edge comes from its header as
+        // laid out the frame before
         bar.background = paint.Brush { Solid: look.bar_color }
+        var bar_length: f32 = 0.0
+        if column < grid.columns.len { bar_length = grid.columns[column].width * look.bar }
+        if bar_length > 2.0 && mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
+            let (head_box, has_head) = control.keyed_bounds(grid.theme.runtime, grid.key + 1u64 + 2u64 * u64(column))
+            let (bar_stops, bar_stops_error) = mem.alloc[paint.Stop](a, 2usize)
+            if has_head && bar_stops_error == ok {
+                bar_stops[0usize] = paint.Stop { offset: 0.0, color: look.bar_color }
+                bar_stops[1usize] = paint.Stop { offset: 1.0, color: paint.rgba(1.0, 1.0, 1.0, 1.0) }
+                bar.background = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: head_box.x, y: 0.0 }, end: geometry.Point { x: head_box.x + bar_length, y: 0.0 }, stops: bar_stops[0usize..2usize] } }
+            }
+        }
         layers[count] = widget.box(0u64, bar, zero)
         count += 1usize
     }

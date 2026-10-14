@@ -254,6 +254,12 @@ fn is_color(shot: image.Image, i: usize, c: paint.Color) -> bool {
     ret close_to(shot.pixels[i], c.red) && close_to(shot.pixels[i + 1usize], c.green) && close_to(shot.pixels[i + 2usize], c.blue)
 }
 
+// a pixel that is not the white of the empty cell (a gradient bar fades to white)
+fn is_inked(shot: image.Image, i: usize) -> bool {
+    let d = (255i32 - i32(shot.pixels[i])) + (255i32 - i32(shot.pixels[i + 1usize])) + (255i32 - i32(shot.pixels[i + 2usize]))
+    ret d > 30i32
+}
+
 fn tap_text(h: *testing.Harness, runtime: *widget.Runtime, text: str) -> bool {
     let (b, found) = widget.bounds_of(runtime, testing.by_text(h, text).element)
     if !found { ret false }
@@ -1062,8 +1068,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var short_blue = 0usize
     var across: f32 = 364.0
     while across < 476.0 {
-        if is_color(shot_r, px(wide_bounds.x + across, wide_bounds.y + wide_bounds.height * 0.5), paint.rgba(0.1, 0.2, 0.9, 1.0)) { wide_blue += 1usize }
-        if is_color(shot_r, px(short_bounds.x + across, short_bounds.y + short_bounds.height * 0.5), paint.rgba(0.1, 0.2, 0.9, 1.0)) { short_blue += 1usize }
+        if is_inked(shot_r, px(wide_bounds.x + across, wide_bounds.y + wide_bounds.height * 0.5)) { wide_blue += 1usize }
+        if is_inked(shot_r, px(short_bounds.x + across, short_bounds.y + short_bounds.height * 0.5)) { short_blue += 1usize }
         across += 4.0
     }
     if wide_blue == 0usize || wide_blue <= short_blue { os.exit(351) }
