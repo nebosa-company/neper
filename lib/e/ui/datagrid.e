@@ -3834,7 +3834,13 @@ fn fmt_choice(a: *mem.Arena, grid: *Grid, caption: str, value: str, key: u64, in
     box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     box.border = style.Border { width: 1.0, color: gl.rgb(0xC8C8C8u32) }
     box.radius = 4.0
-    let held = widget.padded(0u64, 6.0, 5.0, 0.0, 0.0, style.defaults(), one(a, val))
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, control.TooLarge) }
+    layers[0usize] = widget.padded(0u64, 6.0, 5.0, 0.0, 0.0, style.defaults(), one(a, val))
+    let (chevron, chevron_error) = flat_text(a, grid, "v", gl.rgb(0x404040u32))
+    if chevron_error != ok { ret (zero, chevron_error) }
+    layers[1usize] = widget.positioned(0u64, 228.0, 5.0, style.defaults(), one(a, chevron))
+    let held = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
     if live {
         cells[1usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: invoke }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held))
     } else {
@@ -3854,38 +3860,168 @@ fn fmt_button(a: *mem.Arena, grid: *Grid, text: str, key: u64) -> (widget.Node, 
     ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_fmt_close }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, widget.padded(0u64, 36.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
 }
 
+// The caption cell of a style-window row: 14 in, 110 wide, the text dimmed or not.
+fn fmt_caption_cell(a: *mem.Arena, grid: *Grid, caption: str, ink_rgb: u32) -> (widget.Node, err) {
+    let (cap, cap_error) = flat_text(a, grid, caption, gl.rgb(ink_rgb))
+    if cap_error != ok { ret (zero, cap_error) }
+    var cap_style = control.sized_style(110.0, 26.0)
+    cap_style.margin = style.EdgeLengths { left: style.Length { Px: 14.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.box(0u64, cap_style, one(a, widget.padded(0u64, 0.0, 5.0, 0.0, 0.0, style.defaults(), one(a, cap)))), ok)
+}
+
+// The colour chip, at the left inside a box.
+fn fmt_chip(a: *mem.Arena, rgb: u32) -> widget.Node {
+    var swatch = control.sized_style(40.0, 18.0)
+    swatch.background = paint.Brush { Solid: gl.rgb(rgb) }
+    swatch.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
+    ret widget.positioned(0u64, 6.0, 4.0, style.defaults(), one(a, widget.box(0u64, swatch, zero)))
+}
+
+// The inside of a colour box: the value past the chip, the chip, and a chevron.
+fn fmt_colour_body(a: *mem.Arena, grid: *Grid, text: str, ink_rgb: u32, chip_rgb: u32) -> (widget.Node, err) {
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, control.TooLarge) }
+    let (val, val_error) = flat_text(a, grid, text, gl.rgb(ink_rgb))
+    if val_error != ok { ret (zero, val_error) }
+    layers[0usize] = widget.padded(0u64, 52.0, 5.0, 0.0, 0.0, style.defaults(), one(a, val))
+    layers[1usize] = fmt_chip(a, chip_rgb)
+    let (chevron, chevron_error) = flat_text(a, grid, "v", gl.rgb(0x404040u32))
+    if chevron_error != ok { ret (zero, chevron_error) }
+    layers[2usize] = widget.positioned(0u64, 194.0, 5.0, style.defaults(), one(a, chevron))
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..3usize]), ok)
+}
+
+// The drop-down box of a colour row; a tap opens the editor when the row is live.
+fn fmt_colour_box(a: *mem.Arena, grid: *Grid, text: str, look: u64, invoke: fn(*void, widget.Gesture) -> err) -> (widget.Node, err) {
+    var ink_rgb: u32 = 0x000000u32
+    var ground: u32 = 0xFFFFFFu32
+    if ((look >> 32u64) & 1u64) != 0u64 {
+        ink_rgb = 0x9A9A9Au32
+        ground = 0xF4F4F4u32
+    }
+    var field = control.sized_style(216.0, 26.0)
+    field.background = paint.Brush { Solid: gl.rgb(ground) }
+    field.border = style.Border { width: 1.0, color: gl.rgb(0xC8C8C8u32) }
+    field.radius = 4.0
+    let (held, held_error) = fmt_colour_body(a, grid, text, ink_rgb, u32(look & 16777215u64))
+    if held_error != ok { ret (zero, held_error) }
+    if (look >> 40u64) == 0u64 { ret (widget.box(0u64, field, one(a, held)), ok) }
+    ret (widget.region(grid.key + MENU_KEY + (look >> 40u64), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: invoke }, gestures: 1u8, enabled: true, focusable: false }, field, one(a, held)), ok)
+}
+
+// v3's "..." button beside a colour box.
+fn fmt_dots(a: *mem.Arena, grid: *Grid, look: u64, invoke: fn(*void, widget.Gesture) -> err) -> (widget.Node, err) {
+    var ink_rgb: u32 = 0x000000u32
+    if ((look >> 32u64) & 1u64) != 0u64 { ink_rgb = 0x9A9A9Au32 }
+    let (dots, dots_error) = flat_text(a, grid, "...", gl.rgb(ink_rgb))
+    if dots_error != ok { ret (zero, dots_error) }
+    var dots_box = control.sized_style(28.0, 26.0)
+    dots_box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+    dots_box.border = style.Border { width: 1.0, color: gl.rgb(0xC8C8C8u32) }
+    dots_box.radius = 4.0
+    dots_box.margin = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let held = widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, dots))
+    if (look >> 40u64) == 0u64 { ret (widget.box(0u64, dots_box, one(a, held)), ok) }
+    ret (widget.region(grid.key + MENU_KEY + (look >> 40u64) + 1000u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: invoke }, gestures: 1u8, enabled: true, focusable: false }, dots_box, one(a, held)), ok)
+}
+
+// A colour row: caption, a drop-down box with the colour chip, and the "..." button.
+// `look`: bits 0..23 the chip's RGB, bit 32 dimmed, bits 40.. the key offset (0 = not live).
+fn fmt_colour_field(a: *mem.Arena, grid: *Grid, caption: str, text: str, look: u64, invoke: fn(*void, widget.Gesture) -> err) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var ink_rgb: u32 = 0x000000u32
+    if ((look >> 32u64) & 1u64) != 0u64 { ink_rgb = 0x9A9A9Au32 }
+    let (cap, cap_error) = fmt_caption_cell(a, grid, caption, ink_rgb)
+    if cap_error != ok { ret (zero, cap_error) }
+    cells[0usize] = cap
+    let (field, field_error) = fmt_colour_box(a, grid, text, look, invoke)
+    if field_error != ok { ret (zero, field_error) }
+    cells[1usize] = field
+    let (dots, dots_error) = fmt_dots(a, grid, look, invoke)
+    if dots_error != ok { ret (zero, dots_error) }
+    cells[2usize] = dots
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..3usize]), ok)
+}
+
+fn picked_rgb(grid: *const Grid, i: u8) -> u32 {
+    if i != 200u8 { ret palette_value(i) }
+    ret grid.cust_rgb
+}
+
 // The three colour rows of the style window, each its caption and the colour as v3 writes it.
 fn fmt_pos_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (text, text_error) = palette_text(a, grid, grid.wiz_pos_color)
     if text_error != ok { ret (zero, text_error) }
-    let (row, row_error) = fmt_choice(a, grid, "Color:", text, grid.key + MENU_KEY + 850366u64, on_fmt_pos_color, true)
+    let (row, row_error) = fmt_colour_field(a, grid, "Color:", text, u64(picked_rgb(grid, grid.wiz_pos_color)) | (850366u64 << 40u64), on_fmt_pos_color)
     ret (row, row_error)
 }
 
-fn fmt_neg_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
-    var text = "Apply same fill color as positive bar"
-    if grid.wiz_neg_color != 0u8 {
-        let (named, named_error) = palette_text(a, grid, grid.wiz_neg_color - 1u8)
-        if named_error != ok { ret (zero, named_error) }
-        text = named
+// A radio line of the style window: "(o) text" or "( ) text", a tap picks it (SwatchTap carries which).
+fn fmt_radio(a: *mem.Arena, grid: *Grid, chosen: bool, text: str, tap: *SwatchTap, key: u64, invoke: fn(*void, widget.Gesture) -> err) -> (widget.Node, err) {
+    let live = key != 0u64
+    var mark = "( ) "
+    if chosen { mark = "(o) " }
+    let (b, b_error) = str.builder(a, 96usize)
+    if b_error != ok { ret (zero, control.TooLarge) }
+    var sb = b
+    if str.push(&sb, mark) != ok || str.push(&sb, text) != ok { ret (zero, control.TooLarge) }
+    var ink = gl.rgb(0x000000u32)
+    if !live { ink = gl.rgb(0x9A9A9Au32) }
+    let (label, label_error) = flat_text(a, grid, str.done(&sb), ink)
+    if label_error != ok { ret (zero, label_error) }
+    let line = widget.padded(0u64, 14.0, 4.0, 0.0, 4.0, style.defaults(), one(a, label))
+    if !live { ret (line, ok) }
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: invoke }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(360.0, 26.0), one(a, line)), ok)
+}
+
+// The Negative radios (value 0 same fill, 1 own colour) and the Axis radios (value 0..2, the axis mode).
+fn on_fmt_radio(ctx: *void, g: widget.Gesture) -> err {
+    let t = mem.cast[*SwatchTap](ctx)
+    switch g {
+    case .Tap as at:
+        let grid = t.grid
+        if t.value == 0u8 { grid.wiz_neg_color = 0u8 }
+        if t.value == 1u8 && grid.wiz_neg_color == 0u8 { grid.wiz_neg_color = grid.wiz_pos_color + 1u8 }
+        if t.value >= 10u8 { grid.wiz_bar_style = (grid.wiz_bar_style & 7u8) | ((t.value - 10u8) << 3u8) }
+        ret ok
+    default:
+        ret ok
     }
-    let (row, row_error) = fmt_choice(a, grid, "Negative:", text, grid.key + MENU_KEY + 850367u64, on_fmt_neg_color, true)
+}
+
+
+
+fn fmt_neg_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    var index = grid.wiz_pos_color
+    var caption = "( ) Color:"
+    var dimmed: u64 = 1u64 << 32u64
+    if grid.wiz_neg_color != 0u8 {
+        index = grid.wiz_neg_color - 1u8
+        caption = "(o) Color:"
+        dimmed = 0u64
+    }
+    let (text, text_error) = palette_text(a, grid, index)
+    if text_error != ok { ret (zero, text_error) }
+    let (row, row_error) = fmt_colour_field(a, grid, caption, text, u64(picked_rgb(grid, index)) | dimmed | (850367u64 << 40u64), on_fmt_neg_color)
     ret (row, row_error)
 }
 
 fn fmt_axis_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
-    var text = "None"
+    var text = "Black"
+    var chip: u32 = 0u32
     if grid.wiz_axis_color != 0u8 {
         let (named, named_error) = palette_text(a, grid, grid.wiz_axis_color - 1u8)
         if named_error != ok { ret (zero, named_error) }
         text = named
+        chip = picked_rgb(grid, grid.wiz_axis_color - 1u8)
     }
-    let (row, row_error) = fmt_choice(a, grid, "Axis color:", text, grid.key + MENU_KEY + 850368u64, on_fmt_axis_color, true)
+    let (row, row_error) = fmt_colour_field(a, grid, "Axis color:", text, u64(chip) | (850368u64 << 40u64), on_fmt_axis_color)
     ret (row, row_error)
 }
 
 fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 16usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 24usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     var fill = "Gradient"
@@ -3914,11 +4050,20 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if e8 != ok { ret (zero, e8) }
     let (c9, e9) = fmt_caption(a, grid, "Axis Settings", 0x000000u32, 12.0)
     if e9 != ok { ret (zero, e9) }
-    var axis_mode = "Automatic"
-    if ((grid.wiz_bar_style >> 3u8) & 3u8) == 1u8 { axis_mode = "Cell midpoint" }
-    if ((grid.wiz_bar_style >> 3u8) & 3u8) == 2u8 { axis_mode = "None" }
-    let (c10, e10) = fmt_choice(a, grid, "Axis:", axis_mode, grid.key + MENU_KEY + 850365u64, on_fmt_axis, true)
-    if e10 != ok { ret (zero, e10) }
+    let (taps, taps_error) = mem.alloc[SwatchTap](a, 4usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
+    taps[0usize] = SwatchTap { grid: grid, value: 0u8 }
+    taps[1usize] = SwatchTap { grid: grid, value: 10u8 }
+    taps[2usize] = SwatchTap { grid: grid, value: 11u8 }
+    taps[3usize] = SwatchTap { grid: grid, value: 12u8 }
+    let (sf, sf_error) = fmt_radio(a, grid, grid.wiz_neg_color == 0u8, "Apply same fill color as positive bar", &taps[0usize], grid.key + MENU_KEY + 850701u64, on_fmt_radio)
+    if sf_error != ok { ret (zero, sf_error) }
+    let (r0, r0_error) = fmt_radio(a, grid, ((grid.wiz_bar_style >> 3u8) & 3u8) == 0u8, "Automatic (display at variable position based on negative values)", &taps[1usize], grid.key + MENU_KEY + 850702u64, on_fmt_radio)
+    if r0_error != ok { ret (zero, r0_error) }
+    let (r1, r1_error) = fmt_radio(a, grid, ((grid.wiz_bar_style >> 3u8) & 3u8) == 1u8, "Cell midpoint", &taps[2usize], grid.key + MENU_KEY + 850703u64, on_fmt_radio)
+    if r1_error != ok { ret (zero, r1_error) }
+    let (r2, r2_error) = fmt_radio(a, grid, ((grid.wiz_bar_style >> 3u8) & 3u8) == 2u8, "None (show negative value bars in same direction as positive)", &taps[3usize], grid.key + MENU_KEY + 850704u64, on_fmt_radio)
+    if r2_error != ok { ret (zero, r2_error) }
     let (c11, e11) = fmt_axis_row(a, grid)
     if e11 != ok { ret (zero, e11) }
     rows[0usize] = c0
@@ -3927,13 +4072,25 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     rows[3usize] = c3
     rows[4usize] = c4
     rows[5usize] = c5
+    let (pb, pb_error) = fmt_colour_field(a, grid, "Border color:", "255.255.255", 16777215u64 | (1u64 << 32u64), on_fmt_pos_color)
+    if pb_error != ok { ret (zero, pb_error) }
+    let (nb, nb_error) = fmt_colour_field(a, grid, "( ) Border color:", "255.255.255", 16777215u64 | (1u64 << 32u64), on_fmt_neg_color)
+    if nb_error != ok { ret (zero, nb_error) }
+    let (sb, sb_error) = fmt_radio(a, grid, true, "Apply same border color as positive bar", &taps[0usize], 0u64, on_fmt_radio)
+    if sb_error != ok { ret (zero, sb_error) }
     rows[6usize] = c6
-    rows[7usize] = c7
-    rows[8usize] = c8
-    rows[9usize] = c9
-    rows[10usize] = c10
-    rows[11usize] = c11
-    n = 12usize
+    rows[7usize] = pb
+    rows[8usize] = c7
+    rows[9usize] = c8
+    rows[10usize] = sf
+    rows[11usize] = nb
+    rows[12usize] = sb
+    rows[13usize] = c9
+    rows[14usize] = r0
+    rows[15usize] = r1
+    rows[16usize] = r2
+    rows[17usize] = c11
+    n = 18usize
     let (buttons, buttons_error) = mem.alloc[widget.Node](a, 2usize)
     if buttons_error != ok { ret (zero, control.TooLarge) }
     let (ok_button, ok_button_error) = fmt_button(a, grid, "OK", grid.key + MENU_KEY + 850362u64)
@@ -3946,7 +4103,7 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     button_style.margin = style.EdgeLengths { left: style.Length { Px: 150.0 }, top: style.Length { Px: 14.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, button_style, buttons[0usize..2usize])
     n += 1usize
-    var panel = control.sized_style(380.0, 440.0)
+    var panel = control.sized_style(380.0, 600.0)
     panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..n]), ok)
@@ -4786,10 +4943,10 @@ fn fmt_layers(a: *mem.Arena, grid: *Grid, base: widget.Node) -> (widget.Node, er
     // the colour editor of the row asked for, over the dialog
     let (swatches, swatches_error) = swatch_panel(a, grid)
     if swatches_error != ok { ret (zero, swatches_error) }
-    var down: f32 = 186.0
-    if grid.fmt_pick == 2u8 { down = 222.0 }
-    if grid.fmt_pick == 3u8 { down = 258.0 }
-    layers[2usize] = widget.padded(0u64, 250.0, down, 0.0, 0.0, style.defaults(), one(a, swatches))
+    var down: f32 = 205.0
+    if grid.fmt_pick == 2u8 { down = 280.0 }
+    if grid.fmt_pick == 3u8 { down = 305.0 }
+    layers[2usize] = widget.padded(0u64, 196.0, down, 0.0, 0.0, style.defaults(), one(a, swatches))
     ret (widget.stack(0u64, style.defaults(), layers[0usize..3usize]), ok)
 }
 

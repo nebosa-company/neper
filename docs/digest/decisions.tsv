@@ -2315,4 +2315,5 @@ D5032	689	G012: a colour editor behind the style window's colour rows
 D5033	398	G012: custom RGB steppers in the colour editor
 D5034	558	G012: typed margin boxes in Page Setup
 D5035	633	G012: typed Header/Footer cells and Fit To counts in Page Setup
-D5036	423	G012: typed margin boxes in Print Preview
+D5036	424	G012: typed margin boxes in Print Preview
+D5037	1054	G012: the Data Bar style window in v3's layout
