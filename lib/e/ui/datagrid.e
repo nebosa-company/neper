@@ -7276,7 +7276,7 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
 fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     grid.theme = theme
     try follow_focus(grid, theme)
-    if grp.visible_len(grid.g) == 0usize {
+    if grp.visible_len(grid.g) == 0usize && !grid.look.on {
         var inner: widget.Node = zero
         let node_error = text_node(a, grid, grid.empty_text, false, .Text, &inner)
         if node_error != ok { ret (zero, node_error) }
@@ -7332,6 +7332,8 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     let (sort_at, sort_visible) = display_of(grid, grid.sort_column)
     if sort_visible { sort_shown = sort_at }
     var table_options: collection.TableOptions = zero
+    // an empty grid keeps its header and says why under it (v3's NoDataToDisplayInfoText)
+    if grp.visible_len(grid.g) == 0usize { table_options.empty_title = grid.empty_text }
     table_options.double = widget.Change[widget.Key] { ctx: mem.cast[*void](grid), invoke: on_double }
     table_options.has_double = true
     if grid.look.on {

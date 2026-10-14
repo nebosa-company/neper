@@ -2715,6 +2715,8 @@ fn table_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, options:
         var empty = control.empty_options()
         empty.compact = true
         empty.width = width
+        // a measured-look grid says it in plain text, as v3 does, with no picture
+        if options.look.on { empty.art = false }
         let (said, said_error) = control.empty_state_of(a, key + 1u64, t, options.empty_title, options.empty_message, empty)
         if said_error != ok { ret (zero, said_error) }
         held[0usize] = said
