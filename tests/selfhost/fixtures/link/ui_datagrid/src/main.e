@@ -1784,8 +1784,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !grid15.crit_sub[1usize] || grid15.crit_sub[0usize] || grid15.crit_sub_group != 2u8 { os.exit(646) }
     if dg.load_criteria(&grid15, "nonsense") { os.exit(643) }
     // the wizard's Format... steps the colour set and, once those have gone round, the bar style
+    // on a data bar it opens the Data Bar Rule Style Settings window, whose Fill mode switches the bar style
+    grid15.wiz_type = 0u8
     grid15.wiz_palette = 0u8
     grid15.wiz_bar_style = 0u8
+    if dg.on_wiz_format(mem.cast[*void](&grid15), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok { os.exit(649) }
+    if !grid15.fmt_open { os.exit(651) }
+    if dg.on_fmt_fill(mem.cast[*void](&grid15), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok { os.exit(649) }
+    if grid15.wiz_bar_style != 1u8 { os.exit(650) }
+    if dg.on_fmt_close(mem.cast[*void](&grid15), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok || grid15.fmt_open { os.exit(652) }
+    grid15.wiz_type = 2u8
     var format_taps = 0usize
     while format_taps < 4usize {
         if dg.on_wiz_format(mem.cast[*void](&grid15), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok { os.exit(649) }
