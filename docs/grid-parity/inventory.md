@@ -96,3 +96,5 @@ Verified live 2026-10-14: the wizard's Maximum = Number 2 on the CMC data bar ma
 Recorded 2026-10-14 (AF5-operator-list-v3.png): v3's operator list of a condition on the Favorite column holds six entries with an icon each - Equals (=), Does not equal (≠), Is blank (dotted green circle), Is not blank (filled green disc), Is any of (two green discs), Is none of (two red discs) - the current one light blue. The list depends on the column type (this is an image combo column). neper's operator popup (D2450) offers one list of eight text operators for every column; the per-type lists, the icons and the blank / any-of / none-of operators are not built.
 
 Verified live 2026-10-14: an `Is blank` condition on Favorite filters the pool (status line `0 of 120283 cards (filtered in 6 ms)`, AF5-blank-live-v5.png, D2456). The sample's Favorite cells are false, not null, so nothing is blank; v3 treats an unset favourite as blank, which would need a null for false in the loader (application data, not the grid).
+
+Verified live 2026-10-14: `Is none of R, G` on Color shows 89225 of 120283 cards, the complement of Is any of's 31058 (AF6-none-of-v5.png, D2457).
