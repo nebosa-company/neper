@@ -147,6 +147,7 @@ type Grid = struct {
     rules_changed: bool,
     wiz_bar_only: bool,
     wiz_min_number: bool,
+    wiz_select_open: bool,
     wiz_palette: u8,
     wiz_target: usize,
     has_wiz_target: bool,
@@ -3047,6 +3048,23 @@ fn on_wiz_target(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
+type WizPick = struct { grid: *Grid, spec: usize }
+
+// The Applies to select of the wizard (the library's combo box): its toggle and its picks.
+fn on_wiz_select_toggle(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    grid.wiz_select_open = !grid.wiz_select_open
+    ret ok
+}
+
+fn on_wiz_pick(ctx: *void) -> err {
+    let pick = mem.cast[*WizPick](ctx)
+    pick.grid.wiz_target = pick.spec
+    pick.grid.has_wiz_target = true
+    pick.grid.wiz_select_open = false
+    ret ok
+}
+
 fn on_wiz_cancel(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
     switch g {
@@ -3178,25 +3196,34 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         rows[n] = widget.region(grid.key + MENU_KEY + 850330u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_wiz_format }, gestures: 1u8, enabled: true, focusable: false }, format_box, format_held[0usize..1usize])
         n += 1usize
     }
-    // the column the rule applies to (the manager shows it in Applies to)
-    var target_name = "Applies to: (sorted or clicked column)"
-    if grid.has_wiz_target && grid.wiz_target < grid.all.len {
-        let (tb, tb_error) = str.builder(a, 48usize + grid.all[grid.wiz_target].title.len)
-        if tb_error != ok { ret (zero, tb_error) }
-        var tsb = tb
-        if str.push(&tsb, "Applies to: ") != ok || str.push(&tsb, grid.all[grid.wiz_target].title) != ok { ret (zero, control.TooLarge) }
-        target_name = str.done(&tsb)
+    // the column the rule applies to (the manager shows it in Applies to): the library's select
+    let (target_names, target_names_error) = mem.alloc[str](a, grid.all.len + 1usize)
+    if target_names_error != ok { ret (zero, control.TooLarge) }
+    let (target_picks, target_picks_error) = mem.alloc[WizPick](a, grid.all.len + 1usize)
+    if target_picks_error != ok { ret (zero, control.TooLarge) }
+    let (target_submits, target_submits_error) = mem.alloc[widget.Submit](a, grid.all.len + 1usize)
+    if target_submits_error != ok { ret (zero, control.TooLarge) }
+    var target_count = 0usize
+    var target_current = 0usize
+    var listed_at = 0usize
+    while listed_at < grid.all.len {
+        if sort_row_listed(grid, listed_at) {
+            target_names[target_count] = grid.all[listed_at].title
+            target_picks[target_count] = WizPick { grid: grid, spec: listed_at }
+            target_submits[target_count] = widget.Submit { ctx: mem.cast[*void](&target_picks[target_count]), invoke: on_wiz_pick }
+            if grid.has_wiz_target && grid.wiz_target == listed_at { target_current = target_count }
+            target_count += 1usize
+        }
+        listed_at += 1usize
     }
-    let (target_label, target_label_error) = flat_text(a, grid, target_name, gl.rgb(0x000000u32))
-    if target_label_error != ok { ret (zero, target_label_error) }
-    var target_box = control.sized_style(300.0, 26.0)
-    target_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
-    target_box.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
-    target_box.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
-    let (target_held, target_held_error) = mem.alloc[widget.Node](a, 1usize)
-    if target_held_error != ok { ret (zero, control.TooLarge) }
-    target_held[0usize] = widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, target_label))
-    rows[n] = widget.region(grid.key + MENU_KEY + 850320u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_wiz_target }, gestures: 1u8, enabled: true, focusable: false }, target_box, target_held[0usize..1usize])
+    let (target_toggle, target_toggle_error) = mem.alloc[widget.Submit](a, 1usize)
+    if target_toggle_error != ok { ret (zero, control.TooLarge) }
+    target_toggle[0usize] = widget.Submit { ctx: mem.cast[*void](grid), invoke: on_wiz_select_toggle }
+    let (target_select, target_select_error) = control.select(a, grid.key + MENU_KEY + 850320u64, grid.theme, "Applies to", target_names[0usize..target_count], target_current, grid.wiz_select_open, &target_toggle[0usize], target_submits[0usize..target_count])
+    if target_select_error != ok { ret (zero, target_select_error) }
+    var target_row = control.sized_style(300.0, 56.0)
+    target_row.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.box(0u64, target_row, one(a, target_select))
     n += 1usize
     // Minimum and Maximum (v3: a Lowest / Highest Value choice and a value field, for the range types)
     if grid.wiz_type <= 3u8 {
