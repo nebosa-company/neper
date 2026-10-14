@@ -15,7 +15,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Button editor (three dots) | matched | E1 |
 | Memo / preview row (Card Rules) | matched | R1-card-rules (D2431); the frame round both lines of the current card is not drawn yet |
 | Image combo: favourite star (two values) | matched | ST1-favourite-star (D2435) |
-| Image combo: condition, desired, print type (drop-down) | untested | |
+| Image combo: desired (drop-down: Junk, Needed, Needed Badly, Normal, Not Needed, Unassigned) | recorded in v3 (IC1-desired-dropdown-v3.png: the cell shows its value with a down-arrow button while edited, the list opens below with the current value highlighted blue, each value has a small picture); neper's `choice` editor (select with picks) has the same structure, pixel comparison not made | IC1 |
 | Check box, date edit, hyperlink, label editors | untested | |
 | Header image + header hint | matched | T1/T2 hint (delay measured 1045 ms vs 1101 ms, D2430) |
 | Per-column alignment of header, cell, footer, group summary | matched (cell, header) / untested (footer, group summary) | A-series |
