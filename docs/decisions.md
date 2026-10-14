@@ -39436,3 +39436,7 @@ v3's main menu View (VM1-view-menu-v3.png) has three sections, Sort Order, Group
 ## D2481 - G012: the View menu's grid entries act
 
 The grid offers `show_footer`, `set_all_groups` (v3's Full Expand and Full Collapse) and `best_fit_all`; the sample's View menu now acts on Show Summary Footer, Show Group Box, Full Expand, Full Collapse and Best Fit (all columns). Driven live: Group by Rarity from the menu grouped the pool in seven groups, Full Expand opened them, Show Summary Footer removed the footer row (VM2-view-menu-actions-v5.png). Still greyed: Sort by Edition & Card Name, Sort by Card Name & Edition, Clear Sort Order, Group by Type / Color, Legality, Card Rules, Show Grid Lines. The four grid fixtures pass.
+
+## D2482 - G012: the View menu's sort entries
+
+`clear_sort(grid)` drops the header marks and the extra sort keys and raises `CMD_CLEAR_SORT` for the application; the sample's View menu acts on Sort by Edition & Card Name, Sort by Card Name & Edition (the named column first, then the other, ascending, with its header mark) and Clear Sort Order. Driven live: the first sorted the pool by Edition with the arrow on that header (VM3-sort-edition-name-v5.png), the third restored the table order. The four grid fixtures pass.

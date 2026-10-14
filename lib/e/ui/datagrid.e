@@ -601,6 +601,15 @@ fn show_sort(grid: *Grid, spec: usize, descending: bool) {
     grid.descending = descending
 }
 
+// v3's View > Clear Sort Order: the marks go and the application hears the command
+// (`take_command`, CMD_CLEAR_SORT) to restore its order.
+fn clear_sort(grid: *Grid) {
+    grid.sort_column = grid.all.len
+    grid.extra_count = 0usize
+    grid.command = CMD_CLEAR_SORT
+    grid.command_spec = 0usize
+}
+
 // A column's in-cell editor (v3's cxSpinEdit and cxButtonEdit): the text field, a spin editor
 // with a step arrow either side of the number, or a field with a three-dots button at its end.
 const EDITOR_TEXT: u8 = 0u8
