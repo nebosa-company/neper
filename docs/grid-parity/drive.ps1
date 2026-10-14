@@ -29,6 +29,7 @@ foreach ($s in ($Script -split ";")) {
   $s = $s.Trim()
   $t = $s -split ' '
   $r = Rect
+  if (($t[0] -ne "wait") -and ($t[0] -ne "shot") -and ([AW]::GetForegroundWindow() -ne $h)) { throw "${Proc} lost the foreground before ${s}: stopping" }
   switch ($t[0]) {
     'move'   { [AW]::SetCursorPos($r.L + [int]$t[1], $r.T + [int]$t[2]) | Out-Null; Start-Sleep -Milliseconds 400 }
     'click'  { [AW]::SetCursorPos($r.L + [int]$t[1], $r.T + [int]$t[2]) | Out-Null; Start-Sleep -Milliseconds 150; [AW]::mouse_event(2,0,0,0,[UIntPtr]::Zero); [AW]::mouse_event(4,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 600 }
