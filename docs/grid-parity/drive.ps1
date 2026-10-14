@@ -18,6 +18,8 @@ $p = Get-Process $Proc | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Obj
 $h = $p.MainWindowHandle
 [AW]::SetForegroundWindow($h) | Out-Null
 function Rect { $r = New-Object AW+RECT; [AW]::GetWindowRect($h, [ref]$r) | Out-Null; $r }
+& (Join-Path $PSScriptRoot 'mouse-warning.ps1') show
+try {
 foreach ($s in ($Script -split ";")) {
   $s = $s.Trim()
   $t = $s -split ' '
@@ -44,4 +46,7 @@ foreach ($s in ($Script -split ";")) {
       $bmp.Save((Join-Path $Dir ($t[1] + '.png'))); $bmp.Dispose()
     }
   }
+}
+} finally {
+  & (Join-Path $PSScriptRoot 'mouse-warning.ps1') hide
 }
