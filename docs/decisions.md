@@ -39468,3 +39468,7 @@ v3's collection grid (FT2-footer-maximised-v3.png) goes on past Price High with 
 ## D2489 - G012: a click flips the check box
 
 The tap that already flips a favourite star (the row becoming current with the same click) now flips an editable boolean column too, through `begin_edit`, which sets the value and raises the edit event as for the star. The sample's Foil column is editable; driven live: a click on the first row's Foil box set it (CB2-check-box-toggled-v5.png). The four grid fixtures pass.
+
+## D2490 - G012: v3's navigator pictures
+
+Compared with v3 (NV1-navigator-v3.png): its navigator buttons are 24 by 30 bevelled squares holding a small gradient-blue glyph (grey when it cannot move) and a real funnel; the sample drew flat blue triangles. The seven pictures (First, Previous page, Previous, Next, Next page, Last, funnel) and the disabled ones (the left three cut from v3 at its first row, the right three their mirror) are cut from the recording into the sample's icons folder (`nav_00` .. `nav_06`, `nav_d_00` .. `nav_d_05`); `set_navigator_icons` hands them to the grid, which draws them in place of the marks without padding, the marks remaining the fallback (NV1-navigator-v5.png). Not done: the white band behind the "n of m" text, and the horizontal scroll bar thumb v3 keeps in the navigator row. The four grid fixtures pass.
