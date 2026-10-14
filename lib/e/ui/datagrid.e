@@ -6636,7 +6636,10 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var shown = 8usize
     if grid.hon {
         // v3's scroll bar: a dark grey thumb to the right of the funnel, as long as the pane is of the columns
-        var thumb = control.sized_style(hthumb_width(grid), 10.0)
+        // the thumb thickens under the pointer, as the vertical one does
+        var thumb_h: f32 = 10.0
+        if mem.address_of(grid.theme) != 0usize && control.control_state(grid.theme, navigator_key(grid) + 9u64, true, false).hovered { thumb_h = 16.0 }
+        var thumb = control.sized_style(hthumb_width(grid), thumb_h)
         thumb.background = paint.Brush { Solid: gl.rgb(0x808080u32) }
         var room = htrack(grid) - hthumb_width(grid)
         var left: f32 = 0.0

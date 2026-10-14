@@ -39576,3 +39576,7 @@ v3 keeps the header row of an empty grid and writes its message under it. A meas
 ## D2516 - G012: the vertical scroll thumb thickens under the pointer
 
 The owner's observation: v3's scroll bars change size when hovered over. The table's measured bar track (`collection.tabulated`) is now a hover region (key +3300); while the pointer is on it the thumb grows from 2.7 to the track width less 4 (11 units), centred, with a round end (SB1-scroll-thumb-hover-v5.png, rest in SB1-scroll-thumb-rest-v5.png). The track keeps its width so nothing moves. The sizes are an estimate in the Windows 11 manner: v3's hovered width was not measured, and the navigator's horizontal thumb does not yet react. The four grid fixtures pass.
+
+## D2517 - G012: the navigator's horizontal thumb thickens on hover
+
+The navigator row's scroll thumb (D2500) grows from 10 to 16 units tall under the pointer, as the vertical thumb does (D2516). Seen once with the pointer on it; the before and after heights were not compared pixel by pixel, and v3's hovered size is still unmeasured. The four grid fixtures pass.
