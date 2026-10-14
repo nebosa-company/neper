@@ -2694,4 +2694,5 @@ D4111	400	G012: "[Date Printed]" prints the date
 D4112	375	G012: the Bottom and Footer margins place the footer band
 D4113	556	G012: drive.ps1 refuses to click unless the target window is in front; Page Setup cells are three lines tall
 D4114	570	G012: the three-row Page Setup cells seen; drive.ps1 raises the window itself
-D4115	624	G012: a hue strip in the colour popup
+D4115	625	G012: a hue strip in the colour popup
+D4116	841	G012: pictures on the View menu's entries
