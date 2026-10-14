@@ -2192,4 +2192,5 @@ D2428	625	G012: the navigator counts the cards of collapsed groups
 D2429	669	G012: Ctrl+click on the only sorted column clears the sort
 D2430	607	G012: the header hint appears about a second after the pointer rests
 D2431	909	G012: Card Rules shows the rules text under every card, no disclosure
-D2432	951	G012: the Sort dialog
+D2432	952	G012: the Sort dialog
+D2433	1155	G012: the Conditional Formatting Rules Manager

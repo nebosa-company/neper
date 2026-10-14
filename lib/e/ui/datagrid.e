@@ -132,6 +132,8 @@ type Grid = struct {
     extra_desc: [4]bool,
     extra_count: usize,
     sort_dialog_open: bool,
+    rules_dialog_open: bool,
+    rules_selected: usize,
     sort_marks: [24]u8,
     hint_key: widget.Key,
     hint_since: i64,
@@ -1436,6 +1438,252 @@ fn sort_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     ret (widget.box(0u64, body_style, inner[0usize..1usize]), ok)
 }
 
+// ---- the Conditional Formatting Rules Manager (v3's View > Conditional Formatting...) ----
+
+type RuleRow = struct { grid: *Grid, index: usize }
+type RuleAct = struct { grid: *Grid, kind: u8 }
+
+fn rule_words(r: *const rules.Rule) -> str {
+    if r.kind == rules.Kind.CellIs { ret "Cell Value" }
+    if r.kind == rules.Kind.Text { ret "Specific Text" }
+    if r.kind == rules.Kind.Blank { ret "Blanks" }
+    if r.kind == rules.Kind.Above { ret "Above Average" }
+    if r.kind == rules.Kind.Below { ret "Below Average" }
+    if r.kind == rules.Kind.Top { ret "Top Values" }
+    if r.kind == rules.Kind.Bottom { ret "Bottom Values" }
+    if r.kind == rules.Kind.Duplicate { ret "Duplicate Values" }
+    if r.kind == rules.Kind.Unique { ret "Unique Values" }
+    if r.kind == rules.Kind.Scale { ret "Color Scale" }
+    if r.kind == rules.Kind.Bar { ret "Data Bar" }
+    ret "Icon Set"
+}
+
+fn on_rule_row(ctx: *void, g: widget.Gesture) -> err {
+    let row = mem.cast[*RuleRow](ctx)
+    switch g {
+    case .Tap as at:
+        row.grid.rules_selected = row.index
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// 0 Delete, 1 Up, 2 Down, 3 OK / Apply, 4 Cancel.
+fn on_rule_act(ctx: *void, g: widget.Gesture) -> err {
+    let act = mem.cast[*RuleAct](ctx)
+    let grid = act.grid
+    switch g {
+    case .Tap as at:
+        if act.kind == 3u8 || act.kind == 4u8 {
+            grid.rules_dialog_open = false
+            ret ok
+        }
+        if mem.address_of(grid.rule_set) == 0usize { ret ok }
+        let at_rule = grid.rules_selected
+        if at_rule >= grid.rule_set.total { ret ok }
+        if act.kind == 0u8 {
+            rules.remove(grid.rule_set, at_rule)
+            if grid.rules_selected >= grid.rule_set.total && grid.rule_set.total > 0usize { grid.rules_selected = grid.rule_set.total - 1usize }
+            ret ok
+        }
+        if act.kind == 1u8 && at_rule > 0usize {
+            rules.swap(grid.rule_set, at_rule, at_rule - 1usize)
+            grid.rules_selected = at_rule - 1usize
+        }
+        if act.kind == 2u8 && at_rule + 1usize < grid.rule_set.total {
+            rules.swap(grid.rule_set, at_rule, at_rule + 1usize)
+            grid.rules_selected = at_rule + 1usize
+        }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn rules_button(a: *mem.Arena, grid: *Grid, key: widget.Key, label_text: str, w: f32, act: *RuleAct, enabled: bool, default_button: bool) -> (widget.Node, err) {
+    var ink = gl.rgb(0x000000u32)
+    if !enabled { ink = gl.rgb(0xA0A0A0u32) }
+    let (label, label_error) = flat_text(a, grid, label_text, ink)
+    if label_error != ok { ret (zero, label_error) }
+    var box = control.sized_style(w, 27.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+    box.radius = 4.0
+    var edge = gl.rgb(0xADADADu32)
+    var edge_width: f32 = 1.0
+    if default_button {
+        edge = gl.rgb(0x0078D7u32)
+        edge_width = 2.0
+    }
+    if !enabled { edge = gl.rgb(0xD0D0D0u32) }
+    box.border = style.Border { width: edge_width, color: edge }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, control.TooLarge) }
+    var centred = style.defaults()
+    centred.width = style.Length { Percent: 100.0 }
+    centred.height = style.Length { Percent: 100.0 }
+    held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, centred, one(a, label))
+    if !enabled { ret (widget.box(0u64, box, held[0usize..1usize]), ok) }
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](act), invoke: on_rule_act }, gestures: 1u8, enabled: true, focusable: false }, box, held[0usize..1usize]), ok)
+}
+
+fn rules_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let width: f32 = 640.0
+    var count = 0usize
+    if mem.address_of(grid.rule_set) != 0usize { count = grid.rule_set.total }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, count + 8usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    let (picks, picks_error) = mem.alloc[RuleRow](a, count + 1usize)
+    if picks_error != ok { ret (zero, control.TooLarge) }
+    let (acts, acts_error) = mem.alloc[RuleAct](a, 5usize)
+    if acts_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < 5usize {
+        acts[k] = RuleAct { grid: grid, kind: u8(k) }
+        k += 1usize
+    }
+    var n = 0usize
+    // the title
+    let (title, title_error) = flat_text(a, grid, "Conditional Formatting Rules Manager", gl.rgb(0x000000u32))
+    if title_error != ok { ret (zero, title_error) }
+    var title_box = control.sized_style(width, 40.0)
+    title_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    rows[n] = widget.padded(0u64, 44.0, 12.0, 0.0, 0.0, title_box, one(a, title))
+    n += 1usize
+    // Show formatting rules for: All
+    let (show_label, show_label_error) = flat_text(a, grid, "Show formatting rules for:   All", gl.rgb(0x000000u32))
+    if show_label_error != ok { ret (zero, show_label_error) }
+    var show_style = control.sized_style(width - 24.0, 34.0)
+    show_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.padded(0u64, 0.0, 8.0, 0.0, 0.0, show_style, one(a, show_label))
+    n += 1usize
+    // New Rule..., Edit Rule..., Delete Rule, Up, Down
+    var has_selection = count > 0usize && grid.rules_selected < count
+    let (b_new, e_new) = rules_button(a, grid, grid.key + MENU_KEY + 799980u64, "New Rule...", 130.0, &acts[3usize], false, false)
+    if e_new != ok { ret (zero, e_new) }
+    let (b_edit, e_edit) = rules_button(a, grid, grid.key + MENU_KEY + 799981u64, "Edit Rule...", 130.0, &acts[3usize], false, false)
+    if e_edit != ok { ret (zero, e_edit) }
+    let (b_delete, e_delete) = rules_button(a, grid, grid.key + MENU_KEY + 799982u64, "Delete Rule", 130.0, &acts[0usize], has_selection, false)
+    if e_delete != ok { ret (zero, e_delete) }
+    let (b_up, e_up) = rules_button(a, grid, grid.key + MENU_KEY + 799983u64, "Up", 40.0, &acts[1usize], has_selection && grid.rules_selected > 0usize, false)
+    if e_up != ok { ret (zero, e_up) }
+    let (b_down, e_down) = rules_button(a, grid, grid.key + MENU_KEY + 799984u64, "Down", 56.0, &acts[2usize], has_selection && grid.rules_selected + 1usize < count, false)
+    if e_down != ok { ret (zero, e_down) }
+    let (tools, tools_error) = mem.alloc[widget.Node](a, 5usize)
+    if tools_error != ok { ret (zero, control.TooLarge) }
+    tools[0usize] = b_new
+    tools[1usize] = b_edit
+    tools[2usize] = b_delete
+    tools[3usize] = b_up
+    tools[4usize] = b_down
+    var tools_style = control.sized_style(width - 24.0, 40.0)
+    tools_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, tools_style, tools[0usize..5usize])
+    n += 1usize
+    // the list header
+    let heads: [5]str = [5]str{ "Rule (applied in order shown)", "Format", "Applies to", "Apply to the record", "Stop If True" }
+    let head_widths: [5]f32 = [5]f32{ 190.0, 90.0, 110.0, 130.0, 80.0 }
+    let (head_cells, head_cells_error) = mem.alloc[widget.Node](a, 5usize)
+    if head_cells_error != ok { ret (zero, control.TooLarge) }
+    var h = 0usize
+    while h < 5usize {
+        let (head_text, head_error) = flat_text(a, grid, heads[h], gl.rgb(0x000000u32))
+        if head_error != ok { ret (zero, head_error) }
+        head_cells[h] = widget.padded(0u64, 4.0, 5.0, 0.0, 0.0, control.sized_style(head_widths[h], 26.0), one(a, head_text))
+        h += 1usize
+    }
+    var head_style = control.sized_style(width - 24.0, 26.0)
+    head_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    head_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head_cells[0usize..5usize])
+    n += 1usize
+    // one row per rule
+    var at_rule = 0usize
+    var list_rows = 0usize
+    while at_rule < count {
+        let r = grid.rule_set.rules[at_rule]
+        picks[at_rule] = RuleRow { grid: grid, index: at_rule }
+        var applies = ""
+        if r.column < table.column_count(grid.t) { applies = table.column_name(grid.t, r.column) }
+        var selected = false
+        if has_selection && grid.rules_selected == at_rule { selected = true }
+        var ink = gl.rgb(0x000000u32)
+        if selected { ink = gl.rgb(0xFFFFFFu32) }
+        let (c0, e0) = flat_text(a, grid, rule_words(&r), ink)
+        if e0 != ok { ret (zero, e0) }
+        let (c2, e2) = flat_text(a, grid, applies, ink)
+        if e2 != ok { ret (zero, e2) }
+        var whole = "No"
+        if r.whole_row { whole = "Yes" }
+        let (c3, e3) = flat_text(a, grid, whole, ink)
+        if e3 != ok { ret (zero, e3) }
+        let (c4, e4) = flat_text(a, grid, "No", ink)
+        if e4 != ok { ret (zero, e4) }
+        // the format sample: the rule's fill and ink behind "AaBbCc"
+        var sample_ink = gl.rgb(0x000000u32)
+        if r.has_ink { sample_ink = gl.rgb(0xC00000u32) }
+        let (sample_text, sample_error) = flat_text(a, grid, "AaBbCc", sample_ink)
+        if sample_error != ok { ret (zero, sample_error) }
+        var sample_style = control.sized_style(70.0, 18.0)
+        if r.has_fill { sample_style.background = paint.Brush { Solid: r.fill } }
+        if r.kind == rules.Kind.Bar { sample_style.background = paint.Brush { Solid: gl.rgb(0x9CC2E5u32) } }
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 5usize)
+        if cells_error != ok { ret (zero, control.TooLarge) }
+        cells[0usize] = widget.padded(0u64, 4.0, 5.0, 0.0, 0.0, control.sized_style(190.0, 26.0), one(a, c0))
+        cells[1usize] = widget.aligned(0u64, .Start, .Center, control.sized_style(90.0, 26.0), one(a, widget.aligned(0u64, .Center, .Center, sample_style, one(a, sample_text))))
+        cells[2usize] = widget.padded(0u64, 4.0, 5.0, 0.0, 0.0, control.sized_style(110.0, 26.0), one(a, c2))
+        cells[3usize] = widget.padded(0u64, 4.0, 5.0, 0.0, 0.0, control.sized_style(130.0, 26.0), one(a, c3))
+        cells[4usize] = widget.padded(0u64, 4.0, 5.0, 0.0, 0.0, control.sized_style(80.0, 26.0), one(a, c4))
+        var row_style = control.sized_style(width - 24.0, 26.0)
+        row_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        if selected { row_style.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) } }
+        row_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        let (line, line_error) = mem.alloc[widget.Node](a, 1usize)
+        if line_error != ok { ret (zero, control.TooLarge) }
+        line[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..5usize])
+        rows[n] = widget.region(grid.key + MENU_KEY + 800000u64 + u64(at_rule), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[at_rule]), invoke: on_rule_row }, gestures: 1u8, enabled: true, focusable: false }, row_style, line[0usize..1usize])
+        n += 1usize
+        list_rows += 1usize
+        at_rule += 1usize
+    }
+    // the white list area under the rows, then OK, Cancel, Apply
+    var filler = control.sized_style(width - 24.0, 330.0 - f32(list_rows) * 26.0)
+    filler.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    filler.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.box(0u64, filler, zero)
+    n += 1usize
+    let (b_ok, e_ok) = rules_button(a, grid, grid.key + MENU_KEY + 799990u64, "OK", 120.0, &acts[3usize], true, true)
+    if e_ok != ok { ret (zero, e_ok) }
+    let (b_cancel, e_cancel) = rules_button(a, grid, grid.key + MENU_KEY + 799991u64, "Cancel", 120.0, &acts[4usize], true, false)
+    if e_cancel != ok { ret (zero, e_cancel) }
+    let (b_apply, e_apply) = rules_button(a, grid, grid.key + MENU_KEY + 799992u64, "Apply", 120.0, &acts[3usize], false, false)
+    if e_apply != ok { ret (zero, e_apply) }
+    let (finish, finish_error) = mem.alloc[widget.Node](a, 3usize)
+    if finish_error != ok { ret (zero, control.TooLarge) }
+    finish[0usize] = b_ok
+    finish[1usize] = b_cancel
+    finish[2usize] = b_apply
+    var finish_style = control.sized_style(width - 24.0, 46.0)
+    finish_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, finish_style, finish[0usize..3usize])
+    n += 1usize
+    var body_style = control.sized_style(width, 600.0)
+    body_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    body_style.border = style.Border { width: 1.0, color: gl.rgb(0x6D6D6Du32) }
+    body_style.radius = 8.0
+    body_style.overflow = .Clip
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, control.TooLarge) }
+    inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
+    ret (widget.box(0u64, body_style, inner[0usize..1usize]), ok)
+}
+
+// Opens the manager.
+fn open_rules_manager(grid: *Grid) {
+    grid.rules_selected = 0usize
+    grid.rules_dialog_open = true
+}
+
 fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let me = mem.cast[*void](grid)
     let (items, items_error) = mem.alloc[widget.Node](a, grid.all.len + 2usize)
@@ -2115,8 +2363,8 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
             shown += 1usize
         }
     }
-    if !grid.menu_open && !grid.chooser_open && !has_hint && !grid.sort_dialog_open { ret (aimed, ok) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize)
+    if !grid.menu_open && !grid.chooser_open && !has_hint && !grid.sort_dialog_open && !grid.rules_dialog_open { ret (aimed, ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     var n = 0usize
     parts[n] = aimed
@@ -2180,6 +2428,18 @@ fn with_menus(a: *mem.Arena, grid: *Grid, inner: widget.Node) -> (widget.Node, e
         if floating_error != ok { ret (zero, control.TooLarge) }
         floating[0usize] = panel
         parts[n] = widget.overlay(grid.key + CHOOSER_KEY, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: x, y: y }, modal: false, dismiss: zero }, style.defaults(), floating[0usize..1usize])
+        n += 1usize
+    }
+    if grid.rules_dialog_open {
+        let (rules_panel, rules_panel_error) = rules_dialog_panel(a, grid)
+        if rules_panel_error != ok { ret (zero, rules_panel_error) }
+        let rules_size = widget.surface_size(theme.runtime)
+        var rules_x = (rules_size.width - 640.0) * 0.5
+        if rules_x < 0.0 { rules_x = 0.0 }
+        let (rules_held, rules_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if rules_held_error != ok { ret (zero, control.TooLarge) }
+        rules_held[0usize] = rules_panel
+        parts[n] = widget.overlay(grid.key + MENU_KEY + 699901u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: rules_x, y: 120.0 }, modal: false, dismiss: zero }, style.defaults(), rules_held[0usize..1usize])
         n += 1usize
     }
     if grid.sort_dialog_open {
