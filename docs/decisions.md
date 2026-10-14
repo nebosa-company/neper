@@ -40857,3 +40857,7 @@ Recorded in v3 (S4-multi-sort-v3.png): a click on Name sorts it ascending; Shift
 ## D3969 — G012: the search buffer ignores a letter that matches nothing and marks the typed prefix
 
 Recorded in v3 (S5-search-prefix-v3.png, M2-shift-range-v3.png): typing Mox in a group's Name column makes Mox Emerald current with `Mox` painted white on #0078D7 in its cell; a later letter that matches nothing (b, a, after 1, 8 and 23 seconds) changes nothing - the buffer never times out, only Backspace or Escape shortens or ends it. (Shift+click selects the range from the anchor and Ctrl+click toggles one row, as the M1 trace already has.) `on_search_char` takes back a letter with no match, and `cell_text_node` draws the typed prefix of the current row's search cell on #0078D7 in white with the rest in the row's ink. Live in the sample (S5-search-prefix-v5.png); ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D3970 — G012: the navigator counts the cards of collapsed groups
+
+Recorded in v3 (N2-navigator-count-v3.png): over seven collapsed Rarity groups the navigator reads `1 of 120281` on the first group, `38637 of 120281` on the third and `92554 of 120281` on the last (next buttons disabled there) - the position is the cards before the current row plus one, the total is every card. `data_counts` counted visible data rows only (`1 of 0`); with the measured look it adds the card count of each collapsed group. Live in the sample (N2-navigator-count-v5.png); ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
