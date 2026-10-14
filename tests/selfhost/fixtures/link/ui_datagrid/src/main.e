@@ -1734,6 +1734,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     st_set.rules[0usize].stop = false
     let st_open = gr.format(&st_set, 1usize, C_CMC)
     if !st_open.has_fill || !st_open.has_ink { os.exit(636) }
+    // 38. the Advanced Filter's conditions as text and back
+    grid15.crit_count = 2usize
+    grid15.crit_group = 1u8
+    grid15.crit_spec[0usize] = 0usize
+    grid15.crit_op[0usize] = 4u8
+    grid15.crit_len[0usize] = 3usize
+    grid15.crit_text[0usize] = 109u8
+    grid15.crit_text[1usize] = 111u8
+    grid15.crit_text[2usize] = 120u8
+    grid15.crit_spec[1usize] = 0usize
+    grid15.crit_op[1usize] = 1u8
+    grid15.crit_len[1usize] = 0usize
+    let (crit_saved, crit_saved_error) = dg.criteria_text(&f, &grid15)
+    if crit_saved_error != ok { os.exit(640) }
+    grid15.crit_count = 0usize
+    grid15.crit_group = 0u8
+    if !dg.load_criteria(&grid15, crit_saved) { os.exit(641) }
+    if grid15.crit_count != 2usize || grid15.crit_group != 1u8 || grid15.crit_op[0usize] != 4u8 || grid15.crit_len[0usize] != 3usize || grid15.crit_text[0usize] != 109u8 { os.exit(642) }
+    if dg.load_criteria(&grid15, "nonsense") { os.exit(643) }
     os.exit(0)
     ret ok
 }
