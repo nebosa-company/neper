@@ -159,6 +159,7 @@ dz_checks: u64,
 dz_ready: bool,
 dz_style: u8,
 dz_dirty: bool,
+dz_dlg: u8,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
 pv_wide: u8,
@@ -9920,6 +9921,7 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
             t.grid.dz_dirty = true
         }
         if t.kind == 5u8 { t.grid.dz_dirty = false }
+        if t.kind == 6u8 { t.grid.dz_dlg = u8(t.value) }
         if t.kind == 2u8 {
             t.grid.print_open = false
             t.grid.wiz_open = false
@@ -10057,9 +10059,11 @@ fn dz_preview(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err) {
-    let (apply_tap, apply_tap_error) = mem.alloc[DesignTap](a, 1usize)
+    let (apply_tap, apply_tap_error) = mem.alloc[DesignTap](a, 3usize)
     if apply_tap_error != ok { ret (zero, control.TooLarge) }
     apply_tap[0usize] = DesignTap { grid: grid, kind: 5u8, value: 0usize }
+    apply_tap[1usize] = DesignTap { grid: grid, kind: 6u8, value: 1usize }
+    apply_tap[2usize] = DesignTap { grid: grid, kind: 6u8, value: 2usize }
     let (cells, cells_error) = mem.alloc[widget.Node](a, 5usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
     var i = 0usize
@@ -10077,7 +10081,9 @@ fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err)
         box.radius = 4.0
         box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         let held = widget.padded(0u64, 14.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label))
-        if i == 4usize && grid.dz_dirty {
+        if i < 2usize {
+            cells[i] = widget.region(grid.key + MENU_KEY + 851210u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&apply_tap[1usize + i]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held))
+        } else if i == 4usize && grid.dz_dirty {
             cells[i] = widget.region(grid.key + MENU_KEY + 851204u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&apply_tap[0usize]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held))
         } else if i >= 2usize && i < 4usize {
             cells[i] = widget.region(grid.key + MENU_KEY + 851200u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held))
@@ -10090,6 +10096,10 @@ fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err)
 }
 
 fn designer_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    if grid.dz_dlg != 0u8 {
+        let (dialog, dialog_error) = dz_dialog(a, grid)
+        ret (dialog, dialog_error)
+    }
     let (taps, taps_error) = mem.alloc[DesignTap](a, 48usize)
     if taps_error != ok { ret (zero, control.TooLarge) }
     taps[47usize] = DesignTap { grid: grid, kind: 2u8, value: 0usize }
@@ -10326,4 +10336,61 @@ fn dz_style_ink(grid: *const Grid) -> u32 {
 fn dz_button_ink_for(grid: *const Grid, width: f32) -> u32 {
     if width < 90.0 { ret dz_style_ink(grid) }
     ret 0xA0A0A0u32
+}
+
+// ---- Title Properties / Footnote Properties: v3's "Report Title" window ----
+
+fn dz_dialog_button(a: *mem.Arena, grid: *Grid, text: str, tap: *DesignTap, key: u64) -> (widget.Node, err) {
+    let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if label_error != ok { ret (zero, label_error) }
+    var box = control.sized_style(120.0, 28.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
+    box.radius = 4.0
+    box.margin = style.EdgeLengths { left: style.Length { Px: 10.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, widget.padded(0u64, 44.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
+}
+
+// The dialog body: Mode, the Text / Properties tabs, a white text area, OK and Cancel.
+fn dz_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    var heading = "Report Title"
+    var body = "Card Pool"
+    if grid.dz_dlg == 2u8 {
+        heading = "Report Footnote"
+        body = ""
+    }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 6usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    let (close, close_error) = mem.alloc[DesignTap](a, 1usize)
+    if close_error != ok { ret (zero, control.TooLarge) }
+    close[0usize] = DesignTap { grid: grid, kind: 6u8, value: 0usize }
+    let (title, title_error) = dz_heading(a, grid, heading)
+    if title_error != ok { ret (zero, title_error) }
+    rows[0usize] = title
+    let (mode, mode_error) = dz_field(a, grid, "Mode:   On First Page", 560.0)
+    if mode_error != ok { ret (zero, mode_error) }
+    rows[1usize] = mode
+    let (tabs, tabs_error) = dz_field(a, grid, "Text      Properties", 200.0)
+    if tabs_error != ok { ret (zero, tabs_error) }
+    rows[2usize] = tabs
+    let (words, words_error) = flat_text(a, grid, body, gl.rgb(0x000000u32))
+    if words_error != ok { ret (zero, words_error) }
+    var area = control.sized_style(550.0, 300.0)
+    area.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    area.border = style.Border { width: 1.0, color: gl.rgb(0xC8C8C8u32) }
+    area.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[3usize] = widget.box(0u64, area, one(a, widget.padded(0u64, 4.0, 4.0, 0.0, 0.0, style.defaults(), one(a, words))))
+    let (ok_button, ok_error) = dz_dialog_button(a, grid, "OK", &close[0usize], grid.key + MENU_KEY + 851250u64)
+    if ok_error != ok { ret (zero, ok_error) }
+    let (cancel_button, cancel_error) = dz_dialog_button(a, grid, "Cancel", &close[0usize], grid.key + MENU_KEY + 851251u64)
+    if cancel_error != ok { ret (zero, cancel_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, control.TooLarge) }
+    pair[0usize] = ok_button
+    pair[1usize] = cancel_button
+    rows[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(560.0, 44.0), pair[0usize..2usize])
+    var panel = control.sized_style(600.0, 480.0)
+    panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..5usize]), ok)
 }

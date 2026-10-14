@@ -2706,4 +2706,5 @@ D4123	401	G012: drive.ps1 re-checks the foreground window before every click and
 D4124	586	G012: the rows a preview page holds follow the Top and Bottom margins
 D4125	452	G012: "[Time Printed]" prints the time
 D4126	479	G012: a style can be picked in the Designer's Styles list
-D4127	318	G012: the Designer's Apply is live after a change
+D4127	319	G012: the Designer's Apply is live after a change
+D4128	853	G012: Title Properties and Footnote Properties

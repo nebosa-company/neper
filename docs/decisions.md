@@ -41462,3 +41462,6 @@ A tap on a row of the Styles list highlights it (light blue) and turns Font..., 
 
 ## D4127 - G012: the Designer's Apply is live after a change
 Unticking a check box turns Apply black (DZ-format-report-Apply-live-v5.png: Caption unticked) and a tap on it greys it again, as v3's Apply is enabled only while a change is pending; nothing is applied to anything since the checks change only the preview.
+
+## D4128 - G012: Title Properties and Footnote Properties
+Recorded from v3 (TP1-report-title-text-v3.png, TP2-report-title-properties-v3.png): Title Properties... opens "Report Title", a window with a Mode box ("On First Page"), Text and Properties tabs, a white text area holding "Card Pool" and OK / Cancel. The Designer's two buttons now open that window in the Designer's slot (`dz_dialog`; Footnote Properties is the same window titled "Report Footnote" with an empty text area, an assumption: v3's footnote dialog was not recorded because v3 lost the foreground before the second click); OK and Cancel return to the Designer (TP3-report-title-v5.png, TP4-report-footnote-v5.png). The Mode box and tabs are drawn, not live, the text area is not editable and its text does not reach the preview; v3's Properties tab content was not recorded either.
