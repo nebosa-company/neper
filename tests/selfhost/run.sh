@@ -11211,6 +11211,8 @@ greeting"
     python3 "$repo/scripts/make_office_samples.py" "$office_dir" > /dev/null
     while IFS='|' read -r kind fixture port delay taps markers note; do
         [ "$kind" = seedfixture ] || continue
+        # Secure's vault needs entropy: the random-number device, as the disk fixtures have.
+        export NEPEROS_RNG=1
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
         seed_disk="$test_build/shell-$fixture.disk"
         python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/report.docx=$office_dir/report.docx" "/deck.pptx=$office_dir/deck.pptx" "/zz.pdf=$office_dir/zz.pdf" "/zzcode.py=$office_dir/zzcode.py" "/zznotes.md=$office_dir/zznotes.md" "/zzzlong.txt=$office_dir/zzzlong.txt" "/otpauth.txt=$office_dir/otpauth.txt" "/zzzzodf.odt=$office_dir/zzzzodf.odt" "/zzzzzzzip.zip=$office_dir/zzzzzzzip.zip" > /dev/null
@@ -11231,6 +11233,7 @@ greeting"
     # scripts/make_office_samples.py), so the Files list and Document's device list have the few entries the taps expect.
     while IFS='|' read -r kind fixture port delay taps markers note; do
         [ "$kind" = sheetfixture ] || continue
+        unset NEPEROS_RNG
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
         seed_disk="$test_build/shell-$fixture.disk"
         python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/budget.xlsx=$office_dir/budget.xlsx" "/pic.png=$office_dir/pic.png" "/zbig.txt=$office_dir/zbig.txt" "/zpaint.pdf=$office_dir/zpaint.pdf" "/zrun=$office_dir/zrun" "/zzzzzzzip.zip=$office_dir/zzzzzzzip.zip" > /dev/null

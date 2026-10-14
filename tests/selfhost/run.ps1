@@ -11459,6 +11459,8 @@ if ($neperosQemu) {
     foreach ($row in $appsTable) {
         $fields = $row.Split('|', 7)
         if ($fields[0] -ne 'seedfixture') { continue }
+        # Secure's vault needs entropy: the random-number device, as the disk fixtures have.
+        $env:NEPEROS_RNG = '1'
         $fixture = $fields[1]
         $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
         & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/report.docx=' + (Join-Path $officeDir 'report.docx')) ('/deck.pptx=' + (Join-Path $officeDir 'deck.pptx')) ('/zz.pdf=' + (Join-Path $officeDir 'zz.pdf')) ('/zzcode.py=' + (Join-Path $officeDir 'zzcode.py')) ('/zznotes.md=' + (Join-Path $officeDir 'zznotes.md')) ('/zzzlong.txt=' + (Join-Path $officeDir 'zzzlong.txt')) ('/otpauth.txt=' + (Join-Path $officeDir 'otpauth.txt')) ('/zzzzodf.odt=' + (Join-Path $officeDir 'zzzzodf.odt')) ('/zzzzzzzip.zip=' + (Join-Path $officeDir 'zzzzzzzip.zip')) | Out-Null
@@ -11472,6 +11474,7 @@ if ($neperosQemu) {
     foreach ($row in $appsTable) {
         $fields = $row.Split('|', 7)
         if ($fields[0] -ne 'sheetfixture') { continue }
+        Remove-Item Env:NEPEROS_RNG -ErrorAction SilentlyContinue
         $fixture = $fields[1]
         $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
         & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/budget.xlsx=' + (Join-Path $officeDir 'budget.xlsx')) ('/pic.png=' + (Join-Path $officeDir 'pic.png')) ('/zbig.txt=' + (Join-Path $officeDir 'zbig.txt')) ('/zpaint.pdf=' + (Join-Path $officeDir 'zpaint.pdf')) ('/zrun=' + (Join-Path $officeDir 'zrun')) ('/zzzzzzzip.zip=' + (Join-Path $officeDir 'zzzzzzzip.zip')) | Out-Null
