@@ -41113,3 +41113,7 @@ The tap that already flips a favourite star (the row becoming current with the s
 ## D4032 - G012: v3's navigator pictures
 
 Compared with v3 (NV1-navigator-v3.png): its navigator buttons are 24 by 30 bevelled squares holding a small gradient-blue glyph (grey when it cannot move) and a real funnel; the sample drew flat blue triangles. The seven pictures (First, Previous page, Previous, Next, Next page, Last, funnel) and the disabled ones (the left three cut from v3 at its first row, the right three their mirror) are cut from the recording into the sample's icons folder (`nav_00` .. `nav_06`, `nav_d_00` .. `nav_d_05`); `set_navigator_icons` hands them to the grid, which draws them in place of the marks without padding, the marks remaining the fallback (NV1-navigator-v5.png). Not done: the white band behind the "n of m" text, and the horizontal scroll bar thumb v3 keeps in the navigator row. The four grid fixtures pass.
+
+## D4033 - G012: the navigator's white band, driven live
+
+The position text of the navigator stands on a white 115 by 30 band, as v3's does (the gap between its Previous and Next buttons), when the v3 pictures are given. Driven live with the pictures: Next three times read 3 of 120283, Previous 2 of, First 1 of with the left three buttons greyed (NV2-navigator-clicks-v5.png). The horizontal scroll bar thumb of v3's navigator row is still not moved there. The four grid fixtures pass.
