@@ -41444,3 +41444,6 @@ The bottom row ends with v3's Apply, grey like v3's while nothing is pending (DZ
 
 ## D4121 - G012: the Designer's Cards and Charts tabs are out of scope
 v3's Format Report has Cards and Charts tabs (recorded once: card sizes, spacing, framing and shadow; a Transparent check beside a chart), but MTG Studio uses neither, so the user ruled them out: the tabs stay as labels without content. `dz_checks` is a u64 now so more items could be added later without a type change.
+
+## D4122 - G012: the Styles tab's buttons and Style Sheets row (not yet seen)
+Beside the style list: Font..., Color..., Texture..., Clear (grey, as v3 draws them with no style picked); under it Restore Defaults, Save As... and a Style Sheets heading over an empty box (`dz_style_list`, `dz_style_buttons`, `dz_style_foot`; the list narrowed to 250 px). The fixture passes and the sample builds, but the tab was not looked at: a run of the drive script was cut short when another window came in front, so the layout (height in particular) is unchecked. None of the controls does anything.

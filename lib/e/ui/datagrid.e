@@ -10137,7 +10137,7 @@ fn dz_field(a: *mem.Arena, grid: *Grid, text: str, width: f32) -> (widget.Node, 
 }
 
 // The Styles tab's list: thirteen named styles, each with its sample strip and "8 pt. Tahoma".
-fn dz_style_list(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+fn dz_style_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (rows, rows_error) = mem.alloc[widget.Node](a, 13usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
     var i = 0usize
@@ -10146,23 +10146,23 @@ fn dz_style_list(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if name_error != ok { ret (zero, name_error) }
         let (face, face_error) = flat_text(a, grid, "8 pt. Tahoma", gl.rgb(0x000000u32))
         if face_error != ok { ret (zero, face_error) }
-        var strip = control.sized_style(80.0, 14.0)
+        var strip = control.sized_style(50.0, 14.0)
         strip.background = paint.Brush { Solid: gl.rgb(0xE0E0E0u32) }
         if i == 7usize { strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) } }
         strip.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
         strip.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
         let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
         if cells_error != ok { ret (zero, control.TooLarge) }
-        cells[0usize] = widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, control.sized_style(130.0, 20.0), one(a, name))
+        cells[0usize] = widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, control.sized_style(104.0, 20.0), one(a, name))
         cells[1usize] = widget.box(0u64, strip, zero)
         cells[2usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one(a, face))
-        rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(330.0, 20.0), cells[0usize..3usize])
+        rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(250.0, 20.0), cells[0usize..3usize])
         i += 1usize
     }
-    var frame = control.sized_style(340.0, 280.0)
+    var frame = control.sized_style(250.0, 264.0)
     frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     frame.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
-    frame.margin = style.EdgeLengths { left: style.Length { Px: 14.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, rows[0usize..13usize]), ok)
 }
 
@@ -10194,4 +10194,74 @@ fn dz_extra(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn dz_button_ink(i: usize) -> u32 {
     if i == 4usize { ret 0xA0A0A0u32 }
     ret 0x000000u32
+}
+
+// A grey, inert button of the Styles tab (v3 enables them with a style picked).
+fn dz_grey_button(a: *mem.Arena, grid: *Grid, text: str, width: f32, top: f32) -> (widget.Node, err) {
+    let (words, words_error) = flat_text(a, grid, text, gl.rgb(0xA0A0A0u32))
+    if words_error != ok { ret (zero, words_error) }
+    var box = control.sized_style(width, 24.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xF4F4F4u32) }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xD0D0D0u32) }
+    box.radius = 3.0
+    box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.box(0u64, box, one(a, widget.padded(0u64, 8.0, 3.0, 0.0, 0.0, style.defaults(), one(a, words)))), ok)
+}
+
+// The button column right of the style list: Font..., Color..., Texture..., Clear.
+fn dz_style_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var i = 0usize
+    while i < 4usize {
+        var words = "Font..."
+        if i == 1usize { words = "Color..." }
+        if i == 2usize { words = "Texture..." }
+        if i == 3usize { words = "Clear" }
+        let (button, button_error) = dz_grey_button(a, grid, words, 80.0, 2.0)
+        if button_error != ok { ret (zero, button_error) }
+        cells[i] = button
+        i += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(92.0, 130.0), cells[0usize..4usize]), ok)
+}
+
+// Restore Defaults and Save As..., then the Style Sheets box.
+fn dz_style_foot(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    let (restore, restore_error) = dz_grey_button(a, grid, "Restore Defaults", 120.0, 4.0)
+    if restore_error != ok { ret (zero, restore_error) }
+    let (save, save_error) = dz_grey_button(a, grid, "Save As...", 100.0, 4.0)
+    if save_error != ok { ret (zero, save_error) }
+    let (row, row_error) = mem.alloc[widget.Node](a, 2usize)
+    if row_error != ok { ret (zero, control.TooLarge) }
+    row[0usize] = restore
+    row[1usize] = save
+    cells[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(340.0, 32.0), row[0usize..2usize])
+    let (head, head_error) = dz_heading(a, grid, "Style Sheets")
+    if head_error != ok { ret (zero, head_error) }
+    cells[1usize] = head
+    let (combo, combo_error) = dz_field(a, grid, "", 330.0)
+    if combo_error != ok { ret (zero, combo_error) }
+    cells[2usize] = combo
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(350.0, 120.0), cells[0usize..3usize]), ok)
+}
+
+fn dz_style_list(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (box, box_error) = dz_style_box(a, grid)
+    if box_error != ok { ret (zero, box_error) }
+    let (buttons, buttons_error) = dz_style_buttons(a, grid)
+    if buttons_error != ok { ret (zero, buttons_error) }
+    let (foot, foot_error) = dz_style_foot(a, grid)
+    if foot_error != ok { ret (zero, foot_error) }
+    let (top, top_error) = mem.alloc[widget.Node](a, 2usize)
+    if top_error != ok { ret (zero, control.TooLarge) }
+    top[0usize] = box
+    top[1usize] = buttons
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(350.0, 268.0), top[0usize..2usize])
+    parts[1usize] = foot
+    ret (widget.padded(0u64, 14.0, 8.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(350.0, 400.0), parts[0usize..2usize]))), ok)
 }
