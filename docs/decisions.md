@@ -41073,3 +41073,7 @@ While one of its editors holds the keyboard the filter row turns light blue (#A6
 ## D4022 - G012: v3's View menu as an application menu of the grid
 
 v3's main menu View (VM1-view-menu-v3.png) has three sections, Sort Order, Group By and Cards, with a heading over each, pictures, shortcuts, ticks and a rule between entries. `show_app_menu(grid, commands, x, y)` shows an application's own command list in the grid's flat popup (kind `MENU_APP`, up to 40 entries, a `head` on a command puts a section heading with a rule over it, `&&` is a literal ampersand). The sample gets a View button whose menu lists the 23 entries; the ones the sample can answer act (Sort..., Group by Edition / Rarity, Remove Grouping, Show Columns..., Columns Auto Width, Show Header / Indicator / Navigator, Conditional Formatting...), the rest are greyed (VM1-view-menu-v5.png). The four grid fixtures pass.
+
+## D4023 - G012: the View menu's grid entries act
+
+The grid offers `show_footer`, `set_all_groups` (v3's Full Expand and Full Collapse) and `best_fit_all`; the sample's View menu now acts on Show Summary Footer, Show Group Box, Full Expand, Full Collapse and Best Fit (all columns). Driven live: Group by Rarity from the menu grouped the pool in seven groups, Full Expand opened them, Show Summary Footer removed the footer row (VM2-view-menu-actions-v5.png). Still greyed: Sort by Edition & Card Name, Sort by Card Name & Edition, Clear Sort Order, Group by Type / Color, Legality, Card Rules, Show Grid Lines. The four grid fixtures pass.
