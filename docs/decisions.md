@@ -40997,3 +40997,7 @@ v3's criteria tree nests groups under the root (AF1-advanced-filter-v3-condition
 ## D4003 - G012: the nested group is part of the saved filter
 
 `criteria_text` now writes `subgroup n` and a `sub i` line for each condition standing in the nested group, and `load_criteria` reads them back, so Open and Save As (D2452) keep the nested state of D2460. ui_datagrid section 38 round-trips a nested condition and the group operator; ui_gridrules, ui_collections_v2, ui_tabular pass. Not checked live (the format is covered by the fixture only).
+
+## D4004 - G012: the wizard's Preview strip
+
+v3's New Rule window shows a Preview of the rule for the range types (CF2-new-rule-v3.png: a blue gradient bar for the data bar). The wizard now draws a strip under the type list: a bar on a white box for the data bar, three coloured discs for the icon set, eight steps from the low colour to the high one for the two colour scale and through yellow for the three (CF8-preview-v5.png: the two colour scale). The strip follows the type, not the typed Minimum / Maximum or the colours of a Format... dialog, which is not built, and v3's bar is a gradient that this draws as a solid fill. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.

@@ -2582,4 +2582,5 @@ D3999	664	G012: Is any of and Is none of
 D4000	639	G012: icons in the operator list
 D4001	786	G012: the checked value list of Is any of / Is none of
 D4002	939	G012: one nested group in the Advanced Filter
-D4003	458	G012: the nested group is part of the saved filter
+D4003	459	G012: the nested group is part of the saved filter
+D4004	694	G012: the wizard's Preview strip
