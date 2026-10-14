@@ -39572,3 +39572,7 @@ v3 sets `NoDataToDisplayInfoText` per grid in main.vcl.form.pas: `<No cards in c
 ## D2515 - G012: an empty grid keeps its header
 
 v3 keeps the header row of an empty grid and writes its message under it. A measured-look grid no longer replaces itself with the text: the table takes `empty_text` as its empty title (D1248's state), drawn in plain text without the empty-state picture (`art` off when the look is on). Seen live with the header kept and the message centred (ND2 shot, picture still present before the second edit); the picture removal was not looked at, the sample window having been covered by another application's licence dialog. The four grid fixtures pass.
+
+## D2516 - G012: the vertical scroll thumb thickens under the pointer
+
+The owner's observation: v3's scroll bars change size when hovered over. The table's measured bar track (`collection.tabulated`) is now a hover region (key +3300); while the pointer is on it the thumb grows from 2.7 to the track width less 4 (11 units), centred, with a round end (SB1-scroll-thumb-hover-v5.png, rest in SB1-scroll-thumb-rest-v5.png). The track keeps its width so nothing moves. The sizes are an estimate in the Windows 11 manner: v3's hovered width was not measured, and the navigator's horizontal thumb does not yet react. The four grid fixtures pass.
