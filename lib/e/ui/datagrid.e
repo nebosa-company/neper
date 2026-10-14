@@ -150,6 +150,7 @@ type Grid = struct {
 fmt_open: bool,
 print_open: bool,
 chooser_bands: bool,
+band_tabs: bool,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
 pv_wide: u8,
@@ -5416,7 +5417,7 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var title_ink = gl.rgb(0xA0A0A0u32)
     if grid.chooser_active { title_ink = gl.rgb(0x000000u32) }
     var title_caption = "Column"
-    if grid.band_names.len > 0usize { title_caption = "Customization" }
+    if grid.band_names.len > 0usize || grid.band_tabs { title_caption = "Customization" }
     let (title, title_error) = control.colored_text(a, 0u64, title_caption, grid.theme, title_words, title_ink)
     if title_error != ok { ret (zero, title_error) }
     var title_style = style.defaults()
@@ -5461,7 +5462,7 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var n = 0usize
     items[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, bar_style, bar[0usize..2usize])
     n += 1usize
-    if grid.band_names.len > 0usize {
+    if grid.band_names.len > 0usize || grid.band_tabs {
         let (tabs, tabs_error) = chooser_tabs(a, grid)
         if tabs_error != ok { ret (zero, tabs_error) }
         items[n] = tabs
@@ -5512,6 +5513,8 @@ fn chooser_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     list_style.border = style.Border { width: 1.0, color: gl.rgb(0xABABABu32) }
     list_style.width = style.Length { Percent: 100.0 }
     list_style.min_height = style.Length { Px: 120.0 }
+    // v3's Customization window is 436 px tall
+    if grid.band_names.len > 0usize || grid.band_tabs { list_style.min_height = style.Length { Px: 232.0 } }
     items[n] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, list_style, rows[0usize..listed])
     n += 1usize
     let inner = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 3.0 }, style.defaults(), items[0usize..n])
@@ -6514,6 +6517,9 @@ fn set_bands(grid: *Grid, bands: []const Band) { grid.bands = bands }
 // The band names of a grid whose band row is not shown (v3's collection): the Customization window
 // still has its Bands tab.
 fn set_band_names(grid: *Grid, names: []const str) { grid.band_names = names }
+
+// The Bands tab without any band (v3's card pool: the tab is there, its list empty).
+fn set_band_tabs(grid: *Grid, on: bool) { grid.band_tabs = on }
 
 fn show_navigator(grid: *Grid, on: bool) { grid.navigator_visible = on }
 
