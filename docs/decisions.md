@@ -40945,3 +40945,7 @@ v3's wizard shows, for the data bar type, Minimum / Maximum pickers, a Preview, 
 ## D3990 - G012: Stop If True
 
 v3's rules manager has a `Stop If True` column (CF2-rules-manager-empty-v3.png): a rule that holds and has it set keeps the rules after it from applying to that cell. `gridrules.Rule.stop` does that in `format` (the rules are applied in the order of the list, which Up and Down change); the manager shows Yes or No and a tap in that column flips it (CF5-stop-if-true-v5.png). ui_datagrid section 37 checks that a stopping fill rule hides the ink rule after it and that clearing it lets both apply; ui_gridrules, ui_collections_v2, ui_tabular pass. Not built: setting it in the New Rule window (v3 has it in the manager only).
+
+## D3991 - G012: the Advanced Filter's group operator popup
+
+v3's group word (And) opens a list of And, Or, Not And and Not Or with a ring or a filled disc before each (green and red for the or / negated ones) and the current one light blue (AF1-advanced-filter-v3-condition.png). The criteria editor cycled the word on every tap; it now opens that list under the word and a tap picks one (`crit_pop`, AF2-group-popup-v5.png: And, Or, Not And, Not Or; Or picked). The column and operator words still cycle (v3 opens lists for them too). ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.

@@ -146,6 +146,7 @@ type Grid = struct {
     wiz_type: u8,
     rules_arena: *mem.Arena,
     crit_open: bool,
+    crit_pop: bool,
     crit_pending: bool,
     crit_group: u8,
     crit_count: usize,
@@ -1957,7 +1958,13 @@ fn on_crit_tap(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         if row.part == 9u8 {
-            grid.crit_group = (grid.crit_group + 1u8) % 4u8
+            // v3 opens a list of the four group operators under the word
+            grid.crit_pop = !grid.crit_pop
+            ret ok
+        }
+        if row.part == 20u8 || row.part == 21u8 || row.part == 22u8 || row.part == 23u8 {
+            grid.crit_group = row.part - 20u8
+            grid.crit_pop = false
             ret ok
         }
         if row.index >= grid.crit_count { ret ok }
@@ -2201,7 +2208,53 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, control.TooLarge) }
     inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
-    ret (widget.box(0u64, body_style, inner[0usize..1usize]), ok)
+    let framed = widget.box(0u64, body_style, inner[0usize..1usize])
+    if !grid.crit_pop { ret (framed, ok) }
+    // the group operators as v3's popup: a ring or a filled pair of circles, the name, the current one light blue
+    let (pop_rows, pop_rows_error) = mem.alloc[widget.Node](a, 4usize)
+    if pop_rows_error != ok { ret (zero, control.TooLarge) }
+    let (pop_picks, pop_picks_error) = mem.alloc[CritRow](a, 4usize)
+    if pop_picks_error != ok { ret (zero, control.TooLarge) }
+    var pi = 0usize
+    while pi < 4usize {
+        pop_picks[pi] = CritRow { grid: grid, index: 0usize, part: u8(20usize + pi) }
+        var glyph_ink = gl.rgb(0x555555u32)
+        if pi == 1usize { glyph_ink = gl.rgb(0x2E9E2Eu32) }
+        if pi == 2usize { glyph_ink = gl.rgb(0xC62828u32) }
+        if pi == 3usize { glyph_ink = gl.rgb(0xC62828u32) }
+        // a ring (And, Not And) or a filled disc (Or, Not Or), green or red when negated
+        var disc = control.sized_style(12.0, 12.0)
+        disc.radius = 6.0
+        if pi == 1usize || pi == 3usize {
+            disc.background = paint.Brush { Solid: glyph_ink }
+        } else {
+            disc.border = style.Border { width: 2.0, color: glyph_ink }
+        }
+        let glyph = widget.box(0u64, disc, zero)
+        let (name, name_error) = flat_text(a, grid, crit_group_words(u8(pi)), gl.rgb(0x000000u32))
+        if name_error != ok { ret (zero, name_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, control.TooLarge) }
+        pair[0usize] = widget.padded(0u64, 8.0, 0.0, 8.0, 0.0, style.defaults(), one(a, glyph))
+        pair[1usize] = name
+        var entry = control.sized_style(104.0, 26.0)
+        entry.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        if grid.crit_group == u8(pi) { entry.background = paint.Brush { Solid: gl.rgb(0x99D1FFu32) } }
+        pop_rows[pi] = widget.region(grid.key + MENU_KEY + 899960u64 + u64(pi), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&pop_picks[pi]), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, entry, one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), pair[0usize..2usize])))
+        pi += 1usize
+    }
+    var pop_style = style.defaults()
+    pop_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    pop_style.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    let pop = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, pop_style, pop_rows[0usize..4usize])
+    let (pop_held, pop_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if pop_held_error != ok { ret (zero, control.TooLarge) }
+    pop_held[0usize] = pop
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, control.TooLarge) }
+    layers[0usize] = framed
+    layers[1usize] = widget.positioned(0u64, 76.0, 84.0, style.defaults(), pop_held[0usize..1usize])
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
 // ---- the Conditional Formatting Rule wizard (New Rule... of the rules manager: ten rule types) ----
