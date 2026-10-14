@@ -4344,6 +4344,27 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
         }
         if held.control || held.shift { ret grid.events.row_picked(grid.events.ctx, usize(at)) }
     }
+    // v3: a click on a favourite star flips it at once, the row becoming current with the same click
+    if grid.look.on && !again && !grid.read_only && !grid.editing && mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
+        let star_point = widget.pointer_position(grid.theme.runtime)
+        let (star_box, star_found) = widget.bounds_for_key(grid.theme.runtime, row_key(grid, usize(at)))
+        if star_found && star_point.x >= star_box.x {
+            var star_edge = star_box.x
+            var star_at = 0usize
+            while star_at < grid.specs.len {
+                star_edge += grid.widths[grid.origin[star_at]]
+                if star_point.x < star_edge {
+                    if grid.specs[star_at].kind == CellKind.Star && grid.specs[star_at].editable {
+                        let flipped = begin_edit(grid, usize(at), grid.origin[star_at])
+                        if flipped != ok && flipped != Locked && flipped != NotEditable { ret flipped }
+                        ret grid.events.row_picked(grid.events.ctx, usize(at))
+                    }
+                    break
+                }
+                star_at += 1usize
+            }
+        }
+    }
     if (again || grid.immediate_edit) && !grid.read_only && !grid.editing {
         // the first editable column of the row (v3 starts the edit of the clicked cell at once)
         var column = 0usize

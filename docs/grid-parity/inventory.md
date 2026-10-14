@@ -14,7 +14,8 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Spin editor, step arrows in the current row | matched | E1-edit-sequence, `decorate_editors`|
 | Button editor (three dots) | matched | E1 |
 | Memo / preview row (Card Rules) | matched | R1-card-rules (D2431); the frame round both lines of the current card is not drawn yet |
-| Image combo (favourite star, condition) | differs | star column drawn; the combo drop-down not recorded |
+| Image combo: favourite star (two values) | matched | ST1-favourite-star (D2435) |
+| Image combo: condition, desired, print type (drop-down) | untested | |
 | Check box, date edit, hyperlink, label editors | untested | |
 | Header image + header hint | matched | T1/T2 hint (delay measured 1045 ms vs 1101 ms, D2430) |
 | Per-column alignment of header, cell, footer, group summary | matched (cell, header) / untested (footer, group summary) | A-series |
