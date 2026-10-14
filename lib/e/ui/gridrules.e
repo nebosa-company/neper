@@ -46,7 +46,8 @@ type Rule = struct {
     high: paint.Color,
     three: bool,
     buckets: u8,
-    bar_only: bool
+    bar_only: bool,
+    stop: bool
 }
 
 // The look of one cell. `bar` is the filled fraction 0..1 of a data bar (0 for none); `icon`
@@ -91,7 +92,7 @@ error BadRule
 
 fn rule(column: usize, kind: Kind) -> Rule {
     let none = paint.rgba(0.0, 0.0, 0.0, 0.0)
-    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false }
+    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false }
 }
 
 fn create(a: *mem.Arena, t: *const table.Table, capacity: usize) -> (Rules, err) {
@@ -427,6 +428,8 @@ fn format(rs: *const Rules, row: usize, column: usize) -> Format {
                 } else {
                     merge_ink(&f, r)
                 }
+                // Stop If True (v3): the rules after this one are not applied to the cell
+                if r.stop { break }
             }
         }
         i += 1usize

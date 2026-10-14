@@ -1667,6 +1667,13 @@ fn on_rule_row(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         row.grid.rules_selected = row.index
+        // a tap in the Stop If True column flips it
+        if mem.address_of(row.grid.rule_set) != 0usize && row.index < row.grid.rule_set.total && mem.address_of(row.grid.theme) != 0usize && mem.address_of(row.grid.theme.runtime) != 0usize {
+            let (row_box, has_row) = control.keyed_bounds(row.grid.theme.runtime, row.grid.key + MENU_KEY + 800000u64 + u64(row.index))
+            if has_row && at.x >= row_box.x + 520.0 {
+                row.grid.rule_set.rules[row.index].stop = !row.grid.rule_set.rules[row.index].stop
+            }
+        }
         ret ok
     default:
         ret ok
@@ -1838,7 +1845,9 @@ fn rules_dialog_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if r.whole_row { whole = "Yes" }
         let (c3, e3) = flat_text(a, grid, whole, ink)
         if e3 != ok { ret (zero, e3) }
-        let (c4, e4) = flat_text(a, grid, "No", ink)
+        var stop_words = "No"
+        if r.stop { stop_words = "Yes" }
+        let (c4, e4) = flat_text(a, grid, stop_words, ink)
         if e4 != ok { ret (zero, e4) }
         // the format sample: the rule's fill and ink behind "AaBbCc"
         var sample_ink = gl.rgb(0x000000u32)
