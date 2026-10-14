@@ -39408,3 +39408,7 @@ The Minimum and Maximum boxes of the wizard cycled Lowest/Highest Value and Numb
 ## D2474 - G012: a Percent bound is checked by a fixture
 
 ui_gridrules now checks D4015's Percent bound: a data bar with Minimum 75% and Maximum 100% of the range leaves the middle cell (50%) empty and fills the top cell (exits 147-149). Passes.
+
+## D2475 - G012: the filter row stands under the header, in v3's look
+
+v3's Show Filter Row (Options > Grids, recorded in FR1-filter-row-v3.png and FR2-filter-row-operators-v3.png) puts a white 28 px row directly under the header, the operator sign `=` and a flat editor in each filterable column, nothing in the others; a click on the sign opens a list of twelve operators (Equals, Does not equal, Is less than, ..., Begins with, Ends with) with icons. The sample drew Material text fields in a separate row above the header, misaligned (FR3 before). `TableLook` has a head extra row (`has_head_extra`, `head_extra`, `head_extra_height`) that `tabulated` stacks under the header outside the scrolling rows, and `v3_filter_row` fills it (FR3-filter-row-v5.png). Not done: the operator list, a funnel in the indicator column, the focused row's blue (#A6D2FF). The four grid fixtures pass.

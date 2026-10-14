@@ -6254,6 +6254,41 @@ fn filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     ret (widget.flex(grid.key + FILTER_KEY - 1u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..grid.specs.len]), ok)
 }
 
+// v3's filter row (G012, FR1-filter-row-v3): a white row of 28 px right under the header, in each
+// filterable column the operator sign ("=") and a flat editor, nothing in the others.
+fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, grid.specs.len)
+    if cells_error != ok { ret (zero, cells_error) }
+    let (picks, picks_error) = mem.alloc[FilterPick](a, grid.specs.len)
+    if picks_error != ok { ret (zero, picks_error) }
+    var at = 0usize
+    while at < grid.specs.len {
+        let s = grid.specs[at]
+        let orig = grid.origin[at]
+        picks[at] = FilterPick { grid: grid, spec: orig }
+        var cell_style = control.sized_style(grid.columns[at].width, 28.0)
+        cell_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        if s.filter {
+            let (sign, sign_error) = flat_text(a, grid, "=", gl.rgb(0x404040u32))
+            if sign_error != ok { ret (zero, sign_error) }
+            let buffer = grid.filter_text[orig * FILTER_TEXT..(orig + 1usize) * FILTER_TEXT]
+            var inner_width = grid.columns[at].width - 26.0
+            if inner_width < 8.0 { inner_width = 8.0 }
+            let (field, field_error) = control.bare_field(a, grid.key + FILTER_KEY + u64(orig), grid.theme, s.title, buffer, grid.filter_lens[orig], widget.Change[str] { ctx: mem.cast[*void](&picks[at]), invoke: on_filter }, zero, inner_width, 24.0, grid.look.text_size, gl.rgb(0xFFFFFFu32), gl.rgb(0xFFFFFFu32))
+            if field_error != ok { ret (zero, field_error) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, control.TooLarge) }
+            pair[0usize] = widget.padded(0u64, 8.0, 4.0, 4.0, 0.0, control.sized_style(24.0, 28.0), one(a, sign))
+            pair[1usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one(a, field))
+            cells[at] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, cell_style, pair[0usize..2usize])
+        } else {
+            cells[at] = widget.box(0u64, cell_style, zero)
+        }
+        at += 1usize
+    }
+    ret (widget.flex(grid.key + FILTER_KEY - 1u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..grid.specs.len]), ok)
+}
+
 // A row of the footer: the column summaries under their columns.
 fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, grid.specs.len)
@@ -6759,7 +6794,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     let source = collection.TableSource { ctx: me, count: source_count, key: source_key, cell: source_cell }
     var body_height = height
     if grid.footer_visible && grid.g.specs.len != 0usize { body_height = body_height - grid.row_height - 8.0 }
-    if grid.filter_visible { body_height = body_height - 44.0 }
+    if grid.filter_visible && !grid.look.on { body_height = body_height - 44.0 }
     if grid.bands.len != 0usize { body_height = body_height - 36.0 }
     if grid.navigator_visible { body_height = body_height - 52.0 }
     if grid.group_box_visible { body_height = body_height - 35.0 }
@@ -6829,7 +6864,13 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
                 selected_edge = gl.rgb(0x212121u32)
             }
         }
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        var v3_filter: widget.Node = zero
+        if grid.filter_visible {
+            let (made_filter, made_filter_error) = v3_filter_row(a, grid)
+            if made_filter_error != ok { ret (zero, made_filter_error) }
+            v3_filter = made_filter
+        }
+        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 28.0, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     // group footers are taller: the list of the entries that are
     if has_extras(grid) && grid.look.on {
@@ -6862,7 +6903,8 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     let with_footer = grid.footer_visible && grid.g.specs.len != 0usize
     let with_bands = grid.bands.len != 0usize
     if with_footer { part_count += 1usize }
-    if grid.filter_visible { part_count += 1usize }
+    let separate_filter = grid.filter_visible && !grid.look.on
+    if separate_filter { part_count += 1usize }
     if with_bands { part_count += 1usize }
     if grid.navigator_visible { part_count += 1usize }
     if grid.group_box_visible { part_count += 1usize }
@@ -6885,7 +6927,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         parts[at] = bands_node
         at += 1usize
     }
-    if grid.filter_visible {
+    if separate_filter {
         let (filter, filter_error) = filter_row(a, grid)
         if filter_error != ok { ret (zero, filter_error) }
         parts[at] = filter
