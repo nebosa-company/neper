@@ -1700,6 +1700,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (markup, markup_error) = dg.export_string(&f, &grid15, dg.EXPORT_HTML, false, 2usize)
     if markup_error != ok { os.exit(605) }
     if markup.len < 40usize || markup[0usize] != 60u8 { os.exit(606) }
+    // 37. Show Bar Only: a data bar rule with bar_only reports it in the cell's format
+    let (bo_made, bo_error) = gr.create(a, &app.tbl, 2usize)
+    if bo_error != ok { os.exit(630) }
+    var bo_set = bo_made
+    var bo_rule = gr.rule(C_CMC, gr.Kind.Bar)
+    bo_rule.fill = paint.rgba(0.1, 0.2, 0.9, 1.0)
+    bo_rule.bar_only = true
+    let (_bo_at, bo_add_error) = gr.add(a, &bo_set, bo_rule)
+    if bo_add_error != ok || gr.refresh(&bo_set, a) != ok { os.exit(631) }
+    let bo_format = gr.format(&bo_set, 1usize, C_CMC)
+    if !bo_format.has_bar || !bo_format.bar_only { os.exit(632) }
     os.exit(0)
     ret ok
 }

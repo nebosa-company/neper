@@ -137,6 +137,7 @@ type Grid = struct {
     row_drop_fn: fn(*void, usize) -> err,
     rules_dialog_open: bool,
     wiz_open: bool,
+    wiz_bar_only: bool,
     base_look: gl.Look,
     wiz_edit: bool,
     wiz_column: usize,
@@ -2277,6 +2278,7 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         r.mid = paint.rgba(1.0, 1.0, 0.8, 1.0)
         r.high = paint.rgba(0.7, 0.9, 0.7, 1.0)
         r.three = t == 2u8
+        r.bar_only = t == 0u8 && grid.wiz_bar_only
         if grid.wiz_edit && grid.rules_selected < grid.rule_set.total {
             // Edit Rule: the same column, the new type, in the same place
             r.column = grid.rule_set.rules[grid.rules_selected].column
@@ -2292,6 +2294,17 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         }
         let (_added, add_error) = rules.add(grid.rules_arena, grid.rule_set, r)
         if add_error != ok { ret ok }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_wiz_bar_only(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.wiz_bar_only = !grid.wiz_bar_only
         ret ok
     default:
         ret ok
@@ -2368,9 +2381,36 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     buttons[1usize] = widget.region(grid.key + MENU_KEY + 850101u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_wiz_cancel }, gestures: 1u8, enabled: true, focusable: false }, cancel_box, cancel_held[0usize..1usize])
     var foot = control.sized_style(width - 24.0, 46.0)
     foot.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    // the data bar's own option (v3: Show Bar Only), a check box under the list
+    if grid.wiz_type == 0u8 {
+        var box_ink = gl.rgb(0x000000u32)
+        let (bar_label, bar_label_error) = flat_text(a, grid, "Show Bar Only", box_ink)
+        if bar_label_error != ok { ret (zero, bar_label_error) }
+        var check_style = control.sized_style(14.0, 14.0)
+        check_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        check_style.border = style.Border { width: 1.0, color: gl.rgb(0x333333u32) }
+        check_style.radius = 2.0
+        let (check_held, check_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if check_held_error != ok { ret (zero, control.TooLarge) }
+        if grid.wiz_bar_only {
+            let (tick, tick_error) = gl.mark(a, .Check, gl.rgb(0x005FB8u32), gl.rgb(0x005FB8u32), 10.0, 10.0)
+            if tick_error != ok { ret (zero, tick_error) }
+            check_held[0usize] = tick
+        } else {
+            check_held[0usize] = widget.box(0u64, style.defaults(), zero)
+        }
+        let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if bar_parts_error != ok { ret (zero, control.TooLarge) }
+        bar_parts[0usize] = widget.aligned(0u64, .Center, .Center, check_style, check_held[0usize..1usize])
+        bar_parts[1usize] = bar_label
+        var bar_row = control.sized_style(width - 24.0, 24.0)
+        bar_row.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        rows[n] = widget.region(grid.key + MENU_KEY + 850200u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_wiz_bar_only }, gestures: 1u8, enabled: true, focusable: false }, bar_row, one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), bar_parts[0usize..2usize])))
+        n += 1usize
+    }
     rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, foot, buttons[0usize..2usize])
     n += 1usize
-    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0)
+    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0 + 30.0)
     body.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     body.border = style.Border { width: 1.0, color: gl.rgb(0x6D6D6Du32) }
     body.radius = 8.0
@@ -4676,8 +4716,11 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
         count += 1usize
     }
     if look.has_fill { back.background = paint.Brush { Solid: look.fill } }
-    layers[count] = node
-    count += 1usize
+    // Show Bar Only (v3): the bar alone, the value is not written
+    if !(look.has_bar && look.bar_only) {
+        layers[count] = node
+        count += 1usize
+    }
     *out = widget.stack(0u64, back, layers[0usize..count])
     ret ok
 }
