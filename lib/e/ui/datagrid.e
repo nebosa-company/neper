@@ -10085,11 +10085,18 @@ fn designer_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if look_error != ok { ret (zero, look_error) }
     let (halves, halves_error) = mem.alloc[widget.Node](a, 2usize)
     if halves_error != ok { ret (zero, control.TooLarge) }
-    let (left, left_error) = mem.alloc[widget.Node](a, 2usize)
+    let (left, left_error) = mem.alloc[widget.Node](a, 3usize)
     if left_error != ok { ret (zero, control.TooLarge) }
     left[0usize] = tabs
     left[1usize] = page
-    halves[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(370.0, 380.0), left[0usize..2usize])
+    let (extra, extra_error) = dz_extra(a, grid)
+    if extra_error != ok { ret (zero, extra_error) }
+    left[2usize] = extra
+    if grid.dz_tab == 2u8 {
+        left[1usize] = extra
+        left[2usize] = page
+    }
+    halves[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(370.0, 380.0), left[0usize..3usize])
     halves[1usize] = widget.padded(0u64, 8.0, 4.0, 0.0, 0.0, style.defaults(), one(a, look))
     rows[1usize] = widget.padded(0u64, 14.0, 10.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(740.0, 390.0), halves[0usize..2usize])))
     let (buttons, buttons_error) = dz_buttons(a, grid, &taps[47usize])
@@ -10099,4 +10106,85 @@ fn designer_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..3usize]), ok)
+}
+
+fn dz_style_name(i: usize) -> str {
+    if i == 0usize { ret "BandHeader" }
+    if i == 1usize { ret "Caption" }
+    if i == 2usize { ret "Card Caption Row" }
+    if i == 3usize { ret "Card Row Caption" }
+    if i == 4usize { ret "Content" }
+    if i == 5usize { ret "Content Even Rows" }
+    if i == 6usize { ret "Content Odd Rows" }
+    if i == 7usize { ret "Filter Bar" }
+    if i == 8usize { ret "Footer" }
+    if i == 9usize { ret "Group" }
+    if i == 10usize { ret "Header" }
+    if i == 11usize { ret "Preview" }
+    ret "Selection"
+}
+
+// A white box with words in it (a combo, a spin value): v3's Flat and Max Line Count.
+fn dz_field(a: *mem.Arena, grid: *Grid, text: str, width: f32) -> (widget.Node, err) {
+    let (words, words_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if words_error != ok { ret (zero, words_error) }
+    var box = control.sized_style(width, 26.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xC8C8C8u32) }
+    box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.box(0u64, box, one(a, widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, words)))), ok)
+}
+
+// The Styles tab's list: thirteen named styles, each with its sample strip and "8 pt. Tahoma".
+fn dz_style_list(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 13usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var i = 0usize
+    while i < 13usize {
+        let (name, name_error) = flat_text(a, grid, dz_style_name(i), gl.rgb(0x000000u32))
+        if name_error != ok { ret (zero, name_error) }
+        let (face, face_error) = flat_text(a, grid, "8 pt. Tahoma", gl.rgb(0x000000u32))
+        if face_error != ok { ret (zero, face_error) }
+        var strip = control.sized_style(80.0, 14.0)
+        strip.background = paint.Brush { Solid: gl.rgb(0xE0E0E0u32) }
+        if i == 7usize { strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) } }
+        strip.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+        strip.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+        if cells_error != ok { ret (zero, control.TooLarge) }
+        cells[0usize] = widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, control.sized_style(130.0, 20.0), one(a, name))
+        cells[1usize] = widget.box(0u64, strip, zero)
+        cells[2usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one(a, face))
+        rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(330.0, 20.0), cells[0usize..3usize])
+        i += 1usize
+    }
+    var frame = control.sized_style(340.0, 280.0)
+    frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    frame.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    frame.margin = style.EdgeLengths { left: style.Length { Px: 14.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, rows[0usize..13usize]), ok)
+}
+
+// What a tab shows besides its check boxes: Formatting's look-and-feel box, Styles' list, Preview's line count.
+fn dz_extra(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    if grid.dz_tab == 3u8 {
+        let (list, list_error) = dz_style_list(a, grid)
+        ret (list, list_error)
+    }
+    if grid.dz_tab == 2u8 {
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, control.TooLarge) }
+        let (look_head, look_head_error) = dz_heading(a, grid, "Look and Feel")
+        if look_head_error != ok { ret (zero, look_head_error) }
+        let (flat, flat_error) = dz_field(a, grid, "Flat", 280.0)
+        if flat_error != ok { ret (zero, flat_error) }
+        parts[0usize] = look_head
+        parts[1usize] = flat
+        ret (widget.padded(0u64, 14.0, 0.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(330.0, 70.0), parts[0usize..2usize]))), ok)
+    }
+    if grid.dz_tab == 4u8 {
+        let (count, count_error) = dz_field(a, grid, "Max Line Count:   0", 280.0)
+        ret (count, count_error)
+    }
+    ret (widget.box(0u64, style.defaults(), zero), ok)
 }
