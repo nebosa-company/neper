@@ -2625,4 +2625,5 @@ D4042	924	G012: horizontal scrolling and v3's thumb
 D4043	374	G012: the wheel over the horizontal thumb
 D4044	796	G012: the columns grow while the table scrolls
 D4045	834	G012: the table's own sideways scroll is not the answer here
-D4046	971	G012: v3's Format... dialog recorded, not built
+D4046	972	G012: v3's Format... dialog recorded, not built
+D4047	754	G012: a gradient per data bar overruns the frame
