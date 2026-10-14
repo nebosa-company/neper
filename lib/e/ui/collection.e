@@ -1908,7 +1908,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         drags[i] = HeaderDrag { runtime: t.runtime, column: i, sort: sort, reorder: reorder }
         resizes[i] = Resizing { runtime: t.runtime, header: header_key, column: i, width: columns[i].width, low: 2.0 * t.tokens.spacing.lg, resize: resize }
         let state = control.control_state(t, header_key, true, false)
-        let sorted = i == sort_column
+        var also_mark = 0u8
+        if look.on && i < look.also_sorted.len { also_mark = look.also_sorted[i] }
+        let sorted = i == sort_column || also_mark != 0u8
+        var column_descending = descending
+        if i != sort_column && also_mark != 0u8 { column_descending = also_mark == 2u8 }
         var caption = control.text_options()
         caption.role = .TitleSmall
         caption.wrap = .None
@@ -1953,7 +1957,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             // on the header, slot `header_key + 1048595`); reduced motion flips
             // at once.
             var down_goal: f32 = 0.0
-            if sorted && descending { down_goal = 1.0 }
+            if sorted && column_descending { down_goal = 1.0 }
             let flipped = control.eased_on(t, header_key, header_key + 1048595u64, down_goal, false, t.tokens.durations.short3)
             let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
             if turning_error != ok { ret (zero, TooLarge) }
@@ -2490,7 +2494,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32 }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8 }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }

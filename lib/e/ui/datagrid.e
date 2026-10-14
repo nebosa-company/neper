@@ -128,6 +128,10 @@ type Grid = struct {
     empty_text: str,
     sort_column: usize,
     descending: bool,
+    extra_sort: [4]usize,
+    extra_desc: [4]bool,
+    extra_count: usize,
+    also_marks: []u8,
     has_selection: bool,
     selected_row: usize,
     offset: f32,
@@ -333,6 +337,14 @@ fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const Colum
     }
     grid.aligns = aligns
     grid.right_flags = rights
+    let (also_buf, also_error) = mem.alloc[u8](a, specs.len + 1usize)
+    if also_error != ok { ret (zero, also_error) }
+    var mark_at = 0usize
+    while mark_at < also_buf.len {
+        also_buf[mark_at] = 0u8
+        mark_at += 1usize
+    }
+    grid.also_marks = also_buf
     grid.center_flags = centers
     let (editors, editors_error) = mem.alloc[u8](a, specs.len + 1usize)
     if editors_error != ok { ret (zero, editors_error) }
@@ -3237,6 +3249,65 @@ fn on_sort(ctx: *void, shown: usize) -> err {
         ret ok
     }
     let spec = grid.origin[shown]
+    // v3 (DevExpress): Shift+click adds the column to the sort or reverses it there, Ctrl+click takes
+    // it out, a plain click sorts by it alone
+    var mods: input.Modifiers = zero
+    if mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize { mods = widget.modifiers(grid.theme.runtime) }
+    if mods.shift && grid.look.on {
+        if grid.sort_column == spec {
+            grid.descending = !grid.descending
+        } else {
+            var at_extra = 0usize
+            var found_extra = false
+            while at_extra < grid.extra_count {
+                if grid.extra_sort[at_extra] == spec {
+                    grid.extra_desc[at_extra] = !grid.extra_desc[at_extra]
+                    found_extra = true
+                }
+                at_extra += 1usize
+            }
+            if !found_extra && grid.extra_count < 4usize {
+                grid.extra_sort[grid.extra_count] = spec
+                grid.extra_desc[grid.extra_count] = false
+                grid.extra_count += 1usize
+            }
+        }
+        ret grid.events.sort_changed(grid.events.ctx, grid.sort_column, grid.descending)
+    }
+    if mods.control && grid.look.on {
+        var kept = 0usize
+        var drop_at = 0usize
+        var removed = false
+        if grid.sort_column == spec && grid.extra_count > 0usize {
+            // the first of the others becomes the primary
+            grid.sort_column = grid.extra_sort[0usize]
+            grid.descending = grid.extra_desc[0usize]
+            drop_at = 0usize
+            removed = true
+            var shift_at = 1usize
+            while shift_at < grid.extra_count {
+                grid.extra_sort[shift_at - 1usize] = grid.extra_sort[shift_at]
+                grid.extra_desc[shift_at - 1usize] = grid.extra_desc[shift_at]
+                shift_at += 1usize
+            }
+            grid.extra_count -= 1usize
+        } else {
+            while drop_at < grid.extra_count {
+                if grid.extra_sort[drop_at] == spec {
+                    removed = true
+                } else {
+                    grid.extra_sort[kept] = grid.extra_sort[drop_at]
+                    grid.extra_desc[kept] = grid.extra_desc[drop_at]
+                    kept += 1usize
+                }
+                drop_at += 1usize
+            }
+            if removed { grid.extra_count = kept }
+        }
+        if removed { ret grid.events.sort_changed(grid.events.ctx, grid.sort_column, grid.descending) }
+        ret ok
+    }
+    grid.extra_count = 0usize
     var descending = false
     if grid.sort_column == spec { descending = !grid.descending }
     grid.sort_column = spec
@@ -4161,6 +4232,15 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         while shown_at < grid.specs.len {
             let origin_at = grid.origin[shown_at]
             grid.right_flags[shown_at] = grid.aligns[origin_at] == 3u8
+            grid.also_marks[shown_at] = 0u8
+            var extra_at = 0usize
+            while extra_at < grid.extra_count {
+                if grid.extra_sort[extra_at] == origin_at {
+                    grid.also_marks[shown_at] = 1u8
+                    if grid.extra_desc[extra_at] { grid.also_marks[shown_at] = 2u8 }
+                }
+                extra_at += 1usize
+            }
             grid.center_flags[shown_at] = grid.aligns[origin_at] == 2u8
             shown_at += 1usize
         }
@@ -4189,7 +4269,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
                 selected_edge = gl.rgb(0x212121u32)
             }
         }
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     // group footers are taller: the list of the entries that are
     if grid.g.group_footers && grid.look.on {
