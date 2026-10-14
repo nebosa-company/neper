@@ -2512,7 +2512,7 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // their selection cell inert, still focusable and Disabled in the tree.
 // (D1501) `pending` marks rows (by key) whose data has not come: each cell is a
 // skeleton line (60% of the cell, 12 tall) and the row is Busy in the tree.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook, double: widget.Change[widget.Key], has_double: bool }
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook, double: widget.Change[widget.Key], has_double: bool, empty_width: f32 }
 
 fn zero_look() -> TableLook {
     var look: TableLook = zero
@@ -2717,6 +2717,19 @@ fn table_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, options:
         empty.width = width
         // a measured-look grid says it in plain text, as v3 does, with no picture
         if options.look.on { empty.art = false }
+        if options.look.on {
+            // v3: the text is plain grey at the grid's own size, centred in the visible pane
+            var words = control.text_options()
+            words.wrap = .None
+            words.size = options.look.text_size
+            let (plain, plain_error) = control.colored_text(a, key + 1u64, options.empty_title, t, words, paint.rgba(0.5, 0.5, 0.5, 1.0))
+            if plain_error != ok { ret (zero, plain_error) }
+            held[0usize] = plain
+            var pane = control.sized_style(width, height)
+            if options.empty_width > 0.0 && options.empty_width < width { pane = control.sized_style(options.empty_width, height) }
+            pane.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+            ret (widget.aligned(0u64, .Center, .Center, pane, held[0usize..1usize]), ok)
+        }
         let (said, said_error) = control.empty_state_of(a, key + 1u64, t, options.empty_title, options.empty_message, empty)
         if said_error != ok { ret (zero, said_error) }
         held[0usize] = said

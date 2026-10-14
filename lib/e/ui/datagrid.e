@@ -8886,7 +8886,11 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             var sb = b
             var label = grid.footer_label
             if label.len == 0usize { label = "Count" }
-            if str.push(&sb, label) != ok || str.push(&sb, ": ") != ok || str.push_usize(&sb, grp.row_count(grid.g)) != ok { ret (zero, control.TooLarge) }
+            if str.push(&sb, label) != ok || str.push(&sb, ":") != ok { ret (zero, control.TooLarge) }
+            // v3 leaves the number out when the grid is empty
+            if grp.row_count(grid.g) != 0usize {
+                if str.push(&sb, " ") != ok || str.push_usize(&sb, grp.row_count(grid.g)) != ok { ret (zero, control.TooLarge) }
+            }
             text = str.done(&sb)
         } else if s.summary >= 0 && usize(s.summary) < grid.g.specs.len {
             let (shown, shown_error) = summary_text(a, s, grp.footer_summary(grid.g, usize(s.summary)))
@@ -9405,6 +9409,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     if grp.visible_len(grid.g) == 0usize { table_options.empty_title = grid.empty_text }
     table_options.double = widget.Change[widget.Key] { ctx: mem.cast[*void](grid), invoke: on_double }
     table_options.has_double = true
+    if grid.hon && grid.hpane > 0.0 { table_options.empty_width = grid.hpane }
     if grid.look.on {
         let lk = grid.look
         // column alignment: shown columns right or centred by the Alignment popup

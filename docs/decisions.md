@@ -41384,3 +41384,6 @@ The preview page draws a header band above the heading and a footer band under t
 
 ## D4101 - G012: typed R, G and B for the custom colour
 The style window has a "Custom color:" row of three spin boxes (0..255, step 8, typed entry; `rgb_spins`, `set_channel`) that edit `cust_rgb`, and the colour popup's R+/G+/B+ steppers became one "Custom color" entry that gives the row that colour (CR3: 48.24.0 typed by arrow taps, taken by the positive row). A spin box in the popup layer itself ended the window loop with scene.Invalid (not diagnosed: the same box works inside the dialog), hence the row in the dialog. Still no hue square.
+
+## D4102 - G012: the empty grid's message and count as v3 draws them
+Recorded in v3 (ND1-empty-grid-v3.png: Show Filter Row, Name = "zzzq"): the body of an empty grid says "<No cards in card pool>" in plain grey at the grid's own size, centred in the visible pane (not in the full column width), the footer reads "Count:" with no number, and a panel with the active filter ("x", a tick, "(Name Equals zzzq)", Customize...) stands above the navigator. The table says its message the same way (`table_state` with a look: grey text, `TableOptions.empty_width` = the pane while the columns scroll sideways) and the footer drops the number at zero (ND2-empty-grid-v5.png). Not built: the active-filter panel.
