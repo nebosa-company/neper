@@ -1,6 +1,6 @@
 # HANDOVER-GRID.md — the data grid parity stream (G012)
 
-Updated every turn. Last update: 2026-10-14, after D5006 (Data Bar Rule Style Settings window).
+Updated every turn. Last update: 2026-10-14, after D5007 (Bar direction live; local D4068).
 
 ## The goal (standing /goal, re-injected by a Stop hook every turn)
 
@@ -51,7 +51,7 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
 
 ## Open (in priority order)
 
-1. **Data Bar dialog rows that are drawn but inert**: Bar direction (Context / left-to-right / right-to-left),
+1. **Data Bar dialog rows that are drawn but inert** (Bar direction is LIVE since D5007: Context / Right To Left):
    negative bar colour and "apply same fill", axis (Automatic / Cell midpoint / None) and axis colour, positive
    colour edit (the `...` button), the Preview strip. Bar drawing is at `lib/e/ui/datagrid.e` near
    `bar_length` (~line 6205); rule fields live in `gridrules.e` (`bar_solid`, `bar_border`); wizard state in
@@ -75,7 +75,14 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
 - Window scale is 1.5 px per layout unit; the sample layout shifts with the persisted layout, so delete it.
 - The push worktree has no `cc`, so fixtures cannot be run there; run them in the main tree first.
 
+- ALWAYS `taskkill //IM cardgrid.exe //F` before rebuilding the sample: a running exe makes the build fail with
+  `os.Denied`, the old binary keeps running and its crash looks like a library fault.
+- An overlay nested inside the wizard's overlay (even `modal: true`) gets no taps; keep the style window a stacked
+  layer in `wiz_panel`. Helper functions that take `style.Style` by value and return nodes were suspected but not
+  the cause; the percent left margin trick (`bar.margin.left`) gives the right-to-left bar with no extra nodes.
+- `patch.exe` reports "patched" even when a hunk did not apply: grep for the result.
+
 ## Status of the tree
 
-Committed locally and pushed: through D4067 / D5006 (`f3e834fa` on origin/master). Peers' dirty files in the
+Committed locally and pushed: through D4068 / D5007. Peers' dirty files in the
 main tree (`lib/e/ui/control.e`, untracked `docs/tasks/...`) are not mine; leave them.
