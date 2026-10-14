@@ -5743,6 +5743,8 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
         if with_hint > width { width = with_hint }
     }
     if width < 120.0 { width = 120.0 }
+    // v3's column popup is 251 px across, ours came out 240
+    if grid.menu_kind == MENU_HEADER { width += 7.0 }
     var i = 0usize
     while i < commands.len {
         let c = commands[i]

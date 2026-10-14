@@ -41396,3 +41396,6 @@ v3's View menu (VM1-view-menu-v3.png) is 319 px wide with rows 30 px apart; ours
 
 ## D4105 - G012: the shortcut gap of the popup menus
 v3's collection context menu (CM1-collection-context-v3.png) is 316 px wide with a gap of about 18 px between "Remove from Collection" and "Del"; ours was 326 wide with 5 px. The label cell takes ten more units and the shortcut cell ten fewer, and the menu's trailing room shrinks to match, so the width is 313 (CM2-collection-context-v5.png) and the View menu 302. The row pitch (30) already matched. Ours also lists Show Columns... under a rule, which v3's menu (cut at its last visible row in the recording) may or may not have.
+
+## D4106 - G012: the column popup's width
+v3's column header popup (HM1-header-menu-v3.png) is 251 px across with rows 33 apart; ours was 240 wide with the same pitch. Seven units more (HM2-header-menu-v5.png: 251). Entries, pictures, rules, the Alignment arrow and the disabled Group Footers match by eye.
