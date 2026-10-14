@@ -22,3 +22,15 @@ pixels and scale with the display (the measurement machine runs at 150 percent).
   the footer and group footer metrics, the navigator buttons (`cxNavigator`), the filter row, the
   customization form, the quick customization list and every popup menu (all taken from the
   recordings only).
+
+## Header height
+
+`TcxGridColumnHeaderViewInfo.CalculateHeight` (`cxGridTableView.pas:13005`) is
+`GetTextCellHeight` - the font's text height plus the painter's content offsets and borders - raised
+to the glyph height when the column has a header image (the favourite star). So the header is not a
+constant: it follows the grid font and the skin. v3 measured 32 px at 150 percent (21 logical,
+`tokens.json` `header_height`), and neper uses that measured 21 for the 8 pt font; the 12 pt font
+setting leaves the header height alone in v3 (FS1-font-size-xl-v3.png), which follows because the
+header font is the header style's, not the cell font. The source formula was read, its constants
+(offsets, borders of the Windows painter) were not summed, so 21 is the measurement and not a
+derivation.
