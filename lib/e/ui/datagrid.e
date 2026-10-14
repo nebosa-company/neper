@@ -150,6 +150,9 @@ type Grid = struct {
 fmt_open: bool,
 print_open: bool,
 chooser_bands: bool,
+pv_tenths: [6]u8,
+pv_page: usize,
+pv_zoom: u8,
 band_names: []const str,
 wiz_pos_color: u8,
 wiz_neg_color: u8,
@@ -3764,6 +3767,7 @@ fn show_print_preview(grid: *Grid) {
     grid.wiz_open = true
     grid.fmt_open = false
     grid.print_open = true
+    grid.pv_page = 0usize
     grid.win_x[2usize] = 30.0
     grid.win_y[2usize] = 20.0
     grid.win_placed[2usize] = true
@@ -3780,6 +3784,93 @@ fn on_print_close(ctx: *void, g: widget.Gesture) -> err {
     default:
         ret ok
     }
+}
+
+// A tap in the preview: 0..5 step a margin by a tenth of an inch (back to its start after nine), 6 the
+// zoom, 7 and 8 the previous and the next page.
+type PrintTap = struct { grid: *Grid, index: u8 }
+
+fn on_print_tap(ctx: *void, g: widget.Gesture) -> err {
+    let tap = mem.cast[*PrintTap](ctx)
+    switch g {
+    case .Tap as at:
+        let grid = tap.grid
+        if tap.index < 6u8 {
+            grid.pv_tenths[usize(tap.index)] = (grid.pv_tenths[usize(tap.index)] + 1u8) % 10u8
+        } else if tap.index == 6u8 {
+            grid.pv_zoom = (grid.pv_zoom + 1u8) % 4u8
+        } else if tap.index == 7u8 {
+            if grid.pv_page > 0usize { grid.pv_page -= 1usize }
+        } else {
+            grid.pv_page += 1usize
+        }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// "Left: 0.5 in": the label and the value of a margin, in the arena.
+fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8) -> (str, err) {
+    let (b, b_error) = str.builder(a, 24usize)
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    let tenths = base_tenths + extra
+    if str.push(&sb, name) != ok { ret ("", control.TooLarge) }
+    if str.push_u64(&sb, u64(tenths / 10u8)) != ok { ret ("", control.TooLarge) }
+    if str.push(&sb, ".") != ok { ret ("", control.TooLarge) }
+    if str.push_u64(&sb, u64(tenths % 10u8)) != ok { ret ("", control.TooLarge) }
+    if str.push(&sb, " in") != ok { ret ("", control.TooLarge) }
+    ret (str.done(&sb), ok)
+}
+
+// The margins row: its label, then each margin as a tappable value and the zoom.
+fn print_margins(a: *mem.Arena, grid: *Grid, width: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    let (taps, taps_error) = mem.alloc[PrintTap](a, 7usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < 8usize {
+        var text: str = "Margins"
+        if k >= 1usize && k <= 6usize {
+            var name = "Left: "
+            var base: u8 = 5u8
+            if k == 2usize { name = "Top: " }
+            if k == 3usize { name = "Right: " }
+            if k == 4usize { name = "Bottom: " }
+            if k == 5usize {
+                name = "Header: "
+                base = 2u8
+            }
+            if k == 6usize {
+                name = "Footer: "
+                base = 2u8
+            }
+            let (value, value_error) = margin_text(a, name, base, grid.pv_tenths[k - 1usize])
+            if value_error != ok { ret (zero, value_error) }
+            text = value
+        }
+        if k == 7usize {
+            text = "Zoom: 100%"
+            if grid.pv_zoom == 1u8 { text = "Zoom: 75%" }
+            if grid.pv_zoom == 2u8 { text = "Zoom: 50%" }
+            if grid.pv_zoom == 3u8 { text = "Zoom: 125%" }
+        }
+        let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+        if label_error != ok { ret (zero, label_error) }
+        let padded_label = widget.padded(0u64, 10.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label))
+        if k == 0usize {
+            cells[k] = padded_label
+        } else {
+            taps[k - 1usize] = PrintTap { grid: grid, index: u8(k - 1usize) }
+            cells[k] = widget.region(grid.key + MENU_KEY + 850380u64 + u64(k), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[k - 1usize]), invoke: on_print_tap }, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_label))
+        }
+        k += 1usize
+    }
+    var bar = control.sized_style(width, 28.0)
+    bar.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, bar, cells[0usize..8usize]), ok)
 }
 
 fn print_cell(a: *mem.Arena, grid: *Grid, text: str, width: f32, header: bool) -> (widget.Node, err) {
@@ -3854,28 +3945,47 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         rows[n] = widget.box(0u64, tool, zero)
     }
     n += 1usize
-    let (margin_labels, margin_error) = mem.alloc[str](a, 7usize)
-    if margin_error != ok { ret (zero, control.TooLarge) }
-    margin_labels[0usize] = "Margins"
-    margin_labels[1usize] = "Left: 0.5 in"
-    margin_labels[2usize] = "Top: 0.5 in"
-    margin_labels[3usize] = "Right: 0.5 in"
-    margin_labels[4usize] = "Bottom: 0.5 in"
-    margin_labels[5usize] = "Header: 0.2 in"
-    margin_labels[6usize] = "Footer: 0.2 in"
-    let (margin_bar, margin_bar_error) = print_bar(a, grid, margin_labels[0usize..7usize], 0xF0F0F0u32, width)
+    let (margin_bar, margin_bar_error) = print_margins(a, grid, width)
     if margin_bar_error != ok { ret (zero, margin_bar_error) }
     rows[n] = margin_bar
     n += 1usize
-    let (lines, wide, lines_error) = export_rows(a, grid, 12usize, false)
+    // twelve rows a page: the page asked for, from the rows up to its end
+    let per_page = 12usize
+    var data_rows = 0usize
+    var counted = 0usize
+    while counted < grp.visible_len(grid.g) {
+        if !grp.visible_is_group(grid.g, counted) && !grp.visible_is_footer(grid.g, counted) { data_rows += 1usize }
+        counted += 1usize
+    }
+    var pages = (data_rows + per_page - 1usize) / per_page
+    if pages == 0usize { pages = 1usize }
+    if grid.pv_page >= pages { grid.pv_page = pages - 1usize }
+    let (all_lines, wide, lines_error) = export_rows(a, grid, (grid.pv_page + 1usize) * per_page, false)
     if lines_error != ok { ret (zero, lines_error) }
+    var from = 1usize + grid.pv_page * per_page
+    if from > all_lines.len { from = all_lines.len }
+    let (page_lines, page_lines_error) = mem.alloc[[]const str](a, all_lines.len - from + 1usize)
+    if page_lines_error != ok { ret (zero, control.TooLarge) }
+    if all_lines.len > 0usize { page_lines[0usize] = all_lines[0usize] }
+    var take = from
+    var put = 1usize
+    while take < all_lines.len {
+        page_lines[put] = all_lines[take]
+        put += 1usize
+        take += 1usize
+    }
+    let lines = page_lines[0usize..put]
+    var zoom: f32 = 1.0
+    if grid.pv_zoom == 1u8 { zoom = 0.75 }
+    if grid.pv_zoom == 2u8 { zoom = 0.5 }
+    if grid.pv_zoom == 3u8 { zoom = 1.25 }
     var shown = wide
     if shown > 9usize { shown = 9usize }
     let (widths, widths_error) = mem.alloc[f32](a, shown + 1usize)
     if widths_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
     while k < shown {
-        widths[k] = 640.0 / f32(shown)
+        widths[k] = 640.0 * zoom / f32(shown)
         k += 1usize
     }
     let (heading, heading_error) = flat_text(a, grid, "Collection", gl.rgb(0x000000u32))
@@ -3895,25 +4005,52 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     }
     let (filter_text, filter_error) = flat_text(a, grid, "<Filter is Empty>", gl.rgb(0xFFFFFFu32))
     if filter_error != ok { ret (zero, filter_error) }
-    var strip = control.sized_style(640.0, 22.0)
+    var strip = control.sized_style(640.0 * zoom, 22.0)
     strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) }
     strip.margin = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     page[q] = widget.box(0u64, strip, one(a, widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, style.defaults(), one(a, filter_text))))
     q += 1usize
-    var sheet = control.sized_style(690.0, 400.0)
+    var sheet = control.sized_style(690.0 * zoom, 400.0)
     sheet.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     sheet.border = style.Border { width: 1.0, color: gl.rgb(0x3C8CDCu32) }
     sheet.margin = style.EdgeLengths { left: style.Length { Px: 36.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sheet, page[0usize..q])
     n += 1usize
+    // the page row: previous, "Page n of m", next
+    let (foot, foot_error) = mem.alloc[widget.Node](a, 4usize)
+    if foot_error != ok { ret (zero, control.TooLarge) }
+    let (foot_taps, foot_taps_error) = mem.alloc[PrintTap](a, 2usize)
+    if foot_taps_error != ok { ret (zero, control.TooLarge) }
+    foot_taps[0usize] = PrintTap { grid: grid, index: 7u8 }
+    foot_taps[1usize] = PrintTap { grid: grid, index: 8u8 }
+    let (prev_label, prev_error) = flat_text(a, grid, "<", gl.rgb(0x000000u32))
+    if prev_error != ok { ret (zero, prev_error) }
+    let (next_label, next_error) = flat_text(a, grid, ">", gl.rgb(0x000000u32))
+    if next_error != ok { ret (zero, next_error) }
+    let (page_builder, page_builder_error) = str.builder(a, 24usize)
+    if page_builder_error != ok { ret (zero, control.TooLarge) }
+    var pb = page_builder
+    if str.push(&pb, "Page ") != ok || str.push_u64(&pb, u64(grid.pv_page + 1usize)) != ok || str.push(&pb, " of ") != ok || str.push_u64(&pb, u64(pages)) != ok { ret (zero, control.TooLarge) }
+    let (page_label, page_label_error) = flat_text(a, grid, str.done(&pb), gl.rgb(0x000000u32))
+    if page_label_error != ok { ret (zero, page_label_error) }
+    var tap_style = control.sized_style(30.0, 28.0)
+    tap_style.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+    tap_style.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
+    tap_style.margin = style.EdgeLengths { left: style.Length { Px: 36.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
+    foot[0usize] = widget.region(grid.key + MENU_KEY + 850390u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&foot_taps[0usize]), invoke: on_print_tap }, gestures: 1u8, enabled: true, focusable: false }, tap_style, one(a, widget.padded(0u64, 10.0, 5.0, 0.0, 0.0, style.defaults(), one(a, prev_label))))
+    foot[1usize] = widget.padded(0u64, 12.0, 14.0, 0.0, 0.0, style.defaults(), one(a, page_label))
+    var tap_style_next = tap_style
+    tap_style_next.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
+    foot[2usize] = widget.region(grid.key + MENU_KEY + 850391u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&foot_taps[1usize]), invoke: on_print_tap }, gestures: 1u8, enabled: true, focusable: false }, tap_style_next, one(a, widget.padded(0u64, 10.0, 5.0, 0.0, 0.0, style.defaults(), one(a, next_label))))
     let (close_label, close_error) = flat_text(a, grid, "Close", gl.rgb(0x000000u32))
     if close_error != ok { ret (zero, close_error) }
     var close_box = control.sized_style(100.0, 28.0)
     close_box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
     close_box.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
     close_box.radius = 4.0
-    close_box.margin = style.EdgeLengths { left: style.Length { Px: 640.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
-    rows[n] = widget.region(grid.key + MENU_KEY + 850370u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_print_close }, gestures: 1u8, enabled: true, focusable: false }, close_box, one(a, widget.padded(0u64, 28.0, 5.0, 0.0, 0.0, style.defaults(), one(a, close_label))))
+    close_box.margin = style.EdgeLengths { left: style.Length { Px: 380.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
+    foot[3usize] = widget.region(grid.key + MENU_KEY + 850370u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_print_close }, gestures: 1u8, enabled: true, focusable: false }, close_box, one(a, widget.padded(0u64, 28.0, 5.0, 0.0, 0.0, style.defaults(), one(a, close_label))))
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 44.0), foot[0usize..4usize])
     n += 1usize
     var panel = control.sized_style(width, 520.0)
     panel.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) }
