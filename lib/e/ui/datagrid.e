@@ -4936,13 +4936,18 @@ fn set_enter_action(grid: *Grid, action: u8) { grid.enter_action = action }
 fn on_row_enter(ctx: *void) -> err {
     let grid = mem.cast[*Grid](ctx)
     if grid.editing || grid.read_only { ret ok }
-    if grid.enter_action == 1u8 { ret navigate(grid, Nav.Next) }
+    // Enter must never end the program: a row that is not in the tree to take the focus is no error here
+    if grid.enter_action == 1u8 {
+        let moved_row = navigate(grid, Nav.Next)
+        ret ok
+    }
     if grid.focus_column + 1usize < grid.specs.len {
         grid.focus_column += 1usize
         ret ok
     }
     grid.focus_column = 0usize
-    ret navigate(grid, Nav.Next)
+    let moved = navigate(grid, Nav.Next)
+    ret ok
 }
 
 fn on_row_tab(ctx: *void) -> err {
