@@ -4818,11 +4818,19 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
                 var edge = row_box.x
                 var d = 0usize
                 while d < grid.specs.len {
-                    edge += grid.widths[grid.origin[d]]
-                    if at_point.x < edge {
+                    // the column's header stands where the column is drawn, whatever its stored width
+                    var left = edge
+                    var right = edge + grid.widths[grid.origin[d]]
+                    let (head_box, has_head) = widget.bounds_for_key(grid.theme.runtime, grid.key + 1u64 + 2u64 * u64(d))
+                    if has_head {
+                        left = head_box.x
+                        right = head_box.x + head_box.width
+                    }
+                    edge = right
+                    if at_point.x < right {
                         tapped = true
                         // the tap's distance into the cell, less its padding
-                        tap_x = at_point.x - (edge - grid.widths[grid.origin[d]]) - 4.0
+                        tap_x = at_point.x - left - 4.0
                         if grid.specs[d].editable { column = d } else if grid.immediate_edit { column = grid.specs.len }
                         break
                     }
