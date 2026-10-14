@@ -2216,4 +2216,5 @@ D2452	800	G012: Open and Save As of the Advanced Filter
 D2453	709	G012: Minimum and Maximum of a range rule
 D2454	676	G012: Minimum and Maximum pickers of the New Rule wizard
 D2455	754	G012: the column of a new rule is chosen in the wizard
-D2456	817	G012: Is blank and Is not blank, and a short operator list for flag columns
+D2456	818	G012: Is blank and Is not blank, and a short operator list for flag columns
+D2457	663	G012: Is any of and Is none of

@@ -1946,6 +1946,8 @@ fn crit_op_words(op: u8) -> str {
     if op == 6u8 { ret "Begins with" }
     if op == 8u8 { ret "Is blank" }
     if op == 9u8 { ret "Is not blank" }
+    if op == 10u8 { ret "Is any of" }
+    if op == 11u8 { ret "Is none of" }
     ret "Ends with"
 }
 
@@ -1982,7 +1984,7 @@ fn on_crit_tap(ctx: *void, g: widget.Gesture) -> err {
             grid.crit_pop = false
             ret ok
         }
-        if row.part >= 40u8 && row.part < 40u8 + 10u8 && grid.crit_pop_row < grid.crit_count {
+        if row.part >= 40u8 && row.part < 40u8 + 12u8 && grid.crit_pop_row < grid.crit_count {
             grid.crit_op[grid.crit_pop_row] = row.part - 40u8
             grid.crit_pop = false
             ret ok
@@ -2118,7 +2120,7 @@ fn load_criteria(grid: *Grid, text: str) -> bool {
             let (op_word, value_text) = next_token(after_spec)
             let (spec_n, spec_ok) = str.parse_u64(spec_word)
             let (op_n, op_ok) = str.parse_u64(op_word)
-            if spec_ok != ok || op_ok != ok || usize(spec_n) >= grid.all.len || op_n > 9u64 { ret false }
+            if spec_ok != ok || op_ok != ok || usize(spec_n) >= grid.all.len || op_n > 11u64 { ret false }
             specs[count] = usize(spec_n)
             ops[count] = u8(op_n)
             var m = value_text.len
@@ -2345,7 +2347,9 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
                 entries[1usize] = 1usize
                 entries[2usize] = 8usize
                 entries[3usize] = 9usize
-                entry_count = 4usize
+                entries[4usize] = 10usize
+                entries[5usize] = 11usize
+                entry_count = 6usize
             } else {
                 var oi = 0usize
                 while oi < 8usize {
@@ -2354,7 +2358,9 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
                 }
                 entries[8usize] = 8usize
                 entries[9usize] = 9usize
-                entry_count = 10usize
+                entries[10usize] = 10usize
+                entries[11usize] = 11usize
+                entry_count = 12usize
             }
             if grid.crit_pop_row < grid.crit_count { current_entry = usize(grid.crit_op[grid.crit_pop_row]) }
         } else {
