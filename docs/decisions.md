@@ -39722,3 +39722,6 @@ The Color, Negative and Axis color rows open a palette of 24 colours (`swatch_pa
 ## D5033 - G012: custom RGB steppers in the colour editor
 
 Under the 24 swatches the editor has R +, G + and B + boxes that step the custom colour by 32 a tap (wrapping) and make the row use it (index 200; the negative and axis rows store 201); the row shows it as R.G.B (CR2-colour-editor-rgb-v5.png: two G taps and one B tap give 0.64.32). Still no typed RGB or a hue square as v3's editor has.
+
+## D5034 - G012: typed margin boxes in Page Setup
+The Margins tab shows each of the six margins as a spin box (hundredths of an inch, step 5, floor at v3's base 0.50 / 0.20) with a typed field, in place of the tap-to-step text. `pv_hund` holds the last digit beside `pv_tenths`; `set_margin` clamps and splits a typed value; Restore Original clears both; the Print Preview margin cells show the hundredths when set. Seen (MG3-page-setup-margin-spin-v5.png: two arrow taps 50 -> 60); Header/Footer cells, Fit To counts and the Print Preview boxes stay taps.

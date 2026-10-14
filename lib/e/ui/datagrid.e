@@ -151,6 +151,7 @@ fmt_open: bool,
 print_open: bool,
 chooser_bands: bool,
 pv_tenths: [6]u8,
+pv_hund: [6]u8,
 pv_page: usize,
 pv_zoom: u8,
 pv_setup: bool,
@@ -4003,6 +4004,7 @@ fn on_setup_tap(ctx: *void, g: widget.Gesture) -> err {
             var z = 0usize
             while z < 6usize {
                 tap.grid.pv_tenths[z] = 0u8
+                tap.grid.pv_hund[z] = 0u8
                 z += 1usize
             }
         }
@@ -4213,7 +4215,38 @@ fn scaling_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node
     ret (widget.padded(0u64, 14.0, 12.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..4usize]))), ok)
 }
 
-// The Margins tab: the six margins as steppers (a tap steps a tenth of an inch, as in the preview), the
+type MarginSpin = struct { grid: *Grid, slot: u8 }
+
+// A margin set in hundredths of an inch; pv_tenths holds the tenths over the base, pv_hund the last digit.
+fn set_margin(grid: *Grid, slot: u8, hundredths: i64) {
+    var base: i64 = 5i64
+    if slot >= 4u8 { base = 2i64 }
+    var h = hundredths
+    if h < base * 10i64 { h = base * 10i64 }
+    if h > 999i64 { h = 999i64 }
+    grid.pv_tenths[usize(slot)] = u8(h / 10i64 - base)
+    grid.pv_hund[usize(slot)] = u8(h % 10i64)
+}
+
+fn on_margin_spin(ctx: *void, value: i64) -> err {
+    let m = mem.cast[*MarginSpin](ctx)
+    set_margin(m.grid, m.slot, value)
+    ret ok
+}
+
+fn on_margin_text(ctx: *void, value: str) -> err {
+    let m = mem.cast[*MarginSpin](ctx)
+    var h: i64 = 0i64
+    var i = 0usize
+    while i < value.len && i < 4usize {
+        if value[i] >= 48u8 && value[i] <= 57u8 { h = h * 10i64 + i64(value[i] - 48u8) }
+        i += 1usize
+    }
+    set_margin(m.grid, m.slot, h)
+    ret ok
+}
+
+// The Margins tab: the six margins as typed spin boxes (hundredths of an inch) (a tap steps a tenth of an inch, as in the preview), the
 // page drawn with its margin lines, Restore Original and Center on page.
 fn margins_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node, err) {
     let (lines, lines_error) = mem.alloc[widget.Node](a, 10usize)
@@ -4247,10 +4280,21 @@ fn margins_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node
             name = "Footer: "
             base = 2u8
         }
-        let (text, text_error) = margin_text(a, name, base, grid.pv_tenths[slot], true)
-        if text_error != ok { ret (zero, text_error) }
-        let (line, line_error) = setup_line(a, grid, taps[0usize..40usize], k, 5u8, u8(slot), text, false, true, 240.0)
-        if line_error != ok { ret (zero, line_error) }
+        let (label, label_error) = flat_text(a, grid, name, gl.rgb(0x000000u32))
+        if label_error != ok { ret (zero, label_error) }
+        let (buffer, buffer_error) = mem.alloc[u8](a, 12usize)
+        if buffer_error != ok { ret (zero, control.TooLarge) }
+        let (spins, spins_error) = mem.alloc[MarginSpin](a, 1usize)
+        if spins_error != ok { ret (zero, control.TooLarge) }
+        spins[0usize] = MarginSpin { grid: grid, slot: u8(slot) }
+        let hundredths = i64(grid.pv_tenths[slot] + base) * 10i64 + i64(grid.pv_hund[slot])
+        let (field, field_error) = control.spin_box_sized(a, grid.key + MENU_KEY + 850400u64 + u64(k) * 8u64, grid.theme, "1/100 in", buffer[0usize..12usize], hundredths, i64(base) * 10i64, 999i64, 5i64, widget.Change[i64] { ctx: mem.cast[*void](&spins[0usize]), invoke: on_margin_spin }, widget.Change[str] { ctx: mem.cast[*void](&spins[0usize]), invoke: on_margin_text }, 110.0)
+        if field_error != ok { ret (zero, field_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, control.TooLarge) }
+        pair[0usize] = widget.padded(0u64, 0.0, 20.0, 6.0, 0.0, style.defaults(), one(a, label))
+        pair[1usize] = field
+        let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(240.0, 58.0), pair[0usize..2usize])
         lines[n] = line
         n += 1usize
         k += 1usize
@@ -4378,7 +4422,7 @@ fn on_print_tap(ctx: *void, g: widget.Gesture) -> err {
 }
 
 // "Left: 0.5 in": the label and the value of a margin, in the arena.
-fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8, two: bool) -> (str, err) {
+fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8, hund: u8, two: bool) -> (str, err) {
     let (b, b_error) = str.builder(a, 24usize)
     if b_error != ok { ret ("", b_error) }
     var sb = b
@@ -4387,7 +4431,7 @@ fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8, two: bool) 
     if str.push_u64(&sb, u64(tenths / 10u8)) != ok { ret ("", control.TooLarge) }
     if str.push(&sb, ".") != ok { ret ("", control.TooLarge) }
     if str.push_u64(&sb, u64(tenths % 10u8)) != ok { ret ("", control.TooLarge) }
-    if two && str.push(&sb, "0") != ok { ret ("", control.TooLarge) }
+    if (two || hund != 0u8) && str.push_u64(&sb, u64(hund)) != ok { ret ("", control.TooLarge) }
     if str.push(&sb, " in") != ok { ret ("", control.TooLarge) }
     ret (str.done(&sb), ok)
 }
@@ -4415,7 +4459,7 @@ fn print_margins(a: *mem.Arena, grid: *Grid, width: f32) -> (widget.Node, err) {
                 name = "Footer: "
                 base = 2u8
             }
-            let (value, value_error) = margin_text(a, name, base, grid.pv_tenths[k - 1usize], false)
+            let (value, value_error) = margin_text(a, name, base, grid.pv_tenths[k - 1usize], grid.pv_hund[k - 1usize], false)
             if value_error != ok { ret (zero, value_error) }
             text = value
         }
