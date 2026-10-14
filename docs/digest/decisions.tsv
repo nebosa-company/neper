@@ -2629,4 +2629,5 @@ D4046	972	G012: v3's Format... dialog recorded, not built
 D4047	755	G012: a gradient per data bar overruns the frame
 D4048	677	G012: a gradient brush in a cell breaks the row build, whatever its stops
 D4049	658	G012: the gradient fixture failure is an error code, not a check
-D4050	913	G012: why a gradient bar shows nothing
+D4050	914	G012: why a gradient bar shows nothing
+D4051	668	G012: a gradient bar anchored at the cell's x passes the fixtures and kills the sample
