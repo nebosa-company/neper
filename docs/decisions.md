@@ -39682,3 +39682,7 @@ The dialog's tabs are taps now. Margins (MG2 is v3's) lists Top, Bottom, Left, R
 ## D5023 - G012: Page Setup Header / Footer and Scaling tabs
 
 Built from v3 (HF1, HF2): Header / Footer has Reverse on even pages (a toggle), Header and Footer each with Font... and its "8 pt. Tahoma", Background [No Fill] and three cells (the footer holds [Page #] centred and [Date Printed] right), the Vertical Alignment and Predefined Functions row greyed; Scaling has Adjust To (a tap steps ten per cent) and Fit To radios with the page counts. HF34-page-setup-header-footer-scaling-v5.png. The cells are not editable, the font and background buttons do nothing and the scaling does not reach the preview; v3's predefined function icons are not drawn.
+
+## D5024 - G012: the Print group of the card menu in v3's order
+
+The sample's card menu ends with v3's Print group in v3's order: Print... (Ctrl+P, which opens the preview: there is no printer here), Page Setup..., Print Preview... (Ctrl+Shift+P) and Designer... (Alt+P, greyed: the report designer is not built).
