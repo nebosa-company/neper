@@ -2274,4 +2274,5 @@ D2510	762	G012: the Enter key ended the program
 D2511	899	G012: the bar that never showed was the data, and v3's gradient fill
 D2512	556	G012: a rule can ignore values above a bound (Gleemax)
 D2513	552	G012: data bar Fill mode Solid and Border style in the rule model
-D2514	499	G012: the no-data messages
+D2514	500	G012: the no-data messages
+D2515	595	G012: an empty grid keeps its header

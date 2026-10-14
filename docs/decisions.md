@@ -39568,3 +39568,7 @@ Per the owner: ignore Gleemax (CMC 1000000) for the data bar. `Rule.has_ignore` 
 ## D2514 - G012: the no-data messages
 
 v3 sets `NoDataToDisplayInfoText` per grid in main.vcl.form.pas: `<No cards in card pool>`, `<No cards in collection>` and `<No cards in deck. To create a new deck use File | Deck menu.>`. `set_empty_text` hands the text to the grid and the sample sets the three (ND1-no-data-v5.png: a name filter matching nothing). Not matched: v3 keeps the header row and centres the message under it, the grid replaces itself with the message. The four grid fixtures pass.
+
+## D2515 - G012: an empty grid keeps its header
+
+v3 keeps the header row of an empty grid and writes its message under it. A measured-look grid no longer replaces itself with the text: the table takes `empty_text` as its empty title (D1248's state), drawn in plain text without the empty-state picture (`art` off when the look is on). Seen live with the header kept and the message centred (ND2 shot, picture still present before the second edit); the picture removal was not looked at, the sample window having been covered by another application's licence dialog. The four grid fixtures pass.
