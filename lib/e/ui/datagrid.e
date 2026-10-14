@@ -3954,6 +3954,19 @@ fn follow_focus(grid: *Grid, theme: *const control.Theme) -> err {
     let (focus, has_focus) = widget.focused_key(theme.runtime)
     if !has_focus { ret ok }
     let base = grid.key + KEY_BASE
+    if focus >= base + u64(table.capacity(grid.t)) && focus < base + u64(table.capacity(grid.t)) + u64(grp.group_len(grid.g)) {
+        // the keyboard reached a group row: it is the current row, with no card under it (v3)
+        let group = usize(focus - base - u64(table.capacity(grid.t)))
+        var at_group = 0usize
+        let shown_total = grp.visible_len(grid.g)
+        while at_group < shown_total && !(grp.visible_is_group(grid.g, at_group) && !grp.visible_is_footer(grid.g, at_group) && grp.visible_group(grid.g, at_group) == group) { at_group += 1usize }
+        if at_group < shown_total && !(grid.has_position && grid.position == at_group && !grid.has_selection) {
+            grid.has_position = true
+            grid.position = at_group
+            grid.has_selection = false
+        }
+        ret ok
+    }
     if focus < base || focus >= base + u64(table.capacity(grid.t)) { ret ok }
     let row = usize(focus - base)
     if grid.has_selection && grid.selected_row == row { ret ok }
@@ -4073,6 +4086,10 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     let (inner, inner_error) = build_parts(a, grid, theme, height)
     if inner_error != ok { ret (zero, inner_error) }
     let (menus, menus_error) = with_menus(a, grid, inner)
+    // v3 draws the current row, never a focus ring: the dotted rectangle and the fill are its focus
+    if grid.look.on && mem.address_of(theme.runtime) != 0usize {
+        widget.set_focus_ring(theme.runtime, paint.rgba(0.0, 0.0, 0.0, 0.0), theme.tokens.metrics.focus_ring, theme.tokens.metrics.focus_offset)
+    }
     ret (menus, menus_error)
 }
 
