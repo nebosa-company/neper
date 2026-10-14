@@ -40977,3 +40977,7 @@ v3's rule applies to the column chosen in its Applies to (the rule is created fr
 ## D3998 - G012: Is blank and Is not blank, and a short operator list for flag columns
 
 Recorded in v3 (AF5-operator-list-v3.png): the operator list depends on the column; the Favorite image combo offers Equals, Does not equal, Is blank, Is not blank, Is any of, Is none of. The criteria editor's operator codes now include 8 Is blank and 9 Is not blank (written to the saved text up to code 9); the sample maps them to `view.Op.Null` and `NotNull` without a value. A star, boolean or choice column offers the short list Equals, Does not equal, Is blank, Is not blank; every other column the eight text operators and the two blank ones (AF5-operator-list-v5.png). Not built: Is any of and Is none of (a value list), v3's icons in front of the operators. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
+
+## D3999 - G012: Is any of and Is none of
+
+v3's operator list has Is any of (two green discs) and Is none of (two red discs) (AF5-operator-list-v3.png). The criteria editor's operator codes 10 and 11 are those; the value is a comma separated list, and the sample builds a `view.Op.In` / `NotIn` list node from it (up to eight entries per condition, spaces trimmed). Live in the sample (AF6-any-of-v5.png: Color is any of R, G shows 31058 of 120283 cards, only red and green rows). The list is typed as text; v3 offers a checked list of the column's values, which is not built, nor are the two discs. ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
