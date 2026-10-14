@@ -1968,6 +1968,78 @@ fn crit_next_listed(grid: *const Grid, from: usize) -> usize {
     ret from
 }
 
+// Whether `word` is one of the comma separated entries of condition `index`s value.
+fn crit_has_value(grid: *const Grid, index: usize, word: str) -> bool {
+    let text = grid.crit_text[index * CRIT_TEXT..index * CRIT_TEXT + grid.crit_len[index]]
+    var start = 0usize
+    var at = 0usize
+    while at <= text.len {
+        if at == text.len || text[at] == 44u8 {
+            var from = start
+            var to = at
+            while from < to && text[from] == 32u8 { from += 1usize }
+            while to > from && text[to - 1usize] == 32u8 { to -= 1usize }
+            if same_text(text[from..to], word) { ret true }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+// Adds the dictionary entry `id` of the condition column to its value list, or takes it out.
+fn crit_toggle_value(grid: *Grid, index: usize, id: usize) {
+    let column = grid.all[grid.crit_spec[index]].column
+    if id >= table.dict_len(grid.t, column) { ret }
+    let word = table.dict_str(grid.t, column, u32(id))
+    let had = crit_has_value(grid, index, word)
+    var buf: [32]u8 = zero
+    var len = 0usize
+    let text = grid.crit_text[index * CRIT_TEXT..index * CRIT_TEXT + grid.crit_len[index]]
+    var start = 0usize
+    var at = 0usize
+    while at <= text.len {
+        if at == text.len || text[at] == 44u8 {
+            var from = start
+            var to = at
+            while from < to && text[from] == 32u8 { from += 1usize }
+            while to > from && text[to - 1usize] == 32u8 { to -= 1usize }
+            if to > from && !(had && same_text(text[from..to], word)) {
+                if len != 0usize && len < 31usize {
+                    buf[len] = 44u8
+                    len += 1usize
+                }
+                var c = from
+                while c < to && len < 32usize {
+                    buf[len] = text[c]
+                    len += 1usize
+                    c += 1usize
+                }
+            }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    if !had {
+        if len != 0usize && len < 31usize {
+            buf[len] = 44u8
+            len += 1usize
+        }
+        var w = 0usize
+        while w < word.len && len < 32usize {
+            buf[len] = word[w]
+            len += 1usize
+            w += 1usize
+        }
+    }
+    var k = 0usize
+    while k < len {
+        grid.crit_text[index * CRIT_TEXT + k] = buf[k]
+        k += 1usize
+    }
+    grid.crit_len[index] = len
+}
+
 fn on_crit_tap(ctx: *void, g: widget.Gesture) -> err {
     let row = mem.cast[*CritRow](ctx)
     let grid = row.grid
@@ -1982,6 +2054,16 @@ fn on_crit_tap(ctx: *void, g: widget.Gesture) -> err {
         if row.part == 20u8 || row.part == 21u8 || row.part == 22u8 || row.part == 23u8 {
             grid.crit_group = row.part - 20u8
             grid.crit_pop = false
+            ret ok
+        }
+        if row.part == 12u8 {
+            grid.crit_pop = !grid.crit_pop
+            grid.crit_pop_kind = 3u8
+            grid.crit_pop_row = row.index
+            ret ok
+        }
+        if row.part >= 100u8 && grid.crit_pop_row < grid.crit_count {
+            crit_toggle_value(grid, grid.crit_pop_row, usize(row.part - 100u8))
             ret ok
         }
         if row.part >= 40u8 && row.part < 40u8 + 12u8 && grid.crit_pop_row < grid.crit_count {
@@ -2271,6 +2353,34 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         cells[1usize] = column_word
         cells[2usize] = op_word
         cells[3usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 0.0, field_box, one(a, field))
+        var value_listed = false
+        if (grid.crit_op[i] == 10u8 || grid.crit_op[i] == 11u8) && table.column_kind(grid.t, grid.all[grid.crit_spec[i]].column) == table.Kind.Dict && table.dict_len(grid.t, grid.all[grid.crit_spec[i]].column) <= 40usize { value_listed = true }
+        if value_listed {
+            // v3 offers the values of the column as a checked list
+            let (list_cells, list_cells_error) = mem.alloc[widget.Node](a, 5usize)
+            if list_cells_error != ok { ret (zero, list_cells_error) }
+            var li = 0usize
+            while li < 4usize {
+                list_cells[li] = cells[li]
+                li += 1usize
+            }
+            let (pick_text, pick_text_error) = flat_text(a, grid, "Values...", gl.rgb(0x000000u32))
+            if pick_text_error != ok { ret (zero, pick_text_error) }
+            var pick_box = control.sized_style(80.0, 26.0)
+            pick_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            pick_box.border = style.Border { width: 1.0, color: gl.rgb(0x9A9A9Au32) }
+            pick_box.radius = 4.0
+            let (value_picks, value_picks_error) = mem.alloc[CritRow](a, 1usize)
+            if value_picks_error != ok { ret (zero, control.TooLarge) }
+            value_picks[0usize] = CritRow { grid: grid, index: i, part: 12u8 }
+            list_cells[4usize] = widget.region(grid.key + MENU_KEY + 899914u64 + u64(i) * 4u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&value_picks[0usize]), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, pick_box, one(a, widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, pick_text))))
+            var list_line = control.sized_style(width - 24.0, 30.0)
+            list_line.margin = style.EdgeLengths { left: style.Length { Px: 32.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+            rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, list_line, list_cells[0usize..5usize])
+            n += 1usize
+            i += 1usize
+            continue
+        }
         var line_style = control.sized_style(width - 24.0, 30.0)
         line_style.margin = style.EdgeLengths { left: style.Length { Px: 32.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
         rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, line_style, cells[0usize..4usize])
@@ -2330,6 +2440,57 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..n])
     let framed = widget.box(0u64, body_style, inner[0usize..1usize])
     if !grid.crit_pop { ret (framed, ok) }
+    if grid.crit_pop_kind == 3u8 && grid.crit_pop_row < grid.crit_count {
+        // the values of the column with a check before each chosen one
+        let value_column = grid.all[grid.crit_spec[grid.crit_pop_row]].column
+        var value_total = table.dict_len(grid.t, value_column)
+        if value_total > 14usize { value_total = 14usize }
+        let (value_rows, value_rows_error) = mem.alloc[widget.Node](a, value_total + 1usize)
+        if value_rows_error != ok { ret (zero, control.TooLarge) }
+        let (value_picks, value_picks_error) = mem.alloc[CritRow](a, value_total + 1usize)
+        if value_picks_error != ok { ret (zero, control.TooLarge) }
+        var vi = 0usize
+        while vi < value_total {
+            let entry_word = table.dict_str(grid.t, value_column, u32(vi))
+            value_picks[vi] = CritRow { grid: grid, index: grid.crit_pop_row, part: u8(100usize + vi) }
+            let chosen = crit_has_value(grid, grid.crit_pop_row, entry_word)
+            let (entry_text, entry_text_error) = flat_text(a, grid, entry_word, gl.rgb(0x000000u32))
+            if entry_text_error != ok { ret (zero, entry_text_error) }
+            var mark_box = control.sized_style(14.0, 14.0)
+            mark_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            mark_box.border = style.Border { width: 1.0, color: gl.rgb(0x333333u32) }
+            let (mark_held, mark_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if mark_held_error != ok { ret (zero, control.TooLarge) }
+            if chosen {
+                let (tick, tick_error) = gl.mark(a, .Check, gl.rgb(0x005FB8u32), gl.rgb(0x005FB8u32), 10.0, 10.0)
+                if tick_error != ok { ret (zero, tick_error) }
+                mark_held[0usize] = tick
+            } else {
+                mark_held[0usize] = widget.box(0u64, style.defaults(), zero)
+            }
+            let (entry_parts, entry_parts_error) = mem.alloc[widget.Node](a, 2usize)
+            if entry_parts_error != ok { ret (zero, control.TooLarge) }
+            entry_parts[0usize] = widget.aligned(0u64, .Center, .Center, mark_box, mark_held[0usize..1usize])
+            entry_parts[1usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, style.defaults(), one(a, entry_text))
+            var entry_style = control.sized_style(150.0, 24.0)
+            entry_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            let entry_line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), entry_parts[0usize..2usize])
+            value_rows[vi] = widget.region(grid.key + MENU_KEY + 899940u64 + u64(vi), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&value_picks[vi]), invoke: on_crit_tap }, gestures: 1u8, enabled: true, focusable: false }, entry_style, one(a, widget.padded(0u64, 8.0, 5.0, 0.0, 0.0, style.defaults(), one(a, entry_line))))
+            vi += 1usize
+        }
+        var value_list_style = style.defaults()
+        value_list_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        value_list_style.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+        let value_list = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, value_list_style, value_rows[0usize..value_total])
+        let (value_held, value_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if value_held_error != ok { ret (zero, control.TooLarge) }
+        value_held[0usize] = value_list
+        let (value_layers, value_layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if value_layers_error != ok { ret (zero, control.TooLarge) }
+        value_layers[0usize] = framed
+        value_layers[1usize] = widget.positioned(0u64, 400.0, 84.0 + 34.0 * f32(grid.crit_pop_row) + 26.0, style.defaults(), value_held[0usize..1usize])
+        ret (widget.stack(0u64, style.defaults(), value_layers[0usize..2usize]), ok)
+    }
     if grid.crit_pop_kind == 1u8 || grid.crit_pop_kind == 2u8 {
         // the columns or the operators of a condition, as a plain list under its word
         var entries: [40]usize = zero
