@@ -139,6 +139,7 @@ type Grid = struct {
     wiz_open: bool,
     wiz_bar_only: bool,
     wiz_min_number: bool,
+    wiz_palette: u8,
     wiz_target: usize,
     has_wiz_target: bool,
     wiz_max_number: bool,
@@ -2721,6 +2722,32 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 type WizRow = struct { grid: *Grid, index: u8 }
 type WizText = struct { grid: *Grid, maximum: bool }
 
+// The colours of the wizard's Format...: the low, middle and high colour of a scale, the bar colour.
+fn wiz_low(palette: u8) -> paint.Color {
+    if palette == 1u8 { ret paint.rgba(0.95, 0.60, 0.20, 1.0) }
+    if palette == 2u8 { ret paint.rgba(0.99, 0.99, 0.99, 1.0) }
+    if palette == 3u8 { ret paint.rgba(0.30, 0.55, 0.95, 1.0) }
+    ret paint.rgba(0.99, 0.74, 0.74, 1.0)
+}
+
+fn wiz_high(palette: u8) -> paint.Color {
+    if palette == 1u8 { ret paint.rgba(0.30, 0.65, 0.95, 1.0) }
+    if palette == 2u8 { ret paint.rgba(0.30, 0.60, 0.25, 1.0) }
+    if palette == 3u8 { ret paint.rgba(0.95, 0.30, 0.30, 1.0) }
+    ret paint.rgba(0.70, 0.90, 0.70, 1.0)
+}
+
+fn on_wiz_format(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.wiz_palette = (grid.wiz_palette + 1u8) % 4u8
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 fn on_wiz_text(ctx: *void, value: str) -> err {
     let t = mem.cast[*WizText](ctx)
     var n = value.len
@@ -2824,9 +2851,10 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
         var r = rules.rule(column, kind)
         r.fill = paint.rgba(0.55, 0.72, 0.95, 0.55)
         r.has_fill = true
-        r.low = paint.rgba(0.99, 0.74, 0.74, 1.0)
+        r.low = wiz_low(grid.wiz_palette)
         r.mid = paint.rgba(1.0, 1.0, 0.8, 1.0)
-        r.high = paint.rgba(0.7, 0.9, 0.7, 1.0)
+        r.high = wiz_high(grid.wiz_palette)
+        if t == 0u8 { r.fill = paint.rgba(wiz_high(grid.wiz_palette).red, wiz_high(grid.wiz_palette).green, wiz_high(grid.wiz_palette).blue, 0.55) }
         r.three = t == 2u8
         r.bar_only = t == 0u8 && grid.wiz_bar_only
         if t <= 3u8 {
@@ -2906,7 +2934,7 @@ fn on_wiz_cancel(ctx: *void, g: widget.Gesture) -> err {
 
 fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let width: f32 = 520.0
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 22usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 24usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
     let (picks, picks_error) = mem.alloc[WizRow](a, 10usize)
     if picks_error != ok { ret (zero, control.TooLarge) }
@@ -2972,7 +3000,7 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             bar_back.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
             bar_back.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
             var bar_fill = control.sized_style(160.0, 18.0)
-            bar_fill.background = paint.Brush { Solid: gl.rgb(0x63A4EAu32) }
+            bar_fill.background = paint.Brush { Solid: wiz_high(grid.wiz_palette) }
             let (bar_held, bar_held_error) = mem.alloc[widget.Node](a, 1usize)
             if bar_held_error != ok { ret (zero, control.TooLarge) }
             bar_held[0usize] = widget.box(0u64, bar_fill, zero)
@@ -2994,12 +3022,14 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             var step = 0usize
             while step < 8usize {
                 let at = f32(step) / 7.0
-                var cr: f32 = 0.99
-                var cg: f32 = 0.74
-                var cb: f32 = 0.74
-                var tr: f32 = 0.70
-                var tg: f32 = 0.90
-                var tb: f32 = 0.70
+                let low_color = wiz_low(grid.wiz_palette)
+                let high_color = wiz_high(grid.wiz_palette)
+                var cr: f32 = low_color.red
+                var cg: f32 = low_color.green
+                var cb: f32 = low_color.blue
+                var tr: f32 = high_color.red
+                var tg: f32 = high_color.green
+                var tb: f32 = high_color.blue
                 var t = at
                 if grid.wiz_type == 2u8 {
                     if at < 0.5 {
@@ -3024,6 +3054,19 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var strip_style = control.sized_style(width - 24.0, 24.0)
         strip_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
         rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, strip_style, strip_cells[0usize..strip_count])
+        n += 1usize
+        // Format...: steps through four colour sets (v3 opens its cell format dialog)
+        let (format_label, format_label_error) = flat_text(a, grid, "Format...", gl.rgb(0x000000u32))
+        if format_label_error != ok { ret (zero, format_label_error) }
+        var format_box = control.sized_style(100.0, 26.0)
+        format_box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+        format_box.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
+        format_box.radius = 4.0
+        format_box.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        let (format_held, format_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if format_held_error != ok { ret (zero, control.TooLarge) }
+        format_held[0usize] = widget.padded(0u64, 20.0, 4.0, 0.0, 0.0, style.defaults(), one(a, format_label))
+        rows[n] = widget.region(grid.key + MENU_KEY + 850330u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_wiz_format }, gestures: 1u8, enabled: true, focusable: false }, format_box, format_held[0usize..1usize])
         n += 1usize
     }
     // the column the rule applies to (the manager shows it in Applies to)
@@ -3131,7 +3174,7 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     }
     rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, foot, buttons[0usize..2usize])
     n += 1usize
-    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0 + 30.0 + 80.0 + 32.0 + 30.0)
+    var body = control.sized_style(width, 40.0 + 30.0 + 260.0 + 62.0 + 30.0 + 80.0 + 32.0 + 30.0 + 32.0)
     body.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     body.border = style.Border { width: 1.0, color: gl.rgb(0x6D6D6Du32) }
     body.radius = 8.0
