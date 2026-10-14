@@ -194,6 +194,8 @@ type Grid = struct {
     navigator_visible: bool,
     group_box_visible: bool,
     immediate_edit: bool,
+    enter_action: u8,
+    focus_column: usize,
     edit_focus_pending: bool,
     multi: bool,
     quick_sorted: bool,
@@ -4897,6 +4899,22 @@ fn on_edit_back_tab(ctx: *void) -> err {
 
 // Tab with no editor open (after a commit in an immediate-edit grid): edit the cell after the one
 // edited last, or the first editable cell of the next row.
+// v3's Options > Grids > Enter Key Action (main.vcl.form.pas, VK_RETURN): 0 moves to the next column
+// (the last column wraps to the first column of the next row), 1 moves down one row.
+fn set_enter_action(grid: *Grid, action: u8) { grid.enter_action = action }
+
+fn on_row_enter(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    if grid.editing || grid.read_only { ret ok }
+    if grid.enter_action == 1u8 { ret navigate(grid, Nav.Next) }
+    if grid.focus_column + 1usize < grid.specs.len {
+        grid.focus_column += 1usize
+        ret ok
+    }
+    grid.focus_column = 0usize
+    ret navigate(grid, Nav.Next)
+}
+
 fn on_row_tab(ctx: *void) -> err {
     let grid = mem.cast[*Grid](ctx)
     if !grid.immediate_edit || grid.editing || !grid.has_selection { ret ok }
@@ -6703,6 +6721,8 @@ fn with_keys(a: *mem.Arena, grid: *Grid, node: widget.Node) -> (widget.Node, err
         shortcuts[6usize] = widget.Shortcut { key: 9u32, modifiers: none, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_row_tab } }
         tab_count = 7usize
     }
+    shortcuts[tab_count] = widget.Shortcut { key: 13u32, modifiers: none, action: widget.Submit { ctx: mem.cast[*void](grid), invoke: on_row_enter } }
+    tab_count += 1usize
     if grid.multi {
         // Ctrl+A selects every row; Shift+Up and Shift+Down extend the selection
         var with_control: input.Modifiers = zero
