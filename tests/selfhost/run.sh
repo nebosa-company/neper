@@ -11279,6 +11279,8 @@ greeting"
     # URI (tests/selfhost/fixtures/neperos/qr_frame.png, made by qr_frame/src/main.e), for Secure's Scan.
     while IFS='|' read -r kind fixture port delay taps markers note; do
         [ "$kind" = scanfixture ] || continue
+        # Secure's vault needs entropy: the random-number device.
+        export NEPEROS_RNG=1
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
         seed_disk="$test_build/shell-$fixture.disk"
         python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/DCIM/SCAN_0001.png=$repo/tests/selfhost/fixtures/neperos/mrz_scan.png" "/DCIM/IMG_0001.png=$repo/tests/selfhost/fixtures/neperos/qr_frame.png" > /dev/null
@@ -11301,6 +11303,7 @@ greeting"
     python3 "$repo/scripts/make_doc_samples.py" "$doc_dir" "$ext_dir" > /dev/null
     while IFS='|' read -r kind fixture port delay taps markers note; do
         [ "$kind" = externalfixture ] || continue
+        unset NEPEROS_RNG
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
         seed_disk="$test_build/shell-$fixture.disk"
         ext_disk="$test_build/shell-$fixture-ext.disk"

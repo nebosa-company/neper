@@ -11505,6 +11505,8 @@ if ($neperosQemu) {
     foreach ($row in $appsTable) {
         $fields = $row.Split('|', 7)
         if ($fields[0] -ne 'scanfixture') { continue }
+        # Secure's vault needs entropy: the random-number device.
+        $env:NEPEROS_RNG = '1'
         $fixture = $fields[1]
         $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
         & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/DCIM/SCAN_0001.png=' + (Join-Path $repo 'tests\selfhost\fixtures\neperos\mrz_scan.png')) ('/DCIM/IMG_0001.png=' + (Join-Path $repo 'tests\selfhost\fixtures\neperos\qr_frame.png')) | Out-Null
@@ -11520,6 +11522,7 @@ if ($neperosQemu) {
     foreach ($row in $appsTable) {
         $fields = $row.Split('|', 7)
         if ($fields[0] -ne 'externalfixture') { continue }
+        Remove-Item Env:NEPEROS_RNG -ErrorAction SilentlyContinue
         $fixture = $fields[1]
         $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
         $extDisk = Join-Path $testBuild "shell-$fixture-ext.disk"
