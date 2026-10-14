@@ -2177,8 +2177,12 @@ fn criteria_text(a: *mem.Arena, grid: *const Grid) -> (str, err) {
     if b_error != ok { ret ("", b_error) }
     var sb = b
     if str.push(&sb, "filter 1\ngroup ") != ok || str.push_usize(&sb, usize(grid.crit_group)) != ok { ret ("", control.TooLarge) }
+    if str.push(&sb, "\nsubgroup ") != ok || str.push_usize(&sb, usize(grid.crit_sub_group)) != ok { ret ("", control.TooLarge) }
     var i = 0usize
     while i < grid.crit_count {
+        if grid.crit_sub[i] {
+            if str.push(&sb, "\nsub ") != ok || str.push_usize(&sb, i) != ok { ret ("", control.TooLarge) }
+        }
         if str.push(&sb, "\ncond ") != ok || str.push_usize(&sb, grid.crit_spec[i]) != ok || str.push(&sb, " ") != ok || str.push_usize(&sb, usize(grid.crit_op[i])) != ok || str.push(&sb, " ") != ok { ret ("", control.TooLarge) }
         if str.push(&sb, grid.crit_text[i * CRIT_TEXT..i * CRIT_TEXT + grid.crit_len[i]]) != ok { ret ("", control.TooLarge) }
         i += 1usize
@@ -2194,6 +2198,8 @@ fn load_criteria(grid: *Grid, text: str) -> bool {
     var first = true
     var count = 0usize
     var group = grid.crit_group
+    var sub_group: u8 = 0u8
+    var subs: [6]bool = zero
     var specs: [6]usize = zero
     var ops: [6]u8 = zero
     var lens: [6]usize = zero
@@ -2211,6 +2217,13 @@ fn load_criteria(grid: *Grid, text: str) -> bool {
             let (n, ok_n) = str.parse_u64(tail)
             if ok_n != ok || n > 3u64 { ret false }
             group = u8(n)
+        } else if same_text(head, "subgroup") {
+            let (sg, sg_ok) = str.parse_u64(tail)
+            if sg_ok != ok || sg > 3u64 { ret false }
+            sub_group = u8(sg)
+        } else if same_text(head, "sub") {
+            let (si, si_ok) = str.parse_u64(tail)
+            if si_ok == ok && si < 6u64 { subs[usize(si)] = true }
         } else if same_text(head, "cond") && count < 6usize {
             let (spec_word, after_spec) = next_token(tail)
             let (op_word, value_text) = next_token(after_spec)
@@ -2232,7 +2245,13 @@ fn load_criteria(grid: *Grid, text: str) -> bool {
     }
     if first { ret false }
     grid.crit_group = group
+    grid.crit_sub_group = sub_group
     grid.crit_count = count
+    var sj = 0usize
+    while sj < 6usize {
+        grid.crit_sub[sj] = subs[sj] && sj < count
+        sj += 1usize
+    }
     var k = 0usize
     while k < count {
         grid.crit_spec[k] = specs[k]
