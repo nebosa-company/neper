@@ -788,6 +788,11 @@ fn on_search_char(ctx: *void) -> err {
     let key = mem.cast[*SearchKey](ctx)
     let grid = key.grid
     if !grid.has_search || grid.editing { ret ok }
+    // a letter typed into the filter row's editor is its own, not a search
+    if mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
+        let (held, has_held) = widget.focused_key(grid.theme.runtime)
+        if has_held && held >= grid.key + FILTER_KEY && held < grid.key + FILTER_KEY + 1024u64 { ret ok }
+    }
     if key.ch == 8u8 {
         if grid.search_len > 0usize { grid.search_len -= 1usize }
         ret ok
