@@ -224,8 +224,6 @@ type Grid = struct {
     filter_op_icons: [12]scene.TextureId,
     has_filter_op_icons: bool,
     hoff: f32,
-    backdrop: scene.TextureId,
-    has_backdrop: bool,
     hgrab: f32,
     hon: bool,
     hcontent: f32,
@@ -959,13 +957,6 @@ fn set_navigator_icons(grid: *Grid, enabled: [7]scene.TextureId, disabled: [6]sc
     grid.nav_icons = enabled
     grid.nav_disabled = disabled
     grid.has_nav_icons = true
-}
-
-// v3's BackgroundBitmaps.Background (GRID_BACK, 350 by 252 pixels): a picture at the bottom-left of
-// the body, seen where the rows do not cover it.
-fn set_backdrop(grid: *Grid, texture: scene.TextureId) {
-    grid.backdrop = texture
-    grid.has_backdrop = true
 }
 
 // The word before the count in the footer (v3: "Count" in the pool, "Rows" in the collection).
@@ -7545,27 +7536,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         parts[at] = widget.box(grid.key + 3900u64, gauge, zero)
         at += 1usize
     }
-    if grid.has_backdrop && grid.look.on {
-        // the picture stands under the body in normal flow (a positioned child is painted over the rows)
-        let (back_picture, back_error) = control.image(a, 0u64, grid.backdrop, 233.0, 168.0, .Contain, "")
-        if back_error != ok { ret (zero, back_error) }
-        let (back_layers, back_layers_error) = mem.alloc[widget.Node](a, 2usize)
-        if back_layers_error != ok { ret (zero, control.TooLarge) }
-        let (back_flow, back_flow_error) = mem.alloc[widget.Node](a, 2usize)
-        if back_flow_error != ok { ret (zero, control.TooLarge) }
-        var spacer = style.defaults()
-        var spacer_h = body_height - 168.0
-        if !(spacer_h > 0.0) { spacer_h = 0.0 }
-        spacer.height = style.Length { Px: spacer_h }
-        spacer.width = style.Length { Px: 1.0 }
-        back_flow[0usize] = widget.box(0u64, spacer, zero)
-        back_flow[1usize] = back_picture
-        back_layers[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), back_flow[0usize..2usize])
-        back_layers[1usize] = shown_body
-        parts[at] = widget.stack(0u64, style.defaults(), back_layers[0usize..2usize])
-    } else {
-        parts[at] = shown_body
-    }
+    parts[at] = shown_body
     at += 1usize
     if with_footer {
         let (footer, footer_error) = footer_row(a, grid)
