@@ -152,6 +152,11 @@ print_open: bool,
 chooser_bands: bool,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
+pv_wide: u8,
+pv_tall: u8,
+pv_cell: [144]u8,
+pv_cell_len: [6]u8,
+pv_cell_touched: u8,
 pv_page: usize,
 pv_zoom: u8,
 pv_setup: bool,
@@ -4174,7 +4179,20 @@ fn header_footer_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widge
             var words = ""
             if group == 1usize && c == 1usize { words = "[Page #]" }
             if group == 1usize && c == 2usize { words = "[Date Printed]" }
-            let (cell, cell_error) = setup_box(a, grid, words, 166.0, 70.0, c == 2usize)
+            let slot = group * 3usize + c
+            if grid.pv_cell_len[slot] == 0u8 && grid.pv_cell_touched & (1u8 << u8(slot)) == 0u8 {
+                var w = 0usize
+                while w < words.len && w < 24usize {
+                    grid.pv_cell[slot * 24usize + w] = words[w]
+                    w += 1usize
+                }
+                grid.pv_cell_len[slot] = u8(w)
+                grid.pv_cell_touched = grid.pv_cell_touched | (1u8 << u8(slot))
+            }
+            let (cell_ctx, cell_ctx_error) = mem.alloc[MarginSpin](a, 1usize)
+            if cell_ctx_error != ok { ret (zero, control.TooLarge) }
+            cell_ctx[0usize] = MarginSpin { grid: grid, slot: u8(slot) }
+            let (cell, cell_error) = control.text_field(a, grid.key + MENU_KEY + 850500u64 + u64(slot) * 8u64, grid.theme, "", grid.pv_cell[slot * 24usize..slot * 24usize + 24usize], usize(grid.pv_cell_len[slot]), widget.Change[str] { ctx: mem.cast[*void](&cell_ctx[0usize]), invoke: on_cell_text }, zero, control.field_options())
             if cell_error != ok { ret (zero, cell_error) }
             cells[c] = widget.padded(0u64, 6.0, 0.0, 0.0, 0.0, style.defaults(), one(a, cell))
             c += 1usize
@@ -4209,13 +4227,81 @@ fn scaling_content(a: *mem.Arena, grid: *Grid, taps: []SetupTap) -> (widget.Node
     let (fit, fit_error) = setup_line(a, grid, taps[0usize..40usize], 2usize, 9u8, 1u8, "Fit To:", grid.pv_fit, false, 240.0)
     if fit_error != ok { ret (zero, fit_error) }
     rows[2usize] = fit
-    let (fit_label, fit_label_error) = flat_text(a, grid, "1   page(s) wide by   0   tall", gl.rgb(0x000000u32))
-    if fit_label_error != ok { ret (zero, fit_label_error) }
-    rows[3usize] = widget.padded(0u64, 30.0, 4.0, 0.0, 0.0, style.defaults(), one(a, fit_label))
+    let (fit_parts, fit_parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if fit_parts_error != ok { ret (zero, control.TooLarge) }
+    let (fit_ctx, fit_ctx_error) = mem.alloc[MarginSpin](a, 2usize)
+    if fit_ctx_error != ok { ret (zero, control.TooLarge) }
+    let (fit_buffers, fit_buffers_error) = mem.alloc[u8](a, 8usize)
+    if fit_buffers_error != ok { ret (zero, control.TooLarge) }
+    var f = 0usize
+    while f < 2usize {
+        fit_ctx[f] = MarginSpin { grid: grid, slot: u8(f) }
+        var current = i64(grid.pv_tall)
+        var low = 0i64
+        if f == 0usize {
+            current = i64(grid.pv_wide) + 1i64
+            low = 1i64
+        }
+        let (box, box_error) = control.spin_box_sized(a, grid.key + MENU_KEY + 850560u64 + u64(f) * 8u64, grid.theme, "", fit_buffers[f * 4usize..f * 4usize + 4usize], current, low, 99i64, 1i64, widget.Change[i64] { ctx: mem.cast[*void](&fit_ctx[f]), invoke: on_fit_spin }, widget.Change[str] { ctx: mem.cast[*void](&fit_ctx[f]), invoke: on_fit_text }, 90.0)
+        if box_error != ok { ret (zero, box_error) }
+        fit_parts[f * 2usize + 1usize] = box
+        var words = "page(s) wide by"
+        if f == 1usize { words = "tall" }
+        let (word, word_error) = flat_text(a, grid, words, gl.rgb(0x000000u32))
+        if word_error != ok { ret (zero, word_error) }
+        fit_parts[f * 2usize] = widget.padded(0u64, 8.0, 14.0, 6.0, 0.0, style.defaults(), one(a, word))
+        f += 1usize
+    }
+    // order: wide box, "page(s) wide by", tall box, "tall"
+    let (ordered, ordered_error) = mem.alloc[widget.Node](a, 4usize)
+    if ordered_error != ok { ret (zero, control.TooLarge) }
+    ordered[0usize] = fit_parts[1usize]
+    ordered[1usize] = fit_parts[0usize]
+    ordered[2usize] = fit_parts[3usize]
+    ordered[3usize] = fit_parts[2usize]
+    rows[3usize] = widget.padded(0u64, 30.0, 4.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(520.0, 58.0), ordered[0usize..4usize])))
     ret (widget.padded(0u64, 14.0, 12.0, 0.0, 0.0, style.defaults(), one(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..4usize]))), ok)
 }
 
 type MarginSpin = struct { grid: *Grid, slot: u8 }
+
+fn on_cell_text(ctx: *void, value: str) -> err {
+    let m = mem.cast[*MarginSpin](ctx)
+    var n = value.len
+    if n > 24usize { n = 24usize }
+    var i = 0usize
+    while i < n {
+        m.grid.pv_cell[usize(m.slot) * 24usize + i] = value[i]
+        i += 1usize
+    }
+    m.grid.pv_cell_len[usize(m.slot)] = u8(n)
+    ret ok
+}
+
+// Fit To: slot 0 pages wide (1..99), slot 1 pages tall (0..99, 0 = as many as needed).
+fn on_fit_spin(ctx: *void, value: i64) -> err {
+    let m = mem.cast[*MarginSpin](ctx)
+    var v = value
+    if v > 99i64 { v = 99i64 }
+    if m.slot == 0u8 {
+        if v < 1i64 { v = 1i64 }
+        m.grid.pv_wide = u8(v - 1i64)
+    } else {
+        if v < 0i64 { v = 0i64 }
+        m.grid.pv_tall = u8(v)
+    }
+    ret ok
+}
+
+fn on_fit_text(ctx: *void, value: str) -> err {
+    var v: i64 = 0i64
+    var i = 0usize
+    while i < value.len && i < 3usize {
+        if value[i] >= 48u8 && value[i] <= 57u8 { v = v * 10i64 + i64(value[i] - 48u8) }
+        i += 1usize
+    }
+    ret on_fit_spin(ctx, v)
+}
 
 // A margin set in hundredths of an inch; pv_tenths holds the tenths over the base, pv_hund the last digit.
 fn set_margin(grid: *Grid, slot: u8, hundredths: i64) {
@@ -4436,53 +4522,62 @@ fn margin_text(a: *mem.Arena, name: str, base_tenths: u8, extra: u8, hund: u8, t
     ret (str.done(&sb), ok)
 }
 
-// The margins row: its label, then each margin as a tappable value and the zoom.
+// The margins rows: the zoom (a tap), then each margin as a typed spin box.
 fn print_margins(a: *mem.Arena, grid: *Grid, width: f32) -> (widget.Node, err) {
-    let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
-    let (taps, taps_error) = mem.alloc[PrintTap](a, 7usize)
-    if taps_error != ok { ret (zero, control.TooLarge) }
+    let (zoom_tap, zoom_tap_error) = mem.alloc[PrintTap](a, 1usize)
+    if zoom_tap_error != ok { ret (zero, control.TooLarge) }
+    var text: str = "Zoom: 100%"
+    if grid.pv_zoom == 1u8 { text = "Zoom: 75%" }
+    if grid.pv_zoom == 2u8 { text = "Zoom: 50%" }
+    if grid.pv_zoom == 3u8 { text = "Zoom: 125%" }
+    let (zoom_label, zoom_label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if zoom_label_error != ok { ret (zero, zoom_label_error) }
+    zoom_tap[0usize] = PrintTap { grid: grid, index: 6u8 }
+    let zoom_padded = widget.padded(0u64, 10.0, 6.0, 0.0, 0.0, style.defaults(), one(a, zoom_label))
+    cells[0usize] = widget.region(grid.key + MENU_KEY + 850386u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&zoom_tap[0usize]), invoke: on_print_tap }, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), one(a, zoom_padded))
+    // the six margins as typed spin boxes (hundredths of an inch), in the order of the row they replace
+    let (pairs, pairs_error) = mem.alloc[widget.Node](a, 12usize)
+    if pairs_error != ok { ret (zero, control.TooLarge) }
+    let (spins, spins_error) = mem.alloc[MarginSpin](a, 6usize)
+    if spins_error != ok { ret (zero, control.TooLarge) }
+    let (buffers, buffers_error) = mem.alloc[u8](a, 72usize)
+    if buffers_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
-    while k < 8usize {
-        var text: str = "Margins"
-        if k >= 1usize && k <= 6usize {
-            var name = "Left: "
-            var base: u8 = 5u8
-            if k == 2usize { name = "Top: " }
-            if k == 3usize { name = "Right: " }
-            if k == 4usize { name = "Bottom: " }
-            if k == 5usize {
-                name = "Header: "
-                base = 2u8
-            }
-            if k == 6usize {
-                name = "Footer: "
-                base = 2u8
-            }
-            let (value, value_error) = margin_text(a, name, base, grid.pv_tenths[k - 1usize], grid.pv_hund[k - 1usize], false)
-            if value_error != ok { ret (zero, value_error) }
-            text = value
+    while k < 6usize {
+        var name = "Left:"
+        var base: u8 = 5u8
+        if k == 1usize { name = "Top:" }
+        if k == 2usize { name = "Right:" }
+        if k == 3usize { name = "Bottom:" }
+        if k == 4usize {
+            name = "Header:"
+            base = 2u8
         }
-        if k == 7usize {
-            text = "Zoom: 100%"
-            if grid.pv_zoom == 1u8 { text = "Zoom: 75%" }
-            if grid.pv_zoom == 2u8 { text = "Zoom: 50%" }
-            if grid.pv_zoom == 3u8 { text = "Zoom: 125%" }
+        if k == 5usize {
+            name = "Footer:"
+            base = 2u8
         }
-        let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+        spins[k] = MarginSpin { grid: grid, slot: u8(k) }
+        let hundredths = i64(grid.pv_tenths[k] + base) * 10i64 + i64(grid.pv_hund[k])
+        let (field, field_error) = control.spin_box_sized(a, grid.key + MENU_KEY + 850600u64 + u64(k) * 8u64, grid.theme, "", buffers[k * 12usize..k * 12usize + 12usize], hundredths, i64(base) * 10i64, 999i64, 5i64, widget.Change[i64] { ctx: mem.cast[*void](&spins[k]), invoke: on_margin_spin }, widget.Change[str] { ctx: mem.cast[*void](&spins[k]), invoke: on_margin_text }, 80.0)
+        if field_error != ok { ret (zero, field_error) }
+        let (label, label_error) = flat_text(a, grid, name, gl.rgb(0x000000u32))
         if label_error != ok { ret (zero, label_error) }
-        let padded_label = widget.padded(0u64, 10.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label))
-        if k == 0usize {
-            cells[k] = padded_label
-        } else {
-            taps[k - 1usize] = PrintTap { grid: grid, index: u8(k - 1usize) }
-            cells[k] = widget.region(grid.key + MENU_KEY + 850380u64 + u64(k), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[k - 1usize]), invoke: on_print_tap }, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_label))
-        }
+        pairs[k * 2usize] = widget.padded(0u64, 8.0, 20.0, 4.0, 0.0, style.defaults(), one(a, label))
+        pairs[k * 2usize + 1usize] = field
         k += 1usize
     }
-    var bar = control.sized_style(width, 28.0)
-    bar.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, bar, cells[0usize..8usize]), ok)
+    var top = control.sized_style(width, 28.0)
+    top.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    var bottom = control.sized_style(width, 58.0)
+    bottom.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    let (bars, bars_error) = mem.alloc[widget.Node](a, 2usize)
+    if bars_error != ok { ret (zero, control.TooLarge) }
+    bars[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, top, cells[0usize..1usize])
+    bars[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, bottom, pairs[0usize..12usize])
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 86.0), bars[0usize..2usize]), ok)
 }
 
 fn print_cell(a: *mem.Arena, grid: *Grid, text: str, width: f32, header: bool) -> (widget.Node, err) {

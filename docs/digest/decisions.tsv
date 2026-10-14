@@ -2313,4 +2313,6 @@ D5030	382	G012: the quick list's size checked against v3's pool grid
 D5031	265	G012: the filter-operator popup measured and sized from v3
 D5032	689	G012: a colour editor behind the style window's colour rows
 D5033	398	G012: custom RGB steppers in the colour editor
-D5034	557	G012: typed margin boxes in Page Setup
+D5034	558	G012: typed margin boxes in Page Setup
+D5035	633	G012: typed Header/Footer cells and Fit To counts in Page Setup
+D5036	423	G012: typed margin boxes in Print Preview
