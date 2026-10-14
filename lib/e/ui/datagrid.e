@@ -8927,7 +8927,19 @@ fn on_filter_clear(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
-fn filter_panel_button(a: *mem.Arena, grid: *Grid, text: str, fill: u32, ink: u32, width: f32, key: u64, live: bool) -> (widget.Node, err) {
+// Customize... on the filter panel opens the Advanced Filter.
+fn on_filter_customize(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        open_criteria_editor(grid)
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn filter_panel_button(a: *mem.Arena, grid: *Grid, text: str, fill: u32, ink: u32, width: f32, key: u64, kind: u8) -> (widget.Node, err) {
     let (label, label_error) = flat_text(a, grid, text, gl.rgb(ink))
     if label_error != ok { ret (zero, label_error) }
     var box = control.sized_style(width, 22.0)
@@ -8935,7 +8947,8 @@ fn filter_panel_button(a: *mem.Arena, grid: *Grid, text: str, fill: u32, ink: u3
     box.radius = 3.0
     box.margin = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     let held = widget.padded(0u64, 6.0, 2.0, 0.0, 0.0, style.defaults(), one(a, label))
-    if !live { ret (widget.box(0u64, box, one(a, held)), ok) }
+    if kind == 0u8 { ret (widget.box(0u64, box, one(a, held)), ok) }
+    if kind == 2u8 { ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_filter_customize }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held)), ok) }
     ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_filter_clear }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held)), ok)
 }
 
@@ -8943,10 +8956,10 @@ fn filter_panel_button(a: *mem.Arena, grid: *Grid, text: str, fill: u32, ink: u3
 fn filter_panel_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
-    let (clear, clear_error) = filter_panel_button(a, grid, "x", 0xC85050u32, 0xFFFFFFu32, 22.0, grid.key + MENU_KEY + 850880u64, true)
+    let (clear, clear_error) = filter_panel_button(a, grid, "x", 0xC85050u32, 0xFFFFFFu32, 22.0, grid.key + MENU_KEY + 850880u64, 1u8)
     if clear_error != ok { ret (zero, clear_error) }
     cells[0usize] = clear
-    let (tick, tick_error) = filter_panel_button(a, grid, "v", 0x0F5FBFu32, 0xFFFFFFu32, 22.0, 0u64, false)
+    let (tick, tick_error) = filter_panel_button(a, grid, "v", 0x0F5FBFu32, 0xFFFFFFu32, 22.0, 0u64, 0u8)
     if tick_error != ok { ret (zero, tick_error) }
     cells[1usize] = tick
     let (summary, summary_error) = filter_summary(a, grid)
@@ -8954,7 +8967,7 @@ fn filter_panel_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (words, words_error) = flat_text(a, grid, summary, gl.rgb(0x000000u32))
     if words_error != ok { ret (zero, words_error) }
     cells[2usize] = widget.padded(0u64, 12.0, 8.0, 0.0, 0.0, style.defaults(), one(a, words))
-    let (custom, custom_error) = filter_panel_button(a, grid, "Customize...", 0xFDFDFDu32, 0x000000u32, 100.0, 0u64, false)
+    let (custom, custom_error) = filter_panel_button(a, grid, "Customize...", 0xFDFDFDu32, 0x000000u32, 100.0, grid.key + MENU_KEY + 850881u64, 2u8)
     if custom_error != ok { ret (zero, custom_error) }
     cells[3usize] = widget.padded(0u64, 40.0, 0.0, 0.0, 0.0, style.defaults(), one(a, custom))
     var bar = style.defaults()
