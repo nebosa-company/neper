@@ -2230,4 +2230,5 @@ D2466	575	G012: secondary windows are raised by their title bar
 D2467	686	G012: the wizard's Applies to is the library's select
 D2468	520	G012: a secondary window rises when its body is tapped
 D2469	236	G012: the Advanced Filter body raises its window
-D2470	443	G012: window title text and close box placed, raise verified live
+D2470	444	G012: window title text and close box placed, raise verified live
+D2471	346	G012: the Applies to select verified live
