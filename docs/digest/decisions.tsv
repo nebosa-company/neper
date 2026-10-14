@@ -2235,4 +2235,5 @@ D2471	347	G012: the Applies to select verified live
 D2472	384	G012: a new rule's Applies to starts on the first numeric column
 D2473	523	G012: the wizard's Minimum and Maximum take a Percent
 D2474	247	G012: a Percent bound is checked by a fixture
-D2475	888	G012: the filter row stands under the header, in v3's look
+D2475	889	G012: the filter row stands under the header, in v3's look
+D2476	1038	G012: the filter row's operator list
