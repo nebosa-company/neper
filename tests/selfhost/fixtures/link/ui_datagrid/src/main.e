@@ -1777,6 +1777,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !dg.load_criteria(&grid15, nest_saved) { os.exit(645) }
     if !grid15.crit_sub[1usize] || grid15.crit_sub[0usize] || grid15.crit_sub_group != 2u8 { os.exit(646) }
     if dg.load_criteria(&grid15, "nonsense") { os.exit(643) }
+    // v3's Enter key action: Move to next column steps the focused column (the last one wraps and goes down a row)
+    dg.set_enter_action(&grid15, 0u8)
+    grid15.focus_column = 0usize
+    if grid15.specs.len > 1usize {
+        if dg.on_row_enter(mem.cast[*void](&grid15)) != ok { os.exit(647) }
+        if grid15.focus_column != 1usize { os.exit(648) }
+    }
     os.exit(0)
     ret ok
 }

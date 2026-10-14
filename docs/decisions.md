@@ -41133,3 +41133,7 @@ A second look at D4035: the pane measured through the stacked node's keyed bound
 ## D4037 - G012: the $1433 explained
 
 The unexplained v3 footer sum of D4030 is in main.vcl.form.pas: every currency summary of the collection grid has an `OnGetText` that writes an amount over 999 with `FormatFloat('$#0', value)`, without cents (the summary items' own `Format` is `$#0.00`). `summary_text` now drops the decimals of a Currency summary above 999, so $1432.63 reads $1433; the fixture's expected footer text follows the rule (`ui_datagrid`, exits 36-38). The four grid fixtures pass. Also in that file: the Target column shows an empty text for 0 (`btvCollectionTargetGetDisplayText`), which the sample's columns do not have.
+
+## D4038 - G012: the Enter key action
+
+v3 (main.vcl.form.pas, VK_RETURN of the grid site, with `Options > Grids > Enter Key Action`) turns an Enter without modifiers into a move: Move to next column (the default) focuses the next column of the row and, past the last, the first column of the next row; Move to next row goes down one row keeping the column; the key is consumed. `set_enter_action(grid, 0 | 1)` and the grid's Enter shortcut do that (`on_row_enter`; the editor's own Enter still commits, and an editing grid is left alone); the focused column is `focus_column`, drawn nowhere yet (v3 shows its cell focus rectangle). Fixture ui_datagrid checks the column step (exits 647-648); the four grid fixtures pass.
