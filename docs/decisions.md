@@ -41029,3 +41029,7 @@ The stacking of D4005 raised a window only when its title bar was tapped or drag
 ## D4011 - G012: the Advanced Filter body raises its window
 
 The Advanced Filter's body is wired through `window_body` like the other three windows, so a tap on an empty part raises it (D4010 left it out). The four grid fixtures pass.
+
+## D4012 - G012: window title text and close box placed, raise verified live
+
+The title text of a secondary window stood 64 px in (a leftover 44 px pad) and the close box's x sat at its top edge; the title now pads 14 px and the x is placed like the title text. Verified live in cardgrid: with Sort stacked over the rules manager, a tap in the rules manager's body brings it to the front (WN4-sort-over-rules-v5.png, WN4-rules-raised-v5.png).

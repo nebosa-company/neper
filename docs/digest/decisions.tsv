@@ -2590,4 +2590,5 @@ D4007	1019	G012: the scale preview as a gradient, the rule set refreshed by the 
 D4008	575	G012: secondary windows are raised by their title bar
 D4009	686	G012: the wizard's Applies to is the library's select
 D4010	520	G012: a secondary window rises when its body is tapped
-D4011	235	G012: the Advanced Filter body raises its window
+D4011	236	G012: the Advanced Filter body raises its window
+D4012	443	G012: window title text and close box placed, raise verified live
