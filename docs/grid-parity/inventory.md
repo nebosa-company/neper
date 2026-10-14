@@ -98,3 +98,5 @@ Recorded 2026-10-14 (AF5-operator-list-v3.png): v3's operator list of a conditio
 Verified live 2026-10-14: an `Is blank` condition on Favorite filters the pool (status line `0 of 120283 cards (filtered in 6 ms)`, AF5-blank-live-v5.png, D2456). The sample's Favorite cells are false, not null, so nothing is blank; v3 treats an unset favourite as blank, which would need a null for false in the loader (application data, not the grid).
 
 Verified live 2026-10-14: `Is none of R, G` on Color shows 89225 of 120283 cards, the complement of Is any of's 31058 (AF6-none-of-v5.png, D2457).
+
+Verified live 2026-10-14: a two colour scale created in the wizard with the white-to-green Format... set and Applies to: CMC paints the CMC cells green (CF9-scale-live-v5.png, D2463). All five visible cells came out the same dark green, where a scale over the column's 0..max range should grade them; the scale's statistics for that column (refresh after adding a rule from the wizard) are the first suspect and are not yet looked at.
