@@ -40825,3 +40825,7 @@ v3's group footer (F2-group-footer-v3.png, with Group Footers on and a small gro
 ## D3961 — G012: "(Sorted)" in the quick column list
 
 DevExpress's column quick customization has a "(Sorted)" entry (ColumnsQuickCustomizationSorted) that lists the columns alphabetically instead of in the grid's order; v3's list shows it above the rule. It is now a toggle: ticked, the list is ordered by title (case-insensitive); the grid's own column order is unchanged (Q2-quick-sorted-v5.png: CMC, Color, Cost, Edition, ES, Favorite, Legal, Name, P/T, Rarity, Text, Type). The list holds the grid's columns (13 in the pool) in its fixed height, so it does not scroll.
+
+## D3962 — G012: the current row of a grid without the focus is framed in near black
+
+On v3's collection grid with the card pool focused the current row is #D5E4EE inside a one-pixel near-black frame (#212121 measured at its top edge), where a focused grid's selection has the #83878B line. A grid without the focus (D3950's pale selection) now draws that frame as well (B11-unfocused-frame-v5.png: the collection's current row with its editor buttons); the fixture's P006 probe expects it, its grid never having the focus.

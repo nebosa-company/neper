@@ -4059,11 +4059,16 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         }
         // v3 paints the selected row of a grid that has not the focus in a pale blue-grey (#D5E4EE)
         var selected_fill = lk.selected
+        var selected_edge = lk.selected_line
         if !grid.editing && !grid.chooser_active && mem.address_of(theme.runtime) != 0usize {
             let (held, has_held) = widget.focused_key(theme.runtime)
-            if !has_held || !grid.has_selection || held != row_key(grid, grid.selected_row) { selected_fill = gl.rgb(0xD5E4EEu32) }
+            if !has_held || !grid.has_selection || held != row_key(grid, grid.selected_row) {
+                selected_fill = gl.rgb(0xD5E4EEu32)
+                // v3 frames the current row of a grid without the focus in near black
+                selected_edge = gl.rgb(0x212121u32)
+            }
         }
-        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: lk.selected_line, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
+        table_options.look = collection.TableLook { on: true, header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: lk.header_line, even: lk.even, odd: lk.odd, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal }
     }
     if grid.preview_on {
         table_options.expandable = true
