@@ -63,7 +63,7 @@
    "name": "Page Down moves by the rows shown",
    "v3": "re-recorded 2026-10-14 on the grouped pool (7 collapsed Rarity groups, 6 fully shown): Page Down from row 1 lands on row 6, the last fully shown row; the next one goes to row 7 (the end); Page Up from the end lands on the top shown row. Group rows are current rows: Up/Down/Home/End/Page visit them and the dotted rectangle follows (Rec: n)",
    "neper": "data rows only: navigate() skips group rows and the table roving takes the keys before the grid scope, so on a collapsed grouped grid a blue ring moves and the dotted rectangle stays; gating the roving off for the measured look dropped keys after the first move, so it was reverted",
-   "replayed": "open"
+   "replayed": "live in the sample (P1-group-row-keys-v5.png); data rows already followed the focus"
   },
   {
    "id": "S2",

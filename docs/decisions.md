@@ -39208,3 +39208,7 @@ v3 draws a dotted focus rectangle (1 px dots, every other pixel, black) round th
 ## D2424 — G012: a click on a group row focuses it, the box or a double click toggles it
 
 Recorded in v3 (N1-group-row-click-v3.png): a single click on a group row's text makes it current (dotted rectangle, Rec n) and leaves it collapsed; a double click on the row or a click on its +/- box toggles it. The grid toggled on any tap. `TableOptions` gained `double`/`has_double` (passed to the table's row builder), the grid's `on_double` toggles a group row, the box is its own region (`on_box_tap`), and a tap on the row only moves the position when the measured look is on (the plain look keeps tap-toggles). Live in the sample (N1-group-row-click-v5.png); the UI fixtures ui_datagrid, ui_gridrules, ui_collections_v2 and ui_tabular pass.
+
+## D2425 — G012: the keyboard visits group rows; the grid shows no focus ring
+
+v3 (P1-group-row-keys-v3.png): Up, Down, Home, End and the page keys visit group rows, the dotted rectangle follows and Rec n counts them. `follow_focus` now also follows the focus onto a group row (position moves, no card is selected), so the roving that already moved the focus drives the current row; with the measured look the focus ring is made transparent at the end of `build` because v3's current row is the dotted rectangle and the fill. Live in the sample (P1-group-row-keys-v5.png); ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular, ui_collection, ui_navigation, ui_interaction pass.
