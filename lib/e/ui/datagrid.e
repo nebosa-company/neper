@@ -137,6 +137,7 @@ type Grid = struct {
     row_drop_fn: fn(*void, usize) -> err,
     rules_dialog_open: bool,
     wiz_open: bool,
+    base_look: gl.Look,
     wiz_edit: bool,
     wiz_column: usize,
     has_wiz_column: bool,
@@ -446,7 +447,22 @@ fn clear_rules(grid: *Grid) { grid.has_rules = false }
 // theme's own look when `look.on` is false.
 fn set_look(grid: *Grid, look: gl.Look) {
     grid.look = look
+    grid.base_look = look
     if look.on { grid.row_height = look.row_height }
+}
+
+// Options > Grids > Font Size of v3 (Small 7, Medium 8, Large 10, Extra Large 12 points): the text
+// size and the heights of the measured look follow, from the Medium (8 point) look given to `set_look`.
+fn set_font_size(grid: *Grid, points: f32) {
+    if !grid.base_look.on { ret }
+    let factor = points / 8.0
+    var look = grid.base_look
+    look.text_size = grid.base_look.text_size * factor
+    look.row_height = grid.base_look.row_height * factor
+    look.header_height = grid.base_look.header_height * factor
+    grid.look = look
+    grid.row_height = look.row_height
+    relayout(grid)
 }
 
 // The group box above the header: a chip for each grouping level (the field and its sort
