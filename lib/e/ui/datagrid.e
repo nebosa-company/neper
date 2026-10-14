@@ -2772,7 +2772,32 @@ fn label_column(grid: *const Grid) -> usize {
     ret 0usize
 }
 
+// A group row's cell with v3's dotted focus rectangle over it when the group is the current row.
 fn group_cell(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: *widget.Node) -> err {
+    var plain: widget.Node = zero
+    let plain_error = group_cell_plain(a, grid, group, spec, &plain)
+    if plain_error != ok { ret plain_error }
+    var current = false
+    if grid.look.on && grid.has_position && grid.position < grp.visible_len(grid.g) {
+        if grp.visible_is_group(grid.g, grid.position) && !grp.visible_is_footer(grid.g, grid.position) && grp.visible_group(grid.g, grid.position) == group { current = true }
+    }
+    if !current {
+        *out = plain
+        ret ok
+    }
+    var shape = gl.Shape.DotLine
+    if spec == 0usize { shape = gl.Shape.DotEdges }
+    let (dots, dots_error) = gl.mark(a, shape, gl.rgb(0x000000u32), gl.rgb(0x000000u32), grid.columns[spec].width, grid.look.row_height)
+    if dots_error != ok { ret dots_error }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret control.TooLarge }
+    layers[0usize] = plain
+    layers[1usize] = dots
+    *out = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
+    ret ok
+}
+
+fn group_cell_plain(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: *widget.Node) -> err {
     let s = grid.specs[spec]
     if spec == label_column(grid) {
         let (b, b_error) = str.builder(a, 120usize)
@@ -3189,7 +3214,17 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
     if at >= rows {
         let group = usize(at - rows)
         if group < grp.group_len(grid.g) {
-            ret grp.set_expanded(grid.g, group, !grp.is_expanded(grid.g, group))
+            // v3 puts the focus on the group row it toggles (the dotted rectangle)
+            var at_group = 0usize
+            let shown_total = grp.visible_len(grid.g)
+            while at_group < shown_total && !(grp.visible_is_group(grid.g, at_group) && !grp.visible_is_footer(grid.g, at_group) && grp.visible_group(grid.g, at_group) == group) { at_group += 1usize }
+            let toggled = grp.set_expanded(grid.g, group, !grp.is_expanded(grid.g, group))
+            if at_group < shown_total {
+                grid.has_position = true
+                grid.position = at_group
+                grid.has_selection = false
+            }
+            ret toggled
         }
         ret ok
     }
