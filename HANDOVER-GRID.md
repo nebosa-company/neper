@@ -88,6 +88,12 @@ horizontal scrolling with the navigator thumb; background picture (GRID_BACK, `s
 
 - Collection grid: Show Columns... in its menu opens the tabbed Customization window (CM2, D5018).
 
+- `f32(x)` of a **u8** struct field (e.g. `f32(grid.fmt_pick)`) in a function that builds styles made the whole
+  window trap in `style.amount` as soon as it opened, even in a branch not taken (D5032). Compare chains instead.
+- Filter-operator popup sized from v3 (D5031); colour editor is a 24-colour palette (D5032): custom RGB, report
+  Designer, typed spin boxes for Page Setup / Preview margins, Korean row and a negative-value bar seen on
+  the grid are what remains.
+
 ## Status of the tree
 
 Committed locally; pushed through D4068 / D5007, D4069 / D5008 being pushed. Peers' dirty files in the
