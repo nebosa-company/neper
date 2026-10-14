@@ -18,6 +18,7 @@ New-Item -ItemType Directory -Force $Dir | Out-Null
 $p = Get-Process $Proc | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 $h = $p.MainWindowHandle
 if (-not $h -or $h -eq [IntPtr]::Zero) { throw "no window for ${Proc}: refusing to click" }
+[AW]::keybd_event(0x12,0,0,[UIntPtr]::Zero); [AW]::keybd_event(0x12,0,2,[UIntPtr]::Zero)
 [AW]::SetForegroundWindow($h) | Out-Null
 Start-Sleep -Milliseconds 400
 if ([AW]::GetForegroundWindow() -ne $h) { throw "${Proc} is not in front: refusing to click" }

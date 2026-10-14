@@ -41420,3 +41420,6 @@ The footer band's distance below the filter strip grows with Bottom minus Footer
 
 ## D4113 - G012: drive.ps1 refuses to click unless the target window is in front; Page Setup cells are three lines tall
 Twice a scripted run clicked into another application (Discord) because the sample was behind it or had not started: `drive.ps1` now throws when the process has no window or is not the foreground window after SetForegroundWindow, before any click or key. The header and footer cells of Page Setup ask for three rows of 166 x 70 (`cell_field_options`, v3's box size); the fixture passes but the result has not been looked at on screen.
+
+## D4114 - G012: the three-row Page Setup cells seen; drive.ps1 raises the window itself
+HF6-page-setup-cells-three-rows-v5.png: the six header and footer cells are tall boxes with the two footer defaults ("[Page #]", "[Date Printed]") in them; they are grey like the other fields, where v3's are white, and the text starts at the top-left only for the first line (a field of rows shows one line high here). `drive.ps1` presses and releases Alt before SetForegroundWindow so Windows lets it come to the front; its guard (D4113) still refuses to click when it does not.
