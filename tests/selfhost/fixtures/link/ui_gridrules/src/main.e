@@ -270,6 +270,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if axis_look.bar_left > 0.3334f32 || axis_look.bar_left + axis_look.bar_span < 0.3332f32 { os.exit(163) }
     // Axis color: the axis stands as a line a third of the way in
     if !axis_look.has_axis_line || !near(axis_look.bar_axis_at, 0.33333f32) { os.exit(164) }
+    // Negative colour: a value below zero takes it, one above keeps the fill
+    if near(axis_look.bar_color.red, 0.9f32) { os.exit(166) }
+    axis_rule.has_neg = true
+    axis_rule.neg = paint.rgba(0.9f32, 0.0f32, 0.0f32, 1.0f32)
+    axis_rule.has_min = true
+    axis_rule.min_value = -8.0
+    let (made_neg, made_neg_error) = gr.create(a, &t, 2usize)
+    if made_neg_error != ok { os.exit(167) }
+    var rs_neg = made_neg
+    let (_neg, neg_error) = gr.add(a, &rs_neg, axis_rule)
+    if neg_error != ok || gr.refresh(&rs_neg, a) != ok { os.exit(168) }
+    if near(gr.format(&rs_neg, 1usize, C_CMC).bar_color.red, 0.9f32) { os.exit(169) }
     // the bar's Fill mode Solid and Border style reach the cell's format
     var styled = gr.rule(C_CMC, gr.Kind.Bar)
     styled.bar_solid = true
