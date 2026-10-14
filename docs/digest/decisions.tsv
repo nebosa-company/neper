@@ -2576,4 +2576,5 @@ D3993	697	G012: v3's column list of the Advanced Filter recorded and matched in 
 D3994	800	G012: Open and Save As of the Advanced Filter
 D3995	709	G012: Minimum and Maximum of a range rule
 D3996	676	G012: Minimum and Maximum pickers of the New Rule wizard
-D3997	753	G012: the column of a new rule is chosen in the wizard
+D3997	754	G012: the column of a new rule is chosen in the wizard
+D3998	817	G012: Is blank and Is not blank, and a short operator list for flag columns
