@@ -148,6 +148,7 @@ type Grid = struct {
     rules_dialog_open: bool,
     wiz_open: bool,
 fmt_open: bool,
+print_open: bool,
     rules_changed: bool,
     wiz_bar_only: bool,
     wiz_min_number: bool,
@@ -1811,6 +1812,7 @@ fn on_window_close(ctx: *void, g: widget.Gesture) -> err {
         if w.which == 1u8 { w.grid.rules_dialog_open = false }
         if w.which == 2u8 { w.grid.wiz_open = false
             w.grid.fmt_open = false
+            w.grid.print_open = false
         }
         if w.which == 3u8 { w.grid.crit_open = false }
         ret ok
@@ -3655,7 +3657,169 @@ fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 // The wizard, with the Data Bar Rule Style Settings window over it while that is open.
+// ---- Print Preview (v3: Cards > Print > Print Preview..., the DevExpress preview window) --------------
+
+// Opens the preview of the shown rows; it stands in the wizard's window slot.
+fn show_print_preview(grid: *Grid) {
+    grid.wiz_open = true
+    grid.fmt_open = false
+    grid.print_open = true
+    grid.win_x[2usize] = 30.0
+    grid.win_y[2usize] = 20.0
+    grid.win_placed[2usize] = true
+    raise_window(grid, 2u8)
+}
+
+fn on_print_close(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.print_open = false
+        grid.wiz_open = false
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn print_cell(a: *mem.Arena, grid: *Grid, text: str, width: f32, header: bool) -> (widget.Node, err) {
+    let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if label_error != ok { ret (zero, label_error) }
+    var box = control.sized_style(width, 18.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    if header { box.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) } }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xE0E0E0u32) }
+    ret (widget.box(0u64, box, one(a, widget.padded(0u64, 3.0, 1.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
+}
+
+fn print_row(a: *mem.Arena, grid: *Grid, line: []const str, widths: []const f32, header: bool) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, line.len + 1usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < line.len {
+        let (cell, cell_error) = print_cell(a, grid, line[k], widths[k], header)
+        if cell_error != ok { ret (zero, cell_error) }
+        cells[k] = cell
+        k += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..line.len]), ok)
+}
+
+// A bar of text labels (the menu row and the margins row of the preview window).
+fn print_bar(a: *mem.Arena, grid: *Grid, labels: []const str, fill: u32, width: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, labels.len)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < labels.len {
+        let (label, label_error) = flat_text(a, grid, labels[k], gl.rgb(0x000000u32))
+        if label_error != ok { ret (zero, label_error) }
+        cells[k] = widget.padded(0u64, 10.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label))
+        k += 1usize
+    }
+    var bar = control.sized_style(width, 28.0)
+    bar.background = paint.Brush { Solid: gl.rgb(fill) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, bar, cells[0usize..labels.len]), ok)
+}
+
+// The window: title bar, menu, toolbar and margins rows, then the page (title, header and rows) and the
+// filter strip, as the DevExpress preview shows the grid.
+fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let width: f32 = 760.0
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 40usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    let (title, title_error) = window_title(a, grid, 2u8, "Print Preview", width, 30.0, false)
+    if title_error != ok { ret (zero, title_error) }
+    rows[n] = title
+    n += 1usize
+    let (menu_labels, menu_error) = mem.alloc[str](a, 5usize)
+    if menu_error != ok { ret (zero, control.TooLarge) }
+    menu_labels[0usize] = "File"
+    menu_labels[1usize] = "Explorer"
+    menu_labels[2usize] = "View"
+    menu_labels[3usize] = "Format"
+    menu_labels[4usize] = "Go"
+    let (menu_bar, menu_bar_error) = print_bar(a, grid, menu_labels[0usize..5usize], 0xFFFFFFu32, width)
+    if menu_bar_error != ok { ret (zero, menu_bar_error) }
+    rows[n] = menu_bar
+    n += 1usize
+    var tool = control.sized_style(width, 34.0)
+    tool.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    tool.border = style.Border { width: 1.0, color: gl.rgb(0xD0D0D0u32) }
+    rows[n] = widget.box(0u64, tool, zero)
+    n += 1usize
+    let (margin_labels, margin_error) = mem.alloc[str](a, 7usize)
+    if margin_error != ok { ret (zero, control.TooLarge) }
+    margin_labels[0usize] = "Margins"
+    margin_labels[1usize] = "Left: 0.5 in"
+    margin_labels[2usize] = "Top: 0.5 in"
+    margin_labels[3usize] = "Right: 0.5 in"
+    margin_labels[4usize] = "Bottom: 0.5 in"
+    margin_labels[5usize] = "Header: 0.2 in"
+    margin_labels[6usize] = "Footer: 0.2 in"
+    let (margin_bar, margin_bar_error) = print_bar(a, grid, margin_labels[0usize..7usize], 0xF0F0F0u32, width)
+    if margin_bar_error != ok { ret (zero, margin_bar_error) }
+    rows[n] = margin_bar
+    n += 1usize
+    let (lines, wide, lines_error) = export_rows(a, grid, 12usize, false)
+    if lines_error != ok { ret (zero, lines_error) }
+    var shown = wide
+    if shown > 9usize { shown = 9usize }
+    let (widths, widths_error) = mem.alloc[f32](a, shown + 1usize)
+    if widths_error != ok { ret (zero, control.TooLarge) }
+    var k = 0usize
+    while k < shown {
+        widths[k] = 640.0 / f32(shown)
+        k += 1usize
+    }
+    let (heading, heading_error) = flat_text(a, grid, "Collection", gl.rgb(0x000000u32))
+    if heading_error != ok { ret (zero, heading_error) }
+    let (page, page_error) = mem.alloc[widget.Node](a, 40usize)
+    if page_error != ok { ret (zero, control.TooLarge) }
+    var q = 0usize
+    page[q] = widget.padded(0u64, 270.0, 16.0, 0.0, 8.0, style.defaults(), one(a, heading))
+    q += 1usize
+    var r = 0usize
+    while r < lines.len && q < 30usize && shown > 0usize {
+        let (line_node, line_error) = print_row(a, grid, lines[r][0usize..shown], widths[0usize..shown], r == 0usize)
+        if line_error != ok { ret (zero, line_error) }
+        page[q] = widget.padded(0u64, 24.0, 0.0, 0.0, 0.0, style.defaults(), one(a, line_node))
+        q += 1usize
+        r += 1usize
+    }
+    let (filter_text, filter_error) = flat_text(a, grid, "<Filter is Empty>", gl.rgb(0xFFFFFFu32))
+    if filter_error != ok { ret (zero, filter_error) }
+    var strip = control.sized_style(640.0, 22.0)
+    strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) }
+    strip.margin = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    page[q] = widget.box(0u64, strip, one(a, widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, style.defaults(), one(a, filter_text))))
+    q += 1usize
+    var sheet = control.sized_style(690.0, 400.0)
+    sheet.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    sheet.border = style.Border { width: 1.0, color: gl.rgb(0x3C8CDCu32) }
+    sheet.margin = style.EdgeLengths { left: style.Length { Px: 36.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sheet, page[0usize..q])
+    n += 1usize
+    let (close_label, close_error) = flat_text(a, grid, "Close", gl.rgb(0x000000u32))
+    if close_error != ok { ret (zero, close_error) }
+    var close_box = control.sized_style(100.0, 28.0)
+    close_box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+    close_box.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
+    close_box.radius = 4.0
+    close_box.margin = style.EdgeLengths { left: style.Length { Px: 640.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
+    rows[n] = widget.region(grid.key + MENU_KEY + 850370u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_print_close }, gestures: 1u8, enabled: true, focusable: false }, close_box, one(a, widget.padded(0u64, 28.0, 5.0, 0.0, 0.0, style.defaults(), one(a, close_label))))
+    n += 1usize
+    var panel = control.sized_style(width, 520.0)
+    panel.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) }
+    panel.border = style.Border { width: 1.0, color: gl.rgb(0x606060u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..n]), ok)
+}
+
 fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    if grid.print_open {
+        let (print_node, print_error) = print_panel(a, grid)
+        ret (print_node, print_error)
+    }
     let (base, base_error) = wiz_panel_base(a, grid)
     if base_error != ok { ret (zero, base_error) }
     if !grid.fmt_open { ret (base, ok) }

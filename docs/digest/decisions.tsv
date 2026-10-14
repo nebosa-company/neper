@@ -2292,4 +2292,5 @@ D5009	859	G012: axis for data bars and fallback fonts for non-English cards
 D5010	429	G012: the hovered scroll thumb measured from v3
 D5011	379	G012: the navigator bar measured from v3
 D5012	756	G012: why columns grow while scrolling sideways
-D5013	729	G012: columns keep their widths while scrolling sideways
+D5013	730	G012: columns keep their widths while scrolling sideways
+D5014	896	G012: Print Preview window
