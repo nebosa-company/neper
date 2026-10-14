@@ -1642,15 +1642,18 @@ fn menu_commands(a: *mem.Arena, grid: *Grid) -> ([]overlay.MenuCommand, err) {
         ret (commands[0usize..n], ok)
     }
     if grid.menu_kind == MENU_ALIGN {
-        let kinds: [3]u8 = [3]u8{ CMD_ALIGN_LEFT, CMD_ALIGN_CENTER, CMD_ALIGN_RIGHT }
-        let words: [3]str = [3]str{ "Left", "Center", "Right" }
+        let kinds: [3]u8 = [3]u8{ CMD_ALIGN_LEFT, CMD_ALIGN_RIGHT, CMD_ALIGN_CENTER }
+        let words: [3]str = [3]str{ "Align Left", "Align Right", "Align Center" }
         var current = 1u8
         if grid.menu_spec < grid.specs.len && grid.aligns[grid.origin[grid.menu_spec]] != 0u8 { current = grid.aligns[grid.origin[grid.menu_spec]] }
         var q = 0usize
         while q < 3usize {
             picks[q] = MenuPick { grid: grid, id: kinds[q], spec: grid.menu_spec }
             commands[q] = menu_item(words[q], widget.Submit { ctx: mem.cast[*void](&picks[q]), invoke: on_menu_pick }, true, false, "")
-            commands[q].checked = u8(q + 1usize) == current
+            var slot_value = u8(q + 1usize)
+            if q == 1usize { slot_value = 3u8 }
+            if q == 2usize { slot_value = 2u8 }
+            commands[q].checked = slot_value == current
             q += 1usize
         }
         ret (commands[0usize..3usize], ok)

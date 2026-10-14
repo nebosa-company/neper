@@ -39690,3 +39690,7 @@ The sample's card menu ends with v3's Print group in v3's order: Print... (Ctrl+
 ## D5025 - G012: popup widths measured against v3
 
 v3's header menu (HM1) is 250 px wide for its longest entry, Best Fit (all columns); ours (the earlier build) was 328 px; v3's collection cell menu (CM3) is 317 px with Ctrl+Alt+T as its widest shortcut, ours 450 px. The width formula charged 6.6 units a character; v3's menus are 4.0 near enough once the picture column (27) and the margins (24 + 22, 16 before a shortcut) are kept: header 241 px (HM2-header-menu-width-v5.png), cell about 325 px. Entry heights already matched (33 px for the header menu, 30 px for the cell menu). v3 sets its two popups in different faces (the cell menu's text is wider than the header menu's); ours has one face for both.
+
+## D5026 - G012: the Alignment submenu in v3's words and order
+
+v3's submenu (AL3) lists Align Left, Align Right, Align Center in that order, with pictures, and the parent entry stays light blue (ours: Left, Center, Right, parent in the strong blue; AL2). Words and order now match; the pictures and the light-blue parent are not done.
