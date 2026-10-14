@@ -144,6 +144,7 @@ type Grid = struct {
     row_drop_fn: fn(*void, usize) -> err,
     rules_dialog_open: bool,
     wiz_open: bool,
+fmt_open: bool,
     rules_changed: bool,
     wiz_bar_only: bool,
     wiz_min_number: bool,
@@ -1638,7 +1639,9 @@ fn on_window_close(ctx: *void, g: widget.Gesture) -> err {
     case .Tap as at:
         if w.which == 0u8 { w.grid.sort_dialog_open = false }
         if w.which == 1u8 { w.grid.rules_dialog_open = false }
-        if w.which == 2u8 { w.grid.wiz_open = false }
+        if w.which == 2u8 { w.grid.wiz_open = false
+            w.grid.fmt_open = false
+        }
         if w.which == 3u8 { w.grid.crit_open = false }
         ret ok
     default:
@@ -3000,9 +3003,12 @@ fn on_wiz_format(ctx: *void, g: widget.Gesture) -> err {
     let grid = mem.cast[*Grid](ctx)
     switch g {
     case .Tap as at:
+        // a data bar opens v3's Data Bar Rule Style Settings; the other types step through colour sets
+        if grid.wiz_type == 0u8 {
+            grid.fmt_open = true
+            ret ok
+        }
         grid.wiz_palette = (grid.wiz_palette + 1u8) % 4u8
-        // a data bar's Fill mode and Border style (Data Bar Rule Style Settings) step once the colours have gone round
-        if grid.wiz_palette == 0u8 { grid.wiz_bar_style = (grid.wiz_bar_style + 1u8) % 4u8 }
         ret ok
     default:
         ret ok
@@ -3105,6 +3111,7 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         grid.wiz_open = false
+        grid.fmt_open = false
         if mem.address_of(grid.rule_set) == 0usize || mem.address_of(grid.rules_arena) == 0usize { ret ok }
         // the sorted column when it holds numbers, else the first numeric one, else the search column
         var spec = grid.search_spec
@@ -3300,13 +3307,167 @@ fn on_wiz_cancel(ctx: *void, g: widget.Gesture) -> err {
     switch g {
     case .Tap as at:
         grid.wiz_open = false
+        grid.fmt_open = false
         ret ok
     default:
         ret ok
     }
 }
 
+// v3's Data Bar Rule Style Settings: Fill mode and Border style take effect on the rule; the
+// direction, negative-bar and axis rows are drawn as v3 shows them with their default choice.
+fn on_fmt_fill(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.wiz_bar_style = grid.wiz_bar_style ^ 1u8
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_fmt_border(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.wiz_bar_style = grid.wiz_bar_style ^ 2u8
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn on_fmt_close(ctx: *void, g: widget.Gesture) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    switch g {
+    case .Tap as at:
+        grid.fmt_open = false
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+fn fmt_caption(a: *mem.Arena, grid: *Grid, text: str, ink: u32, top: f32) -> (widget.Node, err) {
+    let (label, label_error) = flat_text(a, grid, text, gl.rgb(ink))
+    if label_error != ok { ret (zero, label_error) }
+    ret (widget.padded(0u64, 14.0, top, 0.0, 0.0, style.defaults(), one(a, label)), ok)
+}
+
+// A caption and a value box (a drop-down in v3), tapped to step through the choices.
+fn fmt_choice(a: *mem.Arena, grid: *Grid, caption: str, value: str, key: u64, invoke: fn(*void, widget.Gesture) -> err, live: bool) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    let (cap, cap_error) = flat_text(a, grid, caption, gl.rgb(0x000000u32))
+    if cap_error != ok { ret (zero, cap_error) }
+    var cap_style = control.sized_style(110.0, 26.0)
+    cap_style.margin = style.EdgeLengths { left: style.Length { Px: 14.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    cells[0usize] = widget.box(0u64, cap_style, one(a, widget.padded(0u64, 0.0, 5.0, 0.0, 0.0, style.defaults(), one(a, cap))))
+    let (val, val_error) = flat_text(a, grid, value, gl.rgb(0x000000u32))
+    if val_error != ok { ret (zero, val_error) }
+    var box = control.sized_style(250.0, 26.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xC8C8C8u32) }
+    box.radius = 4.0
+    let held = widget.padded(0u64, 6.0, 5.0, 0.0, 0.0, style.defaults(), one(a, val))
+    if live {
+        cells[1usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: invoke }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, held))
+    } else {
+        cells[1usize] = widget.box(0u64, box, one(a, held))
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..2usize]), ok)
+}
+
+fn fmt_button(a: *mem.Arena, grid: *Grid, text: str, key: u64) -> (widget.Node, err) {
+    let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if label_error != ok { ret (zero, label_error) }
+    var box = control.sized_style(110.0, 30.0)
+    box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
+    box.radius = 4.0
+    box.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 10.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_fmt_close }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, widget.padded(0u64, 36.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
+}
+
+fn fmt_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 16usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    var fill = "Gradient"
+    if (grid.wiz_bar_style & 1u8) != 0u8 { fill = "Solid" }
+    var border = "None"
+    if (grid.wiz_bar_style & 2u8) != 0u8 { border = "Solid" }
+    let (c0, e0) = fmt_caption(a, grid, "Data Bar Rule Style Settings", 0x606060u32, 10.0)
+    if e0 != ok { ret (zero, e0) }
+    let (c1, e1) = fmt_caption(a, grid, "Common", 0x000000u32, 12.0)
+    if e1 != ok { ret (zero, e1) }
+    let (c2, e2) = fmt_choice(a, grid, "Fill mode:", fill, grid.key + MENU_KEY + 850360u64, on_fmt_fill, true)
+    if e2 != ok { ret (zero, e2) }
+    let (c3, e3) = fmt_choice(a, grid, "Border style:", border, grid.key + MENU_KEY + 850361u64, on_fmt_border, true)
+    if e3 != ok { ret (zero, e3) }
+    let (c4, e4) = fmt_choice(a, grid, "Bar direction:", "Context", 0u64, on_fmt_close, false)
+    if e4 != ok { ret (zero, e4) }
+    let (c5, e5) = fmt_caption(a, grid, "Positive Bar Appearance", 0x000000u32, 12.0)
+    if e5 != ok { ret (zero, e5) }
+    let (c6, e6) = fmt_choice(a, grid, "Color:", "0.139.239", 0u64, on_fmt_close, false)
+    if e6 != ok { ret (zero, e6) }
+    let (c7, e7) = fmt_caption(a, grid, "Negative Bar Appearance", 0x000000u32, 12.0)
+    if e7 != ok { ret (zero, e7) }
+    let (c8, e8) = fmt_caption(a, grid, "(o) Apply same fill color as positive bar", 0x000000u32, 6.0)
+    if e8 != ok { ret (zero, e8) }
+    let (c9, e9) = fmt_caption(a, grid, "Axis Settings", 0x000000u32, 12.0)
+    if e9 != ok { ret (zero, e9) }
+    let (c10, e10) = fmt_caption(a, grid, "(o) Automatic (display at variable position based on negative values)", 0x000000u32, 6.0)
+    if e10 != ok { ret (zero, e10) }
+    let (c11, e11) = fmt_choice(a, grid, "Axis color:", "Black", 0u64, on_fmt_close, false)
+    if e11 != ok { ret (zero, e11) }
+    rows[0usize] = c0
+    rows[1usize] = c1
+    rows[2usize] = c2
+    rows[3usize] = c3
+    rows[4usize] = c4
+    rows[5usize] = c5
+    rows[6usize] = c6
+    rows[7usize] = c7
+    rows[8usize] = c8
+    rows[9usize] = c9
+    rows[10usize] = c10
+    rows[11usize] = c11
+    n = 12usize
+    let (buttons, buttons_error) = mem.alloc[widget.Node](a, 2usize)
+    if buttons_error != ok { ret (zero, control.TooLarge) }
+    let (ok_button, ok_button_error) = fmt_button(a, grid, "OK", grid.key + MENU_KEY + 850362u64)
+    if ok_button_error != ok { ret (zero, ok_button_error) }
+    let (cancel_button, cancel_button_error) = fmt_button(a, grid, "Cancel", grid.key + MENU_KEY + 850363u64)
+    if cancel_button_error != ok { ret (zero, cancel_button_error) }
+    buttons[0usize] = ok_button
+    buttons[1usize] = cancel_button
+    var button_style = control.sized_style(380.0, 40.0)
+    button_style.margin = style.EdgeLengths { left: style.Length { Px: 150.0 }, top: style.Length { Px: 14.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, button_style, buttons[0usize..2usize])
+    n += 1usize
+    var panel = control.sized_style(380.0, 440.0)
+    panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..n]), ok)
+}
+
+// The wizard, with the Data Bar Rule Style Settings window over it while that is open.
 fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (base, base_error) = wiz_panel_base(a, grid)
+    if base_error != ok { ret (zero, base_error) }
+    if !grid.fmt_open { ret (base, ok) }
+    let (over, over_error) = fmt_panel(a, grid)
+    if over_error != ok { ret (zero, over_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, control.TooLarge) }
+    layers[0usize] = base
+    layers[1usize] = widget.padded(0u64, 70.0, 20.0, 0.0, 0.0, style.defaults(), one(a, over))
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+}
+
+fn wiz_panel_base(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let width: f32 = 520.0
     let (rows, rows_error) = mem.alloc[widget.Node](a, 24usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
