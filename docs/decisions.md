@@ -39324,3 +39324,7 @@ v3's Advanced Filter has Open... and Save As... (AF1-advanced-filter-v3.png; it 
 ## D2453 - G012: Minimum and Maximum of a range rule
 
 v3's New Rule window gives the data bar, colour scale and icon set types a Minimum and a Maximum, each Lowest / Highest Value or a number (CF2-new-rule-v3.png). `gridrules.Rule` now has `has_min`/`min_value` and `has_max`/`max_value`; `apply_range` uses them in place of the column's lowest and highest value and clamps the fraction to 0..1. ui_datagrid section 39 checks a bar with a Maximum of its own stays within 0..1; ui_gridrules, ui_collections_v2, ui_tabular pass. Model only: the wizard's pickers for them (the Lowest Value / Highest Value / Number choice and the value field) are not built, and v3's percent and formula choices are not either.
+
+## D2454 - G012: Minimum and Maximum pickers of the New Rule wizard
+
+v3's range types (data bar, icon set, colour scales) show Minimum and Maximum, each a Lowest / Highest Value choice with a value field (CF2-new-rule-v3.png). The wizard now shows both for those four types: a tap on the box toggles between Lowest / Highest Value and Number, a Number shows a field, and OK writes `has_min`/`min_value` and `has_max`/`max_value` (D2453) into the new rule. Live in the sample (CF6-min-max-v5.png: Maximum set to Number 5). Not built: v3's percent, percentile and formula choices, the Preview strip and Format.... ui_datagrid, ui_gridrules, ui_collections_v2, ui_tabular pass.
