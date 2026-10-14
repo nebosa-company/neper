@@ -524,6 +524,28 @@ fn set_immediate_edit(grid: *Grid, on: bool) { grid.immediate_edit = on }
 
 fn show_group_box(grid: *Grid, on: bool) { grid.group_box_visible = on }
 
+// v3's View > Show Summary Footer.
+fn show_footer(grid: *Grid, on: bool) { grid.footer_visible = on }
+
+// v3's View > Full Expand and Full Collapse: every group open or closed.
+fn set_all_groups(grid: *Grid, open: bool) {
+    var group = 0usize
+    while group < grp.group_len(grid.g) {
+        let changed = grp.set_expanded(grid.g, group, open)
+        group += 1usize
+    }
+}
+
+// v3's View > Best Fit (all columns).
+fn best_fit_all(a: *mem.Arena, grid: *Grid) -> err {
+    var spec = 0usize
+    while spec < grid.all.len {
+        try best_fit(a, grid, spec)
+        spec += 1usize
+    }
+    ret ok
+}
+
 // The navigator's funnel button calls `action` (v3 opens its filter dialog from it).
 fn set_filter_action(grid: *Grid, action: widget.Submit) {
     grid.filter_action = action
