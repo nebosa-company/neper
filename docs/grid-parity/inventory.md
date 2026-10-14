@@ -17,6 +17,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Image combo: favourite star (two values) | matched | ST1-favourite-star (D2435) |
 | Image combo: desired (drop-down: Junk, Needed, Needed Badly, Normal, Not Needed, Unassigned) | recorded in v3 (IC1-desired-dropdown-v3.png: the cell shows its value with a down-arrow button while edited, the list opens below with the current value highlighted blue, each value has a small picture); neper's `choice` editor (select with picks, dictionaries of up to 24 entries, covered by ui_datagrid section 27) has the same structure; no sample column uses it, the pool grid is read-only and the collection's dictionaries (editions) exceed 24 entries, a tap now opens the select editor in the sample (D2445, IC2-select-editor-v5.png) and and with the v3 look it is now v3's box with arrow button and plain list, current value highlighted blue (IC3-select-v3-look-v5.png, D2446); per-value pictures not built | IC1, IC2, IC3 |
 | Check box, date edit, hyperlink, label editors | untested | |
+| Focused row editors of the collection (Qty spin, Used spin, Buy at and Sell at buttons) | matched | ED1-collection-row-editors-v3 / v5 |
 | Header image + header hint | matched | T1/T2 hint (delay measured 1045 ms vs 1101 ms, D2430) |
 | Per-column alignment of header, cell, footer, group summary | matched (cell, header) / untested (footer, group summary) | A-series |
 | Width, min width, best fit, best fit all | matched | A1-best-fit |
@@ -71,7 +72,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Group row focus, double click, box | matched | N1 (D2424) |
 | Group footers (29 px) | matched | F3-group-footer-height (D2423) |
 | Group summaries and footer summaries (format strings) | untested | `Count: #`, `$#0.00` formats compared once, not exhaustively |
-| Filter row (extra, delayed apply 1000 ms) | untested | the pool has none (F1 n/a) |
+| Filter row (Options > Grids, Show Filter Row) | matched (white 28 px row under the header, `=` sign and flat editor per column, funnel in the indicator column, light blue while an editor has the keyboard, the twelve operators with v3's pictures, typing is not a search) / untested (the 1000 ms delay, per-type default operators, Enter in the editor) | FR1-FR7 (D2475-D2479) |
 | Advanced Filter (criteria editor) | matched (structure, conditions, group operator) / differs (the group, column and operator words open lists, D2449 and D2450, v3's lists of the last two not recorded; no nesting, no Open/Save) | AF1-advanced-filter (D2434) |
 | Filter Card Pool dialog (blocks / formats / editions) | app | AF1-filter-card-pool-v3 |
 | Incremental search, next/previous, prefix mark, no timeout | matched | S3, S5-search-prefix (D2427) |
