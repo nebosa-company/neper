@@ -41347,3 +41347,7 @@ The popup an open Alignment submenu came from keeps its Alignment entry in light
 ## D4090 - G012: the quick column list wraps into two columns
 
 v3's indicator quick list (QM1) is two columns of ticked names, taller lists continuing in the second column; ours was one column that ran off the window. A list of more than fourteen entries (or taller than the surface) now splits in two halves side by side (QM4-quick-two-columns-v5.png). v3 lists every column in its two columns without the (All) and (Sorted) rows at their top in this view; ours keeps them in the first column.
+
+## D4091 - G012: the quick list's size checked against v3's pool grid
+
+v3's pool quick list (QM5) is one column 135 px wide (92 units) with 25.5 px (17 unit) rows and a black frame: ours already is. It wraps into two columns only when the list is long (the collection's, QM1), as the D4090 change does. Nothing to change; the filter-operator popup was matched earlier (FR series).
