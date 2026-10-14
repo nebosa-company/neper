@@ -2480,7 +2480,7 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // their selection cell inert, still focusable and Disabled in the tree.
 // (D1501) `pending` marks rows (by key) whose data has not come: each cell is a
 // skeleton line (60% of the cell, 12 tall) and the row is Busy in the tree.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook }
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook, double: widget.Change[widget.Key], has_double: bool }
 
 fn zero_look() -> TableLook {
     var look: TableLook = zero
@@ -4108,7 +4108,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 if hold_error != ok { ret (zero, hold_error) }
             }
         }
-        let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_conditions, selection.look)
+        let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, selection.double, selection.has_double, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_conditions, selection.look)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize

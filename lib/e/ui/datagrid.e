@@ -2884,7 +2884,14 @@ fn group_cell_plain(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: 
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret control.TooLarge }
         // layered, not a row: a narrow first column must clip the label, not fail the layout
-        pair[0usize] = box
+        let (taps, taps_error) = mem.alloc[BoxTap](a, 1usize)
+        if taps_error != ok { ret control.TooLarge }
+        taps[0usize] = BoxTap { grid: grid, group: group }
+        let (box_inner, box_inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if box_inner_error != ok { ret control.TooLarge }
+        box_inner[0usize] = box
+        var box_hit = control.sized_style(17.0, grid.look.row_height)
+        pair[0usize] = widget.region(grid.key + MENU_KEY + 600000u64 + u64(group), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[0usize]), invoke: on_box_tap }, gestures: 1u8, enabled: true, focusable: false }, box_hit, box_inner[0usize..1usize])
         pair[1usize] = widget.padded(0u64, 17.0, 0.0, 0.0, 0.0, style.defaults(), one(a, label))
         *out = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
         ret ok
@@ -3237,7 +3244,31 @@ fn on_sort(ctx: *void, shown: usize) -> err {
     ret grid.events.sort_changed(grid.events.ctx, spec, descending)
 }
 
-// A tap on a group row toggles it; on a data row it selects it and tells the application.
+// A double click on a group row toggles it (v3), as the click on its box does.
+fn on_double(ctx: *void, value: widget.Key) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    let base = grid.key + KEY_BASE
+    let rows = u64(table.capacity(grid.t))
+    if value < base + rows { ret ok }
+    let group = usize(value - base - rows)
+    if group >= grp.group_len(grid.g) { ret ok }
+    ret grp.set_expanded(grid.g, group, !grp.is_expanded(grid.g, group))
+}
+
+type BoxTap = struct { grid: *Grid, group: usize }
+
+fn on_box_tap(ctx: *void, g: widget.Gesture) -> err {
+    let tap = mem.cast[*BoxTap](ctx)
+    switch g {
+    case .Tap as at:
+        let grid = tap.grid
+        ret grp.set_expanded(grid.g, tap.group, !grp.is_expanded(grid.g, tap.group))
+    default:
+        ret ok
+    }
+}
+
+// A tap on a group row focuses it; on a data row it selects it and tells the application.
 fn on_pick(ctx: *void, value: widget.Key) -> err {
     let grid = mem.cast[*Grid](ctx)
     let base = grid.key + KEY_BASE
@@ -3251,13 +3282,16 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
             var at_group = 0usize
             let shown_total = grp.visible_len(grid.g)
             while at_group < shown_total && !(grp.visible_is_group(grid.g, at_group) && !grp.visible_is_footer(grid.g, at_group) && grp.visible_group(grid.g, at_group) == group) { at_group += 1usize }
-            let toggled = grp.set_expanded(grid.g, group, !grp.is_expanded(grid.g, group))
+            // v3: a click on the row's text only makes it current; the box or a double click toggles
             if at_group < shown_total {
                 grid.has_position = true
                 grid.position = at_group
                 grid.has_selection = false
             }
-            ret toggled
+            if !grid.look.on {
+                ret grp.set_expanded(grid.g, group, !grp.is_expanded(grid.g, group))
+            }
+            ret ok
         }
         ret ok
     }
@@ -4101,6 +4135,8 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     let (sort_at, sort_visible) = display_of(grid, grid.sort_column)
     if sort_visible { sort_shown = sort_at }
     var table_options: collection.TableOptions = zero
+    table_options.double = widget.Change[widget.Key] { ctx: mem.cast[*void](grid), invoke: on_double }
+    table_options.has_double = true
     if grid.look.on {
         let lk = grid.look
         // column alignment: shown columns right or centred by the Alignment popup
