@@ -2059,6 +2059,14 @@ fn data_counts(grid: *const Grid, at: usize) -> (usize, usize) {
         if !grp.visible_is_group(grid.g, i) {
             if i < at { before += 1usize }
             total += 1usize
+        } else if grid.look.on && !grp.visible_is_footer(grid.g, i) {
+            // v3 counts the cards of a collapsed group too: "n of N" runs over the records
+            let group = grp.visible_group(grid.g, i)
+            if !grp.is_expanded(grid.g, group) {
+                let held = grp.group_count(grid.g, group)
+                if i < at { before += held }
+                total += held
+            }
         }
         i += 1usize
     }
