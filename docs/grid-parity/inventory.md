@@ -78,7 +78,7 @@ application, not the grid widget. Written 2026-10-14; the evidence column names 
 | Bookmark (one per view) | matched | S3 |
 | Selection API (select all, Ctrl+A, Shift+arrows) | matched | M1 |
 | Layout persistence (column order, widths, hidden, filter row, navigator across runs) | matched (own `cardgrid.layout` text via `save_layout` / `load_layout`, now with the Shift+click sorts, D2437) / differs (v3 also keeps grouping, expansion, view toggles) | LP1-layout-restored |
-| Export: CSV, Plain Text, XML, HTML; Copy as Text (Copy All) | matched (content, via `export_string`; sample menu) / untested (Copy Selected, Copy Card Name) | EX1 (D2439) |
+| Export: CSV, Plain Text, XML, HTML; Copy as Text (Copy All) | matched (content, via `export_string`; sample menu; Copy Selected and Copy Card Name in the fixture, D2441, clipboard not read back) | EX1 (D2439) |
 | Export: PDF, Excel; Print, Page Setup, Print Preview, Designer | untested | EX1-cards-menu-v3 |
 | Best fit | matched | A1 |
 

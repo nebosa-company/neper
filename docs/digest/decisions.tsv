@@ -2561,4 +2561,5 @@ D3979	722	G012: the saved layout keeps the Shift+click sorts and drives the orde
 D3980	1174	G012: cards dragged from one grid to another
 D3981	1315	G012: export and copy as text; the menu mnemonics keep their spaces
 D3981	1268	G012: export and copy as text; the menu mnemonics keep their spaces
-D3982	1074	G012: the New Rule wizard of the rules manager
+D3982	1075	G012: the New Rule wizard of the rules manager
+D3983	641	G012: Copy Selected and Copy Card Name
