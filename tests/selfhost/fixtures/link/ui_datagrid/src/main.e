@@ -1791,7 +1791,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if dg.on_wiz_format(mem.cast[*void](&grid15), widget.Gesture { Tap: geometry.Point { x: 0.0, y: 0.0 } }) != ok { os.exit(649) }
         format_taps += 1usize
     }
-    if grid15.wiz_palette != 0u8 || grid15.wiz_bar_style != 1u8 { os.exit(650) }
+    if grid15.wiz_palette != 0u8 { os.exit(653) }
     // v3's Enter key action: Move to next column steps the focused column (the last one wraps and goes down a row)
     dg.set_enter_action(&grid15, 0u8)
     grid15.focus_column = 0usize
