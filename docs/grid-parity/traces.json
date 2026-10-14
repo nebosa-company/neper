@@ -61,8 +61,8 @@
   {
    "id": "P1",
    "name": "Page Down moves by the rows shown",
-   "v3": "unreliable in the recorded session (+2 of about 9 shown rows while card images downloaded)",
-   "neper": "collection's page roving",
+   "v3": "re-recorded 2026-10-14 on the grouped pool (7 collapsed Rarity groups, 6 fully shown): Page Down from row 1 lands on row 6, the last fully shown row; the next one goes to row 7 (the end); Page Up from the end lands on the top shown row. Group rows are current rows: Up/Down/Home/End/Page visit them and the dotted rectangle follows (Rec: n)",
+   "neper": "data rows only: navigate() skips group rows and the table roving takes the keys before the grid scope, so on a collapsed grouped grid a blue ring moves and the dotted rectangle stays; gating the roving off for the measured look dropped keys after the first move, so it was reverted",
    "replayed": "open"
   },
   {
