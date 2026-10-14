@@ -154,6 +154,8 @@ type Grid = struct {
     wiz_max_number: bool,
     wiz_min_pct: bool,
     wiz_max_pct: bool,
+    wiz_min_ptile: bool,
+    wiz_max_ptile: bool,
     wiz_min_text: [16]u8,
     wiz_min_len: usize,
     wiz_max_text: [16]u8,
@@ -2993,17 +2995,31 @@ fn on_wiz_mode(ctx: *void, g: widget.Gesture) -> err {
     let t = mem.cast[*WizText](ctx)
     switch g {
     case .Tap as at:
-        // Lowest/Highest Value -> Number -> Percent -> Lowest/Highest Value
+        // Lowest/Highest Value -> Number -> Percent -> Percentile -> Lowest/Highest Value
         let wg = t.grid
         if t.maximum {
-            if !wg.wiz_max_number { wg.wiz_max_number = true } else if !wg.wiz_max_pct { wg.wiz_max_pct = true } else {
-                wg.wiz_max_number = false
+            if !wg.wiz_max_number {
+                wg.wiz_max_number = true
+            } else if !wg.wiz_max_pct && !wg.wiz_max_ptile {
+                wg.wiz_max_pct = true
+            } else if wg.wiz_max_pct {
                 wg.wiz_max_pct = false
+                wg.wiz_max_ptile = true
+            } else {
+                wg.wiz_max_number = false
+                wg.wiz_max_ptile = false
             }
         } else {
-            if !wg.wiz_min_number { wg.wiz_min_number = true } else if !wg.wiz_min_pct { wg.wiz_min_pct = true } else {
-                wg.wiz_min_number = false
+            if !wg.wiz_min_number {
+                wg.wiz_min_number = true
+            } else if !wg.wiz_min_pct && !wg.wiz_min_ptile {
+                wg.wiz_min_pct = true
+            } else if wg.wiz_min_pct {
                 wg.wiz_min_pct = false
+                wg.wiz_min_ptile = true
+            } else {
+                wg.wiz_min_number = false
+                wg.wiz_min_ptile = false
             }
         }
         ret ok
@@ -3104,6 +3120,7 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
                 if me == ok {
                     r.has_min = true
                     r.min_pct = grid.wiz_min_pct
+                    r.min_ptile = grid.wiz_min_ptile
                     r.min_value = mv
                 }
             }
@@ -3112,6 +3129,7 @@ fn on_wiz_ok(ctx: *void, g: widget.Gesture) -> err {
                 if xe == ok {
                     r.has_max = true
                     r.max_pct = grid.wiz_max_pct
+                    r.max_ptile = grid.wiz_max_ptile
                     r.max_value = xv
                 }
             }
@@ -3380,6 +3398,10 @@ fn wiz_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
                 if (side == 0usize && grid.wiz_min_pct) || (side == 1usize && grid.wiz_max_pct) {
                     caption = "Minimum: Percent"
                     if side == 1usize { caption = "Maximum: Percent" }
+                }
+                if (side == 0usize && grid.wiz_min_ptile) || (side == 1usize && grid.wiz_max_ptile) {
+                    caption = "Minimum: Percentile"
+                    if side == 1usize { caption = "Maximum: Percentile" }
                 }
             }
             let (mode_label, mode_error) = flat_text(a, grid, caption, gl.rgb(0x000000u32))

@@ -223,6 +223,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_pb, pct_error) = gr.add(a, &rs_pct, pct)
     if pct_error != ok || gr.refresh(&rs_pct, a) != ok { os.exit(148) }
     if !near(gr.format(&rs_pct, 4usize, C_CMC).bar, 0.0f32) || !near(gr.format(&rs_pct, 5usize, C_CMC).bar, 1.0f32) { os.exit(149) }
+    // a Percentile bound is the value that far up the sorted values: 0 and 100 are the lowest and the
+    // highest, so the bar of the lowest cell is empty and of the highest full
+    var ptile = gr.rule(C_CMC, gr.Kind.Bar)
+    ptile.fill = paint.rgba(0.0f32, 0.0f32, 1.0f32, 1.0f32)
+    ptile.has_min = true
+    ptile.min_value = 0.0
+    ptile.min_ptile = true
+    ptile.has_max = true
+    ptile.max_value = 100.0
+    ptile.max_ptile = true
+    let (made_pt, made_pt_error) = gr.create(a, &t, 2usize)
+    if made_pt_error != ok { os.exit(150) }
+    var rs_pt = made_pt
+    let (_pt, pt_error) = gr.add(a, &rs_pt, ptile)
+    if pt_error != ok || gr.refresh(&rs_pt, a) != ok { os.exit(151) }
+    if !near(gr.format(&rs_pt, 1usize, C_CMC).bar, 0.0f32) || !near(gr.format(&rs_pt, 5usize, C_CMC).bar, 1.0f32) { os.exit(152) }
     // priority: the first rule that sets a field wins; the other field still merges in
     let (made3, made3_error) = gr.create(a, &t, 4usize)
     if made3_error != ok { os.exit(114) }

@@ -53,7 +53,9 @@ type Rule = struct {
     has_max: bool,
     max_value: f64,
     min_pct: bool,
-    max_pct: bool
+    max_pct: bool,
+    min_ptile: bool,
+    max_ptile: bool
 }
 
 // The look of one cell. `bar` is the filled fraction 0..1 of a data bar (0 for none); `icon`
@@ -80,6 +82,8 @@ type Stat = struct {
     high: f64,
     average: f64,
     threshold: f64,
+    p_low: f64,
+    p_high: f64,
     sorted: []f64,
     sorted_len: usize,
     entries: []u32
@@ -98,7 +102,7 @@ error BadRule
 
 fn rule(column: usize, kind: Kind) -> Rule {
     let none = paint.rgba(0.0, 0.0, 0.0, 0.0)
-    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false, has_min: false, min_value: 0.0, has_max: false, max_value: 0.0, min_pct: false, max_pct: false }
+    ret Rule { column: column, kind: kind, op: Op.Eq, a: 0.0, b: 0.0, text: "", fold: true, count: 10usize, percent: false, ink: .Text, has_ink: false, fill: none, has_fill: false, bold: false, whole_row: false, low: none, mid: none, high: none, three: false, buckets: 3u8, bar_only: false, stop: false, has_min: false, min_value: 0.0, has_max: false, max_value: 0.0, min_pct: false, max_pct: false, min_ptile: false, max_ptile: false }
 }
 
 fn create(a: *mem.Arena, t: *const table.Table, capacity: usize) -> (Rules, err) {
@@ -338,7 +342,8 @@ fn build_stat(rs: *Rules, scratch: *mem.Arena, index: usize) -> err {
     s.high = high
     s.average = 0.0f64
     if live != 0usize { s.average = sum / f64(live) }
-    let want_sorted = needs_sorted(r.kind) || r.kind == Kind.Top || r.kind == Kind.Bottom
+    let want_ptile = (r.has_min && r.min_ptile) || (r.has_max && r.max_ptile)
+    let want_sorted = needs_sorted(r.kind) || r.kind == Kind.Top || r.kind == Kind.Bottom || want_ptile
     if !want_sorted { ret ok }
     let marker = mem.mark(scratch)
     var values: []f64 = s.sorted
@@ -359,6 +364,19 @@ fn build_stat(rs: *Rules, scratch: *mem.Arena, index: usize) -> err {
     var by: Order = Order { unused: 0u8 }
     sort.in_place_by[f64, Order](values[0usize..n], &by, by_value)
     s.sorted_len = n
+    // Percentile bounds (v3's wizard): the value standing that share of the way up the sorted values
+    if want_ptile && n != 0usize {
+        if r.has_min && r.min_ptile {
+            var at = usize(f64(n - 1usize) * r.min_value / 100.0)
+            if at >= n { at = n - 1usize }
+            s.p_low = values[at]
+        }
+        if r.has_max && r.max_ptile {
+            var at_high = usize(f64(n - 1usize) * r.max_value / 100.0)
+            if at_high >= n { at_high = n - 1usize }
+            s.p_high = values[at_high]
+        }
+    }
     if r.kind == Kind.Top || r.kind == Kind.Bottom {
         var take = r.count
         if r.percent { take = (n * r.count + 99usize) / 100usize }
@@ -455,10 +473,12 @@ fn apply_range(rs: *const Rules, i: usize, row: usize, f: *Format) {
         low = r.min_value
         // Percent: a share of the way from the column's lowest to its highest value
         if r.min_pct { low = s.low + (s.high - s.low) * r.min_value / 100.0 }
+        if r.min_ptile { low = s.p_low }
     }
     if r.has_max {
         high = r.max_value
         if r.max_pct { high = s.low + (s.high - s.low) * r.max_value / 100.0 }
+        if r.max_ptile { high = s.p_high }
     }
     var x = 1.0f32
     if high > low { x = f32((v - low) / (high - low)) }

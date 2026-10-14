@@ -39496,3 +39496,7 @@ The unexplained v3 footer sum of D2488 is in main.vcl.form.pas: every currency s
 ## D2496 - G012: the Enter key action
 
 v3 (main.vcl.form.pas, VK_RETURN of the grid site, with `Options > Grids > Enter Key Action`) turns an Enter without modifiers into a move: Move to next column (the default) focuses the next column of the row and, past the last, the first column of the next row; Move to next row goes down one row keeping the column; the key is consumed. `set_enter_action(grid, 0 | 1)` and the grid's Enter shortcut do that (`on_row_enter`; the editor's own Enter still commits, and an editing grid is left alone); the focused column is `focus_column`, drawn nowhere yet (v3 shows its cell focus rectangle). Fixture ui_datagrid checks the column step (exits 647-648); the four grid fixtures pass.
+
+## D2497 - G012: Percentile bounds in the wizard
+
+The wizard's Minimum and Maximum now cycle Value, Number, Percent and Percentile. A Percentile bound is the value standing that share of the way up the column's sorted values (`Rule.min_ptile` / `max_ptile`, `Stat.p_low` / `p_high` built in `build_stat` from the sorted copy the Top/Bottom rules already use, applied in `apply_range`). Fixture ui_gridrules checks that 0 and 100 give the lowest and highest cells' bars (exits 150-152); the four grid fixtures pass. Formula remains: the rule model has no expression.
