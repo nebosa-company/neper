@@ -160,6 +160,8 @@ type Grid = struct {
     crit_pop_row: usize,
     crit_pending: bool,
     crit_group: u8,
+    crit_sub: [6]bool,
+    crit_sub_group: u8,
     crit_count: usize,
     crit_spec: [6]usize,
     crit_op: [6]u8,
@@ -2135,6 +2137,18 @@ fn on_crit_act(ctx: *void, g: widget.Gesture) -> err {
             }
             ret ok
         }
+        if act.kind == 6u8 {
+            // put the last condition into the nested group, or take it out again
+            if grid.crit_count > 0usize {
+                let last = grid.crit_count - 1usize
+                grid.crit_sub[last] = !grid.crit_sub[last]
+            }
+            ret ok
+        }
+        if act.kind == 7u8 {
+            grid.crit_sub_group = (grid.crit_sub_group + 1u8) % 4u8
+            ret ok
+        }
         if act.kind == 4u8 || act.kind == 5u8 {
             // Open... (4) and Save As... (5): the application reads or writes the text of the conditions
             grid.crit_io = act.kind - 3u8
@@ -2242,6 +2256,9 @@ fn take_criteria(grid: *Grid) -> bool {
 }
 
 fn criteria_group(grid: *const Grid) -> u8 { ret grid.crit_group }
+fn criteria_sub_group(grid: *const Grid) -> u8 { ret grid.crit_sub_group }
+// Whether condition `index` stands in the nested group (v3 nests groups under the root).
+fn criteria_in_sub(grid: *const Grid, index: usize) -> bool { ret index < 6usize && grid.crit_sub[index] }
 fn criteria_len(grid: *const Grid) -> usize { ret grid.crit_count }
 fn criteria_column(grid: *const Grid, index: usize) -> usize { ret grid.all[grid.crit_spec[index]].column }
 fn criteria_op(grid: *const Grid, index: usize) -> u8 { ret grid.crit_op[index] }
@@ -2281,16 +2298,16 @@ fn crit_button(a: *mem.Arena, grid: *Grid, key: widget.Key, text: str, w: f32, a
 
 fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let width: f32 = 540.0
-    let (rows, rows_error) = mem.alloc[widget.Node](a, CRIT_MAX + 6usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, CRIT_MAX + 8usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
     let (parts, parts_error) = mem.alloc[CritRow](a, CRIT_MAX * 3usize + 2usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     let (values, values_error) = mem.alloc[CritValue](a, CRIT_MAX)
     if values_error != ok { ret (zero, control.TooLarge) }
-    let (acts, acts_error) = mem.alloc[CritAct](a, 6usize)
+    let (acts, acts_error) = mem.alloc[CritAct](a, 8usize)
     if acts_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
-    while k < 6usize {
+    while k < 8usize {
         acts[k] = CritAct { grid: grid, kind: u8(k) }
         k += 1usize
     }
@@ -2382,7 +2399,9 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             continue
         }
         var line_style = control.sized_style(width - 24.0, 30.0)
-        line_style.margin = style.EdgeLengths { left: style.Length { Px: 32.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        var line_left: f32 = 32.0
+        if grid.crit_sub[i] { line_left = 64.0 }
+        line_style.margin = style.EdgeLengths { left: style.Length { Px: line_left }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
         rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, line_style, cells[0usize..4usize])
         n += 1usize
         i += 1usize
@@ -2397,7 +2416,22 @@ fn criteria_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     add_held[0usize] = add_button
     rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, add_style, add_held[0usize..1usize])
     n += 1usize
-    var filler_height = 190.0 - f32(grid.crit_count) * 34.0
+    // the nested group: its operator and the button that moves the last condition into it
+    var sub_words = "Nested group: "
+    if true { sub_words = "Nested group" }
+    let (group_button, group_button_error) = crit_button(a, grid, grid.key + MENU_KEY + 899996u64, "Move the last condition into / out of the nested group", 340.0, &acts[6usize], false)
+    if group_button_error != ok { ret (zero, group_button_error) }
+    let (sub_button, sub_button_error) = crit_button(a, grid, grid.key + MENU_KEY + 899997u64, crit_group_words(grid.crit_sub_group), 80.0, &acts[7usize], false)
+    if sub_button_error != ok { ret (zero, sub_button_error) }
+    let (sub_pair, sub_pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if sub_pair_error != ok { ret (zero, control.TooLarge) }
+    sub_pair[0usize] = group_button
+    sub_pair[1usize] = sub_button
+    var sub_style = control.sized_style(width - 24.0, 27.0)
+    sub_style.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, sub_style, sub_pair[0usize..2usize])
+    n += 1usize
+    var filler_height = 190.0 - f32(grid.crit_count) * 34.0 - 34.0
     if filler_height < 0.0 { filler_height = 0.0 }
     var filler = control.sized_style(width - 24.0, filler_height)
     filler.margin = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
