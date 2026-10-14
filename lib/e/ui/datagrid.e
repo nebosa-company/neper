@@ -5116,7 +5116,7 @@ fn flat_menu(a: *mem.Arena, grid: *Grid, commands: []const overlay.MenuCommand, 
     grid.menu_count = commands.len
     if grid.menu_count > 40usize { grid.menu_count = 40usize }
     // the application's menus (v3's View) are set in a smaller face than the grid's popups
-    var char_width: f32 = 6.6
+    var char_width: f32 = 4.0
     if grid.menu_kind == MENU_APP { char_width = 4.6 }
     var width = 27.0 + f32(widest_label) * char_width + 24.0 + 22.0
     if widest_hint != 0usize { width += f32(widest_hint) * char_width + 16.0 }
