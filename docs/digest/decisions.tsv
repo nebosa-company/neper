@@ -2199,3 +2199,4 @@ D2435	857	G012: one click on a favourite star flips it and makes the row current
 D2436	907	G012: the mouse wheel reaches the grid and turns three rows a notch
 D2437	722	G012: the saved layout keeps the Shift+click sorts and drives the order
 D2438	1174	G012: cards dragged from one grid to another
+D2439	1267	G012: export and copy as text; the menu mnemonics keep their spaces
