@@ -2714,4 +2714,5 @@ D4131	472	G012: the footnote text area is editable
 D4132	369	G012: the footnote prints on the preview page
 D4133	596	G012: the Mode box of Title and Footnote Properties works
 D4134	204	G012: the default First Page mode seen
-D4135	368	G012: Clear unpicks the picked style
+D4135	369	G012: Clear unpicks the picked style
+D4136	814	G012: the Styles tab's Style Sheets row and the native-styles states, from v3

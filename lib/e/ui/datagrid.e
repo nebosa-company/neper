@@ -10295,7 +10295,10 @@ fn dz_style_foot(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (combo, combo_error) = dz_field(a, grid, "", 330.0)
     if combo_error != ok { ret (zero, combo_error) }
     cells[2usize] = combo
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(350.0, 120.0), cells[0usize..3usize]), ok)
+    let (sheet_row, sheet_row_error) = dz_sheet_buttons(a, grid)
+    if sheet_row_error != ok { ret (zero, sheet_row_error) }
+    cells[3usize] = sheet_row
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(350.0, 170.0), cells[0usize..4usize]), ok)
 }
 
 fn dz_style_list(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
@@ -10350,7 +10353,11 @@ fn dz_style_ink(grid: *const Grid) -> u32 {
 
 // The four 80 px buttons follow the picked style; Restore Defaults and Save As stay grey.
 fn dz_button_ink_for(grid: *const Grid, width: f32) -> u32 {
-    if width < 90.0 { ret dz_style_ink(grid) }
+    let native = ((grid.dz_checks >> 28u64) & 1u64) != 0u64
+    if !native { ret 0xA0A0A0u32 }
+    if width < 76.5 && width > 75.5 { ret 0x000000u32 }
+    if width > 99.0 && width < 101.0 { ret 0x000000u32 }
+    if width < 90.0 && width > 79.0 { ret dz_style_ink(grid) }
     ret 0xA0A0A0u32
 }
 
@@ -10539,4 +10546,32 @@ fn dz_prints_here(grid: *const Grid, which: usize) -> bool {
     if mode == 2u8 { ret false }
     if mode == 0u8 && grid.pv_page != 0usize { ret false }
     ret true
+}
+
+// v3's New..., Copy..., Delete..., Rename... under the Style Sheets box (only New is live, grey with native styles off).
+fn dz_sheet_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    var i = 0usize
+    while i < 4usize {
+        var words = "New..."
+        var width: f32 = 76.0
+        if i == 1usize {
+            words = "Copy..."
+            width = 77.0
+        }
+        if i == 2usize {
+            words = "Delete..."
+            width = 77.0
+        }
+        if i == 3usize {
+            words = "Rename..."
+            width = 77.0
+        }
+        let (button, button_error) = dz_grey_button(a, grid, words, width, 8.0)
+        if button_error != ok { ret (zero, button_error) }
+        cells[i] = button
+        i += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(350.0, 36.0), cells[0usize..4usize]), ok)
 }

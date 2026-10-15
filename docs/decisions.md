@@ -41486,3 +41486,6 @@ With the default On First Page the title prints on page 1 only: page 2 has no he
 
 ## D4135 - G012: Clear unpicks the picked style
 With a style picked in the Designer's Styles list (D4126), Clear is live: a tap unpicks it and the four buttons go grey again (DZ-format-report-Styles-cleared-v5.png, after Content was picked). Font..., Color... and Texture... are still inert: they would open the font and colour pickers of v3, which were not recorded.
+
+## D4136 - G012: the Styles tab's Style Sheets row and the native-styles states, from v3
+Recorded from v3 (DZ-format-report-Styles-full-v3.png, ...-nonnative-v3.png): under the Style Sheets box sit New..., Copy..., Delete... and Rename...; with "Use Native Styles" ticked New... and Save As... are live and the rest grey, and unticking it greys the whole tab (list, buttons, Style Sheets) and enables Apply. Ours draws the row and the same states (DZ-format-report-Styles-sheets-v5.png, ...-nonnative-v5.png; `dz_sheet_buttons`, `dz_button_ink_for`). Differences: v3 also greys the list's text when native styles are off, ours keeps it black; the buttons are drawn, not live; v3's Font..., Color... and Texture... pickers are still not recorded (my attempts to pick a row in v3 hit the native-styles box instead).
