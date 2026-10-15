@@ -12719,37 +12719,37 @@ fn win_drop(a: *mem.Arena, overlay_key: widget.Key, anchor: widget.Key, first: w
 // with rows keyed `key + 2 + index`; no motion, as v3's list appears at once.
 fn win_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     var none: []const widget.Node = zero
-    let (made, made_error) = win_image_select(a, key, t, label, options, none, selected, open, toggle, picks)
+    let (made, made_error) = win_image_select(a, key, t, label, options, none, selected, open, true, toggle, picks)
     ret (made, made_error)
 }
 
 // An image combo box (TcxImageComboBox): a select whose rows, and head, lead with an
 // pic (`icons`, one 16 x 16 node per option, or none). Under the other looks it is the
 // plain select: no icons.
-fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if t.tokens.profile != .Windows {
         let (plain, plain_error) = select(a, key, t, label, options, selected, open, toggle, picks)
         ret (plain, plain_error)
     }
-    let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, toggle, picks)
+    let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, enabled, toggle, picks)
     ret (made, made_error)
 }
 
-fn win_image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+fn win_image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
     let chosen = selected < options.len
     var shown = label
     if chosen { shown = options[selected] }
     var lead: []const widget.Node = zero
     if chosen && icons.len == options.len { lead = icons[selected..selected + 1usize] }
-    let (head, head_error) = win_head(a, key, t, label, shown, chosen, open, toggle, true, lead)
+    let (head, head_error) = win_head(a, key, t, label, shown, chosen, open, toggle, enabled, lead)
     if head_error != ok { ret (zero, head_error) }
     var count = 1usize
-    if open { count = 2usize }
+    if open && enabled { count = 2usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count + 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
-    if open {
+    if open && enabled {
         let (drop, drop_error) = win_drop(a, key + 1u64, key, key + 2u64, t, label, options, icons, selected, picks, toggle)
         if drop_error != ok { ret (zero, drop_error) }
         parts[1usize] = drop
