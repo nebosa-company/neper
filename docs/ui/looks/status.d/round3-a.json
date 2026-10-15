@@ -1,0 +1,77 @@
+{
+  "label": {
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/label.png",
+        "notes": "The baseline: control.text in the Neper type scale, same strings as the Windows sheet (the sheet's cells changed to the real v3 labels; the Neper pixels of the old sheet are unchanged)."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/label.png",
+        "notes": "control.windows_label: every TcxLabel of the live dialog captures is Tahoma (DFM Style.Font.Height -11 regular, -13 and -21 bold), so the label takes the DFM size, weight and colour, sits 1 px in from its box, underlines the & mnemonic at the baseline and the hot-link run (#336CCC, fsUnderline) across the text. Ten real labels (Row Color, Card:, Deck Properties title and path, the grey Last update line, About's 21 px product name, version, Send email and URL links, the wrapped Missing Set Cards line) are compared with docs/ui/looks/ref/windows/label.png (windows/label-vs-ref.png): ink boxes agree within 1 px on 6 of 10; colours are the DFM colours (#33486C bold titles, #336CCC links, clGray #808080), not sampled from the ClearType text. Tahoma Bold is registered as font 10 in e.ui.looks and TextOptions.face makes a family lead the font chain.",
+        "gaps": [
+          "Unverified: the disabled label (#6D6D6D is a guess; no capture shows a disabled TcxLabel)",
+          "GDI draws Tahoma with hinted whole-pixel advances and ClearType; our text is unhinted and grayscale, so a long run is narrower: the 36 character path label is 195 px against 214 px, the wrapped Missing Set Cards line breaks at 211 against 230 px; short labels agree to 1 px",
+          "The centred 21 px product name sits 1 px lower than the capture (centred labels are not given the 1 px inset)",
+          "The 1 px inset (x and y) is measured on left aligned labels only; Alignment taClient or a different Style.Color background (clWhite, clBtnFace) was not captured",
+          "Rotated labels (Properties.Angle) and the label's hot (hover) state are not drawn; no capture",
+          "The grey #808080 of Last update is the DFM clGray; the 150 percent captures could not confirm it against thin ClearType text",
+          "The Options page title bars (bold white on a grey gradient) are a panel, not a TcxLabel, and belong to the panel look"
+        ]
+      }
+    }
+  },
+  "button": {
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/button.png",
+        "notes": "The baseline: the existing v2 pill button. The sheet now has ten cells (the Windows evidence sizes); the Neper pixels of the earlier sheets (button.png, button_kinds.png) render identically to master."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/button.png",
+        "notes": "Redrawn from the live 96 DPI captures (docs/ui/looks/ref/windows/dialogs; 96 TcxButtons in 20 dialogs). The crisp rings of Search for Card, Sort, Missing Set Cards, Filter and Conditional Formatting are one shape for every size: a visible box of (W-2) x (H-1) at (1, 1) of the DFM rect (73 x 22 for 75 x 23, 83 x 24 for 85 x 25, 123 x 24 for 125 x 25), a soft two-row top and bottom, one-pixel sides and 6 x 6 corners. e.ui.winbutton paints them from the captured pixels: rest, default (accent #0078D4 sides) and disabled. Compared with docs/ui/looks/ref/windows/button.png and button_kinds.png the ring, face and corners are exactly equal (max per-channel error 0) on the rest, default, disabled, 85 x 25 default, 85 x 25 rest, 125 x 25 rest and disabled, and 30 x 25 disabled cells. The caption is Tahoma 8 pt (11 px; the ink matched Tahoma, not Segoe UI, whose width only coincided on Cancel), centred 1 px left of and above the box centre, ink boxes within 1 px of the captures; & mnemonics are underlined at the baseline; the focus rectangle is the control rect less 3 on every side. Button kinds (picture + caption, picture alone, split, toggle, busy, plain) are in windows/button_kinds.png.",
+        "gaps": [
+          "Unverified: hover (face #F6F6F6) and pressed (#F0F0F0) faces and rings: no capture shows a hovered or pressed button; the rest ring is reused with another face and the corner blends are re-faced",
+          "Unverified: a keyboard-focused non-default button takes the default (accent) ring plus the dotted rectangle; only the About OK (default and focused) is captured",
+          "The Options, Deck Properties and Deck Legality dialogs draw the same ring resampled one pixel wider (74 px, softer rings, the default accent at two soft rows); the crisp 73 px ring was chosen because 35 of the 92 captured buttons (8 dialogs) show it, against 57 resampled ones in the three dialogs named here; those buttons differ from ours by up to 70 levels at the ring",
+          "The dotted focus rectangle's pixel phase and darkness come from one resampled capture (About OK): ours is black on alternate pixels",
+          "Unverified: the toggled-on face (accent 20 percent over the face), the split button (still the old bordered look), the busy ring and the plain button",
+          "Pictures are drawn glyphs (Refresh) with the measured 16 px box, 4 px gap and group centring; v3's are bitmaps from an image list, so picture ink differs and the group's ink start is up to 2 px off",
+          "Icon-only: only the disabled 30 x 25 arrow is captured in the crisp ring; the enabled 25 x 28 arrows of Options > Card Art are resampled",
+          "Text is grayscale and unhinted, the capture's is ClearType and hinted (stroke weight and sub-pixel colour fringes differ)",
+          "Dark and high-contrast Windows palettes keep the old bordered look with Windows metrics, the Tahoma caption and the mnemonic; no v3 capture exists in those palettes"
+        ]
+      }
+    }
+  },
+  "dialog": {
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/dialog.png",
+        "notes": "The baseline: the v2 card over a scrim (dialog.png, dialog_wide.png), the alert with icon (dialog_message.png) and the frameless title bar (title_bar.png). The Neper pixels of the earlier sheets are unchanged."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/dialog.png",
+        "notes": "Rebuilt from the live captures. windows/dialog.png reproduces five real dialogs and windows/dialog_wide.png the Options window (reference composites docs/ui/looks/ref/windows/dialog.png and dialog_wide.png, pairs windows/dialog-vs-ref.png): Search for Card, Sort [Card Pool], Missing Set Cards, Deck Properties, About MTG Studio (inactive), Options (inactive). Chrome: the caption is 31 rows of #1F2022 (#202020 inactive), program icon (the capture's own 16 x 16 pixels, equal to 2 levels) at (10, 7), 12 px Segoe UI title at x 30 (white; inactive about #7C7C7C), a lone 33 wide close X on a dialog and 46 wide minimise, maximise and close buttons on a resizable window (windows/title_bar.png: caption face, icon and the X are pixel equal, the minimise dash and maximise square within the antialiasing, 5 captions compared), a #F5F5F5 row under the caption, a #F0F0F0 face flush to the window edge and no border. Buttons sit at their DFM rects: 75 x 23 with 9 px gaps and 9 from the right and 7 from the bottom in Options, Deck Properties and Statistics, 6 px gaps in Sort and Missing Set Cards, centred in Search for Card; the button rings of Search, Sort and Missing Set Cards are equal to the capture (error 0). Also windows/dialog_message.png (message box) and windows/title_bar.png.",
+        "gaps": [
+          "Unverified: the message box (dialog_message.png): v3 shows no captured MessageDlg, so the white message area, 32 px icon, grey button strip and body padding are the stock Windows layout from memory; only its caption and buttons use the measured chrome",
+          "Unverified: caption button hover and pressed states (close #C42B1C and #B22A1B are Windows 11 defaults), and the maximised restore glyph",
+          "The capture is square cornered and has no DWM border or shadow (PrintWindow omits them); on screen Windows 11 rounds the corners by 8 px, which the Windows look does not draw",
+          "The host hit test (e.ui.window.caption_layout) keeps the platform 32 tall caption, 46 wide buttons, the title at 32; the drawn caption is 31 tall with the title at 30 and a 33 wide lone close button, so a click zone can be 1 to 2 px off the drawn one",
+          "Caption buttons: only the three glyphs of one captured geometry are painted; a window that disables maximise and keeps minimise is drawn with the dimmed glyph (Deck Legality) but the dim level (the theme's disabled content alpha) is not measured",
+          "Dialog content is left blank in the sheets (combo box, radio group, grid, page control, vertical grid, panels): those are other controls. About's white page control and Options' category list overpaint the F5 row in the capture; the sheet draws the row over the whole width",
+          "The row under the caption (#F5F5F5) is the one thing seen on every form that has no explanation yet; About's last row (#F5F5F5) is not drawn",
+          "The Options, Deck Properties and Deck Legality buttons are the resampled 74 px ring (see the button gaps), so their button ring differs from ours while the position and size agree",
+          "The overlay dialog API (overlay.dialog under the Windows look) still centres a fixed 420 px card without a scrim, with a 12 px body padding that is a guess; v3 has no generic dialog, each form is laid out by hand (overlay.windows_window is the hand-laid form)",
+          "Title text is Segoe UI 12 px grayscale; the capture is ClearType: the title ink boxes agree within 1 px",
+          "Not captured: Deck Statistics and Deck Legality were not rebuilt in a sheet; Advanced Filter, Conditional Formatting and Customization draw a light caption (#F0F3F7) that no look cell reproduces"
+        ]
+      }
+    }
+  }
+}
