@@ -109,7 +109,43 @@ Not started in the tree (only read): typed margin boxes. The plan, so the next s
 Before editing datagrid.e: `taskkill //IM cardgrid.exe`, avoid `f32(u8field)` and extra locals in
 `build_parts`/`fmt_panel`; build with `build/windows/neper-self.exe emit-executable .../main.e ...`.
 
+## Update 2026-10-14 (later)
+D4095 (local `1b6a3e4d`): Margins tab uses typed spin boxes (`MarginSpin`, `set_margin`, `pv_hund`); fixture
+ui_datagrid passes, sample builds, NOT seen on screen yet and NOT pushed (push_g24.py ran, D4095 -> D5034,
+worktree left uncommitted). Remaining: Header/Footer + Fit To text fields, Print Preview margin boxes.
+
+## Update 2026-10-14 (end of session)
+Pushed: D5034-D5036 (typed margins, header/footer cells, Fit To, Print Preview margin boxes), `0cf9e924`.
+Local, not pushed: D4098 (`008217d1`) the Data Bar style window in v3's layout (radios, chips, "..." buttons).
+STALE in the Open list above: item 1 (the colour, negative, axis rows are live since D5032+), item 7 (the
+collection row editors are done: ED1 in inventory). Still open: Print / Report Designer, Print Preview
+paging and page drawing following margins, Page Setup multi-line cells and Font/Background buttons, typed
+RGB or hue square, group frames and a real chevron glyph in the style window, popup-size comparison.
+TRAP (D4098): a function with three Styles plus many Nodes corrupts the widget tree; keep style-window
+helpers small, <= 8 argument words, pack flags/colour in one u64, pass no Node by value; bisect with
+early `ret`s and `D:\Temp\claude\run.sh NAME` (build with neper-self directly: build.ps1 hides errors).
+
 ## Status of the tree
 
 Committed locally; pushed through D4068 / D5007, D4069 / D5008 being pushed. Peers' dirty files in the
 main tree (`lib/e/ui/control.e`, untracked `docs/tasks/...`) are not mine; leave them.
+
+## Update 2026-10-15 (where the stream stands)
+Pushed to origin: D5033-D5040 (margins, header/footer cells, Fit To, preview margins/paging, Data Bar window layout, colour RGB).
+LOCAL, NOT PUSHED (22 neper commits, D4102-D4123; port with `D:\Temp\claude\gt\push_g24.py` in one commit, files:
+`lib/e/ui/datagrid.e`, `lib/e/ui/collection.e`, the new `docs/grid-parity/*.png`): empty-grid message and count
+(ND1/ND2), filter panel with clear/suspend/Customize (FP1-3), View/collection/column popup sizes (D4104-D4106),
+Customization window tabs for the pool (D4107), print preview header/footer/date/margins (D4110-D4112),
+three-row Page Setup cells, hue strip (D4115), View menu pictures and bold headings (D4116/D4117, sample side),
+the report Designer = v3's Format Report window with five tabs (D4118-D4120, D4122), Cards/Charts tabs out of
+scope by the user (D4121), drive.ps1 foreground guard (D4113/D4114/D4123).
+The sample's `D:\repos\mtg.studio.src\v5\cardgrid\main.e` has uncommitted edits too (set_band_tabs, View menu
+pictures, the Designer entry): commit them on `main` with `gh auth switch -u oboobortot`, then back to nebosa-company.
+Still open: Title/Footnote Properties dialogs (v3's not recorded: v3 would not come to the front for the guarded
+script, a browser kept taking focus), the Styles tab's controls edit nothing, other Designer checks only remembered,
+Alt+P not wired in the sample, [Time Printed]/[User Name] predefined functions, Print Preview rows per page do not
+follow the margins.
+Traps found this session: a style-window helper building three Styles plus many Nodes corrupts the widget tree
+(keep helpers small, pass flags packed in one u64); a spin box inside the colour popup layer ends the window loop;
+scripts must use `run2.sh`-style builds with neper-self directly (build.ps1 hides errors); `drive.ps1` now refuses
+to click unless the target is in front (checked before every step).

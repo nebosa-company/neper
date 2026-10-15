@@ -2319,4 +2319,60 @@ D5036	424	G012: typed margin boxes in Print Preview
 D5037	1055	G012: the Data Bar style window in v3's layout
 D5038	804	G012: the preview page follows its margins; the toolbar's page icons work
 D5039	1619	C170: Secure exports, shows a QR symbol, checks breaches and locks itself
-D5040	668	The network server polls a TLS stream
+D5040	669	The network server polls a TLS stream
+D5041	918	C171: the reply streams into the bubble
+D5042	723	G012: the filter panel under a filtered grid
+D5043	659	G012: the View menu's size against v3's
+D5044	586	G012: the shortcut gap of the popup menus
+D5045	308	G012: the column popup's width
+D5046	1037	G012: the Alignment submenu and the Customization window against v3
+D5047	370	G012: Customize... on the filter panel opens the Advanced Filter
+D5048	444	G012: the filter panel's tick suspends the filter
+D5049	302	G012: header and footer cells align as v3 prints them
+D5050	400	G012: "[Date Printed]" prints the date
+D5051	375	G012: the Bottom and Footer margins place the footer band
+D5052	556	G012: drive.ps1 refuses to click unless the target window is in front; Page Setup cells are three lines tall
+D5053	570	G012: the three-row Page Setup cells seen; drive.ps1 raises the window itself
+D5054	625	G012: a hue strip in the colour popup
+D5055	842	G012: pictures on the View menu's entries
+D5056	407	G012: bold headings in the View menu
+D5057	1340	G012: the report Designer (Format Report)
+D5058	593	G012: the Designer's Styles list, Look and Feel box and line count
+D5059	360	G012: the Designer's Apply button
+D5060	392	G012: the Designer's Cards and Charts tabs are out of scope
+D5061	584	G012: the Styles tab's buttons and Style Sheets row (not yet seen)
+D5062	401	G012: drive.ps1 re-checks the foreground window before every click and key
+D5063	586	G012: the rows a preview page holds follow the Top and Bottom margins
+D5064	452	G012: "[Time Printed]" prints the time
+D5065	479	G012: a style can be picked in the Designer's Styles list
+D5066	319	G012: the Designer's Apply is live after a change
+D5067	854	G012: Title Properties and Footnote Properties
+D5068	681	G012: the report title is editable and feeds the preview heading
+D5069	783	G012: repair of D4129 (Print Preview broke); the title reaches the preview
+D5070	472	G012: the footnote text area is editable
+D5071	369	G012: the footnote prints on the preview page
+D5072	596	G012: the Mode box of Title and Footnote Properties works
+D5073	204	G012: the default First Page mode seen
+D5074	369	G012: Clear unpicks the picked style
+D5075	815	G012: the Styles tab's Style Sheets row and the native-styles states, from v3
+D5076	252	G012: the style list's text greys with native styles off
+D5077	684	G012: the Font window of the Styles tab
+D5078	846	G012: the Color Editor window of the Styles tab
+D5079	597	G012: the Color Editor's 48 basic colours are v3's
+D5080	717	G012: swatches of the Color Editor can be picked and applied
+D5081	464	G012: the Header style's colour reaches the printed report
+D5082	405	G012: the Filter Bar style's colour paints the printed filter strip
+D5083	558	G012: the Content style's colour paints the printed data cells
+D5084	529	G012: Content Even Rows and Odd Rows stripe the printed table
+D5085	483	G012: the Color Editor's H, S and L follow the pick
+D5086	337	G012: the Color Editor's hex box follows the pick
+D5087	514	G012: custom colours in the Color Editor
+D5088	609	G012: the Color Editor's hue square
+D5089	445	G012: the hue square can be clicked
+D5090	355	G012: the Footer style's colour paints the printed footer band
+D5091	510	G012: the Caption style's colour paints the printed title
+D5092	763	G012: the styles with nothing to paint
+D5093	649	G012: Texture... opens the system's file dialog (not built, by decision)
+D5094	504	G012: the Color Editor's R, G and B are spin boxes
+D5095	308	G012: typing in the Color Editor's R box seen
+D5096	295	G012: typing in the Color Editor's G and B boxes seen

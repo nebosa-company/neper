@@ -39747,3 +39747,172 @@ Not done: a QR scan from the Camera (L137, C122), fingerprint and face unlock, a
 ## D5040 — The network server polls a TLS stream
 
 `OP_POLL` answered `R_BAD` for a TLS connection because the stream cannot say how much plaintext it still holds. The server now waits a moment for the transport (`tcp.pump` while the ring is empty), reads one whole record into a 16 KB `hold` buffer (a read of at least a record's size never leaves plaintext in the stream) and hands it out in the pieces the app asks for; `OP_RECV` serves what `hold` has first. Nothing yet is `R_EMPTY`, the peer's close an empty answer, like a recv's. This is what lets an app keep answering the compositor's ticks during a TLS request (AI's stream, Dynamic's stages, Chat's wss).
+
+## D5041 — C171: the reply streams into the bubble
+
+`httpstream.e` is an incremental HTTP reader over the network server's socket capability: the request goes out, `pump` takes one poll's bytes, the status line and headers are parsed as they come and the body is decoded (a chunked body is joined, anything else passes through to the close) into a buffer that outlives the frames and only grows, so `e.fmt.sse`'s reader can keep its position in it. AI asks for `stream: true` (Anthropic and OpenAI-shaped bodies; Google's `streamGenerateContent?alt=sse`), reads the events on each tick and shows each piece as it arrives; a status other than 200 ends the reply at once with the plain-words reason, 429 included, and a body that is not a stream is read as the one JSON document it was. Fixture: ai_stream (five pieces reach the bubble before `[DONE]`, on a chunked body from the test server, one piece every 0.7 s).
+
+## D5042 - G012: the filter panel under a filtered grid
+With the filter row giving a condition, a panel stands between the footer and the navigator as in ND1: a red x that clears every condition (`on_filter_clear`, through `filter_changed` with an empty value), a blue tick, "(Name Equals zzzq)" with the conditions joined by " And " (`filter_summary`), and a Customize... box (FP1-filter-panel-v5.png). The slot is always in the column (an empty box when no condition is active): adding and removing it made the filter editors lose focus after one letter. The tick and Customize... are pictures only (no Advanced Filter opening yet); the panel is squeezed to the room the fixed height leaves, a few pixels short of v3's.
+
+## D5043 - G012: the View menu's size against v3's
+v3's View menu (VM1-view-menu-v3.png) is 319 px wide with rows 30 px apart; ours was 398 wide and 33 apart. The width now takes the widest label of the rows that have a shortcut plus the widest shortcut, or the widest label alone, whichever is more (v3's shortcut column starts after "Show Columns...", not after the longest label), a row without a shortcut no longer gets an empty hint cell (it squeezed the picture column), a submenu row leaves room for its arrow, and the entries are 21 tall: 306 wide, 31 apart (VM8-view-menu-size-v5.png). Still different: no bold headings, no pictures on the entries.
+
+## D5044 - G012: the shortcut gap of the popup menus
+v3's collection context menu (CM1-collection-context-v3.png) is 316 px wide with a gap of about 18 px between "Remove from Collection" and "Del"; ours was 326 wide with 5 px. The label cell takes ten more units and the shortcut cell ten fewer, and the menu's trailing room shrinks to match, so the width is 313 (CM2-collection-context-v5.png) and the View menu 302. The row pitch (30) already matched. Ours also lists Show Columns... under a rule, which v3's menu (cut at its last visible row in the recording) may or may not have.
+
+## D5045 - G012: the column popup's width
+v3's column header popup (HM1-header-menu-v3.png) is 251 px across with rows 33 apart; ours was 240 wide with the same pitch. Seven units more (HM2-header-menu-v5.png: 251). Entries, pictures, rules, the Alignment arrow and the disabled Group Footers match by eye.
+
+## D5046 - G012: the Alignment submenu and the Customization window against v3
+Recorded in v3: the Alignment submenu of the column popup (AL1-alignment-submenu-v3.png: 177 px wide, 33 px rows beside its parent row) matches ours (AL2: 181 wide, same pitch, parent row light blue); the card pool's popup on a group row (PC1-pool-group-menu-v3.png) lists Add to Deck, Add to Sideboard, Add to Collection, Add Foil to Collection, Search..., Advanced Filter..., Show Columns...; and the pool's Customization window (CZ1/CZ2: 246 x 436 px, a Bands tab with an empty list and a Columns tab listing the hidden columns Artist, Edition Name, Flavor, No, Power, Row, Toughness). Ours showed the plain "Column" window for the pool; `set_band_tabs` gives a grid the Bands and Columns tabs with no band in them, the sample sets it for the pool, and the tabbed window's list is 232 high (425 px against 436; CZ3-customization-v5.png). The sample's pool has no hidden columns, so its Columns list is empty (v3's seven hidden fields have no data here).
+
+## D5047 - G012: Customize... on the filter panel opens the Advanced Filter
+The Customize... box of the filter panel (D4103) is a button now: a tap calls `open_criteria_editor`, the same window as Search > Advanced Filter... (FP2-customize-opens-advanced-filter-v5.png). The blue tick is still a picture (v3 uses it to suspend the filter; ours has no suspended state).
+
+## D5048 - G012: the filter panel's tick suspends the filter
+The tick of the filter panel (blue = applied, grey = suspended) flips `filter_off`: every row shows again, the conditions stay typed in their cells and the panel keeps naming them (FP3-filter-suspended-v5.png: "zz" still in the Name cell, 120283 cards); `filter_value` answers "" while suspended, so a host's refilter needs no change, and typing in a cell applies the filter again.
+
+## D5049 - G012: header and footer cells align as v3 prints them
+The three cells of a printed header or footer sit left, centred and right across the printable width (`print_band`): the footer's "Page 1" is centred under the table (PP11-footer-centred-v5.png). "[Date Printed]" still prints as typed.
+
+## D5050 - G012: "[Date Printed]" prints the date
+A header or footer cell that begins "[Da" prints today's date as M/D/YYYY (`time.to_date` of `time.now`; `datagrid.e` now uses e.time), and an untouched footer's right cell defaults to it, as v3's (PP12-footer-date-v5.png: "Page 1" centred, 10/14/2026 at the right). "[Time Printed]", "[User Name]" and the other predefined functions are not built.
+
+## D5051 - G012: the Bottom and Footer margins place the footer band
+The footer band's distance below the filter strip grows with Bottom minus Footer (beyond their defaults of 50 and 20 hundredths) so a larger Bottom margin lowers it on the sheet; at the defaults it is where D4111 drew it. The row count a page holds still does not depend on the margins (ten rows a page).
+
+## D5052 - G012: drive.ps1 refuses to click unless the target window is in front; Page Setup cells are three lines tall
+Twice a scripted run clicked into another application (Discord) because the sample was behind it or had not started: `drive.ps1` now throws when the process has no window or is not the foreground window after SetForegroundWindow, before any click or key. The header and footer cells of Page Setup ask for three rows of 166 x 70 (`cell_field_options`, v3's box size); the fixture passes but the result has not been looked at on screen.
+
+## D5053 - G012: the three-row Page Setup cells seen; drive.ps1 raises the window itself
+HF6-page-setup-cells-three-rows-v5.png: the six header and footer cells are tall boxes with the two footer defaults ("[Page #]", "[Date Printed]") in them; they are grey like the other fields, where v3's are white, and the text starts at the top-left only for the first line (a field of rows shows one line high here). `drive.ps1` presses and releases Alt before SetForegroundWindow so Windows lets it come to the front; its guard (D4113) still refuses to click when it does not.
+
+## D5054 - G012: a hue strip in the colour popup
+Under "Custom color" the popup has twelve hue chips (red, orange, yellow ... magenta, `hue_rgb`); a tap sets the custom colour and the row takes it, the popup staying open (CR4-hue-strip-v5.png: the yellow chip gives 255.255.0 in the positive row and the spin boxes). It stands in for v3's hue square (one dimension, full saturation and value). Bold menu headings were tried (weight 700 through `control.colored_text`) and changed nothing: the sample registers one face per font and the layout has no synthetic bold, so they need a bold face registered for the heading text.
+
+## D5055 - G012: pictures on the View menu's entries
+The sample gives the View menu v3's pictures from the same image list as its popups (icons folder, `view_icons`; the file number is the list position plus the gaps, not the sheet index): both sort orders, Sort..., Clear Sort Order, Legality, Card Rules, Show Columns, Best Fit, Auto Width, Group Box, Expand, Collapse, Header, Indicator, Grid Lines, Summary Footer and Navigator; a ticked entry keeps v3's pale blue box behind its picture (VM9-view-menu-pictures-v5.png; Show Summary Footer uses a stand-in picture, the Sigma of v3 is not in the extracted set). A picture that fails to load must not stop the loader: a zero texture made the menu's tree invalid, and an early return left the other pictures unloaded. Library unchanged; the change is the sample's main.e (mtg.studio repo).
+
+## D5056 - G012: bold headings in the View menu
+The headings (Sort Order, Group By, Cards) are drawn twice, the second copy 0.8 px to the right (`faux_bold`): v3's bold look without a bold face, which the sample does not register and the layout cannot synthesize (VM10-view-menu-bold-headings-v5.png). Replaces the note in D4115 that bold needed a registered face; a real bold face would still be sharper.
+
+## D5057 - G012: the report Designer (Format Report)
+Recorded from v3 (DZ-format-report-{View,Behaviors,Formatting,Styles,Preview}-v3.png): Cards > Print > Designer... (Alt+P) opens DevExpress's Format Report window, not a free-form designer: seven tabs (View, Behaviors, Formatting, Styles, Preview, Cards, Charts), check boxes in titled groups on the left, a live preview of the report on the right, and Title Properties..., Footnote Properties..., OK, Cancel, Apply along the bottom. `show_designer` / `designer_panel` build it in the print window's slot: the five recorded tabs with their groups and check boxes (`dz_label`, `dz_group_of`, `dz_tab_of`; 29 items kept as bits of `dz_checks`, v3's defaults, two disabled as in v3), a preview of the grid's first rows, and a Filter Bar check (View > Show) that really hides the preview's filter strip (DZ-format-report-View-v5.png, ...-Behaviors-v5.png). The sample's Designer entry is live. Not built: the Cards and Charts tabs (empty, not recorded), the Look and Feel list, the Styles list and its buttons, Title/Footnote Properties, Apply; the other checks are remembered but change nothing; the preview starts with the picture columns (v3's starts at Name). The first attempt of this session also trapped: Alt+P is not wired in the sample, the entry is reached from the context menu.
+
+## D5058 - G012: the Designer's Styles list, Look and Feel box and line count
+The Styles tab lists v3's thirteen styles (BandHeader ... Selection) with their sample strips and "8 pt. Tahoma" under "Use Native Styles" (DZ-format-report-Styles-v5.png against ...-Styles-v3.png); the Formatting tab has its "Look and Feel" heading with the Flat box above the Refinements; the Preview tab's "Max Line Count: 0" box sits under its two checks. The list's Font..., Color..., Texture..., Clear, Restore Defaults, Save As and the style-sheet row are not drawn, and none of these boxes edits anything.
+
+## D5059 - G012: the Designer's Apply button
+The bottom row ends with v3's Apply, grey like v3's while nothing is pending (DZ-format-report-Apply-v5.png). OK and Cancel close the Designer; the Styles tab's Font/Color/Texture/Clear buttons, Restore Defaults, Save As and the style-sheet row are still not drawn (the list fills the tab's height at this scale).
+
+## D5060 - G012: the Designer's Cards and Charts tabs are out of scope
+v3's Format Report has Cards and Charts tabs (recorded once: card sizes, spacing, framing and shadow; a Transparent check beside a chart), but MTG Studio uses neither, so the user ruled them out: the tabs stay as labels without content. `dz_checks` is a u64 now so more items could be added later without a type change.
+
+## D5061 - G012: the Styles tab's buttons and Style Sheets row (not yet seen)
+Beside the style list: Font..., Color..., Texture..., Clear (grey, as v3 draws them with no style picked); under it Restore Defaults, Save As... and a Style Sheets heading over an empty box (`dz_style_list`, `dz_style_buttons`, `dz_style_foot`; the list narrowed to 250 px). The fixture passes and the sample builds, and the tab has now been looked at (DZ-format-report-Styles-buttons-v5.png): list, buttons, Restore Defaults, Save As and the Style Sheets box all fit. None of the controls does anything.
+
+## D5062 - G012: drive.ps1 re-checks the foreground window before every click and key
+After a run's first check passed, another window (a browser) came in front mid-script and a screenshot captured it, so clicks may have landed there. The script now throws before any step but wait and shot when the target is no longer the foreground window. With it the Styles tab was checked (D4122 text updated).
+
+## D5063 - G012: the rows a preview page holds follow the Top and Bottom margins
+`page_rows`: ten rows at the default 0.50 in Top and Bottom, one fewer for every 27 sheet pixels the two margins take beyond that (one more for every 27 they give back), 1 to 14. Bottom 1.10 in gives nine rows and 13365 pages instead of 12029 (PP13-rows-follow-margins-v5.png). The boundaries are the sheet's, not v3's (v3's own pagination was not recorded). Recording v3's Title/Footnote Properties still failed: v3 does not come to the foreground for the guarded script, so those dialogs stay unbuilt.
+
+## D5064 - G012: "[Time Printed]" prints the time
+A header or footer cell that begins "[Ti" prints the time as H:MM (`time.to_time` of `time.now`); typing "[Ti" in the footer's left cell of Page Setup printed 23:42 at the left of the preview's footer (PP14-footer-time-typed-v5.png), which also shows typed cell text reaching the page. "[User Name]" is not built (the library has no user-name call); "[Page #]" and "[Date Printed]" were done (D4111).
+
+## D5065 - G012: a style can be picked in the Designer's Styles list
+A tap on a row of the Styles list highlights it (light blue) and turns Font..., Color..., Texture... and Clear black, as v3 enables them with a style picked; Restore Defaults and Save As stay grey (DZ-format-report-Styles-picked-v5.png: Content picked). The buttons still change nothing. Alt+P is not a gap of the library: the sample wires no keyboard shortcut at all, every shortcut in its menus is a label.
+
+## D5066 - G012: the Designer's Apply is live after a change
+Unticking a check box turns Apply black (DZ-format-report-Apply-live-v5.png: Caption unticked) and a tap on it greys it again, as v3's Apply is enabled only while a change is pending; nothing is applied to anything since the checks change only the preview.
+
+## D5067 - G012: Title Properties and Footnote Properties
+Recorded from v3 (TP1-report-title-text-v3.png, TP2-report-title-properties-v3.png): Title Properties... opens "Report Title", a window with a Mode box ("On First Page"), Text and Properties tabs, a white text area holding "Card Pool" and OK / Cancel. The Designer's two buttons now open that window in the Designer's slot (`dz_dialog`; Footnote Properties is the same window titled "Report Footnote" with an empty text area, an assumption: v3's footnote dialog was not recorded because v3 lost the foreground before the second click); OK and Cancel return to the Designer (TP3-report-title-v5.png, TP4-report-footnote-v5.png). The Mode box and tabs are drawn, not live, the text area is not editable and its text does not reach the preview; v3's Properties tab content was not recorded either.
+
+## D5068 - G012: the report title is editable and feeds the preview heading
+The text area of Title Properties is a real text field seeded with "Card Pool" (typing "Abc" after "Card" gives "CardAbc Pool", TP5-report-title-typed-v5.png), stored in `Grid.dz_title` and used as the preview's heading once the dialog has been opened (`report_title`; "Collection" before). The preview heading was NOT seen after the edit: three runs were cut short by the foreground guard because another window took the focus, so only the typing in the dialog is verified. The field draws grey and large (the library's field look), not v3's white text area; Footnote's text area is still a static box.
+
+## D5069 - G012: repair of D4129 (Print Preview broke); the title reaches the preview
+D4129 left Print Preview failing with InvalidTree: its edit hit the wrong line (an earlier insert had shifted the line numbers) and overwrote the width loop in `print_panel`, and the heading code added more locals to that large builder. The width loop is restored and the heading is built by `preview_heading` (a helper, as the HANDOVER trap says). With it the edited title is the preview's heading (TP6-title-in-preview-v5.png: "CardAbc Pool"), which D4129 claimed but had not been seen. The fixture did not catch the break because it does not draw the print window; lesson: look at the window after every change to a builder, and never patch by line number after another edit in the same file.
+
+## D5070 - G012: the footnote text area is editable
+The Footnote Properties text area is a text field too (`dz_foot_field`, `Grid.dz_foot`): typing "Foo" shows in it (TP7-report-footnote-typed-v5.png). The footnote text is kept but not printed on the preview page yet (v3 prints it under the table). A first attempt at this edit silently did not apply (the Edit tool refused a stale read) and its screenshot showed the old static box: read the file again before editing.
+
+## D5071 - G012: the footnote prints on the preview page
+The text of Footnote Properties is printed on the preview page under the footer band, at the left margin (`preview_footnote`, one line of up to 48 characters; TP8-footnote-in-preview-v5.png: "Foo"). v3's footnote placement and its Mode box (first page / every page) are not modelled; the Title's Mode likewise.
+
+## D5072 - G012: the Mode box of Title and Footnote Properties works
+A tap on the Mode box steps On First Page, On Every Page, Do Not Print (the three DevExpress report-title modes; v3's own list was not recorded, so this is from the component, not from the window). The title and the footnote print on the preview page accordingly (`dz_prints_here`; the default On First Page prints them on page 1 only). Seen: Every Page set, page 2 of the preview shows the title (TP9-title-mode-v5.png, TP10-title-every-page-v5.png). Not seen: first-page-only dropping the title on page 2, and Do Not Print.
+
+## D5073 - G012: the default First Page mode seen
+With the default On First Page the title prints on page 1 only: page 2 has no heading (TP11-title-first-page-only-v5.png). Do Not Print is still unseen.
+
+## D5074 - G012: Clear unpicks the picked style
+With a style picked in the Designer's Styles list (D4126), Clear is live: a tap unpicks it and the four buttons go grey again (DZ-format-report-Styles-cleared-v5.png, after Content was picked). Font..., Color... and Texture... are still inert: they would open the font and colour pickers of v3, which were not recorded.
+
+## D5075 - G012: the Styles tab's Style Sheets row and the native-styles states, from v3
+Recorded from v3 (DZ-format-report-Styles-full-v3.png, ...-nonnative-v3.png): under the Style Sheets box sit New..., Copy..., Delete... and Rename...; with "Use Native Styles" ticked New... and Save As... are live and the rest grey, and unticking it greys the whole tab (list, buttons, Style Sheets) and enables Apply. Ours draws the row and the same states (DZ-format-report-Styles-sheets-v5.png, ...-nonnative-v5.png; `dz_sheet_buttons`, `dz_button_ink_for`). Differences: v3 also greys the list's text when native styles are off, ours keeps it black; the buttons are drawn, not live; v3's Font..., Color... and Texture... pickers are still not recorded (my attempts to pick a row in v3 hit the native-styles box instead).
+
+## D5076 - G012: the style list's text greys with native styles off
+Unticking "Use Native Styles" greys the list's text as well, closing the difference noted in D4136 (DZ-format-report-Styles-nonnative-v5.png replaced by the new shot; `dz_list_ink`).
+
+## D5077 - G012: the Font window of the Styles tab
+Recorded from v3 (FD1-font-dialog-v3.png): with a style picked, Font... opens the Windows font dialog on that style: Font, Font style and Size lists (Tahoma, Regular and 6 highlighted), Strikeout and Underline, a Color box (Black), a Sample ("AaBbYyZz"), a Script box (Western) and OK / Cancel. Ours opens a window with the same parts when Font... is tapped with a style picked (FD2-font-dialog-v5.png; `dz_font_dialog`): the lists show their first entries highlighted, everything else is drawn, nothing is selectable or applied, and OK / Cancel go back to the Designer. Color... and Texture... still have no window (not recorded).
+
+## D5078 - G012: the Color Editor window of the Styles tab
+Recorded from v3 (CE1-color-editor-v3.png): with a style picked, Color... opens the DevExpress Color Editor: Basic Colors (6 x 8 swatches) and Custom Colors (2 x 8 empty slots), "Define Custom Colors >>", a hue/saturation square with a lightness bar, H, S, L, R, G, B boxes, a hex box, "Add to Custom Colors", OK and Cancel. Ours opens the same window from Color... (CE2-color-editor-v5.png; `dz_color_dialog`): the swatch grids (4 rows of the 8 basic colours of the data bar palette, not v3's 48), a flat orange square, the six boxes with white's values, OK / Cancel; no hue square gradient, hex box or lightness bar, and nothing is selectable or applied. Texture... did not open a different window in v3 on two tries (the second click reopened the Color Editor), so it stays unbuilt.
+
+## D5079 - G012: the Color Editor's 48 basic colours are v3's
+The colour data I said was missing was in the recording: the 48 swatches were sampled pixel by pixel from CE1-color-editor-v3.png (`windows_basic`, six rows of eight, the classic Windows basic palette) and the Basic Colors grid now has all six rows (CE3-color-editor-48-v5.png). Still different: the colour square is flat, there is no hex box, lightness bar or Add to Custom Colors, and the swatches are not selectable. (A first build of this failed on a local named `table`, a reserved qualifier; its screenshot was the old binary.)
+
+## D5080 - G012: swatches of the Color Editor can be picked and applied
+A tap on a basic colour fills the editor's square with it and sets the R, G and B boxes (CE4-color-editor-picked-v5.png: teal, 0 / 128 / 128); OK gives that colour to the picked style, whose sample strip in the Styles list takes it (DZ-format-report-Styles-colored-v5.png: Content Even Rows teal); Cancel leaves the strip as it was. `Grid.dz_pick_color` is stored XOR white so the default is white; `dz_style_rgb` / `dz_style_has` keep one colour per style. H, S and L stay at their white values (not computed from the pick), custom colours, the hex box and the hue square are still not built, and the colour does not reach the preview report.
+
+## D5081 - G012: the Header style's colour reaches the printed report
+Picking the Header style, a colour in the Color Editor and OK paints the preview's header row with it (DZ-style-header-in-preview-v5.png: teal header row, `print_header_fill`; light grey until then). The other twelve styles' colours are kept but do not draw anything yet (Content, Even/Odd rows, Footer, Group, Filter Bar ... would each map to a part of the page), and neither do their fonts.
+
+## D5082 - G012: the Filter Bar style's colour paints the printed filter strip
+Same route as the Header style (D4142): picking Filter Bar and a colour paints the preview's "<Filter is Empty>" strip (DZ-style-filterbar-in-preview-v5.png: teal strip). Eleven styles still draw nothing. A first run picked Footer by mistake (my click was 22 px low), which is why the first screenshot showed the grey strip.
+
+## D5083 - G012: the Content style's colour paints the printed data cells
+Picking Content and a colour fills the preview's data cells (DZ-style-content-in-preview-v5.png: light yellow, `dz_content_fill`); the header row keeps its own style. Nine styles still draw nothing (Content Even/Odd Rows need the row number in `print_row`, Footer, Group, Caption, Preview, Selection, BandHeader and the card styles have no counterpart on the page). The first run chose a swatch coordinate in an empty custom slot, so no colour was picked and the cells stayed white.
+
+## D5084 - G012: Content Even Rows and Odd Rows stripe the printed table
+`print_row` and `print_cell` take the row number instead of a header flag (row 0 is the header); `dz_row_fill` picks the Even Rows style's colour for the 1st, 3rd, 5th data row and the Odd Rows style's for the 2nd, 4th ..., else the Content colour (DZ-style-even-odd-in-preview-v5.png: yellow even, cyan odd). Which of the two is "even" (row index 0 or 1) is my reading of the DevExpress convention, not recorded from v3. Seven styles still draw nothing.
+
+## D5085 - G012: the Color Editor's H, S and L follow the pick
+`hsl_channel` computes hue, saturation and lightness of the picked colour, each on a 0 to 255 scale (v3's white reads L 255; its hue and saturation scale was inferred from that one number, not recorded): teal 0 / 128 / 128 reads H 127, S 255, L 64 (CE5-color-editor-hsl-v5.png), salmon 255 / 128 / 128 reads H 0, S 255, L 191. The boxes are still not editable, the hue square, hex box and custom colours are not built.
+
+## D5086 - G012: the Color Editor's hex box follows the pick
+Under the channel boxes a "$ RRGGBB" box shows the picked colour in hex as v3's does (CE6-color-editor-hex-v5.png: teal reads $ 008080; `hex_label`). It is read-only here. The hue square, lightness bar, "Add to Custom Colors" and the custom colour slots are still not built.
+
+## D5087 - G012: custom colours in the Color Editor
+"Add to Custom Colors" (under the hex box) stores the picked colour in the next of the 16 custom slots (the oldest drops out when full; `dz_add_custom`), and a filled slot can be tapped to pick that colour again (CE7-color-editor-custom-v5.png: teal, salmon, teal stored, the first slot then picked: square teal). "Define Custom Colors >>" is still a static box, the hue square and lightness bar are not built, and the stored colours are not kept between runs.
+
+## D5088 - G012: the Color Editor's hue square
+The flat square is v3's colour square: 24 hue columns (red through magenta back to red, `hue_at`) over eight bands that fade toward grey going down, and the picked colour in a box at its right (CE8-color-editor-hue-square-v5.png). It is drawn from solid pieces: a first version with linear gradients showed solid red because gradient coordinates in this renderer are window-relative, not node-relative (the vertical fade only looked right by accident). The square is not clickable, there is still no lightness bar, and v3's own square has its crosshair marker.
+
+## D5089 - G012: the hue square can be clicked
+Each of the 192 pieces of the hue square is a tap that picks its colour (`hue_cell_rgb`): the preview box, H/S/L, R/G/B and the hex box all follow (CE9-color-editor-square-click-v5.png: a click in column 11, band 1 gave 18 / 237 / 182 = $ 12EDB6, H 116 S 219 L 127). The picks are the 24 x 8 grid's colours, not the continuous colour under the pointer, and there is no crosshair or lightness bar.
+
+## D5090 - G012: the Footer style's colour paints the printed footer band
+Picking Footer and a colour paints the preview's footer band (the "Page 1" / date line; DZ-style-footer-in-preview-v5.png: light yellow, in `print_band` for the footer cells). Six styles still draw nothing (Caption, BandHeader, Group, Preview, Selection and the two card styles).
+
+## D5091 - G012: the Caption style's colour paints the printed title
+Picking Caption and a colour puts it behind the report title on the preview page (DZ-style-caption-in-preview-v5.png: light cyan behind "Collection"; `caption_look`). A first version set the colour on the padded wrapper and painted from the sheet's edge to the title (the padding is part of the node), so the heading is wrapped in its own box. Five styles still draw nothing (BandHeader, Group, Preview, Selection and the two card styles).
+
+## D5092 - G012: the styles with nothing to paint
+Of the Designer's thirteen styles, eight now colour the preview page: Caption (title), Header (column headers), Content, Content Even Rows, Content Odd Rows (data cells), Filter Bar (filter strip), Footer (footer band) and, through the list, their own strips. The other five have no counterpart on the flat table the preview prints: BandHeader (no bands), Group (no group rows), Selection (no selected row), Preview (no rules-text rows) and the two card styles (no card layout). Their colours are kept and shown in the Styles list; they will draw when the page grows those parts. Style fonts are kept as "8 pt. Tahoma" only: the page's text size comes from the grid's theme, and the Font window changes nothing.
+
+## D5093 - G012: Texture... opens the system's file dialog (not built, by decision)
+Recorded from v3 (TX1-texture-opens-file-dialog-v3.png): with a style picked, Texture... opens the operating system's Open dialog filtered to images (*.jpg, *.jpeg, *.svg, *.gif, *.png ...), with the file preview pane. There is no report-designer window behind it, so ours stays a button without a window: the sample has no file picker, and an image picked for a style would also need a place on the page (the five styles that draw nothing have none). Cancelled without choosing a file. This also corrects the earlier note that v3 "never showed" a Texture window.
+
+## D5094 - G012: the Color Editor's R, G and B are spin boxes
+R, G and B are labelled spin boxes (0 to 255, arrows step 8, typed digits set the value; `dz_channel_spin`, `dz_set_pick_channel`): two taps on R's up arrow gave 16 and the preview, hex ($ 108080) and H/S/L followed (CE10-color-editor-rgb-spin-v5.png). H, S, L and the hex box are still read-only, "Define Custom Colors >>" is still a static box, and typing in the boxes was not tried. The dialog grew to 700 x 590 to hold the taller boxes.
+
+## D5095 - G012: typing in the Color Editor's R box seen
+Select-all and "200" typed into the R spin box gave R 200, $ C88080, H 0, S 100, L 164 and the matching preview (CE11-color-editor-rgb-typed-v5.png), so the typed path of D4155 works as the arrows do. G and B share the handler, not separately tried.
+
+## D5096 - G012: typing in the Color Editor's G and B boxes seen
+G 100 and B 70 typed after the teal pick give R 0, G 100, B 70, $ 006446, H 114, S 255, L 50 (CE12-color-editor-gb-typed-v5.png); R, G and B are all verified typed and with arrows (R only with arrows after D4155, typed in D4156).
