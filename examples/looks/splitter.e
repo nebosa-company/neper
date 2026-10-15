@@ -48,6 +48,37 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize {
+        let live = looks.Sheet { name: "splitter_live", cells: 2usize, columns: 2usize, cell_w: 200.0, cell_h: 200.0, ctx: zero, build: build_live }
+        ret looks.run_all(a, &live)
+    }
     let sheet = looks.Sheet { name: "splitter", cells: 8usize, columns: 4usize, cell_w: 200.0, cell_h: 120.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
+}
+
+// The two splitters of the v3 main window at their real length (live capture
+// ref/windows/splitter_live*.png): the upright one between the card panel and the grids, the
+// lying one between the two grids; each in a split big enough for its hot zone.
+fn plain_pane() -> widget.Node {
+    var s = style.defaults()
+    s.width = style.Length { Percent: 100.0 }
+    s.height = style.Length { Percent: 100.0 }
+    s.background = paint.Brush { Solid: style.hex(16777215u32) }
+    ret widget.box(0u64, s, zero)
+}
+
+fn build_live(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    var i = 0usize
+    while i < 2usize {
+        var axis: ui_layout.Axis = .Horizontal
+        if i == 1usize { axis = .Vertical }
+        let change = widget.Change[f32] { ctx: zero, invoke: noop_change }
+        let (node, node_error) = control.split_view(a, u64(1000usize * (i + 1usize)), t, axis, plain_pane(), plain_pane(), 96.0, 40.0, 40.0, change, 200.0, 200.0)
+        if node_error != ok { ret (0usize, node_error) }
+        var caption = "Upright"
+        if i == 1usize { caption = "Lying" }
+        cells[i] = looks.Cell { caption: caption, node: node, drive: .None }
+        i += 1usize
+    }
+    ret (2usize, ok)
 }

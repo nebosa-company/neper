@@ -4887,10 +4887,12 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // (D956) room kept clear at the end for a control standing inside it; (D960) a
 // height other than the density's (0 keeps it), `body-medium` at 40 or less.
 // (D1453) `mono` sets the typed text in the theme's fixed-pitch face.
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool }
+// (looks) `flat`: under the Windows look, a combo box as a toolbar hosts it (v3's dxBar editors:
+// no rounded native frame, a flat white face and a grey drop button with a black triangle).
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -6834,7 +6836,7 @@ fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, se
 // enabled). (D1226) `icons` puts a glyph above each label; `badges` holds a count
 // per tab ("" for none) and `badge_names` what each means in the tab's name
 // (the count itself when shorter).
-type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool, icons: []const GlyphKind, badges: []const str, badge_names: []const str, dots: []const bool }
+type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool, icons: []const GlyphKind, badges: []const str, badge_names: []const str, dots: []const bool, bottom: bool }
 
 fn tab_badge(options: *const TabsOptions, i: usize) -> str {
     if i >= options.badges.len { ret "" }
@@ -7071,6 +7073,12 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     let sliding = slide != 0.0 && !windows
     var item_count = labels.len
     var windex = 0usize
+    if windows && options.bottom {
+        // The bottom strip of the v3 main window starts 5 px before its first tab, its rules running on.
+        items[0usize] = windows_tab_lead(a, 5.0)
+        windex = 1usize
+        item_count = 1usize
+    }
     var i = 0usize
     while i < labels.len {
         let chosen = i == selected
@@ -7079,7 +7087,10 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         let state = control_state(t, tab_key, enabled, chosen)
         if windows {
             // The Windows look (v3's lfUltraFlat page control): tabs and separators in a row.
-            let (tab, sep, tab_error) = windows_tab(a, t, tab_key, labels[i], chosen, enabled, state, &picks[i], i + 1usize < labels.len && i + 1usize != selected && !chosen)
+            var tab_icon: GlyphKind = .Picture
+            let has_icon = i < options.icons.len
+            if has_icon { tab_icon = options.icons[i] }
+            let (tab, sep, tab_error) = windows_tab(a, t, tab_key, labels[i], chosen, enabled, state, &picks[i], i + 1usize < labels.len && i + 1usize != selected && !chosen, options.bottom, has_icon, tab_icon)
             if tab_error != ok { ret (zero, tab_error) }
             items[windex] = tab
             items[windex + 1usize] = sep
@@ -7173,13 +7184,15 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     if sharing { strip.width = style.Length { Px: options.width } }
     if windows {
         strip.padding = style.defaults().padding
-        items[windex] = windows_tab_filler(a, t)
+        items[windex] = windows_tab_filler(a, t, options.bottom)
         item_count = windex + 1usize
         if options.width > 0.0 { strip.width = style.Length { Px: options.width } }
     }
     let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 2usize)
     if bar_parts_error != ok { ret (zero, TooLarge) }
-    bar_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 0.0 }, strip, items[0usize..item_count])
+    var strip_cross: ui_layout.CrossAlign = .End
+    if windows && options.bottom { strip_cross = .Start }
+    bar_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: strip_cross, gap: 0.0 }, strip, items[0usize..item_count])
     // (D1254) A scrollable bar with a width scrolls its strip sideways (keyed
     // `key + 1048576`), clamped, with no thumb; while the selected tab has the
     // focus the strip brings it fully into view.
@@ -7524,7 +7537,13 @@ fn v3_chevron(b: *scene.Builder, cx: f32, cy: f32, dir: u8, ink: paint.Color) ->
     ret ok
 }
 
-fn sash_paint_v3(s: *Sash, b: *scene.Builder, area: geometry.Rect) -> err {
+fn sash_paint_v3(s: *Sash, b: *scene.Builder, sized: geometry.Rect) -> err {
+    // On whole pixels (the capture's zone is pixel-sharp whatever the strip's place).
+    let left = f32(i64(sized.x + 0.5))
+    let top = f32(i64(sized.y + 0.5))
+    // TcxSplitter is 8 thick (DFM Width/Height 8); the layout hands over a fractional 7.x.
+    var area = geometry.rect(left, top, 8.0, f32(i64(sized.y + sized.height + 0.5)) - top)
+    if s.across { area = geometry.rect(left, top, f32(i64(sized.x + sized.width + 0.5)) - left, 8.0) }
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: area, brush: paint.Brush { Solid: s.face } } })
     var along = area.height
     var thick = area.width
@@ -7544,23 +7563,24 @@ fn sash_paint_v3(s: *Sash, b: *scene.Builder, area: geometry.Rect) -> err {
     }
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: zone, brush: paint.Brush { Solid: s.edge } } })
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: inner, brush: paint.Brush { Solid: s.hot_face } } })
-    // Chevrons 6 from each end of the zone, the dotted line between them, a dot every 3.
+    // Chevrons 9 from each end of the zone, the dotted line between them (measured at 100 %): a
+    // 1 x 2 dot every 3, the first 16 and the last 16 from the ends of the zone.
     let mid = thick * 0.5
     var dir = 2u8
     if s.across {
         dir = 0u8
     }
     if s.across {
-        try v3_chevron(b, area.x + start + 7.0, area.y + mid, dir, s.ink)
-        try v3_chevron(b, area.x + start + len - 7.0, area.y + mid, dir, s.ink)
+        try v3_chevron(b, area.x + start + 9.5, area.y + mid, dir, s.ink)
+        try v3_chevron(b, area.x + start + len - 9.5, area.y + mid, dir, s.ink)
     } else {
-        try v3_chevron(b, area.x + mid, area.y + start + 7.0, dir, s.ink)
-        try v3_chevron(b, area.x + mid, area.y + start + len - 7.0, dir, s.ink)
+        try v3_chevron(b, area.x + mid, area.y + start + 9.5, dir, s.ink)
+        try v3_chevron(b, area.x + mid, area.y + start + len - 9.5, dir, s.ink)
     }
-    var at: f32 = 15.0
-    while at < len - 14.0 {
-        var dot = geometry.rect(area.x + mid - 0.5, area.y + start + at, 1.0, 1.0)
-        if s.across { dot = geometry.rect(area.x + start + at, area.y + mid - 0.5, 1.0, 1.0) }
+    var at: f32 = 16.0
+    while at < len - 16.0 {
+        var dot = geometry.rect(area.x + f32(i64(mid)), area.y + start + at, 1.0, 2.0)
+        if s.across { dot = geometry.rect(area.x + start + at, area.y + f32(i64(mid)), 1.0, 2.0) }
         try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: dot, brush: paint.Brush { Solid: s.dots } } })
         at += 3.0
     }
@@ -7751,12 +7771,22 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     if t.tokens.profile == .Windows {
         // v3: measured at 150 % (03-main-pool-deck-v3.png): the strip is the dialog face, the hot
         // zone a #A0A0A0 frame with near-black chevrons and #248ADB dots. Hover and press tints are guesses.
-        var zone_edge = style.hex(10526880u32)
+        // Measured again at 100 % (ref/windows/main-window@1x.png): the upright zone is 140 long
+        // framed #ADADAD with #8EBFE6 dots, the lying one 151 long framed #919398 with #99C4E7 dots,
+        // chevrons #131313.
+        var zone_edge = style.hex(11382189u32)
+        var zone_dots = style.hex(9355238u32)
+        var zone_len: f32 = 140.0
+        if vertical {
+            zone_edge = style.hex(9540504u32)
+            zone_dots = style.hex(10077415u32)
+            zone_len = 151.0
+        }
         var zone_face = style.color(t.tokens, .Background)
         if state.hovered { zone_edge = style.hex(8303850u32) }
         if state.hovered { zone_face = style.hex(15069691u32) }
         if state.pressed { zone_face = style.hex(13427959u32) }
-        sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: paint.rgba(0.0, 0.0, 0.0, 0.0), across: vertical, arena: a, v3: true, face: style.color(t.tokens, .Background), edge: zone_edge, dots: style.hex(2394843u32), ink: style.hex(1842204u32), hot_len: 144.0, hot_face: zone_face }
+        sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: paint.rgba(0.0, 0.0, 0.0, 0.0), across: vertical, arena: a, v3: true, face: style.color(t.tokens, .Background), edge: zone_edge, dots: zone_dots, ink: style.hex(1250067u32), hot_len: zone_len, hot_face: zone_face }
     }
     var paint_style = style.defaults()
     paint_style.width = full
@@ -12260,14 +12290,32 @@ fn v3_tab_line() -> style.Style {
 
 // One tab and the hairline that follows it (`with_sep`; else a 1 px gap carrying only the
 // strip's bottom line). Both are 22 tall.
-fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, chosen: bool, enabled: bool, state: style.ControlState, action: *const widget.Submit, with_sep: bool) -> (widget.Node, widget.Node, err) {
+fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, chosen: bool, enabled: bool, state: style.ControlState, action: *const widget.Submit, with_sep: bool, bottom: bool, has_icon: bool, picture_kind: GlyphKind) -> (widget.Node, widget.Node, err) {
     var ink = style.color(t.tokens, .Text)
     if state.hovered && enabled { ink = style.hex(26316u32) }
     if !enabled { ink = style.mix(ink, style.color(t.tokens, .Surface), 0.6) }
     var caption = text_options()
     caption.wrap = .None
-    let (label_ink_node, label_ink_error) = colored_text(a, 0u64, label, t, caption, ink)
-    if label_ink_error != ok { ret (zero, zero, label_ink_error) }
+    var label_ink_node: widget.Node = zero
+    if label.len != 0usize || !has_icon {
+        let (said, said_error) = colored_text(a, 0u64, label, t, caption, ink)
+        if said_error != ok { ret (zero, zero, said_error) }
+        label_ink_node = said
+    }
+    if has_icon {
+        // A tab picture (v3's image list), 16 square before the caption (3 apart).
+        let (picture, picture_error) = icon_square(a, ink, picture_kind, 16.0)
+        if picture_error != ok { ret (zero, zero, picture_error) }
+        if label.len == 0usize {
+            label_ink_node = picture
+        } else {
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, zero, TooLarge) }
+            pair[0usize] = picture
+            pair[1usize] = label_ink_node
+            label_ink_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 3.0 }, style.defaults(), pair[0usize..2usize])
+        }
+    }
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
     if chosen { look.background = style.color(t.tokens, .Background) }
@@ -12280,13 +12328,32 @@ fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, 
     look.padding_y = 3.0
     if chosen { look.padding_y = 2.0 }
     look.min_height = 21.0
+    // A tab at the bottom (tpBottom, measured at 100 % in the v3 main window): the strip's two rule
+    // rows lie above it; a chosen tab's face runs up into the page, framed left and right and closed
+    // by two rows below.
+    if bottom && chosen { look.min_height = 20.0 }
+    if has_icon && label.len == 0usize { look.padding_y = 2.0 }
+    if has_icon && label.len == 0usize && !chosen { look.padding_y = 2.5 }
     let (press, press_error) = pressable_states(a, tab_key, t, 19u8, label, look, enabled, chosen, 0u32, 0u32, 0u64, action, label_ink_node)
     if press_error != ok { ret (zero, zero, press_error) }
-    let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+    let (held, held_error) = mem.alloc[widget.Node](a, 4usize)
     if held_error != ok { ret (zero, zero, TooLarge) }
     held[0usize] = press
     var tab = press
-    if chosen {
+    if bottom && chosen {
+        var frame = style.defaults()
+        frame.background = paint.Brush { Solid: style.hex(394758u32) }
+        frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 0.0 } }
+        held[1usize] = widget.box(0u64, frame, held[0usize..1usize])
+        held[2usize] = v3_tab_rule(10329501u32)
+        held[3usize] = v3_tab_rule(5789784u32)
+        tab = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), held[1usize..4usize])
+    } else if bottom {
+        held[1usize] = v3_tab_rule(10132122u32)
+        held[2usize] = v3_tab_rule(5987163u32)
+        held[3usize] = press
+        tab = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), held[1usize..4usize])
+    } else if chosen {
         var frame = style.defaults()
         frame.background = paint.Brush { Solid: style.hex(2829099u32) }
         frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 0.0 } }
@@ -12295,24 +12362,61 @@ fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, 
         held[1usize] = widget.box(0u64, v3_tab_line(), zero)
         tab = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), held[0usize..2usize])
     }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, zero, TooLarge) }
     var mark = style.defaults()
     mark.width = style.Length { Px: 1.0 }
     mark.height = style.Length { Px: 14.0 }
     mark.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 4.0 } }
     if with_sep { mark.background = paint.Brush { Solid: style.hex(11579568u32) } }
-    parts[0usize] = widget.box(0u64, mark, zero)
-    parts[1usize] = widget.box(0u64, v3_tab_line(), zero)
     var column = style.defaults()
     column.width = style.Length { Px: 1.0 }
+    if bottom {
+        // The hairline of a bottom strip: the strip's two rule rows, then the hairline.
+        parts[0usize] = v3_tab_rule(10132122u32)
+        parts[1usize] = v3_tab_rule(5987163u32)
+        parts[2usize] = widget.box(0u64, mark, zero)
+        let bottom_sep = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column, parts[0usize..3usize])
+        ret (tab, bottom_sep, ok)
+    }
+    parts[0usize] = widget.box(0u64, mark, zero)
+    parts[1usize] = widget.box(0u64, v3_tab_line(), zero)
     let sep = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column, parts[0usize..2usize])
     ret (tab, sep, ok)
 }
 
+// A 1 px tall rule of colour `rgb` (a bottom strip's rule rows, two grays as the capture shows them).
+fn v3_tab_rule(rgb: u32) -> widget.Node {
+    var s = style.defaults()
+    s.height = style.Length { Px: 1.0 }
+    s.background = paint.Brush { Solid: style.hex(rgb) }
+    ret widget.box(0u64, s, zero)
+}
+
+// The `width` wide start of a bottom strip: its two rule rows.
+fn windows_tab_lead(a: *mem.Arena, width: f32) -> widget.Node {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize)
+    if rows_error != ok { ret widget.spacer(0u64, width) }
+    rows[0usize] = v3_tab_rule(10132122u32)
+    rows[1usize] = v3_tab_rule(5987163u32)
+    var lead = style.defaults()
+    lead.width = style.Length { Px: width }
+    ret widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, lead, rows[0usize..2usize])
+}
+
 // The strip's bottom line to the right of the last tab.
-fn windows_tab_filler(a: *mem.Arena, t: *const Theme) -> widget.Node {
+fn windows_tab_filler(a: *mem.Arena, t: *const Theme, bottom: bool) -> widget.Node {
     var none: []const widget.Node = zero
+    if bottom {
+        let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize)
+        if rows_error != ok { ret widget.spacer(0u64, 1.0) }
+        rows[0usize] = v3_tab_rule(10132122u32)
+        rows[1usize] = v3_tab_rule(5987163u32)
+        var down = style.defaults()
+        down.width = style.Length { Flex: 1.0 }
+        down.height = style.Length { Px: 23.0 }
+        ret widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, down, rows[0usize..2usize])
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret widget.spacer(0u64, 1.0) }
     parts[0usize] = widget.spacer(0u64, 1.0)
@@ -12346,9 +12450,13 @@ fn scroll_arrows_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> er
 // px scrolled to `offset`. Keyed `key` (its hover and press state).
 fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, view: f32, content: f32, offset: f32) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
-    var w: f32 = 2.7
+    // Measured at 100 % in the v3 main window (ref/windows/main-window@1x.png): the vertical bar's
+    // thumb is 2 wide (#858585, square ends) on its 16 wide track; the horizontal bar of a grid
+    // (in the navigator row) is a 9 thick #858585 block with square ends.
+    var w: f32 = 2.0
+    if !vertical { w = 9.0 }
     var ink = style.hex(8750469u32)
-    if state.hovered { w = 6.0 }
+    if state.hovered && vertical { w = 6.0 }
     if state.pressed { ink = style.hex(6316128u32) }
     let room = length - 32.0
     var thick = style.defaults()
@@ -12374,7 +12482,8 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             thick.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: side }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         }
         thick.background = paint.Brush { Solid: ink }
-        thick.radius = w * 0.5
+        thick.radius = 0.0
+        if state.hovered && vertical { thick.radius = w * 0.5 }
         layers[count] = widget.box(0u64, thick, zero)
         count += 1usize
     }
@@ -12776,7 +12885,97 @@ fn win_combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
 
 // The frame of an editable drop-down (keyed `key + 1048701`): the editor (keyed `key`) and the
 // drop button (keyed `key + 1`, firing `toggle`) in the native-style box.
+// The drop button's arrow of a toolbar combo (measured at 100 %, v3 main window): a black triangle
+// 5 wide and 3 tall, centred.
+type WinArrow = struct { color: paint.Color, arena: *mem.Arena }
+
+fn win_arrow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*WinArrow](ctx)
+    let (pb, pb_error) = geometry.path_builder(m.arena, 4usize, 4usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    let x0 = area.x + (area.width - 5.0) * 0.5
+    let y0 = area.y + (area.height - 3.0) * 0.5
+    try geometry.move_to(&builder, geometry.Point { x: x0, y: y0 })
+    try geometry.line_to(&builder, geometry.Point { x: x0 + 5.0, y: y0 })
+    try geometry.line_to(&builder, geometry.Point { x: x0 + 2.5, y: y0 + 3.0 })
+    try geometry.close_path(&builder)
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: m.color } } })
+}
+
+// The toolbar combo (`options.flat`), measured in the live v3 main window at 100 %: a 16 tall white
+// face framed 1 px #FAFAFA with a #F5F5F5 line under it, the text 2 in, and a 12 wide drop button
+// (#F0F0F0, 1 px #F7F7F7 edges) with a black arrow. Same keys as `win_edit_frame`.
+fn win_flat_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    let enabled = options.enabled
+    let (bar_t, bar_error) = windows_bar_theme(a, t)
+    if bar_error != ok { ret (zero, bar_error) }
+    var ink = style.hex(0u32)
+    if !enabled { ink = style.hex(10526880u32) }
+    var value_options = text_options()
+    value_options.role = .BodyMedium
+    let (text_look, style_error) = text_style_faced(a, &bar_t, value_options)
+    if style_error != ok { ret (zero, style_error) }
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: 14.0 }
+    let (stack_parts, stack_error) = mem.alloc[widget.Node](a, 2usize)
+    if stack_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    if len == 0usize && options.placeholder.len != 0usize {
+        var hint = text_options()
+        hint.role = .BodyMedium
+        hint.wrap = .None
+        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, &bar_t, hint, style.color(t.tokens, .TextMuted))
+        if hint_error != ok { ret (zero, hint_error) }
+        stack_parts[at] = hint_node
+        at += 1usize
+    }
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style))
+    if named_error != ok { ret (zero, named_error) }
+    stack_parts[at] = named
+    at += 1usize
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    grow.overflow = .Clip
+    let (row_parts, row_error) = mem.alloc[widget.Node](a, 2usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row_parts[0usize] = widget.stack(0u64, grow, stack_parts[0usize..at])
+    let (arrows, arrows_error) = mem.alloc[WinArrow](a, 1usize)
+    if arrows_error != ok { ret (zero, TooLarge) }
+    arrows[0usize] = WinArrow { color: ink, arena: a }
+    var none: []const widget.Node = zero
+    let arrow = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&arrows[0usize]), measure: mark_measure, paint: win_arrow_paint, state: widget.bytes_of[WinArrow](&arrows[0usize]) } }, style: sized_style(10.0, 14.0), children: none }
+    let button_edge = style.hex(16250871u32)
+    let button_face = style.color(t.tokens, .Background)
+    let bare = style.ResolvedControl { background: button_face, foreground: ink, border: button_edge, border_width: 1.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 12.0, min_height: 14.0, corners: zero }
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (opener, opener_error) = pressable_states(a, key + 1u64, t, 3u8, "Choices", bare, enabled && !options.read_only, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, arrow)
+    if opener_error != ok { ret (zero, opener_error) }
+    row_parts[1usize] = opener
+    var frame_style = style.defaults()
+    frame_style.width = style.Length { Px: options.width }
+    frame_style.min_height = style.Length { Px: 16.0 }
+    frame_style.background = paint.Brush { Solid: style.hex(16777215u32) }
+    frame_style.border = style.Border { width: 1.0, color: style.hex(16448250u32) }
+    frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let frame = widget.flex(key + 1048701u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, frame_style, row_parts[0usize..2usize])
+    var foot = style.defaults()
+    foot.height = style.Length { Px: 1.0 }
+    foot.background = paint.Brush { Solid: style.hex(16119285u32) }
+    let (column, column_error) = mem.alloc[widget.Node](a, 2usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = frame
+    column[1usize] = widget.box(0u64, foot, zero)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), column[0usize..2usize]), ok)
+}
+
 fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    if options.flat {
+        let (flat_node, flat_error) = win_flat_frame(a, key, t, label, buffer, len, typed, open, toggle, options)
+        ret (flat_node, flat_error)
+    }
     let enabled = options.enabled
     let state_edit = control_state(t, key, enabled, false)
     let state_button = control_state(t, key + 1u64, enabled, false)

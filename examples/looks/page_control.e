@@ -79,6 +79,46 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize {
+        let bottom = looks.Sheet { name: "page_control_bottom", cells: 4usize, columns: 2usize, cell_w: 300.0, cell_h: 60.0, ctx: zero, build: build_bottom }
+        ret looks.run_all(a, &bottom)
+    }
     let sheet = looks.Sheet { name: "page_control", cells: 6usize, columns: 3usize, cell_w: 310.0, cell_h: 90.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
+}
+
+// The card info strip of the v3 main window (tpBottom, two picture tabs, no captions) as the
+// live capture ref/windows/page_control_bottom.png shows it: the preview tab chosen, the other
+// chosen, the pointer over the unchosen one, and a strip with captions (the decks strip).
+// v3's pictures are bitmaps; glyphs stand in.
+fn build_bottom(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 3usize)
+    if actions_error != ok { ret (0usize, actions_error) }
+    var k = 0usize
+    while k < 3usize {
+        actions[k] = widget.Submit { ctx: zero, invoke: noop_submit }
+        k += 1usize
+    }
+    let pictures = [3]control.GlyphKind{ .Picture, .Calendar, .Search }
+    let blank = [3]str{ "", "", "" }
+    let named = [3]str{ "Deck", "Collection", "Notes" }
+    let captions = [4]str{ "Preview chosen", "Prices chosen", "Hover", "With captions" }
+    var i = 0usize
+    while i < 4usize {
+        var options = control.tabs_options()
+        options.bottom = true
+        options.width = 280.0
+        var selected = 0usize
+        var drive: looks.Drive = .None
+        if i == 1usize { selected = 1usize }
+        if i == 2usize { drive = .Hover }
+        var labels = blank[0usize..2usize]
+        if i == 3usize { labels = named[0usize..3usize] }
+        if i != 3usize { options.icons = pictures[0usize..2usize] }
+        let (bar, bar_error) = control.tabs_of(a, u64(1000usize * (i + 1usize)), t, labels, selected, actions[0usize..labels.len], options)
+        if bar_error != ok { ret (0usize, bar_error) }
+        cells[i] = looks.Cell { caption: captions[i], node: bar, drive: drive }
+        i += 1usize
+    }
+    ret (4usize, ok)
 }
