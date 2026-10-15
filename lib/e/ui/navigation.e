@@ -1655,7 +1655,7 @@ type MenuBarItem = struct { label: str, items: []const overlay.MenuItem }
 // checkable and checked, a radio choice or pictured with a leading glyph,
 // whether a separator stands before it, whether it destroys (in `error`), and
 // its first-level submenu state and toggle.
-type BarCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, submenu: []const BarCommand, submenu_open: bool, submenu_toggle: widget.Submit, header: bool, split: bool }
+type BarCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, submenu: []const BarCommand, submenu_open: bool, submenu_toggle: widget.Submit, header: bool, split: bool, selected: bool, dither_flip: bool }
 
 // A menu of the v2 menu bar (D972): its title and its commands.
 type BarMenu = struct { label: str, commands: []const BarCommand }
@@ -8491,6 +8491,14 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
         var which = 0u32
         if slot.kind == .Maximize { which = 1u32 }
         if slot.kind == .Close { which = 2u32 }
+        // a dialog's 33 wide close button on an odd pixel draws its X half a pixel left (winchrome.cross_cover_odd)
+        if slot.kind == .Close && slot.rect.width < 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 { which = 3u32 }
+        // the 46 wide buttons of a window of odd width start on an odd pixel and draw all three glyphs half a pixel right
+        if slot.rect.width > 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 {
+            if slot.kind == .Minimize { which = 4u32 }
+            if slot.kind == .Maximize { which = 5u32 }
+            if slot.kind == .Close { which = 6u32 }
+        }
         let (shape, shape_error) = winchrome.glyph_node(a, which, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), ink.alpha, slot.rect.width)
         ret (shape, shape_error)
     }
@@ -8787,7 +8795,7 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
     if e1 != ok { ret (zero, e1) }
     let (x0, e0) = windows_layer(a, light, 0.0, 0.0, 0.0, 1.0, x1)
     if e0 != ok { ret (zero, e0) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 16usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 24usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     parts[n] = x0
@@ -8831,6 +8839,14 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
             }
             edge += 1usize
         }
+    }
+    if menu && grip {
+        // (looks4-f) the main menu's grip starts with a soft top (measured: #FA, #F5 beside the lines).
+        parts[n] = windows_rect(4.0, 2.0, 2.0, 1.0, 16448250u32)
+        parts[n + 1usize] = windows_rect(7.0, 2.0, 2.0, 1.0, 16448250u32)
+        parts[n + 2usize] = windows_rect(5.0, 3.0, 1.0, 1.0, 16119285u32)
+        parts[n + 3usize] = windows_rect(8.0, 3.0, 1.0, 1.0, 16119285u32)
+        n += 4usize
     }
     if closed && width > 0.0 {
         parts[n] = windows_rect(width - 1.0, 0.0, 1.0, height - 1.0, 11184810u32)
@@ -8991,6 +9007,7 @@ fn windows_menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len)
     if heads_error != ok { ret (zero, TooLarge) }
     let ink = style.hex(0u32)
+    var bar_x: f32 = 0.0
     var i = 0usize
     while i < menus.len {
         if menus[i].commands.len > 40usize { ret (zero, TooLarge) }
@@ -8998,19 +9015,43 @@ fn windows_menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         let opened = i == open
         let state = control.control_state(t, title_key, true, false)
         var look = control.windows_bar_look(state, ink)
-        if opened {
-            look.background = style.hex(15790320u32)
-            look.border = style.hex(11513775u32)
-        }
-        look.padding = 6.25
+        look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        look.border = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        look.padding = 0.0
+        look.padding_start = 0.0
         look.padding_y = 0.0
         look.min_width = 0.0
-        look.min_height = 20.0
+        look.min_height = 22.0
         var caption = control.text_options()
         caption.role = .BodyMedium
         caption.wrap = .None
-        let (label_node, plain_label, label_error) = windows_title(a, &bt, menus[i].label, caption, ink)
-        if label_error != ok { ret (zero, label_error) }
+        // (looks4-f) A title is its text in GDI's Tahoma 12 advances plus 6 each side (measured on
+        // all ten titles); hot it has a raised 2 px box, open (pressed) a sunken one with the
+        // text 1 px down and right, both read from the live captures.
+        let bw = windows_gdi_width(menus[i].label, 0u8, true) + 12.0
+        let title_x = bar_x
+        bar_x += bw
+        let sunk = opened || state.pressed
+        let lit = state.hovered && !sunk
+        var shift: f32 = 0.0
+        if sunk { shift = 1.0 }
+        let (text_node, plain_label, _, text_error) = windows_gdi_run(a, &bt, caption, menus[i].label, ink, 0u8, windows_menu_under(), true)
+        if text_error != ok { ret (zero, text_error) }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 24usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        var p = 0usize
+        if lit {
+            p = windows_title_box_hot(parts, bw)
+        }
+        if sunk {
+            p = windows_title_box_open(parts, bw, title_x)
+        }
+        held[0usize] = text_node
+        parts[p] = widget.positioned(0u64, 6.0 + shift, 2.0 + shift, style.defaults(), held[0usize..1usize])
+        p += 1usize
+        let label_node = widget.stack(0u64, control.sized_style(bw, 22.0), parts[0usize..p])
         var states = 0u32
         if opened { states = accessibility.STATE_EXPANDED }
         let (head, head_error) = control.pressable_states(a, title_key, t, 3u8, plain_label, look, true, false, states, accessibility.ACTION_SHOW_MENU, title_key + 1u64, &toggles[i], label_node)
@@ -9203,13 +9244,17 @@ fn windows_menu_check(a: *mem.Arena, ink: paint.Color) -> (widget.Node, err) {
 
 // The ground of a checked item's slot, 18 x 18: v3 dithers white pixels (every other one, where x + y
 // is odd) over the face, and the 16 px `picture` sits 1 in.
-fn windows_menu_checked_ground(a: *mem.Arena, picture: widget.Node) -> (widget.Node, err) {
+fn windows_menu_checked_ground(a: *mem.Arena, picture: widget.Node, flip: bool, plain: bool) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 18usize * 9usize + 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     var y = 0usize
     while y < 18usize {
+        // (looks4-f) the dither follows the window's screen position: `flip` takes the other phase.
         var x = (y + 1usize) % 2usize
+        if flip { x = y % 2usize }
+        // A disabled or highlighted checked slot has no dither (search All Cards, toolbars Standard).
+        if plain { x = 18usize }
         while x < 18usize {
             var dot = windows_flat(16777215u32)
             dot.width = style.Length { Px: 1.0 }
@@ -9268,8 +9313,23 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if bold_error != ok { ret (zero, bold_error) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize * commands.len)
     if rows_error != ok { ret (zero, TooLarge) }
-    // The menu hugs its widest row (column width, without the 3 px frames).
-    var widest: f32 = 88.0
+    // (looks4-f) The column width v3 gives a menu, found by fitting the ten captured menus (exact
+    // for all ten): the frame, the picture slot and the paddings add 46 to the widest row, a row
+    // being its label in GDI's Tahoma 12 advances plus, with a shortcut, 14 and the shortcut's width.
+    var widest: f32 = 0.0
+    var sized = 0usize
+    while sized < commands.len {
+        let c = &commands[sized]
+        if c.header {
+            let head_width = 6.5 + windows_gdi_width(c.label, 1u8, true) + 6.0
+            if head_width > widest { widest = head_width }
+        } else {
+            var row_width = 46.0 + windows_gdi_width(c.label, 0u8, true)
+            if c.shortcut.len > 0usize { row_width += 14.0 + windows_gdi_width(c.shortcut, 0u8, false) }
+            if row_width > widest { widest = row_width }
+        }
+        sized += 1usize
+    }
     var content_height: f32 = 0.0
     var n = 0usize
     var i = 0usize
@@ -9288,7 +9348,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             head_caption.role = .BodyMedium
             head_caption.wrap = .None
             head_caption.weight = 700u32
-            let (head_text, head_plain, head_label_width, head_error) = windows_item_label(a, &bold_theme, c.label, head_caption, style.hex(0u32))
+            let (head_text, _, _, head_error) = windows_gdi_run(a, &bold_theme, head_caption, c.label, style.hex(0u32), 1u8, windows_menu_under(), false)
             if head_error != ok { ret (zero, head_error) }
             let (head_held, head_held_error) = mem.alloc[widget.Node](a, 1usize)
             if head_held_error != ok { ret (zero, TooLarge) }
@@ -9306,8 +9366,6 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             rows[n] = rule_below
             n += 1usize
             content_height += 2.0
-            let head_width = 6.5 + head_label_width + 6.0
-            if head_width > widest { widest = head_width }
             i += 1usize
             continue
         }
@@ -9326,126 +9384,159 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             content_height += 10.0
         }
         let item_key = key + 1u64 + u64(i)
-        var state = control.control_state(t, item_key, c.enabled, false)
-        if c.submenu_open { state.hovered = true }
+        let state = control.control_state(t, item_key, c.enabled, false)
+        // The highlighted row (the pointer's, a keyboard's, or the one whose submenu is open) is
+        // #0078D7 with white text from the label's slot on; a row with a picture or a check keeps
+        // its 20 px slot (raised, on the face) and the blue starts 1 px after it.
+        let highlighted = c.selected || c.submenu_open || state.hovered
+        let slotted = c.pictured || c.checked
+        // Pictures and checks keep their own ink on a highlighted row (the face shows round them).
+        var picture_ink = style.hex(0u32)
+        if !c.enabled { picture_ink = style.hex(10526880u32) }
         var ink = style.hex(0u32)
         if !c.enabled { ink = style.hex(10526880u32) }
+        if highlighted {
+            ink = style.hex(16777215u32)
+            if !c.enabled { ink = style.hex(7171437u32) }
+        }
         var look = control.windows_bar_look(state, ink)
         look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
         look.border_width = 0.0
-        if c.enabled && state.hovered { look.background = style.hex(11392767u32) }
         look.padding_start = 0.0
         look.padding = 0.0
         look.padding_y = 0.0
         look.min_width = 0.0
         look.min_height = 20.0
-        let (parts, parts_error) = mem.alloc[widget.Node](a, 10usize)
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 12usize)
         if parts_error != ok { ret (zero, TooLarge) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 12usize)
+        if held_error != ok { ret (zero, TooLarge) }
         var p = 0usize
+        if highlighted {
+            var from: f32 = 0.0
+            if slotted { from = 21.0 }
+            var blue_w = widest - from
+            // A highlighted drop-down row keeps its button as a sunken 16 x 20 box on the face.
+            if c.split { blue_w = widest - 16.0 - from }
+            parts[p] = windows_rect(from, 0.0, blue_w, 20.0, 30935u32)
+            p += 1usize
+        }
         // The picture slot: a drawn glyph (v3 draws bitmaps), a check or a radio dot; a checked
-        // one sits in a sunken frame.
+        // one sits in a sunken frame, a highlighted picture in a raised one.
         var picture = widget.box(0u64, control.sized_style(16.0, 16.0), zero)
         if c.checked && !c.radio && !c.pictured {
-            let (tick, tick_error) = windows_menu_check(a, ink)
+            let (tick, tick_error) = windows_menu_check(a, picture_ink)
             if tick_error != ok { ret (zero, tick_error) }
             picture = tick
         }
         if c.pictured && !c.radio && !c.checkable {
-            let (glyph, glyph_error) = control.icon_square(a, ink, c.glyph, 16.0)
+            let (glyph, glyph_error) = control.icon_square(a, picture_ink, c.glyph, 16.0)
             if glyph_error != ok { ret (zero, glyph_error) }
             picture = glyph
         }
         if c.radio && c.checked {
-            let (dot, dot_error) = overlay.menu_radio_dot(a, ink, 16.0)
+            let (dot, dot_error) = overlay.menu_radio_dot(a, picture_ink, 16.0)
             if dot_error != ok { ret (zero, dot_error) }
             picture = dot
         }
-        let (slot_held, slot_error) = mem.alloc[widget.Node](a, 1usize)
-        if slot_error != ok { ret (zero, TooLarge) }
-        slot_held[0usize] = picture
-        var slot = widget.padded(0u64, 2.0, 2.0, 0.0, 0.0, control.sized_style(20.0, 20.0), slot_held[0usize..1usize])
-        if c.checked {
-            let (inner, inner_error) = windows_menu_checked_ground(a, picture)
-            if inner_error != ok { ret (zero, inner_error) }
-            let (framed_slot, framed_slot_error) = windows_bevel(a, 10526880u32, 16777215u32, inner, 20.0, 20.0)
-            if framed_slot_error != ok { ret (zero, framed_slot_error) }
-            slot = framed_slot
+        if slotted {
+            let (slot_held, slot_error) = mem.alloc[widget.Node](a, 1usize)
+            if slot_error != ok { ret (zero, TooLarge) }
+            slot_held[0usize] = picture
+            var slot = widget.padded(0u64, 2.0, 2.0, 0.0, 0.0, control.sized_style(20.0, 20.0), slot_held[0usize..1usize])
+            if c.checked {
+                let (inner, inner_error) = windows_menu_checked_ground(a, picture, c.dither_flip, !c.enabled || highlighted)
+                if inner_error != ok { ret (zero, inner_error) }
+                let (framed_slot, framed_slot_error) = windows_bevel(a, 10526880u32, 16777215u32, inner, 20.0, 20.0)
+                if framed_slot_error != ok { ret (zero, framed_slot_error) }
+                slot = framed_slot
+            } else if highlighted {
+                let (lifted_held, lifted_held_error) = mem.alloc[widget.Node](a, 1usize)
+                if lifted_held_error != ok { ret (zero, TooLarge) }
+                lifted_held[0usize] = picture
+                var ground = windows_flat(15790320u32)
+                ground.width = style.Length { Px: 18.0 }
+                ground.height = style.Length { Px: 18.0 }
+                let (raised_inner, raised_inner_error) = mem.alloc[widget.Node](a, 1usize)
+                if raised_inner_error != ok { ret (zero, TooLarge) }
+                raised_inner[0usize] = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, ground, lifted_held[0usize..1usize])
+                let (raised, raised_error) = windows_bevel(a, 16777215u32, 10526880u32, raised_inner[0usize], 20.0, 20.0)
+                if raised_error != ok { ret (zero, raised_error) }
+                slot = raised
+            }
+            held[p] = slot
+            parts[p] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), held[p..p + 1usize])
+            p += 1usize
         }
-        parts[p] = slot
-        p += 1usize
         var caption = control.text_options()
         caption.role = .BodyMedium
         caption.wrap = .None
-        let (said, plain_label, said_width, said_error) = windows_item_label(a, &bt, c.label, caption, ink)
+        let (said, plain_label, said_width, said_error) = windows_gdi_run(a, &bt, caption, c.label, ink, 0u8, windows_menu_under(), false)
         if said_error != ok { ret (zero, said_error) }
-        var row_width = 23.0 + said_width
         var said_node = said
-        if !c.enabled {
-            let (white_label, _, _, white_error) = windows_item_label(a, &bt, c.label, caption, style.hex(16777215u32))
+        if !c.enabled && !highlighted {
+            let (white_label, _, _, white_error) = windows_gdi_run(a, &bt, caption, c.label, style.hex(16777215u32), 0u8, windows_menu_under(), false)
             if white_error != ok { ret (zero, white_error) }
             let (lifted_label, lifted_error) = windows_embossed(a, said, white_label, said_width)
             if lifted_error != ok { ret (zero, lifted_error) }
             said_node = lifted_label
         }
-        let (gapped, gapped_error) = mem.alloc[widget.Node](a, 1usize)
-        if gapped_error != ok { ret (zero, TooLarge) }
-        gapped[0usize] = said_node
-        parts[p] = widget.padded(0u64, 3.0, 0.0, 0.0, 0.0, style.defaults(), gapped[0usize..1usize])
-        p += 1usize
-        parts[p] = widget.spacer(0u64, 1.0)
+        held[p] = said_node
+        parts[p] = widget.positioned(0u64, windows_menu_label_x(), windows_menu_text_y(), style.defaults(), held[p..p + 1usize])
         p += 1usize
         if c.shortcut.len > 0usize {
-            let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, &bt, caption, ink)
+            let (keys_node, _, keys_width, keys_error) = windows_gdi_run(a, &bt, caption, c.shortcut, ink, 0u8, 0.0, false)
             if keys_error != ok { ret (zero, keys_error) }
-            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
-            if held_error != ok { ret (zero, TooLarge) }
-            held[0usize] = keys_node
-            let keys_width = widget.text_width(a, keys_node)
-            if !c.enabled {
-                let (white_keys, white_keys_error) = control.colored_text(a, 0u64, c.shortcut, &bt, caption, style.hex(16777215u32))
+            var keys_held = keys_node
+            if !c.enabled && !highlighted {
+                let (white_keys, _, _, white_keys_error) = windows_gdi_run(a, &bt, caption, c.shortcut, style.hex(16777215u32), 0u8, 0.0, false)
                 if white_keys_error != ok { ret (zero, white_keys_error) }
                 let (lifted_keys, lifted_keys_error) = windows_embossed(a, keys_node, white_keys, keys_width)
                 if lifted_keys_error != ok { ret (zero, lifted_keys_error) }
-                held[0usize] = lifted_keys
+                keys_held = lifted_keys
             }
-            row_width += 12.0 + keys_width
-            parts[p] = widget.padded(0u64, 12.0, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
+            held[p] = keys_held
+            parts[p] = widget.positioned(0u64, widest - windows_menu_shortcut_gap() - keys_width, windows_menu_text_y(), style.defaults(), held[p..p + 1usize])
             p += 1usize
-            parts[p] = widget.box(0u64, control.sized_style(24.5, 1.0), zero)
-            p += 1usize
-            row_width += 24.5
         }
-        if c.shortcut.len == 0usize && !has_submenu && !c.split { row_width += 25.0 }
-        if c.split {
+        if c.split && !highlighted {
             // The drop-down button: a #A0A0A0 and a white line, 17 and 16 in from the right.
-            var cut_dark = windows_flat(10526880u32)
-            cut_dark.width = style.Length { Px: 1.0 }
-            cut_dark.height = style.Length { Px: 20.0 }
-            var cut_light = windows_flat(16777215u32)
-            cut_light.width = style.Length { Px: 1.0 }
-            cut_light.height = style.Length { Px: 20.0 }
-            parts[p] = widget.box(0u64, cut_dark, zero)
+            parts[p] = windows_rect(widest - 17.0, 0.0, 1.0, 20.0, 10526880u32)
             p += 1usize
-            parts[p] = widget.box(0u64, cut_light, zero)
+            parts[p] = windows_rect(widest - 16.0, 0.0, 1.0, 20.0, 16777215u32)
             p += 1usize
-            parts[p] = widget.box(0u64, control.sized_style(5.0, 1.0), zero)
+        }
+        if c.split && highlighted {
+            var face = windows_flat(15790320u32)
+            face.width = style.Length { Px: 14.0 }
+            face.height = style.Length { Px: 18.0 }
+            let (face_held, face_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if face_held_error != ok { ret (zero, TooLarge) }
+            face_held[0usize] = widget.box(0u64, face, zero)
+            let (sunk, sunk_error) = windows_bevel(a, 10526880u32, 16777215u32, face_held[0usize], 16.0, 20.0)
+            if sunk_error != ok { ret (zero, sunk_error) }
+            held[p] = sunk
+            parts[p] = widget.positioned(0u64, widest - 16.0, 0.0, style.defaults(), held[p..p + 1usize])
             p += 1usize
         }
         if has_submenu || c.split {
-            let (arrow, arrow_error) = windows_menu_arrow_right(a, ink)
+            var arrow_ink = ink
+            if c.split && highlighted { arrow_ink = style.hex(0u32) }
+            let (arrow, arrow_error) = windows_menu_arrow_right(a, arrow_ink)
             if arrow_error != ok { ret (zero, arrow_error) }
-            let (arrow_held, arrow_held_error) = mem.alloc[widget.Node](a, 1usize)
-            if arrow_held_error != ok { ret (zero, TooLarge) }
-            arrow_held[0usize] = arrow
-            parts[p] = widget.padded(0u64, 0.0, 0.0, 6.0, 0.0, style.defaults(), arrow_held[0usize..1usize])
+            if !c.enabled && !highlighted {
+                // A disabled arrow, like disabled text, has a white copy 1 px right and below.
+                let (white_arrow, white_arrow_error) = windows_menu_arrow_right(a, style.hex(16777215u32))
+                if white_arrow_error != ok { ret (zero, white_arrow_error) }
+                held[p] = white_arrow
+                parts[p] = widget.positioned(0u64, widest - 9.0, 1.0, style.defaults(), held[p..p + 1usize])
+                p += 1usize
+            }
+            held[p] = arrow
+            parts[p] = widget.positioned(0u64, widest - 10.0, 0.0, style.defaults(), held[p..p + 1usize])
             p += 1usize
-            row_width += 28.0
         }
-        if row_width > widest { widest = row_width }
-        var line_style = style.defaults()
-        line_style.width = style.Length { Percent: 100.0 }
-        line_style.height = style.Length { Px: 20.0 }
-        let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, parts[0usize..p])
+        let content = widget.stack(0u64, control.sized_style(widest, 20.0), parts[0usize..p])
         var sem_states = 0u32
         if c.checked { sem_states = accessibility.STATE_CHECKED }
         var semantic_role = 22u8
@@ -9474,7 +9565,6 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         }
         i += 1usize
     }
-    // Whole pixels, so the frame's lines stay crisp.
     widest = f32(usize(widest + 0.5))
     var column_style = windows_flat(15790320u32)
     column_style.width = style.Length { Px: widest }
@@ -9517,7 +9607,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let (framed, framed_error) = windows_bevel(a, 15790320u32, 6908265u32, inner_ring, 0.0, 0.0)
     if framed_error != ok { ret (zero, framed_error) }
     var shadowed = style.defaults()
-    shadowed.shadow = style.Shadow { offset: geometry.Point { x: 2.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.3) }
+    // (looks4-f) no drop shadow: the captures are the popup window alone and show none.
     let (shadow_held, shadow_error) = mem.alloc[widget.Node](a, 1usize)
     if shadow_error != ok { ret (zero, TooLarge) }
     shadow_held[0usize] = framed
@@ -9551,7 +9641,10 @@ fn windows_status_panel(a: *mem.Arena, content: widget.Node, width: f32, tone: u
     parts[n] = windows_rect(0.0, 0.0, 1.0, 17.0, tone)
     n += 1usize
     if !first {
-        parts[n] = windows_rect(1.0, 1.0, 1.0, 15.0, 14935011u32)
+        // (looks4-f) the soft column darkens with the tone (#E3 at the first joint, #DB at the second).
+        let grey = tone / 65793u32
+        let soft = u32(227i64 - (i64(grey) - 173i64) * 8i64 / 7i64)
+        parts[n] = windows_rect(1.0, 1.0, 1.0, 15.0, soft * 65793u32)
         n += 1usize
     }
     parts[n] = windows_rect(width - 2.0, 1.0, 1.0, 15.0, 16579836u32)
@@ -9637,7 +9730,7 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
         var caption = control.text_options()
         caption.role = .BodyMedium
         caption.wrap = .None
-        caption.size = 10.8
+        caption.size = 11.0
         var ink = style.hex(0u32)
         if item.tone == .Error { ink = style.color(t.tokens, .Error) }
         var content: widget.Node = zero
@@ -9659,13 +9752,18 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
             content = widget.padded(0u64, 3.0, 0.0, 0.0, 0.0, style.defaults(), track_held[0usize..1usize])
             panel_width = 140.0
         } else {
-            let (said, said_error) = control.colored_text(a, 0u64, item.text, &bt, caption, ink)
+            // (looks4-f) glyph by glyph at GDI's Tahoma 11 advances, as v3's status text is set
+            let (said, _, said_run_width, said_error) = windows_gdi_run(a, &bt, caption, item.text, ink, 2u8, 2.0, false)
             if said_error != ok { ret (zero, said_error) }
             let (said_held, said_held_error) = mem.alloc[widget.Node](a, 1usize)
             if said_held_error != ok { ret (zero, TooLarge) }
             said_held[0usize] = said
-            content = widget.padded(0u64, 0.0, 0.0, 0.0, 0.0, style.defaults(), said_held[0usize..1usize])
-            panel_width = widget.text_width(a, said) + 20.0
+            // GDI centres on whole pixels (the odd pixel goes right): 1 px of air on the right
+            // when the slack is odd.
+            var air: f32 = 0.0
+            if item.centered && item.panel_width > said_run_width && usize(item.panel_width - said_run_width) % 2usize == 1usize { air = 1.0 }
+            content = widget.padded(0u64, 0.0, 0.0, air, 0.0, style.defaults(), said_held[0usize..1usize])
+            panel_width = said_run_width + 20.0
             if panel_width < 24.0 { panel_width = 24.0 }
         }
         var shown = content
@@ -9721,6 +9819,17 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     var made = 0usize
     var at: f32 = 0.0
     var end_at = width - end_total + 1.0
+    // (looks4-f) Where two panels meet v3 interrupts the bar's top and bottom lines for 4 px (the
+    // joints, measured from the live capture: greys of the columns left-3 .. left+1 on rows 0, 1, 17
+    // and 18, for the first and the second joint).
+    let (joints, joints_error) = mem.alloc[widget.Node](a, 40usize)
+    if joints_error != ok { ret (zero, TooLarge) }
+    var jn = 0usize
+    var joint_no = 0usize
+    let joint_rows = [2][4]u32{ [4]u32{ 240u32, 241u32, 240u32, 217u32 }, [4]u32{ 237u32, 241u32, 240u32, 220u32 } }
+    let joint_row1 = [2][5]u32{ [5]u32{ 244u32, 243u32, 240u32, 173u32, 183u32 }, [5]u32{ 238u32, 244u32, 240u32, 181u32, 180u32 } }
+    let joint_row17 = [2][5]u32{ [5]u32{ 253u32, 243u32, 240u32, 200u32, 236u32 }, [5]u32{ 252u32, 244u32, 240u32, 204u32, 231u32 } }
+    let joint_row18 = [2][4]u32{ [4]u32{ 255u32, 247u32, 245u32, 253u32 }, [4]u32{ 255u32, 248u32, 245u32, 252u32 } }
     var pass = 0usize
     while pass < 2usize {
         i = 0usize
@@ -9733,6 +9842,22 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                 if panel_error != ok { ret (zero, panel_error) }
                 row[made] = panel
                 made += 1usize
+                if left >= 1.0 && pass == 0usize && joint_no < 2usize {
+                    var c = 0usize
+                    while c < 5usize {
+                        let x = left - 3.0 + f32(c)
+                        if c < 4usize {
+                            joints[jn] = windows_rect(x, 0.0, 1.0, 1.0, joint_rows[joint_no][c] * 65793u32)
+                            joints[jn + 1usize] = windows_rect(x, 18.0, 1.0, 1.0, joint_row18[joint_no][c] * 65793u32)
+                            jn += 2usize
+                        }
+                        joints[jn] = windows_rect(x, 1.0, 1.0, 1.0, joint_row1[joint_no][c] * 65793u32)
+                        joints[jn + 1usize] = windows_rect(x, 17.0, 1.0, 1.0, joint_row17[joint_no][c] * 65793u32)
+                        jn += 2usize
+                        c += 1usize
+                    }
+                    joint_no += 1usize
+                }
                 if pass == 1usize { end_at += sizes[i] + 1.0 } else { at += sizes[i] + 1.0 }
             }
             i += 1usize
@@ -9749,7 +9874,7 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     let (panels, panels_error) = mem.alloc[widget.Node](a, 1usize)
     if panels_error != ok { ret (zero, TooLarge) }
     panels[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 1.0 }, line, row[0usize..made])
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 120usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 220usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     parts[n] = windows_rect(0.0, 0.0, width, 19.0, 15790320u32)
@@ -9760,6 +9885,10 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     n += 1usize
     parts[n] = widget.positioned(0u64, 0.0, 1.0, line, panels[0usize..1usize])
     n += 1usize
+    if jn > 0usize {
+        parts[n] = widget.stack(0u64, control.sized_style(width, 19.0), joints[0usize..jn])
+        n += 1usize
+    }
     let (grip, grip_error) = windows_status_grip(a)
     if grip_error != ok { ret (zero, grip_error) }
     let (grip_held, grip_held_error) = mem.alloc[widget.Node](a, 1usize)
@@ -9767,5 +9896,173 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     grip_held[0usize] = grip
     parts[n] = widget.positioned(0u64, width - 13.0, 6.0, control.sized_style(13.0, 12.0), grip_held[0usize..1usize])
     n += 1usize
+    // (looks4-f) The last two columns above and beside the grip, as the live bar ends (v3 has no
+    // right-hand pair on the last panel and a shaded last column).
+    let edge = [19]u32{ 230u32, 224u32, 248u32, 248u32, 248u32, 250u32, 240u32, 211u32, 223u32, 250u32, 240u32, 211u32, 223u32, 250u32, 240u32, 211u32, 223u32, 250u32, 255u32 }
+    let near = [6]u32{ 212u32, 187u32, 240u32, 240u32, 240u32, 243u32 }
+    let (ends_nodes, ends_error) = mem.alloc[widget.Node](a, 30usize)
+    if ends_error != ok { ret (zero, TooLarge) }
+    var en = 0usize
+    var ey = 0usize
+    while ey < 19usize {
+        ends_nodes[en] = windows_rect(width - 1.0, f32(ey), 1.0, 1.0, edge[ey] * 65793u32)
+        en += 1usize
+        if ey < 6usize {
+            ends_nodes[en] = windows_rect(width - 2.0, f32(ey), 1.0, 1.0, near[ey] * 65793u32)
+            en += 1usize
+        }
+        ey += 1usize
+    }
+    ends_nodes[en] = windows_rect(0.0, 17.0, 1.0, 1.0, 192u32 * 65793u32)
+    en += 1usize
+    parts[n] = widget.stack(0u64, control.sized_style(width, 19.0), ends_nodes[0usize..en])
+    n += 1usize
     ret (widget.stack(0u64, control.sized_style(width, 19.0), parts[0usize..n]), ok)
 }
+
+// ---- (looks4-f) v3's menu text as GDI sets it. Tahoma 12 px at 100 % has hinted whole-pixel
+// advances (the sum of the glyphs' advances, no kerning); a popup menu is sized from them (see
+// windows_menu_column_width) and the glyphs are drawn one by one at those pitches so the ink
+// lands where v3's does. One char per glyph from space (32) to tilde (126), 48 + the advance.
+fn windows_gdi_regular() -> str { ret "44597<83557844457777777777449996;8778768845769897977888<787555977676774772362:777745576:6656569" }
+fn windows_gdi_bold() -> str { ret "45698>93558:4547888888888844:::7:988976895687;898998788<877575:87786875883473;888856687;776777:" }
+
+fn windows_gdi_advance(b: u8, face: u8) -> f32 {
+    if b < 32u8 || b > 126u8 { ret 7.0 }
+    var table = windows_gdi_regular()
+    if face == 1u8 { table = windows_gdi_bold() }
+    if face == 2u8 { table = windows_gdi_regular_11() }
+    ret f32(u32(table[usize(b - 32u8)]) - 48u32)
+}
+
+// The width of `text` (with its `&` mnemonic marker dropped when `marked`) in GDI's advances.
+fn windows_gdi_width(text: str, face: u8, marked: bool) -> f32 {
+    var amp = text.len
+    if marked { amp = windows_mnemonic_at(text) }
+    var total: f32 = 0.0
+    var i = 0usize
+    while i < text.len {
+        if i != amp { total += windows_gdi_advance(text[i], face) }
+        i += 1usize
+    }
+    ret total
+}
+
+// A label drawn glyph by glyph at GDI's pitch (see above). Answers the node, the label without its
+// `&` and the width. The `&` letter gets v3's underline: one row of the letter's advance, `under`
+// below the baseline. `t` is the bar theme (Tahoma 12 leading, bold when `bold`).
+fn windows_gdi_run(a: *mem.Arena, t: *const control.Theme, caption: control.TextOptions, label: str, ink: paint.Color, face: u8, under: f32, soft: bool) -> (widget.Node, str, f32, err) {
+    let amp = windows_mnemonic_at(label)
+    let (plain, plain_error) = windows_without_amp(a, label)
+    if plain_error != ok { ret (zero, label, 0.0, plain_error) }
+    let (_, _, baseline, metrics_error) = control.run_metrics_faced(a, t, caption, "x")
+    if metrics_error != ok { ret (zero, plain, 0.0, metrics_error) }
+    let (text_look, style_error) = control.text_style_faced(a, t, caption)
+    if style_error != ok { ret (zero, plain, 0.0, style_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, plain.len + 2usize)
+    if parts_error != ok { ret (zero, plain, 0.0, TooLarge) }
+    let (held, held_error) = mem.alloc[widget.Node](a, plain.len + 2usize)
+    if held_error != ok { ret (zero, plain, 0.0, TooLarge) }
+    var n = 0usize
+    var x: f32 = 0.0
+    var i = 0usize
+    while i < plain.len {
+        let advance = windows_gdi_advance(plain[i], face)
+        if plain[i] != 32u8 {
+            let (glyph, glyph_error) = control.colored_text(a, 0u64, plain[i..i + 1usize], t, caption, ink)
+            if glyph_error != ok { ret (zero, plain, 0.0, glyph_error) }
+            held[n] = glyph
+            parts[n] = widget.positioned(0u64, x, 0.0, style.defaults(), held[n..n + 1usize])
+            n += 1usize
+        }
+        if i == amp && amp < label.len {
+            var rule = control.sized_style(advance, 1.0)
+            rule.background = paint.Brush { Solid: ink }
+            parts[n] = widget.positioned(0u64, x, baseline + under, rule, zero)
+            n += 1usize
+            if soft {
+                // The bar's titles carry a second, fainter row (35 % ink).
+                var faint = control.sized_style(advance, 1.0)
+                faint.background = paint.Brush { Solid: style.mix(ink, style.hex(15790320u32), 0.65) }
+                parts[n] = widget.positioned(0u64, x, baseline + under + 1.0, faint, zero)
+                n += 1usize
+            }
+        }
+        x += advance
+        i += 1usize
+    }
+    ret (widget.stack(0u64, control.sized_style(x, text_look.line_height), parts[0usize..n]), plain, x, ok)
+}
+
+// (looks4-f) Where v3 puts a menu row's parts, in the row's own coordinates (column x 0 is the
+// frame's inner edge, outer x 3): the label's origin, the shortcut's gap to the right edge, the
+// text's top inside the 20 px row and the mnemonic underline's row below the baseline.
+fn windows_menu_label_x() -> f32 { ret 23.0 }
+fn windows_menu_shortcut_gap() -> f32 { ret 25.0 }
+fn windows_menu_text_y() -> f32 { ret 2.0 }
+fn windows_menu_under() -> f32 { ret 2.0 }
+
+// (looks4-f) The box of a hot bar title (raised) and of an open one (sunken), pixel rows read from
+// the live captures (states/main-window-rest, where the pointer rested on View, and
+// states/menu-bar-open-title-*). `bw` is the title's width; each fills `parts` and answers how many.
+fn windows_title_box_hot(parts: []widget.Node, bw: f32) -> usize {
+    parts[0usize] = windows_rect(0.0, 0.0, 1.0, 1.0, 16382457u32)
+    parts[1usize] = windows_rect(1.0, 0.0, bw - 2.0, 1.0, 16448250u32)
+    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 1.0, 12698049u32)
+    parts[3usize] = windows_rect(bw, 0.0, 1.0, 1.0, 15461355u32)
+    parts[4usize] = windows_rect(0.0, 1.0, 1.0, 1.0, 16711422u32)
+    parts[5usize] = windows_rect(1.0, 1.0, 1.0, 1.0, 16185078u32)
+    parts[6usize] = windows_rect(2.0, 1.0, bw - 3.0, 1.0, 16119285u32)
+    parts[7usize] = windows_rect(bw - 1.0, 1.0, 1.0, 1.0, 11119017u32)
+    parts[8usize] = windows_rect(bw, 1.0, 1.0, 1.0, 15263976u32)
+    parts[9usize] = windows_rect(0.0, 2.0, 1.0, 17.0, 16711422u32)
+    parts[10usize] = windows_rect(1.0, 2.0, 1.0, 17.0, 15856113u32)
+    parts[11usize] = windows_rect(bw - 1.0, 2.0, 1.0, 17.0, 11053224u32)
+    parts[12usize] = windows_rect(bw, 2.0, 1.0, 17.0, 15263976u32)
+    parts[13usize] = windows_rect(0.0, 19.0, 1.0, 1.0, 12895428u32)
+    parts[14usize] = windows_rect(1.0, 19.0, 1.0, 1.0, 12369084u32)
+    parts[15usize] = windows_rect(2.0, 19.0, bw - 3.0, 1.0, 12303291u32)
+    parts[16usize] = windows_rect(bw - 1.0, 19.0, 1.0, 1.0, 10724259u32)
+    parts[17usize] = windows_rect(bw, 19.0, 1.0, 1.0, 15263976u32)
+    parts[18usize] = windows_rect(0.0, 20.0, 1.0, 1.0, 14145495u32)
+    parts[19usize] = windows_rect(1.0, 20.0, bw - 1.0, 1.0, 13948116u32)
+    parts[20usize] = windows_rect(bw, 20.0, 1.0, 1.0, 15592941u32)
+    ret 21usize
+}
+
+fn windows_title_box_open(parts: []widget.Node, bw: f32, along: f32) -> usize {
+    // The greys drift along the bar (measured on the nine open titles): the left line #A1 to #B4, the
+    // line beside it 400 less that, the right line #FF to #FB.
+    let left = 161u32 + u32(along * 0.0473 + 0.5)
+    let beside = 400u32 - left
+    let right = 255u32 - u32(along * 0.01 + 0.5)
+    parts[0usize] = windows_rect(0.0, 0.0, bw - 1.0, 1.0, 12303291u32)
+    parts[1usize] = windows_rect(bw - 1.0, 0.0, 1.0, 1.0, 16382457u32)
+    parts[2usize] = windows_rect(0.0, 1.0, 1.0, 19.0, left * 65793u32)
+    parts[3usize] = windows_rect(1.0, 1.0, bw - 2.0, 1.0, 14013909u32)
+    parts[4usize] = windows_rect(bw - 1.0, 1.0, 1.0, 1.0, 16711422u32)
+    parts[5usize] = windows_rect(1.0, 2.0, 1.0, 17.0, beside * 65793u32)
+    parts[6usize] = windows_rect(bw - 1.0, 2.0, 1.0, 18.0, right * 65793u32)
+    parts[7usize] = windows_rect(0.0, 19.0, 1.0, 1.0, 14606046u32)
+    parts[8usize] = windows_rect(1.0, 19.0, bw - 2.0, 1.0, 16448250u32)
+    parts[9usize] = windows_rect(0.0, 20.0, bw, 1.0, 16119285u32)
+    ret 10usize
+}
+
+// (looks4-f) A bar separator as the live toolbar draws it: 6 x 22 (2 air, a dark and a light
+// column, 2 air), 21 full rows and a faded last one; the greys drift lighter / darker along the
+// window (#A3 / #FC at the left to #B2 / #EA at x 372, measured), so the caller names them.
+fn windows_bar_separator_tone(a: *mem.Arena, dark: u32, light: u32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let fade_dark = u32(i64(dark) + (240i64 - i64(dark)) * 5i64 / 8i64)
+    let fade_light = u32(i64(light) - (i64(light) - 240i64) * 2i64 / 3i64)
+    parts[0usize] = windows_rect(2.0, 0.0, 1.0, 21.0, dark * 65793u32)
+    parts[1usize] = windows_rect(3.0, 0.0, 1.0, 21.0, light * 65793u32)
+    parts[2usize] = windows_rect(2.0, 21.0, 1.0, 1.0, fade_dark * 65793u32)
+    parts[3usize] = windows_rect(3.0, 21.0, 1.0, 1.0, fade_light * 65793u32)
+    ret (widget.stack(0u64, control.sized_style(6.0, 22.0), parts[0usize..4usize]), ok)
+}
+
+// (looks4-f) Tahoma 11 px (8 pt, v3's status bar text): GDI's whole-pixel advances, face 2.
+fn windows_gdi_regular_11() -> str { ret "34486;72446844446666666666448885:7677667745658786876676:666444866665664662352866664546686655458" }

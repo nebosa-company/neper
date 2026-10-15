@@ -6316,3 +6316,21 @@ fn virtual_list(extent: f32, offset: f32, row_height: f32, count: usize, oversca
     if first > end { first = end }
     ret RowRange { first: first, end: end }
 }
+
+// ---- looks4 group a: which element holds the focus --------------------------------------------------------
+// The key of the focused element (as `focused_key`) and the accessibility role of the nearest semantics node at or above
+// it (0 when there is none). A Windows default button gives up its accent ring while another button holds the focus.
+fn focused_role(widget_runtime: *Runtime) -> (Key, u8, bool) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok || !s.has_focus { ret (0u64, 0u8, false) }
+    var at = usize(s.focus)
+    var key: Key = 0u64
+    var role: u8 = 0u8
+    while true {
+        if key == 0u64 && s.elements[at].live && s.elements[at].key != 0u64 { key = s.elements[at].key }
+        if role == 0u8 && s.elements[at].has_semantics { role = s.elements[at].sem.role }
+        if !s.elements[at].has_parent { break }
+        at = usize(s.elements[at].parent)
+    }
+    ret (key, role, true)
+}

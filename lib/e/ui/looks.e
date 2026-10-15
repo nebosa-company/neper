@@ -34,8 +34,8 @@ use e.ui.widget
 type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark }
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
-// focus, ring visible).
-type Drive = enum u8 { None, Hover, Press, Focus }
+// focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
+type Drive = enum u8 { None, Hover, Press, Focus, Select }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -268,6 +268,13 @@ fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
         try testing.tap(&rig.harness, x, y)
         try testing.tab(&rig.harness, false)
         try testing.tab(&rig.harness, true)
+        ret testing.hover(&rig.harness, -500.0, -500.0)
+    }
+    if drive == .Select {
+        try testing.tap(&rig.harness, x, y)
+        var modifiers: input.Modifiers = zero
+        modifiers.control = true
+        try testing.press_key(&rig.harness, 65u32, modifiers)
         ret testing.hover(&rig.harness, -500.0, -500.0)
     }
     ret ok

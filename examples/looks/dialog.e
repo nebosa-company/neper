@@ -67,7 +67,7 @@ fn form(i: usize) -> Form {
         f.items = [6]Item{ item(0u32, 360.0, 334.0, 75.0, 23.0, "OK", true), none, none, none, none, none }
         f.count = 1usize
     }
-    if i == 5usize {
+    if i == 6usize {
         f.title = "Options"
         f.width = 712.0
         f.height = 486.0
@@ -75,7 +75,23 @@ fn form(i: usize) -> Form {
         f.items = [6]Item{ item(0u32, 468.0, 456.0, 75.0, 23.0, "OK", true), item(0u32, 552.0, 456.0, 75.0, 23.0, "Cancel", false), item(0u32, 636.0, 456.0, 75.0, 23.0, "&Apply", false), none, none, none }
         f.count = 3usize
     }
-    if i == 6usize {
+    // looks4: the same About and Options windows ACTIVE (caption #1F2022), as the live rest grabs show them
+    // (docs/ui/looks/ref/windows/states/dialog-about-rest, dialog-options-interface-rest).
+    if i == 5usize {
+        f.title = "About MTG Studio"
+        f.width = 436.0
+        f.height = 364.0
+        f.items = [6]Item{ item(0u32, 360.0, 334.0, 75.0, 23.0, "OK", true), none, none, none, none, none }
+        f.count = 1usize
+    }
+    if i == 7usize {
+        f.title = "Options"
+        f.width = 712.0
+        f.height = 486.0
+        f.items = [6]Item{ item(0u32, 468.0, 456.0, 75.0, 23.0, "OK", true), item(0u32, 552.0, 456.0, 75.0, 23.0, "Cancel", false), item(0u32, 636.0, 456.0, 75.0, 23.0, "&Apply", false), none, none, none }
+        f.count = 3usize
+    }
+    if i == 8usize {
         f.title = "Statistics"
         f.width = 941.0
         f.height = 501.0
@@ -188,18 +204,18 @@ fn build_set(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, first:
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let (n, e) = build_set(a, t, cells, 0usize, 5usize, 440.0, 548.0)
+    let (n, e) = build_set(a, t, cells, 0usize, 6usize, 440.0, 548.0)
     ret (n, e)
 }
 
 fn build_wide(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let (n, e) = build_set(a, t, cells, 5usize, 1usize, 714.0, 488.0)
+    let (n, e) = build_set(a, t, cells, 6usize, 2usize, 714.0, 488.0)
     ret (n, e)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "dialog", cells: 5usize, columns: 3usize, cell_w: 440.0, cell_h: 548.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "dialog", cells: 6usize, columns: 3usize, cell_w: 440.0, cell_h: 548.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
-    let wide = looks.Sheet { name: "dialog_wide", cells: 1usize, columns: 1usize, cell_w: 714.0, cell_h: 488.0, ctx: zero, build: build_wide }
+    let wide = looks.Sheet { name: "dialog_wide", cells: 2usize, columns: 1usize, cell_w: 714.0, cell_h: 488.0, ctx: zero, build: build_wide }
     ret looks.run_all(a, &wide)
 }

@@ -31,7 +31,14 @@ fn ring_disabled_corners() -> [144]u32 { ret [144]u32{ 0u32, 0xFFEFEFEFu32, 0xFF
 // top0 top1 bottom1 bottom0 left0 left1 right1 right0
 fn ring_disabled_edges() -> [8]u32 { ret [8]u32{ 0xFFEBEBEBu32, 0xFFF4F4F4u32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFE9E9E9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFE9E9E9u32 } }
 
-// Which ring: 0 rest, 1 default (accent), 2 disabled.
+// looks4 group a: the pressed ring (kind 3), from the live state grabs docs/ui/looks/ref/windows/states/button-pressed-*
+// (Sort OK pressed, a 73 x 22 box; Clear, Cancel and OK show the same ring and face: a pressed default and a pressed plain
+// button are alike). The dotted focus rectangle the press also shows is taken out of the corner cells.
+fn ring_pressed_face() -> u32 { ret 0xFFCCE4F7u32 }
+fn ring_pressed_corners() -> [144]u32 { ret [144]u32{ 0u32, 0xFFDCE3E9u32, 0xFF78A2C5u32, 0xFF5A8EB9u32, 0xFF5088B6u32, 0xFF5088B6u32, 0xFFDCE3E9u32, 0xFF5088B6u32, 0xFF5891C0u32, 0xFF85B1D5u32, 0xFF88B4D8u32, 0xFF88B4D8u32, 0xFF78A2C4u32, 0xFF528DBEu32, 0xFFAACCE7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF1964A2u32, 0xFFA6C9E5u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFFC8E1F5u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF5088B6u32, 0xFF5088B6u32, 0xFF5088B6u32, 0xFF82A9C8u32, 0xFFDCE3E9u32, 0u32, 0xFF88B4D8u32, 0xFF88B4D8u32, 0xFF80AED4u32, 0xFF669AC5u32, 0xFF5088B6u32, 0xFFDCE3E9u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFAECFE9u32, 0xFF4987BAu32, 0xFF6E9BC1u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFA1C6E3u32, 0xFF1E68A4u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFC8E1F5u32, 0xFF05579Bu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF0A5B9Cu32, 0xFFC3DEF3u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF2D71A9u32, 0xFF84B1D6u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFA0BCD3u32, 0xFF2C73ACu32, 0xFF91BADBu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFE6EAECu32, 0xFF91B3CDu32, 0xFF5890BCu32, 0xFF3F81B6u32, 0xFF4484B8u32, 0xFF4484B8u32, 0u32, 0xFFE6EAECu32, 0xFFB9CCDCu32, 0xFFA0BCD3u32, 0xFFA0BCD3u32, 0xFFA0BCD3u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFC3DEF3u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF8CB7D9u32, 0xFF3275AAu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF88B4D7u32, 0xFF3076AEu32, 0xFFA5BFD4u32, 0xFF4484B8u32, 0xFF4484B8u32, 0xFF4987BAu32, 0xFF4A86B6u32, 0xFF91B2CDu32, 0xFFE6E9ECu32, 0xFFA0BCD3u32, 0xFFA0BCD3u32, 0xFFA5C0D5u32, 0xFFB4C9DAu32, 0xFFE6E9ECu32, 0u32 } }
+fn ring_pressed_edges() -> [8]u32 { ret [8]u32{ 0xFF5088B6u32, 0xFF88B4D8u32, 0xFF4484B8u32, 0xFFA0BCD3u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32 } }
+
+// Which ring: 0 rest, 1 default (accent), 2 disabled, 3 pressed.
 type Ring = struct { kind: u32, face: u32, tint: u32 }
 
 fn ring_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
@@ -78,6 +85,10 @@ fn ring_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
 }
 
 fn ring_cell(kind: u32, i: usize) -> u32 {
+    if kind == 3u32 {
+        let table = ring_pressed_corners()
+        ret table[i]
+    }
     if kind == 1u32 {
         let table = ring_default_corners()
         ret table[i]
@@ -91,6 +102,10 @@ fn ring_cell(kind: u32, i: usize) -> u32 {
 }
 
 fn ring_edge(kind: u32, i: usize) -> u32 {
+    if kind == 3u32 {
+        let table = ring_pressed_edges()
+        ret table[i]
+    }
     if kind == 1u32 {
         let table = ring_default_edges()
         ret table[i]
@@ -104,6 +119,7 @@ fn ring_edge(kind: u32, i: usize) -> u32 {
 }
 
 fn ring_baked(kind: u32) -> u32 {
+    if kind == 3u32 { ret ring_pressed_face() }
     if kind == 1u32 { ret ring_default_face() }
     if kind == 2u32 { ret ring_disabled_face() }
     ret ring_normal_face()
@@ -111,6 +127,7 @@ fn ring_baked(kind: u32) -> u32 {
 
 // The colour of the ring line, to tell a corner cell's face share from its edge share.
 fn ring_line(kind: u32) -> u32 {
+    if kind == 3u32 { ret 0x005499u32 }
     if kind == 1u32 { ret 0x0078D4u32 }
     if kind == 2u32 { ret 0xE9E9E9u32 }
     ret 0xD0D0D0u32
@@ -178,4 +195,79 @@ fn mnemonic(a: *mem.Arena, label: str) -> (str, usize, err) {
         i += 1usize
     }
     ret (label, label.len, ok)
+}
+
+// ---- looks4 group a: v3's dotted focus rectangle, pixel for pixel -------------------------------------------------
+// Captured on the focused Invert of Filter Card Pool and on every pressed button (states/button-focused-filter-invert,
+// button-pressed-sort-ok; both 75 x 23 rects). In rect coordinates (the box plus 1 above and left): two rows at y = 3
+// and 4 (and h - 4 and h - 3) of dots every 2 px from x = 6 to w - 7, two columns at x = 3 and w - 4 that alternate
+// per row, and four corner cells that are blends. The dot colours depend on the face: grey #555555 / #AAAAAA on the
+// #FDFDFD face, #665E57 / #99A1A8 on the pressed face.
+type FocusDots = struct { pressed: bool }
+
+fn focus_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+// One pixel at rect coordinates (rx, ry).
+fn focus_px(b: *scene.Builder, area: geometry.Rect, rx: f32, ry: f32, value: u32) -> err {
+    ret ring_rect(b, area.x + rx - 1.0, area.y + ry - 1.0, 1.0, 1.0, value)
+}
+
+fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*FocusDots](ctx)
+    let w = f32(u32(area.width + 0.5)) + 2.0
+    let h = f32(u32(area.height + 0.5)) + 1.0
+    var dark = 0x555555u32
+    var light = 0xAAAAAAu32
+    var dark_corner = 0x505355u32
+    var light_corner = 0x9FA4A8u32
+    if d.pressed {
+        dark = 0x665E57u32
+        light = 0x99A1A8u32
+        dark_corner = 0x615B55u32
+        light_corner = 0x919BA4u32
+    }
+    // the top rows: x = 4 and w - 5 are the corner cells
+    try focus_px(b, area, 4.0, 3.0, dark_corner)
+    try focus_px(b, area, w - 5.0, 3.0, dark_corner)
+    try focus_px(b, area, 3.0, 4.0, dark)
+    try focus_px(b, area, 4.0, 4.0, light)
+    try focus_px(b, area, w - 5.0, 4.0, light)
+    try focus_px(b, area, w - 4.0, 4.0, dark)
+    // the bottom rows
+    try focus_px(b, area, 4.0, h - 4.0, dark)
+    try focus_px(b, area, w - 5.0, h - 4.0, dark)
+    try focus_px(b, area, 4.0, h - 3.0, light_corner)
+    try focus_px(b, area, w - 5.0, h - 3.0, light_corner)
+    var x: f32 = 6.0
+    while x <= w - 7.0 {
+        try focus_px(b, area, x, 3.0, dark)
+        try focus_px(b, area, x, 4.0, light)
+        try focus_px(b, area, x, h - 4.0, dark)
+        try focus_px(b, area, x, h - 3.0, light)
+        x += 2.0
+    }
+    // the side columns alternate per row: dark on even rows, light on odd ones
+    var y: f32 = 5.0
+    while y <= h - 4.0 {
+        var v = light
+        if (u32(y) % 2u32) == 0u32 { v = dark }
+        try focus_px(b, area, 3.0, y, v)
+        try focus_px(b, area, w - 4.0, y, v)
+        y += 1.0
+    }
+    ret ok
+}
+
+// The focus rectangle over a ring box of `width` x `height` (the visible box); `pressed` for the pressed face.
+fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32) -> (widget.Node, err) {
+    let (dots, dots_error) = mem.alloc[FocusDots](a, 1usize)
+    if dots_error != ok { ret (zero, dots_error) }
+    dots[0usize] = FocusDots { pressed: pressed }
+    var s = style.defaults()
+    s.width = style.Length { Px: width }
+    s.height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: focus_measure, paint: focus_paint, state: widget.bytes_of[FocusDots](&dots[0usize]) } }, style: s, children: none }, ok)
 }

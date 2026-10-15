@@ -22,31 +22,34 @@ fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key
     ret (node, node_error)
 }
 
-// Twelve cells. The plain button at rest (v3's Cancel, 75 x 23), the default (OK), a caption with a
-// mnemonic (&Apply), the disabled one (v3's 85 x 25 Apply of the conditional formatting manager), then the
-// states no capture shows (hover, pressed, keyboard focus, default focus) and the 85 x 25 size.
+// Twelve cells. The plain button at rest (v3's Cancel, 75 x 23), the default (OK), a caption with a mnemonic
+// (&Apply), the disabled one (v3's 85 x 25 Apply of the conditional formatting manager), the interaction states of
+// the live captures (docs/ui/looks/ref/windows/states: pressed Cancel of Search for Card, the focused non-default
+// Invert of Filter Card Pool, the focused default OK and the pressed OK of the conditional formatting manager, the
+// pressed OK of Sort), and hover, which no capture can show (DevExpress reads the real pointer).
 // The control rect is the DFM size, the visible box one less each way (see e.ui.winbutton).
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     let action = &actions[0usize]
-    let captions = [10]str{ "Normal", "Default", "Mnemonic", "Disabled 85x25", "Hover", "Pressed", "Focus", "Default focus", "Default 85x25", "Normal 85x25" }
-    let words = [10]str{ "Cancel", "OK", "&Apply", "&Apply", "Cancel", "Cancel", "Cancel", "OK", "OK", "Cancel" }
+    let captions = [12]str{ "Normal", "Default", "Mnemonic", "Disabled 85x25", "Hover", "Pressed", "Focus", "Default focus 85x25", "Default 85x25", "Normal 85x25", "Pressed default", "Pressed 85x25" }
+    let words = [12]str{ "Cancel", "OK", "&Apply", "&Apply", "Cancel", "Cancel", "Invert", "OK", "OK", "Cancel", "OK", "OK" }
     var i = 0usize
-    while i < 10usize {
+    while i < 12usize {
         var variant: style.ControlVariant = .Filled
-        if i == 1usize || i == 7usize || i == 8usize { variant = .Default }
-        let (node, node_error) = one(a, t, action, u64(i + 1usize), words[i], variant, i != 3usize, i == 3usize || i == 8usize || i == 9usize)
+        if i == 1usize || i == 7usize || i == 8usize || i == 10usize || i == 11usize { variant = .Default }
+        let wide = i == 3usize || i == 7usize || i == 8usize || i == 9usize || i == 11usize
+        let (node, node_error) = one(a, t, action, u64(i + 1usize), words[i], variant, i != 3usize, wide)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 4usize { drive = .Hover }
-        if i == 5usize { drive = .Press }
+        if i == 5usize || i == 10usize || i == 11usize { drive = .Press }
         if i == 6usize || i == 7usize { drive = .Focus }
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
-    ret (10usize, ok)
+    ret (12usize, ok)
 }
 
 // The other button kinds, button_kinds.png: a picture before the caption (v3's 125 x 25 New Rule button, rest,
@@ -129,7 +132,7 @@ fn build_kinds(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "button", cells: 10usize, columns: 4usize, cell_w: 133.0, cell_h: 40.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "button", cells: 12usize, columns: 4usize, cell_w: 133.0, cell_h: 40.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
     let kinds = looks.Sheet { name: "button_kinds", cells: 16usize, columns: 4usize, cell_w: 133.0, cell_h: 40.0, ctx: zero, build: build_kinds }
     ret looks.run_all(a, &kinds)

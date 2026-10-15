@@ -1,0 +1,127 @@
+{
+ "combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/combo_box.png",
+    "notes": "The baseline: the v2 outlined combo box in the same cells. Open lists are on neper/combo_box_lists.png (run the app with an argument, `combo_box.exe lists`); the list opens fading, so one frame shows it part way."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_open_size2.png",
+    "notes": "Round 4 group d (fresh render, pixel diff vs ref/windows and ref/windows/states at 100 %). Text is not in the numbers below: v3 draws ClearType (coloured fringes, hinted Tahoma), ours grey unhinted, so interior pixels never match within 2 levels; ink boxes were checked instead (within 1 px except where listed). Medium (Font Size) frame: top/bottom rows now exact within 3 levels (was 5 over 383 px; the v3 theme stroke drifts with the control's window y and x, modelled from 5 measured positions and set through FieldOptions.edge_y / edge_x). Open list (new cells combo_box_open_*): popup frame 1 px #0078D7, 13 px rows, lit row #0078D7 with the XOR dotted focus rect (orange, exact pattern), scroll track 16 wide with 2 px thumb: font-size list ring 7 px off, frame/rows/selection exact, head open (#CCE4F7 face, #005499 ring) 2-12 levels on the antialiased ring. Held drop button: list-style 2px ring max 89 at the corners, interior exact; editable (Search) held button box max 30 on 45 px. List-style focus (Conditional Formatting) ring exact, dots 85/170 exact, caret hidden.",
+    "gaps": [
+     "Unverified (no capture): hover of the head and of a list row (DevExpress reads the real pointer), disabled, invalid, empty hint",
+     "Mismatch: first-grab open head face is #D0E6F7 (the theme fades in to #CCE4F7); ours is the steady #CCE4F7, so the three first-grab open heads differ over the whole face (8000 px by 4 levels)",
+     "Mismatch: Row Color / Card Art / Condition popup grabs lack the right column and bottom row of the border (Font Size / Authentication / Show grabs have them); ours draws the frame as in the complete grabs",
+     "Mismatch: options-dialog focus grab (combo_box_focus) smears the dotted rect (values 141/205 instead of 85/170), unlike the Conditional Formatting one that is crisp; not reproduced",
+     "Mismatch: scroll thumb drawn at the top only (scroll offset is not read); thumb length derived (21 rows assumed)",
+     "Mismatch: popup text 1 px right/low on some rows and Tahoma advance widths differ by 1-3 px on long strings (unhinted)",
+     "Mismatch: AA corner pixels of the head frame up to 90 levels (corner tables are measured at one position)",
+     "Mismatch: editable combo open/pressed list placement (popup top assumed at the head's bottom edge: no capture holds the popup's screen position)",
+     "Guess: ring coverage of the open head at other window positions is the y/x drift of the rest frame, not measured"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/image_combo_box.png",
+    "notes": "The baseline: control.select (no pictures: control.image_select falls back to it under the other looks)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image_combo_box_open_condition.png",
+    "notes": "Round 4 group d (fresh render vs ref/windows + states at 100 %). Text is not in the numbers below: v3 draws ClearType (coloured fringes, hinted Tahoma), ours grey unhinted, so interior pixels never match within 2 levels; ink boxes were checked instead (within 1 px except where listed). Closed heads: ring now within 3 levels on straight edges (frame phase by window x/y, image_select_at); corners up to 10. Open list: Authentication list 2px ring exact (0 error), Condition list shows its 15 rows without scrolling (DropDownRows = 15), 15 px rows, same popup frame, selection and XOR focus rect as the combo.",
+    "gaps": [
+     "Unverified (no capture): hover, disabled, focus of the head, open list of an editable image combo",
+     "Mismatch: the Sort Order in-place editor list (image-combo-box-open-list-sort) has a #F0F0F0 face and 18 px picture rows; not built (a grid-cell editor variant)",
+     "Mismatch: Condition / Card Art popup grabs lack the right column and bottom row of the frame",
+     "Mismatch: first-grab open head face #D0E6F7 (fading) against our steady #CCE4F7",
+     "Mismatch: pictures are drawn glyphs standing in for v3's bitmaps"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/list_box.png",
+    "notes": "The baseline: the v2 list box (rounded frame, check on the chosen row)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/list_box_focus-vs-ref.png",
+    "notes": "Round 4 group d (fresh render vs ref/windows + states at 100 %). Text is not in the numbers below: v3 draws ClearType (coloured fringes, hinted Tahoma), ours grey unhinted, so interior pixels never match within 2 levels; ink boxes were checked instead (within 1 px except where listed). Row text ink within 1 px on all 8 rows; chosen row fill appears only while the list has the focus (unfocused grab: no fill: reproduced); dotted focus rect now 20 tall x (width - 2) as measured; dot greys 85/170; right column lines added. Row structure and borders match the grabs except the listed points.",
+    "gaps": [
+     "Unverified (no capture): hover, disabled, multi-select, scrolling (the grab list has no scroll)",
+     "Mismatch: the first row of the unfocused grab has a #DCDCDC line at y 1 that we do not draw",
+     "Mismatch: the focused-row dots in the grab fade 84 to 109 along the perimeter; ours is a flat #555555",
+     "Mismatch: focused grab: chosen row is a different row than our harness taps in some cells (row 2 chosen; list_box_focus reproduces it)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/page_control.png",
+    "notes": "The baseline: v2 tabs (primary indicator) and the tab view."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control_cards-vs-ref.png",
+    "notes": "Round 4 group d (fresh render vs ref/windows + states at 100 %). Text is not in the numbers below: v3 draws ClearType (coloured fringes, hinted Tahoma), ours grey unhinted, so interior pixels never match within 2 levels; ink boxes were checked instead (within 1 px except where listed). Filter strip: ring (2 px frame) max 20 on 134 px for Cards chosen, tab edges within 2 px except where Tahoma widths differ; the chosen tab's top rows are #EEEEEE/#F2F2F2 only while it is focused (#E9E9E9/#F2F2F2 otherwise: measured on the Customization strip), keyboard focus (not a mouse press) shows the dotted rect, the strip's first row is #F5F5F5. A mouse press selects the tab at once, so v3's 'pressed' tab is just the chosen look (held = Bands chosen: 101 ring px, max 20). Statistics: all 11 tab states built (page_control_stats_1..11), tab frames and text positions match, pictures are substitutes.",
+    "gaps": [
+     "Unverified (no capture): hover tab, disabled tab, scroll buttons, bottom tabs live capture",
+     "Mismatch: tab widths follow our unhinted Tahoma advance: 'Blocks / Formats / Editions' 142 against 140, 'Cards' 38 against 40",
+     "Mismatch: mnemonic underlines (Cards, Options, Colors...) are not drawn",
+     "Mismatch: Statistics pictures are drawn glyphs, not v3's bitmaps",
+     "Mismatch: Statistics (ultra flat) strip ring up to 240 where the substitute pictures meet the tab edges",
+     "Mismatch: the Filter tab strip's Options-chosen right closing edge differs by 162 on a few px"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/splitter.png",
+    "notes": "The baseline: the v2 sash (1 px line, grip on hover, primary line while dragged)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/splitter_dialog-vs-ref.png",
+    "notes": "Round 4 group d (fresh render vs ref/windows + states at 100 %). The Filter window splitter strip (8 x 387) is exact (error 0 on every pixel of the strip, incl. the first row #F3F3F3 that was 240; the crop's left 6 columns belong to the neighbouring tree). Held (pressed, no drag) grabs of the Filter and both main-window splitters are pixel-identical to their rest grabs, so the guessed press tint was removed.",
+    "gaps": [
+     "Unverified (no capture): hover, drag, keyboard focus (the hover tint of the hot zone stays a guess)",
+     "Mismatch: the live main-window splitters (ref/windows/splitter_live*.png) have a #ADADAD zone frame (ours #A0A0A0) and a lighter top edge; their crops include the neighbouring grid borders, ours do not",
+     "Guess: the first-row #F3F3F3 is applied to the lying strip too (only the upright one was measured)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/hint.png",
+    "notes": "The baseline: the dark plain tooltip and the raised rich tooltip."
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/hint.png",
+    "notes": "Round 4 group d: no capture of a hint window is possible (DevExpress cxHint starts from the real pointer; the grabs could not produce one), so nothing was compared and nothing changed.",
+    "gaps": [
+     "Mismatch: no reference exists",
+     "Unverified (no capture): every state"
+    ]
+   }
+  }
+ }
+}
