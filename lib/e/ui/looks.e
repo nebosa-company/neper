@@ -55,7 +55,7 @@ fn segoe_path() -> str { ret "C:/Windows/Fonts/segoeui.ttf" }
 fn tahoma_path() -> str { ret "C:/Windows/Fonts/tahoma.ttf" }
 // Segoe UI Bold (font id 9), last in the chain: only a control that asks for weight 700 reaches it.
 fn segoe_bold_path() -> str { ret "C:/Windows/Fonts/segoeuib.ttf" }
-// Tahoma Bold (font id 10), last: v3 draws the Options pages' header title in it (looks3-b).
+// Tahoma Bold (font id 10), last: v3 draws the Options pages' header title and the bars' group headers in it.
 fn tahoma_bold_path() -> str { ret "C:/Windows/Fonts/tahomabd.ttf" }
 
 // The tokens of a look, Light palette. Cupertino and Material are planned: the Neper tokens
@@ -108,10 +108,10 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     fonts[0usize] = shape.Font { id: 7u32, data: segoe_bytes, face_index: 0u32 }
     fonts[1usize] = shape.Font { id: 8u32, data: tahoma_bytes, face_index: 0u32 }
     fonts[2usize] = shape.Font { id: 9u32, data: bold_bytes, face_index: 0u32 }
+    fonts[3usize] = shape.Font { id: 10u32, data: tahoma_bold_bytes, face_index: 0u32 }
     try scene.register_font(&rig.renderer, fonts[0usize])
     try scene.register_font(&rig.renderer, fonts[1usize])
     try scene.register_font(&rig.renderer, fonts[2usize])
-    fonts[3usize] = shape.Font { id: 10u32, data: tahoma_bold_bytes, face_index: 0u32 }
     try scene.register_font(&rig.renderer, fonts[3usize])
     rig.fonts = fonts[0usize..4usize]
     let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 16384usize, max_states: 1024usize, state_bytes: 65536usize, state_classes: 8u16, max_depth: 48u16, max_commands: 49152usize })

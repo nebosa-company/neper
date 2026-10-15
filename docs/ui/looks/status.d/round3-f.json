@@ -1,0 +1,99 @@
+{
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "The baseline: v2 menu (navigation.bar_menu); the menu fades in so the static sheet shows little."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Redrawn from the ten live v3 captures (ref/windows/dialogs/menu-File..menu-Help at 100 %, copied as ref/windows/popup_menu_<name>.png; sheets popup_menu_<name>.png with popup_menu_<name>-vs-ref.png, popup_menu_dialog = Cards + View side by side). Geometry, measured: frame 3 px (outer #F0F0F0 / #696969, inner #FFFFFF / #A0A0A0) on #F0F0F0; rows 20 px from x 3; picture slot 20 x 20 (label origin 26); a checked slot is sunken (#A0A0A0 top and left, #FFFFFF bottom and right, white dither on every other pixel where x + y is odd) and v3's 7 x 7 check mark is drawn pixel for pixel: all 400 pixels of the slot equal the capture (View Status Bar, File Collection from Card Pool). Separator 10 px (#A0A0A0 + #FFFFFF lines 2 in from the sides), group header = bold Tahoma 12 on a two-line full-width rule above and below (File Mode, View Sort Order, Search Go to...), submenu arrow 4 x 7 pixel triangle 6 from the right, drop-down row (View Show Grid Lines) = #A0A0A0/#FFFFFF line 17 in from the right + the triangle, bottom scroll arrow 9-wide pixel triangle (View: items clipped at y 594, arrow rows 602..606: equal to the capture). Disabled text #A0A0A0 with a white copy 1 px right and below (label and shortcut). Mnemonics underlined always. Text Tahoma 12 px, word gap +2 px (GDI's hinted spaces), shortcut right-aligned ending 29 px from the right edge, label-only rows 27 px. Against the captures: all ten menu heights are exact, the frame, separators, header rules and scroll clip are pixel-exact (about 98 % of the capture's long #A0A0A0/#FFFFFF line pixels match, the rest are mnemonic underlines on other letters), text rows sit on the same pixel rows (ink bottoms equal, underline row equal); widths differ by -1..+3 px (file 0, cards 0, search -1, view +2, cardart +2, online +3, reports -1, tools +2, admin -1, help 0) and label ink ends by up to 3 px because v3 text is hinted integer-advance ClearType and ours is unhinted grey. Built into navigation.bar_menu (BarCommand gained header and split; bar_menu_limited clips a tall menu); the Windows branch is no longer limited to 14 commands.",
+    "gaps": [
+     "Row pictures are drawn glyph stand-ins, v3 draws coloured (disabled: pale) bitmaps; every picture pixel differs",
+     "Text is grey anti-aliased and unhinted, v3's is ClearType with hinted advances: glyph pixels never match, label ink ends drift up to 3 px, widths -1..+3 px",
+     "Hover or selected row: no capture shows one; #ADD6FF is the hover of the grid's own popup (a different DX menu: Segoe UI, flat border, 22 px rows), so unverified for the bar menus",
+     "Mnemonic letters were transcribed by eye from the captures, some underline a different letter; the underline is a full row plus a soft one, v3 draws one solid row",
+     "Drop shadow (2 px, 30 %) is a guess: the capture is the window alone",
+     "Cascading submenu placement (offset -2, -3) and the open state of a submenu row are guesses: no capture shows one open",
+     "Top scroll arrow, scrolling by hovering the arrows and the rule that decides the height limit are not drawn: the caller passes max_height (View is 618 high in the capture)",
+     "Disabled check mark / radio dot and the checked-disabled slot have no capture",
+     "The grid's own popup (cxGrid header and cell menus: Segoe UI, flat #A0A0A0 border, 22 px rows, rounded blue checked slot) is not branched; overlay.menu and context_menu keep the Neper look",
+     "A blank last row in File (a hidden or empty item under the last separator) is modelled by an empty command",
+     "Dark and high-contrast palettes keep Neper colours with Windows metrics"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/menu_bar.png",
+    "notes": "The baseline: v2 menu bar (the open-menu sheet shows no menu because the menu fades in)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "Measured at 100 % from the live main window (ref/windows/menu_bar.png = x 8..789, y 31..56; windows/menu_bar-vs-ref.png). Strip 26 tall: #FFFFFF dock line, #F5F5F5 line, #F0F0F0 face, #BCBCBC and #DEDEDE lines below that start right of the grip (the grip runs through them, as v3 draws it), grip lines at x 4 and 7. Titles Tahoma 12 px (the DFM's -12), ink 3 rows below the dock: cap rows 8..16, underline rows 18 (full) and 19 (35 %), black on the face; padding 6.25 each side (fitted: the ten title starts are within 2 px of the capture: 17 46 87 136 175 203 232 278 332 373 419 against ours 17 48 90 138 176 204 232 278 331 372 418). Mnemonics as v3: F C S V, Card A(rt), O R T, A d(min), H; written `&File` ... `A&dmin` in the label (the Windows branch strips the `&`, a title with no `&` underlines its first letter). Round 3: the live captures main-window-deck-mode, main-window-end and the four '*-main' captures (taken after menu clicks) were compared pixel by pixel with main-window@1x: the bar rows are identical in all of them (no hot, pressed or open title is ever visible: the menu windows are separate and carry no bar), so the title states stay unverified. The open-menu sheet (menu_bar-open.png) now shows the redrawn popup. The 12 px bar font change was re-checked against the ten popup captures (rows, ink rows and underline row equal).",
+    "gaps": [
+     "Hover and pressed title colours are guesses (light blues)",
+     "Open title drawn as a flat #AFAFAF box: no capture shows a title open (the menu captures are the popup windows alone), so it is a guess",
+     "v3 text is ClearType (colour fringes) and GDI-hinted; ours is grey anti-aliased and unhinted, so glyph pixels differ and title starts drift up to 2 px",
+     "The dock's right border (#C5C5C5 at x 791) is not part of the bar",
+     "Collapsed menu bar keeps the Neper look",
+     "Dark and high-contrast palettes keep Neper colours",
+     "windows_bar_theme sets Tahoma 12 px for every bar text; popup_menu was re-measured at that size against the ten menu captures (ink rows equal, widths -1..+3 px)"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/toolbar_button.png",
+    "notes": "The baseline: round glyph buttons (control.glyph_toggle); the sheet's first cell is one row of them."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toolbar_button.png",
+    "notes": "Measured at 100 % from the live main window (ref/windows/toolbar_button.png = the left two bars of the second toolbar row, x 8..454, y 84..109; windows/toolbar_button-vs-ref.png). Strip 26 tall: #F5F5F5 line above, #BEBEBE and #D2D2D2 lines below, a #FFFFFF left line (#F3F3F3 on the next bar), a closed bar ends in a #AAAAAA line; grip = two lines of (white, face, #A0A0A0) 3 px each at x 4 and 7 (#F2F2F2/#ABABAB beside another bar), rows 1..23, end rows #BDBDBD/#D2D2D2. Buttons 23 wide (16 px picture, 3.5 each side) from x 11, separators 6 wide (#A3A3A3 + #FCFCFC lines at +2/+3, 21 tall). Bar A = 2+2+1+3 buttons in 215 px, bar B = 4+2+3 in 232 px: every line, separator and grip pixel column matches the capture. Disabled picture drawn as a #C8C8C8 glyph (v3: pale bitmap, mean #D4D4D4). Round 3: main-window-deck-mode and main-window-end show the enabled rest state: the strip, grips, separators and button boxes are identical to the disabled capture, only pixels inside the 16 px picture boxes at x 14..29, 37..53, 90..104, 118..134, 147..163, 173..184 and 193..209 (bar-relative, coloured v3 bitmaps: new, open, save all, close, properties, legality bolt, statistics) differ. No capture shows a hot, pressed or checked button, so those stay guesses.",
+    "gaps": [
+     "Enabled pictures: v3 draws coloured bitmaps (grey funnel, blue binoculars, house, Discord...), a drawn single-colour glyph stands in, so the enabled rest state is geometry-only",
+     "Hover, pressed and checked colours (light blues #CCE8FF / #A8D4F8 family) are guesses: no capture shows them",
+     "Separator tone drifts #A3 to #AF along the row in v3 (a horizontal gradient), drawn flat #A3A3A3",
+     "No keyboard focus look (DX bars are not focusable)",
+     "Button height 22 is a guess (the capture shows only the 16 px picture, rows 88..104)",
+     "Captioned buttons use Tahoma 12 px; no capture of a captioned v3 button",
+     "Dropdown arrow button and toolbar customisation drag handle not drawn",
+     "Neper sheet row differs from before: cell 0 is one row of round glyphs",
+     "Dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/status_bar.png",
+    "notes": "The baseline: v2 status bar."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/status_bar.png",
+    "notes": "Measured at 100 % from the live main window (ref/windows/status_bar.png = x 8..791, y 574..592; windows/status_bar-vs-ref.png). Bar 19 tall: #D4D4D4 line above, #FFFFFF below, panels 17 tall between (rows 1..17: #BBBBBB top line, #F5F5F5 bottom line), panels one px apart: 282 | 153 | the rest (item.panel_width, item.fills); each has a dark left line (#A0A0A0, #ADADAD, #B5B5B5: a gradient along x, 160 + 0.047 x) with a #E3E3E3 line beside it on all but the first, and a #FCFCFC + #F3F3F3 pair at its right; every seam column matches the capture. Text Tahoma 10.8 px (ink 262 px for the counts string: 9..270), first panel centred (the DFM: taCenter), the others start 3 px in ('Idle' ink at x 439). Size grip: 3 diagonal strokes (lead #F3F3F3, then #E9E9E9 #BDBDBD #AEAEAE #DADADA repeating) over 12 rows and 13 columns, drawn pixel for pixel from the capture (identical). Round 3: main-window-deck-mode, main-window-end and the '*-main' captures show a status bar pixel-identical to main-window (same texts, Idle); controls.json lists the progress container (TdxStatusBarContainerControl 148 x 14 at x 293, y 576 in the window) with its TcxProgressBar hidden in every capture, so the progress state is still a guess.",
+    "gaps": [
+     "Progress container panel (grey track, #06B025 fill) is a guess: the capture shows it empty",
+     "v3 text is ClearType (colour fringes); ours is grey anti-aliased",
+     "Panel widths come from the caller (item.panel_width / fills); without them panels hug their text (as before)",
+     "A narrow bar clips the last panel instead of eliding",
+     "Hover colour of a pressable panel is a guess",
+     "Dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ }
+}

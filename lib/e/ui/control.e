@@ -12870,6 +12870,33 @@ fn windows_bar_theme(a: *mem.Arena, t: *const Theme) -> (Theme, err) {
     ret (Theme { tokens: &copies[0usize], fonts: fonts, language: t.language, runtime: t.runtime }, ok)
 }
 
+// (looks) The bar theme with its body text bold: Tahoma Bold (the rig's fourth font) leads the
+// chain when it is there (popup menu group headers).
+fn windows_bar_theme_bold(a: *mem.Arena, t: *const Theme) -> (Theme, err) {
+    let (base, base_error) = windows_bar_theme(a, t)
+    if base_error != ok { ret (base, base_error) }
+    let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copies_error != ok { ret (base, TooLarge) }
+    copies[0usize] = *base.tokens
+    var heavy = copies[0usize].text[1usize]
+    heavy.weight = 700u16
+    copies[0usize].text[1usize] = heavy
+    var fonts = base.fonts
+    if base.fonts.len >= 4usize {
+        let (swapped, swapped_error) = mem.alloc[shape.Font](a, base.fonts.len)
+        if swapped_error != ok { ret (base, TooLarge) }
+        var i = 0usize
+        while i < base.fonts.len {
+            swapped[i] = base.fonts[i]
+            i += 1usize
+        }
+        swapped[0usize] = base.fonts[3usize]
+        swapped[3usize] = base.fonts[0usize]
+        fonts = swapped
+    }
+    ret (Theme { tokens: &copies[0usize], fonts: fonts, language: base.language, runtime: base.runtime }, ok)
+}
+
 // The look of a flat bar button (toolbar button, menu title): no face at rest, a light blue
 // face and border hovered, a deeper one pressed or checked. Guessed blues.
 fn windows_bar_look(state: style.ControlState, ink: paint.Color) -> style.ResolvedControl {
