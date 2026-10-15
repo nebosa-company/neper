@@ -857,7 +857,8 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
         if !contrast { face = mix(color(t, .SurfaceContainerLowest), accent, 0.2) }
     }
     var hover = hex(0xF6F6F6u32)
-    var press = hex(0xF0F0F0u32)
+    // looks4: the pressed face measured on v3's pressed buttons (docs/ui/looks/ref/windows/states/button-pressed-*): #CCE4F7.
+    var press = hex(0xCCE4F7u32)
     if t.palette == .Dark {
         hover = hex(0x323232u32)
         press = hex(0x272727u32)

@@ -2480,11 +2480,12 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     let edge = look.border_width + look.padding
     fill.min_width = style.Length { Px: max_zero(look.min_width - edge * 2.0) }
     fill.min_height = style.Length { Px: max_zero(look.min_height - (look.border_width + look.padding_y) * 2.0) }
-    let ringed = ring < 3u32
+    let ringed = ring < 4u32
     // v3's caption sits 1 px left of and above the centre of the box (measured on Cancel and Apply).
     if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
     let centred = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
-    let focus = state.focus_visible && enabled
+    // A pressed button is focused too: v3 shows the dotted rectangle on it (states/button-pressed-*).
+    let focus = (state.focus_visible || state.focused || state.pressed) && enabled
     if !focus && !ringed { ret (centred, ok) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
@@ -2499,9 +2500,9 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     n += 1usize
     if focus {
         if ringed {
-            let (dots, dots_error) = windows_dots(a, style.color(t.tokens, .Text), look.min_width - 4.0, look.min_height - 5.0)
+            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height)
             if dots_error != ok { ret (zero, dots_error) }
-            layers[n] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), mem_one_node(a, dots))
+            layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
         }
         if !ringed {
             let (dots, dots_error) = windows_dots(a, style.color(t.tokens, .Text), max_of(max_zero(look.min_width - edge * 2.0), content_w), max_zero(look.min_height - (look.border_width + look.padding_y) * 2.0))
@@ -2522,7 +2523,13 @@ fn windows_rgb(c: paint.Color) -> u32 {
 // names it in the tree), `selected` the toggled-on face, `corners` nonzero for a split's head.
 fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, show_label: bool, selected: bool, corners: style.Corners, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
     let state = control_state(t, key, options.enabled, selected)
-    var look = style.windows_resolve(t.tokens, options.variant, state)
+    // v3's default button gives its accent ring to whichever other button holds the focus (states/button-focused-options-*).
+    var variant = options.variant
+    if variant == .Default && mem.address_of(t.runtime) != 0usize {
+        let (focus_owner, focus_role, has_focus) = widget.focused_role(t.runtime)
+        if has_focus && focus_role == 3u8 && focus_owner != key { variant = .Filled }
+    }
+    var look = style.windows_resolve(t.tokens, variant, state)
     look.corners = corners
     if !show_label { look.min_width = 29.33 }
     // The native ring (looks3 group a): a whole button, not a split's head, not the plain one.
@@ -2530,7 +2537,8 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     var face: u32 = 0u32
     if corners.top_left == 0.0 && corners.top_right == 0.0 && options.variant != .Plain && t.tokens.palette == .Light {
         rk = 0u32
-        if options.variant == .Default || state.focus_visible || selected { rk = 1u32 }
+        if variant == .Default || state.focus_visible || state.focused || selected { rk = 1u32 }
+        if state.pressed && !state.disabled && !selected { rk = 3u32 }
         if state.disabled { rk = 2u32 }
         face = windows_rgb(look.background)
         look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
