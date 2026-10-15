@@ -71,7 +71,7 @@ fn pump(h: *Harness, root: widget.Node, now: time.Instant) -> err {
     let logical_height = f32(s.height) / s.scale
     let (compiled, reconcile_error) = widget.reconcile(s.runtime, &frame, root, ui_layout.Constraints { min_width: 0.0, max_width: logical_width, min_height: 0.0, max_height: logical_height })
     if reconcile_error != ok { ret reconcile_error }
-    ret scene.render(widget.renderer_of(s.runtime), compiled, s.drawable, geometry.Size { width: logical_width, height: logical_height })
+    ret scene.render_scaled(widget.renderer_of(s.runtime), compiled, s.drawable, geometry.Size { width: logical_width, height: logical_height }, s.scale)
 }
 
 // Start a clocked frame before building its tree.

@@ -584,6 +584,7 @@
     "e.ui.testing",
     "e.ui.audit",
     "e.ui.control",
+    "e.ui.looks",
     "e.ui.overlay",
     "e.ui.navigation",
     "e.ui.collection",
@@ -5052,6 +5053,34 @@
     "e.str",
     "e.ui.layout",
     "e.ui.style",
+    "e.ui.widget"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.looks",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.png",
+    "e.fs",
+    "e.gfx.geometry",
+    "e.gfx.image",
+    "e.gfx.paint",
+    "e.gfx.scene",
+    "e.gpu",
+    "e.io",
+    "e.mem",
+    "e.str",
+    "e.text.shape",
+    "e.time",
+    "e.ui.control",
+    "e.ui.input",
+    "e.ui.layout",
+    "e.ui.style",
+    "e.ui.testing",
     "e.ui.widget"
    ],
    "blocked_by": []

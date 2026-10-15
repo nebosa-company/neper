@@ -2233,6 +2233,29 @@ thumb); `theme()` is the unset look. `mark` draws the grid's own marks (favourit
 expander box, group chip triangle). `load_picture` decodes a .png or .bmp file (v3's `bin/data` symbols and legality
 letters) and uploads it; the pixels are copied, so the arena may be reset afterwards. Read by `e.ui.datagrid.set_look`.
 
+### `e.ui.looks`
+
+```neper
+type Look = enum u8 { Neper, Windows, Cupertino, Material }
+type Drive = enum u8 { None, Hover, Press, Focus }
+type Cell = struct { caption: str, node: widget.Node, drive: Drive }
+type Build = fn(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []Cell) -> (usize, err)
+type Sheet = struct { name: str, cells: usize, columns: usize, cell_w: f32, cell_h: f32, ctx: *void, build: Build }
+type Rig = struct { a: *mem.Arena, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, width: f32, height: f32, scale: f32 }
+error Failed
+
+fn theme_for(look: Look) -> style.ThemeTokens
+fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err)
+fn set_look(rig: *Rig, look: Look)
+fn theme_of(rig: *Rig) -> control.Theme
+fn begin(rig: *Rig) -> *mem.Arena
+fn sheet(a: *mem.Arena, t: *const control.Theme, cells: []const Cell, columns: usize, cell_w: f32, cell_h: f32) -> (widget.Node, err)
+fn render(rig: *Rig, root: widget.Node, path: str) -> err
+fn run_all(a: *mem.Arena, s: *const Sheet) -> err
+```
+
+The harness behind `docs/ui/looks` (docs/ui/looks-howto.md): offscreen on the CPU backend, no window. `open` makes a rig (Segoe UI font 7, Tahoma font 8, runtime, harness) at a logical size and device scale; `theme_for` is a look's tokens (Cupertino and Material are the Neper tokens with their profile until they are built); `sheet` lays captioned cells into a grid; `render` writes one frame as a PNG. `run_all` renders a `Sheet` of a control's states (a cell's `drive` makes the runtime hover, press or keyboard-focus it) under the Neper and Windows looks at 1.0 and 1.5 into `docs/ui/looks/<look>/<name>[@1.5x].png`, and beside the v3 reference `docs/ui/looks/ref/windows/<name>[@1.5x].png` when that exists.
+
 ### `e.ui.gridrules`
 
 ```neper
