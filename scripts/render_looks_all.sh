@@ -15,7 +15,7 @@ if [ ${#names[@]} -eq 0 ]; then
 fi
 fail=""
 for c in "${names[@]}"; do
-  r=$("$neper" emit-executable "examples/looks/$c.e" "$root" x64 windows "$out/$c.exe" --arena 2g 2>&1 | tail -1)
+  r=$("$neper" emit-executable "examples/looks/$c.e" "$root" x64 windows "$out/$c.exe" --arena 4g 2>&1 | tail -1)
   if [ "$r" != "executable written" ]; then fail="$fail compile:$c"; continue; fi
   if [ "$c" = "popup_menu" ]; then
     for s in popup_menu popup_menu-hover popup_menu_dialog popup_menu_file popup_menu_cards popup_menu_search \
