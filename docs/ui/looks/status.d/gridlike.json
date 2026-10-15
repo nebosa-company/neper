@@ -1,0 +1,51 @@
+{
+ "data_grid": {
+  "looks": {
+   "neper": {"status": "ready", "screenshot": "neper/data_grid.png", "notes": "The baseline: the theme's own grid (look.on false), the same two sheets."},
+   "windows": {"status": "review", "screenshot": "windows/data_grid.png",
+    "notes": "datagrid.build applies gridlook.v3() under the Windows profile (unless the application set a look), so no per-app wiring. Sheet: a flat list (header, filter row, stripes, selected row, vertical scroll bar, summary footer) and a grouped grid (group row with the plus/minus box and summaries), in the #F0F0F0 form face, rendered at 100 % and 150 %; windows/data_grid-vs-ref@1.5x.png has a crop of the v3 deck capture (03-main-pool-deck-v3.png) on the left. Row pitch 19 (28.5 at 150 %), header 21, #FFFFFF/#EFEFEF stripes, #A6D2FF selection with its #83878B edge match the capture; the measured parity itself is docs/grid-parity.",
+    "gaps": [
+     "No reference at 100 % (v3 captures are at 150 % only); the 100 % sheet is the 150 % measurement scaled",
+     "Reference is a crop of the main window with a different data set (icons, navigator bar, band tabs), so the comparison is of metrics and colours, not pixel for pixel",
+     "The 1 px frame (#828790) is painted under the header and rows on the top and left and shows only on the right and bottom of the grid box (existing datagrid layout, not touched here)",
+     "Footer: the summary cells sit on a grey band with a yellow gap, v3 has a yellow band with grey summary cells only where a summary exists; footer sums are not rounded to the column format ($1595)",
+     "Scroll bar is the grid's thin thumb on a #F0F0F0 track; v3's native scroll bar arrow buttons are not drawn",
+     "Hover and pressed rows, the unfocused selection (#D5E4EE) and the filter row's operator icons are the grid lane's, not shown on this sheet",
+     "Text is the theme's Segoe UI at the grid look's 10.35 px; v3's cell font face (Tahoma?) is not confirmed"]}
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "neper": {"status": "ready", "screenshot": "neper/tree_list.png", "notes": "The baseline: collection.tree_table, the existing v2 tree table, same two sheets."},
+   "windows": {"status": "review", "screenshot": "windows/tree_list.png",
+    "notes": "collection.tree_table under the Windows profile takes gridlook.v3() as its table look: 19 px rows, white / #EFEFEF stripes counted over the visible rows, no rules, the #A6D2FF selection with its edge, the grid's header (21 px, white, #C6C6C6 line), a 20 px indent and the grid's plus and minus boxes as twisties (the DevExpress Office11 expand button). v3's only tree list is tlAbilities in filter.vcl.form.dfm: lfOffice11, NativeStyle, MultiSelect, no tree lines, ColumnAutoWidth, Styles from the TreeList stylesheet (selection #A6D2FF, even #EFEFEF, odd white). Sheet: three columns and levels with a selected leaf, and a one column list in the filter form's shape.",
+    "gaps": [
+     "No capture of any v3 tree list exists: the look is the grid's measured look applied to the tree by the shared stylesheet colours, not a measured tree list",
+     "The expand box is the grid's (grey frame, black plus, flat white); the capture of the grid's group box shows a navy (#2C4574) plus and a light gradient fill",
+     "ShowRoot = False (no expander or indent on the first level) and CheckGroups (check boxes on the nodes) of tlAbilities are not drawn; TreeOptions has no flag for them and the check box control has no Windows look yet",
+     "Indent 20 px is the DevExpress default, not measured",
+     "Row text is the theme's body text, not the grid's 10.35 px",
+     "Header has no sort glyph or hover colour on this sheet; the inactive-focus selection colours (#ECE9D8 and the grid's #D5E4EE) are not applied",
+     "Plain tree and outline (no columns) keep the Neper look",
+     "No 100 % or 150 % reference to compare against"]}
+  }
+ },
+ "vertical_grid": {
+  "neper": "collection.property_grid",
+  "gap": "",
+  "looks": {
+   "neper": {"status": "ready", "screenshot": "neper/vertical_grid.png", "notes": "The baseline: collection.property_grid_of, the existing v2 property grid with group headings, same two sheets."},
+   "windows": {"status": "review", "screenshot": "windows/vertical_grid.png",
+    "notes": "collection.property_grid_of under the Windows profile: 19 px rows, a #F0F0F0 row header column with black Segoe UI names, white value cells, 1 px #A0A0A4 (clMedGray, the DFM's GridLineColor) lines between header and value and under each row, the selected row's header #A6D2FF, category rows a #F0F0F0 band 21 px tall with a plus/minus box and a bold caption. Row header 164 and 330 wide as in deck_properties.vcl.form.dfm (vgProperties: lfOffice11, NativeStyle, CategoryExplorerStyle, Tahoma 8). Sheet: the Deck Properties rows (name text editing, read-only text, combo box, button-edit text, spin edit, check box) with all categories open, and with two shut.",
+    "gaps": [
+     "No capture of v3's vertical grid exists: everything except the line colour (DFM) and the 164 px header width is a DevExpress Office11 default from memory",
+     "CategoryExplorerStyle (Explorer-bar category rows) is approximated by a flat band; the real band, its arrow glyph and any gradient are not drawn",
+     "The selected row colour (#A6D2FF, from the other v3 stylesheets) is a guess: the vertical grid's own Selection style is empty in the DFM",
+     "In v3 only the focused row shows an editor and the others show plain text (and a check glyph); the sheet puts real editors in the combo, spin and check rows, drawn with Neper looks until those controls have Windows looks, so they are 22+ px tall and grow their rows",
+     "TcxMultiEditorRow (Deck/Sideboard, land/creature/spell counts), image combo images, hyperlink and date editors and the row hint are not drawn",
+     "The splitter between header and value is a 1 px line; the draggable divider (options.divide) shows no cursor or hover colour",
+     "Collapsed categories show no property count; keyboard focus ring on a row is not drawn",
+     "No 100 % or 150 % reference to compare against"]}
+  }
+ }
+}
