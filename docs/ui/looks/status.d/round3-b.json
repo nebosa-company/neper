@@ -1,0 +1,127 @@
+{
+ "checkbox": {
+  "neper": "control.checkbox",
+  "app": "examples/looks/checkbox_dialog.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/checkbox.png",
+    "notes": "The baseline: the v2 18 px box in its 40 px state circle, all states."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/checkbox_dialog-vs-ref.png",
+    "notes": "Checked against crops of the live 100 % captures of the Options Interface, Grids and Morph pages (sheet checkbox_dialog, reference docs/ui/looks/ref/windows/checkbox_dialog.png; the state matrix is sheet checkbox). Matches: 13 x 13 box at +2 from the control, rows 21 tall and 17 tall (Style.TransparentBorder = False, flush at the left), box 0.3 below the row's centre, #005FB8 fill, #F3F3F3 face and #787878 edge, caption in Tahoma 11 px with ink starting 16 px after the box, text rows on the capture's rows. Over the eight boxes the mean per-channel error in the box area is 5.7 and the largest 97 (edge pixels). Caption font is Tahoma 8 pt (11 px) as in the DFMs (Font.Name = Tahoma); drawn at 10.9 px because our unhinted advances run 1 to 2 percent wider than GDI's hinted ones (ink widths then agree within 0 to 3 px over 30 character strings); the capture is ClearType (coloured fringes), ours grayscale.",
+    "gaps": [
+     "UNVERIFIED: hover, pressed, disabled and indeterminate colours are Windows 11 conventions; no v3 capture of any non-rest check box and no v3 dialog uses a tri-state box",
+     "UNVERIFIED: the focus rectangle (1 unit black dots every 2 units round the caption) is a guess; the captures show no focused check box (v3 hides focus cues until a key is pressed)",
+     "Box edge: the captured box is the theme's bitmap resampled (edge pixels split over two rows, offset 0.15 to 0.43 px by row), so edge pixels differ by up to 68 to 97 levels per channel; geometry (13 x 13, position within 0.3 px) matches, the soft edge cannot",
+     "The tick is a stroked path (0.8 unit, 62 % white) fitted to the captured glyph; its pixels differ by up to about 80 levels",
+     "Mnemonic underline (&Symbol, &Row, &Flip in v3 captions) is not drawn",
+     "Text is grayscale; the ClearType colour fringes of the captures are not reproduced",
+     "control.checkbox has no height or border options: the 17 tall flush variant of the Morph page is only reachable through control.windows_checkbox_sized",
+     "The face #F3F3F3 was measured over the #F0F0F0 dialog face; over white it is probably different (the native face is translucent)",
+     "Dark and high-contrast Windows palettes: Neper colours with Windows metrics"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "neper": "control.radio",
+  "app": "examples/looks/radio_dialog.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/radio.png",
+    "notes": "The baseline: the v2 20 px ring in its 40 px state circle, all states."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_dialog-vs-ref.png",
+    "notes": "Checked against crops of the live 100 % Missing Set Cards dialog (three TcxRadioButton, 17 tall, in a TcxGroupBox) and the Filter dialog (Blocks selected, Formats, Editions on its #F9F9F9 tab page); sheet radio_dialog, reference docs/ui/looks/ref/windows/radio_dialog.png (state matrix: sheet radio). Matches: disc 13 across flush at the control's left, centre 0.35 below the row's, #005FB8 disc with a white dot about 5 across, unselected ring #6E6E6E on a #F3F3F3 face, caption ink 16 px after the disc, the 24 unit pitch of the rows, the group frame (see group_box). Mean per-channel error in a disc area 7.6 to 9.4, largest 128 (selected, edge pixels). Caption font is Tahoma 8 pt (11 px) as in the DFMs (Font.Name = Tahoma); drawn at 10.9 px because our unhinted advances run 1 to 2 percent wider than GDI's hinted ones (ink widths then agree within 0 to 3 px over 30 character strings); the capture is ClearType (coloured fringes), ours grayscale.",
+    "gaps": [
+     "UNVERIFIED: hover (larger dot), pressed (smaller dot, lighter fill), disabled and the focus rectangle are guesses; no capture of any non-rest radio (v3 hides focus cues)",
+     "Disc edge: resampled theme bitmap, so edge pixels differ by up to 128 levels (selected) and 48 (unselected); the white dot is sharper than the captured soft one and about 0.4 px high",
+     "The unselected ring colour varies 0x65 to 0x82 around the circle in the capture; a single #6E6E6E is used",
+     "Mnemonic underline (&Missing Only, &Available Only in v3) is not drawn",
+     "Text is grayscale (the capture is ClearType)",
+     "Dark and high-contrast Windows palettes: Neper colours with Windows metrics"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "neper": "control.radio_group",
+  "app": "examples/looks/radio_group_dialog.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/radio_group.png",
+    "notes": "The baseline: v2 radios stacked with no frame."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_group_dialog-vs-ref.png",
+    "notes": "Checked against crops of the live 100 % Options Grids page (two TcxRadioGroup, 486 x 105, long captions) and the Search for Card dialog (289 x 105); sheet radio_group_dialog, reference docs/ui/looks/ref/windows/radio_group_dialog.png (generic sheet: radio_group). Matches: the frame's left, top and bottom lines (error at most 4 per channel), caption 8 in with the frame cut by its text (trailing space included), radios 8 in and 18 down at a 42 unit pitch with the mark flush and centred in the row, Tahoma captions. Added control.windows_radio_group_sized (fixed width and height). Caption font is Tahoma 8 pt (11 px) as in the DFMs (Font.Name = Tahoma); drawn at 10.9 px because our unhinted advances run 1 to 2 percent wider than GDI's hinted ones (ink widths then agree within 0 to 3 px over 30 character strings); the capture is ClearType (coloured fringes), ours grayscale.",
+    "gaps": [
+     "UNVERIFIED: hover, pressed, disabled and focus of the radios (see radio); the disabled caption colour is a guess",
+     "The frame's right edge sits 0.5 unit off (the capture splits it over two columns, 501.5 to 502.5; layout widths snap to whole pixels): up to 10 levels per channel on that column",
+     "Frame corners (radius 2.5) are fitted by eye to a 3 pixel corner; 6 levels at most",
+     "control.radio_group (no size) still packs its rows at 21 units in a content wide frame; only the Windows entry point control.windows_radio_group_sized reproduces v3's fixed size",
+     "Mnemonic underlines are not drawn; text is grayscale",
+     "Dark and high-contrast Windows palettes: Neper colours with Windows metrics"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "neper": "control.group_box",
+  "app": "examples/looks/group_box_dialog.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/group_box.png",
+    "notes": "The baseline: the v2 outlined group (rows with dividers); the section header cell shows a plain title."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "Checked against the live 100 % Deck Legality 'Select Format' TcxGroupBox (513 x 93; its twelve buttons are blanked in the reference, they belong to the button sheet), the 'Show Cards' group of Missing Set Cards (sheet radio_dialog) and the header bars of the Interface, Rules and Grids Options pages (sheet group_box_dialog, reference docs/ui/looks/ref/windows/group_box_dialog.png). Frame lines match exactly (0 levels on the top, bottom and left lines, 8 on one right edge): 1 unit #DCDCDC, top line 6.35 below the group's top, caption 8 in and 2 above the line, the gap cut to the text width. The header bar is v3's TGradient (gradient.pas), not a group box: 505 x 24, #808080 to #C0C0C0 with a GDI+ 1 px #808080 border at the measured sub-pixel offset; title Tahoma Bold white at (4.8, 3.75), 'General' Tahoma right aligned. Header mean error 2.2 to 4.6 (text), largest 150. Tahoma Bold (id 10) added to the harness fonts (looks.e). Caption font is Tahoma 8 pt (11 px) as in the DFMs (Font.Name = Tahoma); drawn at 10.9 px because our unhinted advances run 1 to 2 percent wider than GDI's hinted ones (ink widths then agree within 0 to 3 px over 30 character strings); the capture is ClearType (coloured fringes), ours grayscale.",
+    "gaps": [
+     "UNVERIFIED: the disabled caption colour (a guess); no disabled group in any capture",
+     "The header's 16 px page icon (an image list entry) is not drawn",
+     "A group's right edge is fractional in the capture (Select Format: 530.4 to 531.4) and layout snaps widths to whole pixels, so that column differs by up to 8 levels",
+     "control.group_box_of (content sized, children stacked) has no placed children or fixed height; the exact entry point is control.windows_group_sized (children positioned by the caller, as v3 does)",
+     "TcxGroupBox variants not visible in the captures (Search for Text, Additional on the Filter dialog) are not compared",
+     "Collapsible group and invalid message keep the Neper look",
+     "Mnemonic underlines and ClearType fringes are not reproduced"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "neper": "control.multi_select_list",
+  "app": "examples/looks/check_list_box_dialog.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/check_list_box.png",
+    "notes": "The baseline: the v2 multi-select list (selection fill, 40 px rows, state circles)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/check_list_box_dialog-vs-ref.png",
+    "notes": "v3 does have a TcxCheckListBox: the Options Rules, Prices and Card Art pages (the earlier note saying it was absent was wrong). Checked against the live 100 % Rules page (495 x 343, eighteen checked rows, first row current); sheet check_list_box_dialog, reference docs/ui/looks/ref/windows/check_list_box_dialog.png (state matrix: sheet check_list_box). Matches: the 2 unit edge with its four measured colours per ring, white viewport, 15 unit rows, the check mark 1.15 in and 1.4 down in each row, caption ink 18 in, the #0078D7 highlight from 16.16 behind the caption only with white text, Tahoma 11 px. Caption font is Tahoma 8 pt (11 px) as in the DFMs (Font.Name = Tahoma); drawn at 10.9 px because our unhinted advances run 1 to 2 percent wider than GDI's hinted ones (ink widths then agree within 0 to 3 px over 30 character strings); the capture is ClearType (coloured fringes), ours grayscale.",
+    "gaps": [
+     "UNVERIFIED: unchecked rows (the guess is the native unchecked box, see checkbox), hover, disabled and the unfocused current row (DevExpress usually greys it) are not in any capture; the state sheet shows them as guesses",
+     "Item images (the Card Art page's list has a 16 px image per row and 18 unit rows) are not supported; the Prices page list is not compared",
+     "The list's scroll bar (hidden in the Rules capture) has no Windows look; overflow is not shown",
+     "The current row is an explicit index (windows_check_list_sized, current); control.multi_select_list has only the checked flag, so it never draws the highlight",
+     "Row mark edge pixels differ by up to 75 levels (see checkbox)",
+     "The edge's corner pixels (#B6B9BD, #C4C6CA) are not drawn; the dotted focus rectangle is a guess and not used in the dialog sheet",
+     "Text is grayscale; the mnemonic underline of the label above the list is not part of the control"
+    ]
+   }
+  }
+ }
+}

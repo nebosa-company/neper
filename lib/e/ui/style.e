@@ -961,7 +961,7 @@ fn adapt(t: *const ThemeTokens, a: Adaptation) -> ThemeTokens {
 fn windows_choice_resolve(t: *const ThemeTokens, chosen: bool, state: ControlState) -> ResolvedControl {
     let ground = color(t, .Background)
     var face = hex(15987699u32)
-    var edge = hex(6513507u32)
+    var edge = hex(7895160u32)
     var ink = hex(16777215u32)
     if chosen {
         face = color(t, .Primary)
@@ -985,7 +985,7 @@ fn windows_choice_resolve(t: *const ThemeTokens, chosen: bool, state: ControlSta
             edge = mix(edge, ground, 0.6)
         }
     }
-    ret ResolvedControl { background: face, foreground: ink, border: edge, border_width: 1.2, focus_ring: 0.0, opacity: 1.0, radius: t.radii.sm, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: false, min_width: 13.0, min_height: 13.0, corners: zero }
+    ret ResolvedControl { background: face, foreground: ink, border: edge, border_width: 1.2, focus_ring: 0.0, opacity: 1.0, radius: 4.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: false, min_width: 13.0, min_height: 13.0, corners: zero }
 }
 
 // ---- Windows look, caption and dialog window (docs/ui/looks, group feedback) ----

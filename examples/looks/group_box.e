@@ -39,12 +39,12 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let captions = [6]str{ "Rest", "Disabled", "Long caption", "Plain", "Empty", "Section header" }
     var i = 0usize
     while i < 5usize {
-        var label = "Operator:"
+        var label = "Operator: "
         var variant: control.GroupVariant = .Outlined
         var enabled = true
         var count = 2usize
         if i == 1usize { enabled = false }
-        if i == 2usize { label = "Probability of drawing the current combo:" }
+        if i == 2usize { label = "Probability of drawing the current combo: " }
         if i == 3usize { variant = .Plain }
         if i == 4usize { count = 0usize }
         let (node, node_error) = group(a, t, u64(100usize * (i + 1usize)), label, variant, enabled, count)
@@ -54,7 +54,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     }
     var bar: widget.Node = zero
     if t.tokens.profile == .Windows {
-        let (made, made_error) = control.windows_section_header(a, 700u64, t, "Interface (F2)", "General", 220.0)
+        let (made, made_error) = control.windows_section_header(a, 700u64, t, "Interface (F2)", "", 220.0)
         if made_error != ok { ret (0usize, made_error) }
         bar = made
     } else {

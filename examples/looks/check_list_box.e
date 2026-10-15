@@ -26,8 +26,18 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     while i < 4usize {
         var count = 5usize
         if i == 3usize { count = 0usize }
-        let (node, node_error) = control.multi_select_list(a, u64(i * 10usize + 1usize), t, "Blocks", options[0usize..count], picked[0usize..count], toggles[0usize..count], 5u32, 150.0)
-        if node_error != ok { ret (0usize, node_error) }
+        var node: widget.Node = zero
+        if t.tokens.profile == .Windows && i == 2usize {
+            // The Windows list's current row (its item index) is the blue highlight; the keyboard
+            // focus of the other looks is a cell of its own there.
+            let (shown, shown_error) = control.windows_check_list_sized(a, u64(i * 10usize + 1usize), t, "Blocks", options[0usize..count], picked[0usize..count], toggles[0usize..count], 150.0, 79.0, 0usize)
+            if shown_error != ok { ret (0usize, shown_error) }
+            node = shown
+        } else {
+            let (shown, shown_error) = control.multi_select_list(a, u64(i * 10usize + 1usize), t, "Blocks", options[0usize..count], picked[0usize..count], toggles[0usize..count], 5u32, 150.0)
+            if shown_error != ok { ret (0usize, shown_error) }
+            node = shown
+        }
         var drive: looks.Drive = .None
         if i == 1usize { drive = .Hover }
         if i == 2usize { drive = .Focus }
