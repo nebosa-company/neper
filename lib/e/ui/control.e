@@ -7002,6 +7002,10 @@ fn glyph_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // tonal, `secondary-container` with the glyph in `on-secondary-container`, and
 // Selected in the tree.
 fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, selected: bool) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = windows_glyph_toggle(a, key, t, kind, label, action, true, selected)
+        ret (flat, flat_error)
+    }
     let state = control_state(t, key, true, selected)
     var muted = style.color(t.tokens, .OnSurfaceVariant)
     var look = style.resolve(t.tokens, .Plain, state)
@@ -11105,4 +11109,83 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
     sem.live = 1u8
     sem.row_count = u32(items.len)
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// ---- The Windows look, bars (docs/ui/looks, group `bars`): toolbar buttons, menu text and the
+// shared bar helpers. v3's DevExpress bars draw Tahoma 8 pt (11 px) on the #F0F0F0 face; the
+// colours below are measured from docs/grid-parity (main window and popup menu captures at
+// 150 %), except the hover and pressed blues, which are guesses (no capture shows them).
+
+// The theme the Windows bars draw with: the second font first (the rig registers Tahoma as
+// the second; Segoe UI leads every other control) and 11 px body text.
+fn windows_bar_theme(a: *mem.Arena, t: *const Theme) -> (Theme, err) {
+    let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copies_error != ok { ret (*t, TooLarge) }
+    copies[0usize] = *t.tokens
+    let small = style.TextStyle { size: 11.7, line_height: 14.0, weight: 400u16, italic: false }
+    copies[0usize].text[1usize] = small
+    copies[0usize].text[17usize] = small
+    var fonts = t.fonts
+    if t.fonts.len >= 2usize {
+        let (swapped, swapped_error) = mem.alloc[shape.Font](a, t.fonts.len)
+        if swapped_error != ok { ret (*t, TooLarge) }
+        var i = 0usize
+        while i < t.fonts.len {
+            swapped[i] = t.fonts[i]
+            i += 1usize
+        }
+        swapped[0usize] = t.fonts[1usize]
+        swapped[1usize] = t.fonts[0usize]
+        fonts = swapped
+    }
+    ret (Theme { tokens: &copies[0usize], fonts: fonts, language: t.language, runtime: t.runtime }, ok)
+}
+
+// The look of a flat bar button (toolbar button, menu title): no face at rest, a light blue
+// face and border hovered, a deeper one pressed or checked. Guessed blues.
+fn windows_bar_look(state: style.ControlState, ink: paint.Color) -> style.ResolvedControl {
+    var face = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var edge = face
+    var face_ink = ink
+    if state.hovered && !state.pressed && !state.selected {
+        face = style.hex(13428991u32)
+        edge = style.hex(10080767u32)
+    }
+    if state.pressed || state.selected {
+        face = style.hex(11064568u32)
+        edge = style.hex(6730480u32)
+    }
+    if state.disabled {
+        face = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        edge = face
+        face_ink = style.hex(10526880u32)
+    }
+    ret style.ResolvedControl { background: face, foreground: face_ink, border: edge, border_width: 1.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 2.0, padding_start: 0.0, padding_y: 2.0, custom_padding: true, min_width: 22.0, min_height: 22.0, corners: zero }
+}
+
+// A TdxBarButton with a picture: 22 square, the 16 glyph in a dark ink (v3's are bitmaps).
+fn windows_glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool, checked: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, checked)
+    let look = windows_bar_look(state, style.hex(4210752u32))
+    let (mark, mark_error) = icon_square(a, look.foreground, kind, 16.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, checked, action, mark)
+    ret (node, node_error)
+}
+
+// A TdxBarButton with a caption: the same flat button, 6 at its sides, Tahoma 11.
+fn windows_bar_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, enabled: bool, checked: bool) -> (widget.Node, err) {
+    let (bar_t, bar_error) = windows_bar_theme(a, t)
+    if bar_error != ok { ret (zero, bar_error) }
+    let state = control_state(t, key, enabled, checked)
+    var look = windows_bar_look(state, style.hex(0u32))
+    look.padding = 6.0
+    look.min_width = 0.0
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    let (said, said_error) = colored_text(a, 0u64, label, &bar_t, caption, look.foreground)
+    if said_error != ok { ret (zero, said_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, checked, action, said)
+    ret (node, node_error)
 }

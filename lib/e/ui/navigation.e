@@ -452,6 +452,10 @@ fn joined(a: *mem.Arena, first: str, second: str) -> (str, err) {
 // group named `label`. v2 (D944, docs/ux/components/Toolbar, docked): square on
 // `surface-container`, 4 apart and 4 in at pointer density, 8 at touch density.
 fn toolbar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const Action) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = windows_toolbar(a, key, t, label, items)
+        ret (flat, flat_error)
+    }
     var gap: f32 = 4.0
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { gap = 8.0 }
     let (row, row_error) = spaced_row(a, key + 1u64, t, items, .Plain, gap, false)
@@ -538,6 +542,10 @@ fn status_move_fire(ctx: *void) -> err {
 }
 
 fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, mode: bool, width: f32) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = windows_status_bar_of(a, key, t, items, width)
+        ret (flat, flat_error)
+    }
     var ground: style.ColorRole = .SurfaceContainer
     var ink = style.color(t.tokens, .OnSurfaceVariant)
     if mode {
@@ -1743,6 +1751,10 @@ fn menu_bar_fits(a: *mem.Arena, t: *const control.Theme, menus: []const BarMenu,
 
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = windows_menu_bar_of(a, key, t, label, menus, open, toggles)
+        ret (flat, flat_error)
+    }
     let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len)
     if heads_error != ok { ret (zero, TooLarge) }
     let ink = style.color(t.tokens, .OnSurface)
@@ -1844,6 +1856,10 @@ fn bar_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
 fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if commands.len > 14usize { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = windows_bar_menu_at(a, key, t, anchor, label, commands, dismiss, placement, offset, depth)
+        ret (flat, flat_error)
+    }
     var slotted = false
     var k = 0usize
     while k < commands.len {
@@ -8591,4 +8607,498 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     sem.role = 2u8
     sem.label = "Title bar"
     ret (widget.semantics(key, sem, style.defaults(), bar_cell[0usize..1usize]), ok)
+}
+
+// ---- The Windows look, bars (docs/ui/looks, group `bars`): the dxBar strip, the main menu,
+// the popup menu and the status bar as MTG Studio v3 draws them (TdxBarManager, TdxBarPopupMenu,
+// TdxStatusBar). Colours and metrics are measured from docs/grid-parity (main window, popup menu
+// and status bar captures at 150 %); the hover blues and the progress panel are guesses.
+
+fn windows_flat(color: u32) -> style.Style {
+    var s = style.defaults()
+    s.background = paint.Brush { Solid: style.hex(color) }
+    ret s
+}
+
+// A plain rectangle of `color`; a zero width or height is left to the parent.
+fn windows_rule(w: f32, h: f32, color: u32) -> widget.Node {
+    var s = windows_flat(color)
+    if w > 0.0 { s.width = style.Length { Px: w } }
+    if h > 0.0 { s.height = style.Length { Px: h } }
+    ret widget.box(0u64, s, zero)
+}
+
+// `inner` framed by a 1 px rim on two sides: `near` on its left and top, `far` on its right
+// and bottom (a raised bevel; swap them for a sunken one). A set `width`/`height` is the whole.
+fn windows_bevel(a: *mem.Arena, near: u32, far: u32, inner: widget.Node, width: f32, height: f32) -> (widget.Node, err) {
+    let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = inner
+    var near_style = windows_flat(near)
+    var far_style = windows_flat(far)
+    if width > 0.0 {
+        near_style.width = style.Length { Px: width - 1.0 }
+        far_style.width = style.Length { Px: width }
+    }
+    if height > 0.0 {
+        near_style.height = style.Length { Px: height - 1.0 }
+        far_style.height = style.Length { Px: height }
+    }
+    held[1usize] = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, near_style, held[0usize..1usize])
+    ret (widget.padded(0u64, 0.0, 0.0, 1.0, 1.0, far_style, held[1usize..2usize]), ok)
+}
+
+// The dxBar strip: #F0F0F0 with a light line above and to the left, a #ADADAD line below, and
+// (a toolbar or the menu bar) the two-line grip at its left. `height` is the whole strip;
+// `width` 0 fills the parent.
+fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, grip: bool, width: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, nodes.len + 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if grip {
+        let (marks, marks_error) = mem.alloc[widget.Node](a, 4usize)
+        if marks_error != ok { ret (zero, TooLarge) }
+        let lines = height - 8.0
+        marks[0usize] = widget.positioned(0u64, 3.0, 0.0, control.sized_style(1.0, lines), zero)
+        marks[1usize] = widget.positioned(0u64, 4.0, 0.0, control.sized_style(1.0, lines), zero)
+        marks[2usize] = widget.positioned(0u64, 6.0, 0.0, control.sized_style(1.0, lines), zero)
+        marks[3usize] = widget.positioned(0u64, 7.0, 0.0, control.sized_style(1.0, lines), zero)
+        var dark = windows_flat(11447982u32)
+        var light = windows_flat(16645629u32)
+        var m = 0usize
+        while m < 4usize {
+            var painted = marks[m]
+            var tint = dark
+            if m % 2usize == 1usize { tint = light }
+            tint.width = style.Length { Px: 1.0 }
+            tint.height = style.Length { Px: lines }
+            painted = widget.positioned(0u64, 1.0 + f32(m / 2usize) * 3.0 + f32(m % 2usize), 0.0, tint, zero)
+            marks[m] = painted
+            m += 1usize
+        }
+        parts[n] = widget.stack(0u64, control.sized_style(8.0, lines), marks[0usize..4usize])
+        n += 1usize
+    }
+    var i = 0usize
+    while i < nodes.len {
+        parts[n] = nodes[i]
+        n += 1usize
+        i += 1usize
+    }
+    var row_style = style.defaults()
+    row_style.height = style.Length { Percent: 100.0 }
+    row_style.width = style.Length { Percent: 100.0 }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, row_style, parts[0usize..n])
+    var face = windows_flat(15790320u32)
+    face.height = style.Length { Percent: 100.0 }
+    face.width = style.Length { Percent: 100.0 }
+    let (face_node, face_error) = mem.alloc[widget.Node](a, 1usize)
+    if face_error != ok { ret (zero, TooLarge) }
+    face_node[0usize] = widget.box(0u64, face, row[0usize..1usize])
+    var mid = windows_flat(16645629u32)
+    mid.height = style.Length { Percent: 100.0 }
+    mid.width = style.Length { Percent: 100.0 }
+    let (mid_node, mid_error) = mem.alloc[widget.Node](a, 1usize)
+    if mid_error != ok { ret (zero, TooLarge) }
+    mid_node[0usize] = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, mid, face_node[0usize..1usize])
+    var outer = windows_flat(11447982u32)
+    outer.height = style.Length { Px: height }
+    if width > 0.0 { outer.width = style.Length { Px: width } } else { outer.width = style.Length { Percent: 100.0 } }
+    ret (widget.padded(0u64, 0.0, 0.0, 0.0, 1.0, outer, mid_node[0usize..1usize]), ok)
+}
+
+// A bar separator: a vertical #ADADAD line with a light one beside it, `height` tall.
+fn windows_bar_separator(a: *mem.Arena, height: f32) -> (widget.Node, err) {
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = windows_rule(1.0, height, 11447982u32)
+    pair[1usize] = windows_rule(1.0, height, 16645629u32)
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+    ret (widget.padded(0u64, 2.0, 0.0, 2.0, 0.0, style.defaults(), held[0usize..1usize]), ok)
+}
+
+// A toolbar of Actions in the Windows look: flat captioned buttons on the strip; an action
+// with no label, no icon and not enabled is a separator.
+fn windows_toolbar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const Action) -> (widget.Node, err) {
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, items.len)
+    if nodes_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < items.len {
+        if items[i].label.len == 0usize && !items[i].enabled && items[i].icon.slot == 0u32 {
+            let (rule, rule_error) = windows_bar_separator(a, 22.0)
+            if rule_error != ok { ret (zero, rule_error) }
+            nodes[i] = rule
+        } else {
+            let (button, button_error) = control.windows_bar_button(a, key + 1u64 + u64(i), t, items[i].label, &items[i].action, items[i].enabled, false)
+            if button_error != ok { ret (zero, button_error) }
+            nodes[i] = button
+        }
+        i += 1usize
+    }
+    let (strip, strip_error) = windows_bar_strip(a, nodes[0usize..items.len], 24.0, true, 0.0)
+    if strip_error != ok { ret (zero, strip_error) }
+    let (sheet, sheet_error) = mem.alloc[widget.Node](a, 1usize)
+    if sheet_error != ok { ret (zero, TooLarge) }
+    sheet[0usize] = strip
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), sheet[0usize..1usize]), ok)
+}
+
+// The main menu: titles 20 tall, 6 at their sides, Tahoma 11, on a 22 strip with the grip.
+fn windows_menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
+    let (bt, bt_error) = control.windows_bar_theme(a, t)
+    if bt_error != ok { ret (zero, bt_error) }
+    let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len)
+    if heads_error != ok { ret (zero, TooLarge) }
+    let ink = style.hex(0u32)
+    var i = 0usize
+    while i < menus.len {
+        if menus[i].commands.len > 14usize { ret (zero, TooLarge) }
+        let title_key = key + 1u64 + 256u64 * u64(i)
+        let opened = i == open
+        let state = control.control_state(t, title_key, true, false)
+        var look = control.windows_bar_look(state, ink)
+        if opened {
+            look.background = style.hex(15790320u32)
+            look.border = style.hex(11513775u32)
+        }
+        look.padding = 6.0
+        look.padding_y = 0.0
+        look.min_width = 0.0
+        look.min_height = 20.0
+        var caption = control.text_options()
+        caption.role = .BodyMedium
+        caption.wrap = .None
+        let (label_node, label_error) = menu_title_label(a, &bt, menus[i].label, caption, ink, true)
+        if label_error != ok { ret (zero, label_error) }
+        var states = 0u32
+        if opened { states = accessibility.STATE_EXPANDED }
+        let (head, head_error) = control.pressable_states(a, title_key, t, 3u8, menus[i].label, look, true, false, states, accessibility.ACTION_SHOW_MENU, title_key + 1u64, &toggles[i], label_node)
+        if head_error != ok { ret (zero, head_error) }
+        heads[2usize * i] = head
+        let (hung, hung_error) = bar_menu(a, title_key + 1u64, t, title_key, menus[i].label, menus[i].commands, opened, &toggles[i])
+        if hung_error != ok { ret (zero, hung_error) }
+        heads[2usize * i + 1usize] = hung
+        i += 1usize
+    }
+    let (strip, strip_error) = windows_bar_strip(a, heads[0usize..2usize * menus.len], 22.0, true, 0.0)
+    if strip_error != ok { ret (zero, strip_error) }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = strip
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_MENU_BAR
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// A popup menu: 20 px rows (hover #ADD6FF), an 18 picture column, Tahoma 11 black (#A0A0A0
+// disabled), the shortcut 23 from the right, #B0B0B0 separators over a light line, and the
+// classic bevel: light top and left, dark right and bottom, on #F0F0F0.
+fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8) -> (widget.Node, err) {
+    let (bt, bt_error) = control.windows_bar_theme(a, t)
+    if bt_error != ok { ret (zero, bt_error) }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize * commands.len)
+    if rows_error != ok { ret (zero, TooLarge) }
+    // The menu hugs its widest row: picture column, label, shortcut and the arrow or the margin.
+    var widest: f32 = 128.0
+    var n = 0usize
+    var i = 0usize
+    while i < commands.len {
+        let c = &commands[i]
+        let has_submenu = c.submenu.len != 0usize
+        if c.separated && i > 0usize {
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = windows_rule(0.0, 1.0, 11513775u32)
+            pair[1usize] = windows_rule(0.0, 1.0, 16251127u32)
+            var line_style = style.defaults()
+            line_style.width = style.Length { Percent: 100.0 }
+            let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
+            if lines_error != ok { ret (zero, TooLarge) }
+            lines[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, line_style, pair[0usize..2usize])
+            rows[n] = widget.padded(0u64, 3.0, 4.0, 3.0, 4.0, style.defaults(), lines[0usize..1usize])
+            n += 1usize
+        }
+        let item_key = key + 1u64 + u64(i)
+        var state = control.control_state(t, item_key, c.enabled, false)
+        if c.submenu_open { state.hovered = true }
+        var ink = style.hex(0u32)
+        if !c.enabled { ink = style.hex(10526880u32) }
+        var look = control.windows_bar_look(state, ink)
+        look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        look.border_width = 0.0
+        if c.enabled && state.hovered { look.background = style.hex(11392767u32) }
+        look.padding_start = 1.0
+        look.padding = 23.0
+        if has_submenu { look.padding = 3.0 }
+        look.padding_y = 0.0
+        look.min_width = 0.0
+        look.min_height = 20.0
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        var p = 0usize
+        // The picture column: a drawn glyph, a check or a radio dot, framed when checked.
+        var picture = widget.box(0u64, control.sized_style(16.0, 16.0), zero)
+        if c.checked && !c.radio && !c.pictured {
+            let (tick, tick_error) = control.icon_square(a, ink, .Check, 16.0)
+            if tick_error != ok { ret (zero, tick_error) }
+            picture = tick
+        }
+        if c.pictured && !c.radio && !c.checkable {
+            let (glyph, glyph_error) = control.icon_square(a, ink, c.glyph, 16.0)
+            if glyph_error != ok { ret (zero, glyph_error) }
+            picture = glyph
+        }
+        if c.radio && c.checked {
+            let (dot, dot_error) = overlay.menu_radio_dot(a, ink, 16.0)
+            if dot_error != ok { ret (zero, dot_error) }
+            picture = dot
+        }
+        var slot = control.sized_style(18.0, 18.0)
+        if c.checked {
+            slot.background = paint.Brush { Solid: style.hex(13428991u32) }
+            slot.border = style.Border { width: 1.0, color: style.hex(11979228u32) }
+        }
+        let (slot_held, slot_error) = mem.alloc[widget.Node](a, 1usize)
+        if slot_error != ok { ret (zero, TooLarge) }
+        slot_held[0usize] = picture
+        parts[p] = widget.aligned(0u64, .Center, .Center, slot, slot_held[0usize..1usize])
+        p += 1usize
+        var caption = control.text_options()
+        caption.role = .BodyMedium
+        caption.wrap = .None
+        let (said, said_error) = control.colored_text(a, 0u64, c.label, &bt, caption, ink)
+        if said_error != ok { ret (zero, said_error) }
+        var row_width = 23.0 + widget.text_width(a, said)
+        let (gapped, gapped_error) = mem.alloc[widget.Node](a, 1usize)
+        if gapped_error != ok { ret (zero, TooLarge) }
+        gapped[0usize] = said
+        parts[p] = widget.padded(0u64, 2.5, 0.0, 0.0, 0.0, style.defaults(), gapped[0usize..1usize])
+        p += 1usize
+        parts[p] = widget.spacer(0u64, 1.0)
+        p += 1usize
+        if c.shortcut.len > 0usize {
+            let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, &bt, caption, ink)
+            if keys_error != ok { ret (zero, keys_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = keys_node
+            row_width += 16.0 + widget.text_width(a, keys_node)
+            parts[p] = widget.padded(0u64, 16.0, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
+            p += 1usize
+        }
+        if has_submenu {
+            let (arrow, arrow_error) = control.icon_square(a, ink, .ChevronRight, 14.0)
+            if arrow_error != ok { ret (zero, arrow_error) }
+            parts[p] = arrow
+            p += 1usize
+        }
+        if has_submenu { row_width += 17.0 } else { row_width += 23.0 }
+        if row_width > widest { widest = row_width }
+        var line_style = style.defaults()
+        line_style.width = style.Length { Percent: 100.0 }
+        let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, parts[0usize..p])
+        var sem_states = 0u32
+        if c.checked { sem_states = accessibility.STATE_CHECKED }
+        var semantic_role = 22u8
+        if c.checkable || c.checked { semantic_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
+        if c.radio { semantic_role = accessibility.ROLE_MENU_ITEM_RADIO }
+        var sem_actions = 0u32
+        var controls = 0u64
+        var chosen = &c.action
+        var submenu_key = key + 15u64 + 16u64 * u64(i)
+        if depth > 0u8 { submenu_key = key * 32u64 + 16u64 + u64(i) }
+        if has_submenu {
+            sem_actions = accessibility.ACTION_SHOW_MENU
+            controls = submenu_key
+            chosen = &c.submenu_toggle
+            if c.submenu_open { sem_states = sem_states | accessibility.STATE_EXPANDED }
+        }
+        let (made, made_error) = control.pressable_states_fill(a, item_key, t, semantic_role, c.label, look, c.enabled, false, sem_states, sem_actions, controls, chosen, true, content)
+        if made_error != ok { ret (zero, made_error) }
+        rows[n] = made
+        n += 1usize
+        if has_submenu {
+            let (nested, nested_error) = bar_menu_at(a, submenu_key, t, item_key, c.label, c.submenu, c.submenu_open, &c.submenu_toggle, .Right, geometry.Point { x: -2.0, y: -3.0 }, depth + 1u8)
+            if nested_error != ok { ret (zero, nested_error) }
+            rows[n] = nested
+            n += 1usize
+        }
+        i += 1usize
+    }
+    var column_style = windows_flat(15790320u32)
+    column_style.width = style.Length { Px: widest }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, rows[0usize..n])
+    let (padded_column, padded_error) = mem.alloc[widget.Node](a, 1usize)
+    if padded_error != ok { ret (zero, TooLarge) }
+    padded_column[0usize] = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, windows_flat(15790320u32), column[0usize..1usize])
+    let (framed, framed_error) = windows_bevel(a, 16579836u32, 7500402u32, padded_column[0usize], 0.0, 0.0)
+    if framed_error != ok { ret (zero, framed_error) }
+    var shadowed = style.defaults()
+    shadowed.shadow = style.Shadow { offset: geometry.Point { x: 2.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.3) }
+    let (shadow_held, shadow_error) = mem.alloc[widget.Node](a, 1usize)
+    if shadow_error != ok { ret (zero, TooLarge) }
+    shadow_held[0usize] = framed
+    var none: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, shadowed, shadow_held[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 21u8
+    sem.label = label
+    let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+    if lifted_error != ok { ret (zero, TooLarge) }
+    lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
+}
+
+// A status panel: sunken (#A0A0A0 on its top and left, a light line on its right and bottom),
+// `width` x 17, its content at the start.
+fn windows_status_panel(a: *mem.Arena, content: widget.Node, width: f32) -> (widget.Node, err) {
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = content
+    var face = windows_flat(15790320u32)
+    face.height = style.Length { Px: 16.0 }
+    face.width = style.Length { Px: width - 2.0 }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.aligned(0u64, .Start, .Center, face, held[0usize..1usize])
+    let (bevel, bevel_error) = windows_bevel(a, 10526880u32, 16513274u32, inner[0usize], width, 17.0)
+    if bevel_error != ok { ret (zero, bevel_error) }
+    ret (bevel, ok)
+}
+
+// The status bar: 18 tall, #ACACAC above, sunken panels 2 apart (the start group hugging its
+// text, the end group at the right), Tahoma 11, and the diagonal size grip at the far end.
+fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, width: f32) -> (widget.Node, err) {
+    let (bt, bt_error) = control.windows_bar_theme(a, t)
+    if bt_error != ok { ret (zero, bt_error) }
+    let (starts, starts_error) = mem.alloc[widget.Node](a, items.len)
+    if starts_error != ok { ret (zero, TooLarge) }
+    let (ends, ends_error) = mem.alloc[widget.Node](a, items.len + 1usize)
+    if ends_error != ok { ret (zero, TooLarge) }
+    var s = 0usize
+    var e = 0usize
+    var i = 0usize
+    while i < items.len {
+        let item = &items[i]
+        var caption = control.text_options()
+        caption.role = .BodyMedium
+        caption.wrap = .None
+        caption.size = 10.8
+        var ink = style.hex(0u32)
+        if item.tone == .Error { ink = style.color(t.tokens, .Error) }
+        var content: widget.Node = zero
+        var panel_width: f32 = 24.0
+        if item.progress >= 0.0 {
+            // The container panel's progress bar: grey track, native green fill (guessed).
+            var share = item.progress
+            if share > 1.0 { share = 1.0 }
+            let (fills, fills_error) = mem.alloc[widget.Node](a, 1usize)
+            if fills_error != ok { ret (zero, TooLarge) }
+            fills[0usize] = windows_rule(128.0 * share, 9.0, 441381u32)
+            var track = windows_flat(15132390u32)
+            track.width = style.Length { Px: 130.0 }
+            track.height = style.Length { Px: 11.0 }
+            track.border = style.Border { width: 1.0, color: style.hex(12303291u32) }
+            let (track_held, track_error) = mem.alloc[widget.Node](a, 1usize)
+            if track_error != ok { ret (zero, TooLarge) }
+            track_held[0usize] = widget.box(0u64, track, fills[0usize..1usize])
+            content = widget.padded(0u64, 3.0, 0.0, 0.0, 0.0, style.defaults(), track_held[0usize..1usize])
+            panel_width = 140.0
+        } else {
+            let (said, said_error) = control.colored_text(a, 0u64, item.text, &bt, caption, ink)
+            if said_error != ok { ret (zero, said_error) }
+            let (said_held, said_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if said_held_error != ok { ret (zero, TooLarge) }
+            said_held[0usize] = said
+            content = widget.padded(0u64, 8.5, 0.0, 8.5, 0.0, style.defaults(), said_held[0usize..1usize])
+            panel_width = widget.text_width(a, said) + 19.0
+            if panel_width < 24.0 { panel_width = 24.0 }
+        }
+        var shown = content
+        if widget.submit_set(item.action.invoke) {
+            let state = control.control_state(t, key + 1u64 + u64(i), true, false)
+            var look = control.windows_bar_look(state, ink)
+            look.padding = 0.0
+            look.padding_y = 0.0
+            look.min_width = 0.0
+            look.min_height = 15.0
+            let (pressed, pressed_error) = control.pressable(a, key + 1u64 + u64(i), t, 3u8, item.text, look, true, false, &item.action, content)
+            if pressed_error != ok { ret (zero, pressed_error) }
+            shown = pressed
+        } else if i == 0usize {
+            let (lives, lives_error) = mem.alloc[widget.Node](a, 1usize)
+            if lives_error != ok { ret (zero, TooLarge) }
+            lives[0usize] = content
+            var live: widget.Semantics = zero
+            live.role = 26u8
+            live.label = item.text
+            live.live = 1u8
+            shown = widget.semantics(0u64, live, style.defaults(), lives[0usize..1usize])
+        }
+        let (panel, panel_error) = windows_status_panel(a, shown, panel_width)
+        if panel_error != ok { ret (zero, panel_error) }
+        if item.end {
+            ends[e] = panel
+            e += 1usize
+        } else {
+            starts[s] = panel
+            s += 1usize
+        }
+        i += 1usize
+    }
+    // The size grip: three diagonal strokes of 2 px dots in #AAAAAA, 14 square.
+    let (dots, dots_error) = mem.alloc[widget.Node](a, 6usize)
+    if dots_error != ok { ret (zero, TooLarge) }
+    var dot = windows_flat(11184810u32)
+    dot.width = style.Length { Px: 2.0 }
+    dot.height = style.Length { Px: 2.0 }
+    var d = 0usize
+    var diagonal = 0usize
+    while diagonal < 3usize {
+        var step = 0usize
+        while step <= diagonal {
+            dots[d] = widget.positioned(0u64, 11.0 - 4.0 * f32(diagonal - step), 11.0 - 4.0 * f32(step), dot, zero)
+            d += 1usize
+            step += 1usize
+        }
+        diagonal += 1usize
+    }
+    ends[e] = widget.stack(0u64, control.sized_style(14.0, 14.0), dots[0usize..d])
+    e += 1usize
+    let (groups, groups_error) = mem.alloc[widget.Node](a, 3usize)
+    if groups_error != ok { ret (zero, TooLarge) }
+    groups[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 2.0 }, style.defaults(), starts[0usize..s])
+    groups[1usize] = widget.spacer(0u64, 1.0)
+    groups[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 2.0 }, style.defaults(), ends[0usize..e])
+    var row_style = style.defaults()
+    row_style.height = style.Length { Percent: 100.0 }
+    row_style.width = style.Length { Percent: 100.0 }
+    let (row_node, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, row_style, groups[0usize..3usize])
+    var face = windows_flat(15790320u32)
+    face.height = style.Length { Px: 17.0 }
+    face.width = style.Length { Px: width }
+    let (face_node, face_error) = mem.alloc[widget.Node](a, 1usize)
+    if face_error != ok { ret (zero, TooLarge) }
+    face_node[0usize] = widget.box(0u64, face, row_node[0usize..1usize])
+    var outer = windows_flat(11316396u32)
+    outer.height = style.Length { Px: 18.0 }
+    outer.width = style.Length { Px: width }
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.padded(0u64, 0.0, 1.0, 0.0, 0.0, outer, face_node[0usize..1usize])
+    ret (framed[0usize], ok)
 }
