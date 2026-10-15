@@ -1,0 +1,638 @@
+{
+ "label": {
+  "name": "Label",
+  "delphi": "TcxLabel",
+  "neper": "control.text",
+  "app": "examples/looks/label.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/label.png",
+    "notes": "Audit 2 (round 9). label.png: structural 3,135 px outside text zones, 519 off by >2 (max 198: the link underline rows and the bold title rows; 1,289 incl. text zones). Ink boxes within 1 px on 6 of 10 real labels (widest miss the bold 13 px title, 4 px). The pressed link grab is identical to its rest grab, so no pressed look exists. Not matched: ink boxes beyond 1 px, underline row mismatches.",
+    "gaps": [
+     "Audit 2: 519 structural px off by >2 (max 198) in label.png, mainly the link underline rows and the bold title",
+     "Audit 2: 4 of 10 label ink boxes beyond 1 px (hinted GDI advances against unhinted ours)",
+     "Mismatch: text is grayscale and unhinted, the capture is hinted ClearType: no label is within 2 levels per channel on its glyph pixels; ink boxes off by 2 px on the hot-link, path and bold title labels",
+     "Mismatch: the centred 21 px product name sits 1 px low",
+     "Unverified: disabled label (#6D6D6D guess), hover (no capture possible), rotated labels, other backgrounds",
+     "The Options page title bars (bold white on grey gradient) are a panel, not a TcxLabel"
+    ]
+   }
+  }
+ },
+ "button": {
+  "name": "Button",
+  "delphi": "TcxButton",
+  "neper": "control.button",
+  "app": "examples/looks/button.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button.png",
+    "notes": "Audit 2 (round 9). Crisp-ring dialogs: button.png and button_shift.png 0 of 15,536 and 0 of 5,618 structural px off (max 0; rest, default, mnemonic, disabled, pressed, focus, default+focus, shift cells); button_kinds 78 px off, all in the picture boxes (artwork). HELD-OUT: the ring tiles are baked from Search and Filter (rest, default, disabled) and the pressed ring from Sort OK; the other pressed grabs were compared with the pressed cell (ring and dots, caption excluded): Search OK, Filter OK, Missing Set Cards OK, Conditional Formatting OK 0 px off; Search Cancel, Filter Clear and All, Sort Clear, Statistics Close 3 px each (caption edge, max 118); Advanced Filter OK and Open 371 and 381 px off (max 186: the ring phase differs, not reproduced). NOT matched: the resampled dialogs. The Options buttons in dialog_wide.png differ on all three rings by about 130 px per edge row (max 83), Deck Properties, Deck Legality and About likewise. A captured state in 5 of 11 dialogs is therefore off beyond tolerance.",
+    "gaps": [
+     "Audit 2: Options, Deck Properties, Deck Legality, About buttons (resampled ring) up to 83 levels off over about 130 px per edge row per button (dialog_wide.png)",
+     "Audit 2: Advanced Filter pressed OK and Open 371 and 381 px off (max 186) against the crisp pressed ring",
+     "Unverified: hover (face #F6F6F6): DevExpress reads the real pointer, no capture is possible",
+     "Unverified: focused non-default Cancel of Options only exists in the resampled form; keyboard focus on a default button (accent + dots) is matched on the 85x25 conditional formatting OK",
+     "Unverified: toggled-on face, split button, busy ring, plain button (no capture); the Deck Legality format toggle pressed is resampled",
+     "Pictures are drawn glyphs: the first rows of the picture differ from v3's bitmaps (artwork)",
+     "Text is grayscale and unhinted; the capture is ClearType",
+     "Dark and high-contrast palettes keep the old look with Windows metrics (no capture)"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "name": "Check box",
+  "delphi": "TcxCheckBox",
+  "neper": "control.checkbox",
+  "app": "examples/looks/checkbox_dialog.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/checkbox_states-vs-ref.png",
+    "notes": "Audit 2 (round 9). checkbox_states: 5,659 structural px outside text zones, 128 off (max 137); checkbox_dialog 2,601 / 115 (max 137). HELD-OUT check on the 14 x 14 box windows (tiles baked from Options Interface hide-splash rest and pressed, Grids show-foil rest, Morph use pressed): baked instances 0 to 2 per channel (0 px off); held-out instances do NOT reproduce: Show Filter Row rest 7 (46 px of 196), Use Morph rest and focus 6 (31 px), Show tooltips rest, pressed and focus 10 to 12 (47 px each): the whole 1 px box border is 6 to 12 levels off. Of the 13 cells, 7 are within 2 (the baked sources and focus cells reusing the baked rest tile) and 6 held-out cells are not.",
+    "gaps": [
+     "Audit 2: held-out check boxes (unchecked rest of Show Filter Row, checked rest and pressed of Use Morph and Show tooltips) have the box border 6 to 12 levels off over 31 to 47 px of the 14 x 14 box; the tiles do not generalise",
+     "Mismatch: caption right ends differ by up to 2 px (Use Morph effect, Show Foil Symbol) and the focus rectangle's right column follows: hinted GDI advances vs our unhinted ones",
+     "Mismatch: the focus rectangle's dot amplitude is per control in the captures (soft on check boxes, crisp on radios); the check box pattern is the average of the Options grabs, soft-pixel errors up to 40 levels",
+     "Mismatch: Show Foil Symbol's pressed grab shows no pressed face (only the focus rectangle); not compared",
+     "Unverified (no capture): hover, disabled, indeterminate (drawn from the Windows 11 conventions on the old model geometry, 13 x 13, not the baked bitmap)",
+     "Dark and high-contrast Windows palettes keep the drawn mark (the baked tables are the light theme)",
+     "Text is grayscale; the captures' ClearType fringes are not reproduced"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "name": "Radio button",
+  "delphi": "TcxRadioButton",
+  "neper": "control.radio",
+  "app": "examples/looks/radio_dialog.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_states-vs-ref.png",
+    "notes": "Audit 2 (round 9). radio_states: 11,084 structural, 630 off (max 156); radio_dialog 39,072 / 13 (max 109). HELD-OUT on the 13 x 14 disc windows (tiles baked from Missing Set Cards Available and Missing rest and pressed): baked cells 0 px off; the Filter dialog's Blocks and Formats discs (page #F9F9F9) 13 levels over 28 px; the focused Missing Only and Search discs 9 levels over 45 to 49 px. 2 of 8 disc cells baked, 6 held-out, none within 2.",
+    "gaps": [
+     "Audit 2: held-out discs (Filter dialog Blocks and Formats, focused radios) 9 to 13 levels off on 28 to 49 px of the disc window",
+     "Mismatch: caption right ends 0 to 2 px (hinted advances), the focus rectangle's right column follows",
+     "Mismatch: the focused grabs of the Filter radios show the disc in its pressed look (a stale press), so only Missing Only has a compared focus cell",
+     "Unverified (no capture): hover, disabled",
+     "Dark and high-contrast Windows palettes keep the drawn disc",
+     "Text is grayscale"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "name": "Radio group",
+  "delphi": "TcxRadioGroup",
+  "neper": "control.radio_group",
+  "app": "examples/looks/radio_group_dialog.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_group_states-vs-ref.png",
+    "notes": "Audit 2 (round 9). radio_group_states: 13,881 structural, 2,232 off (max 227; about 1,350 px are 11 levels of the neighbouring frame crop); radio_group_dialog 24,860 / 26 (max 227). Discs: baked Search group 0 px, Options group discs 24 to 28 px off (13 levels), the pressed Options discs up to 41 levels over 29 to 33 px (held-out instances).",
+    "gaps": [
+     "Audit 2: Options-page radio group discs (rest and pressed) 13 to 41 levels off on 24 to 33 px each",
+     "Audit 2: group crops carry 1 px of the neighbouring frame (11 levels), not drawn",
+     "Mismatch: the long item captions with quotes end 3 to 8 px right of the capture (Search from start (typing \"War\" ...)), the others within 1 px",
+     "Mismatch: radio_group_states crops include 1 px of the neighbouring group's frame (13 levels), not drawn by the item",
+     "Mismatch: the focus rectangle's right column follows our text width",
+     "Unverified: focused radio group items (the focused grabs show stale pressed discs)",
+     "Unverified (no capture): hover, disabled",
+     "Text is grayscale"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "name": "Text edit",
+  "delphi": "TcxTextEdit",
+  "neper": "control.text_field",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Audit 2 (round 9). Unchanged status. No TcxTextEdit is captured on an Options page, but the Filter dialog's Cards tab (states/tab-selected-filter-cards) shows the NOT single-line box (313 x 25) and the AND and OR boxes at 100 %; ours was not compared against them. The shared frame is matched through the mask, spin and button edits (edits_dialog 1 of 39,855 structural px off).",
+    "gaps": [
+     "Audit 2: a real instance exists (Filter, Cards tab, NOT box, rest): not compared yet",
+     "Audit 2: the frame is only verified through other edit kinds",
+     "Hover (face, button, arrow tints) is unverified: DevExpress reads the real pointer, so it cannot be captured; drawn as rest on a #F9F9F9 face (guess)",
+     "Read-only draws like rest (not captured)",
+     "Invalid has no v3 look: a 1 px error outline over rest is a guess",
+     "Selection starts 1 px left of the capture's (x 3 vs 4); caret and highlight rows match (4..15)",
+     "Rim column 1 and the foot corner pixels drift with the control's x as well (3 to 9 levels at x 406); not modelled",
+     "WindowsDark reuses the light chrome pixels (no dark capture)",
+     "Text is grayscale-antialiased where v3 is ClearType: ink rows and extents agree (row profiles within 10 %, x centroid within 0.5 px) but pixels do not",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "name": "Spin edit",
+  "delphi": "TcxSpinEdit",
+  "neper": "control.spin_box",
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "Audit 2 (round 9). MATCHED. edits_dialog.png 1 of 39,855 structural px off (max 18); edits_states.png: fast-button spin focused 0 off (max 1), stacked spin focused 4 off (max 3); digit ink boxes within 0 px on all 3 spins. The four arrow-pressed grabs (up, down, left, right) equal the focused grab except for the digits, so a pressed arrow IS the focused look, as drawn. HELD-OUT: tiles are baked from Decks (kind 1) and Morph speed (kind 2) and the y-drift model is fitted over 8 rest and 5 focus instances; leave-one-out on the 5 drift rows: max 1 level, 0 of 195 predictions beyond 2; the second Morph spin (y 169, not the tile source) is 0 px off in edits_dialog. Unverified (uncaptured): hover of the arrows, disabled, read-only, limit-greyed arrows.",
+    "gaps": [
+     "Audit 2: only 3 spin instances exist in the captures (all baked or fitted); the stacked-arrow tile compared on the second Morph instance without the slope table is 12 levels off on 86 px, the shipped slope table covers it",
+     "Audit 2: left rim corner pixels drift 5 to 6 levels with y on 3 px per instance (rows 19 to 21)",
+     "Hover (face, button, arrow tints) is unverified: DevExpress reads the real pointer, so it cannot be captured; drawn as rest on a #F9F9F9 face (guess)",
+     "Read-only draws like rest (not captured)",
+     "Invalid has no v3 look: a 1 px error outline over rest is a guess",
+     "Selection starts 1 px left of the capture's (x 3 vs 4); caret and highlight rows match (4..15)",
+     "Rim column 1 and the foot corner pixels drift with the control's x as well (3 to 9 levels at x 406); not modelled",
+     "WindowsDark reuses the light chrome pixels (no dark capture)",
+     "Text is grayscale-antialiased where v3 is ClearType: ink rows and extents agree (row profiles within 10 %, x centroid within 0.5 px) but pixels do not",
+     "Arrow hover is unverified; an arrow that cannot step is greyed (guess, not captured)",
+     "Disabled spin: rest chrome with dimmed arrows (guess)",
+     "The fast buttons step by 10 (DevExpress LargeIncrement default); not a look item"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "name": "Combo box",
+  "delphi": "TcxComboBox",
+  "neper": "control.combo_box",
+  "app": "examples/looks/combo_box.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_open_size2.png",
+    "notes": "Audit 2 (round 9). Rest, focus, flat and pick: combo_box_dialog 20,272 structural, 26 off (text), combo_box_focus 26 off (max 70), combo_box_pick 10, combo_box_search_held 0, combo_box_edit 14 (max 255: caret only in ours). NOT within tolerance: open heads: combo_box_open_color 7,696 and open_size 7,794 px off (7,687 and 7,742 of them the head face, #CCE4F7 against the first-grab #D0E6F7, 4 levels, over 396 x 22 to 38), the second-grab sheets combo_box_open_color2 1,583 and open_size2 473, combo_box_open_show 479 (list scroll column 293 px, max 255), combo_box_held 1,571 (held ring, max 69), combo_box_flat 632 (max 51; the ref is only found at offset 153,37).",
+    "gaps": [
+     "Audit 2: open head face 4 levels off over about 7,700 px in the first-grab sheets (open_color, open_size)",
+     "Audit 2: combo_box_open_show list scroll column 293 px off (max 255); combo_box_held 1,571 px (max 69)",
+     "Unverified (no capture): hover of the head and of a list row (DevExpress reads the real pointer), disabled, invalid, empty hint",
+     "Mismatch: first-grab open head face is #D0E6F7 (the theme fades in to #CCE4F7); ours is the steady #CCE4F7, so the three first-grab open heads differ over the whole face (8000 px by 4 levels)",
+     "Mismatch: Row Color / Card Art / Condition popup grabs lack the right column and bottom row of the border (Font Size / Authentication / Show grabs have them); ours draws the frame as in the complete grabs",
+     "Mismatch: options-dialog focus grab (combo_box_focus) smears the dotted rect (values 141/205 instead of 85/170), unlike the Conditional Formatting one that is crisp; not reproduced",
+     "Mismatch: scroll thumb drawn at the top only (scroll offset is not read); thumb length derived (21 rows assumed)",
+     "Mismatch: popup text 1 px right/low on some rows and Tahoma advance widths differ by 1-3 px on long strings (unhinted)",
+     "Mismatch: AA corner pixels of the head frame up to 90 levels (corner tables are measured at one position)",
+     "Mismatch: editable combo open/pressed list placement (popup top assumed at the head's bottom edge: no capture holds the popup's screen position)",
+     "Guess: ring coverage of the open head at other window positions is the y/x drift of the rest frame, not measured"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "name": "Image combo box",
+  "delphi": "TcxImageComboBox",
+  "neper": "control.image_select",
+  "gap": "No per-item image in Neper's combo box rows; control.image_select adds it for the Windows look and is the plain select under the others",
+  "app": "examples/looks/image_combo_box.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image_combo_box_open_condition.png",
+    "notes": "Audit 2 (round 9). Closed heads: image_combo_box_dialog 16,928 structural, 41 off (max 68). Open lists: image_combo_box_open_art 2,784 off (2,744 the head face), open_auth 622 (max 116), open_auth2 86 (max 219), open_condition 6,640 (6,596 the open head face, 4 levels), open_condition2 6,076 (6,047 at the head ring, max 240).",
+    "gaps": [
+     "Audit 2: open head face 4 levels off over 2,744 to 6,596 px in 4 grabs",
+     "Audit 2: open_condition2 head ring 6,047 px off (max 240)",
+     "Unverified (no capture): hover, disabled, focus of the head, open list of an editable image combo",
+     "Mismatch: the Sort Order in-place editor list (image-combo-box-open-list-sort) has a #F0F0F0 face and 18 px picture rows; not built (a grid-cell editor variant)",
+     "Mismatch: Condition / Card Art popup grabs lack the right column and bottom row of the frame",
+     "Mismatch: first-grab open head face #D0E6F7 (fading) against our steady #CCE4F7",
+     "Mismatch: pictures are drawn glyphs standing in for v3's bitmaps"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "name": "Date edit",
+  "delphi": "TcxDateEdit",
+  "neper": "control.picker",
+  "app": "examples/looks/date_edit.e",
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Audit 2 (round 9). Unchanged: no date edit exists in any v3 capture (states README: not present).",
+    "gaps": [
+     "Audit 2: nothing to compare",
+     "No capture: every state is unverified"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "name": "Mask edit",
+  "delphi": "TcxMaskEdit",
+  "neper": "control.formatted_field",
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "Audit 2 (round 9). MATCHED. Rest: edits_dialog.png mask cell 0 of 14,000 structural px off (max 1); focused: edits_states.png 24 px off, all the caret column (ref #282828 fading, ours #000000, 6 x 16 px, blink phase). HELD-OUT: the y-drift model (rest and focus, rows 0, 1, 19, 20, 21) leave-one-out over 8 rest and 5 focus captures: max error 1, 0 of 195 beyond 2; the rim tiles baked from Passwords y 144 compared with the y 89 and y 198 mask instances: 3 px beyond 2 per instance (max 6, the drifting row 20 corner, covered by the shipped per-cell slope table); the three mask edits are the only mask instances captured, so no instance exists that was neither baked nor fitted. Unverified (uncaptured): typed text and bullets, hover, invalid, read-only, disabled.",
+    "gaps": [
+     "Audit 2: caret colour and phase 40 levels on 6 x 16 px (blink)",
+     "Audit 2: 3 mask instances captured, all used in the fit; leave-one-out only for the drift model",
+     "Hover (face, button, arrow tints) is unverified: DevExpress reads the real pointer, so it cannot be captured; drawn as rest on a #F9F9F9 face (guess)",
+     "Read-only draws like rest (not captured)",
+     "Invalid has no v3 look: a 1 px error outline over rest is a guess",
+     "Selection starts 1 px left of the capture's (x 3 vs 4); caret and highlight rows match (4..15)",
+     "Rim column 1 and the foot corner pixels drift with the control's x as well (3 to 9 levels at x 406); not modelled",
+     "WindowsDark reuses the light chrome pixels (no dark capture)",
+     "Text is grayscale-antialiased where v3 is ClearType: ink rows and extents agree (row profiles within 10 %, x centroid within 0.5 px) but pixels do not",
+     "Typing, masks and echo are not captured (echo shows asterisks, v3 shows bullets)"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "name": "Memo",
+  "delphi": "TcxMemo",
+  "neper": "control.text_area",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/memo.png",
+    "notes": "Audit 2 (round 9). Raised from started: the round 4 claim 'no memo capture at 100 %' is wrong. states/tab-selected-filter-cards shows the Search for Text AND and OR boxes (313 x 45) and the NOT box (313 x 25), empty, at rest, 100 %, on the #F9F9F9 page. Our rest memo is not within tolerance of them: foot rows 172 and 210 in the capture against 179 and 197 in ours, left rim 236 and 254 against 244, 249, 253 (up to 13 levels). Not compared further (our sheet draws other sizes and text).",
+    "gaps": [
+     "Audit 2: a rest capture exists (Filter, Cards tab, AND, OR, NOT), ours up to 13 levels off on the foot and rim rows",
+     "Audit 2: focused, text and scrolled states have no capture",
+     "Foot drift for a tall control assumed to follow its bottom edge",
+     "Scrollbar is the Neper scroll thumb overlay",
+     "Hover (face, button, arrow tints) is unverified: DevExpress reads the real pointer, so it cannot be captured; drawn as rest on a #F9F9F9 face (guess)",
+     "Read-only draws like rest (not captured)",
+     "Invalid has no v3 look: a 1 px error outline over rest is a guess"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "name": "Button edit",
+  "delphi": "TcxButtonEdit",
+  "neper": "control.button_edit",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Audit 2 (round 9). Demoted from matched. edits_dialog.png: the My Decks cell 0 of 10,332 structural px off, Card Art 1 off (max 18) but the Card Art path ink box ends 2 px short (x 288 against 286, bottom 1 px): beyond the 1 px rule. edits_states.png: focused 1 off (max 84), disabled 12 (max 73, text), text selected 485 px (glyph pixels in the highlight; the selection starts 1 px left of the capture's), ellipsis pressed 1,244 px off (the capture has the text selected, ours does not: the Press drive does not select it). Remaining: path ink -2 px, selection start 1 px, selected text missing in the pressed cell.",
+    "gaps": [
+     "Audit 2: Card Art path text ink right end 2 px short (hinted advances)",
+     "Audit 2: ellipsis-pressed cell lacks the selection (1,244 px), selection starts 1 px early (x 3 vs 4)",
+     "Hover (face, button, arrow tints) is unverified: DevExpress reads the real pointer, so it cannot be captured; drawn as rest on a #F9F9F9 face (guess)",
+     "Read-only draws like rest (not captured)",
+     "Invalid has no v3 look: a 1 px error outline over rest is a guess",
+     "Selection starts 1 px left of the capture's (x 3 vs 4); caret and highlight rows match (4..15)",
+     "Rim column 1 and the foot corner pixels drift with the control's x as well (3 to 9 levels at x 406); not modelled",
+     "WindowsDark reuses the light chrome pixels (no dark capture)",
+     "Text is grayscale-antialiased where v3 is ClearType: ink rows and extents agree (row profiles within 10 %, x centroid within 0.5 px) but pixels do not",
+     "Ellipsis hover is unverified",
+     "The focused pressed ellipsis was captured with the text selected; our Press drive does not select the text (text not compared)"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "name": "Token edit",
+  "delphi": "TdxTokenEdit",
+  "neper": "control.token_field",
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/token_edit.png",
+    "notes": "Audit 2 (round 9). Unchanged: no token edit exists in any capture (the Filter Cards tab shows none).",
+    "gaps": [
+     "Audit 2: nothing to compare",
+     "No capture: every state is unverified"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "name": "Check list box",
+  "delphi": "TcxCheckListBox",
+  "neper": "control.multi_select_list",
+  "app": "examples/looks/check_list_box_dialog.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/check_list_box_states-vs-ref.png",
+    "notes": "Audit 2 (round 9). check_list_box_dialog 47,808 structural, 1,684 off (max 251; a 193 x 18 band of 902 px at y 12, a 477 x 20 band of 610 px); check_list_box_states 135,460 / 8,202 off (max 249; two 501 x 9 row strips of 1,292 and 1,260 px at y 451 and 571, 240 levels). The check marks use the baked check box tiles.",
+    "gaps": [
+     "Audit 2: row bands off over 8,202 px in check_list_box_states (highlight and row strips, max 249)",
+     "Mismatch: text right ends 0 to 2 px (hinted advances) and text rows differ in ink",
+     "Mismatch: the Card Art list has a 16 px image per row (18 unit rows, mark after the image); not supported",
+     "Unverified (no capture): unchecked rows (they use the unchecked baked mark, never seen in a list), disabled, hover",
+     "Mismatch: the scroll bar of an overflowing list has no Windows look (hidden in the Rules grab)",
+     "Edge corner pixels (#B6B9BD, #C4C6CA) are not drawn",
+     "Text is grayscale"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "name": "Progress bar",
+  "delphi": "TcxProgressBar",
+  "neper": "control.progress_bar",
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Audit 2 (round 9). Unchanged: no progress bar is visible in any capture (the three report preview frames show none).",
+    "gaps": [
+     "Audit 2: nothing to compare",
+     "Mismatch: no reference exists; track and #06B025 fill are guesses",
+     "Unverified (no capture): every state"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "name": "Group box",
+  "delphi": "TcxGroupBox",
+  "neper": "control.group_box",
+  "app": "examples/looks/group_box_dialog.e",
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "Audit 2 (round 9). MATCHED. group_box_dialog.png: 49,589 structural px, 26 off (max 83, text stems); per cell: header 11, the three TcxGroupBox frames 5 each (glyph pixels); frame lines 0 off. Caption ink boxes 0 to 1 px on all 4 (Select Format, Show Cards, Search in, Incremental Search) and the header. The painter is analytic (fractional extents fitted to the captures: Select Format needs a measured 0.4 px), not baked tiles; 3 of the 7 TcxGroupBox instances (Statistics, the other Filter groups) are not in the sheet and so unverified. Unverified (uncaptured): disabled caption, focus, collapsible variants.",
+    "gaps": [
+     "Audit 2: 3 of 7 TcxGroupBox instances (Statistics, Filter groups) not rendered, so not compared",
+     "Audit 2: the Select Format right line uses a fitted 0.4 px offset, a per-instance fit",
+     "Mismatch: the header's 16 px page icon (an image list entry) is artwork and not drawn",
+     "Unverified (no capture): disabled caption colour, focus, hover; a group box has none in any dialog",
+     "TcxGroupBox variants not visible in the captures (Search for Text, Additional on the Filter dialog) are not compared",
+     "Collapsible group and invalid message keep the Neper look",
+     "Text is grayscale"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "name": "Page control (tabs)",
+  "delphi": "TcxPageControl",
+  "neper": "control.tabs",
+  "app": "examples/looks/page_control.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control_cards-vs-ref.png",
+    "notes": "Audit 2 (round 9). Strips: about 139 off (max 69), cards 257 (max 65), custom 81 (max 10), filter 165 (max 242), options 198 (max 228), held 188 (max 65), stats 89 (max 155); the 11 Statistics tab states 507 to 563 off each (max 255; the substitute pictures meet the tabs); page_control_bottom 2,377 off of 3,692 (the live bottom strip is not reproduced, max 255).",
+    "gaps": [
+     "Audit 2: Statistics strips 507 to 563 px off each (pictures are substitutes), bottom tabs 2,377 px off",
+     "Unverified (no capture): hover tab, disabled tab, scroll buttons, bottom tabs live capture",
+     "Mismatch: tab widths follow our unhinted Tahoma advance: 'Blocks / Formats / Editions' 142 against 140, 'Cards' 38 against 40",
+     "Mismatch: mnemonic underlines (Cards, Options, Colors...) are not drawn",
+     "Mismatch: Statistics pictures are drawn glyphs, not v3's bitmaps",
+     "Mismatch: Statistics (ultra flat) strip ring up to 240 where the substitute pictures meet the tab edges",
+     "Mismatch: the Filter tab strip's Options-chosen right closing edge differs by 162 on a few px"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "name": "Splitter",
+  "delphi": "TcxSplitter",
+  "neper": "control.split_view",
+  "app": "examples/looks/splitter.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/splitter_dialog-vs-ref.png",
+    "notes": "Audit 2 (round 9). splitter_dialog: the 8 x 387 strip is exact (columns 18 to 25: 0 off; the 972 px reported at columns 12 to 17 are the sheet's #F9F9F9 backdrop against the ref's #F0F0F0 neighbour crop, max 9); the held (pressed) grabs equal rest. splitter_live: 640 structural, 163 off (max 74): zone frame and top edge differ (#ADADAD against ours #A0A0A0).",
+    "gaps": [
+     "Audit 2: live main-window splitter frames 163 px off (max 74)",
+     "Unverified (no capture): hover, drag, keyboard focus (the hover tint of the hot zone stays a guess)",
+     "Mismatch: the live main-window splitters (ref/windows/splitter_live*.png) have a #ADADAD zone frame (ours #A0A0A0) and a lighter top edge; their crops include the neighbouring grid borders, ours do not",
+     "Guess: the first-row #F3F3F3 is applied to the lying strip too (only the upright one was measured)"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "name": "Status bar",
+  "delphi": "TdxStatusBar",
+  "neper": "navigation.status_bar",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/status_bar.png",
+    "notes": "Audit 2 (round 9). Demoted from matched. Chrome: status_bar 5,236 structural px, 2 off (max 3); status_bar_report 7,718 / 3 off (max 81, one separator end pixel). Text ink boxes (threshold 140): the main bar's counts string x 10..269 against 10..270, top 1 px low, Idle 1 px right; the report bar's 'Page 1 of 1' x 2..54 against 3..57 (right end 3 px short, left 1 px): beyond the 1 px rule. Unverified: hover, hint windows, the progress panel.",
+    "gaps": [
+     "Audit 2: report bar text right end 3 px short (hinted GDI advances not applied to that run)",
+     "Hover and hint windows of panels cannot be captured (cxHint and the bar read the real pointer): the hover colour of a pressable panel is a guess",
+     "Progress container panel (grey track, #06B025 fill) is a guess: the capture shows it empty (the TcxProgressBar is hidden)",
+     "Panel widths come from the caller (item.panel_width / fills); a narrow bar clips the last panel instead of eliding",
+     "Dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "name": "Toolbar button",
+  "delphi": "TdxBarButton",
+  "neper": "control.glyph_button",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toolbar_button.png",
+    "notes": "Audit 2 (round 9). toolbar_button: 6,369 structural px, 233 off (max 45): the first rows of separators and grips, the second bar's left edge and right edge column, plus 57 px in one 21 x 19 picture box (pictures are artwork). No hot, pressed or checked capture exists.",
+    "gaps": [
+     "Audit 2: 233 px off (max 45): separator first rows, bar edges, picture boxes",
+     "Pictures: v3's pale bitmaps (disabled) and coloured ones (enabled) against drawn single-colour glyphs, every picture pixel differs",
+     "Hover, pressed, checked colours (light blues) and the captioned button are guesses: toolbar states could not be captured",
+     "First row of separators and grips (y 1 fade), the second bar's left lines (x 219..225) and its right edge column are 5..49 levels off on about 60 px",
+     "No keyboard focus look (DX bars are not focusable); dropdown arrow button and customisation handle not drawn",
+     "Button height 22 is a guess (the capture shows only the 16 px picture)",
+     "Dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "name": "Menu bar",
+  "delphi": "TdxBarManager (main menu)",
+  "neper": "navigation.menu_bar",
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "Audit 2 (round 9). MATCHED (upgraded from review). All 11 captures (rest, 9 open titles, hot View): structural off 30 px of about 7,100 per sheet (max 105, glyph pixels; 27 to 49 per sheet); all non-text pixels 5 to 32 beyond 2 of 16,260 per sheet, max 3 (rest), 16 (open Help), 8 (hot View): the 1 px drifting sliver right of an open or hot box and the grey drift of later titles' top rows. Title ink boxes: 10 of 10 titles within 1 px (left 0, right 0 or 1) on rest, open View and open Help, 7 of 7 on hot View. The box greys are drawn from rules, not baked tiles. Unverified (uncaptured): hover (the hot grab is a resting pointer, not a controlled hover), disabled title, Alt focus, Admin open state.",
+    "gaps": [
+     "Audit 2: soft sliver column right of open and hot boxes and top-row grey drift up to 16 levels on 25 px per title (not structural)",
+     "Hot (hover) is evidence from a rest grab where the pointer rested on View, not a controlled hover; no pressed-but-closed state exists (a press opens the menu)",
+     "Disabled title and keyboard-focus (Alt) look: no capture",
+     "Text glyph pixels differ (ClearType, hinted vs grey, unhinted); advances and ink boxes match",
+     "Admin title has no open-state capture (the box is drawn by the same rule)",
+     "Dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "name": "Popup menu",
+  "delphi": "TdxBarPopupMenu",
+  "neper": "overlay.menu",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Audit 2 (round 9). Demoted from matched on the text rule only. Chrome over the 36 single-menu refs (picture slot x<26 excluded as artwork): 418,502 structural px; the 11 rest menus 27 off of 98,037 (max 102), the 25 selected-row and sub-menu refs 1,400 off (max 253), glyph pixels of the rows; 2 refs with 0 off; frames, fills, separators, highlight bars and header rules flat-exact. Text ink x extents (my band test): thr 100 (dark rows) 405 of 429 row bands within 1 px at both ends (94 %), thr 40 (incl. disabled rows) 528 of 571 (92 %); the other 6 to 8 % have a label or shortcut end 2 to 3 px off. popup_menu_dialog (composite) 44,262 / 748 off (max 255, the cells' pictures). The width rule and the dither flags come from the same 10 captures: no held-out menu exists. Unverified: hover, scrolling, disabled checked marks, submenu placement.",
+    "gaps": [
+     "Audit 2: about 7 % of text row bands have an ink end 2 to 3 px off (hinted GDI advances, mostly disabled rows)",
+     "Audit 2: the width rule and per-menu dither flags come from the ten captures themselves, no held-out menu",
+     "Hover with the real pointer: DevExpress reads GetCursorPos, so only the keyboard-selected row (identical blue per the grab notes) is captured; the hovered look itself is unverified",
+     "Sub-menu placement relative to its parent (offset -2, -3) is a guess: each capture is one window alone, so the parent and its sub-menu were compared separately",
+     "Row pictures: drawn glyph stand-ins, v3 draws coloured bitmaps (disabled: pale), every picture pixel differs",
+     "Scroll arrows: only the bottom one of a clipped menu is drawn (View at rest); the top arrow and scrolling are not",
+     "Checked slot dither phase is a per-menu flag taken from each capture (v3's follows the window's screen position)",
+     "The grid's own popup (cxGrid header and cell menus: Segoe UI, flat border, 22 px rows) is not branched",
+     "Disabled checked mark / radio dot ink and radio rows have no capture; dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "name": "Hint (tooltip)",
+  "delphi": "TcxHintStyleController",
+  "neper": "overlay.tooltip",
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/hint.png",
+    "notes": "Audit 2 (round 9). Unchanged: no tooltip can be captured.",
+    "gaps": [
+     "Audit 2: nothing to compare",
+     "Mismatch: no reference exists",
+     "Unverified (no capture): every state"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "name": "Scroll bar",
+  "delphi": "TcxScrollBar",
+  "neper": "widget.scrollbar",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar_states.png",
+    "notes": "Audit 2 (round 9). scroll_bar_live: 2,326 structural, 574 off (max 240; 478 px of a 24 x 118 block, the live bar's track and arrows against our sheet's: the ref is only found at offset 111,44). The thumb blocks of scroll_bar_states (workers: body 0 off, caps up to 77) were not re-extracted; the arrows and track of the live bar remain off.",
+    "gaps": [
+     "Audit 2: live vertical bar 574 px off (max 240): track and arrows differ",
+     "Mismatch: the rounded end caps of the vertical thumbs differ by up to 77 levels on 3 rows at each end",
+     "Mismatch: the data grid's own copy of the bar (collection.e) starts at its header, the capture's bar starts at the grid's top above the group box",
+     "Unverified (no capture): hover (6 px thumb and arrows are guesses), disabled, thumb length and position rules for other content sizes"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "name": "List box",
+  "delphi": "TcxListBox",
+  "neper": "control.list_box",
+  "app": "examples/looks/list_box.e",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/list_box_focus-vs-ref.png",
+    "notes": "Audit 2 (round 9). list_box_dialog 20,682 structural, 57 off (max 164); list_box_blur 21,506 / 157 (max 69; a 155 x 7 line strip, 149 px, 35 levels); list_box_focus 20,739 / 223 (max 228; the focus rectangle dots).",
+    "gaps": [
+     "Audit 2: list_box_blur and list_box_focus line strip 149 px 35 levels off; focus rectangle dots up to 228 levels on 6 px",
+     "Unverified (no capture): hover, disabled, multi-select, scrolling (the grab list has no scroll)",
+     "Mismatch: the first row of the unfocused grab has a #DCDCDC line at y 1 that we do not draw",
+     "Mismatch: the focused-row dots in the grab fade 84 to 109 along the perimeter; ours is a flat #555555",
+     "Mismatch: focused grab: chosen row is a different row than our harness taps in some cells (row 2 chosen; list_box_focus reproduces it)"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "name": "Tree list",
+  "delphi": "TcxTreeList",
+  "neper": "tree_adapter",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list.png",
+    "notes": "Audit 2 (round 9). tree_list 56,784 structural, 6,397 off (max 231; the 302 x 319 area is about 1 px out of phase at the best offset: row pitch), tree_list_check 15,666 / 1,528, tree_list_focus 15,761 / 1,560 (max 251), tree_list_rules 4,987 / 628 (max 226). By the flat-pixel measure the workers use: 789 of 63,382, 238 of 16,585, 228 of 16,596, 40 of 162,503. HELD-OUT: the marks are cut from the Filter dialog captures; the Rules Manager list (not a source) has 40 flat px off, passes.",
+    "gaps": [
+     "Audit 2: 1,500 to 6,400 px off by >2 per sheet (about 1 px row phase)",
+     "Mismatch: text anti-aliasing (ClearType against our grey scale) on every caption; ink boxes within 1 px",
+     "Mismatch: the dotted tree guide line (x = 7) between plus boxes is not drawn",
+     "Mismatch: expander-pressed capture (states/tree-list-expander-pressed-filter): the opened Core Sets branch (child rows with icons) is not reproduced",
+     "Unverified (no capture): hover, disabled, the cream selection with a dotted rectangle on another row, tree scroll bar track (the pressed thumb capture is covered under scroll_bar)"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "name": "Vertical grid (property grid)",
+  "delphi": "TcxVerticalGrid",
+  "neper": "collection.property_grid",
+  "gap": "",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Audit 2 (round 9). vertical_grid 53,085 structural, 4,546 off (max 255; 3,759 px the lower half, pictures and bars); vertical_grid_states 481,550 / 29,310 off (max 255; two 328 x 130 blocks of 6,691 and 3,759 px: the Computed rows and the pressed General category).",
+    "gaps": [
+     "Audit 2: 29,310 px off in vertical_grid_states (lower block, category focus rectangle)",
+     "Mismatch: General pressed: the dotted focus rectangle round the category caption is not drawn",
+     "Mismatch: the Computed category's picture, bar and multi-cell rows (Land/Creature/Spell icons, colour discs, the Strategy bar, the Legality tags) are artwork; plain text rows stand in",
+     "Mismatch: the File Name value differs from the state grabs (they show a path under D:/Temp/claude/v3run/Probe...)",
+     "Unverified (no capture): hover, an open combo editor's drop button (the Archetype grab shows none at rest), disabled, read-only rows"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "name": "Data grid",
+  "delphi": "TcxGrid",
+  "neper": "datagrid (own Look: gridlook.v3())",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "Audit 2 (round 9). data_grid_main 141,232 structural, 16,026 off (max 250; 10,677 px in the upper 497 x 421 block, 3,965 in the lower grid), data_grid_states 61,469 / 12,470 (max 224), data_grid_states_pressed 7,217 / 1,050 (max 240), data_grid_dialogs_sort 52,782 / 8,925 (max 240). By the flat-pixel measure the workers use: 3,590 of 135,231, 881 of 57,344, 1,432 of 56,765. The pixel glyphs (sort marks, funnel, arrows, navigator) are cut from data_grid_main itself; the held-out Sort dialog grid shows the same glyph kinds with 1,432 flat px off.",
+    "gaps": [
+     "Audit 2: 8,925 to 16,026 px off per sheet by the line-inclusive structural measure (about 1 px phase of the line runs)",
+     "Mismatch: text anti-aliasing (v3 ClearType, hinted Tahoma; ours grey, unhinted): interior text pixels never within 2 levels, ink boxes within about 1 px",
+     "Mismatch: card pictures, the row icons (discs stand in for the orange card-back and the black ninja), the backdrop picture behind the collection rows and the sort-order icons of the Sort dialog are artwork not in this repo",
+     "Mismatch: the vertical bar's thumb starts 35 px lower than the capture's (the capture's bar spans the group box, ours the table); its length follows our row count",
+     "Mismatch: frame inner ring is one colour (#C6C8CC); the capture varies it per side (#EAEAEC left, #C6C8CC top, #BFC2C6 bottom)",
+     "Mismatch: the group row focus rectangle is square (the capture's corners are rounded), the first group row's top lines are overpainted by it",
+     "Mismatch: minus (open) group expander box, enabled First/Previous bitmaps (mirror images of the captured Next buttons) and the disabled Next/Last bitmaps (mirrors of the disabled First/Previous) are not captured",
+     "Mismatch: footer cell edge pixels (a 1 px blend and border ring round each summary cell) are drawn as a plain cell",
+     "Unverified (no capture): hover of cells, rows, headers and navigator buttons; the unfocused selected row (our #D5E4EE with a near-black line comes from a 150 % capture; the 100 % grab shows the focused look); edit mode; disabled; sort and filter popups; the filter button of a hot unsorted header on hover (captured only while pressed)",
+     "Unverified at 150 %: the 100 % bitmaps are drawn pixel for pixel scaled by the harness, v3 is DPI unaware"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "name": "Dialog (form chrome)",
+  "delphi": "TForm / TcxButton row",
+  "neper": "overlay.dialog",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog.png",
+    "notes": "Audit 2 (round 9). title_bar.png 126,036 structural px, 1,293 off (max 222; 498 px the long main-window caption text, 379 the second caption); the dialog bodies of dialog.png and dialog_wide.png are not composed (blank), so only chrome is judged. The Options, About and Deck Properties buttons are the resampled ring (see button).",
+    "gaps": [
+     "Audit 2: 1,293 px off in title_bar.png (caption text)",
+     "Mismatch: title text is grayscale and unhinted, ClearType in the capture: title ink boxes within 1 px on dialogs, 2 px wider on the long main window title",
+     "Mismatch: buttons of About, Options and Deck Properties are the resampled ring (see button): up to 70 levels at the ring",
+     "Unverified: caption button hover and pressed (WM_NCLBUTTONDOWN not tried: the system loop watches the real pointer), maximised restore glyph, disabled glyph dim level",
+     "Dialog content (combo, radio group, grid, page control...) is left blank in the sheets: other controls; the message box has no capture",
+     "Each dialog's face colour is its own (the Filter dialog is #F9F9F9, the others #F0F0F0): not modelled",
+     "The capture is square cornered without DWM border or shadow; overlay.dialog still centres a fixed 420 px card (guess)"
+    ]
+   }
+  }
+ }
+}

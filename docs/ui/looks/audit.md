@@ -36,3 +36,57 @@ Independent recompute: fresh `scripts/render_looks_all.sh` (every committed PNG 
 | dialog | review | dialog, dialog_wide, title_bar: structural px 917057, off by >2: 292733, max err 240; title bars: 882 of 81750 structural px off, max 217 (title text, close glyph); dialog.png bodies: 42% px off because the sheet does not compose the body contents | title bars and buttons of 6+ dialogs; dialog bodies are app content | focus, inactive caption, resize, disabled |
 
 Counts: matched 1, ready 0, review 24, started 5.
+
+
+# Audit 2, Windows look after round 4, 2026-10-16
+
+Independent recompute against the fresh renders of `scripts/render_looks_all.sh` (every PNG reproduces) and the live 100 % grabs in `ref/windows/states` and `ref/windows/dialogs`. Method: each ref composite (`docs/ui/looks/ref/windows/*.png`) is diffed with PIL against our sheet of the same name (offset 0 when the sizes agree, else the offset that minimises the diff, usually 12,32 or 16,35). Structural pixel = a ref pixel inside the content of the ref (background and our sheet labels excluded) that is flat (all 4 neighbours equal) or in a straight run of 11 or more equal pixels; ClearType fringe zones (coloured fringes on a neutral ground, dilated 3 px) are left out of the main count and listed as 'incl. text zones'. 'off' counts structural pixels differing by more than 2 on any channel. Picture slots and artwork (popup picture column, button pictures, row icons) are excluded. Text ink boxes were checked with my own band and bbox tests. Hover is not capturable, so no control can be ready: ready 0.
+
+**Counts: matched 4, ready 0, review 22, started 4** (round 4 claims were matched 7, review 18 on the sheet, started 5). Changes against the workers: button, button_edit, status_bar, popup_menu demoted to review; menu_bar upgraded to matched; memo raised from started to review (a real rest capture exists).
+
+**Baked tiles and held-out instances.** The Windows look uses pixel tiles cut from the very captures it is compared with. Instances baked and held out:
+
+| Tiles | Baked from | Held-out check | Result |
+|---|---|---|---|
+| winbutton.e rings | rest, default, disabled from Search and Filter; pressed from Sort OK; dots from Filter Invert and Sort OK (4 dialogs) | the other pressed grabs (11 more, ring and dots, caption excluded) | 9 reproduce (0 px off, or 3 caption-edge px); Advanced Filter OK and Open 371 and 381 px off (max 186); the 5 resampled dialogs (Options, Deck Properties, Deck Legality, About) up to 83 levels |
+| winmark.e check boxes | 4 instances (Interface hide-splash rest and pressed, Grids show-foil rest, Morph use pressed) | the 6 other box cells of checkbox_states (7 of 13 cells are within 2) | 0 of 6 reproduce within 2: border 6 to 12 levels off on 31 to 47 px of the 14 x 14 window |
+| winmark.e radios | 4 discs (Missing Set Cards, rest and pressed, on and off) | 6 other disc cells of radio_states (Filter, Missing Only focus; 2 of 8 within 2) | none within 2: 9 to 13 levels on 28 to 49 px; Options group pressed up to 41 |
+| winedit.e edits | 7 rest, 3 focus, 2 pressed and disabled tiles; y-drift model fitted on all 8 rest and 5 focus instances | leave-one-out of the drift model; tiles against the other instances | LOO max 1 level, 0 of 195 beyond 2; the other mask, spin and path instances reproduce at 0 off (the three mask, three spin and two button edits are all the edit instances in the captures, so none was neither baked nor fitted) |
+| gridlook.e glyphs and tree marks | cut from data_grid_main and the Filter dialog | Sort dialog grid, Rules Manager tree | Rules Manager list 40 flat px off (passes); Sort grid 1,432 flat px off (fails) |
+
+| Control | Status | Captured states compared (structural px, off by >2, max error) | Uncaptured (unverified) |
+|---|---|---|---|
+| label | review | label.png 3,135 / 519 off, max 198 (underline and bold title rows); ink within 1 px on 6 of 10 labels (4 px worst); pressed link identical to rest | disabled, hover, rotated, other grounds |
+| button | review | crisp dialogs (rest, default, mnemonic, disabled, pressed, focus, default+focus, shift): 15,536 / 0 and 5,618 / 0; button_kinds 78 off (pictures); held-out pressed grabs 9 of 11 within tolerance; resampled dialogs (Options etc.) 130 px per ring edge row, max 83; Advanced Filter pressed 371 and 381 px, max 186 | hover, toggled, split, loading, plain |
+| checkbox | review | checkbox_states 5,659 / 128, max 137; held-out boxes 6 to 12 levels on 31 to 47 px each; baked boxes 0 | hover, disabled, indeterminate |
+| radio | review | radio_states 11,084 / 630, max 156; held-out discs 9 to 13 levels on 28 to 49 px | hover, disabled |
+| radio_group | review | radio_group_states 13,881 / 2,232, max 227; Options discs 13 to 41 levels | hover, disabled, focused (stale press in grabs) |
+| text_edit | review | no Options-page instance; a real NOT / AND / OR box exists in states/tab-selected-filter-cards (not compared); shared frame 1 of 39,855 off | hover, read-only, disabled, invalid |
+| spin_edit | matched | edits_dialog 1 / 39,855, max 18; focused fast spin 0 (max 1), stacked 4 (max 3); arrow-pressed grabs equal the focused look; LOO drift 0 of 195 beyond 2; digit ink 0 px | hover, disabled, read-only |
+| combo_box | review | dialog 20,272 / 26, focus 26 (max 70), pick 10, search_held 0; open heads 7,696 and 7,794 off (head face 4 levels, #D0E6F7 first grab), second grabs 1,583 and 473, show 479 (max 255), held 1,571, flat 632 | hover, disabled, invalid |
+| image_combo_box | review | dialog 16,928 / 41 (max 68); open lists 2,784, 622, 86, 6,640, 6,076 off | hover, disabled, focus |
+| date_edit | started | no capture exists | every state |
+| mask_edit | matched | edits_dialog cell 0 / 14,000 (max 1); focused 24 off (caret column only); LOO 0 of 195; the y 89 and 198 instances 3 px beyond 2 (corner, max 6) | typed text and bullets, hover, invalid, disabled |
+| memo | review | rest capture exists (Filter, Cards tab, AND, OR, NOT, 100 %): ours up to 13 levels off on the foot and rim rows | focus, text, scroll |
+| button_edit | review | edits_dialog 10,332 / 0 and 1 off; Card Art path ink 2 px short; focused 1 off, disabled 12, selected 485 (selection starts 1 px early), ellipsis pressed 1,244 (selection missing) | hover of the button, read-only |
+| token_edit | started | no capture exists | every state |
+| check_list_box | review | dialog 47,808 / 1,684 (max 251); states 135,460 / 8,202 (max 249, 501 x 9 row strips) | hover, disabled |
+| progress_bar | started | no capture exists (hidden in every grab) | every state |
+| group_box | matched | group_box_dialog 49,589 / 26 (max 83, glyphs); frames 0 off; caption ink 0 to 1 px on 4 of 4; 3 of 7 instances not rendered | disabled, focus |
+| page_control | review | strips 81 to 257 off each (max 242); Statistics 11 states 507 to 563 off; bottom 2,377 | hover, disabled tab, scroll buttons |
+| splitter | review | dialog strip exact (0), held equals rest; live splitters 163 / 640 off (max 74) | hover, drag, focus |
+| status_bar | review | main 5,236 / 2 (max 3), report 7,718 / 3 (max 81); report text right end 3 px short | hover, hint, progress panel |
+| toolbar_button | review | 6,369 / 233 (max 45), separators and edges, pictures excluded | hover, pressed, checked, focus |
+| menu_bar | matched | 11 captures: structural 30 per sheet (glyphs, max 105); non-text px 5 to 32 of 16,260 beyond 2 (sliver, max 3 rest, 16 open Help, 8 hot View); ink within 1 px on 10 of 10 titles | hover, disabled, Alt focus, Admin open |
+| popup_menu | review | 36 refs: 418,502 structural, rest menus 27 off, selected and sub-menu 1,400 off (glyphs, max 253), chrome flat-exact; ink bands within 1 px 94 % (dark) and 92 % (all) | hover, scroll, submenu placement |
+| hint | started | no capture possible | every state |
+| scroll_bar | review | scroll_bar_live 2,326 / 574 (max 240); thumb blocks not re-extracted | hover, disabled, horizontal rest |
+| list_box | review | dialog 20,682 / 57 (max 164), blur 157, focus 223 (max 228) | hover, disabled, multi-select |
+| tree_list | review | tree 6,397 / 56,784, rules 628, focus 1,560, check 1,528 (flat-pixel measure: 789, 40, 228, 238); about 1 px row phase | hover, disabled |
+| vertical_grid | review | vertical_grid 4,546 / 53,085; states 29,310 / 481,550 (max 255) | hover, disabled, read-only |
+| data_grid | review | main 16,026 / 141,232, states 12,470, pressed 1,050, sort dialog 8,925 (flat-pixel measure: 3,590, 881, 1,432) | hover, edit, disabled, popups, 150 % |
+| dialog | review | title_bar 126,036 / 1,293 (max 222, caption text); bodies not composed | resize, disabled |
+
+**Ten largest remaining mismatches (px off by more than 2):** vertical_grid_states lower blocks 29,310; data_grid_main 16,026; data_grid_states 12,470; data_grid_dialogs_sort 8,925; check_list_box_states row strips 8,202; combo_box_open_size head face 7,794 and open_color 7,696 (4 levels); image_combo_box_open_condition head face 6,640; tree_list 6,397; image_combo_box_open_condition2 head ring 6,076 (max 240). The line-inclusive count for the grids and trees is about 1 px of line phase; by the workers' flat-pixel measure the grids are 0.6 % to 2.6 %.
+
+**Not done:** scroll_bar thumb blocks and the Filter Cards-tab NOT/AND/OR boxes against our text_edit and memo were not diffed pixel by pixel; the ink box checks of the popup menus use my band test, not the workers' glyph rows.
