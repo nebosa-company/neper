@@ -45,7 +45,10 @@ type Look = struct {
     frame: paint.Color,
     track: paint.Color,
     thumb: paint.Color,
-    scroll_width: f32
+    scroll_width: f32,
+    // looks2-grid2 (live 100 % capture, docs/ui/looks/ref/windows/main-window@1x.png): a group row's
+    // label starts in the first column after the indicator, and carries no "(Count: n)"
+    group_flat: bool
 }
 
 // A colour from 0xRRGGBB.
@@ -78,7 +81,8 @@ fn v3() -> Look {
         frame: rgb(0x828790u32),
         track: rgb(0xF0F0F0u32),
         thumb: rgb(0x858585u32),
-        scroll_width: 16.0
+        scroll_width: 16.0,
+        group_flat: true
     }
 }
 

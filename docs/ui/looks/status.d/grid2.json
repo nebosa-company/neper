@@ -1,0 +1,29 @@
+{
+ "data_grid": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/data_grid.png",
+    "notes": "The baseline: the theme's own grid (look.on false), the same two sheets."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid.png",
+    "notes": "Two sheets: data_grid (flat list and grouped grid) and data_grid_main, which reproduces the two grids of the LIVE 100 % capture of the v3 main window (docs/ui/looks/ref/windows/main-window@1x.png, cropped to ref/windows/data_grid_main.png at (292,108) 500x468; windows/data_grid_main-vs-ref.png has ref left, ours right). Measured at 100 %: collection rows pitch 19 (17 face + 2 hairlines #E6/#EC), stripes start grey (#EFEFEF on the first record), header white 18 + #F7F7F7 hairline, header separators nearly invisible 2 px (#EAEAEA/#FAFAFA), pool footer #FFFFDD 20 px with a #E7EAEA Count cell under Name, collection footer #C0DCC0 with #E7EAEA sum cells, navigator 22 px, group rows pitch 18 (16 face + #E5E5E5/#E7E7E7), no '(Count: n)' on group rows, group label starts in the first column after the indicator, footer text regular (not bold), Edition/Qty/Used centred. Changes (behind gridlook.v3, new Look.group_flat): group label no count and from the Star column, footer text regular, stripe phase flipped (first record grey, matching S100 and N1 v3 captures); these also alter docs/ui/looks/windows/data_grid*.png.",
+    "gaps": [
+     "Header height is 21 (the 150 % measurement) but the 100 % capture has 19 (18 + hairline); pool header plus filter row is 41 in v3, ours 48 (head_extra 28 vs about 20): the look has no scale so one value serves both DPIs",
+     "Group rows are 19 px pitch (uniform virtual rows); v3 draws them 18 px with #E5E5E5/#E7E7E7 lines between them, ours has no lines",
+     "Group row focus rectangle is drawn per cell with gaps and also over the indicator column; v3 draws one continuous dotted rectangle from after the indicator",
+     "Group box (plus) is black 11 px; v3's is a 9 px light box with a navy plus; filter-row '=' operator is thin and light, v3's is a thick dark bar; header sort glyph is a black arrow, v3's a light outline triangle; indicator header glyph is blue, v3's grey",
+     "Navigator buttons are plain blue arrows without the button chrome and pictures of v3 (the icon files are not in this repo); the first/prior/next/last/funnel/jump glyphs are guessed shapes",
+     "Name column of the collection grid colours Tangle and Silkguard black in v3 but the row ink is per row (ours green); the orange card-back disc and the black Forest picture are plain discs; the grid backdrop picture below the rows is not drawn; the Edition symbol and Legal letters are not drawn",
+     "The sheet passes height+22 to dg.build because the grid reserves 52 px for the navigator while v3's is about 30; the collection grid shows a vertical thumb that v3 does not, and ends 16 px short of the frame",
+     "Text is Segoe UI 10.35 px greyscale; the capture is ClearType and its group-row text is about 13 % wider (Tahoma 8?), unconfirmed",
+     "The last column 'Se' is a 12 px column to mimic the clipped one; the pool rows are 120283 generated rows, not card data",
+     "Hover, pressed, filter-active and editing states are not in the live capture",
+     "Neper renders of the grid sheets are not meaningful for the main-window sheet (the grid objects keep the v3 look set during the Windows pass, so Neper@1.5x of data_grid already showed v3 stripes; its PNG is left as committed and no Neper data_grid_main is committed)"
+    ]
+   }
+  }
+ }
+}
