@@ -13047,9 +13047,15 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     var track = sized_style(16.0, length)
     if !vertical { track = sized_style(length, 16.0) }
     track.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var count = 0usize
+    // looks4-e: the track's first pixel line, towards the content, is #F7F7F7 (live captures, scroll_bar_live*.png)
+    var edge = sized_style(1.0, length)
+    if !vertical { edge = sized_style(length, 1.0) }
+    edge.background = paint.Brush { Solid: style.hex(16250871u32) }
+    layers[count] = widget.box(0u64, edge, zero)
+    count += 1usize
     if content > view && room > 0.0 {
         var thumb_len = room * view / content
         if thumb_len < 17.0 { thumb_len = 17.0 }
