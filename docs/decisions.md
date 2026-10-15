@@ -41513,3 +41513,6 @@ Same route as the Header style (D4142): picking Filter Bar and a colour paints t
 
 ## D4144 - G012: the Content style's colour paints the printed data cells
 Picking Content and a colour fills the preview's data cells (DZ-style-content-in-preview-v5.png: light yellow, `dz_content_fill`); the header row keeps its own style. Nine styles still draw nothing (Content Even/Odd Rows need the row number in `print_row`, Footer, Group, Caption, Preview, Selection, BandHeader and the card styles have no counterpart on the page). The first run chose a swatch coordinate in an empty custom slot, so no colour was picked and the cells stayed white.
+
+## D4145 - G012: Content Even Rows and Odd Rows stripe the printed table
+`print_row` and `print_cell` take the row number instead of a header flag (row 0 is the header); `dz_row_fill` picks the Even Rows style's colour for the 1st, 3rd, 5th data row and the Odd Rows style's for the 2nd, 4th ..., else the Content colour (DZ-style-even-odd-in-preview-v5.png: yellow even, cyan odd). Which of the two is "even" (row index 0 or 1) is my reading of the DevExpress convention, not recorded from v3. Seven styles still draw nothing.

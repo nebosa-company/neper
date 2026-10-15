@@ -2723,4 +2723,5 @@ D4140	597	G012: the Color Editor's 48 basic colours are v3's
 D4141	717	G012: swatches of the Color Editor can be picked and applied
 D4142	464	G012: the Header style's colour reaches the printed report
 D4143	405	G012: the Filter Bar style's colour paints the printed filter strip
-D4144	557	G012: the Content style's colour paints the printed data cells
+D4144	558	G012: the Content style's colour paints the printed data cells
+D4145	528	G012: Content Even Rows and Odd Rows stripe the printed table

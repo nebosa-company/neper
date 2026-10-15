@@ -4926,22 +4926,22 @@ fn print_margins(a: *mem.Arena, grid: *Grid, width: f32) -> (widget.Node, err) {
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 86.0), bars[0usize..2usize]), ok)
 }
 
-fn print_cell(a: *mem.Arena, grid: *Grid, text: str, width: f32, header: bool) -> (widget.Node, err) {
+fn print_cell(a: *mem.Arena, grid: *Grid, text: str, width: f32, row: usize) -> (widget.Node, err) {
     let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
     if label_error != ok { ret (zero, label_error) }
     var box = control.sized_style(width, 18.0)
-    box.background = paint.Brush { Solid: gl.rgb(dz_content_fill(grid)) }
-    if header { box.background = paint.Brush { Solid: gl.rgb(print_header_fill(grid)) } }
+    box.background = paint.Brush { Solid: gl.rgb(dz_row_fill(grid, row)) }
+    if row == 0usize { box.background = paint.Brush { Solid: gl.rgb(print_header_fill(grid)) } }
     box.border = style.Border { width: 1.0, color: gl.rgb(0xE0E0E0u32) }
     ret (widget.box(0u64, box, one(a, widget.padded(0u64, 3.0, 1.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
 }
 
-fn print_row(a: *mem.Arena, grid: *Grid, line: []const str, widths: []const f32, header: bool) -> (widget.Node, err) {
+fn print_row(a: *mem.Arena, grid: *Grid, line: []const str, widths: []const f32, row: usize) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, line.len + 1usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
     while k < line.len {
-        let (cell, cell_error) = print_cell(a, grid, line[k], widths[k], header)
+        let (cell, cell_error) = print_cell(a, grid, line[k], widths[k], row)
         if cell_error != ok { ret (zero, cell_error) }
         cells[k] = cell
         k += 1usize
@@ -5057,7 +5057,7 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     q += 1usize
     var r = 0usize
     while r < lines.len && q < 30usize && shown > 0usize {
-        let (line_node, line_error) = print_row(a, grid, lines[r][0usize..shown], widths[0usize..shown], r == 0usize)
+        let (line_node, line_error) = print_row(a, grid, lines[r][0usize..shown], widths[0usize..shown], r)
         if line_error != ok { ret (zero, line_error) }
         page[q] = widget.padded(0u64, margin_px(grid, 0usize, sheet_wide), 0.0, 0.0, 0.0, style.defaults(), one(a, line_node))
         q += 1usize
@@ -10052,7 +10052,7 @@ fn dz_preview(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var n = 0usize
     var r = 0usize
     while r < lines.len && r < 6usize && shown > 0usize {
-        let (row, row_error) = print_row(a, grid, lines[r][0usize..shown], widths[0usize..shown], r == 0usize)
+        let (row, row_error) = print_row(a, grid, lines[r][0usize..shown], widths[0usize..shown], r)
         if row_error != ok { ret (zero, row_error) }
         rows[n] = row
         n += 1usize
@@ -10882,4 +10882,13 @@ fn print_header_fill(grid: *const Grid) -> u32 {
 fn dz_content_fill(grid: *const Grid) -> u32 {
     if ((grid.dz_style_has >> 4u16) & 1u16) != 0u16 { ret grid.dz_style_rgb[4usize] }
     ret 0xFFFFFFu32
+}
+
+// A data cell's colour: the style of its row (rows 1, 3, 5 ... are "Content Even Rows", index 0, 2 ...; 2, 4 ... "Odd"),
+// else the Content style's, else white.
+fn dz_row_fill(grid: *const Grid, row: usize) -> u32 {
+    var at: usize = 5usize
+    if row % 2usize == 0usize { at = 6usize }
+    if ((grid.dz_style_has >> u16(at)) & 1u16) != 0u16 { ret grid.dz_style_rgb[at] }
+    ret dz_content_fill(grid)
 }
