@@ -12473,7 +12473,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         var share = offset / (content - view)
         if share < 0.0 { share = 0.0 }
         if share > 1.0 { share = 1.0 }
-        let at = 16.0 + (room - thumb_len) * share
+        let at = 17.0 + (room - thumb_len) * share
         let side = (16.0 - w) * 0.5
         thick = sized_style(w, thumb_len)
         thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
