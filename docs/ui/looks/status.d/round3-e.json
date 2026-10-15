@@ -1,0 +1,152 @@
+{
+ "vertical_grid": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/vertical_grid.png",
+    "notes": "The baseline: collection.property_grid_of, the existing v2 property grid with group headings, same two sheets."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid.png",
+    "notes": "Redrawn from the LIVE 100 % Deck Properties capture (ref/windows/vertical_grid.png = crop (16,79) 330x425 of dialogs/deck-properties@1x.png; windows/vertical_grid-vs-ref.png). New painted frame e.ui.vgridlook: 1 px frame (top #AAADB3, left #828790, right #9DA1A8, bottom #D2D4D7), #F0F0F0 gutter 14 px with a #A1A1A5 line, WHITE header cells (the earlier #F0F0F0 guess was wrong), 150 px header + #ABABAE/#F4F4F5 line, 19 px rows (17 + dark/light hairlines), focused row #0078D7 with white name and a dotted rectangle round its value cell, category bands 22 px with the #D2D2D2 to #B7B7B7 gradient, top/bottom lines and the double chevron (pixel table from the capture, flipped when shut), Tahoma 11 px (ink widths match Tahoma, not Segoe), names at header x+16, values at the value cell x+2. Structure (gutter, lines, band, selection) is within 2 levels per channel except the hairlines (up to 8) and the dotted rectangle; text differs by ClearType fringes only.",
+    "gaps": [
+     "Row hairlines: the capture's lines sit at fractional positions and drift 0.013 px per row (dark C6 to CE, light D9 to D2); ours is a linear approximation per group, so the second category's rows differ by up to 8 levels",
+     "Text is greyscale AA; the capture is ClearType (colour fringes), ink within 1 px",
+     "The capture's Computed rows with pictures (Land/Creature/Spell, mana symbols, strategy bar, legality letters) and two-cell rows (Deck | Sideboard) are not reproduced: the sheet shows plain text rows",
+     "Dotted focus rectangle colour and phase approximate (the capture mixes #484848..#8F8F8F); its right edge dots sit on the frame column",
+     "Only the focused row is an editor in v3; editors in other rows are caller supplied (the sheet passes plain text); editing, hover and the shut band's own look are not in the capture (the down chevron is the flipped picture, a guess)",
+     "The band's right corner highlight (x 328) and the first/last band top lines blend with the frame; approximated",
+     "Neper look keeps the v2 property grid; its PNG changed only because the sheet now has the dialog's size"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/tree_list.png",
+    "notes": "The baseline: collection.tree_table, the existing v2 tree table, same two sheets."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list.png",
+    "notes": "Measured from the LIVE Filter dialog list (ref/windows/tree_list.png = crop (21,88) 305x319 of dialogs/search-filter-top@1x.png) and the Conditional Formatting Rules list (tree_list_rules.png, windows/tree_list_rules.png). Rows 17 px, stripe phase first row grey (#EFEFEF on even rows); the focused row #ECE9D8 (inactive selection); header 19 px white with #E5E5E5 column lines and Tahoma 11; the 9 x 10 expander box (#919191 frame, light gradient, navy cross) and the 13 x 13 node check box drawn pixel for pixel (new gl shapes TreePlus/TreeMinus/TreeBox); the empty part is white; v3's 16 px bar (#F0F0F0 track, 2 px #858585 thumb) stands beside the table only when rows overflow (thumb 17..227 vs capture 17..228). Row positions, stripes, header, expander and check box match the capture to the pixel; node ink colours are named colours matched by eye.",
+    "gaps": [
+     "The focused row's dotted rectangle and its start at x 32 (the capture's cream cell begins after the check box, ours fills the whole row) are not drawn",
+     "Header text is greyscale (ClearType in the capture); 'Abbr.' is inset with spaces in the sheet because TableLook has no first-column inset; the narrow ES header is clipped",
+     "The first hairline of each row (#F4F4F4 / #FAFAFA, fractional layout) is flat #EFEFEF / #FFFFFF; the last column is 3 px short of the capture (the table subtracts 1 px per cell when lines are off)",
+     "Dotted tree guide lines (#E9E9E9/#E2E2E2) between expanders are not drawn; checked and indeterminate node check boxes, hover, pressed expander and ShowRoot=False are not in the capture",
+     "The Neper cell of this sheet changed (it shows the dialog list instead of the 3-level demo); the Neper look itself is untouched",
+     "Node colours are guessed named colours (clRed, clDarkViolet ...); sampled darkest pixels differ because of ClearType",
+     "The Rules list frame (1 px #828790, #A7AAB0 over #D5D7DA) is drawn by the sheet, not the control; its header and separators match; only the empty list is captured"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/data_grid.png",
+    "notes": "The baseline: the theme's own grid (look.on false), the same two sheets."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid.png",
+    "notes": "Two sheets: data_grid (flat list and grouped grid) and data_grid_main, which reproduces the two grids of the LIVE 100 % capture of the v3 main window (docs/ui/looks/ref/windows/main-window@1x.png, cropped to ref/windows/data_grid_main.png at (292,108) 500x468; windows/data_grid_main-vs-ref.png has ref left, ours right). Measured at 100 %: collection rows pitch 19 (17 face + 2 hairlines #E6/#EC), stripes start grey (#EFEFEF on the first record), header white 18 + #F7F7F7 hairline, header separators nearly invisible 2 px (#EAEAEA/#FAFAFA), pool footer #FFFFDD 20 px with a #E7EAEA Count cell under Name, collection footer #C0DCC0 with #E7EAEA sum cells, navigator 22 px, group rows pitch 18 (16 face + #E5E5E5/#E7E7E7), no '(Count: n)' on group rows, group label starts in the first column after the indicator, footer text regular (not bold), Edition/Qty/Used centred. Changes (behind gridlook.v3, new Look.group_flat): group label no count and from the Star column, footer text regular, stripe phase flipped (first record grey, matching S100 and N1 v3 captures); these also alter docs/ui/looks/windows/data_grid*.png. ROUND 3 (looks3-e): the dialogs' grids are the new sheet data_grid_dialogs (Sort dialog grid vs ref/windows/data_grid_sort.png, Missing Set Cards list vs data_grid_missing.png): TcxGrid frame (#828790 sides, #A7AAB0/#D5D7DA top), white header with the #F4F4F4 first hairline, stripes first row grey, 16 px bar with the 2 px thumb, Tahoma at text_size 11.7 (ink width of 'Mystery Booster Commander Edition' 186 vs 184 px). Reports, Show Columns and the Rules list are covered in the gaps and in tree_list.",
+    "gaps": [
+     "Header height is 21 (the 150 % measurement) but the 100 % capture has 19 (18 + hairline); pool header plus filter row is 41 in v3, ours 48 (head_extra 28 vs about 20): the look has no scale so one value serves both DPIs",
+     "Group rows are 19 px pitch (uniform virtual rows); v3 draws them 18 px with #E5E5E5/#E7E7E7 lines between them, ours has no lines",
+     "Group row focus rectangle is drawn per cell with gaps and also over the indicator column; v3 draws one continuous dotted rectangle from after the indicator",
+     "Group box (plus) is black 11 px; v3's is a 9 px light box with a navy plus; filter-row '=' operator is thin and light, v3's is a thick dark bar; header sort glyph is a black arrow, v3's a light outline triangle; indicator header glyph is blue, v3's grey",
+     "Navigator buttons are plain blue arrows without the button chrome and pictures of v3 (the icon files are not in this repo); the first/prior/next/last/funnel/jump glyphs are guessed shapes",
+     "Name column of the collection grid colours Tangle and Silkguard black in v3 but the row ink is per row (ours green); the orange card-back disc and the black Forest picture are plain discs; the grid backdrop picture below the rows is not drawn; the Edition symbol and Legal letters are not drawn",
+     "The sheet passes height+22 to dg.build because the grid reserves 52 px for the navigator while v3's is about 30; the collection grid shows a vertical thumb that v3 does not, and ends 16 px short of the frame",
+     "Text is Segoe UI 10.35 px greyscale; the capture is ClearType and its group-row text is about 13 % wider (Tahoma 8?), unconfirmed",
+     "The last column 'Se' is a 12 px column to mimic the clipped one; the pool rows are 120283 generated rows, not card data",
+     "Hover, pressed, filter-active and editing states are not in the live capture",
+     "Neper renders of the grid sheets are not meaningful for the main-window sheet (the grid objects keep the v3 look set during the Windows pass, so Neper@1.5x of data_grid already showed v3 stripes; its PNG is left as committed and no Neper data_grid_main is committed)",
+     "Dialog grids: the rows' bottom 2 px hairlines (#E2E2E2/#F3F3F3) are not drawn (same gap as the main grids: the grid look has no horizontal hairline pair)",
+     "Sort dialog: the Sort Order column's A-Z / Z-A glyph is not drawn (text indented with spaces); the selected row of the Missing Set Cards list (#A6D2FF with edge) is not driven, so the sheet shows it unselected",
+     "Dialog grid column separator (#DCDCDC at the last column's right edge) and the bar's thumb (1 px right, different anti-aliasing) are close but not exact",
+     "Report windows (FastReport preview, 1296x768): the page area is the fr preview, not a Neper control; Show Columns / Customization is a plain list in a tab control; neither is reproduced",
+     "Text size 11.7 is a fitted value for Tahoma in the grid (the vertical grid and tree use 11.0); the cause of the 6 % difference is not understood"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/scroll_bar.png",
+    "notes": "The baseline: the v2 overlay thumb (4 wide, 8 when the pointer is in the trailing 12) via control.scroll_area."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar.png",
+    "notes": "The grid's v3 bars as a control (control.scroll_area), re-measured on the live 100 % capture (windows/scroll_bar_live.png beside ref/windows/scroll_bar_live*.png): vertical bar 16 wide #F0F0F0 track, 16 empty arrow slots, a 2 wide #858585 thumb with square ends; horizontal bar (in a grid's navigator row) a 9 thick #858585 block with square ends. Hover widening, pressed colour and arrows are still guesses (the capture is at rest). ROUND 3: re-measured on the Filter list and the FastReport preview: 16 px #F0F0F0 track, 2 px #858585 thumb starting at y 17 (one px lower than before; windows_scroll_bar now uses 17), no arrows drawn; used by the tree table and the Windows scroll_area.",
+    "gaps": [
+     "Vertical thumb is 2.0 wide on the pixel grid; the capture anti-aliases it across 3 columns (0.54 + 1 + 0.46) because v3's track sits half a pixel off",
+     "Hover thickness 6 (vertical) and 9 (horizontal) are estimates: only the bars at rest are captured",
+     "Pressed thumb colour (#606060) and the hover arrows (7 x 4 chevrons) are guesses: the captures show no arrows",
+     "The horizontal bar in v3 has no track of its own (the navigator row is its ground); its 16 slots and thumb length rule are not measured",
+     "Disabled bar not drawn",
+     "Thumb dragging and clicks on the track or arrows go through the viewport's own invisible thumb, not the drawn bar",
+     "The grid's own bar in collection.e is a separate hand-drawn copy (still 2.7 wide) and is not yet switched to this control",
+     "The track is the dialog face, so it only shows beside a white pane",
+     "The same bar appears in the report preview (x 1272..1287); hover, pressed and disabled are still not captured"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/progress_bar.png",
+    "notes": "The baseline: the v2 pill bar (4 tall, stop dot), determinate and indeterminate."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "v3's TcxProgressBar with NativeStyle: 21 tall (DFM default height), 1 px frame, flat square green fill inside it, percent centred (ShowTextStyle cxtsText: black on the track, white over the fill), marquee as one travelling segment. Read from import.vcl.form.dfm; no capture of a v3 progress bar exists. ROUND 3: the capture has the main window's TcxProgressBar (148 x 14 at x 293 in the status bar) but it is hidden while idle, and no dialog or report shows one: still no v3 pixels for a progress bar.",
+    "gaps": [
+     "No v3 capture of a progress bar: the frame #BCBCBC, track #E6E6E6 and fill #06B025 are the Windows 10/11 comctl theme from memory",
+     "Marquee segment width (a fifth of the bar) and speed (2 s) are guesses; the native glow highlight is not drawn",
+     "Text is Segoe UI 11.2 px; v3 sets Tahoma 8 pt (Height -11) for this bar",
+     "Not implemented: BarStyle cxbsGradient (main form: 0,89,130 to 0,62,91), vertical Orientation and PeakValue (statistics form), disabled state, error and paused tones",
+     "progress_ring keeps the Neper look (v3 has none)",
+     "Round 3 search: a TcxProgressBar exists only as the hidden status bar one (main-window.controls.json); Statistics is a chart. Nothing to measure: colours and marquee stay guesses"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/status_bar.png",
+    "notes": "The baseline: v2 status bar."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/status_bar.png",
+    "notes": "Measured at 100 % from the live main window (ref/windows/status_bar.png = x 8..791, y 574..592; windows/status_bar-vs-ref.png). Bar 19 tall: #D4D4D4 line above, #FFFFFF below, panels 17 tall between (rows 1..17: #BBBBBB top line, #F5F5F5 bottom line), panels one px apart: 282 | 153 | the rest (item.panel_width, item.fills); each has a dark left line (#A0A0A0, #ADADAD, #B5B5B5: a gradient along x, 160 + 0.047 x) with a #E3E3E3 line beside it on all but the first, and a #FCFCFC + #F3F3F3 pair at its right; every seam column matches the capture. Text Tahoma 10.8 px (ink 262 px for the counts string: 9..270), first panel centred (the DFM: taCenter), the others start 3 px in ('Idle' ink at x 439). Size grip: 3 diagonal strokes (lead #F3F3F3, then #E9E9E9 #BDBDBD #AEAEAE #DADADA repeating) over 12 rows and 13 columns, drawn pixel for pixel from the capture (identical). ROUND 3: the report windows (FastReport preview) carry a different bar, a flat VCL TStatusBar: 19 px (#9E9E9E top blend, #DFDFDF line, #F0F0F0 face, #F5F5F5 bottom line), panels split by a #D9D9D9/#EEEEEE groove at x 206 and 747 (panels 198 | 540 | 540 wide), Tahoma 11 text 'Page 1 of 1' at x 10; not implemented (the DevExpress bar above is kept).",
+    "gaps": [
+     "Progress container panel (grey track, #06B025 fill) is a guess: the capture shows it empty",
+     "v3 text is ClearType (colour fringes); ours is grey anti-aliased",
+     "Panel widths come from the caller (item.panel_width / fills); without them panels hug their text (as before)",
+     "A narrow bar clips the last panel instead of eliding",
+     "Hover colour of a pressable panel is a guess",
+     "Dark and high-contrast palettes keep Neper colours",
+     "Report window chrome not implemented: native-themed TStatusBar (above), the preview's TToolBar (print/save/find/zoom icons on #F0F0F0, 31 px), the grey #808080 page area with its orange-edged white page; measurements only",
+     "Advanced Filter dialog (TcxFilterControl: Filter / And / <root> boxes) has no Neper control",
+     "The progress container panel is hidden in every capture"
+    ]
+   }
+  }
+ }
+}

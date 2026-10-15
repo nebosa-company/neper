@@ -12636,7 +12636,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         var share = offset / (content - view)
         if share < 0.0 { share = 0.0 }
         if share > 1.0 { share = 1.0 }
-        let at = 16.0 + (room - thumb_len) * share
+        let at = 17.0 + (room - thumb_len) * share
         let side = (16.0 - w) * 0.5
         thick = sized_style(w, thumb_len)
         thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
@@ -13240,3 +13240,35 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     sem.row_count = u32(options.len)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
 }
+
+// ---- looks3-e: the Windows dialog font ---------------------------------------------------------
+// v3's dialogs and grids draw Tahoma 8 pt (11 px, 13 px lines); ink widths of the live captures
+// match Tahoma, not Segoe UI. The rig registers Tahoma as the second font, so the theme this
+// returns leads with it (as windows_bar_theme does) at `px` for every body role.
+fn windows_tahoma_theme(a: *mem.Arena, t: *const Theme, px: f32) -> (Theme, err) {
+    let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copies_error != ok { ret (*t, TooLarge) }
+    copies[0usize] = *t.tokens
+    let small = style.TextStyle { size: px, line_height: px + 2.0, weight: 400u16, italic: false }
+    copies[0usize].text[0usize] = small
+    copies[0usize].text[1usize] = small
+    copies[0usize].text[4usize] = small
+    copies[0usize].text[17usize] = small
+    copies[0usize].text[18usize] = small
+    copies[0usize].text[19usize] = small
+    var fonts = t.fonts
+    if t.fonts.len >= 2usize {
+        let (swapped, swapped_error) = mem.alloc[shape.Font](a, t.fonts.len)
+        if swapped_error != ok { ret (*t, TooLarge) }
+        var i = 0usize
+        while i < t.fonts.len {
+            swapped[i] = t.fonts[i]
+            i += 1usize
+        }
+        swapped[0usize] = t.fonts[1usize]
+        swapped[1usize] = t.fonts[0usize]
+        fonts = swapped
+    }
+    ret (Theme { tokens: &copies[0usize], fonts: fonts, language: t.language, runtime: t.runtime }, ok)
+}
+// ---- end looks3-e ------------------------------------------------------------------------------
