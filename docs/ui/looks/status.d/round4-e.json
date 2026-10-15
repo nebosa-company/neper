@@ -1,0 +1,81 @@
+{
+ "tree_list": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/tree_list.png",
+    "notes": "The baseline: v2 tree table, unchanged by round 4."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list.png",
+    "notes": "Round 4 against the live 100 % captures, non-anti-aliased pixels only (pixels whose four neighbours are equal in the capture; off by more than 2 levels; the rest are ClearType text): rest, Filter dialog list (tree_list.png 305x319) 805 of 63,382; Rules Manager list (tree_list_rules.png) 40 of 162,503; selected focused row (tree_list_focus.png, from states/tree-list-row-selected-focused-filter) 246 of 16,596; check box checked (tree_list_check.png, from states/tree-list-checkbox-pressed-filter) 251 of 16,585. New from the captures: the selected row is #A6D2FF with the keyboard focus and #ECE9D8 without, its fill starts at x = 32 with a dotted rectangle (#5B5C62 and light dots, 1 px), the cells before it keep the zebra colour; the plus, minus and check boxes (unchecked and checked, #005FB8) are cut from the live Filter dialog captures. The unfocused capture is identical to the focused one (WM_KILLFOCUS did not take the real focus), and the expander-pressed capture shows the result of the mouse-down (node open, check on) rather than a pressed look.",
+    "gaps": [
+     "Mismatch: text anti-aliasing (ClearType against our grey scale) on every caption; ink boxes within 1 px",
+     "Mismatch: the dotted tree guide line (x = 7) between plus boxes is not drawn",
+     "Mismatch: expander-pressed capture (states/tree-list-expander-pressed-filter): the opened Core Sets branch (child rows with icons) is not reproduced",
+     "Unverified (no capture): hover, disabled, the cream selection with a dotted rectangle on another row, tree scroll bar track (the pressed thumb capture is covered under scroll_bar)"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/scroll_bar.png",
+    "notes": "The baseline: the theme's overlay thumb, unchanged by round 4."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar_states.png",
+    "notes": "Round 4 from states/scroll-bar-thumb-pressed-main-vertical and -horizontal against their rest grabs (sheet scroll_bar_states, thumb blocks compared pixel by pixel at 100 %): vertical thumb at rest 3 x 17 px (#B6 #85 #BF, 2 px wide at +0.46 px), body rows 0 pixels off by more than 2, rounded end caps max 70 (10 pixels of 51); pressed pill 7 x 17, body 0 off, caps max 77 (33 of 119). Horizontal thumb: 8 px core in a 1 px #BABABA rim at rest, 12 px core with 4 px rounded ends pressed: cross section exact (14 of 14 and 10 of 10 rows), the same width on both. The track's first pixel line is #F7F7F7. No arrows are drawn while the thumb is pressed (the capture shows none); the arrow-pressed capture (a click on the track near the bottom) shows only the resting thumb. The dialog bars (tree, Options Shortcuts, Sort) are the same thumb.",
+    "gaps": [
+     "Mismatch: the rounded end caps of the vertical thumbs differ by up to 77 levels on 3 rows at each end",
+     "Mismatch: the data grid's own copy of the bar (collection.e) starts at its header, the capture's bar starts at the grid's top above the group box",
+     "Unverified (no capture): hover (6 px thumb and arrows are guesses), disabled, thumb length and position rules for other content sizes"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/progress_bar.png",
+    "notes": "The baseline: v2 progress bar."
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Round 4: no real progress bar was captured. The v3 progress bar (TcxProgressBar in the status bar's container) is hidden in every capture; the three frames of states/progress-while-computing-combos (report preview, grabbed every 120 ms) show only 'Page 0 of 0' / 'Page 1 of 1' in the report window's status bar, no bar. Track and #06B025 fill remain guesses.",
+    "gaps": [
+     "Mismatch: no reference exists; track and #06B025 fill are guesses",
+     "Unverified (no capture): every state"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/status_bar.png",
+    "notes": "The baseline: v2 status bar."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/status_bar.png",
+    "notes": "Round 4: the main window bar stays as in round 3 (rest, 0 of 7,156 non-anti-aliased pixels off). New: the report preview window's bar (sheet status_bar_report, 1280 x 19 from dialogs/reports-combos-from-collection@1x.png at (8, 742)): flat bar, a #DFDFDF line on top and #F5F5F5 at the foot, no panel edges, joints or grip, two pixel separators (#D9D9D9/#EEEEEE at x 199, #DFDFDF/#E7E7E7 at x 739, lighter at both ends) and a #E6E6E6 last column; 4 of 22,860 pixels right of the text off by more than 2 (max 234 on one separator end pixel); 'Page 1 of 1' ink box x 2..54 against 3..57, y 6..16 on both. The sheet selects the variant with drop_order = 77 on the first item.",
+    "gaps": [
+     "Hover and hint windows of panels cannot be captured (cxHint and the bar read the real pointer): the hover colour of a pressable panel is a guess",
+     "Progress container panel (grey track, #06B025 fill) is a guess: the capture shows it empty (the TcxProgressBar is hidden)",
+     "Text glyph pixels (ClearType, hinted) differ; the report bar's text ink is 3 px short at its right end (GDI advances not applied to that run)",
+     "Report bar: the panel separators' end pixels at rows 1 and 17 are approximated",
+     "Panel widths come from the caller (item.panel_width / fills); a narrow bar clips the last panel instead of eliding",
+     "Dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ }
+}
