@@ -4391,6 +4391,10 @@ fn field_options() -> FieldOptions {
 // (keyed `key`) says text field in the tree and the label names the group. The
 // caller owns the buffer and keeps the length (D807).
 fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, secret: bool) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (win, win_error) = windows_field(a, key, t, label, buffer, len, change, submit, options, secret)
+        ret (win, win_error)
+    }
     let state = control_state(t, key, options.enabled, false)
     let focused = state.focused && options.enabled
     let hovered = state.hovered && options.enabled
@@ -4686,6 +4690,370 @@ fn with_alpha(c: paint.Color, alpha: f32) -> paint.Color {
 fn if_else(choice: bool, yes: f32, no: f32) -> f32 {
     if choice { ret yes }
     ret no
+}
+
+// ------------------------------------------------ the Windows look's edits (docs/ui/looks)
+// Own block for the Windows look of the text, spin, mask, memo, button and token edits; the Neper
+// code above and below is untouched. Measured from docs/grid-parity (09d spin edit, TP2 memo,
+// ED1 in-grid button) at 150 %; what no capture shows is listed in docs/ui/looks/status.d/inputs.json.
+
+fn win_rgb(r: u32, g: u32, b: u32) -> paint.Color {
+    ret style.hex((r << 16u32) | (g << 8u32) | b)
+}
+
+// A solid bar `w` by `thickness`.
+fn windows_bar(w: f32, thickness: f32, color: paint.Color) -> widget.Node {
+    var s = sized_style(w, thickness)
+    s.background = paint.Brush { Solid: color }
+    ret widget.box(0u64, s, zero)
+}
+
+// The native Windows 11 edit as v3 draws it (NativeStyle): a white face, a 1 px border so light
+// (#EEEEEE) that it only shows on white, and a darker line (#989898) along the foot; focus makes
+// the foot line the 2 px accent. `options.end_space` keeps room clear at the end for a button.
+fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, secret: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    let focused = state.focused && options.enabled
+    let hovered = state.hovered && options.enabled
+    let multiline = options.rows > 1u32
+    let line = style.text_style(t.tokens, .BodyMedium).line_height
+    var h = t.tokens.metrics.control_height
+    if options.height > 0.0 { h = options.height }
+    if multiline { h = max_of(h, f32(options.rows) * line + 8.0) }
+    var face = style.color(t.tokens, .Surface)
+    var side = win_rgb(238u32, 238u32, 238u32)
+    var foot = win_rgb(146u32, 146u32, 146u32)
+    var foot_h: f32 = 1.0
+    var ink = style.color(t.tokens, .Text)
+    if hovered { face = win_rgb(249u32, 249u32, 249u32) }
+    if focused {
+        foot = style.color(t.tokens, .Primary)
+        foot_h = 2.0
+    }
+    if options.invalid {
+        side = style.color(t.tokens, .Error)
+        foot = side
+    }
+    if !options.enabled {
+        face = win_rgb(244u32, 244u32, 244u32)
+        side = win_rgb(230u32, 230u32, 230u32)
+        foot = side
+        ink = win_rgb(160u32, 160u32, 160u32)
+    }
+    var value_options = text_options()
+    value_options.role = .BodyMedium
+    value_options.mono = options.mono
+    let (text_look, style_error) = text_style_faced(a, t, value_options)
+    if style_error != ok { ret (zero, style_error) }
+    let pad: f32 = 2.0
+    let inner = max_zero(options.width - 2.0 - 2.0 * pad - options.start_space - options.end_space)
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: f32(options.rows) * line }
+    let edit_node = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: style.color(t.tokens, .Selection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, edit_node)
+    if named_error != ok { ret (zero, named_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    // The placeholder (DevExpress's null prompt) shows while the empty edit is not focused.
+    if len == 0usize && options.placeholder.len != 0usize && !focused {
+        var hint = text_options()
+        hint.role = .BodyMedium
+        hint.wrap = .None
+        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, t, hint, win_rgb(128u32, 128u32, 128u32))
+        if hint_error != ok { ret (zero, hint_error) }
+        layers[at] = hint_node
+        at += 1usize
+    }
+    if multiline {
+        // A viewport `rows` lines tall that scrolls its overflow, keeping the caret's line in view.
+        var caret_line = 0usize
+        if mem.address_of(t.runtime) != 0usize {
+            let (rs, rs_error) = widget.state_of(t.runtime)
+            if rs_error == ok {
+                let (edit_id, edit_found) = widget.find_by_key(rs, key)
+                if edit_found == 1usize {
+                    let (laid_line, has_laid_line) = widget.edit_caret_line(t.runtime, edit_id)
+                    if has_laid_line { caret_line = laid_line }
+                }
+            }
+        }
+        var first_line = 0usize
+        if caret_line + 1usize > usize(options.rows) { first_line = caret_line + 1usize - usize(options.rows) }
+        var scrolled_style = editor_style
+        scrolled_style.width = style.Length { Px: inner }
+        let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
+        if scrolled_error != ok { ret (zero, TooLarge) }
+        let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: style.color(t.tokens, .Selection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, scrolled_style))
+        if scrolled_named_error != ok { ret (zero, scrolled_named_error) }
+        scrolled[0usize] = scrolled_named
+        var viewport = style.defaults()
+        viewport.width = style.Length { Px: inner }
+        viewport.height = style.Length { Px: max_zero(h - 8.0) }
+        viewport.overflow = .Clip
+        layers[at] = widget.scroll(key + 1048612u64, widget.Scroll { axis: .Vertical, offset: f32(first_line) * line, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, viewport, scrolled[0usize..1usize])
+    } else {
+        layers[at] = named
+    }
+    at += 1usize
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    grow.overflow = .Clip
+    let value_stack = widget.stack(0u64, grow, layers[0usize..at])
+    var frame_style = style.defaults()
+    frame_style.width = style.Length { Px: options.width }
+    frame_style.height = style.Length { Px: h }
+    frame_style.background = paint.Brush { Solid: face }
+    frame_style.border = style.Border { width: 1.0, color: side }
+    frame_style.radius = t.tokens.radii.xs
+    frame_style.overflow = .Clip
+    var pad_y = max_zero((h - 2.0 - line) * 0.5)
+    if multiline { pad_y = 3.0 }
+    frame_style.padding = style.EdgeLengths { left: style.Length { Px: pad + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: pad + options.end_space }, bottom: style.Length { Px: pad_y } }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = value_stack
+    var cross: ui_layout.CrossAlign = .Center
+    if multiline { cross = .Start }
+    let frame = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: cross, gap: 0.0 }, frame_style, row[0usize..1usize])
+    let (foot_parts, foot_parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if foot_parts_error != ok { ret (zero, TooLarge) }
+    foot_parts[0usize] = windows_bar(options.width - 2.0, foot_h, foot)
+    foot_parts[1usize] = frame
+    let boxed = widget.stack(0u64, style.defaults(), foot_parts[1usize..2usize])
+    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
+    if stacked_error != ok { ret (zero, TooLarge) }
+    stacked[0usize] = boxed
+    stacked[1usize] = widget.positioned(0u64, 1.0, h - foot_h, style.defaults(), foot_parts[0usize..1usize])
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.stack(0u64, style.defaults(), stacked[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A token of the Windows token edit: an 18 high rounded box with the text and a small cross that
+// removes it. No capture of the v3 token edit exists (the Filter dialog's Cards tab was not
+// captured), so face, border and cross colours are guesses.
+fn windows_token(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, remove: *const widget.Submit, still: *const widget.Submit) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    let cross_state = control_state(t, key + 1u64, true, false)
+    var look = style.windows_resolve(t.tokens, .Filled, state)
+    look.background = win_rgb(232u32, 232u32, 232u32)
+    look.border = win_rgb(210u32, 210u32, 210u32)
+    look.border_width = 1.0
+    if state.hovered { look.background = win_rgb(220u32, 235u32, 247u32) }
+    look.radius = 3.0
+    look.custom_padding = true
+    look.padding = 2.0
+    look.padding_start = 6.0
+    look.padding_y = 0.0
+    look.min_height = 18.0
+    look.min_width = 0.0
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, style.color(t.tokens, .Text))
+    if label_error != ok { ret (zero, label_error) }
+    var ink = win_rgb(109u32, 109u32, 109u32)
+    if cross_state.hovered { ink = win_rgb(196u32, 43u32, 28u32) }
+    let (cross, cross_error) = stroked_glyph(a, ink, .Cross, 8.0, 1.2)
+    if cross_error != ok { ret (zero, cross_error) }
+    let (removed, removed_error) = mem.alloc[widget.Node](a, 1usize)
+    if removed_error != ok { ret (zero, TooLarge) }
+    removed[0usize] = cross
+    let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
+    if hit_error != ok { ret (zero, TooLarge) }
+    hit[0usize] = widget.aligned(0u64, .Center, .Center, sized_style(14.0, 14.0), removed[0usize..1usize])
+    let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
+    if region_error != ok { ret (zero, TooLarge) }
+    region[0usize] = widget.region(key + 1u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](remove), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), hit[0usize..1usize])
+    var remove_sem: widget.Semantics = zero
+    remove_sem.role = 3u8
+    remove_sem.label = "Remove"
+    remove_sem.actions = accessibility.ACTION_PRESS
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = label_node
+    parts[1usize] = widget.semantics(0u64, remove_sem, style.defaults(), region[0usize..1usize])
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 3.0 }, style.defaults(), parts[0usize..2usize])
+    let (node, node_error) = pressable_states(a, key, t, 3u8, label, look, true, false, 0u32, 0u32, 0u64, still, content)
+    ret (node, node_error)
+}
+
+// The Windows token edit: the native edit box (white, faint border, darker foot line, accent foot
+// while the input is focused) holding the tokens and the input as a wrapping flow, 22 high at
+// least (the v3 single-line token edit is 26, its two-line one 45).
+fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
+    if items_error != ok { ret (zero, TooLarge) }
+    let (still, still_error) = mem.alloc[widget.Submit](a, 1usize)
+    if still_error != ok { ret (zero, TooLarge) }
+    var none_action: widget.Submit = zero
+    still[0usize] = none_action
+    var i = 0usize
+    while i < tokens.len {
+        let (token, token_error) = windows_token(a, key + 1u64 + 2u64 * u64(i), t, tokens[i], &removes[i], &still[0usize])
+        if token_error != ok { ret (zero, token_error) }
+        items[i] = token
+        i += 1usize
+    }
+    let state = control_state(t, key, true, false)
+    let line = style.text_style(t.tokens, .BodyMedium).line_height
+    var words = text_options()
+    words.role = .BodyMedium
+    let (text_look, style_error) = text_style_faced(a, t, words)
+    if style_error != ok { ret (zero, style_error) }
+    var editor_style = style.defaults()
+    var input_w: f32 = 60.0
+    if tokens.len == 0usize { input_w = max_zero(width - 8.0) }
+    editor_style.min_width = style.Length { Px: input_w }
+    editor_style.min_height = style.Length { Px: line }
+    let bare = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .Text), selection: style.color(t.tokens, .Selection), change: typed, submit: add, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let (named_bare, named_bare_error) = named_editor(a, key, label, "", false, editor_style, bare)
+    if named_bare_error != ok { ret (zero, named_bare_error) }
+    items[tokens.len] = named_bare
+    if len == 0usize && tokens.len == 0usize && label.len != 0usize {
+        // The hint (the null prompt) stands under the empty input while it is not focused.
+        var hint = text_options()
+        hint.role = .BodyMedium
+        hint.wrap = .None
+        let (hint_node, hint_error) = colored_text(a, 0u64, label, t, hint, win_rgb(128u32, 128u32, 128u32))
+        if hint_error != ok { ret (zero, hint_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = hint_node
+        pair[1usize] = named_bare
+        if state.focused {
+            pair[0usize] = widget.box(0u64, style.defaults(), zero)
+        }
+        items[tokens.len] = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
+    }
+    var foot = win_rgb(146u32, 146u32, 146u32)
+    var foot_h: f32 = 1.0
+    if state.focused {
+        foot = style.color(t.tokens, .Primary)
+        foot_h = 2.0
+    }
+    var flow_style = style.defaults()
+    flow_style.width = style.Length { Percent: 100.0 }
+    flow_style.min_height = style.Length { Px: 18.0 }
+    let flow = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 3.0, cross_gap: 2.0 }, flow_style, items[0usize..tokens.len + 1usize])
+    var bar = style.defaults()
+    bar.width = style.Length { Percent: 100.0 }
+    bar.height = style.Length { Px: foot_h }
+    bar.background = paint.Brush { Solid: foot }
+    bar.margin = style.EdgeLengths { left: style.Length { Px: -2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: -2.0 }, bottom: style.Length { Px: -1.0 } }
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 2usize)
+    if lines_error != ok { ret (zero, TooLarge) }
+    lines[0usize] = flow
+    lines[1usize] = widget.box(0u64, bar, zero)
+    var frame_style = style.defaults()
+    frame_style.width = style.Length { Px: width }
+    frame_style.min_height = style.Length { Px: 22.0 }
+    frame_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    frame_style.border = style.Border { width: 1.0, color: win_rgb(238u32, 238u32, 238u32) }
+    frame_style.radius = t.tokens.radii.xs
+    frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 1.0 } }
+    let framed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, lines[0usize..2usize])
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting(a, key, t, label, framed, none, key + 62u64, key + 63u64, suggestions, active, open, picks, activate, dismiss)
+    ret (made, made_error)
+}
+
+// The small button a Windows edit carries at its end (a spin arrow, the ellipsis): a #FDFDFD
+// face in a #DADADA 1 px border with 3 px corners, `w` by `h`; hover and press tints are guesses.
+fn windows_mini_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, enabled: bool, w: f32, h: f32, content: widget.Node) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    var look = style.windows_resolve(t.tokens, .Filled, state)
+    look.background = win_rgb(253u32, 253u32, 253u32)
+    look.border = win_rgb(218u32, 218u32, 218u32)
+    look.border_width = 1.0
+    if state.hovered && !state.pressed { look.background = win_rgb(235u32, 244u32, 252u32) }
+    if state.pressed { look.background = win_rgb(214u32, 233u32, 249u32) }
+    if !enabled {
+        look.background = win_rgb(244u32, 244u32, 244u32)
+        look.border = win_rgb(230u32, 230u32, 230u32)
+    }
+    look.radius = 3.0
+    look.padding = 0.0
+    look.padding_y = 0.0
+    look.custom_padding = true
+    look.min_width = w
+    look.min_height = h
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = content
+    let centred = widget.aligned(0u64, .Center, .Center, sized_style(w - 2.0, h - 2.0), inner[0usize..1usize])
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, false, action, centred)
+    ret (node, node_error)
+}
+
+// A Windows spin edit: the edit with the two arrow buttons (13 x 8, up over down) 3 px from its
+// top and end; Up and Down step it as the Neper spin box does.
+fn windows_spin(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
+    let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
+    if pair_error != ok { ret (zero, pair_error) }
+    let len = write_i64(buffer, value)
+    var options = field_options()
+    options.width = width
+    options.end_space = 13.0
+    let (editor, editor_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
+    if editor_error != ok { ret (zero, editor_error) }
+    let ink = win_rgb(0u32, 0u32, 0u32)
+    let off = win_rgb(160u32, 160u32, 160u32)
+    var up_ink = ink
+    var down_ink = ink
+    if !(value < high) { up_ink = off }
+    if !(value > low) { down_ink = off }
+    let (up_mark, up_mark_error) = beak(a, up_ink, .ChevronUp, 7.0, 3.6)
+    if up_mark_error != ok { ret (zero, up_mark_error) }
+    let (down_mark, down_mark_error) = beak(a, down_ink, .ChevronDown, 7.0, 3.6)
+    if down_mark_error != ok { ret (zero, down_mark_error) }
+    let (up, up_error) = windows_mini_button(a, key + 2u64, t, "Increase", &shortcuts[1usize].action, value < high, 13.0, 8.0, up_mark)
+    if up_error != ok { ret (zero, up_error) }
+    let (down, down_error) = windows_mini_button(a, key + 1u64, t, "Decrease", &shortcuts[0usize].action, value > low, 13.0, 8.0, down_mark)
+    if down_error != ok { ret (zero, down_error) }
+    let (arrows, arrows_error) = mem.alloc[widget.Node](a, 3usize)
+    if arrows_error != ok { ret (zero, TooLarge) }
+    arrows[0usize] = up
+    arrows[1usize] = down
+    arrows[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 1.0 }, style.defaults(), arrows[0usize..2usize])
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = editor
+    layers[1usize] = widget.positioned(0u64, width - 3.0 - 13.0, 3.0, style.defaults(), arrows[2usize..3usize])
+    let boxed = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
+    var none: []widget.Node = zero
+    let (made, made_error) = stepped(a, key + 3u64, t, label, value, boxed, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
+    ret (made, made_error)
+}
+
+// A Windows button edit: the edit with the ellipsis button (17 wide, the edit's height less 4)
+// 2 px from its end.
+fn windows_button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, action: *const widget.Submit, button_label: str, options: FieldOptions) -> (widget.Node, err) {
+    var reserved = options
+    reserved.end_space = 19.0
+    let (editor, editor_error) = text_field(a, key, t, label, buffer, len, change, submit, reserved)
+    if editor_error != ok { ret (zero, editor_error) }
+    var h = options.height
+    if h <= 0.0 { h = t.tokens.metrics.control_height }
+    let usable = options.enabled && !options.read_only
+    var dot = win_rgb(40u32, 40u32, 40u32)
+    if !usable { dot = win_rgb(160u32, 160u32, 160u32) }
+    let (dots, dots_error) = stroked_glyph(a, dot, .MoreHoriz, 12.0, 1.6)
+    if dots_error != ok { ret (zero, dots_error) }
+    let (ellipsis, button_error) = windows_mini_button(a, key + 1u64, t, button_label, action, usable, 17.0, h - 4.0, dots)
+    if button_error != ok { ret (zero, button_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = editor
+    layers[2usize] = ellipsis
+    layers[1usize] = widget.positioned(0u64, options.width - 2.0 - 17.0, 2.0, style.defaults(), layers[2usize..3usize])
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
 // A single-line text field.
@@ -7680,6 +8048,10 @@ fn spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer:
 
 // The same spin box `width` wide (D961: the font picker's 104).
 fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (win, win_error) = windows_spin(a, key, t, label, buffer, value, low, high, step, change, typed, width)
+        ret (win, win_error)
+    }
     let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
     if pair_error != ok { ret (zero, pair_error) }
     let len = write_i64(buffer, value)
@@ -7752,6 +8124,10 @@ fn bare_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffe
 // handles (a picker, a dialog). The field is `options.width` wide, `options.height` high (the
 // design height when 0); `key + 1` is the button.
 fn button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, action: *const widget.Submit, button_label: str, options: FieldOptions) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (win, win_error) = windows_button_edit(a, key, t, label, buffer, len, change, submit, action, button_label, options)
+        ret (win, win_error)
+    }
     var reserved = options
     reserved.end_space = 24.0 - 8.0
     let (editor, editor_error) = text_field(a, key, t, label, buffer, len, change, submit, reserved)
@@ -8392,6 +8768,10 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
 // wrapped to `width`; suggestions as an autocomplete's (list `key + 62`, items
 // `key + 63 + index`).
 fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (win, win_error) = windows_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width)
+        ret (win, win_error)
+    }
     if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
     if items_error != ok { ret (zero, TooLarge) }
