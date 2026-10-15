@@ -2521,17 +2521,17 @@ fn windows_table_look() -> TableLook {
     var look: TableLook = zero
     let lk = gl.v3()
     look.on = true
-    look.header_height = lk.header_height
-    look.pad = lk.pad
+    look.header_height = 19.0
+    look.pad = 2.0
     look.text_size = lk.text_size
     look.header = lk.header
     look.header_hover = lk.header_hover
-    look.header_line = lk.header_line
-    look.even = lk.even
-    look.odd = lk.odd
-    look.selected = lk.selected
-    look.selected_line = lk.selected_line
-    look.line = lk.line
+    look.header_line = gl.rgb(0xFFFFFFu32)
+    look.even = gl.rgb(0xEFEFEFu32)
+    look.odd = gl.rgb(0xFFFFFFu32)
+    look.selected = gl.rgb(0xECE9D8u32)
+    look.selected_line = gl.rgb(0xECE9D8u32)
+    look.line = gl.rgb(0xE5E5E5u32)
     look.group = lk.group_row
     look.track = lk.track
     look.thumb = lk.thumb
@@ -4945,19 +4945,18 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         let tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
         // The twisty, or its blank for a leaf.
         var twisty = widget.box(0u64, control.sized_style(24.0, 24.0), zero)
-        if win { twisty = widget.box(0u64, control.sized_style(step, tall), zero) }
+        if win { twisty = widget.box(0u64, control.sized_style(14.0, tall), zero) }
         if win && entry.branch {
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
-            var box_shape = gl.Shape.PlusBox
-            if open { box_shape = gl.Shape.MinusBox }
-            let (box, box_error) = gl.mark(a, box_shape, gl.rgb(0x919191u32), gl.rgb(0xFFFFFFu32), 11.0, 11.0)
+            var box_shape = gl.Shape.TreePlus
+            if open { box_shape = gl.Shape.TreeMinus }
+            let (box, box_error) = gl.mark(a, box_shape, gl.rgb(0x919191u32), gl.rgb(0xFFFFFFu32), 9.0, 10.0)
             if box_error != ok { ret (none, box_error) }
             let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
             if box_held_error != ok { ret (none, TooLarge) }
             box_held[0usize] = box
-            var hit = control.sized_style(step, tall)
-            let side = style.Length { Px: (step - 11.0) * 0.5 }
-            hit.padding = style.EdgeLengths { left: side, top: style.Length { Px: (tall - 11.0) * 0.5 }, right: side, bottom: flat }
+            var hit = control.sized_style(14.0, tall)
+            hit.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 4.0 }, right: flat, bottom: flat }
             twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, hit, box_held[0usize..1usize])
         }
         if entry.branch && !win {
@@ -5017,7 +5016,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         if lead_error != ok { ret (none, TooLarge) }
         lead[0usize] = indent
         lead[1usize] = twisty
-        lead[2usize] = widget.box(0u64, control.sized_style(control.if_else(win, 2.0, 8.0), 0.0), zero)
+        lead[2usize] = widget.box(0u64, control.sized_style(control.if_else(win, 0.0, 8.0), 0.0), zero)
         var lead_count = 3usize
         if options.numbered {
             let (digits, digits_error) = mem.alloc[u8](a, 48usize)
@@ -5578,7 +5577,10 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         view_style.width = style.Length { Px: width }
         view_style.height = style.Length { Px: options.height }
         view_style.overflow = .Clip
-        parts[1usize] = widget.scroll(key + 2u64, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.scrolled, virtual_first: table_first, virtual_count: table_total, virtual_extent: row_extent, fades: false, virtual_extras: zero }, view_style, rows)
+        var scroll_thumb = control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
+        // looks3-e: under the Windows profile v3's bar stands beside the table (below); the viewport's own thumb is invisible
+        if t.tokens.profile == .Windows { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
+        parts[1usize] = widget.scroll(key + 2u64, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: scroll_thumb, change: options.scrolled, virtual_first: table_first, virtual_count: table_total, virtual_extent: row_extent, fades: false, virtual_extras: zero }, view_style, rows)
         part_count = 2usize
     } else {
         var r = 0usize
@@ -5600,6 +5602,18 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..part_count])
+    if t.tokens.profile == .Windows && options.height > 0.0 {
+        // looks3-e: v3's 16 wide bar beside header and rows, as tall as both
+        var row_pitch = row_height_of
+        if !(row_pitch > 0.0) { row_pitch = gl.v3().row_height }
+        let (bar, bar_error) = control.windows_scroll_bar(a, key + 3300u64, t, true, head_height + 1.0 + options.height - 1.0, options.height, f32(table_total) * row_pitch, options.offset)
+        if bar_error != ok { ret (zero, bar_error) }
+        let (beside, beside_error) = mem.alloc[widget.Node](a, 2usize)
+        if beside_error != ok { ret (zero, TooLarge) }
+        beside[0usize] = column_node[0usize]
+        beside[1usize] = bar
+        column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), beside[0usize..2usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = accessibility.ROLE_TREE_GRID
     sem.label = label

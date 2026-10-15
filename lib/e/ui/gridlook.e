@@ -120,7 +120,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape }
 
@@ -184,6 +184,7 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let cy = area.y + area.height * 0.5
     var side = area.width
     if area.height < side { side = area.height }
+    if m.shape == Shape.TreePlus || m.shape == Shape.TreeMinus || m.shape == Shape.TreeBox { ret tree_mark_paint(m, b, area) }
     if m.shape == Shape.StarOutline || m.shape == Shape.StarFilled {
         let (outer, outer_error) = star_path(m.arena, cx, cy, side * 0.5)
         if outer_error != ok { ret outer_error }
@@ -738,3 +739,71 @@ fn svg_fit_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: fit_paint, state: widget.bytes_of[FitMark](&marks[0usize]) } }, style: size, children: none }, ok)
 }
+
+// ---- looks3-e: the tree list's marks, pixel for pixel from the live Filter dialog capture --------
+// TreePlus / TreeMinus: the 9 x 10 expander (a #919191 frame, a light gradient, a navy cross);
+// TreeBox: the 13 x 13 unchecked check box of the node (the capture's grey values, row by row).
+fn tpx(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: rgb(value) } } })
+}
+
+fn tree_box_grays() -> str {
+    ret "ba9ec0c3c3c3c3c3c3c3ba9bc07cc9f0f3f3f3f3f3f3f3edcf8065edf3f3f3f3f3f3f3f3f3f06562f3f3f3f3f3f3f3f3f3f3f36262f3f3f3f3f3f3f3f3f3f3f36262f3f3f3f3f3f3f3f3f3f3f36262f3f3f3f3f3f3f3f3f3f3f36262f3f3f3f3f3f3f3f3f3f3f36262f3f3f3f3f3f3f3f3f3f3f36268edf3f3f3f3f3f3f3f3f3e76894b3e7f3f3f3f3f3f3f3edb08ed89d929292929292929294a3d4efd5c3c0c0c0c0c0c0c0c3d7ef"
+}
+
+fn hex_digit(c: u8) -> u32 {
+    if c >= 97u8 { ret u32(c) - 87u32 }
+    ret u32(c) - 48u32
+}
+
+fn tree_mark_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
+    let x = area.x
+    let y = area.y
+    if m.shape == Shape.TreeBox {
+        let grays = tree_box_grays()
+        var r = 0usize
+        while r < 13usize {
+            var c = 0usize
+            while c < 13usize {
+                let i = (r * 13usize + c) * 2usize
+                let g = hex_digit(grays[i]) * 16u32 + hex_digit(grays[i + 1usize])
+                try tpx(b, x + f32(c), y + f32(r), 1.0, 1.0, g * 65793u32)
+                c += 1usize
+            }
+            r += 1usize
+        }
+        ret ok
+    }
+    // the expander: 9 wide, 10 tall
+    try tpx(b, x, y, 9.0, 10.0, 0x919191u32)
+    try tpx(b, x + 1.0, y, 7.0, 1.0, 0xB0B0B0u32)
+    try tpx(b, x, y, 1.0, 1.0, 0xCCCCCDu32)
+    try tpx(b, x + 8.0, y, 1.0, 1.0, 0xCCCCCDu32)
+    try tpx(b, x + 1.0, y + 1.0, 7.0, 1.0, 0xD8D8D8u32)
+    try tpx(b, x, y + 1.0, 1.0, 1.0, 0x9F9F9Fu32)
+    try tpx(b, x + 8.0, y + 1.0, 1.0, 1.0, 0x9F9F9Fu32)
+    // the light gradient between the frame's sides, rows 2..7
+    try tpx(b, x + 1.0, y + 2.0, 7.0, 1.0, 0xFCFCFCu32)
+    try tpx(b, x + 1.0, y + 3.0, 7.0, 1.0, 0xFBFBFBu32)
+    try tpx(b, x + 1.0, y + 4.0, 7.0, 1.0, 0xFAFAFAu32)
+    try tpx(b, x + 1.0, y + 5.0, 7.0, 1.0, 0xF1F1F1u32)
+    try tpx(b, x + 1.0, y + 6.0, 7.0, 1.0, 0xE6E6E6u32)
+    try tpx(b, x + 1.0, y + 7.0, 7.0, 1.0, 0xE3E3E3u32)
+    try tpx(b, x, y + 8.0, 9.0, 1.0, 0xACACACu32)
+    try tpx(b, x + 1.0, y + 9.0, 7.0, 1.0, 0xD0D0D0u32)
+    try tpx(b, x, y + 9.0, 1.0, 1.0, 0xDDDEDEu32)
+    try tpx(b, x + 8.0, y + 9.0, 1.0, 1.0, 0xDDDEDEu32)
+    // the cross: a two-row bar and, for a plus, a one-wide stem
+    try tpx(b, x + 2.0, y + 4.0, 5.0, 1.0, 0x8595C3u32)
+    try tpx(b, x + 2.0, y + 5.0, 5.0, 1.0, 0xB7BFD5u32)
+    try tpx(b, x + 4.0, y + 4.0, 1.0, 1.0, 0x405895u32)
+    try tpx(b, x + 4.0, y + 5.0, 1.0, 1.0, 0x344D84u32)
+    if m.shape == Shape.TreePlus {
+        try tpx(b, x + 4.0, y + 2.0, 1.0, 1.0, 0x6F80A0u32)
+        try tpx(b, x + 4.0, y + 3.0, 1.0, 1.0, 0x294272u32)
+        try tpx(b, x + 4.0, y + 6.0, 1.0, 1.0, 0x294272u32)
+        try tpx(b, x + 4.0, y + 7.0, 1.0, 1.0, 0xA5AEBDu32)
+    }
+    ret ok
+}
+// ---- end looks3-e ------------------------------------------------------------------------------
