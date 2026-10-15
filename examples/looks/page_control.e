@@ -78,7 +78,108 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (6usize, ok)
 }
 
+// The native tab strips of v3's lfOffice11 page controls (ref/windows/dialogs): the Filter window's
+// (Blocks / Formats / Editions chosen and focused, then Cards and Options) and the Customization window's
+// (Bands, Columns chosen). One strip per cell at (0, 0); the cells are as large as the captures' crops.
+// `page_control.exe filter` and `page_control.exe custom` write page_control_filter.png and
+// page_control_custom.png, which compare pixel for pixel with ref/windows/page_control_*.png
+// (scripts/looks_refs_d.py).
+fn build_native(a: *mem.Arena, cells: []looks.Cell, t: *const control.Theme, labels: []const str, selected: usize, width: f32, drive: looks.Drive, high: f32) -> (usize, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, labels.len)
+    if actions_error != ok { ret (0usize, actions_error) }
+    var k = 0usize
+    while k < labels.len {
+        actions[k] = widget.Submit { ctx: zero, invoke: noop_submit }
+        k += 1usize
+    }
+    var options = control.tabs_options()
+    options.native = true
+    options.width = width
+    let (bar, bar_error) = control.tabs_of(a, 1000u64, t, labels, selected, actions[0usize..labels.len], options)
+    if bar_error != ok { ret (0usize, bar_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = bar
+    parts[1usize] = widget.spacer(0u64, 0.0)
+    var column = looks.size_style(width, high)
+    cells[0usize] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..1usize]), drive: drive }
+    ret (1usize, ok)
+}
+
+fn build_filter(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 0usize, 229.0, .Focus, 22.0)
+    ret (made, made_error)
+}
+
+fn build_custom(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let labels = [2]str{ "Bands", "Columns" }
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..2usize], 1usize, 96.0, .None, 22.0)
+    ret (made, made_error)
+}
+
+// The ultra-flat tab strips (lfUltraFlat, NativeStyle = False) of the Statistics window (a picture before
+// every tab, Colors chosen and focused) and the About window (two tabs, MTG Studio chosen): one strip
+// per cell at (0, 0). `page_control.exe stats` and `page_control.exe about` write page_control_stats.png
+// and page_control_about.png (compared with ref/windows/page_control_*.png). The pictures are v3's
+// bitmaps; a drawn glyph stands in.
+fn build_ultra(a: *mem.Arena, cells: []looks.Cell, t: *const control.Theme, labels: []const str, width: f32, pictures: bool, drive: looks.Drive) -> (usize, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, labels.len)
+    if actions_error != ok { ret (0usize, actions_error) }
+    var k = 0usize
+    while k < labels.len {
+        actions[k] = widget.Submit { ctx: zero, invoke: noop_submit }
+        k += 1usize
+    }
+    let glyphs = [3]control.GlyphKind{ .Picture, .Picture, .Picture }
+    var options = control.tabs_options()
+    options.width = width
+    if pictures { options.icons = glyphs[0usize..labels.len] }
+    let (bar, bar_error) = control.tabs_of(a, 1000u64, t, labels, 0usize, actions[0usize..labels.len], options)
+    if bar_error != ok { ret (0usize, bar_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = bar
+    var column = looks.size_style(width, 24.0)
+    cells[0usize] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..1usize]), drive: drive }
+    ret (1usize, ok)
+}
+
+fn build_stats(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let labels = [2]str{ "Colors", "Rarity" }
+    let (made, made_error) = build_ultra(a, cells, t, labels[0usize..2usize], 126.0, true, .Focus)
+    ret (made, made_error)
+}
+
+fn build_about(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let labels = [2]str{ "MTG Studio", "Details" }
+    let (made, made_error) = build_ultra(a, cells, t, labels[0usize..2usize], 120.0, false, .None)
+    ret (made, made_error)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len == 2usize {
+        let first_byte = args[1usize][0usize]
+        if first_byte == 115u8 {
+            let stats = looks.Sheet { name: "page_control_stats", cells: 1usize, columns: 1usize, cell_w: 126.0, cell_h: 24.0, ctx: zero, build: build_stats }
+            ret looks.run_all(a, &stats)
+        }
+        if first_byte == 97u8 {
+            let about = looks.Sheet { name: "page_control_about", cells: 1usize, columns: 1usize, cell_w: 120.0, cell_h: 24.0, ctx: zero, build: build_about }
+            ret looks.run_all(a, &about)
+        }
+    }
+    if args.len == 2usize {
+        let first = args[1usize][0usize]
+        if first == 102u8 {
+            let filter = looks.Sheet { name: "page_control_filter", cells: 1usize, columns: 1usize, cell_w: 229.0, cell_h: 22.0, ctx: zero, build: build_filter }
+            ret looks.run_all(a, &filter)
+        }
+        if first == 99u8 {
+            let custom = looks.Sheet { name: "page_control_custom", cells: 1usize, columns: 1usize, cell_w: 96.0, cell_h: 22.0, ctx: zero, build: build_custom }
+            ret looks.run_all(a, &custom)
+        }
+    }
     if args.len > 1usize {
         let bottom = looks.Sheet { name: "page_control_bottom", cells: 4usize, columns: 2usize, cell_w: 300.0, cell_h: 60.0, ctx: zero, build: build_bottom }
         ret looks.run_all(a, &bottom)
