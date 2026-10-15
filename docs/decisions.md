@@ -41537,3 +41537,6 @@ Picking Footer and a colour paints the preview's footer band (the "Page 1" / dat
 
 ## D4152 - G012: the Caption style's colour paints the printed title
 Picking Caption and a colour puts it behind the report title on the preview page (DZ-style-caption-in-preview-v5.png: light cyan behind "Collection"; `caption_look`). A first version set the colour on the padded wrapper and painted from the sheet's edge to the title (the padding is part of the node), so the heading is wrapped in its own box. Five styles still draw nothing (BandHeader, Group, Preview, Selection and the two card styles).
+
+## D4153 - G012: the styles with nothing to paint
+Of the Designer's thirteen styles, eight now colour the preview page: Caption (title), Header (column headers), Content, Content Even Rows, Content Odd Rows (data cells), Filter Bar (filter strip), Footer (footer band) and, through the list, their own strips. The other five have no counterpart on the flat table the preview prints: BandHeader (no bands), Group (no group rows), Selection (no selected row), Preview (no rules-text rows) and the two card styles (no card layout). Their colours are kept and shown in the Styles list; they will draw when the page grows those parts. Style fonts are kept as "8 pt. Tahoma" only: the page's text size comes from the grid's theme, and the Font window changes nothing.
