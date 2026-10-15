@@ -4931,7 +4931,7 @@ fn print_cell(a: *mem.Arena, grid: *Grid, text: str, width: f32, header: bool) -
     if label_error != ok { ret (zero, label_error) }
     var box = control.sized_style(width, 18.0)
     box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
-    if header { box.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) } }
+    if header { box.background = paint.Brush { Solid: gl.rgb(print_header_fill(grid)) } }
     box.border = style.Border { width: 1.0, color: gl.rgb(0xE0E0E0u32) }
     ret (widget.box(0u64, box, one(a, widget.padded(0u64, 3.0, 1.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
 }
@@ -10870,4 +10870,10 @@ fn dz_strip_rgb(grid: *const Grid, i: usize) -> u32 {
     if ((grid.dz_style_has >> u16(i)) & 1u16) != 0u16 { ret grid.dz_style_rgb[i] }
     if i == 7usize { ret 0xA0A0A0u32 }
     ret 0xE0E0E0u32
+}
+
+// The header row of the printed table: the "Header" style's colour from the Designer (list entry 10), else light grey.
+fn print_header_fill(grid: *const Grid) -> u32 {
+    if ((grid.dz_style_has >> 10u16) & 1u16) != 0u16 { ret grid.dz_style_rgb[10usize] }
+    ret 0xF0F0F0u32
 }

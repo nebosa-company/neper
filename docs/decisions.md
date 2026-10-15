@@ -41504,3 +41504,6 @@ The colour data I said was missing was in the recording: the 48 swatches were sa
 
 ## D4141 - G012: swatches of the Color Editor can be picked and applied
 A tap on a basic colour fills the editor's square with it and sets the R, G and B boxes (CE4-color-editor-picked-v5.png: teal, 0 / 128 / 128); OK gives that colour to the picked style, whose sample strip in the Styles list takes it (DZ-format-report-Styles-colored-v5.png: Content Even Rows teal); Cancel leaves the strip as it was. `Grid.dz_pick_color` is stored XOR white so the default is white; `dz_style_rgb` / `dz_style_has` keep one colour per style. H, S and L stay at their white values (not computed from the pick), custom colours, the hex box and the hue square are still not built, and the colour does not reach the preview report.
+
+## D4142 - G012: the Header style's colour reaches the printed report
+Picking the Header style, a colour in the Color Editor and OK paints the preview's header row with it (DZ-style-header-in-preview-v5.png: teal header row, `print_header_fill`; light grey until then). The other twelve styles' colours are kept but do not draw anything yet (Content, Even/Odd rows, Footer, Group, Filter Bar ... would each map to a part of the page), and neither do their fonts.
