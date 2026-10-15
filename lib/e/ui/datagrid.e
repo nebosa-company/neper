@@ -165,6 +165,7 @@ dz_title_len: usize,
 dz_title_set: bool,
 dz_foot: [48]u8,
 dz_foot_len: usize,
+dz_pick_color: u32,
 dz_modes: [2]u8,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
@@ -10110,6 +10111,10 @@ fn designer_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let (font_node, font_error) = dz_font_dialog(a, grid)
         ret (font_node, font_error)
     }
+    if grid.dz_dlg == 4u8 {
+        let (color_node, color_error) = dz_color_dialog(a, grid)
+        ret (color_node, color_error)
+    }
     if grid.dz_dlg != 0u8 {
         let (dialog, dialog_error) = dz_dialog(a, grid)
         ret (dialog, dialog_error)
@@ -10260,10 +10265,11 @@ fn dz_grey_button(a: *mem.Arena, grid: *Grid, text: str, width: f32, top: f32) -
 fn dz_style_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
-    let (clear_tap, clear_tap_error) = mem.alloc[DesignTap](a, 2usize)
+    let (clear_tap, clear_tap_error) = mem.alloc[DesignTap](a, 3usize)
     if clear_tap_error != ok { ret (zero, control.TooLarge) }
     clear_tap[0usize] = DesignTap { grid: grid, kind: 8u8, value: 0usize }
     clear_tap[1usize] = DesignTap { grid: grid, kind: 6u8, value: 3usize }
+    clear_tap[2usize] = DesignTap { grid: grid, kind: 6u8, value: 4usize }
     var i = 0usize
     while i < 4usize {
         var words = "Font..."
@@ -10275,6 +10281,9 @@ fn dz_style_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         cells[i] = button
         if i == 0usize && grid.dz_style != 0u8 {
             cells[i] = widget.region(grid.key + MENU_KEY + 851281u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&clear_tap[1usize]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(92.0, 32.0), one(a, button))
+        }
+        if i == 1usize && grid.dz_style != 0u8 {
+            cells[i] = widget.region(grid.key + MENU_KEY + 851282u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&clear_tap[2usize]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(92.0, 32.0), one(a, button))
         }
         if i == 3usize && grid.dz_style != 0u8 {
             cells[i] = widget.region(grid.key + MENU_KEY + 851280u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&clear_tap[0usize]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(92.0, 32.0), one(a, button))
@@ -10701,4 +10710,105 @@ fn dz_font_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..4usize]), ok)
+}
+
+// ---- the Color Editor of the Styles tab (v3: the DevExpress colour editor) ----
+
+fn dz_swatch_grid(a: *mem.Arena, rows_n: usize, filled: bool) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, rows_n + 1usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var r = 0usize
+    while r < rows_n {
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
+        if cells_error != ok { ret (zero, control.TooLarge) }
+        var c = 0usize
+        while c < 8usize {
+            var cell = control.sized_style(32.0, 30.0)
+            cell.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
+            cell.margin = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 2.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            if filled { cell.background = paint.Brush { Solid: bar_palette(u8(r * 8usize + c)) } }
+            cells[c] = widget.box(0u64, cell, zero)
+            c += 1usize
+        }
+        rows[r] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..8usize])
+        r += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..rows_n]), ok)
+}
+
+fn dz_color_left(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (basic_head, basic_error) = dz_heading(a, grid, "Basic Colors")
+    if basic_error != ok { ret (zero, basic_error) }
+    let (basic, basic_grid_error) = dz_swatch_grid(a, 4usize, true)
+    if basic_grid_error != ok { ret (zero, basic_grid_error) }
+    let (custom_head, custom_error) = dz_heading(a, grid, "Custom Colors")
+    if custom_error != ok { ret (zero, custom_error) }
+    let (custom, custom_grid_error) = dz_swatch_grid(a, 2usize, false)
+    if custom_grid_error != ok { ret (zero, custom_grid_error) }
+    let (define, define_error) = dz_field(a, grid, "Define Custom Colors >>", 300.0)
+    if define_error != ok { ret (zero, define_error) }
+    parts[0usize] = basic_head
+    parts[1usize] = basic
+    parts[2usize] = custom_head
+    parts[3usize] = custom
+    parts[4usize] = define
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(310.0, 400.0), parts[0usize..5usize]), ok)
+}
+
+fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    var square = control.sized_style(300.0, 220.0)
+    square.background = paint.Brush { Solid: gl.rgb(0xFF9060u32) }
+    square.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
+    parts[0usize] = widget.box(0u64, square, zero)
+    var i = 0usize
+    while i < 6usize {
+        var words = "H:  0"
+        if i == 1usize { words = "S:  0" }
+        if i == 2usize { words = "L:  255" }
+        if i == 3usize { words = "R:  255" }
+        if i == 4usize { words = "G:  255" }
+        if i == 5usize { words = "B:  255" }
+        let (box, box_error) = dz_field(a, grid, words, 140.0)
+        if box_error != ok { ret (zero, box_error) }
+        parts[1usize + i] = box
+        i += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(320.0, 400.0), parts[0usize..7usize]), ok)
+}
+
+fn dz_color_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    let (close, close_error) = mem.alloc[DesignTap](a, 1usize)
+    if close_error != ok { ret (zero, control.TooLarge) }
+    close[0usize] = DesignTap { grid: grid, kind: 6u8, value: 0usize }
+    let (title, title_error) = dz_heading(a, grid, "Color Editor")
+    if title_error != ok { ret (zero, title_error) }
+    rows[0usize] = title
+    let (left, left_error) = dz_color_left(a, grid)
+    if left_error != ok { ret (zero, left_error) }
+    let (right, right_error) = dz_color_right(a, grid)
+    if right_error != ok { ret (zero, right_error) }
+    let (halves, halves_error) = mem.alloc[widget.Node](a, 2usize)
+    if halves_error != ok { ret (zero, control.TooLarge) }
+    halves[0usize] = left
+    halves[1usize] = right
+    rows[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(680.0, 410.0), halves[0usize..2usize])
+    let (ok_button, ok_error) = dz_dialog_button(a, grid, "OK", &close[0usize], grid.key + MENU_KEY + 851254u64)
+    if ok_error != ok { ret (zero, ok_error) }
+    let (cancel_button, cancel_error) = dz_dialog_button(a, grid, "Cancel", &close[0usize], grid.key + MENU_KEY + 851255u64)
+    if cancel_error != ok { ret (zero, cancel_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, control.TooLarge) }
+    pair[0usize] = ok_button
+    pair[1usize] = cancel_button
+    rows[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(680.0, 44.0), pair[0usize..2usize])
+    var panel = control.sized_style(700.0, 520.0)
+    panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..3usize]), ok)
 }
