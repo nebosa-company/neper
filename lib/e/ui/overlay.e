@@ -58,14 +58,27 @@ fn tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 // `duration-short-2`, in a box keyed `key + 8192` that is there shown or not;
 // leaving, it is out of the tree and its overlay is keyed `key + 8195`.
 fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, text: str, shortcut: str, shown: bool) -> (widget.Node, err) {
-    let entering = opening_share_over(t, key, shown, t.tokens.durations.short4)
-    let leaving = closing_share_over(t, key, shown, t.tokens.durations.short2)
+    let windows = t.tokens.profile == .Windows
+    var entering = opening_share_over(t, key, shown, t.tokens.durations.short4)
+    var leaving = closing_share_over(t, key, shown, t.tokens.durations.short2)
+    // v3's hint window comes and goes at once (no fade, no scale).
+    if windows {
+        entering = 1.0
+        leaving = 0.0
+    }
     if !shown && !(leaving > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
-    let ink = style.color(t.tokens, .InverseOnSurface)
+    var ink = style.color(t.tokens, .InverseOnSurface)
+    if windows { ink = style.color(t.tokens, .Text) }
     var caption = control.text_options()
     caption.role = .BodySmall
     caption.wrap = .Word
     caption.max_lines = 2u32
+    if windows {
+        caption.role = .Body
+        // v3's hint does not wrap by itself: its text carries its own line breaks.
+        caption.wrap = .None
+        caption.max_lines = 0u32
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     let (label_node, label_error) = control.colored_text(a, 0u64, text, t, caption, ink)
@@ -87,6 +100,23 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let sides = style.Length { Px: 8.0 }
     let ends = style.Length { Px: 4.0 }
     plate.padding = style.EdgeLengths { left: sides, top: ends, right: sides, bottom: ends }
+    var placement: widget.Placement = .AboveCenter
+    var gap_y: f32 = -4.0
+    if windows {
+        // The Windows look (docs/ui/looks): a square white hint with a 1 px #767676 frame,
+        // measured from the grid header hint (docs/grid-parity/T1-header-hint-v5.png), shown
+        // below its anchor.
+        plate.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+        plate.border = style.Border { width: 1.0, color: style.hex(7763574u32) }
+        plate.radius = 0.0
+        plate.min_height = style.Length { Px: 0.0 }
+        plate.max_width = style.Length { Px: 320.0 }
+        let pad_x = style.Length { Px: 4.0 }
+        let pad_y = style.Length { Px: 2.0 }
+        plate.padding = style.EdgeLengths { left: pad_x, top: pad_y, right: pad_x, bottom: pad_y }
+        placement = .BelowCenter
+        gap_y = 4.0
+    }
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
     surface[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, plate, parts[0usize..n])
@@ -96,7 +126,7 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (tip, tip_error) = mem.alloc[widget.Node](a, 1usize)
     if tip_error != ok { ret (zero, TooLarge) }
     tip[0usize] = widget.semantics(0u64, sem, style.defaults(), surface[0usize..1usize])
-    let (placed_node, placed_error) = transient_placed(a, t, key, shown, entering, leaving, 0.8, tip[0usize], surface[0usize], widget.Overlay { anchor: anchor, placement: .AboveCenter, offset: geometry.Point { x: 0.0, y: -4.0 }, modal: false, dismiss: zero })
+    let (placed_node, placed_error) = transient_placed(a, t, key, shown, entering, leaving, 0.8, tip[0usize], surface[0usize], widget.Overlay { anchor: anchor, placement: placement, offset: geometry.Point { x: 0.0, y: gap_y }, modal: false, dismiss: zero })
     ret (placed_node, placed_error)
 }
 
@@ -181,8 +211,13 @@ fn transient_placed(a: *mem.Arena, t: *const control.Theme, key: widget.Key, sho
 // non-modal overlay, a tooltip in the tree named by the subhead (or the text).
 // (D1427) It comes and goes as the plain tooltip does.
 fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, subhead: str, text: str, actions: []const MenuItem, shown: bool) -> (widget.Node, err) {
-    let entering = opening_share_over(t, key, shown, t.tokens.durations.short4)
-    let leaving = closing_share_over(t, key, shown, t.tokens.durations.short2)
+    let windows = t.tokens.profile == .Windows
+    var entering = opening_share_over(t, key, shown, t.tokens.durations.short4)
+    var leaving = closing_share_over(t, key, shown, t.tokens.durations.short2)
+    if windows {
+        entering = 1.0
+        leaving = 0.0
+    }
     if !shown && !(leaving > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     if actions.len > 2usize { ret (zero, TooLarge) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
@@ -191,6 +226,7 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     var words = control.text_options()
     if subhead.len > 0usize {
         words.role = .TitleSmall
+        if windows { words.role = .Body }
         words.wrap = .Word
         let (head, head_error) = control.colored_text(a, 0u64, subhead, t, words, style.color(t.tokens, .OnSurface))
         if head_error != ok { ret (zero, head_error) }
@@ -203,7 +239,14 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     words.role = .BodyMedium
     words.wrap = .Word
     words.max_lines = 4u32
-    let (body, body_error) = control.colored_text(a, 0u64, text, t, words, style.color(t.tokens, .OnSurfaceVariant))
+    if windows {
+        words.role = .Body
+        words.wrap = .None
+        words.max_lines = 0u32
+    }
+    var body_ink = style.color(t.tokens, .OnSurfaceVariant)
+    if windows { body_ink = style.color(t.tokens, .Text) }
+    let (body, body_error) = control.colored_text(a, 0u64, text, t, words, body_ink)
     if body_error != ok { ret (zero, body_error) }
     parts[n] = body
     n += 1usize
@@ -242,11 +285,25 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     raised.elevation = 2u8
     raised.radius = t.tokens.radii.md
     raised.padding = 16.0
+    if windows {
+        // The Windows look (docs/ui/looks): the square white hint with its 1 px #767676 frame.
+        raised.elevation = 0u8
+        raised.radius = 0.0
+        raised.padding = 4.0
+    }
     var plate = control.surface_style(t, raised)
     plate.padding.top = style.Length { Px: 12.0 }
     plate.padding.bottom = style.Length { Px: 8.0 }
     plate.min_height = style.Length { Px: 48.0 }
     plate.max_width = style.Length { Px: 312.0 }
+    if windows {
+        let pad_x = style.Length { Px: 4.0 }
+        let pad_y = style.Length { Px: 2.0 }
+        plate.padding = style.EdgeLengths { left: pad_x, top: pad_y, right: pad_x, bottom: pad_y }
+        plate.min_height = style.Length { Px: 0.0 }
+        plate.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+        plate.border = style.Border { width: 1.0, color: style.hex(7763574u32) }
+    }
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
     surface[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plate, parts[0usize..n])

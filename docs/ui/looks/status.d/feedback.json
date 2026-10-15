@@ -1,7 +1,46 @@
 {
- "progress_bar": {"looks": {
-  "neper": {"status": "ready", "screenshot": "neper/progress_bar.png", "notes": "The baseline: the v2 pill bar (4 tall, stop dot), determinate and indeterminate."},
-  "windows": {"status": "review", "screenshot": "windows/progress_bar.png", "notes": "v3's TcxProgressBar with NativeStyle: 21 tall (DFM default height), 1 px frame, flat square green fill inside it, percent centred (ShowTextStyle cxtsText: black on the track, white over the fill), marquee as one travelling segment. Read from import.vcl.form.dfm; no capture of a v3 progress bar exists.",
-   "gaps": ["No v3 capture of a progress bar: the frame #BCBCBC, track #E6E6E6 and fill #06B025 are the Windows 10/11 comctl theme from memory", "Marquee segment width (a fifth of the bar) and speed (2 s) are guesses; the native glow highlight is not drawn", "Text is Segoe UI 11.2 px; v3 sets Tahoma 8 pt (Height -11) for this bar", "Not implemented: BarStyle cxbsGradient (main form: 0,89,130 to 0,62,91), vertical Orientation and PeakValue (statistics form), disabled state, error and paused tones", "progress_ring keeps the Neper look (v3 has none)"]}
- }}
+ "progress_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/progress_bar.png",
+    "notes": "The baseline: the v2 pill bar (4 tall, stop dot), determinate and indeterminate."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "v3's TcxProgressBar with NativeStyle: 21 tall (DFM default height), 1 px frame, flat square green fill inside it, percent centred (ShowTextStyle cxtsText: black on the track, white over the fill), marquee as one travelling segment. Read from import.vcl.form.dfm; no capture of a v3 progress bar exists.",
+    "gaps": [
+     "No v3 capture of a progress bar: the frame #BCBCBC, track #E6E6E6 and fill #06B025 are the Windows 10/11 comctl theme from memory",
+     "Marquee segment width (a fifth of the bar) and speed (2 s) are guesses; the native glow highlight is not drawn",
+     "Text is Segoe UI 11.2 px; v3 sets Tahoma 8 pt (Height -11) for this bar",
+     "Not implemented: BarStyle cxbsGradient (main form: 0,89,130 to 0,62,91), vertical Orientation and PeakValue (statistics form), disabled state, error and paused tones",
+     "progress_ring keeps the Neper look (v3 has none)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/hint.png",
+    "notes": "The baseline: the dark plain tooltip and the raised rich tooltip."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/hint.png",
+    "notes": "v3's TcxHintStyle window: square, white face, 1 px #767676 frame, black Segoe UI 11.2 px text with 4 x 2 px padding, shown below its anchor with no fade or scale; lines break only where the text does. Colours and padding read off the grid header hint capture docs/grid-parity/T1-header-hint-v5.png (the v5 grid, recorded as matching v3 in D2430); v3 sets Tahoma 8 pt for the hint (hscMain.HintStyle.Font).",
+    "gaps": [
+     "No capture of the real v3 hint itself: the look is taken from the v5 header hint that was matched to it",
+     "Font is Segoe UI 11.2 px, v3 configures Tahoma 8 pt (Height -11) for hint and caption",
+     "Padding, the 320 px cap on the plate and the 4 px gap under the anchor are fitted, not measured",
+     "The v3 hint has a drop shadow on some Windows versions; none is drawn",
+     "Rich tooltip action buttons keep the Neper text-button look and are not in the sheet",
+     "The sheet holds five cells: a sixth overlay made the harness frame an InvalidTree (probably its 16384-command limit)",
+     "Dark and high-contrast Windows palettes keep Neper colours with the Windows shape"
+    ]
+   }
+  }
+ }
 }
