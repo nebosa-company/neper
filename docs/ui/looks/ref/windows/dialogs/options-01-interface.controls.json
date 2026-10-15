@@ -1,0 +1,176 @@
+{
+  "name": "options-01-interface",
+  "how": "Tools menu, item at popup y=153 (page 1)",
+  "class": "TOptionsForm",
+  "title": "Options",
+  "width": 728,
+  "height": 494,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TCategoryButtons",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 197,
+      "h": 416,
+      "id": 592838,
+      "hwnd": 592838
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 205,
+      "y": 31,
+      "w": 515,
+      "h": 416,
+      "id": 3083196,
+      "hwnd": 3083196
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 33,
+      "w": 511,
+      "h": 30,
+      "id": 461726,
+      "hwnd": 461726
+    },
+    {
+      "class": "TcxLabel",
+      "text": "General",
+      "visible": true,
+      "x": 536,
+      "y": 39,
+      "w": 153,
+      "h": 17,
+      "id": 3673014,
+      "hwnd": 3673014
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Interface (F2)",
+      "visible": true,
+      "x": 213,
+      "y": 39,
+      "w": 83,
+      "h": 17,
+      "id": 723904,
+      "hwnd": 723904
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 854882,
+      "hwnd": 854882
+    },
+    {
+      "class": "TInterfaceForm",
+      "text": "Interface",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 2427854,
+      "hwnd": 2427854
+    },
+    {
+      "class": "TcxCheckBox",
+      "text": "Show tooltips",
+      "visible": true,
+      "x": 215,
+      "y": 155,
+      "w": 86,
+      "h": 21,
+      "id": 68572,
+      "hwnd": 68572
+    },
+    {
+      "class": "TcxCheckBox",
+      "text": "Show card preview tooltip",
+      "visible": true,
+      "x": 215,
+      "y": 128,
+      "w": 146,
+      "h": 21,
+      "id": 68570,
+      "hwnd": 68570
+    },
+    {
+      "class": "TcxCheckBox",
+      "text": "Show card image while dragging",
+      "visible": true,
+      "x": 215,
+      "y": 101,
+      "w": 175,
+      "h": 21,
+      "id": 68568,
+      "hwnd": 68568
+    },
+    {
+      "class": "TcxCheckBox",
+      "text": "Hide splash screen on start",
+      "visible": true,
+      "x": 215,
+      "y": 74,
+      "w": 274,
+      "h": 21,
+      "id": 854998,
+      "hwnd": 854998
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 447,
+      "w": 712,
+      "h": 39,
+      "id": 1903562,
+      "hwnd": 1903562
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 636,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2493394,
+      "hwnd": 2493394
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 468,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2165716,
+      "hwnd": 2165716
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 552,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 6097850,
+      "hwnd": 6097850
+    }
+  ]
+}

@@ -1,0 +1,242 @@
+{
+  "name": "deck-legality",
+  "how": "File menu, item at popup y=233",
+  "class": "TDeckLegalityForm",
+  "title": "Deck Legality",
+  "width": 555,
+  "height": 486,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 439,
+      "w": 539,
+      "h": 39,
+      "id": 1772264,
+      "hwnd": 1772264
+    },
+    {
+      "class": "TcxButton",
+      "text": "Help",
+      "visible": true,
+      "x": 22,
+      "y": 448,
+      "w": 75,
+      "h": 23,
+      "id": 3673032,
+      "hwnd": 3673032
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Last update on October 10, 2026",
+      "visible": true,
+      "x": 103,
+      "y": 451,
+      "w": 270,
+      "h": 17,
+      "id": 5376788,
+      "hwnd": 5376788
+    },
+    {
+      "class": "TcxButton",
+      "text": "Close",
+      "visible": true,
+      "x": 460,
+      "y": 448,
+      "w": 75,
+      "h": 23,
+      "id": 265168,
+      "hwnd": 265168
+    },
+    {
+      "class": "TcxGroupBox",
+      "text": "Select Format ",
+      "visible": true,
+      "x": 26,
+      "y": 39,
+      "w": 513,
+      "h": 93,
+      "id": 2296324,
+      "hwnd": 2296324
+    },
+    {
+      "class": "TcxButton",
+      "text": "P&easant",
+      "visible": true,
+      "x": 446,
+      "y": 95,
+      "w": 75,
+      "h": 23,
+      "id": 920516,
+      "hwnd": 920516
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Brawl",
+      "visible": true,
+      "x": 365,
+      "y": 95,
+      "w": 75,
+      "h": 23,
+      "id": 396172,
+      "hwnd": 396172
+    },
+    {
+      "class": "TcxButton",
+      "text": "Comm &1v1",
+      "visible": true,
+      "x": 284,
+      "y": 95,
+      "w": 75,
+      "h": 23,
+      "id": 396090,
+      "hwnd": 396090
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Commander",
+      "visible": true,
+      "x": 203,
+      "y": 95,
+      "w": 75,
+      "h": 23,
+      "id": 1838018,
+      "hwnd": 1838018
+    },
+    {
+      "class": "TcxButton",
+      "text": "&2HG",
+      "visible": true,
+      "x": 122,
+      "y": 95,
+      "w": 75,
+      "h": 23,
+      "id": 2362324,
+      "hwnd": 2362324
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Pauper",
+      "visible": true,
+      "x": 41,
+      "y": 95,
+      "w": 75,
+      "h": 23,
+      "id": 2755538,
+      "hwnd": 2755538
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Modern",
+      "visible": true,
+      "x": 122,
+      "y": 66,
+      "w": 75,
+      "h": 23,
+      "id": 1902858,
+      "hwnd": 1902858
+    },
+    {
+      "class": "TcxButton",
+      "text": "&All",
+      "visible": true,
+      "x": 446,
+      "y": 66,
+      "w": 75,
+      "h": 23,
+      "id": 265164,
+      "hwnd": 265164
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Vintage",
+      "visible": true,
+      "x": 365,
+      "y": 66,
+      "w": 75,
+      "h": 23,
+      "id": 2885150,
+      "hwnd": 2885150
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Legacy",
+      "visible": true,
+      "x": 284,
+      "y": 66,
+      "w": 75,
+      "h": 23,
+      "id": 527146,
+      "hwnd": 527146
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Pioneer",
+      "visible": true,
+      "x": 203,
+      "y": 66,
+      "w": 75,
+      "h": 23,
+      "id": 1706790,
+      "hwnd": 1706790
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Standard",
+      "visible": true,
+      "x": 41,
+      "y": 66,
+      "w": 75,
+      "h": 23,
+      "id": 1182498,
+      "hwnd": 1182498
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 23,
+      "y": 138,
+      "w": 516,
+      "h": 295,
+      "id": 1575712,
+      "hwnd": 1575712
+    },
+    {
+      "class": "TChromium",
+      "text": "",
+      "visible": true,
+      "x": 24,
+      "y": 139,
+      "w": 514,
+      "h": 293,
+      "id": 1706496,
+      "hwnd": 1706496
+    },
+    {
+      "class": "CefBrowserWindow",
+      "text": "",
+      "visible": true,
+      "x": 24,
+      "y": 139,
+      "w": 514,
+      "h": 293,
+      "id": 0,
+      "hwnd": 2230792
+    },
+    {
+      "class": "WebViewHost",
+      "text": "",
+      "visible": true,
+      "x": 24,
+      "y": 139,
+      "w": 514,
+      "h": 293,
+      "id": 0,
+      "hwnd": 592626
+    }
+  ]
+}

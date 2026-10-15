@@ -1,0 +1,10 @@
+{
+  "name": "menu-Search",
+  "how": "click 'Search' on the Main Menu bar",
+  "class": "TdxBarSubMenuControl",
+  "title": "",
+  "width": 227,
+  "height": 488,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": []
+}

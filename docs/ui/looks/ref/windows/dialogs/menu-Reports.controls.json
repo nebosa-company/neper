@@ -1,0 +1,10 @@
+{
+  "name": "menu-Reports",
+  "how": "click 'Reports' on the Main Menu bar",
+  "class": "TdxBarSubMenuControl",
+  "title": "",
+  "width": 228,
+  "height": 206,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": []
+}

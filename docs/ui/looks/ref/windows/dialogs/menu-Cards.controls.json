@@ -1,0 +1,10 @@
+{
+  "name": "menu-Cards",
+  "how": "click 'Cards' on the Main Menu bar",
+  "class": "TdxBarSubMenuControl",
+  "title": "",
+  "width": 217,
+  "height": 496,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": []
+}

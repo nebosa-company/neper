@@ -1,0 +1,165 @@
+{
+  "name": "options-05-internet-authentication",
+  "how": "Tools menu, item at popup y=153, then click page 5 in the left category list",
+  "class": "TOptionsForm",
+  "title": "Options",
+  "width": 728,
+  "height": 494,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TCategoryButtons",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 197,
+      "h": 416,
+      "id": 592838,
+      "hwnd": 592838
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 205,
+      "y": 31,
+      "w": 515,
+      "h": 416,
+      "id": 3083196,
+      "hwnd": 3083196
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 33,
+      "w": 511,
+      "h": 30,
+      "id": 461726,
+      "hwnd": 461726
+    },
+    {
+      "class": "TcxLabel",
+      "text": "General",
+      "visible": true,
+      "x": 536,
+      "y": 39,
+      "w": 153,
+      "h": 17,
+      "id": 3673014,
+      "hwnd": 3673014
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Internet Authentication (F6)",
+      "visible": true,
+      "x": 213,
+      "y": 39,
+      "w": 165,
+      "h": 17,
+      "id": 723904,
+      "hwnd": 723904
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 854882,
+      "hwnd": 854882
+    },
+    {
+      "class": "TInternetAuthenticationForm",
+      "text": "Internet Authentication",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 2952142,
+      "hwnd": 2952142
+    },
+    {
+      "class": "TcxImageComboBox",
+      "text": "",
+      "visible": true,
+      "x": 371,
+      "y": 71,
+      "w": 189,
+      "h": 21,
+      "id": 461788,
+      "hwnd": 461788
+    },
+    {
+      "class": "TcxCustomComboBoxInnerEdit",
+      "text": "",
+      "visible": true,
+      "x": 374,
+      "y": 74,
+      "w": 168,
+      "h": 13,
+      "id": 592856,
+      "hwnd": 592856
+    },
+    {
+      "class": "TcxLabel",
+      "text": "&Authentication Type:",
+      "visible": true,
+      "x": 215,
+      "y": 71,
+      "w": 150,
+      "h": 17,
+      "id": 330718,
+      "hwnd": 330718
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 447,
+      "w": 712,
+      "h": 39,
+      "id": 1903562,
+      "hwnd": 1903562
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 636,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2493394,
+      "hwnd": 2493394
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 468,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2165716,
+      "hwnd": 2165716
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 552,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 6097850,
+      "hwnd": 6097850
+    }
+  ]
+}

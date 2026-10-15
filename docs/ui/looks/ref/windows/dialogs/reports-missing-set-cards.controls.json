@@ -1,0 +1,143 @@
+{
+  "name": "reports-missing-set-cards",
+  "how": "Reports menu, item at popup y=103",
+  "class": "TMissingSetCardsForm",
+  "title": "Missing Set Cards",
+  "width": 266,
+  "height": 503,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TcxGroupBox",
+      "text": "Show Cards ",
+      "visible": true,
+      "x": 16,
+      "y": 351,
+      "w": 234,
+      "h": 99,
+      "id": 3999922,
+      "hwnd": 3999922
+    },
+    {
+      "class": "TcxRadioButton",
+      "text": "&Both Missing and Available",
+      "visible": true,
+      "x": 24,
+      "y": 420,
+      "w": 212,
+      "h": 17,
+      "id": 2820260,
+      "hwnd": 2820260
+    },
+    {
+      "class": "TcxRadioButton",
+      "text": "&Available Only",
+      "visible": true,
+      "x": 24,
+      "y": 396,
+      "w": 212,
+      "h": 17,
+      "id": 2164316,
+      "hwnd": 2164316
+    },
+    {
+      "class": "TcxRadioButton",
+      "text": "&Missing Only",
+      "visible": true,
+      "x": 24,
+      "y": 372,
+      "w": 212,
+      "h": 17,
+      "id": 3868826,
+      "hwnd": 3868826
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 16,
+      "y": 79,
+      "w": 234,
+      "h": 256,
+      "id": 1051470,
+      "hwnd": 1051470
+    },
+    {
+      "class": "TSelectEditionForm",
+      "text": "",
+      "visible": true,
+      "x": 16,
+      "y": 79,
+      "w": 234,
+      "h": 256,
+      "id": 1444278,
+      "hwnd": 1444278
+    },
+    {
+      "class": "TcxGrid",
+      "text": "",
+      "visible": true,
+      "x": 16,
+      "y": 79,
+      "w": 234,
+      "h": 256,
+      "id": 461556,
+      "hwnd": 461556
+    },
+    {
+      "class": "TcxGridSite",
+      "text": "",
+      "visible": true,
+      "x": 17,
+      "y": 80,
+      "w": 232,
+      "h": 254,
+      "id": 7538860,
+      "hwnd": 7538860
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Select which edition cards' availability to be checked:",
+      "visible": true,
+      "x": 16,
+      "y": 39,
+      "w": 234,
+      "h": 34,
+      "id": 1117002,
+      "hwnd": 1117002
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 456,
+      "w": 250,
+      "h": 39,
+      "id": 9699588,
+      "hwnd": 9699588
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 174,
+      "y": 465,
+      "w": 75,
+      "h": 23,
+      "id": 5507626,
+      "hwnd": 5507626
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 93,
+      "y": 465,
+      "w": 75,
+      "h": 23,
+      "id": 4587604,
+      "hwnd": 4587604
+    }
+  ]
+}

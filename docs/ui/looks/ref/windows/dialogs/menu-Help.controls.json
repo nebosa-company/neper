@@ -1,0 +1,10 @@
+{
+  "name": "menu-Help",
+  "how": "click 'Help' on the Main Menu bar",
+  "class": "TdxBarSubMenuControl",
+  "title": "",
+  "width": 191,
+  "height": 216,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": []
+}

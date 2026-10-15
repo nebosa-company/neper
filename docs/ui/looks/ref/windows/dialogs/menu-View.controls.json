@@ -1,0 +1,10 @@
+{
+  "name": "menu-View",
+  "how": "click 'View' on the Main Menu bar",
+  "class": "TdxBarSubMenuControl",
+  "title": "",
+  "width": 214,
+  "height": 618,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": []
+}

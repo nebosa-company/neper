@@ -1,0 +1,88 @@
+{
+  "name": "search-advanced-filter",
+  "how": "Search menu, item at popup y=53",
+  "class": "TfmFilterControlDialog",
+  "title": "Advanced Filter",
+  "width": 560,
+  "height": 355,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TdxLayoutControl",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 544,
+      "h": 316,
+      "id": 1443538,
+      "hwnd": 1443538
+    },
+    {
+      "class": "TcxFilterControl",
+      "text": "",
+      "visible": true,
+      "x": 7,
+      "y": 30,
+      "w": 546,
+      "h": 278,
+      "id": 1248056,
+      "hwnd": 1248056
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 308,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 658252,
+      "hwnd": 658252
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 389,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 658254,
+      "hwnd": 658254
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 470,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 723786,
+      "hwnd": 723786
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Save As...",
+      "visible": true,
+      "x": 96,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 461634,
+      "hwnd": 461634
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Open...",
+      "visible": true,
+      "x": 15,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 1771976,
+      "hwnd": 1771976
+    }
+  ]
+}

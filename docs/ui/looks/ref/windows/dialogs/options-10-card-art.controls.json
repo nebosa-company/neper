@@ -1,0 +1,242 @@
+{
+  "name": "options-10-card-art",
+  "how": "Tools menu, item at popup y=153, then click page 10 in the left category list",
+  "class": "TOptionsForm",
+  "title": "Options",
+  "width": 728,
+  "height": 494,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TCategoryButtons",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 197,
+      "h": 416,
+      "id": 592838,
+      "hwnd": 592838
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 205,
+      "y": 31,
+      "w": 515,
+      "h": 416,
+      "id": 3083196,
+      "hwnd": 3083196
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 33,
+      "w": 511,
+      "h": 30,
+      "id": 461726,
+      "hwnd": 461726
+    },
+    {
+      "class": "TcxLabel",
+      "text": "General",
+      "visible": true,
+      "x": 536,
+      "y": 39,
+      "w": 153,
+      "h": 17,
+      "id": 3673014,
+      "hwnd": 3673014
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Card Art (F11)",
+      "visible": true,
+      "x": 213,
+      "y": 39,
+      "w": 84,
+      "h": 17,
+      "id": 723904,
+      "hwnd": 723904
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 854882,
+      "hwnd": 854882
+    },
+    {
+      "class": "TCardArtForm",
+      "text": "Card Art",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 265212,
+      "hwnd": 265212
+    },
+    {
+      "class": "TcxButtonEdit",
+      "text": "",
+      "visible": true,
+      "x": 215,
+      "y": 385,
+      "w": 464,
+      "h": 21,
+      "id": 527326,
+      "hwnd": 527326
+    },
+    {
+      "class": "TcxCustomInnerTextEdit",
+      "text": "",
+      "visible": true,
+      "x": 218,
+      "y": 388,
+      "w": 443,
+      "h": 13,
+      "id": 592860,
+      "hwnd": 592860
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Replace...",
+      "visible": true,
+      "x": 296,
+      "y": 416,
+      "w": 75,
+      "h": 23,
+      "id": 3214286,
+      "hwnd": 3214286
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Validate",
+      "visible": true,
+      "x": 458,
+      "y": 416,
+      "w": 75,
+      "h": 23,
+      "id": 986074,
+      "hwnd": 986074
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Delete",
+      "visible": true,
+      "x": 377,
+      "y": 416,
+      "w": 75,
+      "h": 23,
+      "id": 199674,
+      "hwnd": 199674
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Add...",
+      "visible": true,
+      "x": 215,
+      "y": 416,
+      "w": 75,
+      "h": 23,
+      "id": 199672,
+      "hwnd": 199672
+    },
+    {
+      "class": "TcxButton",
+      "text": "",
+      "visible": true,
+      "x": 685,
+      "y": 123,
+      "w": 25,
+      "h": 28,
+      "id": 265204,
+      "hwnd": 265204
+    },
+    {
+      "class": "TcxButton",
+      "text": "",
+      "visible": true,
+      "x": 685,
+      "y": 89,
+      "w": 25,
+      "h": 28,
+      "id": 265206,
+      "hwnd": 265206
+    },
+    {
+      "class": "TcxCheckListBox",
+      "text": "",
+      "visible": true,
+      "x": 215,
+      "y": 71,
+      "w": 464,
+      "h": 308,
+      "id": 1903574,
+      "hwnd": 1903574
+    },
+    {
+      "class": "TcxCustomInnerCheckListBox",
+      "text": "",
+      "visible": true,
+      "x": 217,
+      "y": 73,
+      "w": 460,
+      "h": 304,
+      "id": 330738,
+      "hwnd": 330738
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 447,
+      "w": 712,
+      "h": 39,
+      "id": 1903562,
+      "hwnd": 1903562
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 636,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2493394,
+      "hwnd": 2493394
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 468,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2165716,
+      "hwnd": 2165716
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 552,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 6097850,
+      "hwnd": 6097850
+    }
+  ]
+}
