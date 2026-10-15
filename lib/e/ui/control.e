@@ -1579,6 +1579,10 @@ fn group_options() -> GroupOptions {
 fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: GroupOptions, children: []const widget.Node) -> (widget.Node, err) {
     let plain = options.variant == .Plain
     let collapsible = mem.address_of(options.toggle) != 0usize
+    if t.tokens.profile == .Windows && !collapsible {
+        let (framed, framed_error) = windows_group_box(a, key, t, label, options, children)
+        ret (framed, framed_error)
+    }
     var row_h: f32 = t.tokens.sizes.control_lg
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { row_h = t.tokens.sizes.control_xl }
     var fade: f32 = 1.0
@@ -6578,10 +6582,75 @@ fn resizable_pane(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, a
 // A sash's paint (D966): the line across the sash's middle (on whole pixels),
 // `line_width` thick, and a 4 x 48 fully rounded grip on it (none while `grip`
 // is clear), or, as a dock layout's, a 4px bar in place of the line.
-type Sash = struct { line: paint.Color, line_width: f32, grip: paint.Color, across: bool, arena: *mem.Arena }
+// The Windows look (v3's TcxSplitter, simple hot zone): `v3` paints `face` over the strip and
+// a hot zone `hot_len` long, `edge` framed, with a chevron toward the first pane at each end
+// (`ink`) and a dotted line (`dots`) between them.
+type Sash = struct { line: paint.Color, line_width: f32, grip: paint.Color, across: bool, arena: *mem.Arena, v3: bool, face: paint.Color, edge: paint.Color, dots: paint.Color, ink: paint.Color, hot_len: f32, hot_face: paint.Color }
+
+// ---- looks: Windows (v3) splitter, appended block ----
+
+// A 7 x 4 chevron of 2-thick strokes centred on (cx, cy); dir 0 up, 1 down, 2 left, 3 right.
+fn v3_chevron(b: *scene.Builder, cx: f32, cy: f32, dir: u8, ink: paint.Color) -> err {
+    var c: f32 = -3.0
+    while c <= 3.0 {
+        var o = c
+        if o < 0.0 { o = 0.0 - o }
+        var r = geometry.rect(cx + c, cy - 2.5 + o, 1.5, 2.0)
+        if dir == 1u8 { r = geometry.rect(cx + c, cy + 0.5 - o, 1.5, 2.0) }
+        if dir == 2u8 { r = geometry.rect(cx - 2.5 + o, cy + c, 2.0, 1.5) }
+        if dir == 3u8 { r = geometry.rect(cx + 0.5 - o, cy + c, 2.0, 1.5) }
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: r, brush: paint.Brush { Solid: ink } } })
+        c += 1.0
+    }
+    ret ok
+}
+
+fn sash_paint_v3(s: *Sash, b: *scene.Builder, area: geometry.Rect) -> err {
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: area, brush: paint.Brush { Solid: s.face } } })
+    var along = area.height
+    var thick = area.width
+    if s.across {
+        along = area.width
+        thick = area.height
+    }
+    var len = s.hot_len
+    if len > along - 2.0 { len = along - 2.0 }
+    if len < 24.0 { ret ok }
+    let start = f32(i64((along - len) * 0.5))
+    var zone = geometry.rect(area.x, area.y + start, thick, len)
+    var inner = geometry.rect(area.x + 1.0, area.y + start + 1.0, thick - 2.0, len - 2.0)
+    if s.across {
+        zone = geometry.rect(area.x + start, area.y, len, thick)
+        inner = geometry.rect(area.x + start + 1.0, area.y + 1.0, len - 2.0, thick - 2.0)
+    }
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: zone, brush: paint.Brush { Solid: s.edge } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: inner, brush: paint.Brush { Solid: s.hot_face } } })
+    // Chevrons 6 from each end of the zone, the dotted line between them, a dot every 3.
+    let mid = thick * 0.5
+    var dir = 2u8
+    if s.across {
+        dir = 0u8
+    }
+    if s.across {
+        try v3_chevron(b, area.x + start + 7.0, area.y + mid, dir, s.ink)
+        try v3_chevron(b, area.x + start + len - 7.0, area.y + mid, dir, s.ink)
+    } else {
+        try v3_chevron(b, area.x + mid, area.y + start + 7.0, dir, s.ink)
+        try v3_chevron(b, area.x + mid, area.y + start + len - 7.0, dir, s.ink)
+    }
+    var at: f32 = 15.0
+    while at < len - 14.0 {
+        var dot = geometry.rect(area.x + mid - 0.5, area.y + start + at, 1.0, 1.0)
+        if s.across { dot = geometry.rect(area.x + start + at, area.y + mid - 0.5, 1.0, 1.0) }
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: dot, brush: paint.Brush { Solid: s.dots } } })
+        at += 3.0
+    }
+    ret ok
+}
 
 fn sash_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let s = mem.cast[*Sash](ctx)
+    if s.v3 { ret sash_paint_v3(s, b, area) }
     // `across`: the sash lies along x (a bottom panel's), else along y.
     if s.across {
         try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x, area.y + f32(i64((area.height - s.line_width) * 0.5)), area.width, s.line_width), brush: paint.Brush { Solid: s.line } } })
@@ -6713,6 +6782,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     // across, WCAG 2.5.8's minimum: it reaches 8 over each side, its line centred.
     var reach: f32 = 0.0
     if !touch { reach = 8.0 }
+    if t.tokens.profile == .Windows { reach = 0.0 }
     let over = style.Length { Px: 0.0 - reach }
     let flat = style.Length { Px: 0.0 }
     if vertical {
@@ -6758,7 +6828,17 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     }
     let (sashes, sashes_error) = mem.alloc[Sash](a, 1usize)
     if sashes_error != ok { ret (zero, TooLarge) }
-    sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: grip_color, across: vertical, arena: a }
+    sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: grip_color, across: vertical, arena: a, v3: false, face: sashes_line, edge: sashes_line, dots: sashes_line, ink: sashes_line, hot_len: 0.0, hot_face: sashes_line }
+    if t.tokens.profile == .Windows {
+        // v3: measured at 150 % (03-main-pool-deck-v3.png): the strip is the dialog face, the hot
+        // zone a #A0A0A0 frame with near-black chevrons and #248ADB dots. Hover and press tints are guesses.
+        var zone_edge = style.hex(10526880u32)
+        var zone_face = style.color(t.tokens, .Background)
+        if state.hovered { zone_edge = style.hex(8303850u32) }
+        if state.hovered { zone_face = style.hex(15069691u32) }
+        if state.pressed { zone_face = style.hex(13427959u32) }
+        sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: paint.rgba(0.0, 0.0, 0.0, 0.0), across: vertical, arena: a, v3: true, face: style.color(t.tokens, .Background), edge: zone_edge, dots: style.hex(2394843u32), ink: style.hex(1842204u32), hot_len: 144.0, hot_face: zone_face }
+    }
     var paint_style = style.defaults()
     paint_style.width = full
     paint_style.height = full
@@ -11105,4 +11185,107 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
     sem.live = 1u8
     sem.row_count = u32(items.len)
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// ---- looks: Windows (v3) containers, appended block (group box, section header) ----
+// Measured from docs/grid-parity/tcxgrid/09b-statistics-probability-v3.png and
+// 00-options-interface-controls-v3.png at 150 %. The frame is the theme's OutlineVariant
+// (#DCDCDC) on the dialog face; the caption stands 2 inside a gap cut in the top edge.
+
+// A group box as v3 draws it (TcxGroupBox, lfStandard): a 1 px frame whose top edge runs
+// through the middle of the caption, the caption on the dialog face 8 in from the left,
+// `children` stacked inside. `width` 0 sizes it to its content.
+fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: GroupOptions, children: []const widget.Node) -> (widget.Node, err) {
+    let face = style.color(t.tokens, .Background)
+    var ink = style.color(t.tokens, .Text)
+    if !options.enabled { ink = style.mix(ink, face, 0.55) }
+    var frame = style.defaults()
+    frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 7.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
+    if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: style.color(t.tokens, .OutlineVariant) } }
+    if options.width > 0.0 { frame.width = style.Length { Px: options.width } }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, children.len)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < children.len {
+        rows[i] = children[i]
+        i += 1usize
+    }
+    var caption = text_options()
+    caption.wrap = .None
+    let (heading, heading_error) = colored_text(a, 0u64, label, t, caption, ink)
+    if heading_error != ok { ret (zero, heading_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = heading
+    var cut = style.defaults()
+    cut.background = paint.Brush { Solid: face }
+    cut.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 0.0 } }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[2usize] = widget.box(0u64, cut, held[0usize..1usize])
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, frame, rows[0usize..children.len])
+    parts[1usize] = widget.positioned(0u64, 6.0, 0.0, style.defaults(), parts[2usize..3usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), widget_stack_of(a, parts[0usize..2usize])), ok)
+}
+
+// A stack of `nodes` as the single child list `widget.semantics` wants.
+fn widget_stack_of(a: *mem.Arena, nodes: []const widget.Node) -> []const widget.Node {
+    var out: []const widget.Node = zero
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret out }
+    one[0usize] = widget.stack(0u64, style.defaults(), nodes)
+    ret one[0usize..1usize]
+}
+
+// The section header of v3's option pages (a plain panel with a grey gradient): 24 tall,
+// #808080 at the left running to #C0C0C0 at the right, the title bold white 8 in, `aside`
+// (may be empty) in black at the right end. `width` 0 stretches to the parent.
+type SectionBar = struct { stops: [2]paint.Stop }
+
+fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let s = mem.cast[*SectionBar](ctx)
+    let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: area.x, y: area.y }, end: geometry.Point { x: area.x + area.width, y: area.y }, stops: s.stops[0usize..2usize] } }
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: area, brush: brush } })
+    // The 1 px top and bottom edge, a shade darker than the gradient (#808080).
+    let edge = paint.Brush { Solid: s.stops[0usize].color }
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x, area.y, area.width, 1.0), brush: edge } })
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x, area.y + area.height - 1.0, area.width, 1.0), brush: edge } })
+}
+
+fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, aside: str, width: f32) -> (widget.Node, err) {
+    let (bars, bars_error) = mem.alloc[SectionBar](a, 1usize)
+    if bars_error != ok { ret (zero, TooLarge) }
+    bars[0usize].stops[0usize] = paint.Stop { offset: 0.0, color: style.hex(8421504u32) }
+    bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex(12632256u32) }
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    var none: []const widget.Node = zero
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 6usize)
+    if nodes_error != ok { ret (zero, TooLarge) }
+    nodes[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&bars[0usize]), measure: mark_measure, paint: section_bar_paint, state: widget.bytes_of[SectionBar](&bars[0usize]) } }, style: fill, children: none }
+    var heading = text_options()
+    heading.wrap = .None
+    heading.weight = 700u32
+    let (head_node, head_error) = colored_text(a, 0u64, title, t, heading, style.hex(16777215u32))
+    if head_error != ok { ret (zero, head_error) }
+    var side = text_options()
+    side.wrap = .None
+    let (side_node, side_error) = colored_text(a, 0u64, aside, t, side, style.hex(0u32))
+    if side_error != ok { ret (zero, side_error) }
+    nodes[2usize] = head_node
+    nodes[3usize] = widget.spacer(0u64, 1.0)
+    nodes[4usize] = side_node
+    var row = style.defaults()
+    row.width = style.Length { Percent: 100.0 }
+    row.height = style.Length { Percent: 100.0 }
+    row.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+    nodes[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, row, nodes[2usize..5usize])
+    var holder = sized_style(width, 24.0)
+    if !(width > 0.0) { holder.width = style.Length { Percent: 100.0 } }
+    ret (widget.stack(key, holder, nodes[0usize..2usize]), ok)
 }
