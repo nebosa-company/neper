@@ -20,6 +20,7 @@ use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
 use e.ui.widget
+use e.ui.winchrome
 use e.ui.window as win
 
 error TooLarge
@@ -8485,6 +8486,14 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
     }
     var side: f32 = 10.0
     if platform == .Linux { side = 12.0 }
+    // The Windows look: v3's minimise dash and maximise square, painted from the live capture (e.ui.winchrome).
+    if t.tokens.profile == .Windows && platform == .Windows && (slot.kind == .Minimize || slot.kind == .Close || (slot.kind == .Maximize && !slot.restore)) {
+        var which = 0u32
+        if slot.kind == .Maximize { which = 1u32 }
+        if slot.kind == .Close { which = 2u32 }
+        let (shape, shape_error) = winchrome.glyph_node(a, which, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), ink.alpha, slot.rect.width)
+        ret (shape, shape_error)
+    }
     var glyph: control.GlyphKind = .Dash
     if slot.kind == .Close { glyph = .Cross }
     if slot.kind == .Maximize && !slot.restore { glyph = .Maximize }
@@ -8515,6 +8524,42 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
     ret (mark, ok)
 }
 
+// The Windows look's caption geometry (looks3): v3's dark caption as the live captures measure it, applied over the
+// platform layout. 31 tall (the platform's 32 less the row under it), the icon at (10, 7), the title at 30, and the
+// buttons from the right: 46 wide each when the window has minimise or maximise, a lone close button 33 wide; a
+// button the window cannot use is not drawn (a width of 0) because v3's dialogs show only the X. The host's hit test
+// (`win.caption_layout`) stays the platform's 32 / 46 / 32, up to 2 px away from what is drawn.
+fn windows_caption_v3(c: win.Caption, width: f32) -> win.Caption {
+    var out = c
+    if out.count == 0usize || out.leading { ret out }
+    let h = style.windows_caption_height()
+    out.bar = geometry.rect(0.0, 0.0, width, h)
+    var drawn = 0usize
+    var i = 0usize
+    while i < out.count {
+        if out.slots[i].enabled && out.slots[i].kind != .Close { drawn += 1usize }
+        i += 1usize
+    }
+    // a dialog (neither minimise nor maximise usable) shows the X alone, 33 wide; any other window the three, 46 each
+    var button_w: f32 = 46.0
+    if drawn == 0usize { button_w = 33.0 }
+    var right = width
+    i = out.count
+    while i > 0usize {
+        i -= 1usize
+        if drawn > 0usize || out.slots[i].kind == .Close {
+            right -= button_w
+            out.slots[i].rect = geometry.rect(right, 0.0, button_w, h)
+        } else {
+            out.slots[i].rect = geometry.rect(0.0, 0.0, 0.0, 0.0)
+        }
+    }
+    out.drag = geometry.rect(30.0, 0.0, right - 30.0, h)
+    out.title = out.drag
+    if out.icon.width > 0.0 { out.icon = geometry.rect(10.0, 7.0, 16.0, 16.0) }
+    ret out
+}
+
 // The title bar `width` wide. Keys from `key`: the drag region and title `+ 1`, minimise `+ 2`, maximise `+ 3`, close `+ 4`.
 // The bar is a group named "Title bar"; the buttons are named Minimize, Maximize or Restore, and Close.
 fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, options: TitleBarOptions, width: f32) -> (widget.Node, err) {
@@ -8534,7 +8579,8 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     }
     let (advance, _, _, metrics_error) = control.run_metrics(a, t, .LabelLarge, title)
     if metrics_error != ok { ret (zero, metrics_error) }
-    let caption = win.caption_layout(width, caption_options, advance)
+    var caption = win.caption_layout(width, caption_options, advance)
+    if windows { caption = windows_caption_v3(caption, width) }
     if caption.bar.height == 0.0 {
         var sem: widget.Semantics = zero
         sem.role = 2u8
@@ -8568,7 +8614,9 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     if options.icon && caption.icon.width > 0.0 {
         let (icon, icon_error) = control.stroked_glyph(a, ink, options.glyph, 16.0, 1.5)
         if icon_error != ok { ret (zero, icon_error) }
-        parts[n] = widget.positioned(key + 5u64, caption.icon.x, caption.icon.y, style.defaults(), mem_one(a, icon))
+        var mark = icon
+        if windows { mark = winchrome.icon_node() }
+        parts[n] = widget.positioned(key + 5u64, caption.icon.x, caption.icon.y, style.defaults(), mem_one(a, mark))
         n += 1usize
     }
     // the buttons
@@ -8580,6 +8628,10 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     var i = 0usize
     while i < caption.count {
         let slot = caption.slots[i]
+        if windows && slot.rect.width == 0.0 {
+            i += 1usize
+            continue
+        }
         var index = 2usize
         if slot.kind == .Maximize { index = 1usize }
         if slot.kind == .Minimize { index = 0usize }

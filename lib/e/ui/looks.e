@@ -55,7 +55,7 @@ fn segoe_path() -> str { ret "C:/Windows/Fonts/segoeui.ttf" }
 fn tahoma_path() -> str { ret "C:/Windows/Fonts/tahoma.ttf" }
 // Segoe UI Bold (font id 9), last in the chain: only a control that asks for weight 700 reaches it.
 fn segoe_bold_path() -> str { ret "C:/Windows/Fonts/segoeuib.ttf" }
-// Tahoma Bold (font id 10), last: v3 draws the Options pages' header title and the bars' group headers in it.
+// Tahoma Bold (font id 10), last: v3 draws bold labels, captions, the Options pages' header title and the bars' group headers in it.
 fn tahoma_bold_path() -> str { ret "C:/Windows/Fonts/tahomabd.ttf" }
 
 // The tokens of a look, Light palette. Cupertino and Material are planned: the Neper tokens

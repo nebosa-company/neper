@@ -994,12 +994,13 @@ fn windows_choice_resolve(t: *const ThemeTokens, chosen: bool, state: ControlSta
 // glyph 10 wide). Unmeasured guesses: the inactive caption and every hover and pressed colour.
 fn windows_caption_face(active: bool) -> paint.Color {
     if active { ret hex(2039842u32) }
-    ret hex(2829099u32)
+    // looks3: measured on the live captures (the inactive Options and About captions are #202020).
+    ret hex(2105376u32)
 }
 
 fn windows_caption_ink(active: bool) -> paint.Color {
     if active { ret hex(16777215u32) }
-    ret hex(10395294u32)
+    ret hex(8158332u32)
 }
 
 // The close button's hover (#C42B1C) and pressed (#B22A1B) faces; its glyph turns white.
@@ -1008,4 +1009,5 @@ fn windows_caption_close(pressed: bool) -> paint.Color {
     ret hex(12856092u32)
 }
 
-fn windows_caption_height() -> f32 { ret 30.0 }
+// looks3: the live 96 DPI captures put the dark caption at 31 rows (y 0 to 30).
+fn windows_caption_height() -> f32 { ret 31.0 }
