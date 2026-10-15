@@ -157,7 +157,153 @@ fn build_about(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
     ret (made, made_error)
 }
 
+// The Statistics window's eleven tabs (v3 bitmaps stand in as drawn pictures), tab `n` (1 to 11) chosen and
+// not focused, as ref/windows/states/tab-selected-statistics-<n>. `page_control.exe t<n>` writes
+// page_control_stats_<n>.png; t12 and t13 the Filter tabs with Cards or Options chosen, t14 the
+// Customization tabs with Bands held down (the press selects at once, so it is the Bands-chosen strip).
+fn build_stat_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n: usize) -> (usize, err) {
+    let labels = [11]str{ "Colors", "Rarity", "Card Type", "Editions", "Mana Analyser", "Mana Product", "Power Analyser", "Probability", "Mana Slots", "Start Hand", "Advanced" }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 11usize)
+    if actions_error != ok { ret (0usize, actions_error) }
+    var k = 0usize
+    while k < 11usize {
+        actions[k] = widget.Submit { ctx: zero, invoke: noop_submit }
+        k += 1usize
+    }
+    let glyphs = [11]control.GlyphKind{ .Picture, .Picture, .Picture, .Picture, .Picture, .Picture, .Picture, .Picture, .Picture, .Picture, .Picture }
+    var options = control.tabs_options()
+    options.width = 905.0
+    options.icons = glyphs[0usize..11usize]
+    let (bar, bar_error) = control.tabs_of(a, 1000u64, t, labels[0usize..11usize], n - 1usize, actions[0usize..11usize], options)
+    if bar_error != ok { ret (0usize, bar_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = bar
+    let column = looks.size_style(905.0, 24.0)
+    cells[0usize] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..1usize]), drive: .None }
+    ret (1usize, ok)
+}
+
+fn build_t1(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 1usize)
+    ret (m, e)
+}
+
+fn build_t2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 2usize)
+    ret (m, e)
+}
+
+fn build_t3(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 3usize)
+    ret (m, e)
+}
+
+fn build_t4(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 4usize)
+    ret (m, e)
+}
+
+fn build_t5(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 5usize)
+    ret (m, e)
+}
+
+fn build_t6(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 6usize)
+    ret (m, e)
+}
+
+fn build_t7(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 7usize)
+    ret (m, e)
+}
+
+fn build_t8(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 8usize)
+    ret (m, e)
+}
+
+fn build_t9(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 9usize)
+    ret (m, e)
+}
+
+fn build_t10(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 10usize)
+    ret (m, e)
+}
+
+fn build_t11(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_stat_n(a, t, cells, 11usize)
+    ret (m, e)
+}
+
+fn build_p2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 1usize, 229.0, .None, 22.0)
+    ret (made, made_error)
+}
+
+fn build_p3(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 2usize, 229.0, .None, 22.0)
+    ret (made, made_error)
+}
+
+fn build_p4(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let labels = [2]str{ "Bands", "Columns" }
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..2usize], 0usize, 96.0, .None, 22.0)
+    ret (made, made_error)
+}
+
+fn run_tab(a: *mem.Arena, which: usize) -> err {
+    if which == 12usize {
+        let sheet = looks.Sheet { name: "page_control_cards", cells: 1usize, columns: 1usize, cell_w: 229.0, cell_h: 22.0, ctx: zero, build: build_p2 }
+        ret looks.run_all(a, &sheet)
+    }
+    if which == 13usize {
+        let sheet = looks.Sheet { name: "page_control_options", cells: 1usize, columns: 1usize, cell_w: 229.0, cell_h: 22.0, ctx: zero, build: build_p3 }
+        ret looks.run_all(a, &sheet)
+    }
+    if which == 14usize {
+        let sheet = looks.Sheet { name: "page_control_held", cells: 1usize, columns: 1usize, cell_w: 96.0, cell_h: 22.0, ctx: zero, build: build_p4 }
+        ret looks.run_all(a, &sheet)
+    }
+    var maker: looks.Build = build_t1
+    var name = "page_control_stats_1"
+    if which == 1usize { maker = build_t1
+        name = "page_control_stats_1" }
+    if which == 2usize { maker = build_t2
+        name = "page_control_stats_2" }
+    if which == 3usize { maker = build_t3
+        name = "page_control_stats_3" }
+    if which == 4usize { maker = build_t4
+        name = "page_control_stats_4" }
+    if which == 5usize { maker = build_t5
+        name = "page_control_stats_5" }
+    if which == 6usize { maker = build_t6
+        name = "page_control_stats_6" }
+    if which == 7usize { maker = build_t7
+        name = "page_control_stats_7" }
+    if which == 8usize { maker = build_t8
+        name = "page_control_stats_8" }
+    if which == 9usize { maker = build_t9
+        name = "page_control_stats_9" }
+    if which == 10usize { maker = build_t10
+        name = "page_control_stats_10" }
+    if which == 11usize { maker = build_t11
+        name = "page_control_stats_11" }
+    let sheet = looks.Sheet { name: name, cells: 1usize, columns: 1usize, cell_w: 905.0, cell_h: 24.0, ctx: zero, build: maker }
+    ret looks.run_all(a, &sheet)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len == 2usize && args[1usize][0usize] == 116u8 {
+        var which = usize(args[1usize][1usize]) - 48usize
+        if args[1usize].len > 2usize { which = which * 10usize + usize(args[1usize][2usize]) - 48usize }
+        ret run_tab(a, which)
+    }
     if args.len == 2usize {
         let first_byte = args[1usize][0usize]
         if first_byte == 115u8 {

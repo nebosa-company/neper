@@ -168,6 +168,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 fn build_dialog(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let values = [3]str{ "Unknown", "No Authentication", "Stretch" }
     let widths = [3]f32{ 335.0, 189.0, 151.0 }
+    let ys = [3]f32{ 99.0, 71.0, 278.0 }
+    let xs = [3]f32{ 371.0, 371.0, 406.0 }
     var i = 0usize
     while i < 3usize {
         let names = [2]str{ values[i], "Other" }
@@ -176,7 +178,7 @@ fn build_dialog(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
         let (toggle, toggle_error) = pick_actions(a, 1usize)
         if toggle_error != ok { ret (0usize, toggle_error) }
         var none: []const widget.Node = zero
-        let (combo, combo_error) = control.image_select_wide(a, u64(i + 1usize) * 100u64, t, "Condition", names[0usize..2usize], none, 0usize, false, true, &toggle[0usize], picks, widths[i])
+        let (combo, combo_error) = control.image_select_at(a, u64(i + 1usize) * 100u64, t, "Condition", names[0usize..2usize], none, 0usize, false, true, &toggle[0usize], picks, widths[i], ys[i], xs[i])
         if combo_error != ok { ret (0usize, combo_error) }
         let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
         if parts_error != ok { ret (0usize, parts_error) }
@@ -190,7 +192,81 @@ fn build_dialog(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
     ret (3usize, ok)
 }
 
+// The open drop-down of the image combo boxes (ref/windows/states/combo-box-open-*; these dialog combos
+// are TcxImageComboBox): the head at (4, 4) of a one-cell sheet with its popup right under it.
+// `image_combo_box.exe o<n>`: 1 Authentication, 2 the same with row 2 lit, 3 Card Art Position (Stretch),
+// 4 Condition (15 rows), 5 Condition with row 4 lit.
+type Open = struct { name: str, width: f32, rows: usize, active: usize, edge_x: f32, edge_y: f32, set: usize }
+
+fn open_spec(n: usize) -> Open {
+    if n == 1usize { ret Open { name: "image_combo_box_open_auth", width: 189.0, rows: 2usize, active: 0usize, edge_x: 371.0, edge_y: 71.0, set: 0usize } }
+    if n == 2usize { ret Open { name: "image_combo_box_open_auth2", width: 189.0, rows: 2usize, active: 1usize, edge_x: 371.0, edge_y: 71.0, set: 0usize } }
+    if n == 3usize { ret Open { name: "image_combo_box_open_art", width: 151.0, rows: 3usize, active: 0usize, edge_x: 406.0, edge_y: 278.0, set: 1usize } }
+    if n == 4usize { ret Open { name: "image_combo_box_open_condition", width: 335.0, rows: 15usize, active: 0usize, edge_x: 371.0, edge_y: 99.0, set: 2usize } }
+    ret Open { name: "image_combo_box_open_condition2", width: 335.0, rows: 15usize, active: 3usize, edge_x: 371.0, edge_y: 99.0, set: 2usize }
+}
+
+fn open_high(o: Open) -> f32 { ret 4.0 + 21.0 + f32(o.rows) * 15.0 + 2.0 + 4.0 }
+
+fn build_open_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n: usize) -> (usize, err) {
+    let o = open_spec(n)
+    let auth = [2]str{ "No Authentication", "Basic Authentication" }
+    let art = [3]str{ "Stretch", "Center", "Top-Left Corner" }
+    let conds = [15]str{ "Unknown", "Sealed", "Brand New", "Mint", "Near Mint", "Fine", "Good", "Fair", "Poor", "Misprint", "Signed", "Foreign", "Graded", "Laminated", "Proof" }
+    var names: []const str = auth[0usize..2usize]
+    if o.set == 1usize { names = art[0usize..3usize] }
+    if o.set == 2usize { names = conds[0usize..15usize] }
+    let (picks, picks_error) = pick_actions(a, o.rows)
+    if picks_error != ok { ret (0usize, picks_error) }
+    let (toggle, toggle_error) = pick_actions(a, 1usize)
+    if toggle_error != ok { ret (0usize, toggle_error) }
+    var none: []const widget.Node = zero
+    let (combo, combo_error) = control.image_select_at(a, 100u64, t, "Image", names, none, o.active, true, true, &toggle[0usize], picks, o.width, o.edge_y, o.edge_x)
+    if combo_error != ok { ret (0usize, combo_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = widget.box(0u64, looks.size_style(1.0, 4.0), zero)
+    parts[1usize] = combo
+    var column = looks.size_style(o.width + 8.0, open_high(o))
+    column.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    cells[0usize] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..2usize]), drive: .None }
+    ret (1usize, ok)
+}
+
+fn build_o1(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 1usize)
+    ret (m, e)
+}
+fn build_o2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 2usize)
+    ret (m, e)
+}
+fn build_o3(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 3usize)
+    ret (m, e)
+}
+fn build_o4(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 4usize)
+    ret (m, e)
+}
+fn build_o5(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 5usize)
+    ret (m, e)
+}
+
+fn run_open(a: *mem.Arena, n: usize) -> err {
+    let o = open_spec(n)
+    var maker: looks.Build = build_o1
+    if n == 2usize { maker = build_o2 }
+    if n == 3usize { maker = build_o3 }
+    if n == 4usize { maker = build_o4 }
+    if n == 5usize { maker = build_o5 }
+    let sheet = looks.Sheet { name: o.name, cells: 1usize, columns: 1usize, cell_w: o.width + 8.0, cell_h: open_high(o), ctx: zero, build: maker }
+    ret looks.run_all(a, &sheet)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len == 2usize && args[1usize][0usize] == 111u8 { ret run_open(a, usize(args[1usize][1usize]) - 48usize) }
     if args.len == 2usize {
         let dialog = looks.Sheet { name: "image_combo_box_dialog", cells: 3usize, columns: 1usize, cell_w: 343.0, cell_h: 29.0, ctx: zero, build: build_dialog }
         ret looks.run_all(a, &dialog)

@@ -5,6 +5,7 @@ use e.mem
 use e.ui.layout as ui_layout
 use e.ui.control
 use e.ui.looks
+use e.ui.style
 use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
@@ -82,7 +83,44 @@ fn build_dialog(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
     ret (1usize, ok)
 }
 
+// The Columns list with its second row chosen: `s1` keyboard focus on it (the harness taps the cell
+// centre, which falls on row 2), `s2` the list unfocused (the chosen row shows no fill). Compared with
+// ref/windows/states/list-box-row-selected-{focused,unfocused}-customization.
+fn build_state(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, drive: looks.Drive) -> (usize, err) {
+    let names = [8]str{ "Artist", "Edition Name", "Flavor", "Legal", "No", "Power", "Row", "Toughness" }
+    let (picks, picks_error) = pick_actions(a, 8usize)
+    if picks_error != ok { ret (0usize, picks_error) }
+    let (list, list_error) = control.list_box(a, 100u64, t, "Columns", names[0usize..8usize], 1usize, picks, 8u32, 152.0)
+    if list_error != ok { ret (0usize, list_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = widget.box(0u64, looks.size_style(1.0, 117.0), zero)
+    parts[1usize] = list
+    var column = looks.size_style(164.0, 300.0)
+    column.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    cells[0usize] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..2usize]), drive: drive }
+    ret (1usize, ok)
+}
+
+fn build_s1(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_state(a, t, cells, .Focus)
+    ret (m, e)
+}
+
+fn build_s2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_state(a, t, cells, .None)
+    ret (m, e)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len == 2usize && args[1usize][0usize] == 115u8 {
+        if args[1usize][1usize] == 49u8 {
+            let focus = looks.Sheet { name: "list_box_focus", cells: 1usize, columns: 1usize, cell_w: 164.0, cell_h: 300.0, ctx: zero, build: build_s1 }
+            ret looks.run_all(a, &focus)
+        }
+        let blurred = looks.Sheet { name: "list_box_blur", cells: 1usize, columns: 1usize, cell_w: 164.0, cell_h: 300.0, ctx: zero, build: build_s2 }
+        ret looks.run_all(a, &blurred)
+    }
     if args.len == 2usize {
         let dialog = looks.Sheet { name: "list_box_dialog", cells: 1usize, columns: 1usize, cell_w: 152.0, cell_h: 287.0, ctx: zero, build: build_dialog }
         ret looks.run_all(a, &dialog)
