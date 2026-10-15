@@ -2397,7 +2397,10 @@ fn options_text(look: style.ResolvedControl) -> bool {
 
 // A button: its label in the resolved foreground; Enter and Space press it too.
 fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
-    let look = button_look(t, style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, false)), options.enabled)
+    let state = control_state(t, key, options.enabled, false)
+    var look = button_look(t, style.resolve(t.tokens, options.variant, state), options.enabled)
+    // The Windows look (docs/ui/looks) draws its own face, border and size.
+    if t.tokens.profile == .Windows { look = style.windows_resolve(t.tokens, options.variant, state) }
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
@@ -2424,7 +2427,17 @@ fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *
     }
     let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
     if label_error != ok { ret (zero, label_error) }
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, label_node)
+    var shown = label_node
+    if t.tokens.profile == .Windows {
+        // v3's buttons are a fixed minimum width with the label centred in it.
+        let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if inner_error != ok { ret (zero, TooLarge) }
+        inner[0usize] = label_node
+        var fill = style.defaults()
+        fill.min_width = style.Length { Px: look.min_width - look.padding * 2.0 - look.border_width * 2.0 }
+        shown = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
+    }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, shown)
     ret (node, node_error)
 }
 

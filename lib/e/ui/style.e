@@ -611,12 +611,12 @@ fn windows(palette: Palette) -> ThemeTokens {
         put(&t, .Selection, 10932991u32)
     }
     // Flat square-ish corners: v3's buttons and fields are 3 px.
-    t.radii = Radii { xs: 2.0, sm: 3.0, md: 4.0, lg: 4.0, xl: 4.0, full: 9999.0 }
+    t.radii = Radii { xs: 2.0, sm: 4.0, md: 4.0, lg: 4.0, xl: 4.0, full: 9999.0 }
     t.borders = Borders { hairline: 1.0, regular: 1.0, thick: 2.0 }
     var e: [6]f32 = zero
     t.elevation = e
-    // 9 pt (12 px) body text; v3's labels are regular weight, not the Neper semibold.
-    let body = TextStyle { size: 12.0, line_height: 16.0, weight: 400u16, italic: false }
+    // 8.4 pt (11.2 px, fitted by ink width of "Cancel") body text; v3 labels are regular weight, not the Neper semibold.
+    let body = TextStyle { size: 11.2, line_height: 15.0, weight: 400u16, italic: false }
     t.text[0] = body
     t.text[1] = body
     t.text[4] = body
@@ -627,7 +627,7 @@ fn windows(palette: Palette) -> ThemeTokens {
     t.sizes.control_sm = 22.0
     t.sizes.outline_focused = 1.0
     // Buttons, combo boxes and text fields are 22 layout units high.
-    t.metrics = Metrics { hit_target: 22.0, control_height: 22.0, density: 1.0, focus_ring: 1.0, focus_offset: 0.0 }
+    t.metrics = Metrics { hit_target: 22.0, control_height: 22.0, density: 1.0, focus_ring: 0.0, focus_offset: 0.0 }
     ret t
 }
 
@@ -743,6 +743,32 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
     if state.disabled { opacity = 0.5 }
     if state.hovered && elevation != 0u8 { elevation = elevation + 1u8 }
     ret ResolvedControl { background: background, foreground: foreground, border: border, border_width: border_width, focus_ring: focus_ring, opacity: opacity, radius: t.radii.sm, elevation: elevation, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: false, min_width: 0.0, min_height: 0.0, corners: zero }
+}
+
+// The Windows look's button (docs/ui/looks): a #FDFDFD face with a 1 px border, 75 x 22 at
+// least, black label; `Default` (and a focused button) takes the accent border, as the native
+// theme draws a defaulted button; `Plain` is the label alone. Measured: face, border, accent,
+// size. Unmeasured, so a guess: the hover and pressed tints and the disabled colours.
+fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) -> ResolvedControl {
+    var face = color(t, .SurfaceContainerLowest)
+    var ink = color(t, .Text)
+    var edge = color(t, .Border)
+    if variant == .Plain {
+        face = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        edge = face
+    }
+    if state.hovered && !state.pressed { face = layer(face, ink, 0.04) }
+    if state.pressed { face = layer(face, ink, 0.08) }
+    if variant == .Default || state.focused { edge = hex(2723289u32) }
+    if state.disabled {
+        face = mix(face, color(t, .Background), 0.5)
+        ink = mix(ink, color(t, .SurfaceContainerLowest), 0.55)
+        edge = mix(edge, color(t, .Background), 0.5)
+    }
+    var stroke = t.borders.regular
+    if variant == .Default || state.focused { stroke = 1.33 }
+    let line = text_style(t, .Label).line_height
+    ret ResolvedControl { background: face, foreground: ink, border: edge, border_width: stroke, focus_ring: 0.0, opacity: 1.0, radius: t.radii.sm, elevation: 0u8, padding: 8.0, padding_start: 0.0, padding_y: (t.metrics.control_height - line) * 0.5, custom_padding: true, min_width: 75.0, min_height: t.metrics.control_height, corners: zero }
 }
 
 // The v2 disabled look (D942): the container in the surface's content colour at
