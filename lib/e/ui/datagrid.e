@@ -4829,6 +4829,7 @@ fn print_band(a: *mem.Arena, grid: *Grid, first: usize, lp: f32, across: f32, to
         c += 1usize
     }
     var band = control.sized_style(across, 18.0)
+    if first == 3usize && ((grid.dz_style_has >> 8u16) & 1u16) != 0u16 { band.background = paint.Brush { Solid: gl.rgb(grid.dz_style_rgb[8usize]) } }
     band.margin = style.EdgeLengths { left: style.Length { Px: lp }, top: style.Length { Px: top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, band, cells[0usize..3usize]), ok)
 }

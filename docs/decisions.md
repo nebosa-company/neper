@@ -41531,3 +41531,6 @@ The flat square is v3's colour square: 24 hue columns (red through magenta back 
 
 ## D4150 - G012: the hue square can be clicked
 Each of the 192 pieces of the hue square is a tap that picks its colour (`hue_cell_rgb`): the preview box, H/S/L, R/G/B and the hex box all follow (CE9-color-editor-square-click-v5.png: a click in column 11, band 1 gave 18 / 237 / 182 = $ 12EDB6, H 116 S 219 L 127). The picks are the 24 x 8 grid's colours, not the continuous colour under the pointer, and there is no crosshair or lightness bar.
+
+## D4151 - G012: the Footer style's colour paints the printed footer band
+Picking Footer and a colour paints the preview's footer band (the "Page 1" / date line; DZ-style-footer-in-preview-v5.png: light yellow, in `print_band` for the footer cells). Six styles still draw nothing (Caption, BandHeader, Group, Preview, Selection and the two card styles).

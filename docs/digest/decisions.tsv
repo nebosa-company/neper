@@ -2729,4 +2729,5 @@ D4146	483	G012: the Color Editor's H, S and L follow the pick
 D4147	337	G012: the Color Editor's hex box follows the pick
 D4148	514	G012: custom colours in the Color Editor
 D4149	609	G012: the Color Editor's hue square
-D4150	444	G012: the hue square can be clicked
+D4150	445	G012: the hue square can be clicked
+D4151	354	G012: the Footer style's colour paints the printed footer band
