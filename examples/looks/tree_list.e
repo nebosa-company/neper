@@ -19,6 +19,10 @@ use e.ui.gridlook as gl
 use e.ui.looks
 use e.ui.widget
 
+type Flags = struct { checked: bool }
+var flags: Flags = zero
+fn checked_two() -> bool { ret flags.checked }
+
 fn noop_key(ctx: *void, value: widget.Key) -> err { ret ok }
 fn noop_sort(ctx: *void, value: usize) -> err { ret ok }
 fn noop_reorder(ctx: *void, value: collection.Reorder) -> err { ret ok }
@@ -82,12 +86,15 @@ fn has_children(ctx: *void, node: widget.Key) -> bool {
 
 // The first column: the node's check box, 3 px in (the plus box takes the first 14).
 fn build_row(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> err {
-    let (box, box_error) = gl.mark(a, .TreeBox, gl.rgb(0u32), gl.rgb(0u32), 13.0, 13.0)
+    // v3's check box, cut from the live capture (the Windows look; the others keep the drawn box); node 2 is checked in the check sheet
+    var pic = gl.gx_tree_check()
+    if node == 2u64 && checked_two() { pic = gl.gx_tree_check_on() }
+    let (box, box_error) = gl.pixels(a, pic, gl.gx_tree_check_w(), gl.gx_tree_check_h())
     if box_error != ok { ret box_error }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret held_error }
     held[0usize] = box
-    *out = widget.padded(0u64, 3.0, 3.0, 0.0, 0.0, control.sized_style(16.0, 17.0), held[0usize..1usize])
+    *out = widget.padded(0u64, 2.0, 3.0, 0.0, 0.0, control.sized_style(17.0, 17.0), held[0usize..1usize])
     ret ok
 }
 
@@ -103,7 +110,7 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
     ret ok
 }
 
-fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key) -> (widget.Node, err) {
+fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key, focus_two: bool) -> (widget.Node, err) {
     let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
     if tahoma_error != ok { ret (zero, tahoma_error) }
     let (copies, copies_error) = mem.alloc[control.Theme](a, 1usize)
@@ -118,6 +125,7 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key) -> (widg
     let (picked, picked_error) = mem.alloc[widget.Key](a, 1usize)
     if picked_error != ok { ret (zero, picked_error) }
     picked[0usize] = 1u64
+    if flags.checked || focus_two { picked[0usize] = 2u64 }
     var held = t
     if t.tokens.profile == .Windows { held = &copies[0usize] }
     let source = collection.TreeSource { ctx: mem.cast[*void](held), count: count_of, key: key_of, has_children: has_children, build: build_row }
@@ -125,6 +133,7 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key) -> (widg
     var none: []const widget.Key = zero
     var options: collection.TreeOptions = zero
     options.height = 300.0
+    if focus_two { options.height = 71.0 }
     let (node, node_error) = collection.tree_table_with(a, key, held, "Blocks", columns[0usize..4usize], source, cells, none, picked[0usize..1usize], widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, 99usize, false, widget.Change[usize] { ctx: zero, invoke: noop_sort }, widget.Change[collection.Reorder] { ctx: zero, invoke: noop_reorder }, widget.Change[collection.ColumnResize] { ctx: zero, invoke: noop_resize }, 17.0, options)
     ret (node, node_error)
 }
@@ -178,7 +187,7 @@ fn rules_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key) -> (widge
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let (left, left_error) = filter_list(a, t, 1000u64)
+    let (left, left_error) = filter_list(a, t, 1000u64, false)
     if left_error != ok { ret (0usize, left_error) }
     cells[0usize] = looks.Cell { caption: "Filter dialog list: Abbr., ES, Block/Edition, Released", node: left, drive: .None }
     ret (1usize, ok)
@@ -192,8 +201,32 @@ fn build_rules(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // `tree_list.exe states` renders the two state sheets (the arena holds only so many sheets)
+    if args.len > 1usize { ret main_states(a) }
     let sheet = looks.Sheet { name: "tree_list", cells: 1usize, columns: 1usize, cell_w: 305.0, cell_h: 319.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
     let second = looks.Sheet { name: "tree_list_rules", cells: 1usize, columns: 1usize, cell_w: 664.0, cell_h: 257.0, ctx: zero, build: build_rules }
     ret looks.run_all(a, &second)
+}
+
+// The same list in the states of the captures: the second node selected with the keyboard focus (the harness taps the middle of
+// a 305 x 90 cell, which is that row), and with its check box on (v3 sets the check on the button going down).
+fn build_focus(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (node, node_error) = filter_list(a, t, 1000u64, true)
+    if node_error != ok { ret (0usize, node_error) }
+    var face = looks.size_style(305.0, 90.0)
+    face.overflow = .Clip
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (0usize, held_error) }
+    held[0usize] = node
+    cells[0usize] = looks.Cell { caption: "Selected focused row", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize]), drive: .Focus }
+    ret (1usize, ok)
+}
+
+fn main_states(a: *mem.Arena) -> err {
+    let focus = looks.Sheet { name: "tree_list_focus", cells: 1usize, columns: 1usize, cell_w: 305.0, cell_h: 90.0, ctx: zero, build: build_focus }
+    try looks.run_all(a, &focus)
+    flags.checked = true
+    let check = looks.Sheet { name: "tree_list_check", cells: 1usize, columns: 1usize, cell_w: 305.0, cell_h: 90.0, ctx: zero, build: build_focus }
+    ret looks.run_all(a, &check)
 }

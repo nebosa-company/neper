@@ -562,7 +562,7 @@ fn setup_states(s: *States) -> err {
     specs[5usize] = dg.ColumnSpec { title: "Color", width: 60.0, column: SC_COLOR, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[6usize] = dg.ColumnSpec { title: "Type", width: 150.0, column: SC_TYPE, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[7usize] = dg.ColumnSpec { title: "Rarity", width: 50.0, column: SC_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    specs[8usize] = dg.ColumnSpec { title: "", width: 24.0, column: SC_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[8usize] = dg.ColumnSpec { title: "", width: 24.0, column: SC_NAME, kind: dg.CellKind.Picture, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     let (g1, g1_error) = dg.create(a, &s.tbl, &s.group, specs[0usize..9usize], dg.no_events(), 300u64)
     if g1_error != ok { ret g1_error }
     s.grid = g1
@@ -595,6 +595,27 @@ fn build_states(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
     ret (1usize, ok)
 }
 
+// the same grid, only its header in view: the harness presses the Name header (the cell's centre)
+fn build_states_pressed(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let s = mem.cast[*States](ctx)
+    if s.ready && s.windows != (t.tokens.profile == .Windows) { s.ready = false }
+    if !s.ready {
+        try setup_states(s)
+        s.ready = true
+        s.windows = t.tokens.profile == .Windows
+    }
+    let (body, body_error) = dg.build(a, &s.grid, t, 101.0)
+    if body_error != ok { ret (0usize, body_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (0usize, held_error) }
+    held[0usize] = body
+    var face = looks.size_style(892.0, 179.0)
+    face.padding = style.EdgeLengths { left: style.Length { Px: 316.0 }, top: style.Length { Px: 78.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    cells[0usize] = looks.Cell { caption: "Top grid of the live main window: pressed header (Name)", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize]), drive: .Press }
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len > 1usize {
         // `data_grid.exe states`: the states sheet alone (every sheet takes its own rigs; one run holds only so many)
@@ -603,6 +624,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var only_seed: States = zero
         only_seed.a = a
         only[0usize] = only_seed
+        if strs.eq(args[1usize], "pressed") {
+            let (held_s, held_s_error) = mem.alloc[States](a, 1usize)
+            if held_s_error != ok { ret held_s_error }
+            var held_seed: States = zero
+            held_seed.a = a
+            held_s[0usize] = held_seed
+            let pressed = looks.Sheet { name: "data_grid_states_pressed", cells: 1usize, columns: 1usize, cell_w: 892.0, cell_h: 179.0, ctx: mem.cast[*void](&held_s[0usize]), build: build_states_pressed }
+            ret looks.run_all(a, &pressed)
+        }
         let quick = looks.Sheet { name: "data_grid_states", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 179.0, ctx: mem.cast[*void](&only[0usize]), build: build_states }
         ret looks.run_all(a, &quick)
     }

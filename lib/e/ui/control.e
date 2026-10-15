@@ -13033,11 +13033,15 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     // Measured at 100 % in the v3 main window (ref/windows/main-window@1x.png): the vertical bar's
     // thumb is 2 wide (#858585, square ends) on its 16 wide track; the horizontal bar of a grid
     // (in the navigator row) is a 9 thick #858585 block with square ends.
+    // looks4-e (states captures): the vertical thumb is 2 wide, 0.4 right of the track's middle, a 6 wide pill while pressed;
+    // the horizontal thumb is 8 thick inside a 1 px #BABABA rim, 12 thick with rounded ends while pressed; the colour is
+    // #858585 pressed or not and no arrows show while the thumb is pressed
     var w: f32 = 2.0
-    if !vertical { w = 9.0 }
+    if !vertical { w = 8.0 }
     var ink = style.hex(8750469u32)
     if state.hovered && vertical { w = 6.0 }
-    if state.pressed { ink = style.hex(6316128u32) }
+    if state.pressed { w = 6.0 }
+    if state.pressed && !vertical { w = 12.0 }
     let room = length - 32.0
     var thick = style.defaults()
     var track = sized_style(16.0, length)
@@ -13054,20 +13058,23 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         if share < 0.0 { share = 0.0 }
         if share > 1.0 { share = 1.0 }
         let at = 17.0 + (room - thumb_len) * share
-        let side = (16.0 - w) * 0.5
+        var side = (16.0 - w) * 0.5 + 0.46
         thick = sized_style(w, thumb_len)
-        thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at + 0.47 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        thick.radius = w * 0.5
         if !vertical {
-            thick = sized_style(thumb_len, w)
+            side = (16.0 - (w + 2.0)) * 0.5
+            thick = sized_style(thumb_len, w + 2.0)
             thick.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: side }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            thick.border = style.Border { width: 1.0, color: style.hex(12237498u32) }
+            thick.radius = 0.0
+            if state.pressed { thick.radius = 4.0 }
         }
         thick.background = paint.Brush { Solid: ink }
-        thick.radius = 0.0
-        if state.hovered && vertical { thick.radius = w * 0.5 }
         layers[count] = widget.box(0u64, thick, zero)
         count += 1usize
     }
-    if state.hovered || state.pressed {
+    if state.hovered && !state.pressed {
         let (arrows, arrows_error) = mem.alloc[ScrollArrows](a, 1usize)
         if arrows_error != ok { ret (zero, TooLarge) }
         arrows[0usize] = ScrollArrows { vertical: vertical, ink: style.hex(6316128u32) }

@@ -117,7 +117,31 @@ fn mem_one(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
     ret nodes[0usize..1usize]
 }
 
+// ---- sheet 3: scroll_bar_states, the bars of the live captures at rest and with the thumb pressed ----------------
+// states/scroll-bar-thumb-pressed-main-vertical (the grid's bar: a 2 px thumb, a 6 px pill pressed) and
+// ...-main-horizontal (the navigator's: an 8 px block in a rim, 12 px with rounded ends pressed), each against its rest.
+// The harness presses the centre of a cell, which is on the bar.
+fn build_states(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let captions = [4]str{ "Vertical", "Vertical pressed", "Horizontal", "Horizontal pressed" }
+    var i = 0usize
+    while i < 4usize {
+        let vertical = i < 2usize
+        var length: f32 = 100.0
+        let (bar, bar_error) = control.windows_scroll_bar(a, u64(7000usize + i), t, vertical, length, length, 400.0, 0.0)
+        if bar_error != ok { ret (0usize, bar_error) }
+        var drive: looks.Drive = .None
+        if i == 1usize || i == 3usize { drive = .Press }
+        cells[i] = looks.Cell { caption: captions[i], node: bar, drive: drive }
+        i += 1usize
+    }
+    ret (4usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 2usize {
+        let states = looks.Sheet { name: "scroll_bar_states", cells: 4usize, columns: 4usize, cell_w: 130.0, cell_h: 130.0, ctx: zero, build: build_states }
+        ret looks.run_all(a, &states)
+    }
     if args.len > 1usize {
         let live = looks.Sheet { name: "scroll_bar_live", cells: 2usize, columns: 2usize, cell_w: 200.0, cell_h: 190.0, ctx: zero, build: build_live }
         ret looks.run_all(a, &live)

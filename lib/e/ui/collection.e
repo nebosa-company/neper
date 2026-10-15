@@ -1971,8 +1971,16 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if look.on {
                 // looks4-e: v3 marks the sort with an outlined triangle (up ascending, down descending), 8 x 9
                 var pic = gl.gx_sort_up()
+                var pic_w = gl.gx_sort_up_w()
+                var pic_h = gl.gx_sort_up_h()
                 if sorted && column_descending { pic = gl.gx_sort_down() }
-                let (tri, tri_error) = gl.pixels(a, pic, gl.gx_sort_up_w(), gl.gx_sort_up_h())
+                if !sorted {
+                    // a hot header that is not the sort shows its filter button (captured pressed)
+                    pic = gl.gx_header_filter()
+                    pic_w = gl.gx_header_filter_w()
+                    pic_h = gl.gx_header_filter_h()
+                }
+                let (tri, tri_error) = gl.pixels(a, pic, pic_w, pic_h)
                 if tri_error != ok { ret (zero, tri_error) }
                 body[1usize] = tri
             }
@@ -2019,6 +2027,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if look.on {
             var head_fill = look.header
             if state.hovered { head_fill = look.header_hover }
+            // looks4-e: a pressed header is #BCDCF4 (live capture, states/grid-header-pressed-main)
+            if state.pressed && look.soft_lines { head_fill = gl.rgb(0xBCDCF4u32) }
             // looks4-e: a pressed header is #BCDCF4 (live capture, states/grid-header-pressed-main)
             if state.pressed && look.soft_lines { head_fill = gl.rgb(0xBCDCF4u32) }
             head_style.background = paint.Brush { Solid: head_fill }
@@ -2467,6 +2477,10 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         // a group footer: the footer band's yellow
         if mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 2u8 { fill = look.footer_fill }
         if selected { fill = look.selected }
+        if selected && look.focus_aware && mem.address_of(t.runtime) != 0usize {
+            let (held, has_held) = widget.focused_key(t.runtime)
+            if has_held && held == row_key { fill = look.selected_focus }
+        }
     }
     var row_style = style.defaults()
     row_style.height = style.Length { Px: extent }
@@ -2479,6 +2493,13 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         row_style.height = style.Length { Px: extent - 1.0 }
     }
     row_style.background = paint.Brush { Solid: fill }
+    let tree_selected = look.on && selected && look.tree_dots
+    if tree_selected {
+        // the cells before the selection's fill keep the row's zebra colour
+        var plain = look.even
+        if index % 2usize == 1usize { plain = look.odd }
+        row_style.background = paint.Brush { Solid: plain }
+    }
     // the current row carries the line (with several rows selected it is the one with the focus)
     var lined_row = selected
     if look.focus_on { lined_row = row_key == look.focus_key }
@@ -2524,6 +2545,20 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         var stacked_count = 2usize
         if look.soft_lines { stacked_count = 3usize }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
+    }
+    if look.on && selected && look.tree_dots {
+        // looks4-e: the tree list's selected row has a dotted rectangle from x = 32 (measured, tree_list.png)
+        let (tree_dots, tree_dots_error) = gl.mark(a, .DotsSoftLeft, gl.rgb(0x5B5C62u32), gl.rgb(0xA4A39Du32), 4000.0, 18.0)
+        if tree_dots_error != ok { ret (zero, tree_dots_error) }
+        // the selection's fill starts at x = 32, under the cells; the cells before it stay white
+        var band = control.sized_style(4000.0, extent)
+        band.background = paint.Brush { Solid: fill }
+        let (with_band, with_band_error) = mem.alloc[widget.Node](a, 3usize)
+        if with_band_error != ok { ret (zero, TooLarge) }
+        with_band[0usize] = widget.positioned(0u64, 32.0, 0.0, style.defaults(), one_node(a, widget.box(0u64, band, zero)))
+        with_band[1usize] = lined[0usize]
+        with_band[2usize] = widget.positioned(0u64, 32.0, 0.0 - 1.0, style.defaults(), one_node(a, tree_dots))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_band[0usize..3usize])
     }
     if dotted_row {
         // looks4-e: a focused selected row carries v3's dotted focus rectangle, not a line
@@ -2643,6 +2678,10 @@ fn windows_table_look() -> TableLook {
     look.odd = gl.rgb(0xFFFFFFu32)
     look.selected = gl.rgb(0xECE9D8u32)
     look.selected_line = gl.rgb(0xECE9D8u32)
+    // looks4-e: focused, the selected row is #A6D2FF (states/tree-list-row-selected-focused-filter); both carry a dotted rectangle
+    look.focus_aware = true
+    look.selected_focus = gl.rgb(0xA6D2FFu32)
+    look.tree_dots = true
     look.line = gl.rgb(0xE5E5E5u32)
     look.group = lk.group_row
     look.track = lk.track
@@ -2662,7 +2701,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -5078,7 +5117,11 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
             var box_shape = gl.Shape.TreePlus
             if open { box_shape = gl.Shape.TreeMinus }
-            let (box, box_error) = gl.mark(a, box_shape, gl.rgb(0x919191u32), gl.rgb(0xFFFFFFu32), 9.0, 10.0)
+            // looks4-e: v3's own plus and minus boxes, cut from the live capture
+            var box_pic = gl.gx_tree_plus()
+            if open { box_pic = gl.gx_tree_minus() }
+            let (box, box_error) = gl.pixels(a, box_pic, gl.gx_tree_plus_w(), gl.gx_tree_plus_h())
+            let _ = box_shape
             if box_error != ok { ret (none, box_error) }
             let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
             if box_held_error != ok { ret (none, TooLarge) }

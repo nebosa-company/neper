@@ -288,6 +288,7 @@ cust_rgb: u32,
     hpane: f32,
     pane_hint: f32,
     count_spec: usize,
+    force_focus: bool,
     bar_on: bool,
     nav_icons: [7]scene.TextureId,
     nav_disabled: [6]scene.TextureId,
@@ -601,6 +602,9 @@ fn set_pane_hint(grid: *Grid, width: f32) { grid.pane_hint = width }
 
 // looks4-e: the column whose footer cell holds the count (v3 lets the grid's designer choose; the default is the first text column).
 fn set_count_column(grid: *Grid, spec: usize) { grid.count_spec = spec + 1usize }
+
+// looks4-e: draw the selected row as a focused grid's (the looks sheets cannot put the keyboard focus on a chosen row).
+fn set_forced_focus(grid: *Grid, on: bool) { grid.force_focus = on }
 
 fn show_group_box(grid: *Grid, on: bool) { grid.group_box_visible = on }
 
@@ -7965,6 +7969,13 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
             ink = gl.rgb(0x505050u32)
         }
         // a grid that edits in place shows the editing arrow on its current row (v3's collection)
+        if current && grid.look.group_flat {
+            // looks4-e: v3's own arrow, 1 in and 6 down in the 19 px row
+            let (long_pic, long_error) = gl.pixels(a, gl.gx_row_arrow_long(), gl.gx_row_arrow_long_w(), gl.gx_row_arrow_long_h())
+            if long_error != ok { ret long_error }
+            *out = widget.padded(0u64, 1.0, 6.0, 0.0, 0.0, style.defaults(), one(a, long_pic))
+            ret ok
+        }
         var arrow_shape = gl.Shape.Right
         var arrow_w = size
         if current && grid.immediate_edit {
@@ -9933,7 +9944,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         var dotted_focus = true
         if !grid.editing && !grid.chooser_active && mem.address_of(theme.runtime) != 0usize {
             let (held, has_held) = widget.focused_key(theme.runtime)
-            if !has_held || !grid.has_selection || held != row_key(grid, grid.selected_row) {
+            if !grid.force_focus && (!has_held || !grid.has_selection || held != row_key(grid, grid.selected_row)) {
                 selected_fill = gl.rgb(0xD5E4EEu32)
                 // v3 frames the current row of a grid without the focus in near black
                 selected_edge = gl.rgb(0x212121u32)
@@ -9946,7 +9957,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             if made_filter_error != ok { ret (zero, made_filter_error) }
             v3_filter = made_filter
         }
-        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus }
+        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false }
     }
     // group footers are taller: the list of the entries that are
     if has_extras(grid) && grid.look.on {
@@ -10065,7 +10076,8 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     }
     var frame = style.defaults()
     var gap: f32 = 4.0
-    if grid.look.on {
+    if grid.look.on { gap = 0.0 }
+    if grid.look.on && !grid.look.frame_none {
         // the grid is framed by a 1 px line and its parts touch
         // looks4-e: the live capture's frame is two pixels: a darker outer line over a lighter inner one
         frame.border = style.Border { width: 1.0, color: grid.look.frame }
@@ -10073,9 +10085,9 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         gap = 0.0
     }
     var inner_style = style.defaults()
-    if grid.look.on { inner_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) } }
+    if grid.look.on && !grid.look.frame_none { inner_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) } }
     var stacked = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap }, inner_style, parts[0usize..part_count])
-    if grid.look.on { stacked = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, frame, one(a, stacked)) }
+    if grid.look.on && !grid.look.frame_none { stacked = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, frame, one(a, stacked)) }
     let (keyed, keyed_error) = with_keys(a, grid, stacked)
     ret (keyed, keyed_error)
 }

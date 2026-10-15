@@ -128,7 +128,7 @@ fn load(a: *mem.Arena, app: *App) -> err {
     ret ok
 }
 
-fn plain_grid(a: *mem.Arena, tbl: *table.Table, v: *view.View, g: *grp.Grouping, scratch: *mem.Arena, specs: []const dg.ColumnSpec, id: u64) -> (dg.Grid, err) {
+fn plain_grid(row_height: f32, a: *mem.Arena, tbl: *table.Table, v: *view.View, g: *grp.Grouping, scratch: *mem.Arena, specs: []const dg.ColumnSpec, id: u64) -> (dg.Grid, err) {
     let (vv, vv_error) = view.create(a, tbl)
     if vv_error != ok { ret (zero, vv_error) }
     *v = vv
@@ -143,9 +143,11 @@ fn plain_grid(a: *mem.Arena, tbl: *table.Table, v: *view.View, g: *grp.Grouping,
     if made_error != ok { ret (zero, made_error) }
     var grid = made
     var look = gl.v3()
-    look.text_size = 11.7
+    look.text_size = 11.0
     look.header_height = 19.0
     look.header_line = gl.rgb(0xF4F4F4u32)
+    look.frame_none = true
+    look.row_height = row_height
     dg.set_look(&grid, look)
     dg.show_indicator(&grid, false)
     ret (grid, ok)
@@ -162,16 +164,19 @@ fn setup(app: *App) -> err {
     if sort_specs_error != ok { ret sort_specs_error }
     sort_specs[0usize] = dg.ColumnSpec { title: "Column", width: 156.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     sort_specs[1usize] = dg.ColumnSpec { title: "Sort Order", width: 159.0, column: 1usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    let (sg, sg_error) = plain_grid(a, &app.sort_table, &app.sort_view, &app.sort_group, &app.scratch, sort_specs[0usize..2usize], 100u64)
+    let (sg, sg_error) = plain_grid(19.0, a, &app.sort_table, &app.sort_view, &app.sort_group, &app.scratch, sort_specs[0usize..2usize], 100u64)
     if sg_error != ok { ret sg_error }
     app.sort_grid = sg
     let (miss_specs, miss_specs_error) = mem.alloc[dg.ColumnSpec](a, 1usize)
     if miss_specs_error != ok { ret miss_specs_error }
     miss_specs[0usize] = dg.ColumnSpec { title: "Edition", width: 214.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    let (mg, mg_error) = plain_grid(a, &app.miss_table, &app.miss_view, &app.miss_group, &app.scratch, miss_specs[0usize..1usize], 200u64)
+    let (mg, mg_error) = plain_grid(18.0, a, &app.miss_table, &app.miss_view, &app.miss_group, &app.scratch, miss_specs[0usize..1usize], 200u64)
     if mg_error != ok { ret mg_error }
     app.miss_grid = mg
     dg.set_row_ink(&app.miss_grid, zero, miss_ink)
+    dg.set_forced_focus(&app.miss_grid, true)
+    app.miss_grid.has_selection = true
+    app.miss_grid.selected_row = 0usize
     app.miss_grid.has_position = true
     app.miss_grid.position = 0usize
     ret ok
@@ -223,7 +228,12 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let (right, right_error) = boxed(a, t, &app.miss_grid, 234.0, 256.0)
     if right_error != ok { ret (0usize, right_error) }
     cells[0usize] = looks.Cell { caption: "Sort dialog grid", node: left, drive: .None }
-    cells[1usize] = looks.Cell { caption: "Missing Set Cards edition list", node: right, drive: .None }
+    // the cell is as large as the first one, the list at its top left, so both stand on whole pixels
+    let (corner, corner_error) = mem.alloc[widget.Node](a, 1usize)
+    if corner_error != ok { ret (0usize, corner_error) }
+    corner[0usize] = right
+    let holder = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, looks.size_style(331.0, 259.0), corner[0usize..1usize])
+    cells[1usize] = looks.Cell { caption: "Missing Set Cards edition list", node: holder, drive: .None }
     ret (2usize, ok)
 }
 
