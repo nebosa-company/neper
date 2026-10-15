@@ -5797,8 +5797,13 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
     let total = source.count(source.ctx)
     if total > 256usize { ret (zero, TooLarge) }
     let touch = density_of(t) == 2usize
-    let row_min = control.if_else(touch, 56.0, 40.0)
-    let head_h = control.if_else(touch, 40.0, 32.0)
+    // looks (docs/ui/looks): the Windows property grid is v3's TcxVerticalGrid: 19 px rows, a #F0F0F0
+    // row header column and white value cells split by 1 px #A0A0A4 lines, category rows with a +/- box.
+    let win = t.tokens.profile == .Windows
+    let rule_ink = gl.rgb(0xA0A0A4u32)
+    let row_min = control.if_else(win, 19.0, control.if_else(touch, 56.0, 40.0))
+    let head_h = control.if_else(win, 21.0, control.if_else(touch, 40.0, 32.0))
+    let right_pad = control.if_else(win, 0.0, 8.0)
     let needle = options.filter[0usize..options.filter_len]
     var grouped = false
     var g = 0usize
@@ -5806,8 +5811,9 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         if source.property(source.ctx, g).group.len > 0usize { grouped = true }
         g += 1usize
     }
-    let start = control.if_else(grouped, 36.0, 8.0)
-    let value_width = control.max_zero(width - name_width - 8.0)
+    var start = control.if_else(grouped, 36.0, 8.0)
+    if win { start = 6.0 }
+    let value_width = control.max_zero(width - name_width - control.if_else(win, 1.0, 8.0))
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let flat = style.Length { Px: 0.0 }
     let (rows, rows_error) = mem.alloc[widget.Node](a, total)
@@ -5875,6 +5881,7 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     if options.has_status { standing = options.status(source.ctx, r) }
                     var name_ink = muted
                     if standing.modified { name_ink = style.color(t.tokens, .OnSurface) }
+                    if win { name_ink = gl.rgb(0x000000u32) }
                     var caption = control.text_options()
                     caption.role = .BodyMedium
                     caption.wrap = .None
@@ -5962,12 +5969,44 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     var line_style = style.defaults()
                     line_style.width = style.Length { Px: width }
                     line_style.min_height = style.Length { Px: row_min }
-                    line_style.padding = style.EdgeLengths { left: flat, top: flat, right: style.Length { Px: 8.0 }, bottom: flat }
+                    line_style.padding = style.EdgeLengths { left: flat, top: flat, right: style.Length { Px: right_pad }, bottom: flat }
                     // (D1544) The selected row on `secondary-container`.
                     if options.selected != 0u64 && p.key == options.selected { line_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }
                     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
                     if lined_error != ok { ret (zero, TooLarge) }
                     lined[0usize] = widget.flex(p.key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, pair[0usize..parts_in_row])
+                    if win {
+                        // the row header cell, the seam, the value cell; a 1 px line under the row
+                        let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+                        if cells_error != ok { ret (zero, TooLarge) }
+                        var header_cell = style.defaults()
+                        header_cell.width = style.Length { Px: name_width }
+                        header_cell.min_height = style.Length { Px: row_min }
+                        var header_fill = style.color(t.tokens, .Background)
+                        if options.selected != 0u64 && p.key == options.selected { header_fill = gl.rgb(0xA6D2FFu32) }
+                        header_cell.background = paint.Brush { Solid: header_fill }
+                        var value_cell = style.defaults()
+                        value_cell.width = style.Length { Px: value_width }
+                        value_cell.min_height = style.Length { Px: row_min }
+                        value_cell.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+                        cells[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, header_cell, pair[0usize..1usize])
+                        var seam_line = style.defaults()
+                        seam_line.width = style.Length { Px: 1.0 }
+                        seam_line.background = paint.Brush { Solid: rule_ink }
+                        cells[1usize] = widget.box(0u64, seam_line, zero)
+                        cells[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, value_cell, pair[1usize..2usize])
+                        var win_line = style.defaults()
+                        win_line.width = style.Length { Px: width }
+                        let (stack, stack_error) = mem.alloc[widget.Node](a, 2usize)
+                        if stack_error != ok { ret (zero, TooLarge) }
+                        stack[0usize] = widget.flex(p.key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, win_line, cells[0usize..3usize])
+                        var under = style.defaults()
+                        under.width = style.Length { Px: width }
+                        under.height = style.Length { Px: 1.0 }
+                        under.background = paint.Brush { Solid: rule_ink }
+                        stack[1usize] = widget.box(0u64, under, zero)
+                        lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), stack[0usize..2usize])
+                    }
                     var row_sem: widget.Semantics = zero
                     row_sem.role = 13u8
                     row_sem.row = u32(r + 1usize)
@@ -6007,15 +6046,30 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
             let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.padded(0u64, 4.5, 4.5, 4.5, 4.5, control.sized_style(24.0, 24.0), drawn[0usize..1usize])
+            if win {
+                // v3's category row: the grid's plus or minus box, then the caption in bold
+                var box_shape = gl.Shape.PlusBox
+                if open { box_shape = gl.Shape.MinusBox }
+                let (box, box_error) = gl.mark(a, box_shape, gl.rgb(0x919191u32), gl.rgb(0xFFFFFFu32), 11.0, 11.0)
+                if box_error != ok { ret (zero, box_error) }
+                let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
+                if box_held_error != ok { ret (zero, TooLarge) }
+                box_held[0usize] = box
+                parts[0usize] = widget.padded(0u64, 5.0, 5.0, 4.0, 5.0, control.sized_style(20.0, 21.0), box_held[0usize..1usize])
+            }
             var title = control.text_options()
             title.role = .TitleSmall
+            if win {
+                title.role = .BodyMedium
+                title.weight = 700u32
+            }
             title.wrap = .None
             let (said, said_error) = control.colored_text(a, 0u64, head.group, t, title, style.color(t.tokens, .OnSurface))
             if said_error != ok { ret (zero, said_error) }
             parts[1usize] = said
             parts[2usize] = widget.spacer(0u64, 1.0)
             var p_count = 3usize
-            if !open {
+            if !open && !win {
                 let (counted, counted_error) = mem.alloc[u8](a, 40usize)
                 if counted_error != ok { ret (zero, TooLarge) }
                 var m = control.write_i64(counted, i64(matched))
@@ -6029,16 +6083,18 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                 p_count = 4usize
             }
             var bar_style = style.defaults()
-            bar_style.width = style.Length { Px: control.max_zero(width - 16.0) }
+            bar_style.width = style.Length { Px: control.max_zero(width - control.if_else(win, 4.0, 16.0)) }
             let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, bar_style, parts[0usize..p_count])
             var look = style.resolve(t.tokens, .Plain, state)
             look.background = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
+            if win { look.background = style.color(t.tokens, .Background) }
             look.foreground = style.color(t.tokens, .OnSurface)
+            if win { look.foreground = gl.rgb(0x000000u32) }
             look.border_width = 0.0
             look.opacity = 1.0
             look.radius = 0.0
             look.custom_padding = true
-            look.padding = 8.0
+            look.padding = control.if_else(win, 2.0, 8.0)
             look.padding_y = control.max_zero((head_h - 24.0) * 0.5)
             look.min_height = head_h
             look.min_width = width
@@ -6049,9 +6105,21 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
             let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
             if stacked_error != ok { ret (zero, TooLarge) }
             stacked[0usize] = header
+            if win {
+                // a 1 px line under the category row
+                let (capped, capped_error) = mem.alloc[widget.Node](a, 2usize)
+                if capped_error != ok { ret (zero, TooLarge) }
+                var cap_line = style.defaults()
+                cap_line.width = style.Length { Px: width }
+                cap_line.height = style.Length { Px: 1.0 }
+                cap_line.background = paint.Brush { Solid: rule_ink }
+                capped[0usize] = header
+                capped[1usize] = widget.box(0u64, cap_line, zero)
+                stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), capped[0usize..2usize])
+            }
             stacked[1usize] = group_rows
             var group_style = style.defaults()
-            if block_count > 0usize { group_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: 8.0 }, right: flat, bottom: flat } }
+            if block_count > 0usize && !win { group_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: 8.0 }, right: flat, bottom: flat } }
             blocks[block_count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, group_style, stacked[0usize..2usize])
         }
         block_count += 1usize
