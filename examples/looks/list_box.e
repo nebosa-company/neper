@@ -2,6 +2,7 @@
 // Run from the repository root; see docs/ui/looks-howto.md.
 
 use e.mem
+use e.ui.layout as ui_layout
 use e.ui.control
 use e.ui.looks
 use e.ui.widget
@@ -61,7 +62,31 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (8usize, ok)
 }
 
+// The Columns list of v3's Customization window (ref/windows/dialogs/view-show-columns): eight rows,
+// the first chosen and focused. The control stands at (0, 133) of a 152 x 287 cell so that the
+// harness's pointer (the cell's centre) taps the first row. `list_box.exe dialog` writes
+// list_box_dialog.png, which compares pixel for pixel with ref/windows/list_box_dialog.png
+// (scripts/looks_refs_d.py).
+fn build_dialog(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let names = [8]str{ "Artist", "Edition Name", "Flavor", "Legal", "No", "Power", "Row", "Toughness" }
+    let (picks, picks_error) = pick_actions(a, 8usize)
+    if picks_error != ok { ret (0usize, picks_error) }
+    let (list, list_error) = control.list_box(a, 100u64, t, "Columns", names[0usize..8usize], 0usize, picks, 8u32, 152.0)
+    if list_error != ok { ret (0usize, list_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = widget.box(0u64, looks.size_style(1.0, 133.0), zero)
+    parts[1usize] = list
+    let column = looks.size_style(152.0, 287.0)
+    cells[0usize] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..2usize]), drive: .Focus }
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len == 2usize {
+        let dialog = looks.Sheet { name: "list_box_dialog", cells: 1usize, columns: 1usize, cell_w: 152.0, cell_h: 287.0, ctx: zero, build: build_dialog }
+        ret looks.run_all(a, &dialog)
+    }
     let sheet = looks.Sheet { name: "list_box", cells: 8usize, columns: 4usize, cell_w: 150.0, cell_h: 124.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

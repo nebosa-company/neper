@@ -13108,19 +13108,78 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     }
     ret (widget.stack(key + 1048701u64, sized_style(options.width, 21.0), layers[0usize..count]), ok)
 }
+// A list box (TcxListBox): v3 has none of its own, so this is the list its customization window
+// shows (TcxCustomGridItemsInnerListBox, measured on ref/windows/dialogs/view-show-columns at
+// 100 %): white rows 19 tall with the text 4 in, a #C1C1C1 line above, #A1A1A1 on the left, #EAEAEA on
+// the right and #F8F8F8 below, the chosen row #D9EBF9 and, while a row has the focus, the dotted
+// focus rectangle round it. Past `rows` rows it scrolls. Rows are keyed `key + 1 + index`.
+type Win3Lines = struct { shade: f32 }
 
-// A list box (TcxListBox): a framed viewport (keyed `key`) `rows` rows tall of `options`,
-// the selected row #0078D7 under white text; past `rows` rows it scrolls. Rows are keyed
-// `key + 1 + index`.
+fn win3_lines_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let x = area.x
+    let y = area.y
+    try win3_rect(b, x + 1.0, y + 1.0, area.width - 3.0, area.height - 2.0, style.hex(16777215u32))
+    try win3_rect(b, x, y, area.width - 1.0, 1.0, style.hex(12698049u32))
+    try win3_rect(b, x, y + 1.0, 1.0, area.height - 1.0, style.hex(10592673u32))
+    try win3_rect(b, x + area.width - 2.0, y + 1.0, 1.0, area.height - 2.0, style.hex(15395562u32))
+    ret win3_rect(b, x + 1.0, y + area.height - 1.0, area.width - 3.0, 1.0, style.hex(16316664u32))
+}
+
+fn win3_lines(a: *mem.Arena) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win3Lines](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win3Lines { shade: 0.0 }
+    var none: []const widget.Node = zero
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win3_lines_paint, state: widget.bytes_of[Win3Lines](&cells[0usize]) } }, style: fill, children: none }, ok)
+}
+
 fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
+    let (dialog_t, dialog_error) = win3_dialog_theme(a, t)
+    if dialog_error != ok { ret (zero, dialog_error) }
     let (items, items_error) = mem.alloc[widget.Node](a, options.len)
     if items_error != ok { ret (zero, TooLarge) }
+    let ink = style.color(t.tokens, .Text)
     var i = 0usize
     while i < options.len {
-        var none: []const widget.Node = zero
-        let (row, row_error) = win_row(a, key + 1u64 + u64(i), t, options[i], i == selected, &picks[i], none, true)
-        if row_error != ok { ret (zero, row_error) }
+        let row_key = key + 1u64 + u64(i)
+        let state = control_state(t, row_key, true, false)
+        var words = text_options()
+        words.role = .BodyMedium
+        words.wrap = .None
+        let (label_node, label_error) = colored_text(a, 0u64, options[i], &dialog_t, words, ink)
+        if label_error != ok { ret (zero, label_error) }
+        var line_style = style.defaults()
+        line_style.width = style.Length { Percent: 100.0 }
+        line_style.height = style.Length { Px: 19.0 }
+        line_style.padding = edges(2.5, 0.0, 0.0, 0.0)
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        let (text_held, text_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if text_held_error != ok { ret (zero, TooLarge) }
+        text_held[0usize] = label_node
+        layers[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, text_held[0usize..1usize])
+        var count = 1usize
+        if state.focused {
+            let (dots, dots_error) = win3_dots(a, ink, max_zero(width - 3.0), 19.0)
+            if dots_error != ok { ret (zero, dots_error) }
+            layers[1usize] = dots
+            count = 2usize
+        }
+        var row_style = style.defaults()
+        row_style.width = style.Length { Percent: 100.0 }
+        row_style.height = style.Length { Px: 19.0 }
+        if i == selected { row_style.background = paint.Brush { Solid: style.hex(14281721u32) } }
+        var stack_style = style.defaults()
+        stack_style.width = style.Length { Percent: 100.0 }
+        stack_style.height = style.Length { Px: 19.0 }
+        let (stack_held, stack_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if stack_held_error != ok { ret (zero, TooLarge) }
+        stack_held[0usize] = widget.stack(0u64, stack_style, layers[0usize..count])
+        let shown = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, stack_held[0usize..1usize])
         var entry: widget.Semantics = zero
         entry.role = accessibility.ROLE_OPTION
         entry.label = options[i]
@@ -13129,25 +13188,30 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         if i == selected { entry.states = accessibility.STATE_SELECTED }
         let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
         if wrapped_error != ok { ret (zero, TooLarge) }
-        wrapped[0usize] = row
+        wrapped[0usize] = shown
         var stretched = style.defaults()
         stretched.width = style.Length { Percent: 100.0 }
         items[i] = widget.semantics(0u64, entry, stretched, wrapped[0usize..1usize])
         i += 1usize
     }
     var view_style = style.defaults()
-    view_style.width = style.Length { Px: width }
-    view_style.height = style.Length { Px: f32(rows) * win_row_height() + 2.0 }
-    view_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
-    view_style.border = style.Border { width: 1.0, color: style.color(t.tokens, .Border) }
-    view_style.radius = t.tokens.radii.sm
-    view_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    view_style.width = style.Length { Px: max_zero(width - 3.0) }
+    view_style.height = style.Length { Px: f32(rows) * 19.0 }
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
     if view_error != ok { ret (zero, TooLarge) }
+    let (lines, lines_error) = win3_lines(a)
+    if lines_error != ok { ret (zero, lines_error) }
+    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
+    if stacked_error != ok { ret (zero, TooLarge) }
+    stacked[0usize] = lines
+    let (view_held, view_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if view_held_error != ok { ret (zero, TooLarge) }
+    view_held[0usize] = view
+    stacked[1usize] = widget.positioned(0u64, 1.0, 1.0, style.defaults(), view_held[0usize..1usize])
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = view
+    body[0usize] = widget.stack(0u64, sized_style(width, f32(rows) * 19.0 + 2.0), stacked[0usize..2usize])
     var sem: widget.Semantics = zero
     sem.role = accessibility.ROLE_LISTBOX
     sem.label = label

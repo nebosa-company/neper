@@ -39,10 +39,20 @@ def sheet_size(columns, cw, ch, n):
             MARGIN * 2 + rows * (CAPTION + ch) + (rows - 1) * GAP)
 
 
+def pad_of(cell):
+    return cell[5] if len(cell) > 5 else PAD
+
+
+def shift_of(cell):
+    """Where the crop's top-left sits inside its cell (default the cell's corner)."""
+    return (cell[6], cell[7]) if len(cell) > 7 else (0, 0)
+
+
 def crop_of(cell):
-    src, x, y, w, h = cell
+    src, x, y, w, h = cell[:5]
+    pad = pad_of(cell)
     im = Image.open(os.path.join(DLG, src + "@1x.png")).convert("RGB")
-    return im.crop((x - PAD, y - PAD, x + w + PAD, y + h + PAD))
+    return im.crop((x - pad, y - pad, x + w + pad, y + h + pad))
 
 
 def make_ref(name):
@@ -53,7 +63,8 @@ def make_ref(name):
         if cell is None:
             continue
         ox, oy = cell_origin(columns, cw, ch, i)
-        out.paste(crop_of(cell), (ox, oy))
+        sx, sy = shift_of(cell)
+        out.paste(crop_of(cell), (ox + sx, oy + sy))
     path = os.path.join(ROOT, "docs/ui/looks/ref/windows", name + ".png")
     out.save(path)
     print("wrote", path, out.size)
@@ -66,6 +77,8 @@ def compare(name, out_dir):
         if cell is None:
             continue
         ox, oy = cell_origin(columns, cw, ch, i)
+        sx, sy = shift_of(cell)
+        ox, oy = ox + sx, oy + sy
         ref = crop_of(cell)
         got = ours.crop((ox, oy, ox + ref.width, oy + ref.height))
         worst, over2, over16, total = 0, 0, 0, 0
@@ -81,10 +94,11 @@ def compare(name, out_dir):
                 diff.putpixel((xx, yy), (min(255, d * 4),) * 3)
         print("%s cell %d %s: max %d, >2: %d, >16: %d of %d" % (name, i, cell[0], worst, over2, over16, total))
         zones = {}
-        _, _, _, w, h = cell
+        w, h = cell[3:5]
+        pad = pad_of(cell)
         for yy in range(ref.height):
             for xx in range(ref.width):
-                rx, ry = xx - PAD, yy - PAD
+                rx, ry = xx - pad, yy - pad
                 edge = min(rx, ry, w - rx, h - ry)
                 zone = "ring" if edge <= 2 else ("button" if rx >= w - 17 else "inside")
                 a, b = ref.getpixel((xx, yy)), got.getpixel((xx, yy))
@@ -117,6 +131,12 @@ SHEETS["image_combo_box_dialog"] = (1, 343, 29, [
     ("options-09-defaults", 371, 99, 335, 21),         # Condition
     ("options-05-internet-authentication", 371, 71, 189, 21),  # Authentication
     ("options-11-morph", 406, 278, 151, 21),           # Stretch
+])
+
+SHEETS["list_box_dialog"] = (1, 152, 287, [
+    # Customization > Columns: the 8 row list, first row chosen and focused (control at (0, 133)
+    # of its cell so that the harness's pointer, at the cell centre, lands on the first row)
+    ("view-show-columns", 14, 57, 152, 154, 0, 0, 133),
 ])
 
 if __name__ == "__main__":
