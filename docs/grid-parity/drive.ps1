@@ -22,7 +22,8 @@ if (-not $h -or $h -eq [IntPtr]::Zero) { throw "no window for ${Proc}: refusing 
 [AW]::keybd_event(0x12,0,0,[UIntPtr]::Zero); [AW]::keybd_event(0x12,0,2,[UIntPtr]::Zero)
 [AW]::SetForegroundWindow($h) | Out-Null
 Start-Sleep -Milliseconds 400
-function FrontIsTarget { $fp = 0; [AW]::GetWindowThreadProcessId([AW]::GetForegroundWindow(), [ref]$fp) | Out-Null; return ($fp -eq $p.Id) }
+function FrontIsTarget0 { $fp = 0; [AW]::GetWindowThreadProcessId([AW]::GetForegroundWindow(), [ref]$fp) | Out-Null; return ($fp -eq $p.Id) }
+function FrontIsTarget { for ($k = 0; $k -lt 6; $k++) { if (FrontIsTarget0) { return $true }; [AW]::keybd_event(0x12,0,0,[UIntPtr]::Zero); [AW]::keybd_event(0x12,0,2,[UIntPtr]::Zero); [AW]::SetForegroundWindow($h) | Out-Null; Start-Sleep -Milliseconds 500 }; return $false }
 if (-not (FrontIsTarget)) { throw "${Proc} is not in front: refusing to click" }
 function Rect { $r = New-Object AW+RECT; [AW]::GetWindowRect($h, [ref]$r) | Out-Null; $r }
 & (Join-Path $PSScriptRoot 'mouse-warning.ps1') show

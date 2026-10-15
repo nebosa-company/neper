@@ -5035,12 +5035,10 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if widths_error != ok { ret (zero, control.TooLarge) }
     var k = 0usize
     while k < shown {
-    let (heading_text, heading_text_error) = report_title(a, grid)
-    if heading_text_error != ok { ret (zero, heading_text_error) }
-    let (heading, heading_error) = flat_text(a, grid, heading_text, gl.rgb(0x000000u32))
+        widths[k] = across * zoom / f32(shown)
         k += 1usize
     }
-    let (heading, heading_error) = flat_text(a, grid, "Collection", gl.rgb(0x000000u32))
+    let (heading, heading_error) = preview_heading(a, grid)
     if heading_error != ok { ret (zero, heading_error) }
     let (page, page_error) = mem.alloc[widget.Node](a, 40usize)
     if page_error != ok { ret (zero, control.TooLarge) }
@@ -10451,4 +10449,12 @@ fn dz_title_field(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     options.height = 300.0
     let (field, field_error) = control.text_field(a, grid.key + MENU_KEY + 851260u64, grid.theme, "", grid.dz_title[0usize..48usize], grid.dz_title_len, widget.Change[str] { ctx: mem.cast[*void](grid), invoke: on_title_text }, zero, options)
     ret (field, field_error)
+}
+
+// The report's heading over the table, from the report title.
+fn preview_heading(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (text, text_error) = report_title(a, grid)
+    if text_error != ok { ret (zero, text_error) }
+    let (node, node_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    ret (node, node_error)
 }

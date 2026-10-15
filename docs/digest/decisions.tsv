@@ -2708,4 +2708,5 @@ D4125	452	G012: "[Time Printed]" prints the time
 D4126	479	G012: a style can be picked in the Designer's Styles list
 D4127	319	G012: the Designer's Apply is live after a change
 D4128	854	G012: Title Properties and Footnote Properties
-D4129	680	G012: the report title is editable and feeds the preview heading
+D4129	681	G012: the report title is editable and feeds the preview heading
+D4130	782	G012: repair of D4129 (Print Preview broke); the title reaches the preview
