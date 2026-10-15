@@ -23,6 +23,7 @@ use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
+use e.ui.winbutton
 
 // What a page is set in: the theme's tokens, the fonts in preference order, the
 // language for shaping, and the page's runtime, from which a control reads what the
@@ -31,12 +32,12 @@ use e.ui.widget
 type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str, runtime: *widget.Runtime }
 // A button's look: its fill, whether it takes presses, and whether it is busy with
 // what it started (the label hidden in place under a progress ring, D942).
-type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool }
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32 }
 // (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
 // theme's fonts that match best lead the fallback chain (`text_style_faced`).
 // (D1458) `size`, when above 0, sets the text's size in place of its role's,
 // the line height scaled with it.
-type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str, weight: u32, italic: bool, mono: bool, size: f32 }
+type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str, weight: u32, italic: bool, mono: bool, size: f32, face: u32 }
 // A span of rich text; a linked span fires `link` when tapped, so the spans must
 // outlive the element the way an action's context does.
 type Span = struct { value: str, role: style.TextRole, color: style.ColorRole, link: widget.Submit }
@@ -47,7 +48,7 @@ const ROLE_LINK: u8 = 9u8
 const ROLE_TEXT: u8 = 6u8
 
 fn text_options() -> TextOptions {
-    ret TextOptions { role: .Body, color: .Text, align: .Start, wrap: .Word, max_lines: 0u32, ellipsis: "", weight: 0u32, italic: false, mono: false, size: 0.0 }
+    ret TextOptions { role: .Body, color: .Text, align: .Start, wrap: .Word, max_lines: 0u32, ellipsis: "", weight: 0u32, italic: false, mono: false, size: 0.0, face: 0u32 }
 }
 
 // The layout style of a text role: the theme's fonts at the role's size, its line
@@ -68,6 +69,33 @@ fn text_style(a: *mem.Arena, t: *const Theme, role: style.TextRole) -> (layout.S
 // options' weight, italic and fixed pitch comes first (a missing italic or mono
 // face costs more than any weight gap); ties keep the theme's order.
 fn text_style_faced(a: *mem.Arena, t: *const Theme, options: TextOptions) -> (layout.Style, err) {
+    let (plain, plain_error) = text_style_faced_plain(a, t, options)
+    if plain_error != ok { ret (zero, plain_error) }
+    if options.face == 0u32 || plain.fonts.len < 2usize { ret (plain, ok) }
+    // looks3: `face` names the font that leads the chain (the Windows look asks for Tahoma, id 8, where v3 draws with it).
+    let (led, led_error) = mem.alloc[layout.FontChoice](a, plain.fonts.len)
+    if led_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var j = 0usize
+    while j < plain.fonts.len {
+        if plain.fonts[j].font.id == options.face {
+            led[n] = plain.fonts[j]
+            n += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < plain.fonts.len {
+        if plain.fonts[j].font.id != options.face {
+            led[n] = plain.fonts[j]
+            n += 1usize
+        }
+        j += 1usize
+    }
+    ret (layout.Style { fonts: led, language: plain.language, line_height: plain.line_height }, ok)
+}
+
+fn text_style_faced_plain(a: *mem.Arena, t: *const Theme, options: TextOptions) -> (layout.Style, err) {
     let (styled, made_error) = text_style(a, t, options.role)
     if made_error != ok { ret (zero, made_error) }
     var made = styled
@@ -2271,7 +2299,7 @@ fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
 // ------------------------------------------------------- the button family (D818, P1-06)
 
 fn button_options() -> ButtonOptions {
-    ret ButtonOptions { variant: .Filled, enabled: true, loading: false }
+    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0 }
 }
 
 // The control state of a keyed element under the page's runtime, with what the
@@ -2440,24 +2468,53 @@ fn windows_dots(a: *mem.Arena, color: paint.Color, width: f32, height: f32) -> (
 }
 
 // The button's box content: `row` centred in the room the look leaves inside its border and padding,
-// with the dotted focus rectangle laid over it while the keyboard has the focus.
-fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node) -> (widget.Node, err) {
+// with the dotted focus rectangle laid over it while the keyboard has the focus. `ring` below 3 is the
+// pixel-exact native ring (e.ui.winbutton) drawn under everything in the whole box, and the focus rectangle
+// is then v3's: the control rect (the box plus 1 above and left) less 3 on every side.
+fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     inner[0usize] = row
     var fill = style.defaults()
-    let edge = t.tokens.borders.regular + look.padding
+    let edge = look.border_width + look.padding
     fill.min_width = style.Length { Px: max_zero(look.min_width - edge * 2.0) }
-    fill.min_height = style.Length { Px: max_zero(look.min_height - (t.tokens.borders.regular + look.padding_y) * 2.0) }
+    fill.min_height = style.Length { Px: max_zero(look.min_height - (look.border_width + look.padding_y) * 2.0) }
+    let ringed = ring < 3u32
+    // v3's caption sits 1 px left of and above the centre of the box (measured on Cancel and Apply).
+    if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
     let centred = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
-    if !(state.focus_visible && enabled) { ret (centred, ok) }
-    let (dots, dots_error) = windows_dots(a, style.color(t.tokens, .Text), max_of(max_zero(look.min_width - edge * 2.0), content_w), max_zero(look.min_height - (t.tokens.borders.regular + look.padding_y) * 2.0))
-    if dots_error != ok { ret (zero, dots_error) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    let focus = state.focus_visible && enabled
+    if !focus && !ringed { ret (centred, ok) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
-    layers[0usize] = centred
-    layers[1usize] = dots
-    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+    var n = 0usize
+    if ringed {
+        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height)
+        if face_error != ok { ret (zero, face_error) }
+        layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, face_node))
+        n += 1usize
+    }
+    layers[n] = centred
+    n += 1usize
+    if focus {
+        if ringed {
+            let (dots, dots_error) = windows_dots(a, style.color(t.tokens, .Text), look.min_width - 4.0, look.min_height - 5.0)
+            if dots_error != ok { ret (zero, dots_error) }
+            layers[n] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), mem_one_node(a, dots))
+        }
+        if !ringed {
+            let (dots, dots_error) = windows_dots(a, style.color(t.tokens, .Text), max_of(max_zero(look.min_width - edge * 2.0), content_w), max_zero(look.min_height - (look.border_width + look.padding_y) * 2.0))
+            if dots_error != ok { ret (zero, dots_error) }
+            layers[n] = dots
+        }
+        n += 1usize
+    }
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..n]), ok)
+}
+
+// The 0xRRGGBB of an opaque colour.
+fn windows_rgb(c: paint.Color) -> u32 {
+    ret (u32(c.red * 255.0 + 0.5) << 16u32) | (u32(c.green * 255.0 + 0.5) << 8u32) | u32(c.blue * 255.0 + 0.5)
 }
 
 // A Windows button: `picture` (when `has_icon`) then the caption (when `show_label`; `label` still
@@ -2467,6 +2524,25 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     var look = style.windows_resolve(t.tokens, options.variant, state)
     look.corners = corners
     if !show_label { look.min_width = 29.33 }
+    // The native ring (looks3 group a): a whole button, not a split's head, not the plain one.
+    var rk: u32 = 9u32
+    var face: u32 = 0u32
+    if corners.top_left == 0.0 && corners.top_right == 0.0 && options.variant != .Plain && t.tokens.palette == .Light {
+        rk = 0u32
+        if options.variant == .Default || state.focus_visible || selected { rk = 1u32 }
+        if state.disabled { rk = 2u32 }
+        face = windows_rgb(look.background)
+        look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        look.border = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        look.border_width = 0.0
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_width = 73.0
+        if !show_label { look.min_width = 29.0 }
+        look.min_height = 22.0
+        if options.width > 0.0 { look.min_width = options.width - 2.0 }
+        if options.height > 0.0 { look.min_height = options.height - 1.0 }
+    }
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
@@ -2482,11 +2558,40 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         content_w = 16.0
     }
     if show_label {
-        let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, ink)
+        // v3 draws Tahoma 8 pt (11 px) on its buttons and underlines the '&' mnemonic at the baseline.
+        if t.tokens.profile == .Windows {
+            caption.face = 8u32
+            caption.size = 11.0
+        }
+        var shown_label = label
+        var mark_at = label.len
+        if t.tokens.profile == .Windows {
+            let (plain, at, mark_error) = winbutton.mnemonic(a, label)
+            if mark_error != ok { ret (zero, mark_error) }
+            shown_label = plain
+            mark_at = at
+        }
+        let (word_node, label_error) = colored_text(a, 0u64, shown_label, t, caption, ink)
         if label_error != ok { ret (zero, label_error) }
+        var label_node = word_node
+        if mark_at < shown_label.len {
+            let (before, before_fit, before_base, before_error) = run_metrics_faced(a, t, caption, shown_label[0usize..mark_at])
+            if before_error != ok { ret (zero, before_error) }
+            let (mark_adv, mark_fit, mark_base, mark_error) = run_metrics_faced(a, t, caption, shown_label[mark_at..mark_at + 1usize])
+            if mark_error != ok { ret (zero, mark_error) }
+            let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, t, caption, shown_label)
+            if whole_error != ok { ret (zero, whole_error) }
+            var line = sized_style(mark_adv, 1.0)
+            line.background = paint.Brush { Solid: ink }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = word_node
+            pair[1usize] = widget.positioned(0u64, before, whole_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+            label_node = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
+        }
         parts[count] = label_node
         count += 1usize
-        let (advance, fit, baseline, metrics_error) = run_metrics(a, t, .Label, label)
+        let (advance, fit, baseline, metrics_error) = run_metrics_faced(a, t, caption, shown_label)
         if metrics_error != ok { ret (zero, metrics_error) }
         content_w += fit
         if count == 2usize { content_w += 4.0 }
@@ -2507,7 +2612,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         row = widget.stack(0u64, style.defaults(), layers[1usize..3usize])
         states = accessibility.STATE_BUSY
     }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row)
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face)
     if shown_error != ok { ret (zero, shown_error) }
     let (node, node_error) = pressable_states(a, key, t, 3u8, label, look, options.enabled, selected, states, 0u32, 0u64, action, shown)
     ret (node, node_error)
@@ -2529,7 +2634,7 @@ fn windows_split(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ac
     look.padding = 3.0
     let (chevron, chevron_error) = icon_square(a, look.foreground, .ChevronDown, 12.0)
     if chevron_error != ok { ret (zero, chevron_error) }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron)
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32)
     if shown_error != ok { ret (zero, shown_error) }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
