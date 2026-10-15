@@ -9494,6 +9494,8 @@ fn reveal_current(grid: *Grid) {
 
 // The grid as a node of `height`: its parts, in the context menu target (and chooser) of v3.
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
+    // The Windows look (docs/ui/looks) is the measured v3 grid, unless the application set its own.
+    if theme.tokens.profile == .Windows && !grid.look.on { set_look(grid, gl.v3()) }
     let (inner, inner_error) = build_parts(a, grid, theme, height)
     if inner_error != ok { ret (zero, inner_error) }
     var (menus, menus_error) = with_menus(a, grid, inner)

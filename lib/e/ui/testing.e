@@ -30,7 +30,7 @@ error GoldenMismatch
 
 type State = struct { runtime: *widget.Runtime, frames: *gpu.Target, drawable: scene.Target, queue: *gpu.Queue, width: u32, height: u32, scale: f32, frame_storage: []u8, closed: bool, capabilities: style.Capabilities, safe: geometry.Insets, keyboard: geometry.Insets, tree_storage: []u8 }
 
-const FRAME_BYTES: usize = 4194304usize
+const FRAME_BYTES: usize = 16777216usize
 const TREE_BYTES: usize = 524288usize
 
 fn harness(a: *mem.Arena, runtime: *widget.Runtime, width: u32, height: u32, scale: f32) -> (Harness, err) {

@@ -90,7 +90,7 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     if device_error != ok { ret (rig, device_error) }
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { ret (rig, queue_error) }
-    let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 4u32)
+    let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 64u32)
     if renderer_error != ok { ret (rig, renderer_error) }
     rig.renderer = r
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 2usize)
@@ -100,7 +100,7 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     try scene.register_font(&rig.renderer, fonts[0usize])
     try scene.register_font(&rig.renderer, fonts[1usize])
     rig.fonts = fonts[0usize..2usize]
-    let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 4000usize, max_states: 128usize, state_bytes: 256usize, state_classes: 4u16, max_depth: 24u16, max_commands: 16384usize })
+    let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 16384usize, max_states: 1024usize, state_bytes: 65536usize, state_classes: 8u16, max_depth: 48u16, max_commands: 49152usize })
     if runtime_error != ok { ret (rig, runtime_error) }
     rig.runtime = rt
     let physical_w = u32(width * scale + 0.5)
@@ -108,7 +108,7 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     let (h, harness_error) = testing.harness(a, &rig.runtime, physical_w, physical_h, scale)
     if harness_error != ok { ret (rig, harness_error) }
     rig.harness = h
-    let (storage, storage_error) = mem.alloc[u8](a, 4194304usize)
+    let (storage, storage_error) = mem.alloc[u8](a, 33554432usize)
     if storage_error != ok { ret (rig, storage_error) }
     rig.frame_storage = storage
     rig.frame = mem.arena_from(storage)
