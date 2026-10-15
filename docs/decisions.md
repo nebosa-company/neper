@@ -41492,3 +41492,6 @@ Recorded from v3 (DZ-format-report-Styles-full-v3.png, ...-nonnative-v3.png): un
 
 ## D4137 - G012: the style list's text greys with native styles off
 Unticking "Use Native Styles" greys the list's text as well, closing the difference noted in D4136 (DZ-format-report-Styles-nonnative-v5.png replaced by the new shot; `dz_list_ink`).
+
+## D4138 - G012: the Font window of the Styles tab
+Recorded from v3 (FD1-font-dialog-v3.png): with a style picked, Font... opens the Windows font dialog on that style: Font, Font style and Size lists (Tahoma, Regular and 6 highlighted), Strikeout and Underline, a Color box (Black), a Sample ("AaBbYyZz"), a Script box (Western) and OK / Cancel. Ours opens a window with the same parts when Font... is tapped with a style picked (FD2-font-dialog-v5.png; `dz_font_dialog`): the lists show their first entries highlighted, everything else is drawn, nothing is selectable or applied, and OK / Cancel go back to the Designer. Color... and Texture... still have no window (not recorded).

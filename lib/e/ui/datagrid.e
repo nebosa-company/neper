@@ -10106,6 +10106,10 @@ fn dz_buttons(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err)
 }
 
 fn designer_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    if grid.dz_dlg == 3u8 {
+        let (font_node, font_error) = dz_font_dialog(a, grid)
+        ret (font_node, font_error)
+    }
     if grid.dz_dlg != 0u8 {
         let (dialog, dialog_error) = dz_dialog(a, grid)
         ret (dialog, dialog_error)
@@ -10256,9 +10260,10 @@ fn dz_grey_button(a: *mem.Arena, grid: *Grid, text: str, width: f32, top: f32) -
 fn dz_style_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
-    let (clear_tap, clear_tap_error) = mem.alloc[DesignTap](a, 1usize)
+    let (clear_tap, clear_tap_error) = mem.alloc[DesignTap](a, 2usize)
     if clear_tap_error != ok { ret (zero, control.TooLarge) }
     clear_tap[0usize] = DesignTap { grid: grid, kind: 8u8, value: 0usize }
+    clear_tap[1usize] = DesignTap { grid: grid, kind: 6u8, value: 3usize }
     var i = 0usize
     while i < 4usize {
         var words = "Font..."
@@ -10268,6 +10273,9 @@ fn dz_style_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let (button, button_error) = dz_grey_button(a, grid, words, 80.0, 2.0)
         if button_error != ok { ret (zero, button_error) }
         cells[i] = button
+        if i == 0usize && grid.dz_style != 0u8 {
+            cells[i] = widget.region(grid.key + MENU_KEY + 851281u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&clear_tap[1usize]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(92.0, 32.0), one(a, button))
+        }
         if i == 3usize && grid.dz_style != 0u8 {
             cells[i] = widget.region(grid.key + MENU_KEY + 851280u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&clear_tap[0usize]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(92.0, 32.0), one(a, button))
         }
@@ -10580,4 +10588,117 @@ fn dz_sheet_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn dz_list_ink(grid: *const Grid) -> u32 {
     if ((grid.dz_checks >> 28u64) & 1u64) == 0u64 { ret 0xA0A0A0u32 }
     ret 0x000000u32
+}
+
+// ---- the Font window of the Styles tab (v3: the system's font dialog) ----
+
+// A white list box: one line per entry, the first one highlighted blue.
+fn dz_pick_list(a: *mem.Arena, grid: *Grid, items: []const str, width: f32, height: f32) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, items.len + 1usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    var i = 0usize
+    while i < items.len {
+        var ink: u32 = 0x000000u32
+        if i == 0usize { ink = 0xFFFFFFu32 }
+        let (words, words_error) = flat_text(a, grid, items[i], gl.rgb(ink))
+        if words_error != ok { ret (zero, words_error) }
+        var line = control.sized_style(width - 2.0, 20.0)
+        if i == 0usize { line.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) } }
+        rows[i] = widget.box(0u64, line, one(a, widget.padded(0u64, 3.0, 2.0, 0.0, 0.0, style.defaults(), one(a, words))))
+        i += 1usize
+    }
+    var frame = control.sized_style(width, height)
+    frame.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    frame.border = style.Border { width: 1.0, color: gl.rgb(0x828790u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, rows[0usize..items.len]), ok)
+}
+
+fn dz_font_lists(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    let names: [7]str = [7]str{ "Tahoma", "Tempus Sans ITC", "Times New Roman", "Trebuchet MS", "Tw Cen MT", "Ubuntu Mono", "Verdana" }
+    let looks: [4]str = [4]str{ "Regular", "Bold", "Oblique", "Bold Oblique" }
+    let sizes: [8]str = [8]str{ "8", "9", "10", "11", "12", "14", "16", "18" }
+    let (font_list, font_error) = dz_pick_list(a, grid, names[0usize..7usize], 220.0, 142.0)
+    if font_error != ok { ret (zero, font_error) }
+    let (look_list, look_error) = dz_pick_list(a, grid, looks[0usize..4usize], 166.0, 142.0)
+    if look_error != ok { ret (zero, look_error) }
+    let (size_list, size_error) = dz_pick_list(a, grid, sizes[0usize..8usize], 84.0, 142.0)
+    if size_error != ok { ret (zero, size_error) }
+    cells[0usize] = widget.padded(0u64, 16.0, 0.0, 0.0, 0.0, style.defaults(), one(a, font_list))
+    cells[1usize] = widget.padded(0u64, 12.0, 0.0, 0.0, 0.0, style.defaults(), one(a, look_list))
+    cells[2usize] = widget.padded(0u64, 12.0, 0.0, 0.0, 0.0, style.defaults(), one(a, size_list))
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(560.0, 150.0), cells[0usize..3usize]), ok)
+}
+
+fn dz_font_effects(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    let (head, head_error) = dz_heading(a, grid, "Effects")
+    if head_error != ok { ret (zero, head_error) }
+    cells[0usize] = head
+    let (strike, strike_error) = dz_field(a, grid, "[ ] Strikeout", 200.0)
+    if strike_error != ok { ret (zero, strike_error) }
+    cells[1usize] = strike
+    let (under, under_error) = dz_field(a, grid, "[ ] Underline", 200.0)
+    if under_error != ok { ret (zero, under_error) }
+    cells[2usize] = under
+    let (color, color_error) = dz_field(a, grid, "Color:  Black", 200.0)
+    if color_error != ok { ret (zero, color_error) }
+    cells[3usize] = color
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(240.0, 200.0), cells[0usize..4usize]), ok)
+}
+
+fn dz_font_sample(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (head, head_error) = dz_heading(a, grid, "Sample")
+    if head_error != ok { ret (zero, head_error) }
+    let (words, words_error) = flat_text(a, grid, "AaBbYyZz", gl.rgb(0x000000u32))
+    if words_error != ok { ret (zero, words_error) }
+    var box = control.sized_style(250.0, 70.0)
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xD0D0D0u32) }
+    box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let (script, script_error) = dz_field(a, grid, "Script:   Western", 250.0)
+    if script_error != ok { ret (zero, script_error) }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+    if cells_error != ok { ret (zero, control.TooLarge) }
+    cells[0usize] = head
+    cells[1usize] = widget.box(0u64, box, one(a, widget.padded(0u64, 90.0, 26.0, 0.0, 0.0, style.defaults(), one(a, words))))
+    cells[2usize] = script
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(270.0, 200.0), cells[0usize..3usize]), ok)
+}
+
+fn dz_font_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 5usize)
+    if rows_error != ok { ret (zero, control.TooLarge) }
+    let (close, close_error) = mem.alloc[DesignTap](a, 1usize)
+    if close_error != ok { ret (zero, control.TooLarge) }
+    close[0usize] = DesignTap { grid: grid, kind: 6u8, value: 0usize }
+    let (title, title_error) = dz_heading(a, grid, "Font")
+    if title_error != ok { ret (zero, title_error) }
+    rows[0usize] = title
+    let (lists, lists_error) = dz_font_lists(a, grid)
+    if lists_error != ok { ret (zero, lists_error) }
+    rows[1usize] = lists
+    let (effects, effects_error) = dz_font_effects(a, grid)
+    if effects_error != ok { ret (zero, effects_error) }
+    let (sample, sample_error) = dz_font_sample(a, grid)
+    if sample_error != ok { ret (zero, sample_error) }
+    let (low, low_error) = mem.alloc[widget.Node](a, 2usize)
+    if low_error != ok { ret (zero, control.TooLarge) }
+    low[0usize] = effects
+    low[1usize] = sample
+    rows[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(560.0, 210.0), low[0usize..2usize])
+    let (ok_button, ok_error) = dz_dialog_button(a, grid, "OK", &close[0usize], grid.key + MENU_KEY + 851252u64)
+    if ok_error != ok { ret (zero, ok_error) }
+    let (cancel_button, cancel_error) = dz_dialog_button(a, grid, "Cancel", &close[0usize], grid.key + MENU_KEY + 851253u64)
+    if cancel_error != ok { ret (zero, cancel_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, control.TooLarge) }
+    pair[0usize] = ok_button
+    pair[1usize] = cancel_button
+    rows[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(560.0, 44.0), pair[0usize..2usize])
+    var panel = control.sized_style(620.0, 520.0)
+    panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..4usize]), ok)
 }
