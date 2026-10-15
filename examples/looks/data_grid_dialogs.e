@@ -27,6 +27,7 @@ const MISSING_ROWS: usize = 14usize
 type App = struct {
     a: *mem.Arena,
     ready: bool,
+    windows: bool,
     sort_table: table.Table,
     sort_view: view.View,
     sort_group: grp.Grouping,
@@ -128,7 +129,7 @@ fn load(a: *mem.Arena, app: *App) -> err {
     ret ok
 }
 
-fn plain_grid(row_height: f32, a: *mem.Arena, tbl: *table.Table, v: *view.View, g: *grp.Grouping, scratch: *mem.Arena, specs: []const dg.ColumnSpec, id: u64) -> (dg.Grid, err) {
+fn plain_grid(windows: bool, row_height: f32, a: *mem.Arena, tbl: *table.Table, v: *view.View, g: *grp.Grouping, scratch: *mem.Arena, specs: []const dg.ColumnSpec, id: u64) -> (dg.Grid, err) {
     let (vv, vv_error) = view.create(a, tbl)
     if vv_error != ok { ret (zero, vv_error) }
     *v = vv
@@ -142,6 +143,7 @@ fn plain_grid(row_height: f32, a: *mem.Arena, tbl: *table.Table, v: *view.View, 
     let (made, made_error) = dg.create(a, tbl, g, specs, dg.no_events(), id)
     if made_error != ok { ret (zero, made_error) }
     var grid = made
+    if !windows { ret (grid, ok) }
     var look = gl.v3()
     look.text_size = 11.0
     look.header_height = 19.0
@@ -164,13 +166,14 @@ fn setup(app: *App) -> err {
     if sort_specs_error != ok { ret sort_specs_error }
     sort_specs[0usize] = dg.ColumnSpec { title: "Column", width: 156.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     sort_specs[1usize] = dg.ColumnSpec { title: "Sort Order", width: 159.0, column: 1usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    let (sg, sg_error) = plain_grid(19.0, a, &app.sort_table, &app.sort_view, &app.sort_group, &app.scratch, sort_specs[0usize..2usize], 100u64)
+    let (sg, sg_error) = plain_grid(app.windows, 19.0, a, &app.sort_table, &app.sort_view, &app.sort_group, &app.scratch, sort_specs[0usize..2usize], 100u64)
     if sg_error != ok { ret sg_error }
     app.sort_grid = sg
+    if app.windows { dg.set_cell_select(&app.sort_grid, 1usize) }
     let (miss_specs, miss_specs_error) = mem.alloc[dg.ColumnSpec](a, 1usize)
     if miss_specs_error != ok { ret miss_specs_error }
     miss_specs[0usize] = dg.ColumnSpec { title: "Edition", width: 214.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    let (mg, mg_error) = plain_grid(18.0, a, &app.miss_table, &app.miss_view, &app.miss_group, &app.scratch, miss_specs[0usize..1usize], 200u64)
+    let (mg, mg_error) = plain_grid(app.windows, 18.0, a, &app.miss_table, &app.miss_view, &app.miss_group, &app.scratch, miss_specs[0usize..1usize], 200u64)
     if mg_error != ok { ret mg_error }
     app.miss_grid = mg
     dg.set_row_ink(&app.miss_grid, zero, miss_ink)
@@ -219,7 +222,10 @@ fn boxed(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid, w: f32, h: f32)
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let app = mem.cast[*App](ctx)
+    // the grids keep the look they were made with: another look's pass builds them afresh
+    if app.ready && app.windows != (t.tokens.profile == .Windows) { app.ready = false }
     if !app.ready {
+        app.windows = t.tokens.profile == .Windows
         try setup(app)
         app.ready = true
     }
@@ -237,12 +243,40 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (2usize, ok)
 }
 
+// `data_grid_dialogs.exe sort`: the Sort dialog's grid with its Name row selected and focused (states/grid-row-selected-focused-sort),
+// compared with ref/windows/data_grid_dialogs_sort.png (the grid's 331 x 259 box in that capture).
+fn build_sort_selected(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let app = mem.cast[*App](ctx)
+    if app.ready && app.windows != (t.tokens.profile == .Windows) { app.ready = false }
+    if !app.ready {
+        app.windows = t.tokens.profile == .Windows
+        try setup(app)
+        app.ready = true
+    }
+    dg.set_forced_focus(&app.sort_grid, true)
+    app.sort_grid.has_selection = true
+    app.sort_grid.selected_row = 2usize
+    let (left, left_error) = boxed(a, t, &app.sort_grid, 331.0, 259.0)
+    if left_error != ok { ret (0usize, left_error) }
+    cells[0usize] = looks.Cell { caption: "Sort dialog grid: Name selected, focused", node: left, drive: .None }
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (apps, apps_error) = mem.alloc[App](a, 1usize)
     if apps_error != ok { ret apps_error }
     var seed: App = zero
     seed.a = a
     apps[0usize] = seed
+    if args.len > 1usize {
+        let (held, held_error) = mem.alloc[App](a, 1usize)
+        if held_error != ok { ret held_error }
+        var held_seed: App = zero
+        held_seed.a = a
+        held[0usize] = held_seed
+        let only = looks.Sheet { name: "data_grid_dialogs_sort", cells: 1usize, columns: 1usize, cell_w: 331.0, cell_h: 259.0, ctx: mem.cast[*void](&held[0usize]), build: build_sort_selected }
+        ret looks.run_all(a, &only)
+    }
     let sheet = looks.Sheet { name: "data_grid_dialogs", cells: 2usize, columns: 2usize, cell_w: 331.0, cell_h: 259.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
     ret looks.run_all(a, &sheet)
 }
