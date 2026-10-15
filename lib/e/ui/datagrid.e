@@ -10185,9 +10185,9 @@ fn dz_style_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var i = 0usize
     while i < 13usize {
         picks[i] = DesignTap { grid: grid, kind: 3u8, value: i }
-        let (name, name_error) = flat_text(a, grid, dz_style_name(i), gl.rgb(0x000000u32))
+        let (name, name_error) = flat_text(a, grid, dz_style_name(i), gl.rgb(dz_list_ink(grid)))
         if name_error != ok { ret (zero, name_error) }
-        let (face, face_error) = flat_text(a, grid, "8 pt. Tahoma", gl.rgb(0x000000u32))
+        let (face, face_error) = flat_text(a, grid, "8 pt. Tahoma", gl.rgb(dz_list_ink(grid)))
         if face_error != ok { ret (zero, face_error) }
         var strip = control.sized_style(50.0, 14.0)
         strip.background = paint.Brush { Solid: gl.rgb(0xE0E0E0u32) }
@@ -10574,4 +10574,10 @@ fn dz_sheet_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         i += 1usize
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(350.0, 36.0), cells[0usize..4usize]), ok)
+}
+
+// The style list's text: black, grey once "Use Native Styles" is unticked (as v3 draws it).
+fn dz_list_ink(grid: *const Grid) -> u32 {
+    if ((grid.dz_checks >> 28u64) & 1u64) == 0u64 { ret 0xA0A0A0u32 }
+    ret 0x000000u32
 }
