@@ -33,7 +33,7 @@
     "gaps": [
      "Mismatch: General pressed: the dotted focus rectangle round the category caption is not drawn",
      "Mismatch: the Computed category's picture, bar and multi-cell rows (Land/Creature/Spell icons, colour discs, the Strategy bar, the Legality tags) are artwork; plain text rows stand in",
-     "Mismatch: the File Name value differs from the state grabs (they show D:\\Temp\\claude\u000b3run\\Probe...)",
+     "Mismatch: the File Name value differs from the state grabs (they show a path under D:/Temp/claude/v3run/Probe...)",
      "Unverified (no capture): hover, an open combo editor's drop button (the Archetype grab shows none at rest), disabled, read-only rows"
     ]
    }
