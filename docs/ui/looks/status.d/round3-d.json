@@ -1,0 +1,145 @@
+{
+ "combo_box": {
+  "app": "examples/looks/combo_box.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/combo_box.png",
+    "notes": "The baseline: the v2 outlined combo box in the same cells. Open lists are on neper/combo_box_lists.png (run the app with an argument, `combo_box.exe lists`); the list opens fading, so one frame shows it part way."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_dialog-vs-ref.png",
+    "notes": "Round 3, from the live 100 % dialog captures (ref/windows/dialogs; scripts/looks_refs_d.py makes the crops and the pixel diff). The frame is now the theme bitmap v3 shows: a rounded #FDFDFD box with a two-ring edge (pixel tables for the four corners, #DCDCDC / #EDEDED top, #D3D3D3 / #DCDCDC foot, #D7D7D7 and #DFDFDF sides) that bleeds 1 px right and down, the 17 px drop-button column with the measured chevron (pixel table, 3 levels at most), and Tahoma 11 px text (ink 89 px wide for 'Against Card Color', as in the capture; the DFMs ask for Tahoma -11). Matched sheets, each beside its crop: combo_box_dialog (Options > Grids, two combos at rest: frame, chevron and text origin equal to 0 levels on the first, 3 to 5 on the second; the other instances of the real control vary by up to 10), combo_box_edit (Search for Card: an editable combo with the focus is the square white frame with the accent underline #5599D5 / #0067C0 / #A0C3E0 and a pale ring: equal except the caret our editor shows), combo_box_pick (Conditional Formatting: a focused list-style combo keeps the rounded frame and shows v3's dotted focus rectangle, 121 x 16 at (3, 3): dots within 5 levels, frame within 10 to 23 levels on the right edge). Round 2 pieces unchanged: the toolbar combo (combo_box_flat) and the drop-down list (combo_box_lists, now with Tahoma rows).",
+    "gaps": [
+     "unverified, no capture shows them: hover (3 % face tint, darker chevron), the drop button hot and pressed, open (the square accent frame is borrowed from the focused editable one), disabled (grays mixed halfway toward the dialog face), read-only, empty with a hint, long text",
+     "unverified: the open drop-down list has no capture in any dialog (none shows a list open): row height 15, the #0078D7 selection and the 1 px #BCBCBC frame are the older 150 % measurements, and its text is Tahoma 11 only by inference from the DFM",
+     "The ring colours of the real controls vary by up to 10 levels between instances (top 220/224, foot 211/221); the pixel tables are the first Options > Grids combo",
+     "Text is grayscale-antialiased: the captures are ClearType (coloured fringes), so text pixels differ by up to 255 while ink boxes agree within 1 px ('Medium' sits 1 px right and up in its capture)",
+     "The focused editors show a caret (blink on) where the captures show none, also in the list-style one",
+     "Chevron pixels 250 to 252 over the face are not drawn; at 150 % the 1 px tables scale and blur",
+     "The Win11 frame bleeds 1 px right and down of the control's rectangle (v3's 21 tall control paints 22); layouts keep the 21 px box",
+     "date_edit shares the frame through win_edit_frame and was not regenerated here; DropDownRows (10 in some filter combos) is not an option, the list shows 8 rows; the scroll bar in a long list is the generic thumb"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "app": "examples/looks/image_combo_box.e",
+  "neper": "control.image_select",
+  "gap": "No per-item image in Neper's combo box rows; control.image_select adds it for the Windows look and is the plain select under the others",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/image_combo_box.png",
+    "notes": "The baseline: control.select (no pictures: control.image_select falls back to it under the other looks)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image_combo_box_dialog-vs-ref.png",
+    "notes": "The same Windows 11 combo frame, chevron and Tahoma 11 text as the combo box (control.image_select_wide takes the head's width: v3's DFM widths 335, 189 and 151). image_combo_box_dialog reproduces the three captured instances (Options > Defaults 'Unknown', Internet Authentication 'No Authentication', Morph 'Stretch') beside their crops: frame within 2 levels on the first, 5 and 10 on the others (instance variation), chevron within 3, text ink boxes within 1 px, button column equal. None of the captures shows a picture in the head or the list, so the picture variants of the state sheet stay as before.",
+    "gaps": [
+     "unverified: the 16 px picture before the value, its 3 px gap and the 18 px row height are guesses, no capture has a picture in an image combo box (the v3 image lists are bitmaps; drawn glyphs stand in)",
+     "unverified: hover, open, focused (dotted rectangle round the text, as the list-style combo shows), disabled and nothing-chosen states have no capture of this control",
+     "The open list has no capture; its rows are those of the combo box drop-down (15 tall, #0078D7 selection), text Tahoma 11 by inference",
+     "Text is grayscale-antialiased where the captures are ClearType",
+     "Frame ring colours vary by up to 10 levels between the real instances",
+     "In-grid editor style (grey list, blue frame) is not drawn; keyboard handling of the open list is that of control.select (none)"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "app": "examples/looks/list_box.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/list_box.png",
+    "notes": "The baseline: the v2 list box (rounded frame, check on the chosen row)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/list_box_dialog-vs-ref.png",
+    "notes": "v3 has no list box of its own, but the Customization window (View > Show Columns, TcxGridTableColumnsListBox) shows one at 100 %, and the control is now that: white rows 19 tall, text 4 in (Tahoma 11), a #C1C1C1 line above, #A1A1A1 on the left, #EAEAEA on the right and #F8F8F8 below, the chosen row #D9EBF9 and a dotted focus rectangle round the focused row. list_box_dialog (the eight-row Columns list, first row chosen and focused) matches its crop in frame lines and fill exactly (0 levels), row pitch and the text boxes within 1 px; the dotted rectangle follows the capture's two-row pattern (the capture draws it with colour fringes, so the dots differ by up to 60 levels). The older rounded #FDFDFD frame and #0078D7 selection belonged to the combo's drop-down and are gone from the list box.",
+    "gaps": [
+     "unverified: hover (DevExpress lists have no hot tracking, none drawn), disabled (no disabled option exists in control.list_box), an unfocused chosen row (drawn with the same #D9EBF9 fill; the capture's list has the focus), empty list, long rows (clipped, no ellipsis), more rows than fit",
+     "The scroll bar when rows overflow is the generic thumb of widget.scroll_view, not the Windows scroll bar (the capture's bar is hidden); the capture's list is 8 rows and ends in the dialog face below its last row, which the control does not reproduce",
+     "The focus rectangle stops 1 px short of the capture's (it ends at the right line column, which our viewport clips); the capture's dots carry ClearType colour fringes",
+     "Text is grayscale-antialiased where the capture is ClearType",
+     "TcxCheckListBox (the Options rules, prices and card art lists) is control.multi_select_list and keeps its look (see check_list_box)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "app": "examples/looks/page_control.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/page_control.png",
+    "notes": "The baseline: v2 tabs (primary indicator) and the tab view."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control_filter-vs-ref.png",
+    "notes": "Round 3: v3 has two page control looks, both captured at 100 %. (1) lfUltraFlat, NativeStyle False (Statistics, About; TabsOptions default): redrawn to the capture's geometry: strip starting 5 px before the first tab, the chosen tab a #F0F0F0 box framed by two grey rows (#555555, #A0A0A0) on top and 1 px black sides, the strip's two-row bottom line, 14 tall #A0A0A0 hairlines, a 16 px picture and 6 px gap before the caption, Tahoma 11, the dotted focus rectangle; page_control_about and page_control_stats equal their crops in lines (within 2 levels) apart from the picture bitmaps, text ink boxes within 1 px. (2) lfOffice11 with NativeStyle True (Filter, Customization; new TabsOptions.native): the Windows 11 tab face, unselected tabs 20 tall (#E9E9E9 top, #EEEEEE, #F3F3F3 face, #EAEAEA / #F2F2F2 foot), the chosen tab 22 tall on #F9F9F9 with the page's top edge (#E9E9E9, #F2F2F2) under the others, #E5E5E5 left edges, dotted focus rectangle in the chosen tab: page_control_filter and page_control_custom, text boxes within 1 px, tab edges within 2 px. The tpBottom strip (round 2) is unchanged.",
+    "gaps": [
+     "unverified: hover, pressed and disabled states of every tab style (hot label blue #0066CC and no face change for the ultra-flat strip, no change at all for the native one; disabled ink mixed 60 % to the face); the captures show only the chosen and unchosen tab at rest and the focused chosen tab",
+     "Tab widths follow our text widths: v3 draws GDI-hinted Tahoma, which is up to 5 px narrower on long labels (the 'Blocks / Formats / Editions' tab is 2 px wider than the capture, 'Cards' 2 px narrower), so later tabs drift by that much",
+     "The pictures of the Statistics tabs are v3's image list bitmaps; drawn glyphs stand in",
+     "Accelerator underlines ('&Colors') and the hot-tracked underline are not drawn",
+     "The page body is not part of the strip: the native page frame (#E5E5E5 sides, #ECECEC / #EEEEEE / #F1F1F1 foot) and the ultra-flat page's two grey edge rows (#BBBBBB, #D5D5D5) are not drawn by tab_view, which keeps the default strip",
+     "Overflowing tabs, multi-row, tabs at the sides or with close buttons are in no capture and not drawn; the native tabs' rounded top corners are drawn square",
+     "The widget harness holds 128 element states, so the state sheet has six strips",
+     "Text is grayscale-antialiased where the captures are ClearType"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "app": "examples/looks/splitter.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/splitter.png",
+    "notes": "The baseline: the v2 sash (1 px line, grip on hover, primary line while dragged)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/splitter_dialog-vs-ref.png",
+    "notes": "The hot zone of v3's TcxSplitter (simple style), redrawn from the Filter window capture at 100 % (splitter_dialog, beside its crop; the strip columns match to 9 levels, the dots' pale ghost included): an 8 wide strip of the dialog face, the zone with a #A0A0A0 frame, #BBBBBB top and foot rows, a #DFDFDF row and a white column inside, a #D5D5D5 shadow row under it, a 4 x 8 '<' chevron 6 px from each end (grey 0 / 80 / 160) and #50A0DF / #A0C8E8 dots every 3 px. Its length is floor(0.3 x strip + 2), centred: 387 gives 118, 463 gives 140 and 497 gives 151, which are the three captured lengths (it resolves the earlier gap about the lengths read off the main window). The live sheet now uses the real strip lengths.",
+    "gaps": [
+     "unverified: hover and dragged states (the blue-tinted zone faces are guesses; v3 drags a dotted XOR line instead of recolouring)",
+     "The main window's two splitters differ from the Filter window's by a tint (frame #ADADAD / #919398 with blue-grey rows against #A0A0A0 here); the Filter window's is the one drawn, so the live sheet is within about 13 levels on its frame",
+     "The zone's toggle-panel click (collapse) is not wired and the chevron always points toward the first pane; lying strips use the transposed glyph",
+     "Sash input reach is 8 (v3) rather than the Neper 24",
+     "A fresh split_view's first pane includes the 8 px strip at its end in the pane sizes (a 12 px first pane shows a 4 px page next to the strip)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/hint.png",
+    "notes": "The baseline: the dark plain tooltip and the raised rich tooltip."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/hint.png",
+    "notes": "v3's TcxHintStyle window: square, white face, 1 px #767676 frame, black Segoe UI 11.2 px text with 4 x 2 px padding, shown below its anchor with no fade or scale; lines break only where the text does. Colours and padding read off the grid header hint capture docs/grid-parity/T1-header-hint-v5.png (the v5 grid, recorded as matching v3 in D2430); v3 sets Tahoma 8 pt for the hint (hscMain.HintStyle.Font). Round 3: none of the live dialog and window captures shows a hint window (their README lists the menus, dialogs and reports reached; hints appear only after hovering), so the look is unchanged.",
+    "gaps": [
+     "Round 3: no hint window in any live capture (no controls.json lists a hint or tooltip window class), so nothing could be re-measured",
+     "No capture of the real v3 hint itself: the look is taken from the v5 header hint that was matched to it",
+     "Font is Segoe UI 11.2 px, v3 configures Tahoma 8 pt (Height -11) for hint and caption",
+     "Padding, the 320 px cap on the plate and the 4 px gap under the anchor are fitted, not measured",
+     "The v3 hint has a drop shadow on some Windows versions; none is drawn",
+     "Rich tooltip action buttons keep the Neper text-button look and are not in the sheet",
+     "The sheet holds five cells: a sixth overlay made the harness frame an InvalidTree (probably its 16384-command limit)",
+     "Dark and high-contrast Windows palettes keep Neper colours with the Windows shape"
+    ]
+   }
+  }
+ }
+}

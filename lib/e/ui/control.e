@@ -7891,15 +7891,10 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     if sashes_error != ok { ret (zero, TooLarge) }
     sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: grip_color, across: vertical, arena: a, v3: false, face: sashes_line, edge: sashes_line, dots: sashes_line, ink: sashes_line, hot_len: 0.0, hot_face: sashes_line }
     if t.tokens.profile == .Windows {
-        // v3: measured at 150 % (03-main-pool-deck-v3.png): the strip is the dialog face, the hot
-        // zone a #A0A0A0 frame with near-black chevrons and #248ADB dots. Hover and press tints are guesses.
-        // Measured again at 100 % (ref/windows/main-window@1x.png): the upright zone is 140 long
-        // framed #ADADAD with #8EBFE6 dots, the lying one 151 long framed #919398 with #99C4E7 dots,
-        // chevrons #131313.
-        // looks3: measured on the Filter window's splitter at 100 % (all three captures follow one rule
-        // for the zone's length, see sash_paint_v3): frame #A0A0A0, dots #50A0DF over #A0C8E8.
-        let zone_edge_base = style.hex(10526880u32)
-        var zone_edge = zone_edge_base
+        // v3 (ref/windows/dialogs/search-filter-top at 100 %; the 150 % and main-window captures agree
+        // with it to a tint): the strip is the dialog face, the hot zone a #A0A0A0 frame with #50A0DF
+        // dots whose length follows one rule (see sash_paint_v3). Hover and press tints are guesses.
+        var zone_edge = style.hex(10526880u32)
         let zone_dots = style.hex(5284063u32)
         let zone_len: f32 = 0.0
         var zone_face = style.color(t.tokens, .Background)
@@ -12788,16 +12783,6 @@ fn win_look(t: *const Theme, hovered: bool, pressed: bool, focused: bool, open: 
     ret WinLook { face: face, edge: edge, edge_width: edge_width, ink: ink, chevron: chevron }
 }
 
-fn win_chevron(a: *mem.Arena, color: paint.Color) -> (widget.Node, err) {
-    let (node, node_error) = stroked_glyph(a, color, .ChevronDown, 18.0, 1.3)
-    ret (node, node_error)
-}
-
-// The padding that keeps the frame 21 tall whatever its border (18 inside: the chevron).
-fn win_pad_y(edge_width: f32) -> f32 {
-    ret max_zero((3.0 - 2.0 * edge_width) * 0.5)
-}
-
 // A read-only head: a face that opens the list (keyed `key`), the value (or the label,
 // muted, before a choice) after an optional `lead` pic, the chevron at the end.
 fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, enabled: bool, lead: []const widget.Node, width: f32) -> (widget.Node, err) {
@@ -13566,8 +13551,7 @@ fn win3_dialog_theme(a: *mem.Arena, t: *const Theme) -> (Theme, err) {
 }
 
 // ---- looks3 group d: the Windows 11 native tab strip of v3's lfOffice11 page controls ------------
-// The Filter window's tabs and the Customization window's (NativeStyle = True): a #F5F5F5 line over the
-// strip, unselected tabs 20 tall (#E9E9E9 top edge, #EEEEEE, #F3F3F3 face, #EAEAEA / #F2F2F2 rows under
+// The Filter window's tabs and the Customization window's (NativeStyle = True): unselected tabs 20 tall (#E9E9E9 top edge, #EEEEEE, #F3F3F3 face, #EAEAEA / #F2F2F2 rows under
 // them that are the page's top edge), the chosen tab 22 tall on the page's #F9F9F9 face with its
 // left edge #E5E5E5, a 1 px #E5E5E5 left edge on every tab (the last also closes on the right).
 // Measured on ref/windows/dialogs/search-filter-top, view-show-columns. Text is Tahoma 11 px.
