@@ -2732,4 +2732,5 @@ D4149	609	G012: the Color Editor's hue square
 D4150	445	G012: the hue square can be clicked
 D4151	355	G012: the Footer style's colour paints the printed footer band
 D4152	510	G012: the Caption style's colour paints the printed title
-D4153	762	G012: the styles with nothing to paint
+D4153	763	G012: the styles with nothing to paint
+D4154	648	G012: Texture... opens the system's file dialog (not built, by decision)
