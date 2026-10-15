@@ -4930,7 +4930,7 @@ fn print_cell(a: *mem.Arena, grid: *Grid, text: str, width: f32, header: bool) -
     let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
     if label_error != ok { ret (zero, label_error) }
     var box = control.sized_style(width, 18.0)
-    box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    box.background = paint.Brush { Solid: gl.rgb(dz_content_fill(grid)) }
     if header { box.background = paint.Brush { Solid: gl.rgb(print_header_fill(grid)) } }
     box.border = style.Border { width: 1.0, color: gl.rgb(0xE0E0E0u32) }
     ret (widget.box(0u64, box, one(a, widget.padded(0u64, 3.0, 1.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
@@ -10876,4 +10876,10 @@ fn dz_strip_rgb(grid: *const Grid, i: usize) -> u32 {
 fn print_header_fill(grid: *const Grid) -> u32 {
     if ((grid.dz_style_has >> 10u16) & 1u16) != 0u16 { ret grid.dz_style_rgb[10usize] }
     ret 0xF0F0F0u32
+}
+
+// The data cells of the printed table: the "Content" style's colour from the Designer (list entry 4), else white.
+fn dz_content_fill(grid: *const Grid) -> u32 {
+    if ((grid.dz_style_has >> 4u16) & 1u16) != 0u16 { ret grid.dz_style_rgb[4usize] }
+    ret 0xFFFFFFu32
 }

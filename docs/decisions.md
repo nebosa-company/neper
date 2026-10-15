@@ -41510,3 +41510,6 @@ Picking the Header style, a colour in the Color Editor and OK paints the preview
 
 ## D4143 - G012: the Filter Bar style's colour paints the printed filter strip
 Same route as the Header style (D4142): picking Filter Bar and a colour paints the preview's "<Filter is Empty>" strip (DZ-style-filterbar-in-preview-v5.png: teal strip). Eleven styles still draw nothing. A first run picked Footer by mistake (my click was 22 px low), which is why the first screenshot showed the grey strip.
+
+## D4144 - G012: the Content style's colour paints the printed data cells
+Picking Content and a colour fills the preview's data cells (DZ-style-content-in-preview-v5.png: light yellow, `dz_content_fill`); the header row keeps its own style. Nine styles still draw nothing (Content Even/Odd Rows need the row number in `print_row`, Footer, Group, Caption, Preview, Selection, BandHeader and the card styles have no counterpart on the page). The first run chose a swatch coordinate in an empty custom slot, so no colour was picked and the cells stayed white.
