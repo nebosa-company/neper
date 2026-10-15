@@ -1,0 +1,97 @@
+{
+  "name": "dialog-advanced-filter-rest",
+  "control": "dialog (Advanced Filter)",
+  "state": "rest",
+  "how": "dialog just opened (Search > Advanced Filter)",
+  "class": "TfmFilterControlDialog",
+  "title": "Advanced Filter",
+  "width": 560,
+  "height": 355,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TdxLayoutControl",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 8,
+      "y": 31,
+      "w": 544,
+      "h": 316,
+      "id": 658696,
+      "hwnd": 658696
+    },
+    {
+      "class": "TcxFilterControl",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 7,
+      "y": 30,
+      "w": 546,
+      "h": 278,
+      "id": 3149092,
+      "hwnd": 3149092
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "enabled": true,
+      "x": 308,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 3934722,
+      "hwnd": 3934722
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "enabled": true,
+      "x": 389,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 2755290,
+      "hwnd": 2755290
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "enabled": true,
+      "x": 470,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 23137226,
+      "hwnd": 23137226
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Save As...",
+      "visible": true,
+      "enabled": true,
+      "x": 96,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 3672012,
+      "hwnd": 3672012
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Open...",
+      "visible": true,
+      "enabled": true,
+      "x": 15,
+      "y": 315,
+      "w": 75,
+      "h": 25,
+      "id": 4130476,
+      "hwnd": 4130476
+    }
+  ]
+}

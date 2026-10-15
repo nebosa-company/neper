@@ -1,0 +1,85 @@
+{
+  "name": "dialog-deck-properties-rest",
+  "control": "dialog (Deck Properties)",
+  "state": "rest",
+  "how": "dialog just opened (File > Properties (deck mode))",
+  "class": "TDeckPropertiesForm",
+  "title": "Deck Properties",
+  "width": 364,
+  "height": 552,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TcxLabel",
+      "text": "D:\\Temp\\claude\\v3run\\Probe Deck.deck",
+      "visible": true,
+      "enabled": true,
+      "x": 56,
+      "y": 55,
+      "w": 291,
+      "h": 17,
+      "id": 3147426,
+      "hwnd": 3147426
+    },
+    {
+      "class": "TcxLabel",
+      "text": "MTG Studio",
+      "visible": true,
+      "enabled": true,
+      "x": 56,
+      "y": 34,
+      "w": 291,
+      "h": 20,
+      "id": 1182668,
+      "hwnd": 1182668
+    },
+    {
+      "class": "TcxVerticalGrid",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 16,
+      "y": 79,
+      "w": 330,
+      "h": 425,
+      "id": 1182938,
+      "hwnd": 1182938
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 8,
+      "y": 505,
+      "w": 348,
+      "h": 39,
+      "id": 3999316,
+      "hwnd": 3999316
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "enabled": true,
+      "x": 272,
+      "y": 514,
+      "w": 75,
+      "h": 23,
+      "id": 6160752,
+      "hwnd": 6160752
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "enabled": true,
+      "x": 188,
+      "y": 514,
+      "w": 75,
+      "h": 23,
+      "id": 4194774,
+      "hwnd": 4194774
+    }
+  ]
+}
