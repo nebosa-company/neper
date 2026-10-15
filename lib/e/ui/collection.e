@@ -17,6 +17,7 @@ use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
+use e.ui.vgridlook as vg
 use e.ui.widget
 
 error TooLarge
@@ -5723,7 +5724,7 @@ type PropertyStatus = struct { modified: bool, message: str }
 // sets one back to its default by index (neither unless `has_status`).
 // (D1544) `selected` is the property row (by key) picked for docs or binding;
 // `divide` hears the name column's divider dragged: the new name width.
-type PropertyGridOptions = struct { kind: str, name: str, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool, status: fn(*void, usize) -> PropertyStatus, has_status: bool, reset: widget.Change[usize], selected: widget.Key, divide: widget.Change[f32] }
+type PropertyGridOptions = struct { kind: str, name: str, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool, status: fn(*void, usize) -> PropertyStatus, has_status: bool, reset: widget.Change[usize], selected: widget.Key, divide: widget.Change[f32], height: f32 }
 
 // (D1544) A property grid's divider drag: the name width is the pointer's
 // distance from the grid's (keyed `grid`) start, at least 96 and at most 60% of
@@ -5796,6 +5797,10 @@ fn contains_folded(hay: str, needle: []const u8) -> bool {
 fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32, options: PropertyGridOptions) -> (widget.Node, err) {
     let total = source.count(source.ctx)
     if total > 256usize { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows {
+        let (windows_made, windows_error) = windows_property_grid(a, key, t, label, source, collapsed, toggle, name_width, width, options)
+        ret (windows_made, windows_error)
+    }
     let touch = density_of(t) == 2usize
     // looks (docs/ui/looks): the Windows property grid is v3's TcxVerticalGrid: 19 px rows, a #F0F0F0
     // row header column and white value cells split by 1 px #A0A0A4 lines, category rows with a +/- box.
@@ -10501,3 +10506,186 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     sem.row_count = u32(n)
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
 }
+
+// ---- looks3-e: the Windows property grid (v3's TcxVerticalGrid), measured from the live capture ----
+// See e.ui.vgridlook for the geometry. Rows are 19 px (17 + two hairlines), category bands 22 px,
+// names in Tahoma 11 px at the header's x + 16, values at the value cell's x + 1; the editors the
+// source returns are laid over the painted cells (a plain text node draws the idle v3 cell). The
+// selected row is the grid's focused one: blue header, white name, a dotted rectangle round its
+// value cell. `options.height` (when larger than the content) is the grid's whole height.
+fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32, options: PropertyGridOptions) -> (widget.Node, err) {
+    let total = source.count(source.ctx)
+    if total > 256usize { ret (zero, TooLarge) }
+    let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
+    if tahoma_error != ok { ret (zero, tahoma_error) }
+    let needle = options.filter[0usize..options.filter_len]
+    let (band_y, band_y_error) = mem.alloc[f32](a, total + 1usize)
+    let (band_first, band_first_error) = mem.alloc[bool](a, total + 1usize)
+    let (band_open, band_open_error) = mem.alloc[bool](a, total + 1usize)
+    let (row_y, row_y_error) = mem.alloc[f32](a, total + 1usize)
+    let (row_sel, row_sel_error) = mem.alloc[bool](a, total + 1usize)
+    let (row_top, row_top_error) = mem.alloc[bool](a, total + 1usize)
+    let (row_last, row_last_error) = mem.alloc[bool](a, total + 1usize)
+    let (toggles, toggles_error) = mem.alloc[GroupToggle](a, total + 1usize)
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, total + 1usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize * total + 2usize)
+    if band_y_error != ok || band_first_error != ok || band_open_error != ok || row_y_error != ok || row_sel_error != ok || row_top_error != ok || row_last_error != ok || toggles_error != ok || actions_error != ok || parts_error != ok { ret (zero, TooLarge) }
+    var bands = 0usize
+    var rows = 0usize
+    var n = 1usize
+    var cursor: f32 = 1.0
+    let value_x = name_width + 3.0
+    var i = 0usize
+    while i < total {
+        let head = source.property(source.ctx, i)
+        var end = i
+        while end < total && same_text(source.property(source.ctx, end).group, head.group) { end += 1usize }
+        var matched = 0usize
+        var r = i
+        while r < end {
+            if contains_folded(source.property(source.ctx, r).name, needle) { matched += 1usize }
+            r += 1usize
+        }
+        if matched == 0usize {
+            i = end
+            continue
+        }
+        let group_key = property_group_key(head.group)
+        let open = head.group.len == 0usize || !is_selected(collapsed, group_key)
+        if head.group.len > 0usize {
+            band_y[bands] = cursor
+            band_first[bands] = bands == 0usize
+            band_open[bands] = open
+            // the band: a transparent press target over the painted one, then its caption
+            toggles[bands] = GroupToggle { key: group_key, toggle: toggle }
+            actions[bands] = widget.Submit { ctx: ctx_of(&toggles[bands]), invoke: group_toggle_fire }
+            let heading_key = property_group_heading_key(key, head.group)
+            let state = control.control_state(t, heading_key, true, false)
+            var look = style.resolve(t.tokens, .Plain, state)
+            look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            look.border_width = 0.0
+            look.opacity = 1.0
+            look.radius = 0.0
+            look.custom_padding = true
+            look.padding = 0.0
+            look.padding_y = 0.0
+            look.min_height = 22.0
+            look.min_width = width - 2.0
+            var states = 0u32
+            if open { states = accessibility.STATE_EXPANDED }
+            let (header, header_error) = control.pressable_states(a, heading_key, t, 3u8, head.group, look, true, false, states, 0u32, 0u64, &actions[bands], widget.spacer(0u64, 1.0))
+            if header_error != ok { ret (zero, header_error) }
+            let (header_held, header_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if header_held_error != ok { ret (zero, TooLarge) }
+            header_held[0usize] = header
+            parts[n] = widget.positioned(0u64, 1.0, cursor, style.defaults(), header_held[0usize..1usize])
+            n += 1usize
+            var caption = control.text_options()
+            caption.role = .BodyMedium
+            caption.wrap = .None
+            let (said, said_error) = control.colored_text(a, 0u64, head.group, &tahoma, caption, style.hex(0x6D6D6Du32))
+            if said_error != ok { ret (zero, said_error) }
+            let (said_held, said_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if said_held_error != ok { ret (zero, TooLarge) }
+            said_held[0usize] = said
+            parts[n] = widget.positioned(0u64, 19.0, cursor + 4.0, control.sized_style(280.0, 15.0), said_held[0usize..1usize])
+            n += 1usize
+            bands += 1usize
+            cursor += 22.0
+        }
+        if open {
+            cursor += 1.0
+            var first_row = true
+            var k = i
+            while k < end {
+                let p = source.property(source.ctx, k)
+                if contains_folded(p.name, needle) {
+                    var last = true
+                    var later = k + 1usize
+                    while later < end {
+                        if contains_folded(source.property(source.ctx, later).name, needle) { last = false }
+                        later += 1usize
+                    }
+                    let chosen = options.selected != 0u64 && p.key == options.selected
+                    row_y[rows] = cursor
+                    row_sel[rows] = chosen
+                    row_top[rows] = first_row
+                    row_last[rows] = last
+                    var ink = style.hex(0x000000u32)
+                    var nudge: f32 = 0.0
+                    if chosen {
+                        ink = style.hex(0xFFFFFFu32)
+                        nudge = 0.0
+                    }
+                    var line = control.text_options()
+                    line.role = .BodyMedium
+                    line.wrap = .None
+                    line.max_lines = 1u32
+                    line.ellipsis = "…"
+                    let (name_node, name_error) = control.colored_text(a, 0u64, p.name, &tahoma, line, ink)
+                    if name_error != ok { ret (zero, name_error) }
+                    let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
+                    if named_error != ok { ret (zero, TooLarge) }
+                    named[0usize] = name_node
+                    var name_sem: widget.Semantics = zero
+                    name_sem.role = 31u8
+                    name_sem.label = p.name
+                    name_sem.row = u32(k + 1usize)
+                    name_sem.column = 1u32
+                    var name_box = control.sized_style(name_width - 17.0, 17.0)
+                    name_box.overflow = .Clip
+                    let (name_flex, name_flex_error) = mem.alloc[widget.Node](a, 1usize)
+                    if name_flex_error != ok { ret (zero, TooLarge) }
+                    name_flex[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, name_box, named[0usize..1usize])
+                    let (name_holder, name_holder_error) = mem.alloc[widget.Node](a, 1usize)
+                    if name_holder_error != ok { ret (zero, TooLarge) }
+                    name_holder[0usize] = widget.semantics(0u64, name_sem, style.defaults(), name_flex[0usize..1usize])
+                    parts[n] = widget.positioned(0u64, 31.0 + nudge, cursor + nudge, style.defaults(), name_holder[0usize..1usize])
+                    n += 1usize
+                    var editor: widget.Node = zero
+                    let editor_error = source.editor(source.ctx, a, k, &editor)
+                    if editor_error != ok { ret (zero, editor_error) }
+                    let (valued, valued_error) = mem.alloc[widget.Node](a, 1usize)
+                    if valued_error != ok { ret (zero, TooLarge) }
+                    valued[0usize] = editor
+                    var value_sem: widget.Semantics = zero
+                    value_sem.role = 14u8
+                    value_sem.label = p.name
+                    value_sem.row = u32(k + 1usize)
+                    value_sem.column = 2u32
+                    var value_box = control.sized_style(control.max_zero(width - value_x - 2.0), 17.0)
+                    value_box.overflow = .Clip
+                    let (value_flex, value_flex_error) = mem.alloc[widget.Node](a, 1usize)
+                    if value_flex_error != ok { ret (zero, TooLarge) }
+                    value_flex[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, value_box, valued[0usize..1usize])
+                    let (value_holder, value_holder_error) = mem.alloc[widget.Node](a, 1usize)
+                    if value_holder_error != ok { ret (zero, TooLarge) }
+                    value_holder[0usize] = widget.semantics(0u64, value_sem, style.defaults(), value_flex[0usize..1usize])
+                    parts[n] = widget.positioned(0u64, value_x + 2.0, cursor - 1.0, style.defaults(), value_holder[0usize..1usize])
+                    n += 1usize
+                    rows += 1usize
+                    cursor += 19.0
+                    first_row = false
+                }
+                k += 1usize
+            }
+            if !first_row { cursor -= 1.0 }
+        }
+        i = end
+    }
+    var height = cursor + 1.0
+    if options.height > height { height = options.height }
+    let (frame, frame_error) = vg.node(a, vg.Frame { width: width, height: height, bands: band_y[0usize..bands], firsts: band_first[0usize..bands], opens: band_open[0usize..bands], rows: row_y[0usize..rows], selected: row_sel[0usize..rows], tops: row_top[0usize..rows], lasts: row_last[0usize..rows], name_width: name_width, stops: zero })
+    if frame_error != ok { ret (zero, frame_error) }
+    parts[0usize] = frame
+    let (root, root_error) = mem.alloc[widget.Node](a, 1usize)
+    if root_error != ok { ret (zero, TooLarge) }
+    root[0usize] = widget.stack(key, control.sized_style(width, height), parts[0usize..n])
+    var sem: widget.Semantics = zero
+    sem.role = 12u8
+    sem.label = label
+    sem.row_count = u32(total)
+    sem.column_count = 2u32
+    ret (widget.semantics(0u64, sem, style.defaults(), root[0usize..1usize]), ok)
+}
+// ---- end looks3-e ------------------------------------------------------------------------------

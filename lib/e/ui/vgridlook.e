@@ -1,0 +1,193 @@
+// The Windows look of the vertical grid (v3's TcxVerticalGrid, Deck Properties): the frame, the
+// category bands and the row cells as one painted node, measured pixel for pixel from the live
+// 100 % capture docs/ui/looks/ref/windows/dialogs/deck-properties@1x.png (the grid crop is
+// docs/ui/looks/ref/windows/vertical_grid.png). The grid's text and editors are laid over this
+// node by `collection.property_grid_of`; this module only paints.
+//
+// Geometry (logical px = capture px; every y is relative to the node, the frame is 1 px):
+//   band      22 tall: a top line, 20 rows of a left-to-right gradient #D2D2D2 .. #B7B7B7, a bottom
+//             line, the grid's double chevron at x 312 (pointing up open, down shut)
+//   row       the content `row_h` - 2 = 17 tall, then a dark and a light hairline; a 1 px hairline
+//             also tops the first row of a group; the left 14 px is a #F0F0F0 gutter, header cells
+//             are white (the selected row's #0078D7), a 2 px dark/light line separates the value
+//   selected  the header #0078D7 with a lighter top and bottom line, a dotted focus rectangle
+//             round the value cell
+//
+// ponytail: the hairline pair is one fixed colour; the capture drifts 0.013 px per row (its
+// lines sit at fractional positions) which shows as up to 8 levels difference; the frame's side
+// colours are measured, they look like the classic edit-control bevel.
+
+use e.mem
+use e.gfx.geometry
+use e.gfx.paint
+use e.gfx.scene
+use e.ui.layout as ui_layout
+use e.ui.style
+use e.ui.widget
+
+// What to paint: band tops, whether each is the first band and open; row content tops, whether
+// each is selected, first in its group, last in its group; the overall size.
+type Frame = struct { width: f32, height: f32, bands: []const f32, firsts: []const bool, opens: []const bool, rows: []const f32, selected: []const bool, tops: []const bool, lasts: []const bool, name_width: f32, stops: []const paint.Stop }
+
+fn measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn fill(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: style.hex(value) } } })
+}
+
+// A rectangle filled with a left-to-right gradient of `stops` (offsets 0..1 across x .. x + span).
+fn across(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, span: f32, stops: []const paint.Stop) -> err {
+    let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: x, y: y }, end: geometry.Point { x: x + span, y: y }, stops: stops } }
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: brush } })
+}
+
+fn stop(offset: f32, value: u32) -> paint.Stop {
+    ret paint.Stop { offset: offset, color: style.hex(value) }
+}
+
+fn hexval(c: u8) -> u32 {
+    if c >= 97u8 { ret u32(c) - 87u32 }
+    ret u32(c) - 48u32
+}
+
+// The double chevron's coverage: 11 rows by 11 columns of alpha, two hex digits each, #767676 over
+// the band (the capture's pixels, the two chevrons overlapping in the middle row).
+fn chevron_alpha() -> str {
+    ret "00000000007e2300000000000000007eebb4230000000000007eebffffb423000000007eebff81dcffb423000000c8ff81144bdcff370000004b5e147e234b5e1400000000007eebb4230000000000007eebffffb423000000007eebff81dcffb423000000c8ff81144bdcff370000004b5e1400004b5e1400"
+}
+
+// The double chevron at (x, y); `down` turns it over.
+fn chevron(b: *scene.Builder, x: f32, y: f32, down: bool) -> err {
+    let alpha = chevron_alpha()
+    var row = 0usize
+    while row < 11usize {
+        var at = row
+        if down { at = 10usize - row }
+        var column = 0usize
+        while column < 11usize {
+            let i = (at * 11usize + column) * 2usize
+            let v = hexval(alpha[i]) * 16u32 + hexval(alpha[i + 1usize])
+            if v > 0u32 {
+                try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x + f32(column), y: y + f32(row), width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: paint.rgba(0.4627, 0.4627, 0.4627, f32(v) / 255.0) } } })
+            }
+            column += 1usize
+        }
+        row += 1usize
+    }
+    ret ok
+}
+
+// A dotted rectangle: 1 px dots every 2 px along the four edges.
+fn dotted(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
+    var dx: f32 = 0.0
+    while dx < w {
+        try fill(b, x + dx, y, 1.0, 1.0, value)
+        try fill(b, x + dx + 1.0, y + h - 1.0, 1.0, 1.0, value)
+        dx += 2.0
+    }
+    var dy: f32 = 1.0
+    while dy < h {
+        try fill(b, x, y + dy, 1.0, 1.0, value)
+        try fill(b, x + w - 1.0, y + dy, 1.0, 1.0, value)
+        dy += 2.0
+    }
+    ret ok
+}
+
+fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let f = mem.cast[*Frame](ctx)
+    let x = area.x
+    let y = area.y
+    let w = area.width
+    let h = area.height
+    let value_x = f.name_width + 1.0
+    try fill(b, x, y, w, h, 0xFFFFFFu32)
+    var r = 0usize
+    var k = 0u32
+    while r < f.rows.len {
+        let top = y + f.rows[r]
+        let dark_x = x + value_x
+        // the capture's hairlines drift 0.013 px a row (fractional layout): dark C6 -> CE, light D9 -> D2
+        if f.tops[r] { k = 0u32 }
+        if k > 8u32 { k = 8u32 }
+        let dark = 0xC5C5C8u32 + k * 0x010101u32
+        let light = 0xDADADBu32 - k * 0x010101u32
+        k += 1u32
+        // the gutter and its line, over the whole row (hairline row included)
+        try fill(b, x + 1.0, top - 1.0, 13.0, 20.0, 0xF0F0F0u32)
+        try fill(b, x + 1.0, top - 1.0, 1.0, 20.0, 0xEFEFEFu32)
+        try fill(b, x + 14.0, top - 1.0, 1.0, 20.0, 0xA1A1A5u32)
+        // the line between the header and the value cell
+        try fill(b, dark_x, top - 1.0, 1.0, 20.0, 0xABABAEu32)
+        try fill(b, dark_x + 1.0, top - 1.0, 1.0, 20.0, 0xF4F4F5u32)
+        if f.tops[r] { try fill(b, x + 15.0, top - 1.0, w - 16.0, 1.0, 0xCFCFD1u32) }
+        if f.selected[r] {
+            try fill(b, x + 15.0, top - 1.0, value_x - 15.0, 1.0, 0x3D87C4u32)
+            try fill(b, x + 15.0, top, value_x - 15.0, 17.0, 0x0078D7u32)
+            try fill(b, x + 15.0, top + 17.0, value_x - 15.0, 1.0, 0x6190B8u32)
+        }
+        // the hairlines under the row; the last row's light one is the next band's top line
+        if f.selected[r] {
+            try fill(b, dark_x + 2.0, top + 17.0, w - value_x - 3.0, 1.0, 0xB7B7BAu32)
+        } else {
+            try fill(b, x + 15.0, top + 17.0, w - 16.0, 1.0, dark)
+        }
+        if f.lasts[r] { try fill(b, x + 1.0, top + 17.0, 13.0, 1.0, 0xC7C7C9u32) }
+        if !f.lasts[r] { try fill(b, x + 15.0, top + 18.0, w - 16.0, 1.0, light) }
+        r += 1usize
+    }
+    // the frame: classic edit-control bevel colours, measured
+    try fill(b, x, y, w, 1.0, 0xAAADB3u32)
+    try fill(b, x, y + 1.0, 1.0, h - 1.0, 0x828790u32)
+    try fill(b, x + w - 1.0, y + 1.0, 1.0, h - 1.0, 0x9DA1A8u32)
+    try fill(b, x + 1.0, y + h - 1.0, w - 2.0, 1.0, 0xD2D4D7u32)
+    var i = 0usize
+    while i < f.bands.len {
+        let top = y + f.bands[i]
+        var edge = 0xB8B8BAu32
+        var seam = 0xE0E0E0u32
+        var base = 0xB8B8BAu32
+        if f.firsts[i] {
+            edge = 0xB4B5B9u32
+            seam = 0xE4E4E4u32
+            base = 0xB2B2B5u32
+        }
+        // the gradient: constant to x 230, down to #B7B7B7 at 318, constant after
+        try across(b, x + 1.0, top + 1.0, w - 2.0, 20.0, 328.0, f.stops)
+        try fill(b, x + 1.0, top, w - 2.0, 1.0, edge)
+        try fill(b, x + 1.0, top + 21.0, 13.0, 1.0, seam)
+        try fill(b, x + 14.0, top + 21.0, w - 15.0, 1.0, base)
+        try fill(b, x + w - 1.0, top, 1.0, 22.0, 0x8E9199u32)
+        try chevron(b, x + 312.0, top + 5.0, !f.opens[i])
+        i += 1usize
+    }
+    // the focus rectangle of the selected row: dots round its value cell, over the frame's edge
+    r = 0usize
+    while r < f.rows.len {
+        if f.selected[r] { try dotted(b, x + value_x + 1.0, y + f.rows[r] - 1.0, w - value_x - 1.0, 18.0, 0x6A6A6Au32) }
+        r += 1usize
+    }
+    ret ok
+}
+
+// The painted node, `f.width` by `f.height`; `f` outlives the frame like any widget context.
+fn node(a: *mem.Arena, f: Frame) -> (widget.Node, err) {
+    let (held, held_error) = mem.alloc[Frame](a, 1usize)
+    if held_error != ok { ret (zero, held_error) }
+    let (ramp, ramp_error) = mem.alloc[paint.Stop](a, 4usize)
+    if ramp_error != ok { ret (zero, ramp_error) }
+    // the band's gradient: constant to x 230, down to #B7B7B7 at 318, constant after (of 328)
+    ramp[0usize] = stop(0.0, 0xD2D2D2u32)
+    ramp[1usize] = stop(100.0 / 328.0, 0xD1D1D1u32)
+    ramp[2usize] = stop(230.0 / 328.0, 0xD0D0D0u32)
+    ramp[3usize] = stop(318.0 / 328.0, 0xB7B7B7u32)
+    held[0usize] = f
+    held[0usize].stops = ramp[0usize..4usize]
+    var s = style.defaults()
+    s.width = style.Length { Px: f.width }
+    s.height = style.Length { Px: f.height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&held[0usize]), measure: measure, paint: frame_paint, state: widget.bytes_of[Frame](&held[0usize]) } }, style: s, children: none }, ok)
+}
