@@ -39,10 +39,11 @@ fn bar(a: *mem.Arena, t: *const control.Theme, key: u64, title: str, y: f32) -> 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
     if parts_error != ok { ret (0usize, parts_error) }
-    // Deck Legality: crop (20,30)-(545,138); the group at (26,39), 513 x 93, so at (6, 9).
+    // Deck Legality: crop (20,30)-(545,138); the group at (26,39), 513 x 93, so at (6, 9); its right line sits 0.4 past
+    // the 513 (the capture splits it over two columns, 530.4 to 531.4).
     var group: widget.Node = zero
     if t.tokens.profile == .Windows {
-        let (framed, framed_error) = control.windows_group_sized(a, 1u64, t, "Select Format ", true, 513.0, 93.0, false, parts[0usize..0usize])
+        let (framed, framed_error) = control.windows_group_exact(a, 1u64, t, "Select Format ", true, 513.0, 93.0, 0.0, 6.35, 513.4, 92.35, parts[0usize..0usize])
         if framed_error != ok { ret (0usize, framed_error) }
         group = framed
     } else {

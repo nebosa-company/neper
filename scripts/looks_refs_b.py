@@ -196,6 +196,45 @@ EXISTING["radio_group_dialog"] = (1, 496, 224, [(496, 224), (302, 116)])
 EXISTING["group_box_dialog"] = (1, 525, 108, [(525, 108), (510, 28), (510, 28), (510, 28)])
 EXISTING["check_list_box_dialog"] = (1, 500, 348, [(500, 348)])
 
+# Radio button (TcxRadioButton, 17 tall): Missing Set Cards and the Filter dialog. The Filter dialog's focused
+# grabs show the disc in its pressed look (a stale press), so only Missing Only has a focus cell.
+SHEETS["radio_states"] = (3, 150, 25, [
+    (D + "dialog-missing-set-cards-rest@1x.png", 24, 372, 112, 17),
+    None,
+    (S + "radio-focused-missing-set-cards-missing@1x.png", 24, 372, 112, 17),
+    (D + "dialog-missing-set-cards-rest@1x.png", 24, 396, 112, 17),
+    (S + "radio-pressed-missing-set-cards-available@1x.png", 24, 396, 112, 17),
+    None,
+    (D + "dialog-filter-rest@1x.png", 21, 65, 84, 17, 4, 36, 0),
+    (S + "radio-pressed-filter-blocks@1x.png", 21, 65, 84, 17, 4, 36, 0),
+    None,
+    (D + "dialog-filter-rest@1x.png", 109, 65, 90, 17, 4, 36, 0),
+    (S + "radio-pressed-filter-formats@1x.png", 109, 65, 90, 17, 4, 36, 0),
+    None])
+
+# Radio group items (42 tall rows): the Search for Card dialog (flat group, crisp discs) and the Options Grids
+# page (resampled discs). The short items sit at x 140 of their 340 wide cell so that the harness's pointer, at
+# the cell centre, lands on them. The focused grabs show stale pressed discs and are left out.
+SHEETS["radio_group_states"] = (2, 340, 50, [
+    (D + "dialog-search-rest@1x.png", 28, 120, 100, 42, 4, 136, 0),
+    (S + "radio-pressed-search-cards@1x.png", 28, 120, 100, 42, 4, 136, 0),
+    (D + "dialog-search-rest@1x.png", 28, 162, 100, 42, 4, 136, 0),
+    (S + "radio-pressed-search-collection@1x.png", 28, 162, 100, 42, 4, 136, 0),
+    (D + "dialog-options-grids-rest@1x.png", 232, 212, 330, 42, 4, 0, 0),
+    (S + "radio-pressed-options-search-from-start@1x.png", 232, 212, 330, 42, 4, 0, 0),
+    (D + "dialog-options-grids-rest@1x.png", 232, 254, 330, 42, 4, 0, 0),
+    (S + "radio-pressed-options-search-within@1x.png", 232, 254, 330, 42, 4, 0, 0)])
+
+# Check list box (TcxCheckListBox): the top four rows of the Options Rules and Prices lists with the current row
+# moved (the unfocused and focused grabs, and the pressed check box grab, are identical to these: the highlight
+# stays #0078D7 whether or not the list has the focus, and a pressed row mark shows no pressed look).
+SHEETS["check_list_box_states"] = (1, 500, 90, [
+    (D + "dialog-options-rules-rest@1x.png", 213, 92, 500, 62, 0),
+    (S + "check-list-box-row-selected-focused-options-rules@1x.png", 213, 92, 500, 62, 0),
+    (S + "check-list-box-row-selected-unfocused-options-rules@1x.png", 213, 92, 500, 62, 0),
+    (S + "check-list-box-focused-options-rules@1x.png", 213, 92, 500, 62, 0),
+    (S + "check-list-box-row-selected-focused-options-prices@1x.png", 213, 92, 500, 62, 0)])
+
 if __name__ == "__main__":
     command, name = sys.argv[1], sys.argv[2]
     if command == "ref":

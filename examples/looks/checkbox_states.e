@@ -10,6 +10,14 @@ use e.ui.control
 use e.ui.looks
 use e.ui.style
 use e.ui.widget
+use e.ui.winbutton
+
+// The label without its '&' mnemonic mark (only the Windows look draws it).
+fn plain(a: *mem.Arena, label: str) -> str {
+    let (shown, mark, shown_error) = winbutton.mnemonic(a, label)
+    if shown_error != ok { ret label }
+    ret shown
+}
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
@@ -40,7 +48,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             if made_error != ok { ret (0usize, made_error) }
             box = made
         } else {
-            let (made, made_error) = control.checkbox(a, u64(i + 1usize), t, labels[row], checked[row], false, action, true)
+            let (made, made_error) = control.checkbox(a, u64(i + 1usize), t, plain(a, labels[row]), checked[row], false, action, true)
             if made_error != ok { ret (0usize, made_error) }
             box = made
         }

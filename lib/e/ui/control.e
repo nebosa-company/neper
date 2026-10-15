@@ -3733,7 +3733,7 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
 // is two pixels wide, a dot pixel 44 % black, the pixel between the dots 33 %, their outer
 // neighbours 10 % and 8 %. The top and bottom lines run on odd columns, the left line on odd rows
 // and the right one on even rows; the area is the rectangle plus the outer column and row.
-type Dotted = struct { color: paint.Color }
+type Dotted = struct { color: paint.Color, dot: f32, gap: f32, dot_spill: f32, gap_spill: f32 }
 
 fn dotted_pixel(b: *scene.Builder, color: paint.Color, x: f32, y: f32, alpha: f32) -> err {
     ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: with_alpha(color, alpha) } } })
@@ -3743,17 +3743,17 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Dotted](ctx)
     var y: f32 = 0.0
     while y < area.height - 1.0 {
-        var left_dot: f32 = 0.33
-        var left_spill: f32 = 0.08
-        var right_dot: f32 = 0.33
-        var right_spill: f32 = 0.09
+        var left_dot = d.gap
+        var left_spill = d.gap_spill
+        var right_dot = d.gap
+        var right_spill = d.gap_spill
         let odd = (i32(y) % 2) == 1
         if odd {
-            left_dot = 0.44
-            left_spill = 0.10
+            left_dot = d.dot
+            left_spill = d.dot_spill
         } else {
-            right_dot = 0.44
-            right_spill = 0.12
+            right_dot = d.dot
+            right_spill = d.dot_spill
         }
         try dotted_pixel(b, d.color, area.x, area.y + y, left_dot)
         try dotted_pixel(b, d.color, area.x + 1.0, area.y + y, left_spill)
@@ -3764,11 +3764,11 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     var x: f32 = 0.0
     while x < area.width {
         let odd = (i32(x) % 2) == 1
-        var dot: f32 = 0.09
-        var gap: f32 = 0.07
+        var dot = d.dot_spill
+        var gap = d.gap_spill
         if odd {
-            dot = 0.44
-            gap = 0.33
+            dot = d.dot
+            gap = d.gap
         }
         try dotted_pixel(b, d.color, area.x + x, area.y, dot)
         try dotted_pixel(b, d.color, area.x + x, area.y + 1.0, gap)
@@ -3780,10 +3780,12 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 // The dotted focus rectangle as a node `width` x `height`.
-fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32) -> (widget.Node, err) {
+fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, crisp: bool) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[Dotted](a, 1usize)
     if dots_error != ok { ret (zero, TooLarge) }
-    dots[0usize] = Dotted { color: color }
+    // The check boxes' grabs show the rectangle soft (44 %, 33 %, 10 % and 8 % black), the radios' crisp (62 % and 31 %).
+    dots[0usize] = Dotted { color: color, dot: 0.44, gap: 0.33, dot_spill: 0.10, gap_spill: 0.08 }
+    if crisp { dots[0usize] = Dotted { color: color, dot: 0.625, gap: 0.31, dot_spill: 0.0, gap_spill: 0.0 } }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: mark_measure, paint: dotted_paint, state: widget.bytes_of[Dotted](&dots[0usize]) } }, style: sized_style(width, height), children: none }, ok)
 }
@@ -3861,7 +3863,7 @@ fn edges(left: f32, top: f32, right: f32, bottom: f32) -> style.EdgeLengths {
 // and 1 above and below; a '&' marks the mnemonic, underlined at the baseline. When `focused` the
 // dotted focus rectangle (looks4: at the text's origin, 1 below the caption's top, the text's
 // rounded advance + 1 wide, 15 tall) lies over it without moving anything.
-fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, enabled: bool) -> (widget.Node, err) {
+fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, enabled: bool, crisp: bool) -> (widget.Node, err) {
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
@@ -3894,7 +3896,7 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, pad, mem_one_node(a, word_node))
     var n = 1usize
     if focused {
-        let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 2.0, 16.0)
+        let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 2.0, 16.0, crisp)
         if dots_error != ok { ret (zero, dots_error) }
         parts[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), mem_one_node(a, dots))
         n = 2usize
@@ -3917,7 +3919,7 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if mark_error != ok { ret (zero, mark_error) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (label_node, label_error) = windows_caption(a, &dialog_t, label, (state.focused || state.pressed) && enabled, enabled)
+    let (label_node, label_error) = windows_caption(a, &dialog_t, label, (state.focused || state.pressed) && enabled, enabled, round)
     if label_error != ok { ret (zero, label_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -4017,7 +4019,7 @@ fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // One row of the check list, `width` wide, 15 tall: the native check box mark 1.15 in, the caption
 // from 17, and, for the current row (the list's item index), the system highlight
 // (#0078D7) behind the caption only, from 16.16, the caption white.
-fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: *const Theme, label: str, chosen: bool, current: bool, action: *const widget.Submit, width: f32) -> (widget.Node, err) {
+fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: *const Theme, label: str, chosen: bool, current: bool, below: bool, action: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
     let (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0, 0u32)
     if mark_error != ok { ret (zero, mark_error) }
@@ -4028,13 +4030,20 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     if current { ink = style.hex(16777215u32) }
     let (words, words_error) = colored_text(a, 0u64, label, dialog_t, caption, ink)
     if words_error != ok { ret (zero, words_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     if current {
-        var bar = sized_style(width - 16.16, 15.0)
+        var bar = sized_style(width - 16.64, 15.0)
         bar.background = paint.Brush { Solid: style.hex(30935u32) }
         parts[n] = widget.positioned(0u64, 16.16, 0.4, bar, zero)
+        n += 1usize
+    }
+    if below {
+        // The current row's highlight is 15 tall from 0.4: its last 0.4 spills into this row's first line.
+        var tail = sized_style(width - 16.64, 0.4)
+        tail.background = paint.Brush { Solid: style.hex(30935u32) }
+        parts[n] = widget.positioned(0u64, 16.16, 0.0, tail, zero)
         n += 1usize
     }
     parts[n] = widget.positioned(0u64, 1.15, 0.0, style.defaults(), widget_one_of(a, mark_node))
@@ -4057,7 +4066,10 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
 // A TcxCheckListBox at its DFM size, `width` x `height` outside (v3's is 495 x 343 on the Rules
 // page): a 2 unit edge, a white viewport, 15 unit rows. No item images (the Card Art page's list
 // has them), no column of check marks for a state other than checked and unchecked.
-fn windows_check_list_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, width: f32, height: f32, current: usize) -> (widget.Node, err) {
+fn windows_check_list_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rect_width: f32, rect_height: f32, current: usize) -> (widget.Node, err) {
+    // looks4: the native frame bleeds 1 px right and down of the control's rectangle (as the button's does).
+    let width = rect_width + 1.0
+    let height = rect_height + 1.0
     if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
@@ -4065,7 +4077,7 @@ fn windows_check_list_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, lab
     if items_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < options.len {
-        let (row, row_error) = windows_check_row(a, key + 1u64 + u64(i), t, &dialog_t, options[i], chosen[i], i == current, &picks[i], width - 4.0)
+        let (row, row_error) = windows_check_row(a, key + 1u64 + u64(i), t, &dialog_t, options[i], chosen[i], i == current, i == current + 1usize, &picks[i], width - 4.0)
         if row_error != ok { ret (zero, row_error) }
         items[i] = row
         i += 1usize
@@ -13893,7 +13905,7 @@ fn windows_dialog_theme(a: *mem.Arena, t: *const Theme) -> (Theme, err) {
     let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
     if copies_error != ok { ret (*t, TooLarge) }
     copies[0usize] = *t.tokens
-    let small = style.TextStyle { size: 10.9, line_height: 15.0, weight: 400u16, italic: false }
+    let small = style.TextStyle { size: 10.8, line_height: 15.0, weight: 400u16, italic: false }
     copies[0usize].text[0] = small
     copies[0usize].text[1] = small
     copies[0usize].text[17] = small
@@ -14232,7 +14244,7 @@ fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize + body.len)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = frame
-    parts[1usize] = widget.positioned(0u64, 8.0, -2.0, cut, widget_one_of(a, heading))
+    parts[1usize] = widget.positioned(0u64, 8.0, -1.0, cut, widget_one_of(a, heading))
     var i = 0usize
     while i < body.len {
         parts[2usize + i] = body[i]
