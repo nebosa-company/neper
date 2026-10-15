@@ -7617,6 +7617,22 @@ fn v3_chevron(b: *scene.Builder, cx: f32, cy: f32, dir: u8, ink: paint.Color) ->
     ret ok
 }
 
+// A run of the hot zone: `u` along the strip, `v` across it, `n` px long along it and 1 across;
+// the strip lying (`across`) swaps the axes.
+fn v3_zone_px(b: *scene.Builder, across: bool, ax: f32, ay: f32, u: f32, v: f32, n: f32, color: paint.Color) -> err {
+    if across { ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(ax + u, ay + v, n, 1.0), brush: paint.Brush { Solid: color } } }) }
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(ax + v, ay + u, 1.0, n), brush: paint.Brush { Solid: color } } })
+}
+
+// The "<" chevron of the hot zone, 4 across by 8 along, measured at 100 % on the Filter window's
+// splitter (ref/windows/dialogs/search-filter-top): grey values row by row (".." empty).
+fn v3_zone_chevron() -> str { ret "......50....5000..5000a05000a0..a00050....a00050....a000......a0" }
+
+// The hot zone of v3's TcxSplitter (simple style), 8 thick and 0.3 of the strip long (and 2 more, down
+// to a whole pixel: 463 -> 140, 497 -> 151, 387 -> 118 in the captures), centred; the zone is a
+// #A0A0A0 (the button shadow) frame with a #BBBBBB top and foot, a lighter row and a white column
+// inside, a #D5D5D5 shadow row under it, a "<" chevron toward the first pane 6 from each end and
+// a dotted line between them (1 x 2 blue dots every 3).
 fn sash_paint_v3(s: *Sash, b: *scene.Builder, sized: geometry.Rect) -> err {
     // On whole pixels (the capture's zone is pixel-sharp whatever the strip's place).
     let left = f32(i64(sized.x + 0.5))
@@ -7631,37 +7647,63 @@ fn sash_paint_v3(s: *Sash, b: *scene.Builder, sized: geometry.Rect) -> err {
         along = area.width
         thick = area.height
     }
-    var len = s.hot_len
+    var len = f32(i64(along * 0.3 + 2.0))
+    if s.hot_len > 0.0 { len = s.hot_len }
     if len > along - 2.0 { len = along - 2.0 }
     if len < 24.0 { ret ok }
-    let start = f32(i64((along - len) * 0.5))
-    var zone = geometry.rect(area.x, area.y + start, thick, len)
-    var inner = geometry.rect(area.x + 1.0, area.y + start + 1.0, thick - 2.0, len - 2.0)
-    if s.across {
-        zone = geometry.rect(area.x + start, area.y, len, thick)
-        inner = geometry.rect(area.x + start + 1.0, area.y + 1.0, len - 2.0, thick - 2.0)
+    let ax = area.x
+    let ay = area.y
+    let u0 = f32(i64((along - len) * 0.5 + 0.5))
+    let last = thick - 1.0
+    let frame = s.edge
+    let top_row = style.hex(12303291u32)
+    var v: f32 = 0.0
+    while v < thick {
+        try v3_zone_px(b, s.across, ax, ay, u0, v, 1.0, top_row)
+        try v3_zone_px(b, s.across, ax, ay, u0 + len - 2.0, v, 1.0, top_row)
+        try v3_zone_px(b, s.across, ax, ay, u0 + len - 1.0, v, 1.0, style.hex(14013909u32))
+        v += 1.0
     }
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: zone, brush: paint.Brush { Solid: s.edge } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: inner, brush: paint.Brush { Solid: s.hot_face } } })
-    // Chevrons 9 from each end of the zone, the dotted line between them (measured at 100 %): a
-    // 1 x 2 dot every 3, the first 16 and the last 16 from the ends of the zone.
-    let mid = thick * 0.5
-    var dir = 2u8
-    if s.across {
-        dir = 0u8
+    // The sides, the face between them, the light row (u 1) and the paler one (u 2), the white column.
+    try v3_zone_px(b, s.across, ax, ay, u0 + 1.0, 0.0, len - 3.0, frame)
+    try v3_zone_px(b, s.across, ax, ay, u0 + 1.0, last, len - 3.0, frame)
+    try v3_zone_px(b, s.across, ax, ay, u0 + len - 2.0, 0.0, 1.0, frame)
+    try v3_zone_px(b, s.across, ax, ay, u0 + len - 2.0, last, 1.0, frame)
+    v = 1.0
+    while v < last {
+        try v3_zone_px(b, s.across, ax, ay, u0 + 1.0, v, len - 3.0, s.hot_face)
+        v += 1.0
     }
-    if s.across {
-        try v3_chevron(b, area.x + start + 9.5, area.y + mid, dir, s.ink)
-        try v3_chevron(b, area.x + start + len - 9.5, area.y + mid, dir, s.ink)
-    } else {
-        try v3_chevron(b, area.x + mid, area.y + start + 9.5, dir, s.ink)
-        try v3_chevron(b, area.x + mid, area.y + start + len - 9.5, dir, s.ink)
+    v = 1.0
+    while v < last {
+        var edge_row = style.hex(14671839u32)
+        try v3_zone_px(b, s.across, ax, ay, u0 + 1.0, v, 1.0, edge_row)
+        if v > 1.0 { try v3_zone_px(b, s.across, ax, ay, u0 + 2.0, v, 1.0, style.hex(16119285u32)) }
+        v += 1.0
+    }
+    try v3_zone_px(b, s.across, ax, ay, u0 + 2.0, 1.0, len - 4.0, style.hex(16777215u32))
+    try v3_zone_px(b, s.across, ax, ay, u0 + len - 2.0, 1.0, 1.0, style.hex(12632256u32))
+    let table = v3_zone_chevron()
+    var row: f32 = 0.0
+    while row < 8.0 {
+        var col: f32 = 0.0
+        while col < 4.0 {
+            let g = win3_byte(table, usize(row) * 4usize + usize(col))
+            if g < 256u32 {
+                let ink = style.hex(g * 65793u32)
+                try v3_zone_px(b, s.across, ax, ay, u0 + 6.0 + row, 2.0 + col, 1.0, ink)
+                try v3_zone_px(b, s.across, ax, ay, u0 + len - 13.0 + row, 2.0 + col, 1.0, ink)
+            }
+            col += 1.0
+        }
+        row += 1.0
     }
     var at: f32 = 16.0
     while at < len - 16.0 {
-        var dot = geometry.rect(area.x + f32(i64(mid)), area.y + start + at, 1.0, 2.0)
-        if s.across { dot = geometry.rect(area.x + start + at, area.y + f32(i64(mid)), 1.0, 2.0) }
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: dot, brush: paint.Brush { Solid: s.dots } } })
+        try v3_zone_px(b, s.across, ax, ay, u0 + at, 4.0, 1.0, s.dots)
+        try v3_zone_px(b, s.across, ax, ay, u0 + at + 1.0, 4.0, 1.0, style.hex(10537192u32))
+        try v3_zone_px(b, s.across, ax, ay, u0 + at - 1.0, 3.0, 1.0, style.hex(16448250u32))
+        try v3_zone_px(b, s.across, ax, ay, u0 + at, 3.0, 1.0, style.hex(16119285u32))
         at += 3.0
     }
     ret ok
@@ -7854,14 +7896,12 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
         // Measured again at 100 % (ref/windows/main-window@1x.png): the upright zone is 140 long
         // framed #ADADAD with #8EBFE6 dots, the lying one 151 long framed #919398 with #99C4E7 dots,
         // chevrons #131313.
-        var zone_edge = style.hex(11382189u32)
-        var zone_dots = style.hex(9355238u32)
-        var zone_len: f32 = 140.0
-        if vertical {
-            zone_edge = style.hex(9540504u32)
-            zone_dots = style.hex(10077415u32)
-            zone_len = 151.0
-        }
+        // looks3: measured on the Filter window's splitter at 100 % (all three captures follow one rule
+        // for the zone's length, see sash_paint_v3): frame #A0A0A0, dots #50A0DF over #A0C8E8.
+        let zone_edge_base = style.hex(10526880u32)
+        var zone_edge = zone_edge_base
+        let zone_dots = style.hex(5284063u32)
+        let zone_len: f32 = 0.0
         var zone_face = style.color(t.tokens, .Background)
         if state.hovered { zone_edge = style.hex(8303850u32) }
         if state.hovered { zone_face = style.hex(15069691u32) }
@@ -13541,7 +13581,7 @@ fn win3_tab_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let h = area.height
     let edge = style.hex(15066597u32)
     if f.chosen {
-        try win3_rect(b, x + 1.0, y + 2.0, w - 1.0, h - 2.0, style.hex(16381433u32))
+        try win3_rect(b, x + 1.0, y + 2.0, w - 1.0, h - 2.0, style.hex(16382457u32))
         try win3_rect(b, x + 1.0, y, w - 2.0, 1.0, style.hex(15329769u32))
         try win3_rect(b, x + 1.0, y + 1.0, w - 2.0, 1.0, style.hex(15921906u32))
         try win3_rect(b, x, y + 1.0, 1.0, h - 1.0, edge)

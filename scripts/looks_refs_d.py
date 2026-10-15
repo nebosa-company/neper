@@ -153,6 +153,10 @@ SHEETS["page_control_about"] = (1, 120, 24, [
     ("help-about", 8, 31, 120, 24, 0),                  # MTG Studio (chosen), Details
 ])
 
+SHEETS["splitter_dialog"] = (1, 24, 387, [
+    ("search-filter-top", 320, 55, 24, 387, 0),         # the Filter window splitter, 8 wide at x 12
+])
+
 if __name__ == "__main__":
     command, name = sys.argv[1], sys.argv[2]
     if command == "ref":

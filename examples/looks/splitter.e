@@ -47,9 +47,41 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (8usize, ok)
 }
 
+// The splitter of v3's Filter window (ref/windows/dialogs/search-filter-top: TcxSplitter, simple hot
+// zone, 387 long between two f9f9f9 panels) at its real length: a 16 x 387 split, the strip 8 wide at
+// x 4. `splitter.exe dialog` writes splitter_dialog.png, which compares pixel for pixel with
+// ref/windows/splitter_dialog.png (scripts/looks_refs_d.py).
+fn page_pane() -> widget.Node {
+    var s = style.defaults()
+    s.width = style.Length { Percent: 100.0 }
+    s.height = style.Length { Percent: 100.0 }
+    s.background = paint.Brush { Solid: style.hex(16382457u32) }
+    ret widget.box(0u64, s, zero)
+}
+
+fn small_pane(w: f32) -> widget.Node {
+    var s = style.defaults()
+    s.width = style.Length { Px: w }
+    s.height = style.Length { Percent: 100.0 }
+    s.background = paint.Brush { Solid: style.hex(16382457u32) }
+    ret widget.box(0u64, s, zero)
+}
+
+fn build_dialog(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let change = widget.Change[f32] { ctx: zero, invoke: noop_change }
+    let (node, node_error) = control.split_view(a, 1000u64, t, .Horizontal, page_pane(), small_pane(4.0), 12.0, 2.0, 2.0, change, 24.0, 387.0)
+    if node_error != ok { ret (0usize, node_error) }
+    cells[0usize] = looks.Cell { caption: "", node: node, drive: .None }
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len == 2usize {
+        let dialog = looks.Sheet { name: "splitter_dialog", cells: 1usize, columns: 1usize, cell_w: 24.0, cell_h: 387.0, ctx: zero, build: build_dialog }
+        ret looks.run_all(a, &dialog)
+    }
     if args.len > 1usize {
-        let live = looks.Sheet { name: "splitter_live", cells: 2usize, columns: 2usize, cell_w: 200.0, cell_h: 200.0, ctx: zero, build: build_live }
+        let live = looks.Sheet { name: "splitter_live", cells: 2usize, columns: 2usize, cell_w: 497.0, cell_h: 463.0, ctx: zero, build: build_live }
         ret looks.run_all(a, &live)
     }
     let sheet = looks.Sheet { name: "splitter", cells: 8usize, columns: 4usize, cell_w: 200.0, cell_h: 120.0, ctx: zero, build: build }
@@ -73,7 +105,14 @@ fn build_live(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
         var axis: ui_layout.Axis = .Horizontal
         if i == 1usize { axis = .Vertical }
         let change = widget.Change[f32] { ctx: zero, invoke: noop_change }
-        let (node, node_error) = control.split_view(a, u64(1000usize * (i + 1usize)), t, axis, plain_pane(), plain_pane(), 96.0, 40.0, 40.0, change, 200.0, 200.0)
+        // Strips of the captures' real lengths (463 upright, 497 lying: the hot zone is 0.3 of them).
+        var live_w: f32 = 200.0
+        var live_h: f32 = 463.0
+        if i == 1usize {
+            live_w = 497.0
+            live_h = 200.0
+        }
+        let (node, node_error) = control.split_view(a, u64(1000usize * (i + 1usize)), t, axis, plain_pane(), plain_pane(), 96.0, 40.0, 40.0, change, live_w, live_h)
         if node_error != ok { ret (0usize, node_error) }
         var caption = "Upright"
         if i == 1usize { caption = "Lying" }
