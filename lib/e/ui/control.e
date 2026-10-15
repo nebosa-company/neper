@@ -3476,6 +3476,10 @@ fn choice_mark_at(a: *mem.Arena, t: *const Theme, state: style.ControlState, cho
 // 40 tall (48 on touch, 32 dense). Disabled is `on-surface` at 38%, a checked box
 // keeping its fill in that with a `surface` tick.
 fn choosable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (drawn, drawn_error) = windows_choice(a, key, t, role, label, chosen, mixed, round, action, enabled)
+        ret (drawn, drawn_error)
+    }
     let state = control_state(t, key, enabled, false)
     let h = t.tokens.metrics.control_height
     let touch = h > t.tokens.sizes.control_sm
@@ -3556,12 +3560,233 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
     }
     let (stacked, stacked_error) = mem.alloc[widget.Node](a, 1usize)
     if stacked_error != ok { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows {
+        let (framed, framed_error) = windows_group(a, key, t, label, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len]), enabled)
+        ret (framed, framed_error)
+    }
     // v2 (D955): the rows abut.
     stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
     ret (widget.semantics(key, sem, style.defaults(), stacked[0usize..1usize]), ok)
+}
+
+
+// ---- Windows look, group `choices` (docs/ui/looks) -----------------------------------------
+// v3's check box, radio button and radio group (DevExpress with NativeStyle: the Windows 11 theme
+// draws the mark). See `style.windows_choice_resolve` for the colours.
+
+// A dotted rectangle, 1 unit dots every 2 units round the area: the focus rectangle DevExpress
+// draws round a focused caption.
+type Dotted = struct { color: paint.Color }
+
+fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*Dotted](ctx)
+    var x: f32 = 0.0
+    while x < area.width {
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + x, y: area.y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + x, y: area.y + area.height - 1.0, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        x += 2.0
+    }
+    var y: f32 = 2.0
+    while y < area.height - 1.0 {
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: area.y + y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + area.width - 1.0, y: area.y + y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        y += 2.0
+    }
+    ret ok
+}
+
+// The dotted focus rectangle as a node that fills its parent.
+fn dotted_focus(a: *mem.Arena, color: paint.Color) -> (widget.Node, err) {
+    let (dots, dots_error) = mem.alloc[Dotted](a, 1usize)
+    if dots_error != ok { ret (zero, TooLarge) }
+    dots[0usize] = Dotted { color: color }
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: mark_measure, paint: dotted_paint, state: widget.bytes_of[Dotted](&dots[0usize]) } }, style: fill, children: none }, ok)
+}
+
+// The 13 unit mark: a box (round for a radio) with its tick, dash or dot.
+fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool) -> (widget.Node, err) {
+    let look = style.windows_choice_resolve(t.tokens, chosen || mixed, state)
+    var face = sized_style(13.0, 13.0)
+    face.background = paint.Brush { Solid: look.background }
+    face.border = style.Border { width: look.border_width, color: look.border }
+    face.radius = look.radius
+    if round { face.radius = 6.5 }
+    let (inside, inside_error) = mem.alloc[widget.Node](a, 1usize)
+    if inside_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    if round && chosen {
+        var across: f32 = 5.0
+        if state.hovered && !state.pressed { across = 6.0 }
+        if state.pressed { across = 4.5 }
+        var dot = sized_style(across, across)
+        dot.radius = across * 0.5
+        dot.background = paint.Brush { Solid: look.foreground }
+        inside[0usize] = widget.box(0u64, dot, zero)
+        count = 1usize
+    }
+    if !round && (chosen || mixed) {
+        var kind: GlyphKind = .Check
+        if mixed { kind = .Dash }
+        let (drawn, drawn_error) = stroked_glyph(a, with_alpha(look.foreground, 0.75), kind, 10.5, 0.8)
+        if drawn_error != ok { ret (zero, drawn_error) }
+        inside[0usize] = drawn
+        count = 1usize
+    }
+    ret (widget.aligned(0u64, .Center, .Center, face, inside[0usize..count]), ok)
+}
+
+fn edges(left: f32, top: f32, right: f32, bottom: f32) -> style.EdgeLengths {
+    ret style.EdgeLengths { left: style.Length { Px: left }, top: style.Length { Px: top }, right: style.Length { Px: right }, bottom: style.Length { Px: bottom } }
+}
+
+// A caption in the Windows look: black (muted when disabled) regular text, 2 units either side
+// and 1 above and below, the dotted focus rectangle over it when `focused`.
+fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, enabled: bool) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    var ink = style.color(t.tokens, .Text)
+    if !enabled { ink = style.color(t.tokens, .TextMuted) }
+    let (words, words_error) = colored_text(a, 0u64, label, t, caption, ink)
+    if words_error != ok { ret (zero, words_error) }
+    var pad = style.defaults()
+    pad.padding = edges(2.0, 1.0, 2.0, 1.0)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = words
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, pad, inner[0usize..1usize])
+    var n = 1usize
+    var box = style.defaults()
+    if focused {
+        // The dots fill the stack, so the stack takes the caption's measured size.
+        let (look, look_error) = text_style_faced(a, t, caption)
+        if look_error != ok { ret (zero, look_error) }
+        let (laid, laid_error) = layout.layout(a, label, look, layout.Options { width: 100000.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
+        if laid_error != ok { ret (zero, laid_error) }
+        box = sized_style(laid.bounds.width + 4.0, laid.bounds.height + 2.0)
+        let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text))
+        if dots_error != ok { ret (zero, dots_error) }
+        parts[1usize] = dots
+        n = 2usize
+    }
+    ret (widget.stack(0u64, box, parts[0usize..n]), ok)
+}
+
+// A check box or radio button row: the mark, then the caption, as a tap-and-hover region at
+// least 21 tall (TcxCheckBox's default height). `role` 4 is a checkbox, 5 a radio.
+fn windows_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (label_node, label_error) = windows_caption(a, t, label, state.focused && enabled, enabled)
+    if label_error != ok { ret (zero, label_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = mark_node
+    parts[1usize] = label_node
+    var row_style = style.defaults()
+    row_style.min_height = style.Length { Px: 21.0 }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, row_style, parts[0usize..2usize])
+    let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
+    if region_error != ok { ret (zero, TooLarge) }
+    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, style.defaults(), inner[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = role
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if chosen { sem.states = accessibility.STATE_CHECKED }
+    if mixed { sem.states = sem.states | accessibility.STATE_MIXED }
+    if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
+}
+
+// A TcxRadioGroup: a 1 unit #DCDCDC frame with 3 unit corners round the radio rows, its caption
+// cut into the top edge (text 7 units in), on the dialog face.
+fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, rows: widget.Node, enabled: bool) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    var ink = style.color(t.tokens, .Text)
+    if !enabled { ink = style.color(t.tokens, .TextMuted) }
+    let (words, words_error) = colored_text(a, 0u64, label, t, caption, ink)
+    if words_error != ok { ret (zero, words_error) }
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 6usize)
+    if nodes_error != ok { ret (zero, TooLarge) }
+    // nodes: 0 words, 1 cut, 2 shifted cut, 3 rows, 4 frame, 5 dropped frame.
+    nodes[0usize] = words
+    var cut = style.defaults()
+    cut.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    cut.padding = edges(2.0, 0.0, 2.0, 0.0)
+    nodes[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, cut, nodes[0usize..1usize])
+    var shift = style.defaults()
+    shift.padding = edges(5.0, 0.0, 0.0, 0.0)
+    nodes[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, shift, nodes[1usize..2usize])
+    nodes[3usize] = rows
+    var edge = style.defaults()
+    edge.border = style.Border { width: 1.0, color: style.color(t.tokens, .OutlineVariant) }
+    edge.radius = 3.0
+    edge.padding = edges(7.0, 10.0, 7.0, 5.0)
+    nodes[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, edge, nodes[3usize..4usize])
+    var drop = style.defaults()
+    drop.padding = edges(0.0, 8.0, 0.0, 0.0)
+    nodes[5usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, drop, nodes[4usize..5usize])
+    // The dropped frame, then the caption over its top edge.
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = nodes[5usize]
+    layers[1usize] = nodes[2usize]
+    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 1usize)
+    if stacked_error != ok { ret (zero, TooLarge) }
+    stacked[0usize] = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), stacked[0usize..1usize]), ok)
+}
+
+
+// A TcxCheckListBox in the Windows look: v3 has none, so this is the native check box mark per
+// row on a white viewport with a 1 unit #ABABAB edge (the field edge the combo boxes measure),
+// 21 unit rows, the mark 4 units in. A row's focus is the dotted rectangle round its caption.
+fn windows_check_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, options.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < options.len {
+        let (row, row_error) = windows_choice(a, key + 1u64 + u64(i), t, 4u8, options[i], chosen[i], false, false, &picks[i], true)
+        if row_error != ok { ret (zero, row_error) }
+        items[i] = row
+        i += 1usize
+    }
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: width }
+    view_style.height = style.Length { Px: f32(rows) * 21.0 + 2.0 }
+    view_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    view_style.border = style.Border { width: 1.0, color: style.hex(11250603u32) }
+    view_style.padding = edges(4.0, 0.0, 1.0, 0.0)
+    view_style.overflow = .Clip
+    let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
+    if view_error != ok { ret (zero, TooLarge) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = view
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_LISTBOX
+    sem.label = label
+    sem.row_count = u32(options.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
 }
 
 // (D1264) The switch's own part: its 52 x 32 track and thumb in the 40 circle
@@ -5340,6 +5565,10 @@ fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options
 // Unframed (D958), it is the rows alone on the container, for a frame around more.
 fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32, multi: bool, framed: bool) -> (widget.Node, err) {
     if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows && multi && framed {
+        let (drawn, drawn_error) = windows_check_list(a, key, t, label, options, chosen, picks, rows, width)
+        ret (drawn, drawn_error)
+    }
     let (items, items_error) = mem.alloc[widget.Node](a, options.len)
     if items_error != ok { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
