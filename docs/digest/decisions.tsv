@@ -2713,4 +2713,5 @@ D4130	783	G012: repair of D4129 (Print Preview broke); the title reaches the pre
 D4131	472	G012: the footnote text area is editable
 D4132	369	G012: the footnote prints on the preview page
 D4133	596	G012: the Mode box of Title and Footnote Properties works
-D4134	203	G012: the default First Page mode seen
+D4134	204	G012: the default First Page mode seen
+D4135	368	G012: Clear unpicks the picked style

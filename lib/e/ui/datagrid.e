@@ -9930,6 +9930,7 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
         }
         if t.kind == 5u8 { t.grid.dz_dirty = false }
         if t.kind == 6u8 { t.grid.dz_dlg = u8(t.value) }
+        if t.kind == 8u8 { t.grid.dz_style = 0u8 }
         if t.kind == 7u8 { t.grid.dz_modes[t.value] = (t.grid.dz_modes[t.value] + 1u8) % 3u8 }
         if t.kind == 2u8 {
             t.grid.print_open = false
@@ -10255,6 +10256,9 @@ fn dz_grey_button(a: *mem.Arena, grid: *Grid, text: str, width: f32, top: f32) -
 fn dz_style_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 4usize)
     if cells_error != ok { ret (zero, control.TooLarge) }
+    let (clear_tap, clear_tap_error) = mem.alloc[DesignTap](a, 1usize)
+    if clear_tap_error != ok { ret (zero, control.TooLarge) }
+    clear_tap[0usize] = DesignTap { grid: grid, kind: 8u8, value: 0usize }
     var i = 0usize
     while i < 4usize {
         var words = "Font..."
@@ -10264,6 +10268,9 @@ fn dz_style_buttons(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let (button, button_error) = dz_grey_button(a, grid, words, 80.0, 2.0)
         if button_error != ok { ret (zero, button_error) }
         cells[i] = button
+        if i == 3usize && grid.dz_style != 0u8 {
+            cells[i] = widget.region(grid.key + MENU_KEY + 851280u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&clear_tap[0usize]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(92.0, 32.0), one(a, button))
+        }
         i += 1usize
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(92.0, 130.0), cells[0usize..4usize]), ok)

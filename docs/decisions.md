@@ -41483,3 +41483,6 @@ A tap on the Mode box steps On First Page, On Every Page, Do Not Print (the thre
 
 ## D4134 - G012: the default First Page mode seen
 With the default On First Page the title prints on page 1 only: page 2 has no heading (TP11-title-first-page-only-v5.png). Do Not Print is still unseen.
+
+## D4135 - G012: Clear unpicks the picked style
+With a style picked in the Designer's Styles list (D4126), Clear is live: a tap unpicks it and the four buttons go grey again (DZ-format-report-Styles-cleared-v5.png, after Content was picked). Font..., Color... and Texture... are still inert: they would open the font and colour pickers of v3, which were not recorded.
