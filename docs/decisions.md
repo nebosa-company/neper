@@ -41543,3 +41543,6 @@ Of the Designer's thirteen styles, eight now colour the preview page: Caption (t
 
 ## D4154 - G012: Texture... opens the system's file dialog (not built, by decision)
 Recorded from v3 (TX1-texture-opens-file-dialog-v3.png): with a style picked, Texture... opens the operating system's Open dialog filtered to images (*.jpg, *.jpeg, *.svg, *.gif, *.png ...), with the file preview pane. There is no report-designer window behind it, so ours stays a button without a window: the sample has no file picker, and an image picked for a style would also need a place on the page (the five styles that draw nothing have none). Cancelled without choosing a file. This also corrects the earlier note that v3 "never showed" a Texture window.
+
+## D4155 - G012: the Color Editor's R, G and B are spin boxes
+R, G and B are labelled spin boxes (0 to 255, arrows step 8, typed digits set the value; `dz_channel_spin`, `dz_set_pick_channel`): two taps on R's up arrow gave 16 and the preview, hex ($ 108080) and H/S/L followed (CE10-color-editor-rgb-spin-v5.png). H, S, L and the hex box are still read-only, "Define Custom Colors >>" is still a static box, and typing in the boxes was not tried. The dialog grew to 700 x 590 to hold the taller boxes.

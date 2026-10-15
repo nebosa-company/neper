@@ -10812,6 +10812,11 @@ fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let (box, box_error) = dz_field(a, grid, words, 140.0)
         if box_error != ok { ret (zero, box_error) }
         parts[1usize + i] = box
+        if i >= 3usize {
+            let (spin, spin_error) = dz_channel_spin(a, grid, i - 3usize, value)
+            if spin_error != ok { ret (zero, spin_error) }
+            parts[1usize + i] = spin
+        }
         i += 1usize
     }
     let (hex_text, hex_text_error) = hex_label(a, picked)
@@ -10825,7 +10830,7 @@ fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (add_button, add_button_error) = dz_dialog_button(a, grid, "Add to Custom Colors", &add_tap[0usize], grid.key + MENU_KEY + 851256u64)
     if add_button_error != ok { ret (zero, add_button_error) }
     parts[8usize] = add_button
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(320.0, 400.0), parts[0usize..9usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(330.0, 470.0), parts[0usize..9usize]), ok)
 }
 
 fn dz_color_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
@@ -10846,7 +10851,7 @@ fn dz_color_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if halves_error != ok { ret (zero, control.TooLarge) }
     halves[0usize] = left
     halves[1usize] = right
-    rows[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(680.0, 410.0), halves[0usize..2usize])
+    rows[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(680.0, 480.0), halves[0usize..2usize])
     let (ok_button, ok_error) = dz_dialog_button(a, grid, "OK", &close[1usize], grid.key + MENU_KEY + 851254u64)
     if ok_error != ok { ret (zero, ok_error) }
     let (cancel_button, cancel_error) = dz_dialog_button(a, grid, "Cancel", &close[0usize], grid.key + MENU_KEY + 851255u64)
@@ -10856,7 +10861,7 @@ fn dz_color_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     pair[0usize] = ok_button
     pair[1usize] = cancel_button
     rows[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(680.0, 44.0), pair[0usize..2usize])
-    var panel = control.sized_style(700.0, 520.0)
+    var panel = control.sized_style(700.0, 590.0)
     panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..3usize]), ok)
@@ -11046,4 +11051,56 @@ fn caption_look(grid: *const Grid) -> style.Style {
     var s = style.defaults()
     if ((grid.dz_style_has >> 1u16) & 1u16) != 0u16 { s.background = paint.Brush { Solid: gl.rgb(grid.dz_style_rgb[1usize]) } }
     ret s
+}
+
+// Sets one channel (0 red, 1 green, 2 blue) of the Color Editor's pick.
+fn dz_set_pick_channel(grid: *Grid, channel: usize, value: i64) {
+    var v = value
+    if v < 0i64 { v = 0i64 }
+    if v > 255i64 { v = 255i64 }
+    var shift: u32 = 16u32
+    if channel == 1usize { shift = 8u32 }
+    if channel == 2usize { shift = 0u32 }
+    let current = grid.dz_pick_color ^ 0xFFFFFFu32
+    let changed = (current & ~(255u32 << shift)) | (u32(v) << shift)
+    grid.dz_pick_color = changed ^ 0xFFFFFFu32
+}
+
+fn on_pick_spin(ctx: *void, value: i64) -> err {
+    let t = mem.cast[*DesignTap](ctx)
+    dz_set_pick_channel(t.grid, t.value, value)
+    ret ok
+}
+
+fn on_pick_text(ctx: *void, value: str) -> err {
+    let t = mem.cast[*DesignTap](ctx)
+    var v: i64 = 0i64
+    var i = 0usize
+    while i < value.len && i < 3usize {
+        if value[i] >= 48u8 && value[i] <= 57u8 { v = v * 10i64 + i64(value[i] - 48u8) }
+        i += 1usize
+    }
+    dz_set_pick_channel(t.grid, t.value, v)
+    ret ok
+}
+
+// R, G or B of the Color Editor as a spin box: arrows step 8, typed digits set the value.
+fn dz_channel_spin(a: *mem.Arena, grid: *Grid, channel: usize, value: u32) -> (widget.Node, err) {
+    let (taps, taps_error) = mem.alloc[DesignTap](a, 1usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
+    taps[0usize] = DesignTap { grid: grid, kind: 0u8, value: channel }
+    let (buffer, buffer_error) = mem.alloc[u8](a, 4usize)
+    if buffer_error != ok { ret (zero, control.TooLarge) }
+    let (spin, spin_error) = control.spin_box_sized(a, grid.key + MENU_KEY + 851700u64 + u64(channel) * 8u64, grid.theme, "", buffer[0usize..4usize], i64(value), 0i64, 255i64, 8i64, widget.Change[i64] { ctx: mem.cast[*void](&taps[0usize]), invoke: on_pick_spin }, widget.Change[str] { ctx: mem.cast[*void](&taps[0usize]), invoke: on_pick_text }, 140.0)
+    if spin_error != ok { ret (zero, spin_error) }
+    var name = "R:"
+    if channel == 1usize { name = "G:" }
+    if channel == 2usize { name = "B:" }
+    let (label, label_error) = flat_text(a, grid, name, gl.rgb(0x000000u32))
+    if label_error != ok { ret (zero, label_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, control.TooLarge) }
+    pair[0usize] = widget.padded(0u64, 4.0, 14.0, 0.0, 0.0, control.sized_style(34.0, 40.0), one(a, label))
+    pair[1usize] = spin
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), pair[0usize..2usize]), ok)
 }
