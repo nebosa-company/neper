@@ -9,6 +9,14 @@ use e.ui.control
 use e.ui.looks
 use e.ui.style
 use e.ui.widget
+use e.ui.winbutton
+
+// The label without its '&' mnemonic mark (only the Windows look draws it).
+fn plain(a: *mem.Arena, label: str) -> str {
+    let (shown, mark, shown_error) = winbutton.mnemonic(a, label)
+    if shown_error != ok { ret label }
+    ret shown
+}
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
@@ -27,7 +35,7 @@ fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key
         if radio_error != ok { ret (zero, radio_error) }
         made = radio
     } else {
-        let (radio, radio_error) = control.radio(a, key, t, label, selected, action, true)
+        let (radio, radio_error) = control.radio(a, key, t, plain(a, label), selected, action, true)
         if radio_error != ok { ret (zero, radio_error) }
         made = radio
     }
@@ -43,11 +51,11 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (0usize, parts_error) }
     // Missing Set Cards: crop (8,340)-(262,460); the group at (16,351) 234 x 99, radios at (+8,+21/45/69).
-    let (r0, e0) = one(a, t, action, 1u64, "Missing Only", true, 8.0, 21.0, 17.0)
+    let (r0, e0) = one(a, t, action, 1u64, "&Missing Only", true, 8.0, 21.0, 17.0)
     if e0 != ok { ret (0usize, e0) }
-    let (r1, e1) = one(a, t, action, 2u64, "Available Only", false, 8.0, 45.0, 17.0)
+    let (r1, e1) = one(a, t, action, 2u64, "&Available Only", false, 8.0, 45.0, 17.0)
     if e1 != ok { ret (0usize, e1) }
-    let (r2, e2) = one(a, t, action, 3u64, "Both Missing and Available", false, 8.0, 69.0, 17.0)
+    let (r2, e2) = one(a, t, action, 3u64, "&Both Missing and Available", false, 8.0, 69.0, 17.0)
     if e2 != ok { ret (0usize, e2) }
     parts[0usize] = r0
     parts[1usize] = r1
