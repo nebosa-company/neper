@@ -23,10 +23,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var selected = 0usize
         if i == 1usize { selected = 1usize }
         var shown = labels[0usize..2usize]
-        var caption = "Enter Key Action:"
+        var caption = "Enter Key Action: "
         if i == 1usize {
             shown = long_labels[0usize..2usize]
-            caption = "Incremental Search:"
+            caption = "Incremental Search: "
         }
         let key = u64(i * 4usize + 1usize)
         let (node, node_error) = control.radio_group(a, key, t, caption, shown, selected, actions[0usize..2usize], i != 2usize)

@@ -3611,13 +3611,19 @@ fn dotted_focus(a: *mem.Arena, color: paint.Color) -> (widget.Node, err) {
 }
 
 // The 13 unit mark: a box (round for a radio) with its tick, dash or dot.
-fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool) -> (widget.Node, err) {
+fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32) -> (widget.Node, err) {
     let look = style.windows_choice_resolve(t.tokens, chosen || mixed, state)
     var face = sized_style(13.0, 13.0)
     face.background = paint.Brush { Solid: look.background }
     face.border = style.Border { width: look.border_width, color: look.border }
     face.radius = look.radius
-    if round { face.radius = 6.5 }
+    if round {
+        face.radius = 6.45
+        face.width = style.Length { Px: 12.9 }
+        face.height = style.Length { Px: 12.9 }
+        // The ring is darker than the box edge (#656565 at its darkest in the captures).
+        if !chosen && !state.disabled { face.border = style.Border { width: look.border_width, color: style.hex(7237230u32) } }
+    }
     let (inside, inside_error) = mem.alloc[widget.Node](a, 1usize)
     if inside_error != ok { ret (zero, TooLarge) }
     var count = 0usize
@@ -3634,12 +3640,25 @@ fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chose
     if !round && (chosen || mixed) {
         var kind: GlyphKind = .Check
         if mixed { kind = .Dash }
-        let (drawn, drawn_error) = stroked_glyph(a, with_alpha(look.foreground, 0.75), kind, 10.5, 0.8)
+        let (drawn, drawn_error) = stroked_glyph(a, with_alpha(look.foreground, 0.62), kind, 10.5, 0.8)
         if drawn_error != ok { ret (zero, drawn_error) }
         inside[0usize] = drawn
         count = 1usize
     }
-    ret (widget.aligned(0u64, .Center, .Center, face, inside[0usize..count]), ok)
+    // The live 100 % captures put the box 0.3 px below the whole pixel (the theme's
+    // bitmap is resampled): a 13 x 21 slot (the row's height) holds it at y + 4.3.
+    let (slot, slot_error) = mem.alloc[widget.Node](a, 1usize)
+    if slot_error != ok { ret (zero, TooLarge) }
+    // The live capture's box is 13 across at about (0.1, 0.4) in its slot (the theme's bitmap is
+    // resampled): (0, 0.3) minimises the difference.
+    var nudge_x: f32 = 0.0
+    var nudge_y: f32 = 0.3
+    if round {
+        nudge_x = 0.05
+        nudge_y = 0.35
+    }
+    slot[0usize] = widget.positioned(0u64, nudge_x, (high - 13.0) * 0.5 + nudge_y, style.defaults(), widget_one_of(a, widget.aligned(0u64, .Center, .Center, face, inside[0usize..count])))
+    ret (widget.stack(0u64, sized_style(13.0, high), slot[0usize..1usize]), ok)
 }
 
 fn edges(left: f32, top: f32, right: f32, bottom: f32) -> style.EdgeLengths {
@@ -3684,17 +3703,27 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
 // A check box or radio button row: the mark, then the caption, as a tap-and-hover region at
 // least 21 tall (TcxCheckBox's default height). `role` 4 is a checkbox, 5 a radio.
 fn windows_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let (row, row_error) = windows_choice_high(a, key, t, role, label, chosen, mixed, round, action, enabled, 21.0, false)
+    ret (row, row_error)
+}
+
+// `windows_choice` in a row `high` tall (a TcxCheckBox is 21, 17 without its transparent border; a
+// radio group's rows are 42). A check box has 2 units of transparent border at its left, a radio none.
+fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round)
+    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, high)
     if mark_error != ok { ret (zero, mark_error) }
-    let (label_node, label_error) = windows_caption(a, t, label, state.focused && enabled, enabled)
+    let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
+    if dialog_error != ok { ret (zero, dialog_error) }
+    let (label_node, label_error) = windows_caption(a, &dialog_t, label, state.focused && enabled, enabled)
     if label_error != ok { ret (zero, label_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = mark_node
     parts[1usize] = label_node
     var row_style = style.defaults()
-    row_style.min_height = style.Length { Px: 21.0 }
+    row_style.min_height = style.Length { Px: high }
+    if !round && !flush { row_style.padding = edges(2.0, 0.0, 0.0, 0.0) }
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, row_style, parts[0usize..2usize])
@@ -3719,7 +3748,9 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
     caption.wrap = .None
     var ink = style.color(t.tokens, .Text)
     if !enabled { ink = style.color(t.tokens, .TextMuted) }
-    let (words, words_error) = colored_text(a, 0u64, label, t, caption, ink)
+    let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
+    if dialog_error != ok { ret (zero, dialog_error) }
+    let (words, words_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
     if words_error != ok { ret (zero, words_error) }
     let (nodes, nodes_error) = mem.alloc[widget.Node](a, 6usize)
     if nodes_error != ok { ret (zero, TooLarge) }
@@ -3727,10 +3758,9 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
     nodes[0usize] = words
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-    cut.padding = edges(2.0, 0.0, 2.0, 0.0)
     nodes[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, cut, nodes[0usize..1usize])
     var shift = style.defaults()
-    shift.padding = edges(5.0, 0.0, 0.0, 0.0)
+    shift.padding = edges(8.0, 0.0, 0.0, 0.0)
     nodes[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, shift, nodes[1usize..2usize])
     nodes[3usize] = rows
     var edge = style.defaults()
@@ -3756,37 +3786,112 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
 }
 
 
-// A TcxCheckListBox in the Windows look: v3 has none, so this is the native check box mark per
-// row on a white viewport with a 1 unit #ABABAB edge (the field edge the combo boxes measure),
-// 21 unit rows, the mark 4 units in. A row's focus is the dotted rectangle round its caption.
+// A TcxCheckListBox in the Windows look (the Options Rules, Prices and Card Art pages), `rows` 15 unit
+// rows tall; see `windows_check_list_sized`.
 fn windows_check_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    let (list, list_error) = windows_check_list_sized(a, key, t, label, options, chosen, picks, width, f32(rows) * 15.0 + 4.0, options.len)
+    ret (list, list_error)
+}
+
+// The list's two unit edge, measured on the 100 % captures: an outer line (top #ACAFB4, left
+// #93979F, right #B7BABE, bottom #AAAEB3) and an inner one (#D0D2D5, #ECEDEE, #C2C5C9, #D1D3D6).
+type ListEdge = struct { unused: u8 }
+
+fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let x = area.x
+    let y = area.y
+    let w = area.width
+    let h = area.height
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, w, 1.0), brush: paint.Brush { Solid: style.hex(11317172u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + h - 1.0, w, 1.0), brush: paint.Brush { Solid: style.hex(11185843u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + 1.0, 1.0, h - 2.0), brush: paint.Brush { Solid: style.hex(9672607u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, y + 1.0, 1.0, h - 2.0), brush: paint.Brush { Solid: style.hex(12040894u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 1.0, w - 2.0, 1.0), brush: paint.Brush { Solid: style.hex(13685461u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + h - 2.0, w - 2.0, 1.0), brush: paint.Brush { Solid: style.hex(13751254u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 2.0, 1.0, h - 4.0), brush: paint.Brush { Solid: style.hex(15527406u32) } } })
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 2.0, y + 2.0, 1.0, h - 4.0), brush: paint.Brush { Solid: style.hex(12764617u32) } } })
+}
+
+// One row of the check list, `width` wide, 15 tall: the native check box mark 1.15 in, the caption
+// from 17, and, for the current row (the list's item index), the system highlight
+// (#0078D7) behind the caption only, from 16.16, the caption white.
+fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: *const Theme, label: str, chosen: bool, current: bool, action: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    var ink = style.color(t.tokens, .Text)
+    if current { ink = style.hex(16777215u32) }
+    let (words, words_error) = colored_text(a, 0u64, label, dialog_t, caption, ink)
+    if words_error != ok { ret (zero, words_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if current {
+        var bar = sized_style(width - 16.16, 15.0)
+        bar.background = paint.Brush { Solid: style.hex(30935u32) }
+        parts[n] = widget.positioned(0u64, 16.16, 0.4, bar, zero)
+        n += 1usize
+    }
+    parts[n] = widget.positioned(0u64, 1.15, 0.0, style.defaults(), widget_one_of(a, mark_node))
+    n += 1usize
+    var line = style.defaults()
+    line.height = style.Length { Px: 15.0 }
+    parts[n] = widget.positioned(0u64, 17.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, widget_one_of(a, words))))
+    n += 1usize
+    let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
+    if region_error != ok { ret (zero, TooLarge) }
+    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, 15.0), parts[0usize..n])))
+    var sem: widget.Semantics = zero
+    sem.role = 4u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if chosen { sem.states = accessibility.STATE_CHECKED }
+    ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
+}
+
+// A TcxCheckListBox at its DFM size, `width` x `height` outside (v3's is 495 x 343 on the Rules
+// page): a 2 unit edge, a white viewport, 15 unit rows. No item images (the Card Art page's list
+// has them), no column of check marks for a state other than checked and unchecked.
+fn windows_check_list_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, width: f32, height: f32, current: usize) -> (widget.Node, err) {
     if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
+    let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
+    if dialog_error != ok { ret (zero, dialog_error) }
     let (items, items_error) = mem.alloc[widget.Node](a, options.len)
     if items_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < options.len {
-        let (row, row_error) = windows_choice(a, key + 1u64 + u64(i), t, 4u8, options[i], chosen[i], false, false, &picks[i], true)
+        let (row, row_error) = windows_check_row(a, key + 1u64 + u64(i), t, &dialog_t, options[i], chosen[i], i == current, &picks[i], width - 4.0)
         if row_error != ok { ret (zero, row_error) }
         items[i] = row
         i += 1usize
     }
-    var view_style = style.defaults()
-    view_style.width = style.Length { Px: width }
-    view_style.height = style.Length { Px: f32(rows) * 21.0 + 2.0 }
+    var view_style = sized_style(width - 4.0, height - 4.0)
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
-    view_style.border = style.Border { width: 1.0, color: style.hex(11250603u32) }
-    view_style.padding = edges(4.0, 0.0, 1.0, 0.0)
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
     if view_error != ok { ret (zero, TooLarge) }
-    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
-    if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = view
+    let (marks, marks_error) = mem.alloc[ListEdge](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    marks[0usize] = ListEdge { unused: 0u8 }
+    let (edge, edge_error) = mem.alloc[widget.Node](a, 1usize)
+    if edge_error != ok { ret (zero, TooLarge) }
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    var none: []const widget.Node = zero
+    edge[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: list_edge_paint, state: widget.bytes_of[ListEdge](&marks[0usize]) } }, style: fill, children: none }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = edge[0usize]
+    layers[1usize] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), widget_one_of(a, view))
     var sem: widget.Semantics = zero
     sem.role = accessibility.ROLE_LISTBOX
     sem.label = label
     sem.row_count = u32(options.len)
-    ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, height), layers[0usize..2usize]))), ok)
 }
 
 // (D1264) The switch's own part: its 52 x 32 track and thumb in the 40 circle
@@ -12185,8 +12290,8 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var ink = style.color(t.tokens, .Text)
     if !options.enabled { ink = style.mix(ink, face, 0.55) }
     var frame = style.defaults()
-    frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 7.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    frame.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
+    frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 6.35 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: style.Length { Px: 13.65 }, right: style.Length { Px: 7.0 }, bottom: style.Length { Px: 7.0 } }
     if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: style.color(t.tokens, .OutlineVariant) } }
     if options.width > 0.0 { frame.width = style.Length { Px: options.width } }
     let (rows, rows_error) = mem.alloc[widget.Node](a, children.len)
@@ -12198,19 +12303,20 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     }
     var caption = text_options()
     caption.wrap = .None
-    let (heading, heading_error) = colored_text(a, 0u64, label, t, caption, ink)
+    let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
+    if dialog_error != ok { ret (zero, dialog_error) }
+    let (heading, heading_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
     if heading_error != ok { ret (zero, heading_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = heading
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: face }
-    cut.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 0.0 } }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[2usize] = widget.box(0u64, cut, held[0usize..1usize])
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, frame, rows[0usize..children.len])
-    parts[1usize] = widget.positioned(0u64, 6.0, 0.0, style.defaults(), parts[2usize..3usize])
+    parts[1usize] = widget.positioned(0u64, 8.0, -2.0, style.defaults(), parts[2usize..3usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
@@ -12231,16 +12337,29 @@ fn widget_stack_of(a: *mem.Arena, nodes: []const widget.Node) -> []const widget.
 // (may be empty) in black at the right end. `width` 0 stretches to the parent.
 type SectionBar = struct { stops: [2]paint.Stop }
 
+// v3's TGradient (gradient.pas): GDI+ fills (0,0,w-1,h-1) from Gray to Silver and draws a 1 px Gray
+// border over it. The live 100 % capture puts the rectangle 0.16 right and 0.4 below the
+// control's pixel and 505.3 wide for the control's 505 (GDI+ resampling), so: the gradient over that
+// rectangle, then the four border lines inside its edge.
 fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let s = mem.cast[*SectionBar](ctx)
-    let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: area.x, y: area.y }, end: geometry.Point { x: area.x + area.width, y: area.y }, stops: s.stops[0usize..2usize] } }
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: area, brush: brush } })
-    // The 1 px top and bottom edge, a shade darker than the gradient (#808080).
+    let x0 = area.x + 0.16
+    let y0 = area.y + 0.4
+    let w = area.width + 0.3
+    let h = area.height - 0.05
+    let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: x0, y: y0 }, end: geometry.Point { x: x0 + w, y: y0 }, stops: s.stops[0usize..2usize] } }
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0, w, h), brush: brush } })
     let edge = paint.Brush { Solid: s.stops[0usize].color }
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x, area.y, area.width, 1.0), brush: edge } })
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x, area.y + area.height - 1.0, area.width, 1.0), brush: edge } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0, w, 1.0), brush: edge } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0 + h - 1.0, w, 1.0), brush: edge } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0, 1.0, h), brush: edge } })
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0 + w - 1.0, y0, 1.0, h), brush: edge } })
 }
 
+// The header bar of v3's Options pages: a TGradient 505 x 24 (`width` 0 stretches), its title
+// (Tahoma bold, white) at (4.8, 3.75) and `aside` (the page group, Tahoma, black, right aligned in a
+// 153 wide label ending 26 short of the right edge) at (width - 179, 3). The 16 px page icon the
+// control draws at its right is not drawn (an image list entry).
 fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, aside: str, width: f32) -> (widget.Node, err) {
     let (bars, bars_error) = mem.alloc[SectionBar](a, 1usize)
     if bars_error != ok { ret (zero, TooLarge) }
@@ -12250,29 +12369,45 @@ fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
     var none: []const widget.Node = zero
-    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 6usize)
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 3usize)
     if nodes_error != ok { ret (zero, TooLarge) }
     nodes[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&bars[0usize]), measure: mark_measure, paint: section_bar_paint, state: widget.bytes_of[SectionBar](&bars[0usize]) } }, style: fill, children: none }
+    let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
+    if dialog_error != ok { ret (zero, dialog_error) }
+    // Tahoma Bold (font id 10) leads the bold title's chain.
+    var bold_t = dialog_t
+    let (ordered, ordered_error) = mem.alloc[shape.Font](a, dialog_t.fonts.len)
+    if ordered_error != ok { ret (zero, TooLarge) }
+    var put = 1usize
+    var n = 0usize
+    while n < dialog_t.fonts.len {
+        if dialog_t.fonts[n].id == 10u32 {
+            ordered[0usize] = dialog_t.fonts[n]
+        } else {
+            ordered[put] = dialog_t.fonts[n]
+            put += 1usize
+        }
+        n += 1usize
+    }
+    if put == dialog_t.fonts.len { bold_t.fonts = ordered }
     var heading = text_options()
     heading.wrap = .None
     heading.weight = 700u32
-    let (head_node, head_error) = colored_text(a, 0u64, title, t, heading, style.hex(16777215u32))
+    let (head_node, head_error) = colored_text(a, 0u64, title, &bold_t, heading, style.hex(16777215u32))
     if head_error != ok { ret (zero, head_error) }
     var side = text_options()
     side.wrap = .None
-    let (side_node, side_error) = colored_text(a, 0u64, aside, t, side, style.hex(0u32))
+    let (side_node, side_error) = colored_text(a, 0u64, aside, &dialog_t, side, style.hex(0u32))
     if side_error != ok { ret (zero, side_error) }
-    nodes[2usize] = head_node
-    nodes[3usize] = widget.spacer(0u64, 1.0)
-    nodes[4usize] = side_node
-    var row = style.defaults()
-    row.width = style.Length { Percent: 100.0 }
-    row.height = style.Length { Percent: 100.0 }
-    row.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
-    nodes[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, row, nodes[2usize..5usize])
-    var holder = sized_style(width, 24.0)
-    if !(width > 0.0) { holder.width = style.Length { Percent: 100.0 } }
-    ret (widget.stack(key, holder, nodes[0usize..2usize]), ok)
+    var span = width
+    if !(span > 0.0) { span = 505.0 }
+    // Both labels are 17 tall, their text vertically centred.
+    var tall = style.defaults()
+    tall.height = style.Length { Px: 17.0 }
+    nodes[1usize] = widget.positioned(0u64, 4.8, 3.75, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, tall, widget_one_of(a, head_node))))
+    nodes[2usize] = widget.positioned(0u64, span - 181.5, 3.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 0.0 }, sized_style(153.0, 17.0), widget_one_of(a, side_node))))
+    var holder = sized_style(span, 24.0)
+    ret (widget.stack(key, holder, nodes[0usize..3usize]), ok)
 }
 
 // ---- looks: Windows (v3) page control tabs, appended block ----
@@ -13076,4 +13211,123 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     sem.label = label
     sem.row_count = u32(options.len)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// ---- looks3-b (docs/ui/looks, round 3): the Windows dialog controls, appended block ----
+// v3's dialogs draw their captions in Tahoma 8 pt (11 px, measured by ink width on the live 100 %
+// captures of the Options pages): the check box, radio, group box and check list use this theme in
+// place of the Segoe UI one the other Windows controls share.
+fn windows_dialog_theme(a: *mem.Arena, t: *const Theme) -> (Theme, err) {
+    let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copies_error != ok { ret (*t, TooLarge) }
+    copies[0usize] = *t.tokens
+    let small = style.TextStyle { size: 10.9, line_height: 15.0, weight: 400u16, italic: false }
+    copies[0usize].text[0] = small
+    copies[0usize].text[1] = small
+    copies[0usize].text[17] = small
+    var fonts = t.fonts
+    if t.fonts.len >= 2usize {
+        let (swapped, swapped_error) = mem.alloc[shape.Font](a, t.fonts.len)
+        if swapped_error != ok { ret (*t, TooLarge) }
+        var i = 0usize
+        while i < t.fonts.len {
+            swapped[i] = t.fonts[i]
+            i += 1usize
+        }
+        swapped[0usize] = t.fonts[1usize]
+        swapped[1usize] = t.fonts[0usize]
+        fonts = swapped
+    }
+    ret (Theme { tokens: &copies[0usize], fonts: fonts, language: t.language, runtime: t.runtime }, ok)
+}
+
+// `node` as a one element list.
+fn widget_one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    var out: []const widget.Node = zero
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret out }
+    one[0usize] = node
+    ret one[0usize..1usize]
+}
+
+// A check box in a row `high` tall; `flush` drops the 2 unit transparent border at its left
+// (TcxCheckBox with Style.TransparentBorder = False is 17 tall and flush). Windows look only.
+fn windows_checkbox_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool) -> (widget.Node, err) {
+    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush)
+    ret (row, row_error)
+}
+
+// A radio button in a row `high` tall (TcxRadioButton is 17, a TcxRadioGroup's rows 42). Windows only.
+fn windows_radio_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32) -> (widget.Node, err) {
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true)
+    ret (row, row_error)
+}
+
+// A group with its frame and caption at v3's measured geometry (100 % captures), `width` x
+// `height` as the DFM gives them; `body` are children already placed (`widget.positioned`) relative
+// to the group's top left. TcxGroupBox (lfFlat): a 1 unit #DCDCDC frame, square, whose top line runs
+// 6.35 below the top and bottom line 0.65 above the bottom; TcxRadioGroup: 1.2 units, corners 2.5,
+// 0.15 in at the left, 0.5 past the right, 6.25 down and 0.25 up. The caption (v3 captions end in
+// a space) starts 8 in, on the dialog face, 2 above the frame's top so its middle sits on the line.
+fn windows_group_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, enabled: bool, width: f32, height: f32, in_radio_group: bool, body: []const widget.Node) -> (widget.Node, err) {
+    let face = style.color(t.tokens, .Background)
+    var ink = style.color(t.tokens, .Text)
+    if !enabled { ink = style.mix(ink, face, 0.55) }
+    var left: f32 = 0.0
+    var top: f32 = 6.35
+    var right = width
+    var bottom = height - 0.65
+    var line: f32 = 1.0
+    var radius: f32 = 0.0
+    if in_radio_group {
+        left = 0.15
+        top = 6.25
+        right = width + 0.5
+        bottom = height - 0.25
+        line = 1.2
+        radius = 2.5
+    }
+    var frame = sized_style(right - left, bottom - top)
+    frame.border = style.Border { width: line, color: style.color(t.tokens, .OutlineVariant) }
+    frame.radius = radius
+    let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
+    if dialog_error != ok { ret (zero, dialog_error) }
+    var caption = text_options()
+    caption.wrap = .None
+    caption.role = .BodyMedium
+    let (heading, heading_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
+    if heading_error != ok { ret (zero, heading_error) }
+    var cut = style.defaults()
+    cut.background = paint.Brush { Solid: face }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize + body.len)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.positioned(0u64, left, top, frame, zero)
+    parts[1usize] = widget.positioned(0u64, 8.0, -2.0, cut, widget_one_of(a, heading))
+    var i = 0usize
+    while i < body.len {
+        parts[2usize + i] = body[i]
+        i += 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, height), parts[0usize..2usize + body.len]))), ok)
+}
+
+// A TcxRadioGroup at its DFM size (`width` x `height`): its radios stand 8 in, the first 18 down,
+// each 42 tall (v3's items fill the group), the mark flush at the left and the caption centred
+// beside it. `selected` is the chosen index (past the end: none). Windows look only.
+fn windows_radio_group_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32) -> (widget.Node, err) {
+    if actions.len != labels.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < labels.len {
+        let (item, item_error) = windows_radio_sized(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, 42.0)
+        if item_error != ok { ret (zero, item_error) }
+        items[i] = widget.positioned(0u64, 8.0, 18.0 + 42.0 * f32(i), style.defaults(), widget_one_of(a, item))
+        i += 1usize
+    }
+    let (framed, framed_error) = windows_group_sized(a, key, t, label, enabled, width, height, true, items[0usize..labels.len])
+    ret (framed, framed_error)
 }
