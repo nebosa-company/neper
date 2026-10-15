@@ -2514,6 +2514,33 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // skeleton line (60% of the cell, 12 tall) and the row is Busy in the tree.
 type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook, double: widget.Change[widget.Key], has_double: bool, empty_width: f32 }
 
+// The Windows look's table look (docs/ui/looks): `gridlook.v3()` as a `TableLook` without the grid's
+// callbacks, for the tree list: no vertical or horizontal lines, the measured stripes and selection.
+fn windows_table_look() -> TableLook {
+    var look: TableLook = zero
+    let lk = gl.v3()
+    look.on = true
+    look.header_height = lk.header_height
+    look.pad = lk.pad
+    look.text_size = lk.text_size
+    look.header = lk.header
+    look.header_hover = lk.header_hover
+    look.header_line = lk.header_line
+    look.even = lk.even
+    look.odd = lk.odd
+    look.selected = lk.selected
+    look.selected_line = lk.selected_line
+    look.line = lk.line
+    look.group = lk.group_row
+    look.track = lk.track
+    look.thumb = lk.thumb
+    look.scroll_width = lk.scroll_width
+    look.vertical_off = true
+    look.head_text = lk.text_size
+    look.footer_fill = lk.footer_band
+    ret look
+}
+
 fn zero_look() -> TableLook {
     var look: TableLook = zero
     ret look
@@ -4856,6 +4883,11 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     let (moves, moves_error) = mem.alloc[control.FocusTo](a, 9usize * count)
     if moves_error != ok { ret (none, TooLarge) }
     let tabled = columns.len > 0usize
+    // looks (docs/ui/looks): the Windows tree list is v3's TcxTreeList, drawn with the measured
+    // table look (rows of 19, stripes, the #A6D2FF selection) and +/- boxes for twisties.
+    let win = tabled && t.tokens.profile == .Windows
+    var win_look = zero_look()
+    if win { win_look = windows_table_look() }
     // (D1372) Moving: the row a drag carries, and the gestures a row takes.
     let moving = widget.change_set[TreeMove](options.move.invoke)
     let (lifted_row, has_lifted_row) = tree_lifted(t, count)
@@ -4867,6 +4899,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     if !(row_extent > 0.0) {
         row_extent = control.if_else(touch, 48.0, 32.0)
         if tabled { row_extent = table_row_height(t) }
+        if win { row_extent = gl.v3().row_height }
     }
     let start = control.if_else(tabled, 0.0, 4.0)
     let muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -4907,11 +4940,26 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         let entry = visible[i]
         let open = entry.open
         let chosen = is_selected(selected, entry.key)
-        let lined = tabled && i + 1usize < count
+        let lined = tabled && !win && i + 1usize < count
         let tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
         // The twisty, or its blank for a leaf.
         var twisty = widget.box(0u64, control.sized_style(24.0, 24.0), zero)
-        if entry.branch {
+        if win { twisty = widget.box(0u64, control.sized_style(step, tall), zero) }
+        if win && entry.branch {
+            toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
+            var box_shape = gl.Shape.PlusBox
+            if open { box_shape = gl.Shape.MinusBox }
+            let (box, box_error) = gl.mark(a, box_shape, gl.rgb(0x919191u32), gl.rgb(0xFFFFFFu32), 11.0, 11.0)
+            if box_error != ok { ret (none, box_error) }
+            let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if box_held_error != ok { ret (none, TooLarge) }
+            box_held[0usize] = box
+            var hit = control.sized_style(step, tall)
+            let side = style.Length { Px: (step - 11.0) * 0.5 }
+            hit.padding = style.EdgeLengths { left: side, top: style.Length { Px: (tall - 11.0) * 0.5 }, right: side, bottom: flat }
+            twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, hit, box_held[0usize..1usize])
+        }
+        if entry.branch && !win {
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
             var kind: control.GlyphKind = .ChevronRight
             if open && t.tokens.motion.reduced { kind = .ChevronDown }
@@ -4968,7 +5016,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         if lead_error != ok { ret (none, TooLarge) }
         lead[0usize] = indent
         lead[1usize] = twisty
-        lead[2usize] = widget.box(0u64, control.sized_style(8.0, 0.0), zero)
+        lead[2usize] = widget.box(0u64, control.sized_style(control.if_else(win, 2.0, 8.0), 0.0), zero)
         var lead_count = 3usize
         if options.numbered {
             let (digits, digits_error) = mem.alloc[u8](a, 48usize)
@@ -5019,7 +5067,11 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
                 cells[c] = extra
                 c += 1usize
             }
-            let (tabled_row, tabled_error) = table_row_of(a, t, columns, cells, entry.key, entry.index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, cell_padding(t), false, false, zero, false)
+            var row_pad = cell_padding(t)
+            var row_index = entry.index
+            if win { row_index = i }
+            if win { row_pad = win_look.pad }
+            let (tabled_row, tabled_error) = table_row_full(a, t, columns, cells, entry.key, row_index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, row_pad, false, false, zero, false, 0u32, win_look)
             if tabled_error != ok { ret (none, tabled_error) }
             made = tabled_row
             // (D1506) A tree table's row drags as a tree's does: an outer region
@@ -5221,7 +5273,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         }
         i += 1usize
     }
-    if tabled {
+    if tabled && !win {
         i = first
         while i + 1usize < stop {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
@@ -5488,7 +5540,19 @@ fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
 // their rows (as `TreeOptions` does for a tree, D1503).
 fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TreeSource, cells_of: CellSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], extent: f32, options: TreeOptions) -> (widget.Node, err) {
     if columns.len == 0usize { ret (zero, TooLarge) }
-    let (head, head_error) = header_row(a, key, t, columns, sort_column, descending, sort, reorder, resize)
+    // looks (docs/ui/looks): under the Windows profile the header and rows take the measured v3 table look
+    var head_look = zero_look()
+    var no_flags: []const bool = zero
+    var head_height = header_height(t)
+    var head_pad = cell_padding(t)
+    var row_height_of = extent
+    if t.tokens.profile == .Windows {
+        head_look = windows_table_look()
+        head_height = head_look.header_height
+        head_pad = head_look.pad
+        if !(row_height_of > 0.0) { row_height_of = gl.v3().row_height }
+    }
+    let (head, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, head_pad, 0.0, 0u64, no_flags, no_flags, head_look)
     if head_error != ok { ret (zero, head_error) }
     var width: f32 = 0.0
     var c = 0usize
@@ -5500,14 +5564,14 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var table_total = 0usize
     let (ordered, ordered_error) = sorted_source(a, source, sort_column, descending, options)
     if ordered_error != ok { ret (zero, ordered_error) }
-    let (rows, rows_error) = tree_rows(a, key + 128u64, t, ordered, expanded, selected, toggle, pick, false, columns, cells_of, extent, width, 0u64, options, &table_first, &table_total)
+    let (rows, rows_error) = tree_rows(a, key + 128u64, t, ordered, expanded, selected, toggle, pick, false, columns, cells_of, row_height_of, width, 0u64, options, &table_first, &table_total)
     if rows_error != ok { ret (zero, rows_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, rows.len + 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
     var part_count = 1usize
     if options.height > 0.0 {
-        var row_extent = extent
+        var row_extent = row_height_of
         if !(row_extent > 0.0) { row_extent = table_row_height(t) }
         var view_style = style.defaults()
         view_style.width = style.Length { Px: width }
