@@ -2728,4 +2728,5 @@ D4145	529	G012: Content Even Rows and Odd Rows stripe the printed table
 D4146	483	G012: the Color Editor's H, S and L follow the pick
 D4147	337	G012: the Color Editor's hex box follows the pick
 D4148	514	G012: custom colours in the Color Editor
-D4149	608	G012: the Color Editor's hue square
+D4149	609	G012: the Color Editor's hue square
+D4150	444	G012: the hue square can be clicked

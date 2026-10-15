@@ -9939,6 +9939,7 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
         if t.kind == 9u8 { t.grid.dz_pick_color = windows_basic(t.value) ^ 0xFFFFFFu32 }
         if t.kind == 10u8 { dz_apply_color(t.grid) }
         if t.kind == 11u8 { dz_add_custom(t.grid) }
+        if t.kind == 13u8 { t.grid.dz_pick_color = hue_cell_rgb(t.value) ^ 0xFFFFFFu32 }
         if t.kind == 12u8 { t.grid.dz_pick_color = t.grid.dz_custom[t.value] ^ 0xFFFFFFu32 }
         if t.kind == 7u8 { t.grid.dz_modes[t.value] = (t.grid.dz_modes[t.value] + 1u8) % 3u8 }
         if t.kind == 2u8 {
@@ -10778,7 +10779,7 @@ fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 10usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     let picked = grid.dz_pick_color ^ 0xFFFFFFu32
-    let (square, square_error) = dz_hue_square(a, picked)
+    let (square, square_error) = dz_hue_square(a, grid, picked)
     if square_error != ok { ret (zero, square_error) }
     parts[0usize] = square
     var i = 0usize
@@ -10998,9 +10999,11 @@ fn hue_at(t: f32) -> paint.Color {
 
 // v3's colour square from solid pieces (gradient coordinates are window-relative here): 24 hue columns, each
 // under a stack of eight grey bands that fade it toward grey going down; the picked colour in a box at the right.
-fn dz_hue_square(a: *mem.Arena, picked: u32) -> (widget.Node, err) {
+fn dz_hue_square(a: *mem.Arena, grid: *Grid, picked: u32) -> (widget.Node, err) {
     let (columns, columns_error) = mem.alloc[widget.Node](a, 25usize)
     if columns_error != ok { ret (zero, control.TooLarge) }
+    let (taps, taps_error) = mem.alloc[DesignTap](a, 192usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
     var c = 0usize
     while c < 24usize {
         let (bands, bands_error) = mem.alloc[widget.Node](a, 9usize)
@@ -11011,7 +11014,9 @@ fn dz_hue_square(a: *mem.Arena, picked: u32) -> (widget.Node, err) {
             let hue = hue_at(f32(c) / 24.0)
             let fade = f32(band) / 7.0
             piece.background = paint.Brush { Solid: paint.rgba(hue.red + (0.5 - hue.red) * fade, hue.green + (0.5 - hue.green) * fade, hue.blue + (0.5 - hue.blue) * fade, 1.0) }
-            bands[band] = widget.box(0u64, piece, zero)
+            let at = c * 8usize + band
+            taps[at] = DesignTap { grid: grid, kind: 13u8, value: at }
+            bands[band] = widget.region(grid.key + MENU_KEY + 851600u64 + u64(at), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[at]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, piece, zero)
             band += 1usize
         }
         columns[c] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(9.6, 190.0), bands[0usize..8usize])
@@ -11023,4 +11028,14 @@ fn dz_hue_square(a: *mem.Arena, picked: u32) -> (widget.Node, err) {
     chip.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     columns[24usize] = widget.box(0u64, chip, zero)
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(310.0, 190.0), columns[0usize..25usize]), ok)
+}
+
+// The colour of piece `index` (column * 8 + band) of the hue square, as 0xRRGGBB.
+fn hue_cell_rgb(index: usize) -> u32 {
+    let hue = hue_at(f32(index / 8usize) / 24.0)
+    let fade = f32(index % 8usize) / 7.0
+    let r = u32((hue.red + (0.5 - hue.red) * fade) * 255.0 + 0.5)
+    let g = u32((hue.green + (0.5 - hue.green) * fade) * 255.0 + 0.5)
+    let b = u32((hue.blue + (0.5 - hue.blue) * fade) * 255.0 + 0.5)
+    ret (r << 16u32) | (g << 8u32) | b
 }
