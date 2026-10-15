@@ -1,0 +1,91 @@
+{
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "The baseline: v2 menu (navigation.bar_menu); the menu fades in so the static sheet shows little."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Round 4 (live 100 % grabs docs/ui/looks/ref/windows/states, compared with a pixel diff at scale 1.0 after template matching; every sheet lands at the same offset, so geometry is exact). WIDTH RULE FOUND (fits all ten captured menus exactly): column width = 46 + max over rows of (label width + (shortcut ? 14 + shortcut width : 0)), outer width = that + 6, where widths are GDI's hinted Tahoma 12 px advances (a sum of whole-pixel glyph advances, no kerning; Tahoma bold for group headers). Our text is now laid out glyph by glyph at those pitches (navigation.windows_gdi_run, advance tables measured with GDI), so the width drift of -1..+3 px is gone and ink x extents match (label origin outer x 26, shortcut right edge 25 in from the column). popup_menu_dialog is now the exact composite of the Cards and View captures (cells 227 apart, 618 tall, #F0F0F0 ground): its mismatch was layout. Drop shadow removed (the captures are the window alone). CAPTURED STATES BUILT (26 sheets, refs copied as ref/windows/popup_menu_sel_*, popup_menu_sub_*, popup_menu_reports_deck_mode; sheets in examples/looks/popup_menu.e from a data table made from the captures): the highlighted row (#0078D7, white text; disabled and highlighted #6D6D6D; the picture slot stays on the face with a raised white/#A0A0A0 bevel and the blue starts 1 px after it; picture-less rows are blue from x 3), 17 selected-row grabs, 4 sub-menu pairs (the sub-menu window with its first row selected, and the parent with the parent row selected; a split row keeps its drop-down button as a sunken 16 x 20 box), the Reports menu in deck mode, plus the View menu as it really is when not clipped (it ends Legend, Messages Ctrl+M, 626 tall). Mnemonic underlines were re-read from the captures (one row at baseline+2 under the letter's advance; several by-eye letters were wrong), and so were checked slots and their dither (none when disabled or highlighted; the phase follows the window's screen position, so it is a per-menu flag). NUMBERS over all 37 popup refs: pixels in flat chrome (frames, fills, separators, header rules, slots; 2,228,203 px) off by more than 2: 75, all of them picture-bitmap pixels or a one-px dither phase; 0 in 31 of the 37 refs. Ink x extents of labels and shortcuts within 1 px on 851 of 903 text rows (the other 52 are thin disabled glyphs under the measuring threshold, checked by eye on the Del row). Max error on non-antialiased chrome pixels 15 (dither). Glyph pixels do not match (v3 is ClearType with hinted outlines, ours grey antialiased) and the row pictures are drawn glyph stand-ins for v3's coloured bitmaps: both excluded as artwork, as for the button.",
+    "gaps": [
+     "Hover with the real pointer: DevExpress reads GetCursorPos, so only the keyboard-selected row (identical blue per the grab notes) is captured; the hovered look itself is unverified",
+     "Sub-menu placement relative to its parent (offset -2, -3) is a guess: each capture is one window alone, so the parent and its sub-menu were compared separately",
+     "Row pictures: drawn glyph stand-ins, v3 draws coloured bitmaps (disabled: pale), every picture pixel differs",
+     "Text glyph pixels: grey anti-aliased and unhinted against ClearType with hinted outlines; ink boxes and advances match, pixels do not",
+     "Scroll arrows: only the bottom one of a clipped menu is drawn (View at rest); the top arrow and scrolling are not",
+     "Checked slot dither phase is a per-menu flag taken from each capture (v3's follows the window's screen position)",
+     "The grid's own popup (cxGrid header and cell menus: Segoe UI, flat border, 22 px rows) is not branched",
+     "Disabled checked mark / radio dot ink and radio rows have no capture; dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/menu_bar.png",
+    "notes": "The baseline: v2 menu bar (the open-menu sheet shows no menu because the menu fades in)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "Round 4: rest strip against ref/windows/menu_bar.png: every pixel outside the title text is exact (0 of 15,250 off by more than 2, max 1; the grip's soft top rows were added). Titles are laid out from GDI's Tahoma 12 advances: each title is its text width + 12 (checked on all ten: boxes 29 41 49 39 57 46 54 41 46 36 wide), text drawn glyph by glyph, ink x extents within 1 px of the capture on all titles. STATES from the live grabs: the nine open titles (menu_bar_open_<title>: a sunken 2 px box, text 1 px down and right, left line #A1 drifting to #B4 along the bar, the line beside it 400 less that, right line #FF to #FB) and a hot title (menu_bar_hot_view: in the main-window-rest grab the pointer happened to rest on View, which shows the raised hot box: #FA/#FE top-left, #BB/#D4 bottom, #A8/#E8 right). Pressed now draws the open box. NUMBERS (pixels outside the title text, off by more than 2): open File 0 (max 1), Cards 0 (2), Search 1 (4), View 4 (5), Card Art 5 (7), Online 6 (9), Reports 25 (13), Tools 25 (15), Help 27 (16); hot View 46 (the box's shadow column, 1 px, 8 levels, which v3 paints over the next title's first column, and gradient drift of the box greys).",
+    "gaps": [
+     "Open and hot boxes: the 1 px sliver right of the box (#F1..#F4, drifting) and the drift of the greys in the top rows of the later titles (up to 16 levels on 25 px per title) are not reproduced exactly",
+     "Hot (hover) is evidence from a rest grab where the pointer rested on View, not a controlled hover; no pressed-but-closed state exists (a press opens the menu)",
+     "Disabled title and keyboard-focus (Alt) look: no capture",
+     "Text glyph pixels differ (ClearType, hinted vs grey, unhinted); advances and ink boxes match",
+     "Admin title has no open-state capture (the box is drawn by the same rule)",
+     "Dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/toolbar_button.png",
+    "notes": "The baseline: round glyph buttons (control.glyph_toggle); the sheet's first cell is one row of them."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toolbar_button.png",
+    "notes": "Round 4: the sheet's first cell is the captured second toolbar row (ref/windows/toolbar_button.png, 447 x 26) at the same layout (bars 2+2+1+3 and 4+2+3 buttons, same separators). Measured and fixed: separators are 6 x 22 with 21 full rows and a faded last row, and their greys drift along the window (dark #A3 #A5 #A7 #AF #B2, light #FC #F9 #F7 #ED #EA at the five separators); the main menu's grip got its soft top. NUMBERS: outside the 16 px picture boxes (rows 4..20) and the row below the bar, 62 pixels are off by more than 2 (max 49): the faded first row of the separators and grips (y 1), the second bar's left edge (x 219..225) and right edge column (x 446: #B5 not #AA) and a few separator end pixels. The pictures are v3's bitmaps (pale, disabled) against drawn glyphs, so the picture boxes differ by design (3,889 px off in all). No capture of a hot, pressed, checked or captioned button exists (the toolbars ignore posted mouse messages).",
+    "gaps": [
+     "Pictures: v3's pale bitmaps (disabled) and coloured ones (enabled) against drawn single-colour glyphs, every picture pixel differs",
+     "Hover, pressed, checked colours (light blues) and the captioned button are guesses: toolbar states could not be captured",
+     "First row of separators and grips (y 1 fade), the second bar's left lines (x 219..225) and its right edge column are 5..49 levels off on about 60 px",
+     "No keyboard focus look (DX bars are not focusable); dropdown arrow button and customisation handle not drawn",
+     "Button height 22 is a guess (the capture shows only the 16 px picture)",
+     "Dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/status_bar.png",
+    "notes": "The baseline: v2 status bar."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/status_bar.png",
+    "notes": "Round 4, rest state against ref/windows/status_bar.png (the only capture; hover and hint windows are unreachable): the bar's chrome is now exact except 12 structural pixels (of 12,412, max 15, on the end column). New from the capture: the panel joints (the bar's top and bottom lines are interrupted for 4 px where two panels meet, greys per joint), the soft column beside a panel's dark line darkens with the tone (#E3 at the first joint, #DB at the second), the last panel has no right-hand pair and a shaded last column, and the bottom-left corner pixel. TEXT: v3 sets the status text in Tahoma 11 px (8 pt) at GDI's whole-pixel advances (261 px for the counts string, found by measuring); drawn glyph by glyph at those pitches the ink starts at x 10 and ends at 269 exactly as in the capture (centred in its 282 px panel with GDI's floor), 'Idle' starts at 445. Ink tops sit one row lower than v3's ascenders (our unhinted 11 px caps are 8 rows, v3's hinted ones 9).",
+    "gaps": [
+     "Hover and hint windows of panels cannot be captured (cxHint and the bar read the real pointer): the hover colour of a pressable panel is a guess",
+     "Progress container panel (grey track, #06B025 fill) is a guess: the capture shows it empty (the TcxProgressBar is hidden)",
+     "Text glyph pixels (ClearType, hinted) differ; ink x extents match, tops are 1 px lower",
+     "Panel widths come from the caller (item.panel_width / fills); a narrow bar clips the last panel instead of eliding",
+     "Dark and high-contrast palettes keep Neper colours"
+    ]
+   }
+  }
+ }
+}
