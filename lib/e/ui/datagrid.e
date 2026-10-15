@@ -166,6 +166,8 @@ dz_title_set: bool,
 dz_foot: [48]u8,
 dz_foot_len: usize,
 dz_pick_color: u32,
+dz_custom: [16]u32,
+dz_custom_n: usize,
 dz_style_rgb: [13]u32,
 dz_style_has: u16,
 dz_modes: [2]u8,
@@ -9936,6 +9938,8 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
         if t.kind == 8u8 { t.grid.dz_style = 0u8 }
         if t.kind == 9u8 { t.grid.dz_pick_color = windows_basic(t.value) ^ 0xFFFFFFu32 }
         if t.kind == 10u8 { dz_apply_color(t.grid) }
+        if t.kind == 11u8 { dz_add_custom(t.grid) }
+        if t.kind == 12u8 { t.grid.dz_pick_color = t.grid.dz_custom[t.value] ^ 0xFFFFFFu32 }
         if t.kind == 7u8 { t.grid.dz_modes[t.value] = (t.grid.dz_modes[t.value] + 1u8) % 3u8 }
         if t.kind == 2u8 {
             t.grid.print_open = false
@@ -10732,10 +10736,14 @@ fn dz_swatch_grid(a: *mem.Arena, grid: *Grid, rows_n: usize, filled: bool) -> (w
             cell.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
             cell.margin = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 2.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
             if filled { cell.background = paint.Brush { Solid: gl.rgb(windows_basic(r * 8usize + c)) } }
+            let used = !filled && r * 8usize + c < grid.dz_custom_n
+            if used { cell.background = paint.Brush { Solid: gl.rgb(grid.dz_custom[r * 8usize + c]) } }
             cells[c] = widget.box(0u64, cell, zero)
-            if filled {
-                taps[r * 8usize + c] = DesignTap { grid: grid, kind: 9u8, value: r * 8usize + c }
-                cells[c] = widget.region(grid.key + MENU_KEY + 851400u64 + u64(r * 8usize + c), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[r * 8usize + c]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, cell, zero)
+            if filled || used {
+                var kind: u8 = 9u8
+                if used { kind = 12u8 }
+                taps[r * 8usize + c] = DesignTap { grid: grid, kind: kind, value: r * 8usize + c }
+                cells[c] = widget.region(grid.key + MENU_KEY + 851400u64 + u64(kind) * 100u64 + u64(r * 8usize + c), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[r * 8usize + c]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, cell, zero)
             }
             c += 1usize
         }
@@ -10767,7 +10775,7 @@ fn dz_color_left(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 }
 
 fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 10usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     var square = control.sized_style(300.0, 190.0)
     let picked = grid.dz_pick_color ^ 0xFFFFFFu32
@@ -10810,7 +10818,13 @@ fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (hex_box, hex_box_error) = dz_field(a, grid, hex_text, 140.0)
     if hex_box_error != ok { ret (zero, hex_box_error) }
     parts[7usize] = hex_box
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(320.0, 400.0), parts[0usize..8usize]), ok)
+    let (add_tap, add_tap_error) = mem.alloc[DesignTap](a, 1usize)
+    if add_tap_error != ok { ret (zero, control.TooLarge) }
+    add_tap[0usize] = DesignTap { grid: grid, kind: 11u8, value: 0usize }
+    let (add_button, add_button_error) = dz_dialog_button(a, grid, "Add to Custom Colors", &add_tap[0usize], grid.key + MENU_KEY + 851256u64)
+    if add_button_error != ok { ret (zero, add_button_error) }
+    parts[8usize] = add_button
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(320.0, 400.0), parts[0usize..9usize]), ok)
 }
 
 fn dz_color_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
@@ -10947,4 +10961,20 @@ fn hex_label(a: *mem.Arena, rgb: u32) -> (str, err) {
         shift -= 4u32
     }
     ret (str.done(&sb), ok)
+}
+
+// "Add to Custom Colors": the picked colour goes into the next free slot (the oldest drops out when all 16 are full).
+fn dz_add_custom(grid: *Grid) {
+    let picked = grid.dz_pick_color ^ 0xFFFFFFu32
+    if grid.dz_custom_n < 16usize {
+        grid.dz_custom[grid.dz_custom_n] = picked
+        grid.dz_custom_n += 1usize
+        ret
+    }
+    var i = 1usize
+    while i < 16usize {
+        grid.dz_custom[i - 1usize] = grid.dz_custom[i]
+        i += 1usize
+    }
+    grid.dz_custom[15usize] = picked
 }

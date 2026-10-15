@@ -2726,4 +2726,5 @@ D4143	405	G012: the Filter Bar style's colour paints the printed filter strip
 D4144	558	G012: the Content style's colour paints the printed data cells
 D4145	529	G012: Content Even Rows and Odd Rows stripe the printed table
 D4146	483	G012: the Color Editor's H, S and L follow the pick
-D4147	336	G012: the Color Editor's hex box follows the pick
+D4147	337	G012: the Color Editor's hex box follows the pick
+D4148	513	G012: custom colours in the Color Editor

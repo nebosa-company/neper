@@ -41522,3 +41522,6 @@ Picking Content and a colour fills the preview's data cells (DZ-style-content-in
 
 ## D4147 - G012: the Color Editor's hex box follows the pick
 Under the channel boxes a "$ RRGGBB" box shows the picked colour in hex as v3's does (CE6-color-editor-hex-v5.png: teal reads $ 008080; `hex_label`). It is read-only here. The hue square, lightness bar, "Add to Custom Colors" and the custom colour slots are still not built.
+
+## D4148 - G012: custom colours in the Color Editor
+"Add to Custom Colors" (under the hex box) stores the picked colour in the next of the 16 custom slots (the oldest drops out when full; `dz_add_custom`), and a filled slot can be tapped to pick that colour again (CE7-color-editor-custom-v5.png: teal, salmon, teal stored, the first slot then picked: square teal). "Define Custom Colors >>" is still a static box, the hue square and lightness bar are not built, and the stored colours are not kept between runs.
