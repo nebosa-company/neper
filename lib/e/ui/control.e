@@ -4753,11 +4753,11 @@ fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
 // button (keyed `key + 1`, the caller's `clear` action) beside it while it holds
 // anything, and "Search" for a placeholder when none is given.
 fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, clear: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
-    // v2 (D952, docs/ux/components/SearchBar): a pill on `surface-container-high`
-    // (the hover layer of `on-surface` over it), 40 tall with a pointer and 56 on
-    // touch, 12 before the query and 4 after it (16 and 8 on touch); the query in
-    // `body-medium` (`body-large` on touch) and `on-surface`, the placeholder in
-    // `on-surface-variant`; a clear button at the end while it holds text.
+    // v2 (D952, docs/ux/components/SearchBar): a `surface-container-high` pill,
+    // 40 tall with a pointer and 56 on touch, with a trailing clear button.
+    // The query is body-medium (body-large on touch) over its variant placeholder.
+    // ponytail: no expanded/docked view, grouped suggestions, result announcement
+    // or shortcut/open-close model; add `overlay.search_view` when product search needs it.
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     let state = control_state(t, key, options.enabled, false)
     var h = t.tokens.sizes.control_md
