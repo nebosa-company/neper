@@ -10805,7 +10805,12 @@ fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         parts[1usize + i] = box
         i += 1usize
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(320.0, 400.0), parts[0usize..7usize]), ok)
+    let (hex_text, hex_text_error) = hex_label(a, picked)
+    if hex_text_error != ok { ret (zero, hex_text_error) }
+    let (hex_box, hex_box_error) = dz_field(a, grid, hex_text, 140.0)
+    if hex_box_error != ok { ret (zero, hex_box_error) }
+    parts[7usize] = hex_box
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(320.0, 400.0), parts[0usize..8usize]), ok)
 }
 
 fn dz_color_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
@@ -10924,4 +10929,22 @@ fn hsl_channel(rgb: u32, which: usize) -> u32 {
     var turn = sixth / 6
     if turn < 0 { turn += 255 }
     ret u32(turn)
+}
+
+// "$ FFFFFF": the picked colour in hex, as v3's Color Editor shows it.
+fn hex_label(a: *mem.Arena, rgb: u32) -> (str, err) {
+    let (b, b_error) = str.builder(a, 12usize)
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    if str.push(&sb, "$  ") != ok { ret ("", control.TooLarge) }
+    var shift: u32 = 20u32
+    while true {
+        let nibble = (rgb >> shift) & 15u32
+        var digit = u8(48u32 + nibble)
+        if nibble > 9u32 { digit = u8(55u32 + nibble) }
+        if str.push_byte(&sb, digit) != ok { ret ("", control.TooLarge) }
+        if shift == 0u32 { break }
+        shift -= 4u32
+    }
+    ret (str.done(&sb), ok)
 }

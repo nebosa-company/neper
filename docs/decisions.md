@@ -41519,3 +41519,6 @@ Picking Content and a colour fills the preview's data cells (DZ-style-content-in
 
 ## D4146 - G012: the Color Editor's H, S and L follow the pick
 `hsl_channel` computes hue, saturation and lightness of the picked colour, each on a 0 to 255 scale (v3's white reads L 255; its hue and saturation scale was inferred from that one number, not recorded): teal 0 / 128 / 128 reads H 127, S 255, L 64 (CE5-color-editor-hsl-v5.png), salmon 255 / 128 / 128 reads H 0, S 255, L 191. The boxes are still not editable, the hue square, hex box and custom colours are not built.
+
+## D4147 - G012: the Color Editor's hex box follows the pick
+Under the channel boxes a "$ RRGGBB" box shows the picked colour in hex as v3's does (CE6-color-editor-hex-v5.png: teal reads $ 008080; `hex_label`). It is read-only here. The hue square, lightness bar, "Add to Custom Colors" and the custom colour slots are still not built.
