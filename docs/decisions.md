@@ -41549,3 +41549,6 @@ R, G and B are labelled spin boxes (0 to 255, arrows step 8, typed digits set th
 
 ## D4156 - G012: typing in the Color Editor's R box seen
 Select-all and "200" typed into the R spin box gave R 200, $ C88080, H 0, S 100, L 164 and the matching preview (CE11-color-editor-rgb-typed-v5.png), so the typed path of D4155 works as the arrows do. G and B share the handler, not separately tried.
+
+## D4157 - G012: typing in the Color Editor's G and B boxes seen
+G 100 and B 70 typed after the teal pick give R 0, G 100, B 70, $ 006446, H 114, S 255, L 50 (CE12-color-editor-gb-typed-v5.png); R, G and B are all verified typed and with arrows (R only with arrows after D4155, typed in D4156).
