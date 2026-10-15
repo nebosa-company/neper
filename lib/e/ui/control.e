@@ -72,13 +72,14 @@ fn text_style_faced(a: *mem.Arena, t: *const Theme, options: TextOptions) -> (la
     let (plain, plain_error) = text_style_faced_plain(a, t, options)
     if plain_error != ok { ret (zero, plain_error) }
     if options.face == 0u32 || plain.fonts.len < 2usize { ret (plain, ok) }
-    // looks3: `face` names the font that leads the chain (the Windows look asks for Tahoma, id 8, where v3 draws with it).
+    // looks3: `face` names the family that leads the chain: the font of that id and the one two above it (the Windows look asks
+    // for 8, Tahoma, whose bold is 10, where v3 draws with it); within the family the weight order stands.
     let (led, led_error) = mem.alloc[layout.FontChoice](a, plain.fonts.len)
     if led_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     var j = 0usize
     while j < plain.fonts.len {
-        if plain.fonts[j].font.id == options.face {
+        if plain.fonts[j].font.id == options.face || plain.fonts[j].font.id == options.face + 2u32 {
             led[n] = plain.fonts[j]
             n += 1usize
         }
@@ -86,7 +87,7 @@ fn text_style_faced(a: *mem.Arena, t: *const Theme, options: TextOptions) -> (la
     }
     j = 0usize
     while j < plain.fonts.len {
-        if plain.fonts[j].font.id != options.face {
+        if plain.fonts[j].font.id != options.face && plain.fonts[j].font.id != options.face + 2u32 {
             led[n] = plain.fonts[j]
             n += 1usize
         }
@@ -2687,6 +2688,49 @@ fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Glyp
     let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize])
     let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, row)
     ret (node, node_error)
+}
+// ---- looks3 group a: the Windows label (TcxLabel) ------------------------------------------------
+// v3 draws its dialog labels in Tahoma (Style.Font Height -11 regular, -13 or -21 bold, colours per label): `size` is
+// that height in px, `weight` 400 or 700, `ink` the font colour. A '&' marks the mnemonic, underlined at the baseline,
+// and `underline` (fsUnderline: the hot-link style) underlines the whole run. One line unless `width` is above 0,
+// which wraps the words in that width (Properties.WordWrap).
+fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32) -> (widget.Node, err) {
+    var options = text_options()
+    options.face = 8u32
+    options.size = size
+    options.weight = weight
+    options.wrap = .None
+    if width > 0.0 { options.wrap = .Word }
+    let (shown, mark_at, mark_error) = winbutton.mnemonic(a, value)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (words, words_error) = colored_text(a, 0u64, shown, t, options, ink)
+    if words_error != ok { ret (zero, words_error) }
+    var plain = style.defaults()
+    plain.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    if mark_at >= shown.len && !underline {
+        ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, words)), ok)
+    }
+    let (before, before_fit, before_base, before_error) = run_metrics_faced(a, t, options, shown[0usize..mark_at])
+    if before_error != ok { ret (zero, before_error) }
+    var piece = shown
+    if mark_at < shown.len { piece = shown[mark_at..mark_at + 1usize] }
+    let (mark_adv, mark_fit, mark_base, mark_error_two) = run_metrics_faced(a, t, options, piece)
+    if mark_error_two != ok { ret (zero, mark_error_two) }
+    let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, t, options, shown)
+    if whole_error != ok { ret (zero, whole_error) }
+    var line_x = before
+    var line_w = mark_adv
+    if underline {
+        line_x = 0.0
+        line_w = whole
+    }
+    var line = sized_style(line_w, 1.0)
+    line.background = paint.Brush { Solid: ink }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = words
+    pair[1usize] = widget.positioned(0u64, line_x, whole_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, widget.stack(0u64, style.defaults(), pair[0usize..2usize]))), ok)
 }
 // ---- end looks-polish: the Windows button family ----------------------------------------------
 
