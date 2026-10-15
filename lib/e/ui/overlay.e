@@ -898,7 +898,9 @@ fn alert_dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var words = control.text_options()
     words.role = .BodyMedium
-    let (message_node, message_error) = control.colored_text(a, key + 2u64, message, t, words, style.color(t.tokens, .OnSurfaceVariant))
+    var message_ink = style.color(t.tokens, .OnSurfaceVariant)
+    if t.tokens.profile == .Windows { message_ink = style.color(t.tokens, .Text) }
+    let (message_node, message_error) = control.colored_text(a, key + 2u64, message, t, words, message_ink)
     if message_error != ok { ret (zero, message_error) }
     let (made, made_error) = dialog_as(a, key, t, title, message_node, buttons, open, true, accessibility.ROLE_ALERT_DIALOG)
     ret (made, made_error)
@@ -1037,6 +1039,10 @@ fn dialog_labelled(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
 // and scaling up from 90%, in a box keyed `key + 8192` there open or shut;
 // leaving is at once.
 fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit, has_icon: bool, icon: control.GlyphKind, destructive_icon: bool, title_role: style.TextRole, title_ink: style.ColorRole) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (windowed, windowed_error) = dialog_windows(a, key, t, title, content, buttons, open, described, semantic_role, busy, fallback, has_icon, icon)
+        ret (windowed, windowed_error)
+    }
     let entering = opening_share_over(t, key, open, t.tokens.durations.medium4)
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     var submit: widget.Submit = zero
@@ -7751,4 +7757,176 @@ fn interactive_canvas(a: *mem.Arena, key: widget.Key, t: *const control.Theme, c
     sem.label = options.label
     if !options.enabled { sem.states = accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), held[extra + 4usize..extra + 5usize]), ok)
+}
+
+// ---- Windows look, dialog window (docs/ui/looks, group feedback) ----
+// v3 dialogs are ordinary Windows 11 windows, not cards over a scrim: the dark caption
+// (title at 31, a 34 x 30 close button), a #F0F0F0 face, and a button row at the bottom right,
+// 9 from the right edge and 7 from the bottom, the buttons 75 x 22 and 9 apart, the default
+// one with the accent border. Measured from docs/grid-parity/tcxgrid/00-options-interface-
+// controls-v3.png. A message box (an alert dialog, or a dialog with an icon) takes the stock
+// Windows layout from memory: a white area with the icon and the message above the grey
+// button strip. Unmeasured: the width (a fixed 420), the body padding, the 8 px
+// corner radius (Windows 11 rounding), the message icon and every state but rest.
+fn windows_dialog_width() -> f32 { ret 420.0 }
+
+fn windows_close_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, false)
+    var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var ink = style.windows_caption_ink(true)
+    if state.hovered || state.pressed {
+        fill = style.windows_caption_close(state.pressed)
+        ink = style.hex(16777215u32)
+    }
+    let (glyph, glyph_error) = control.stroked_glyph(a, ink, .Cross, 20.0, 1.0)
+    if glyph_error != ok { ret (zero, glyph_error) }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = fill
+    look.foreground = ink
+    look.border_width = 0.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 0.0
+    look.padding_y = 0.0
+    look.min_width = 34.0
+    look.min_height = style.windows_caption_height()
+    let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+    if centred_error != ok { ret (zero, TooLarge) }
+    centred[0usize] = glyph
+    let cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(34.0, style.windows_caption_height()), centred[0usize..1usize])
+    let (pressed, pressed_error) = control.pressable(a, key, t, 3u8, "Close", look, true, false, action, cell)
+    ret (pressed, pressed_error)
+}
+
+// The window visual: caption, body, button row. `close` is what the X does.
+fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, busy: bool, message_box: bool, has_icon: bool, icon: control.GlyphKind, close: widget.Submit) -> (widget.Node, err) {
+    let width = windows_dialog_width()
+    let bar_h = style.windows_caption_height()
+    // the caption
+    var words = control.text_options()
+    words.wrap = .None
+    words.size = 12.0
+    words.weight = 400u32
+    let (word, word_error) = control.colored_text(a, key + 1u64, title, t, words, style.windows_caption_ink(true))
+    if word_error != ok { ret (zero, word_error) }
+    let (title_cell, title_cell_error) = mem.alloc[widget.Node](a, 1usize)
+    if title_cell_error != ok { ret (zero, TooLarge) }
+    title_cell[0usize] = word
+    let titled = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width - 34.0 - 31.0, bar_h), title_cell[0usize..1usize])
+    let (closes, closes_error) = mem.alloc[widget.Submit](a, 1usize)
+    if closes_error != ok { ret (zero, TooLarge) }
+    closes[0usize] = close
+    let (x_button, x_error) = windows_close_button(a, key + 2u64, t, &closes[0usize])
+    if x_error != ok { ret (zero, x_error) }
+    let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if bar_parts_error != ok { ret (zero, TooLarge) }
+    let (title_held, title_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if title_held_error != ok { ret (zero, TooLarge) }
+    title_held[0usize] = titled
+    let (x_held, x_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if x_held_error != ok { ret (zero, TooLarge) }
+    x_held[0usize] = x_button
+    bar_parts[0usize] = widget.positioned(0u64, 31.0, 0.0, style.defaults(), title_held[0usize..1usize])
+    bar_parts[1usize] = widget.positioned(0u64, width - 34.0, 0.0, style.defaults(), x_held[0usize..1usize])
+    var bar = control.sized_style(width, bar_h)
+    bar.background = paint.Brush { Solid: style.windows_caption_face(true) }
+    let caption = widget.stack(0u64, bar, bar_parts[0usize..2usize])
+    // the body
+    var body_style = style.defaults()
+    body_style.width = style.Length { Px: width }
+    var body_ground: style.ColorRole = .Background
+    var pad: f32 = 12.0
+    let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = content
+    var held_count = 1usize
+    if message_box {
+        body_ground = .Surface
+        pad = 20.0
+        if has_icon {
+            let (mark, mark_error) = control.icon_square(a, style.color(t.tokens, .Primary), icon, 32.0)
+            if mark_error != ok { ret (zero, mark_error) }
+            held[0usize] = mark
+            held[1usize] = content
+            held_count = 2usize
+        }
+    }
+    body_style.background = paint.Brush { Solid: style.color(t.tokens, body_ground) }
+    let side = style.Length { Px: pad }
+    body_style.padding = style.EdgeLengths { left: side, top: side, right: side, bottom: side }
+    body_style.min_height = style.Length { Px: 48.0 }
+    let body = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 16.0 }, body_style, held[0usize..held_count])
+    // the button row
+    let (row, row_error) = mem.alloc[widget.Node](a, buttons.len)
+    if row_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < buttons.len {
+        var options = control.button_options()
+        options.variant = .Filled
+        if buttons[i].kind == .Default { options.variant = .Default }
+        if busy && buttons[i].kind != .Default { options.enabled = false }
+        let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, buttons[i].label, &buttons[i].action, options)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        row[i] = pressed
+        i += 1usize
+    }
+    var strip = style.defaults()
+    strip.width = style.Length { Px: width }
+    strip.padding = style.EdgeLengths { left: style.Length { Px: 9.0 }, top: style.Length { Px: 10.0 }, right: style.Length { Px: 9.0 }, bottom: style.Length { Px: 7.0 } }
+    let actions = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 9.0 }, strip, row[0usize..buttons.len])
+    // the window
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = caption
+    parts[1usize] = body
+    parts[2usize] = actions
+    var face = control.surface_style(t, control.surface_options(t))
+    face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    let none_px = style.Length { Px: 0.0 }
+    face.padding = style.EdgeLengths { left: none_px, top: none_px, right: none_px, bottom: none_px }
+    face.width = style.Length { Px: width }
+    face.radius = 8.0
+    face.overflow = .Clip
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, parts[0usize..3usize]), ok)
+}
+
+// The Windows dialog as an overlay: the window centred, no scrim (a Windows modal dialog does
+// not dim its owner), the default and cancel keys as in the Neper dialog.
+fn dialog_windows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit, has_icon: bool, icon: control.GlyphKind) -> (widget.Node, err) {
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
+    var submit: widget.Submit = zero
+    var cancel: widget.Submit = zero
+    var i = 0usize
+    while i < buttons.len {
+        if buttons[i].kind == .Default && !busy { submit = buttons[i].action }
+        if buttons[i].kind == .Cancel && !busy { cancel = buttons[i].action }
+        i += 1usize
+    }
+    if !busy && !widget.submit_set(cancel.invoke) && widget.submit_set(fallback.invoke) { cancel = fallback }
+    let message_box = semantic_role == accessibility.ROLE_ALERT_DIALOG || has_icon
+    let (card, card_error) = windows_dialog_card(a, key, t, title, content, buttons, busy, message_box, has_icon, icon, cancel)
+    if card_error != ok { ret (zero, card_error) }
+    let (card_held, card_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if card_held_error != ok { ret (zero, TooLarge) }
+    card_held[0usize] = card
+    var none: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), card_held[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = semantic_role
+    sem.label = title
+    sem.states = accessibility.STATE_MODAL
+    if busy { sem.states = sem.states | accessibility.STATE_BUSY }
+    sem.labelled_by = key + 1u64
+    if described { sem.described_by = key + 2u64 }
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    var outside = cancel
+    if semantic_role == accessibility.ROLE_ALERT_DIALOG { outside = widget.Submit { ctx: zero, invoke: zero } }
+    let (placed, placed_error) = mem.alloc[widget.Node](a, 1usize)
+    if placed_error != ok { ret (zero, TooLarge) }
+    placed[0usize] = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize])
+    ret (widget.box(key + 8192u64, style.defaults(), placed[0usize..1usize]), ok)
 }

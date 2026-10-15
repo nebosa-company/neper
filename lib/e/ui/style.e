@@ -816,3 +816,25 @@ fn adapt(t: *const ThemeTokens, a: Adaptation) -> ThemeTokens {
     }
     ret out
 }
+
+// ---- Windows look, caption and dialog window (docs/ui/looks, group feedback) ----
+// v3's windows wear the Windows 11 dark caption: #1F2022 with white text, measured from
+// docs/grid-parity/tcxgrid/00-options-interface-controls-v3.png (150 % DPI; 30 tall, the close
+// glyph 10 wide). Unmeasured guesses: the inactive caption and every hover and pressed colour.
+fn windows_caption_face(active: bool) -> paint.Color {
+    if active { ret hex(2039842u32) }
+    ret hex(2829099u32)
+}
+
+fn windows_caption_ink(active: bool) -> paint.Color {
+    if active { ret hex(16777215u32) }
+    ret hex(10395294u32)
+}
+
+// The close button's hover (#C42B1C) and pressed (#B22A1B) faces; its glyph turns white.
+fn windows_caption_close(pressed: bool) -> paint.Color {
+    if pressed { ret hex(11676187u32) }
+    ret hex(12856092u32)
+}
+
+fn windows_caption_height() -> f32 { ret 30.0 }
