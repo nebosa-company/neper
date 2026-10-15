@@ -48,10 +48,21 @@ def shift_of(cell):
     return (cell[6], cell[7]) if len(cell) > 7 else (0, 0)
 
 
+STATES = os.path.join(ROOT, "docs/ui/looks/ref/windows/states")
+
+
+def open_src(src):
+    """A dialog capture, or (round 4) a state capture of docs/ui/looks/ref/windows/states."""
+    path = os.path.join(DLG, src + "@1x.png")
+    if not os.path.exists(path):
+        path = os.path.join(STATES, src + "@1x.png")
+    return Image.open(path).convert("RGB")
+
+
 def crop_of(cell):
     src, x, y, w, h = cell[:5]
     pad = pad_of(cell)
-    im = Image.open(os.path.join(DLG, src + "@1x.png")).convert("RGB")
+    im = open_src(src)
     return im.crop((x - pad, y - pad, x + w + pad, y + h + pad))
 
 
@@ -157,8 +168,121 @@ SHEETS["splitter_dialog"] = (1, 24, 387, [
     ("search-filter-top", 320, 55, 24, 387, 0),         # the Filter window splitter, 8 wide at x 12
 ])
 
+# ---------------------------------------------------------------------------------------------
+# Round 4 composite sheets: ONE cell of cw x ch holding several real crops at fixed offsets
+# (a combo head and the list window under it, a tab strip with its page edge...). Each part is
+# (capture, x, y, w, h, dx, dy): the capture rectangle pasted at (dx, dy) of the cell, no padding.
+PARTS = {}
+
+
+# combo head open (blue face, bleed row included) and the popup list window right under it
+for _n, _head, _hx, _hy, _hw, _list, _lw, _lh in [
+    ("combo_box_open_color", "combo-box-open-dialog-options-row-color", 321, 71, 389, "combo-box-open-list-options-row-color", 389, 41),
+    ("combo_box_open_color2", "combo-box-open-dialog-options-row-color-row2", 321, 71, 389, "combo-box-open-list-options-row-color-row2", 389, 41),
+    ("combo_box_open_size", "combo-box-open-dialog-options-font-size", 321, 159, 389, "combo-box-open-list-options-font-size", 389, 54),
+    ("combo_box_open_size2", "combo-box-open-dialog-options-font-size-row2", 321, 159, 389, "combo-box-open-list-options-font-size-row2", 389, 54),
+    ("combo_box_open_show", "combo-box-open-dialog-conditional-formatting-show", 149, 41, 143, "combo-box-open-list-conditional-formatting-show", 143, 106),
+    ("combo_box_open_show2", "combo-box-open-dialog-conditional-formatting-show-row2", 149, 41, 143, "combo-box-open-list-conditional-formatting-show-row2", 143, 106),
+]:
+    _skip = "RB" if "row-color" in _list else ""
+    PARTS[_n] = (_hw + 8, 4 + 21 + _lh + 4, [(_head, _hx, _hy, _hw + 1, 22, 4, 4), (_list, 0, 0, _lw, _lh, 4, 25, _skip)])
+# states of the closed combo: drop button held, focused list-style
+for _n, _src in [("combo_box_held", "combo-box-drop-button-pressed-options-row-color"), ("combo_box_focus", "combo-box-focused-options-row-color")]:
+    PARTS[_n] = (389 + 8, 29, [(_src, 321, 71, 390, 22, 4, 4)])
+
+
+
+# image combo (TcxImageComboBox) heads and their popup lists, 15 px rows
+for _n, _head, _hx, _hy, _hw, _list, _lw, _lh, _with_head in [
+    ("image_combo_box_open_auth", "combo-box-open-dialog-options-auth-type", 371, 71, 189, "combo-box-open-list-options-auth-type", 189, 32, True),
+    ("image_combo_box_open_auth2", "combo-box-open-dialog-options-auth-type-row2", 371, 71, 189, "combo-box-open-list-options-auth-type-row2", 189, 32, False),
+    ("image_combo_box_open_art", "combo-box-open-dialog-options-card-art-position", 406, 278, 151, "combo-box-open-list-options-card-art-position", 151, 47, True),
+    ("image_combo_box_open_condition", "combo-box-open-dialog-options-condition", 371, 99, 335, "combo-box-open-list-options-condition", 335, 227, True),
+    ("image_combo_box_open_condition2", "combo-box-open-dialog-options-condition-row2", 371, 99, 335, "combo-box-open-list-options-condition-row2", 335, 227, False),
+]:
+    _parts = [(_list, 0, 0, _lw, _lh, 4, 25, "RB" if ("condition" in _list or "card-art" in _list) else "")]
+    if _with_head:
+        _parts.insert(0, (_head, _hx, _hy, _hw + 1, 22, 4, 4))
+    PARTS[_n] = (_hw + 8, 4 + 21 + _lh + 4, _parts)
+
+
+PARTS["list_box_focus"] = (164, 300, [("list-box-row-selected-focused-customization", 14, 57, 152, 154, 4, 117)])
+PARTS["list_box_blur"] = (164, 300, [("list-box-row-selected-unfocused-customization", 14, 57, 152, 154, 4, 117)])
+
+
+for _k in range(1, 12):
+    PARTS["page_control_stats_%d" % _k] = (905, 24, [("tab-selected-statistics-%d" % _k, 8, 31, 905, 24, 0, 0)])
+PARTS["page_control_cards"] = (229, 22, [("tab-selected-filter-cards", 8, 31, 229, 22, 0, 0)])
+PARTS["page_control_options"] = (229, 22, [("tab-selected-filter-options", 8, 31, 229, 22, 0, 0)])
+PARTS["page_control_held"] = (96, 22, [("tab-pressed-customization-columns", 12, 33, 96, 22, 0, 0)])
+
+
+PARTS["combo_box_search_held"] = (297, 29, [("combo-box-drop-button-pressed-search", 20, 70, 289, 22, 4, 4)])
+
+
+def parts_ref(name):
+    cw, ch, parts = PARTS[name]
+    out = Image.new("RGB", (cw, ch), FACE)
+    for part in parts:
+        src, x, y, w, h, dx, dy = part[:7]
+        out.paste(open_src(src).crop((x, y, x + w, y + h)), (dx, dy))
+    return out
+
+
+def make_parts(name):
+    cw, ch, _ = PARTS[name]
+    w, h = sheet_size(1, cw, ch, 1)
+    out = Image.new("RGB", (w, h), FACE)
+    ox, oy = cell_origin(1, cw, ch, 0)
+    out.paste(parts_ref(name), (ox, oy))
+    path = os.path.join(ROOT, "docs/ui/looks/ref/windows", name + ".png")
+    out.save(path)
+    print("wrote", path, out.size)
+
+
+def compare_parts(name, out_dir):
+    cw, ch, parts = PARTS[name]
+    ref = parts_ref(name)
+    ours = Image.open(os.path.join(ROOT, "docs/ui/looks/windows", name + ".png")).convert("RGB")
+    ox, oy = cell_origin(1, cw, ch, 0)
+    got = ours.crop((ox, oy, ox + cw, oy + ch))
+    diff = Image.new("RGB", ref.size)
+    for part in parts:
+        src, x, y, w, h, dx, dy = part[:7]
+        skip = part[7] if len(part) > 7 else ""   # "R" right column, "B" bottom row: grab artefacts
+        worst, over2, over16 = 0, 0, 0
+        # the frame/border zone (2 px ring) apart from the interior
+        ring_worst, ring_n = 0, 0
+        for yy in range(dy, dy + h):
+            for xx in range(dx, dx + w):
+                a, b = ref.getpixel((xx, yy)), got.getpixel((xx, yy))
+                d = max(abs(a[0] - b[0]), abs(a[1] - b[1]), abs(a[2] - b[2]))
+                if ("R" in skip and xx == dx + w - 1) or ("B" in skip and yy == dy + h - 1):
+                    d = 0
+                worst = max(worst, d)
+                over2 += d > 2
+                over16 += d > 16
+                if min(xx - dx, yy - dy, dx + w - 1 - xx, dy + h - 1 - yy) < 2:
+                    ring_worst = max(ring_worst, d)
+                    ring_n += d > 2
+                diff.putpixel((xx, yy), (min(255, d * 4),) * 3)
+        print("%s part %s @%d,%d %dx%d: max %d, >2: %d, >16: %d of %d; 2px ring max %d (>2: %d)" % (name, src, dx, dy, w, h, worst, over2, over16, w * h, ring_worst, ring_n))
+    s = 3
+    img = Image.new("RGB", (cw * s, ch * s * 3 + 8), (255, 0, 255))
+    img.paste(ref.resize((cw * s, ch * s), Image.NEAREST), (0, 0))
+    img.paste(got.resize((cw * s, ch * s), Image.NEAREST), (0, ch * s + 4))
+    img.paste(diff.resize((cw * s, ch * s), Image.NEAREST), (0, ch * s * 2 + 8))
+    img.save(os.path.join(out_dir, name + "_parts.png"))
+
+
 if __name__ == "__main__":
     command, name = sys.argv[1], sys.argv[2]
+    if command == "refp":
+        make_parts(name)
+        sys.exit(0)
+    if command == "cmpp":
+        compare_parts(name, sys.argv[3] if len(sys.argv) > 3 else os.environ.get("TEMP", "."))
+        sys.exit(0)
     if command == "ref":
         make_ref(name)
     else:

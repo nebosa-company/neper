@@ -249,9 +249,12 @@ fn build_dialog_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: [
         var choices: []const str = colors[0usize..4usize]
         var drive = looks.Drive.None
         let high: f32 = 29.0
+        options.edge_y = 71.0
+        options.edge_x = 321.0
         if i == 1usize {
             value = "Medium"
             choices = sizes[0usize..3usize]
+            options.edge_y = 159.0
         }
         if which == 1usize {
             options.width = 289.0
@@ -261,6 +264,8 @@ fn build_dialog_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: [
         if which == 2usize {
             options.width = 143.0
             options.read_only = true
+            options.edge_y = 41.0
+            options.edge_x = 149.0
             value = "All"
             choices = colors[0usize..4usize]
             drive = .Focus
@@ -288,9 +293,135 @@ fn build_pick(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     ret (made, made_error)
 }
 
+// The open drop-down as the v3 grabs show it (ref/windows/states/combo-box-open-*): a list-style combo
+// at (4, 4) of a one-cell sheet with its popup right under it. `combo_box.exe o<n>`: 1 Row Color
+// (chosen row 1), 2 Row Color (row 2 lit), 3 Font Size, 4 Font Size (row 4), 5 Show rules (scrolling,
+// 21 rows), 6 the same with row 2. The 21 rows of the scrolling list are fillers after the 8 captured.
+type Open = struct { name: str, width: f32, high: f32, edge_x: f32, edge_y: f32, active: usize, rows: usize, set: usize }
+
+fn open_spec(n: usize) -> Open {
+    if n == 1usize { ret Open { name: "combo_box_open_color", width: 389.0, high: 41.0, edge_x: 321.0, edge_y: 71.0, active: 1usize, rows: 3usize, set: 0usize } }
+    if n == 2usize { ret Open { name: "combo_box_open_color2", width: 389.0, high: 41.0, edge_x: 321.0, edge_y: 71.0, active: 2usize, rows: 3usize, set: 0usize } }
+    if n == 3usize { ret Open { name: "combo_box_open_size", width: 389.0, high: 54.0, edge_x: 321.0, edge_y: 159.0, active: 1usize, rows: 4usize, set: 1usize } }
+    if n == 4usize { ret Open { name: "combo_box_open_size2", width: 389.0, high: 54.0, edge_x: 321.0, edge_y: 159.0, active: 3usize, rows: 4usize, set: 1usize } }
+    if n == 5usize { ret Open { name: "combo_box_open_show", width: 143.0, high: 106.0, edge_x: 149.0, edge_y: 41.0, active: 1usize, rows: 21usize, set: 2usize } }
+    ret Open { name: "combo_box_open_show2", width: 143.0, high: 106.0, edge_x: 149.0, edge_y: 41.0, active: 2usize, rows: 21usize, set: 2usize }
+}
+
+fn build_open_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n: usize) -> (usize, err) {
+    let o = open_spec(n)
+    let colors = [3]str{ "Not Colored", "Against Card Color", "Against Card Rarity" }
+    let sizes = [4]str{ "Small", "Medium", "Large", "Extra Large" }
+    let shows = [21]str{ "Current Selection", "All", "Favorite", "ES", "Name", "Legal", "Edition", "Color", "Rarity", "Type", "Cost", "Power", "Toughness", "Artist", "Block", "Set", "Price", "Quantity", "Foil", "Note", "Tag" }
+    var choices: []const str = colors[0usize..3usize]
+    if o.set == 1usize { choices = sizes[0usize..4usize] }
+    if o.set == 2usize { choices = shows[0usize..21usize] }
+    var options = control.field_options()
+    options.width = o.width
+    options.read_only = true
+    options.edge_x = o.edge_x
+    options.edge_y = o.edge_y
+    let (node, node_error) = one(a, t, 100u64, choices[1usize], choices, o.active, true, options, 4.0, 4.0, 4.0 + 21.0 + o.high + 4.0, o.width + 8.0)
+    if node_error != ok { ret (0usize, node_error) }
+    cells[0usize] = looks.Cell { caption: "", node: node, drive: .None }
+    ret (1usize, ok)
+}
+
+fn build_o1(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 1usize)
+    ret (m, e)
+}
+fn build_o2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 2usize)
+    ret (m, e)
+}
+fn build_o3(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 3usize)
+    ret (m, e)
+}
+fn build_o4(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 4usize)
+    ret (m, e)
+}
+fn build_o5(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 5usize)
+    ret (m, e)
+}
+fn build_o6(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_open_n(a, t, cells, 6usize)
+    ret (m, e)
+}
+
+fn run_open(a: *mem.Arena, n: usize) -> err {
+    let o = open_spec(n)
+    var build: looks.Build = build_o1
+    if n == 2usize { build = build_o2 }
+    if n == 3usize { build = build_o3 }
+    if n == 4usize { build = build_o4 }
+    if n == 5usize { build = build_o5 }
+    if n == 6usize { build = build_o6 }
+    let sheet = looks.Sheet { name: o.name, cells: 1usize, columns: 1usize, cell_w: o.width + 8.0, cell_h: 4.0 + 21.0 + o.high + 4.0, ctx: zero, build: build }
+    ret looks.run_all(a, &sheet)
+}
+
+// The closed combo held down on its drop button (`h`) and with the keyboard focus (`f`), list style, as
+// ref/windows/states/combo-box-drop-button-pressed-options-row-color and ...-focused-options-row-color
+// show them. The cell is wide so that the harness's pointer, at its centre, lands on the drop button.
+fn build_held(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let colors = [3]str{ "Not Colored", "Against Card Color", "Against Card Rarity" }
+    var options = control.field_options()
+    options.width = 389.0
+    options.read_only = true
+    options.edge_x = 321.0
+    options.edge_y = 71.0
+    let (node, node_error) = one(a, t, 100u64, "Against Card Color", colors[0usize..3usize], 1usize, false, options, 4.0, 4.0, 29.0, 762.0)
+    if node_error != ok { ret (0usize, node_error) }
+    cells[0usize] = looks.Cell { caption: "", node: node, drive: .Press }
+    ret (1usize, ok)
+}
+
+fn build_focus(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let colors = [3]str{ "Not Colored", "Against Card Color", "Against Card Rarity" }
+    var options = control.field_options()
+    options.width = 389.0
+    options.read_only = true
+    options.edge_x = 321.0
+    options.edge_y = 71.0
+    let (node, node_error) = one(a, t, 100u64, "Against Card Color", colors[0usize..3usize], 1usize, false, options, 4.0, 4.0, 29.0, 397.0)
+    if node_error != ok { ret (0usize, node_error) }
+    cells[0usize] = looks.Cell { caption: "", node: node, drive: .Focus }
+    ret (1usize, ok)
+}
+
+// The editable combo of the Search window with its drop button held (`s`), as
+// ref/windows/states/combo-box-drop-button-pressed-search: a wide cell so that the pointer, at its centre,
+// lands on the drop button.
+fn build_search_held(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let colors = [3]str{ "Black Lotus", "Mox Pearl", "Sol Ring" }
+    var options = control.field_options()
+    options.width = 289.0
+    let (node, node_error) = one(a, t, 100u64, "", colors[0usize..3usize], 0usize, false, options, 4.0, 4.0, 29.0, 570.0)
+    if node_error != ok { ret (0usize, node_error) }
+    cells[0usize] = looks.Cell { caption: "", node: node, drive: .Press }
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 2usize {
         let first = args[1usize][0usize]
+        if first == 115u8 {
+            let held = looks.Sheet { name: "combo_box_search_held", cells: 1usize, columns: 1usize, cell_w: 570.0, cell_h: 29.0, ctx: zero, build: build_search_held }
+            ret looks.run_all(a, &held)
+        }
+        if first == 104u8 {
+            let held = looks.Sheet { name: "combo_box_held", cells: 1usize, columns: 1usize, cell_w: 762.0, cell_h: 29.0, ctx: zero, build: build_held }
+            ret looks.run_all(a, &held)
+        }
+        if first == 102u8 {
+            let focus = looks.Sheet { name: "combo_box_focus", cells: 1usize, columns: 1usize, cell_w: 397.0, cell_h: 29.0, ctx: zero, build: build_focus }
+            ret looks.run_all(a, &focus)
+        }
+        if first == 111u8 { ret run_open(a, usize(args[1usize][1usize]) - 48usize) }
         if first == 100u8 {
             let dialog = looks.Sheet { name: "combo_box_dialog", cells: 2usize, columns: 2usize, cell_w: 397.0, cell_h: 29.0, ctx: zero, build: build_dialog }
             ret looks.run_all(a, &dialog)
