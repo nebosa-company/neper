@@ -48,7 +48,7 @@ Plan: `docs/ui/looks-plan.md`. Decision: D5108. Progress page: `docs/ui/looks-pr
 5. **Compare.** View the PNGs with the Read tool. Crop the same control from the v3 capture and
    from ours (`@1.5x`), paste them one above the other at 3x with PIL, and compare size, border,
    face, label position and ink width. Iterate until they match; then check the 1.0 render too.
-6. **Record.** Edit `docs/ui/looks/status.json`: under the control's `looks` set `status`
+6. **Record.** Do NOT edit `status.json` (parallel workers would conflict). Write your own overlay `docs/ui/looks/status.d/<group>.json` = `{"<control id>": {"looks": {"windows": {...}}}}` (a look entry replaces the base one wholesale; copy the base entry first and change it). In the entry set `status`
    (`planned`, `started`, `review` = renders but not within tolerance or unmeasured states,
    `ready` = matches the reference at 100 % and 150 %), `screenshot` (relative to
    `docs/ui/looks/`), `notes` and `gaps` (every guessed colour, every state without a capture,

@@ -71,6 +71,18 @@ def cell(control, look, shots):
 def main():
     data = json.loads(STATUS.read_text(encoding="utf-8"))
     looks, controls = data["looks"], data["controls"]
+    # Overlays: docs/ui/looks/status.d/<anything>.json = {"<control id>": {<control keys>, "looks": {"<look id>": {...}}}}.
+    # Each parallel worker owns one overlay file; a look entry replaces the base entry wholesale.
+    byid = {c["id"]: c for c in controls}
+    for f in sorted((ROOT / "docs/ui/looks/status.d").glob("*.json")):
+        for cid, patch in json.loads(f.read_text(encoding="utf-8")).items():
+            if cid not in byid:
+                raise SystemExit("%s: unknown control %r" % (f.name, cid))
+            for k, v in patch.items():
+                if k == "looks":
+                    byid[cid].setdefault("looks", {}).update(v)
+                else:
+                    byid[cid][k] = v
     shots = ROOT / "docs/ui/looks"
     counts = {l["id"]: {s: 0 for s in ORDER} for l in looks}
     for c in controls:
