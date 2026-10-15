@@ -41525,3 +41525,6 @@ Under the channel boxes a "$ RRGGBB" box shows the picked colour in hex as v3's 
 
 ## D4148 - G012: custom colours in the Color Editor
 "Add to Custom Colors" (under the hex box) stores the picked colour in the next of the 16 custom slots (the oldest drops out when full; `dz_add_custom`), and a filled slot can be tapped to pick that colour again (CE7-color-editor-custom-v5.png: teal, salmon, teal stored, the first slot then picked: square teal). "Define Custom Colors >>" is still a static box, the hue square and lightness bar are not built, and the stored colours are not kept between runs.
+
+## D4149 - G012: the Color Editor's hue square
+The flat square is v3's colour square: 24 hue columns (red through magenta back to red, `hue_at`) over eight bands that fade toward grey going down, and the picked colour in a box at its right (CE8-color-editor-hue-square-v5.png). It is drawn from solid pieces: a first version with linear gradients showed solid red because gradient coordinates in this renderer are window-relative, not node-relative (the vertical fade only looked right by accident). The square is not clickable, there is still no lightness bar, and v3's own square has its crosshair marker.

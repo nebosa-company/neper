@@ -10777,11 +10777,10 @@ fn dz_color_left(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 10usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
-    var square = control.sized_style(300.0, 190.0)
     let picked = grid.dz_pick_color ^ 0xFFFFFFu32
-    square.background = paint.Brush { Solid: gl.rgb(picked) }
-    square.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
-    parts[0usize] = widget.box(0u64, square, zero)
+    let (square, square_error) = dz_hue_square(a, picked)
+    if square_error != ok { ret (zero, square_error) }
+    parts[0usize] = square
     var i = 0usize
     while i < 6usize {
         var label = "H:"
@@ -10977,4 +10976,51 @@ fn dz_add_custom(grid: *Grid) {
         i += 1usize
     }
     grid.dz_custom[15usize] = picked
+}
+
+fn dz_stop(offset: f32, red: f32, green: f32, blue: f32, alpha: f32) -> paint.Stop {
+    ret paint.Stop { offset: offset, color: paint.rgba(red, green, blue, alpha) }
+}
+
+// The colour of hue position t (0..1 around the circle) at full saturation: red, yellow, green, cyan, blue, magenta, red.
+fn hue_at(t: f32) -> paint.Color {
+    let x = t * 6.0
+    var sector: i32 = i32(x)
+    if sector > 5 { sector = 5 }
+    let f = x - f32(sector)
+    if sector == 0 { ret paint.rgba(1.0, f, 0.0, 1.0) }
+    if sector == 1 { ret paint.rgba(1.0 - f, 1.0, 0.0, 1.0) }
+    if sector == 2 { ret paint.rgba(0.0, 1.0, f, 1.0) }
+    if sector == 3 { ret paint.rgba(0.0, 1.0 - f, 1.0, 1.0) }
+    if sector == 4 { ret paint.rgba(f, 0.0, 1.0, 1.0) }
+    ret paint.rgba(1.0, 0.0, 1.0 - f, 1.0)
+}
+
+// v3's colour square from solid pieces (gradient coordinates are window-relative here): 24 hue columns, each
+// under a stack of eight grey bands that fade it toward grey going down; the picked colour in a box at the right.
+fn dz_hue_square(a: *mem.Arena, picked: u32) -> (widget.Node, err) {
+    let (columns, columns_error) = mem.alloc[widget.Node](a, 25usize)
+    if columns_error != ok { ret (zero, control.TooLarge) }
+    var c = 0usize
+    while c < 24usize {
+        let (bands, bands_error) = mem.alloc[widget.Node](a, 9usize)
+        if bands_error != ok { ret (zero, control.TooLarge) }
+        var band = 0usize
+        while band < 8usize {
+            var piece = control.sized_style(9.6, 23.75)
+            let hue = hue_at(f32(c) / 24.0)
+            let fade = f32(band) / 7.0
+            piece.background = paint.Brush { Solid: paint.rgba(hue.red + (0.5 - hue.red) * fade, hue.green + (0.5 - hue.green) * fade, hue.blue + (0.5 - hue.blue) * fade, 1.0) }
+            bands[band] = widget.box(0u64, piece, zero)
+            band += 1usize
+        }
+        columns[c] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(9.6, 190.0), bands[0usize..8usize])
+        c += 1usize
+    }
+    var chip = control.sized_style(60.0, 60.0)
+    chip.background = paint.Brush { Solid: gl.rgb(picked) }
+    chip.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
+    chip.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    columns[24usize] = widget.box(0u64, chip, zero)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(310.0, 190.0), columns[0usize..25usize]), ok)
 }
