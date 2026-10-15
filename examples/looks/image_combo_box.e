@@ -161,7 +161,40 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (8usize, ok)
 }
 
+// The image combo boxes as the v3 dialogs show them (Options > Defaults, Internet Authentication and
+// Morph: no picture in the head, the widths of their DFMs), one per cell at (4, 4) of a cell as large as
+// the capture's crop; `image_combo_box.exe dialog` writes image_combo_box_dialog.png, which
+// compares pixel for pixel with ref/windows/image_combo_box_dialog.png (scripts/looks_refs_d.py).
+fn build_dialog(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let values = [3]str{ "Unknown", "No Authentication", "Stretch" }
+    let widths = [3]f32{ 335.0, 189.0, 151.0 }
+    var i = 0usize
+    while i < 3usize {
+        let names = [2]str{ values[i], "Other" }
+        let (picks, picks_error) = pick_actions(a, 2usize)
+        if picks_error != ok { ret (0usize, picks_error) }
+        let (toggle, toggle_error) = pick_actions(a, 1usize)
+        if toggle_error != ok { ret (0usize, toggle_error) }
+        var none: []const widget.Node = zero
+        let (combo, combo_error) = control.image_select_wide(a, u64(i + 1usize) * 100u64, t, "Condition", names[0usize..2usize], none, 0usize, false, true, &toggle[0usize], picks, widths[i])
+        if combo_error != ok { ret (0usize, combo_error) }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (0usize, parts_error) }
+        parts[0usize] = widget.box(0u64, looks.size_style(1.0, 4.0), zero)
+        parts[1usize] = combo
+        var column = looks.size_style(343.0, 29.0)
+        column.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        cells[i] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..2usize]), drive: .None }
+        i += 1usize
+    }
+    ret (3usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len == 2usize {
+        let dialog = looks.Sheet { name: "image_combo_box_dialog", cells: 3usize, columns: 1usize, cell_w: 343.0, cell_h: 29.0, ctx: zero, build: build_dialog }
+        ret looks.run_all(a, &dialog)
+    }
     let (passes, passes_error) = mem.alloc[Pass](a, 1usize)
     if passes_error != ok { ret passes_error }
     passes[0usize] = Pass { call: 0usize }

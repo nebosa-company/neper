@@ -15,12 +15,12 @@ fn cell_h() -> f32 { ret 150.0 }
 
 // The control `above` px below the top of its cell box and `left` px from its side, so that
 // the cell's centre (where the harness puts the pointer) falls where a state needs it.
-fn placed(a: *mem.Arena, node: widget.Node, above: f32, left: f32, high: f32) -> (widget.Node, err) {
+fn placed(a: *mem.Arena, node: widget.Node, above: f32, left: f32, high: f32, across: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, parts_error) }
     parts[0usize] = widget.box(0u64, looks.size_style(1.0, above), zero)
     parts[1usize] = node
-    var column = looks.size_style(cell_w(), high)
+    var column = looks.size_style(across, high)
     column.padding = style.EdgeLengths { left: style.Length { Px: left }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..2usize]), ok)
 }
@@ -37,7 +37,7 @@ fn pick_actions(a: *mem.Arena, n: usize) -> ([]widget.Submit, err) {
 }
 
 // One combo box: its value, the choices, the open list's active row, and the options.
-fn one(a: *mem.Arena, t: *const control.Theme, key: widget.Key, value: str, choices: []const str, active: usize, open: bool, options: control.FieldOptions, above: f32, left: f32, high: f32) -> (widget.Node, err) {
+fn one(a: *mem.Arena, t: *const control.Theme, key: widget.Key, value: str, choices: []const str, active: usize, open: bool, options: control.FieldOptions, above: f32, left: f32, high: f32, across: f32) -> (widget.Node, err) {
     let (buffer, buffer_error) = mem.alloc[u8](a, 64usize)
     if buffer_error != ok { ret (zero, buffer_error) }
     let n = control.copy_text(buffer, value)
@@ -47,7 +47,7 @@ fn one(a: *mem.Arena, t: *const control.Theme, key: widget.Key, value: str, choi
     if toggle_error != ok { ret (zero, toggle_error) }
     let (combo, combo_error) = control.combo_box(a, key, t, "Row Color", buffer, n, zero, choices, active, open, picks, zero, &toggle[0usize], options)
     if combo_error != ok { ret (zero, combo_error) }
-    let (shown, shown_error) = placed(a, combo, above, left, high)
+    let (shown, shown_error) = placed(a, combo, above, left, high, across)
     ret (shown, shown_error)
 }
 
@@ -180,7 +180,7 @@ fn build_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
         let s = spec_of(sheet_no, i)
         var choices: []const str = colors[0usize..4usize]
         if s.rows == 22usize { choices = numbers[0usize..22usize] }
-        let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, s.value, choices, s.active, s.open && now == i, s.options, s.above, s.left, s.high)
+        let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, s.value, choices, s.active, s.open && now == i, s.options, s.above, s.left, s.high, cell_w())
         if node_error != ok { ret (0usize, node_error) }
         cells[i] = looks.Cell { caption: s.caption, node: node, drive: s.drive }
         i += 1usize
@@ -220,7 +220,7 @@ fn build_flat(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
         if i == 2usize {
             options.enabled = false
         }
-        let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, value, colors[0usize..4usize], 0usize, false, options, 6.0, 8.0, 40.0)
+        let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, value, colors[0usize..4usize], 0usize, false, options, 6.0, 8.0, 40.0, cell_w())
         if node_error != ok { ret (0usize, node_error) }
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: .None }
         i += 1usize
@@ -228,7 +228,82 @@ fn build_flat(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     ret (3usize, ok)
 }
 
+// The combos as the v3 dialogs show them (ref/windows/dialogs: Options > Grids, Search for Card,
+// the Conditional Formatting manager), each control at (4, 4) of a cell as large as the capture's
+// crop (rectangle plus 4 px), so windows/<sheet>.png compares pixel for pixel with
+// ref/windows/<sheet>.png (scripts/looks_refs_d.py). `combo_box.exe dialog`: two at rest, 389 wide;
+// `edit`: the focused editable combo (Search for Card); `pick`: a focused list-style combo.
+fn build_dialog_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, which: usize) -> (usize, err) {
+    let colors = [4]str{ "Against Card Color", "Mono", "Rarity", "Frame" }
+    let sizes = [3]str{ "Small", "Medium", "Large" }
+    var n = 2usize
+    var across: f32 = 397.0
+    if which == 1usize { across = 297.0 }
+    if which == 2usize { across = 151.0 }
+    if which != 0usize { n = 1usize }
+    var i = 0usize
+    while i < n {
+        var options = control.field_options()
+        options.width = 389.0
+        var value = "Against Card Color"
+        var choices: []const str = colors[0usize..4usize]
+        var drive = looks.Drive.None
+        let high: f32 = 29.0
+        if i == 1usize {
+            value = "Medium"
+            choices = sizes[0usize..3usize]
+        }
+        if which == 1usize {
+            options.width = 289.0
+            value = ""
+            drive = .Focus
+        }
+        if which == 2usize {
+            options.width = 143.0
+            options.read_only = true
+            value = "All"
+            choices = colors[0usize..4usize]
+            drive = .Focus
+        }
+        let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, value, choices, 0usize, false, options, 4.0, 4.0, high, across)
+        if node_error != ok { ret (0usize, node_error) }
+        cells[i] = looks.Cell { caption: "", node: node, drive: drive }
+        i += 1usize
+    }
+    ret (n, ok)
+}
+
+fn build_dialog(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (made, made_error) = build_dialog_set(ctx, a, t, cells, 0usize)
+    ret (made, made_error)
+}
+
+fn build_edit(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (made, made_error) = build_dialog_set(ctx, a, t, cells, 1usize)
+    ret (made, made_error)
+}
+
+fn build_pick(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (made, made_error) = build_dialog_set(ctx, a, t, cells, 2usize)
+    ret (made, made_error)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len == 2usize {
+        let first = args[1usize][0usize]
+        if first == 100u8 {
+            let dialog = looks.Sheet { name: "combo_box_dialog", cells: 2usize, columns: 2usize, cell_w: 397.0, cell_h: 29.0, ctx: zero, build: build_dialog }
+            ret looks.run_all(a, &dialog)
+        }
+        if first == 101u8 {
+            let edit = looks.Sheet { name: "combo_box_edit", cells: 1usize, columns: 1usize, cell_w: 297.0, cell_h: 29.0, ctx: zero, build: build_edit }
+            ret looks.run_all(a, &edit)
+        }
+        if first == 112u8 {
+            let pick = looks.Sheet { name: "combo_box_pick", cells: 1usize, columns: 1usize, cell_w: 151.0, cell_h: 29.0, ctx: zero, build: build_pick }
+            ret looks.run_all(a, &pick)
+        }
+    }
     if args.len > 2usize {
         let flat = looks.Sheet { name: "combo_box_flat", cells: 3usize, columns: 3usize, cell_w: 170.0, cell_h: 50.0, ctx: zero, build: build_flat }
         ret looks.run_all(a, &flat)

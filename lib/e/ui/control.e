@@ -5793,7 +5793,7 @@ fn field_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown
 fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, h: f32, closed: GlyphKind, opened: GlyphKind, notch: bool, lead: []const widget.Node) -> (widget.Node, err) {
     // The Windows look (docs/ui/looks, pickers): the native combo box face.
     if t.tokens.profile == .Windows {
-        let (flat, flat_error) = win_head(a, key, t, label, shown, chosen, open, toggle, true, lead)
+        let (flat, flat_error) = win_head(a, key, t, label, shown, chosen, open, toggle, true, lead, 0.0)
         ret (flat, flat_error)
     }
     let state = control_state(t, key, true, false)
@@ -12679,18 +12679,28 @@ fn win_pad_y(edge_width: f32) -> f32 {
 
 // A read-only head: a face that opens the list (keyed `key`), the value (or the label,
 // muted, before a choice) after an optional `lead` pic, the chevron at the end.
-fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, enabled: bool, lead: []const widget.Node) -> (widget.Node, err) {
+fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, enabled: bool, lead: []const widget.Node, width: f32) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
-    let c = win_look(t, state.hovered, state.pressed, state.focused, open, enabled, false)
-    var look = style.ResolvedControl { background: c.face, foreground: c.ink, border: c.edge, border_width: c.edge_width, focus_ring: 0.0, opacity: 1.0, radius: t.tokens.radii.sm, elevation: 0u8, padding: 0.0, padding_start: 2.5, padding_y: win_pad_y(c.edge_width), custom_padding: true, min_width: 112.0, min_height: 21.0, corners: zero }
+    let c = win_look(t, state.hovered, state.pressed, false, open, enabled, false)
+    // looks3 group d: the frame is the theme's bitmap (win3_frame); the head itself is bare.
+    var head_w: f32 = 112.0
+    if width > 0.0 { head_w = width }
+    var look = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: head_w, min_height: 21.0, corners: zero }
     var words = text_options()
     words.role = .BodyMedium
     words.wrap = .None
     var value_color = c.ink
     if !chosen && enabled { value_color = style.color(t.tokens, .TextMuted) }
-    let (value_node, value_error) = colored_text(a, 0u64, shown, t, words, value_color)
+    let (bar_t, bar_error) = win3_dialog_theme(a, t)
+    if bar_error != ok { ret (zero, bar_error) }
+    let (value_node, value_error) = colored_text(a, 0u64, shown, &bar_t, words, value_color)
     if value_error != ok { ret (zero, value_error) }
-    let (chevron, chevron_error) = win_chevron(a, c.chevron)
+    // The chevron: darker under the pointer (unmeasured), paler disabled; wide table while focused.
+    var chevron_scale: f32 = 1.0
+    if state.hovered { chevron_scale = 1.25 }
+    if !enabled { chevron_scale = 0.5 }
+    let focused = state.focused && enabled
+    let (chevron, chevron_error) = win3_chevron(a, c.ink, focused, false, chevron_scale)
     if chevron_error != ok { ret (zero, chevron_error) }
     let (bits, bits_error) = mem.alloc[widget.Node](a, 4usize)
     if bits_error != ok { ret (zero, TooLarge) }
@@ -12702,8 +12712,30 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     }
     bits[1usize] = chevron
     var spread = style.defaults()
-    spread.min_width = style.Length { Px: 112.0 - 3.0 - 2.0 }
-    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 4.0 }, spread, bits[0usize..2usize])
+    spread.width = style.Length { Px: head_w }
+    spread.height = style.Length { Px: 21.0 }
+    spread.padding = edges(3.0, 0.0, 0.0, 0.0)
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, spread, bits[0usize..2usize])
+    var tone: f32 = 0.0
+    if !enabled { tone = 0.5 }
+    let (frame, frame_error) = win3_frame(a, c.face, style.color(t.tokens, .Background), tone, false, head_w, 21.0)
+    if frame_error != ok { ret (zero, frame_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = frame
+    layers[1usize] = row
+    var count = 2usize
+    if focused {
+        // v3 rings a focused list-style combo's text area with its dotted focus rectangle.
+        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(head_w - 22.0), 16.0)
+        if dots_error != ok { ret (zero, dots_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = dots
+        layers[2usize] = widget.positioned(0u64, 3.0, 3.0, style.defaults(), held[0usize..1usize])
+        count = 3usize
+    }
+    let content = widget.stack(0u64, sized_style(head_w, 21.0), layers[0usize..count])
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
     let (head_node, head_error) = pressable_states(a, key, t, 3u8, shown, look, enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, content)
@@ -12735,7 +12767,9 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
     var words = text_options()
     words.role = .BodyMedium
     words.wrap = .None
-    let (label_node, label_error) = colored_text(a, 0u64, label, t, words, ink)
+    let (dialog_t, dialog_error) = win3_dialog_theme(a, t)
+    if dialog_error != ok { ret (zero, dialog_error) }
+    let (label_node, label_error) = colored_text(a, 0u64, label, &dialog_t, words, ink)
     if label_error != ok { ret (zero, label_error) }
     let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
     if bits_error != ok { ret (zero, TooLarge) }
@@ -12832,7 +12866,7 @@ fn win_drop(a: *mem.Arena, overlay_key: widget.Key, anchor: widget.Key, first: w
 // with rows keyed `key + 2 + index`; no motion, as v3's list appears at once.
 fn win_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     var none: []const widget.Node = zero
-    let (made, made_error) = win_image_select(a, key, t, label, options, none, selected, open, true, toggle, picks)
+    let (made, made_error) = win_image_select(a, key, t, label, options, none, selected, open, true, toggle, picks, 0.0)
     ret (made, made_error)
 }
 
@@ -12844,18 +12878,29 @@ fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         let (plain, plain_error) = select(a, key, t, label, options, selected, open, toggle, picks)
         ret (plain, plain_error)
     }
-    let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, enabled, toggle, picks)
+    let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, enabled, toggle, picks, 0.0)
     ret (made, made_error)
 }
 
-fn win_image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+// `image_select` with the head `width` wide (v3's TcxImageComboBox has its own Width); 0 is the
+// default of at least 112. Under the other looks the plain select, whose width the caller sets.
+fn image_select_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit, width: f32) -> (widget.Node, err) {
+    if t.tokens.profile != .Windows {
+        let (plain, plain_error) = select(a, key, t, label, options, selected, open, toggle, picks)
+        ret (plain, plain_error)
+    }
+    let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, enabled, toggle, picks, width)
+    ret (made, made_error)
+}
+
+fn win_image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit, width: f32) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
     let chosen = selected < options.len
     var shown = label
     if chosen { shown = options[selected] }
     var lead: []const widget.Node = zero
     if chosen && icons.len == options.len { lead = icons[selected..selected + 1usize] }
-    let (head, head_error) = win_head(a, key, t, label, shown, chosen, open, toggle, enabled, lead)
+    let (head, head_error) = win_head(a, key, t, label, shown, chosen, open, toggle, enabled, lead, width)
     if head_error != ok { ret (zero, head_error) }
     var count = 1usize
     if open && enabled { count = 2usize }
@@ -12983,10 +13028,18 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     let enabled = options.enabled
     let state_edit = control_state(t, key, enabled, false)
     let state_button = control_state(t, key + 1u64, enabled, false)
-    let c = win_look(t, state_edit.hovered || state_button.hovered, false, state_edit.focused || state_button.focused, open, enabled, options.read_only)
+    let focused = enabled && (state_edit.focused || state_button.focused)
+    // looks3 group d: an editable combo with the focus (or its list open) is the square frame with
+    // the accent line under it; a list-style (read-only) one keeps the rounded frame and shows
+    // the dotted focus rectangle round its text.
+    let square = enabled && !options.read_only && (focused || open)
+    let c = win_look(t, state_edit.hovered || state_button.hovered, false, false, false, enabled, options.read_only)
     var value_options = text_options()
     value_options.role = .BodyMedium
-    let (text_look, style_error) = text_style_faced(a, t, value_options)
+    // v3's dialogs set Tahoma 11 px (DFM Font.Name = 'Tahoma', Height = -11) on their edits.
+    let (bar_t, bar_error) = win3_dialog_theme(a, t)
+    if bar_error != ok { ret (zero, bar_error) }
+    let (text_look, style_error) = text_style_faced(a, &bar_t, value_options)
     if style_error != ok { ret (zero, style_error) }
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
@@ -12998,7 +13051,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         var hint = text_options()
         hint.role = .BodyMedium
         hint.wrap = .None
-        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, t, hint, style.color(t.tokens, .TextMuted))
+        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, &bar_t, hint, style.color(t.tokens, .TextMuted))
         if hint_error != ok { ret (zero, hint_error) }
         stack_parts[at] = hint_node
         at += 1usize
@@ -13007,29 +13060,53 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     if named_error != ok { ret (zero, named_error) }
     stack_parts[at] = named
     at += 1usize
+    // The value sits 3 in and 1 up of centre, in the room left of the 17 wide drop button column;
+    // both are placed, so the frame's measured geometry does not depend on flex rounding.
     var grow = style.defaults()
-    grow.width = style.Length { Flex: 1.0 }
+    grow.width = style.Length { Percent: 100.0 }
     grow.overflow = .Clip
     let (row_parts, row_error) = mem.alloc[widget.Node](a, 2usize)
     if row_error != ok { ret (zero, TooLarge) }
     row_parts[0usize] = widget.stack(0u64, grow, stack_parts[0usize..at])
-    let (chevron, chevron_error) = win_chevron(a, c.chevron)
+    var text_box = style.defaults()
+    text_box.width = style.Length { Px: max_zero(options.width - 20.0) }
+    text_box.height = style.Length { Px: 21.0 }
+    text_box.padding = edges(0.0, 0.0, 0.0, 2.0)
+    let text_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, text_box, row_parts[0usize..1usize])
+    var chevron_scale: f32 = 1.0
+    if state_edit.hovered || state_button.hovered { chevron_scale = 1.25 }
+    if !enabled { chevron_scale = 0.5 }
+    let (chevron, chevron_error) = win3_chevron(a, c.ink, focused && !square, square, chevron_scale)
     if chevron_error != ok { ret (zero, chevron_error) }
-    var bare = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 18.0, min_height: 18.0, corners: zero }
+    var bare = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 17.0, min_height: 21.0, corners: zero }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
     let (opener, opener_error) = pressable_states(a, key + 1u64, t, 3u8, "Choices", bare, enabled && !options.read_only, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
     if opener_error != ok { ret (zero, opener_error) }
     row_parts[1usize] = opener
-    var frame_style = style.defaults()
-    frame_style.width = style.Length { Px: options.width }
-    frame_style.min_height = style.Length { Px: 21.0 }
-    frame_style.background = paint.Brush { Solid: c.face }
-    frame_style.border = style.Border { width: c.edge_width, color: c.edge }
-    frame_style.radius = t.tokens.radii.sm
-    let pad_y = style.Length { Px: win_pad_y(c.edge_width) }
-    frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.5 }, top: pad_y, right: style.Length { Px: 0.0 }, bottom: pad_y }
-    ret (widget.flex(key + 1048701u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, frame_style, row_parts[0usize..2usize]), ok)
+    var tone: f32 = 0.0
+    if !enabled { tone = 0.5 }
+    let (frame, frame_error) = win3_frame(a, c.face, style.color(t.tokens, .Background), tone, square, options.width, 21.0)
+    if frame_error != ok { ret (zero, frame_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = frame
+    let (held_text, held_text_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_text_error != ok { ret (zero, TooLarge) }
+    held_text[0usize] = text_row
+    layers[1usize] = widget.positioned(0u64, 3.0, 0.0, style.defaults(), held_text[0usize..1usize])
+    layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), row_parts[1usize..2usize])
+    var count = 3usize
+    if focused && options.read_only {
+        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(options.width - 22.0), 16.0)
+        if dots_error != ok { ret (zero, dots_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = dots
+        layers[3usize] = widget.positioned(0u64, 3.0, 3.0, style.defaults(), held[0usize..1usize])
+        count = 4usize
+    }
+    ret (widget.stack(key + 1048701u64, sized_style(options.width, 21.0), layers[0usize..count]), ok)
 }
 
 // A list box (TcxListBox): a framed viewport (keyed `key`) `rows` rows tall of `options`,
@@ -13076,4 +13153,229 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     sem.label = label
     sem.row_count = u32(options.len)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// ---- looks3 group d: the Windows combo frame as the v3 theme draws it (docs/ui/looks) ----------
+// v3's combo boxes are DevExpress edits with NativeStyle: the Windows 11 theme paints a bitmap
+// frame, measured on the live 100 % captures (ref/windows/dialogs/options-08-grids,
+// search-search, view-conditional-formatting): a rounded #FDFDFD box with a two-ring edge (a
+// darker ring outside, a light one inside, the bottom ring the darkest) that bleeds 1 px right
+// and down of the control's rectangle, or, while an editable combo has the focus, a square white
+// box with the accent line (2 px #5599D5 / #0067C0 plus a pale third) under it. The corners and
+// the chevron are pixel tables (two hex digits a pixel, ".." transparent); the straight edges are
+// lines. v3 draws the focus of a list-style combo as a dotted rectangle round the text.
+type Win3Frame = struct { face: paint.Color, ground: paint.Color, tone: f32, square: bool, bleed: f32 }
+type Win3Chevron = struct { ink: paint.Color, wide: bool, square: bool, scale: f32 }
+type Win3Dots = struct { ink: paint.Color }
+
+fn win3_nibble(c: u8) -> u32 {
+    if c >= 97u8 { ret u32(c) - 87u32 }
+    ret u32(c) - 48u32
+}
+
+// The byte at pixel `at` of a table, 256 for "..".
+fn win3_byte(table: str, at: usize) -> u32 {
+    if table[at * 2usize] == 46u8 { ret 256u32 }
+    ret win3_nibble(table[at * 2usize]) * 16u32 + win3_nibble(table[at * 2usize + 1usize])
+}
+
+fn win3_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, color: paint.Color) -> err {
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: color } } })
+}
+
+fn win3_gray(f: *const Win3Frame, v: u32) -> paint.Color {
+    let c = style.hex(v * 65793u32)
+    if f.tone > 0.0 { ret style.mix(c, f.ground, f.tone) }
+    ret c
+}
+
+// Corner pixels (outer corner first, 5 x 5) of the rounded frame, measured: top-left, top-right,
+// bottom-left, bottom-right.
+fn win3_corner_tl() -> str { ret "..eee4dedceee0e0eaede4e1f0fbfddaedfbfdfdd7f2fdfdfd" }
+fn win3_corner_tr() -> str { ret "..efe8dfdcefe4e0e8ece7dfebf9fde2e4f8fdfde0e7fcfdfd" }
+fn win3_corner_bl() -> str { ret "..efe5dedcefe5dad4d3e7dcebf9fddce8f9fdfdd8f1fdfdfd" }
+fn win3_corner_br() -> str { ret "..efe8dfdcefe8dcd5d3eae0e5f5fce3e3f6fdfddfe6fcfdfd" }
+
+fn win3_corner(f: *const Win3Frame, b: *scene.Builder, table: str, x: f32, y: f32, flip_x: bool, flip_y: bool) -> err {
+    var j = 0usize
+    while j < 5usize {
+        var i = 0usize
+        while i < 5usize {
+            let v = win3_byte(table, j * 5usize + i)
+            if v < 256u32 {
+                var px = x + f32(i)
+                var py = y + f32(j)
+                if flip_x { px = x + f32(4usize - i) }
+                if flip_y { py = y + f32(4usize - j) }
+                try win3_rect(b, px, py, 1.0, 1.0, win3_gray(f, v))
+            }
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+fn win3_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+// The frame, laid out as a w x h box (the control's rectangle), painted over w + bleed x h + 1.
+fn win3_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let f = mem.cast[*Win3Frame](ctx)
+    let x = area.x
+    let y = area.y
+    let w = area.width + f.bleed
+    let h = area.height + 1.0
+    if f.square {
+        // Pale ring (#ECECEC left, #E3E3E3 right), top rows #EDEDED #F9F9F9, white face, accent rows.
+        try win3_rect(b, x, y, w, h, win3_gray(f, 255u32))
+        try win3_rect(b, x, y, w, 1.0, win3_gray(f, 237u32))
+        try win3_rect(b, x, y + 1.0, w, 1.0, win3_gray(f, 249u32))
+        try win3_rect(b, x, y + 2.0, 1.0, h - 5.0, win3_gray(f, 236u32))
+        try win3_rect(b, x + w - 1.0, y + 2.0, 1.0, h - 5.0, win3_gray(f, 227u32))
+        try win3_rect(b, x, y + h - 3.0, w, 1.0, style.mix(style.hex(5609941u32), f.ground, f.tone))
+        try win3_rect(b, x, y + h - 2.0, w, 1.0, style.mix(style.hex(26560u32), f.ground, f.tone))
+        try win3_rect(b, x, y + h - 1.0, w, 1.0, style.mix(style.hex(10535904u32), f.ground, f.tone))
+        ret ok
+    }
+    try win3_rect(b, x + 2.0, y + 2.0, w - 4.0, h - 4.0, f.face)
+    try win3_rect(b, x + 5.0, y, w - 10.0, 1.0, win3_gray(f, 220u32))
+    try win3_rect(b, x + 5.0, y + 1.0, w - 10.0, 1.0, win3_gray(f, 237u32))
+    try win3_rect(b, x + 5.0, y + h - 2.0, w - 10.0, 1.0, win3_gray(f, 211u32))
+    try win3_rect(b, x + 5.0, y + h - 1.0, w - 10.0, 1.0, win3_gray(f, 220u32))
+    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, win3_gray(f, 215u32))
+    try win3_rect(b, x + 1.0, y + 5.0, 1.0, h - 10.0, win3_gray(f, 243u32))
+    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, win3_gray(f, 231u32))
+    try win3_rect(b, x + w - 1.0, y + 5.0, 1.0, h - 10.0, win3_gray(f, 223u32))
+    try win3_corner(f, b, win3_corner_tl(), x, y, false, false)
+    try win3_corner(f, b, win3_corner_tr(), x + w - 5.0, y, true, false)
+    try win3_corner(f, b, win3_corner_bl(), x, y + h - 5.0, false, true)
+    ret win3_corner(f, b, win3_corner_br(), x + w - 5.0, y + h - 5.0, true, true)
+}
+
+// A frame node of `w` x `h` (w 0: the width offered): `face` is the rounded frame's fill, `tone`
+// mixes every measured grey toward `ground` (disabled), `square` is the focused editable variant.
+fn win3_frame(a: *mem.Arena, face: paint.Color, ground: paint.Color, tone: f32, square: bool, w: f32, h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win3Frame](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    var bleed: f32 = 1.0
+    if square { bleed = 0.0 }
+    cells[0usize] = Win3Frame { face: face, ground: ground, tone: tone, square: square, bleed: bleed }
+    var none: []const widget.Node = zero
+    var box = style.defaults()
+    if w > 0.0 {
+        box.width = style.Length { Px: w }
+    } else {
+        box.width = style.Length { Percent: 100.0 }
+    }
+    box.height = style.Length { Px: h }
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win3_frame_paint, state: widget.bytes_of[Win3Frame](&cells[0usize]) } }, style: box, children: none }, ok)
+}
+
+// The chevron tables: grey values over a #FDFDFD face (the square frame's over #FFFFFF), 11 x 7 for
+// the rounded frame at rest, 10 x 7 for the focused ones.
+fn win3_chevron_odd() -> str { ret "fbf1f3fdfdfdfdfdf3f1fbfac8baedfdfdfdeebbc6fafcdea9b7edfdeeb8a8ddfcfdfbdda9b7deb8a8dcfbfdfdfdfbdda991a8dcfbfdfdfdfdfdfbdec3ddfbfdfdfdfdfdfdfdfcfafbfdfdfdfd" }
+fn win3_chevron_even() -> str { ret "fae8fdfdfdfdfdfde8faf793dcfdfdfdfddc93f7fbc68ddcfdfddc8dc6fbfdf9c68ddcdc8dc6f9fdfdfdf9c68d8dc6f9fdfdfdfdfdf9c8c8f9fdfdfdfdfdfdfdfafafdfdfdfd" }
+fn win3_chevron_square() -> str { ret "fceaffffffffffffeafcf994deffffffffde94f9fdc88edeffffde8ec8fdfffbc88edede8ec8fbfffffffbc88e8ec8fbfffffffffffbcacafbfffffffffffffffcfcffffffff" }
+
+// The chevron over a 17 x 21 drop-button area: the table 3 right and 8 down, black at the table's
+// darkness (the area is the frame's 17 px button column, so the table lands where v3's glyph is).
+fn win3_chevron_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let c = mem.cast[*Win3Chevron](ctx)
+    var table = win3_chevron_odd()
+    var columns = 11usize
+    var face = 253u32
+    if c.wide {
+        table = win3_chevron_even()
+        columns = 10usize
+    }
+    if c.square {
+        table = win3_chevron_square()
+        columns = 10usize
+        face = 255u32
+    }
+    var j = 0usize
+    while j < 7usize {
+        var i = 0usize
+        while i < columns {
+            let v = win3_byte(table, j * columns + i)
+            if v + 3u32 < face {
+                let alpha = f32(face - v) / f32(face) * c.scale
+                try win3_rect(b, area.x + 3.0 + f32(i), area.y + 8.0 + f32(j), 1.0, 1.0, with_alpha(c.ink, alpha))
+            }
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+// The 17 x 21 drop-button column of a combo: the chevron, `ink` at `scale` (1 at rest).
+fn win3_chevron(a: *mem.Arena, ink: paint.Color, wide: bool, square: bool, scale: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win3Chevron](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win3Chevron { ink: ink, wide: wide, square: square, scale: scale }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win3_chevron_paint, state: widget.bytes_of[Win3Chevron](&cells[0usize]) } }, style: sized_style(17.0, 21.0), children: none }, ok)
+}
+
+// v3's focus rectangle of a list-style combo, measured: dots on every second column along the top
+// (#555555 over #AAAAAA below) and bottom, a line down each side alternating the two greys.
+fn win3_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*Win3Dots](ctx)
+    let dark = with_alpha(d.ink, 0.667)
+    let light = with_alpha(d.ink, 0.333)
+    var x: f32 = 1.0
+    while x < area.width - 1.0 {
+        try win3_rect(b, area.x + x, area.y, 1.0, 1.0, dark)
+        try win3_rect(b, area.x + x, area.y + 1.0, 1.0, 1.0, light)
+        try win3_rect(b, area.x + x, area.y + area.height - 2.0, 1.0, 1.0, dark)
+        try win3_rect(b, area.x + x, area.y + area.height - 1.0, 1.0, 1.0, light)
+        x += 2.0
+    }
+    var y: f32 = 1.0
+    while y < area.height - 1.0 {
+        var edge = light
+        if (u32(y) & 1u32) == 1u32 { edge = dark }
+        try win3_rect(b, area.x, area.y + y, 1.0, 1.0, edge)
+        try win3_rect(b, area.x + area.width - 1.0, area.y + y, 1.0, 1.0, edge)
+        y += 1.0
+    }
+    ret ok
+}
+
+fn win3_dots(a: *mem.Arena, ink: paint.Color, w: f32, h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win3Dots](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win3Dots { ink: ink }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win3_dots_paint, state: widget.bytes_of[Win3Dots](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
+}
+// ---- end looks3 group d -------------------------------------------------------------------------
+
+// The theme of v3's dialog text: Tahoma (font id 8, swapped to lead the chain) at 11 px, which is
+// what the DFMs ask for (Font.Name = 'Tahoma', Height = -11) and what the captures measure: the
+// ink of "Against Card Color" is 89 px wide, Tahoma 11 px's advance.
+fn win3_dialog_theme(a: *mem.Arena, t: *const Theme) -> (Theme, err) {
+    let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copies_error != ok { ret (*t, TooLarge) }
+    copies[0usize] = *t.tokens
+    let small = style.TextStyle { size: 11.0, line_height: 15.0, weight: 400u16, italic: false }
+    copies[0usize].text[1usize] = small
+    copies[0usize].text[17usize] = small
+    var fonts = t.fonts
+    if t.fonts.len >= 2usize {
+        let (swapped, swapped_error) = mem.alloc[shape.Font](a, t.fonts.len)
+        if swapped_error != ok { ret (*t, TooLarge) }
+        var i = 0usize
+        while i < t.fonts.len {
+            swapped[i] = t.fonts[i]
+            i += 1usize
+        }
+        swapped[0usize] = t.fonts[1usize]
+        swapped[1usize] = t.fonts[0usize]
+        fonts = swapped
+    }
+    ret (Theme { tokens: &copies[0usize], fonts: fonts, language: t.language, runtime: t.runtime }, ok)
 }
