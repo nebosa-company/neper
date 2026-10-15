@@ -18,6 +18,7 @@ use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
+use e.ui.winchrome
 
 error TooLarge
 
@@ -7798,7 +7799,8 @@ fn windows_close_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         fill = style.windows_caption_close(state.pressed)
         ink = style.hex(16777215u32)
     }
-    let (glyph, glyph_error) = control.stroked_glyph(a, ink, .Cross, 20.0, 1.0)
+    // looks3: the X is the capture's own pixels (e.ui.winchrome), 33 wide on a dialog's lone close button.
+    let (glyph, glyph_error) = winchrome.glyph_node(a, 2u32, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), 1.0, 33.0)
     if glyph_error != ok { ret (zero, glyph_error) }
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = fill
@@ -7808,12 +7810,12 @@ fn windows_close_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     look.custom_padding = true
     look.padding = 0.0
     look.padding_y = 0.0
-    look.min_width = 34.0
+    look.min_width = 33.0
     look.min_height = style.windows_caption_height()
     let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
     if centred_error != ok { ret (zero, TooLarge) }
     centred[0usize] = glyph
-    let cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(34.0, style.windows_caption_height()), centred[0usize..1usize])
+    let cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(33.0, style.windows_caption_height()), centred[0usize..1usize])
     let (pressed, pressed_error) = control.pressable(a, key, t, 3u8, "Close", look, true, false, action, cell)
     ret (pressed, pressed_error)
 }
@@ -7832,13 +7834,13 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let (title_cell, title_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if title_cell_error != ok { ret (zero, TooLarge) }
     title_cell[0usize] = word
-    let titled = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width - 34.0 - 31.0, bar_h), title_cell[0usize..1usize])
+    let titled = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width - 33.0 - 30.0, bar_h), title_cell[0usize..1usize])
     let (closes, closes_error) = mem.alloc[widget.Submit](a, 1usize)
     if closes_error != ok { ret (zero, TooLarge) }
     closes[0usize] = close
     let (x_button, x_error) = windows_close_button(a, key + 2u64, t, &closes[0usize])
     if x_error != ok { ret (zero, x_error) }
-    let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 2usize)
+    let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 3usize)
     if bar_parts_error != ok { ret (zero, TooLarge) }
     let (title_held, title_held_error) = mem.alloc[widget.Node](a, 1usize)
     if title_held_error != ok { ret (zero, TooLarge) }
@@ -7846,11 +7848,15 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let (x_held, x_held_error) = mem.alloc[widget.Node](a, 1usize)
     if x_held_error != ok { ret (zero, TooLarge) }
     x_held[0usize] = x_button
-    bar_parts[0usize] = widget.positioned(0u64, 31.0, 0.0, style.defaults(), title_held[0usize..1usize])
-    bar_parts[1usize] = widget.positioned(0u64, width - 34.0, 0.0, style.defaults(), x_held[0usize..1usize])
+    bar_parts[0usize] = widget.positioned(0u64, 30.0, 0.0, style.defaults(), title_held[0usize..1usize])
+    bar_parts[1usize] = widget.positioned(0u64, width - 33.0, 0.0, style.defaults(), x_held[0usize..1usize])
+    let (icon_held, icon_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if icon_held_error != ok { ret (zero, TooLarge) }
+    icon_held[0usize] = winchrome.icon_node()
+    bar_parts[2usize] = widget.positioned(0u64, 10.0, 7.0, style.defaults(), icon_held[0usize..1usize])
     var bar = control.sized_style(width, bar_h)
     bar.background = paint.Brush { Solid: style.windows_caption_face(true) }
-    let caption = widget.stack(0u64, bar, bar_parts[0usize..2usize])
+    let caption = widget.stack(0u64, bar, bar_parts[0usize..3usize])
     // the body
     var body_style = style.defaults()
     body_style.width = style.Length { Px: width }
@@ -7905,9 +7911,38 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let none_px = style.Length { Px: 0.0 }
     face.padding = style.EdgeLengths { left: none_px, top: none_px, right: none_px, bottom: none_px }
     face.width = style.Length { Px: width }
-    face.radius = 8.0
+    // The capture is square-cornered (PrintWindow omits the DWM rounding Windows 11 adds on screen).
+    face.radius = 0.0
     face.overflow = .Clip
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, parts[0usize..3usize]), ok)
+}
+
+// looks3: a v3 form window of `width` x `height` (the visible window of the capture): the #F0F0F0 face with `children`
+// laid over it, every one a node already positioned in window coordinates (the caption among them, a title bar from
+// e.ui.navigation). v3 forms are laid out by hand in the DFM, so there is no flow: the caller places the controls.
+fn windows_window(a: *mem.Arena, t: *const control.Theme, width: f32, height: f32, children: []const widget.Node) -> (widget.Node, err) {
+    var face = control.sized_style(width, height)
+    face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    // The row under the caption is #F5F5F5 across the whole width in every captured form (the DWM client edge); a page or list
+    // covering it (About's page control, Options' category list) overpaints it, as the captures show.
+    var edge = control.sized_style(width, 1.0)
+    edge.background = paint.Brush { Solid: style.hex(0xF5F5F5u32) }
+    let (all, all_error) = mem.alloc[widget.Node](a, children.len + 1usize)
+    if all_error != ok { ret (zero, TooLarge) }
+    all[0usize] = widget.positioned(0u64, 0.0, style.windows_caption_height(), style.defaults(), mem_one_box(a, edge))
+    var i = 0usize
+    while i < children.len {
+        all[i + 1usize] = children[i]
+        i += 1usize
+    }
+    ret (widget.stack(0u64, face, all[0usize..children.len + 1usize]), ok)
+}
+
+fn mem_one_box(a: *mem.Arena, look: style.Style) -> []const widget.Node {
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret zero }
+    one[0usize] = widget.box(0u64, look, zero)
+    ret one[0usize..1usize]
 }
 
 // The Windows dialog as an overlay: the window centred, no scrim (a Windows modal dialog does
