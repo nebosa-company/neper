@@ -12444,7 +12444,7 @@ fn windows_bar_theme(a: *mem.Arena, t: *const Theme) -> (Theme, err) {
     let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
     if copies_error != ok { ret (*t, TooLarge) }
     copies[0usize] = *t.tokens
-    let small = style.TextStyle { size: 11.7, line_height: 14.0, weight: 400u16, italic: false }
+    let small = style.TextStyle { size: 12.0, line_height: 15.0, weight: 400u16, italic: false }
     copies[0usize].text[1usize] = small
     copies[0usize].text[17usize] = small
     var fonts = t.fonts
@@ -12482,14 +12482,18 @@ fn windows_bar_look(state: style.ControlState, ink: paint.Color) -> style.Resolv
         edge = face
         face_ink = style.hex(10526880u32)
     }
-    ret style.ResolvedControl { background: face, foreground: face_ink, border: edge, border_width: 1.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 2.0, padding_start: 0.0, padding_y: 2.0, custom_padding: true, min_width: 22.0, min_height: 22.0, corners: zero }
+    ret style.ResolvedControl { background: face, foreground: face_ink, border: edge, border_width: 1.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 2.0, padding_start: 0.0, padding_y: 2.0, custom_padding: true, min_width: 23.0, min_height: 22.0, corners: zero }
 }
 
 // A TdxBarButton with a picture: 22 square, the 16 glyph in a dark ink (v3's are bitmaps).
 fn windows_glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool, checked: bool) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, checked)
     let look = windows_bar_look(state, style.hex(4210752u32))
-    let (mark, mark_error) = icon_square(a, look.foreground, kind, 16.0)
+    // v3's disabled pictures are pale bitmaps (mean #D4D4D4 over the glyph area, measured);
+    // a drawn glyph in #C8C8C8 stands in.
+    var ink = look.foreground
+    if !enabled { ink = style.hex(13158600u32) }
+    let (mark, mark_error) = icon_square(a, ink, kind, 16.0)
     if mark_error != ok { ret (zero, mark_error) }
     let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, checked, action, mark)
     ret (node, node_error)

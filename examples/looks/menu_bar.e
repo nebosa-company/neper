@@ -32,7 +32,11 @@ fn command(label: str, shortcut: str, enabled: bool, separated: bool, action: wi
 }
 
 fn bar(a: *mem.Arena, t: *const control.Theme, action: widget.Submit, base: widget.Key, open: usize, only_cards: bool) -> (widget.Node, err) {
-    let titles = [10]str{ "File", "Cards", "Search", "View", "Card Art", "Online", "Reports", "Tools", "Admin", "Help" }
+    let plain = [10]str{ "File", "Cards", "Search", "View", "Card Art", "Online", "Reports", "Tools", "Admin", "Help" }
+    // The Windows look underlines the letter after the `&` (v3's mnemonics: Card &Art, A&dmin).
+    let marked = [10]str{ "&File", "&Cards", "&Search", "&View", "Card &Art", "&Online", "&Reports", "&Tools", "A&dmin", "&Help" }
+    var titles = plain
+    if t.tokens.profile == .Windows { titles = marked }
     var count = 10usize
     if only_cards { count = 4usize }
     let (cards, cards_error) = mem.alloc[navigation.BarCommand](a, 6usize)
@@ -80,8 +84,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var x: f32 = 0.0
         if i == 1usize { drive = .Hover }
         if i == 2usize { drive = .Press }
-        if i != 0usize { x = 260.0 - 57.0 }
-        let (shifted, shifted_error) = placed(a, menu_bar, x, 11.0, 520.0, 44.0)
+        if i != 0usize { x = 331.0 }
+        let (shifted, shifted_error) = placed(a, menu_bar, x, 0.0, 782.0, 26.0)
         if shifted_error != ok { ret (0usize, shifted_error) }
         cells[i] = looks.Cell { caption: captions[i], node: shifted, drive: drive }
         i += 1usize
@@ -102,7 +106,7 @@ fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "menu_bar", cells: 3usize, columns: 1usize, cell_w: 520.0, cell_h: 44.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "menu_bar", cells: 3usize, columns: 1usize, cell_w: 782.0, cell_h: 26.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
     let open_sheet = looks.Sheet { name: "menu_bar-open", cells: 1usize, columns: 1usize, cell_w: 520.0, cell_h: 190.0, ctx: zero, build: build_open }
     ret looks.run_all(a, &open_sheet)

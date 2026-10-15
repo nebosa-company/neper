@@ -23,7 +23,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
-    let captions = [5]str{ "Rest", "Progress panel", "Pressable panel (hover)", "Error tone", "Narrow" }
+    let captions = [5]str{ "Rest", "Progress panel", "Pressable panel (hover)", "Error tone", "Narrow (panels hug their text)" }
     var i = 0usize
     while i < 5usize {
         let (items, items_error) = mem.alloc[navigation.StatusItem](a, 3usize)
@@ -31,8 +31,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         items[0usize] = navigation.status_item("Sel: 0 Fil: 120 283 Shown: 120 283 All: 120 283 Rec: 1")
         items[1usize] = navigation.status_item("")
         items[2usize] = navigation.status_item("Idle")
-        items[2usize].end = true
-        var width: f32 = 560.0
+        var width: f32 = 784.0
         var x: f32 = 0.0
         var drive: looks.Drive = .None
         if i == 1usize {
@@ -42,17 +41,26 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 2usize {
             items[0usize] = navigation.status_item("Where are the card images?")
             items[0usize].action = actions[0usize]
-            x = 350.0 - 70.0
             drive = .Hover
+            // the first panel's centre under the pointer (the cell's centre)
+            x = 251.0
+            width = 533.0
         }
         if i == 3usize {
             items[0usize] = navigation.status_item("Could not reach the price server")
             items[0usize].tone = .Error
         }
         if i == 4usize { width = 300.0 }
+        // v3's three panels at 100 %: 282 centred, 153, the rest (the DFM: 200 centred, 150, rest).
+        if i != 4usize {
+            items[0usize].panel_width = 282.0
+            items[0usize].centered = true
+            items[1usize].panel_width = 153.0
+            items[2usize].fills = true
+        }
         let (bar, bar_error) = navigation.status_bar_of(a, 1000u64 * u64(i + 1usize), t, items[0usize..3usize], false, width)
         if bar_error != ok { ret (0usize, bar_error) }
-        let (shown, shown_error) = placed(a, bar, x, 6.0, 700.0, 30.0)
+        let (shown, shown_error) = placed(a, bar, x, 0.0, 784.0, 19.0)
         if shown_error != ok { ret (0usize, shown_error) }
         cells[i] = looks.Cell { caption: captions[i], node: shown, drive: drive }
         i += 1usize
@@ -61,6 +69,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "status_bar", cells: 5usize, columns: 1usize, cell_w: 700.0, cell_h: 30.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "status_bar", cells: 5usize, columns: 1usize, cell_w: 784.0, cell_h: 19.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
