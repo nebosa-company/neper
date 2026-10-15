@@ -120,7 +120,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels, DotsSoft, DotsSoftLeft, SelDots }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape, pix: str, cols: usize }
 
@@ -186,6 +186,8 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     if area.height < side { side = area.height }
     if m.shape == Shape.TreePlus || m.shape == Shape.TreeMinus || m.shape == Shape.TreeBox { ret tree_mark_paint(m, b, area) }
     if m.shape == Shape.Pixels { ret pixels_paint(m, b, area) }
+    if m.shape == Shape.DotsSoft || m.shape == Shape.DotsSoftLeft { ret dots_soft_paint(m, b, area) }
+    if m.shape == Shape.SelDots { ret sel_dots_paint(m, b, area) }
     if m.shape == Shape.StarOutline || m.shape == Shape.StarFilled {
         let (outer, outer_error) = star_path(m.arena, cx, cy, side * 0.5)
         if outer_error != ok { ret outer_error }
@@ -825,7 +827,13 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
         let bl = (pix_digit(m.pix[at + 4usize]) * 16.0 + pix_digit(m.pix[at + 5usize])) / 255.0
         let px = f32(n % m.cols)
         let py = f32(n / m.cols)
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: f32(i64(area.x + 0.5)) + px, y: f32(i64(area.y + 0.5)) + py, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: paint.rgba(r, g, bl, 1.0) } } })
+        // a pixel overlaps the next one by half a pixel (the next paints over it): at a scale between whole numbers
+        // the rectangles then leave no seams
+        var pw: f32 = 1.5
+        var ph: f32 = 1.5
+        if n % m.cols == m.cols - 1usize { pw = 1.0 }
+        if (n / m.cols) * 6usize * m.cols + 6usize * m.cols >= m.pix.len { ph = 1.0 }
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: f32(i64(area.x + 0.5)) + px, y: f32(i64(area.y + 0.5)) + py, width: pw, height: ph }, brush: paint.Brush { Solid: paint.rgba(r, g, bl, 1.0) } } })
         at += 6usize
         n += 1usize
     }
@@ -916,3 +924,73 @@ fn gx_nav_w(slot: usize, enabled: bool) -> f32 {
     ret 19.0
 }
 fn gx_nav_h() -> f32 { ret 23.0 }
+
+// looks4-e: the live capture's focus rectangle of a group row: alternate dark (`color`) and light (`inner`) pixels along the
+// top edge (1 px in from the row's top) and the bottom edge (1 px up from its foot); DotsSoftLeft also its left edge.
+fn dots_soft_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
+    let top = f32(i64(area.y + 0.5)) + 1.0
+    let foot = f32(i64(area.y + 0.5)) + f32(i64(area.height + 0.5)) - 1.0
+    let left = f32(i64(area.x + 0.5))
+    var dx: f32 = 0.0
+    while dx < area.width {
+        var ink = m.color
+        if i64(dx) % 2i64 == 1i64 { ink = m.inner }
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: left + dx, y: top, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: ink } } })
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: left + dx, y: foot, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: ink } } })
+        dx += 1.0
+    }
+    if m.shape == Shape.DotsSoftLeft {
+        var dy: f32 = 0.0
+        while top + dy <= foot {
+            var ink = m.color
+            if i64(dy) % 2i64 == 1i64 { ink = m.inner }
+            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: left, y: top + dy, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: ink } } })
+            dy += 1.0
+        }
+    }
+    ret ok
+}
+
+fn dot_px(b: *scene.Builder, x: f32, y: f32, c: u32) -> err {
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: rgb(c) } } })
+}
+
+// looks4-e: the focus rectangle of a selected row, measured on the live capture (states/grid-row-selected-focused-main):
+// two dotted lines along the top and the bottom and along the left edge `cols` px in, 1 px dots alternating dark and light.
+fn sel_dots_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
+    let x0 = f32(i64(area.x + 0.5)) + f32(m.cols)
+    let y0 = f32(i64(area.y + 0.5))
+    let h = f32(i64(area.height + 0.5))
+    var dx: f32 = 0.0
+    while dx < area.width - f32(m.cols) {
+        let odd = i64(dx) % 2i64 == 1i64
+        // top: the outer line (brown dark, very light), the inner (grey dark, light blue); phases as measured
+        if odd { try dot_px(b, x0 + dx, y0, 0x9C8670u32) } else { try dot_px(b, x0 + dx, y0, 0xB7CADDu32) }
+        if odd { try dot_px(b, x0 + dx, y0 + 1.0, 0x8A95A1u32) } else { try dot_px(b, x0 + dx, y0 + 1.0, 0xA2C9F1u32) }
+        if odd { try dot_px(b, x0 + dx, y0 + h - 2.0, 0xA0C6ECu32) } else { try dot_px(b, x0 + dx, y0 + h - 2.0, 0x808283u32) }
+        if odd { try dot_px(b, x0 + dx, y0 + h - 1.0, 0xC0CEDCu32) } else { try dot_px(b, x0 + dx, y0 + h - 1.0, 0xA7998Bu32) }
+        dx += 1.0
+    }
+    var dy: f32 = 2.0
+    while dy < h - 2.0 {
+        let odd = i64(dy) % 2i64 == 1i64
+        if odd { try dot_px(b, x0, y0 + dy, 0x91969Bu32) } else { try dot_px(b, x0, y0 + dy, 0x89837Eu32) }
+        if odd { try dot_px(b, x0 + 1.0, y0 + dy, 0xA2C8F0u32) } else { try dot_px(b, x0 + 1.0, y0 + dy, 0xA0C6ECu32) }
+        dy += 1.0
+    }
+    ret ok
+}
+
+// A selected row's focus rectangle: `width` x `height`, its left edge `left` px in.
+fn sel_dots(a: *mem.Arena, width: f32, height: f32, left: usize) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
+    if marks_error != ok { ret (zero, marks_error) }
+    marks[0usize] = Mark { arena: a, color: rgb(0u32), inner: rgb(0u32), shape: Shape.SelDots, pix: "", cols: left }
+    var size = style.defaults()
+    size.width = style.Length { Px: width }
+    size.height = style.Length { Px: height }
+    size.min_width = style.Length { Px: width }
+    size.min_height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: size, children: none }, ok)
+}

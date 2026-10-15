@@ -2400,9 +2400,11 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = cells[c]
         var width = columns[c].width
-        if grid || look.on { width -= t.tokens.sizes.divider }
+        // a group row has no column lines (its cells run on)
+        let is_group_row = look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8
+        if (grid || look.on) && !(look.soft_lines && is_group_row) { width -= t.tokens.sizes.divider }
         // looks4-e: v3 draws its grid lines two pixels wide: a line and a lighter one beside it
-        if look.on && look.soft_lines && !look.vertical_off { width -= 1.0 }
+        if look.on && look.soft_lines && !look.vertical_off && !is_group_row { width -= 1.0 }
         var cell_style = control.sized_style(control.max_zero(width), extent)
         cell_style.overflow = .Clip
         // a group row's label runs on over the cells beside it, with no column lines
@@ -2478,7 +2480,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     // the current row carries the line (with several rows selected it is the one with the focus)
     var lined_row = selected
     if look.focus_on { lined_row = row_key == look.focus_key }
-    if look.on && lined_row { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
+    let dotted_row = look.on && lined_row && look.soft_lines && look.dotted_focus
+    if look.on && lined_row && !dotted_row { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
     if lined_error != ok { ret (zero, TooLarge) }
     var content_look = style.defaults()
@@ -2508,14 +2511,36 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             one_style.background = paint.Brush { Solid: first_px }
             var two_style = control.sized_style(4000.0, 1.0)
             two_style.background = paint.Brush { Solid: second_px }
-            pair[0usize] = widget.positioned(0u64, 0.0, extent - 2.0, style.defaults(), one_node(a, widget.box(0u64, one_style, zero)))
-            pair[1usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, two_style, zero)))
+            // the indicator column stays white (no line across it)
+            var pair_x: f32 = 0.0
+            if columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { pair_x = columns[0usize].width }
+            pair[0usize] = widget.positioned(0u64, pair_x, extent - 2.0, style.defaults(), one_node(a, widget.box(0u64, one_style, zero)))
+            pair[1usize] = widget.positioned(0u64, pair_x, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, two_style, zero)))
             with_line[1usize] = pair[0usize]
             with_line[2usize] = pair[1usize]
         }
         var stacked_count = 2usize
         if look.soft_lines { stacked_count = 3usize }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
+    }
+    if dotted_row {
+        // looks4-e: a focused selected row carries v3's dotted focus rectangle, not a line
+        var edge_left: usize = 0usize
+        if columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { edge_left = usize(columns[0usize].width - 1.0) }
+        var dotted_width: f32 = 0.0
+        var dotted_at = 0usize
+        while dotted_at < columns.len {
+            dotted_width += columns[dotted_at].width
+            dotted_at += 1usize
+        }
+        if dotted_width > 700.0 { dotted_width = 700.0 }
+        let (dotted, dotted_error) = gl.sel_dots(a, dotted_width, extent, edge_left)
+        if dotted_error != ok { ret (zero, dotted_error) }
+        let (with_dots, with_dots_error) = mem.alloc[widget.Node](a, 2usize)
+        if with_dots_error != ok { ret (zero, TooLarge) }
+        with_dots[0usize] = lined[0usize]
+        with_dots[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one_node(a, dotted))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_dots[0usize..2usize])
     }
     if soft_group {
         // two pixels at the top of a group row (measured: #E5E5E5 then #E7E7E7), the cells below them
@@ -2635,7 +2660,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4384,12 +4409,21 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, parts[0usize..p])
-    if selection.look.on && selection.look.scroll_width > 0.0 {
+    var live_content = f32(total) * row_extent
+    var extra_at = 0usize
+    while extra_at < selection.extras.len {
+        live_content += selection.extras[extra_at].extra
+        extra_at += 1usize
+    }
+    // looks4-e: the live capture draws no bar while the rows fit
+    var bar_wanted = true
+    if selection.look.soft_lines && !(live_content > body_height) { bar_wanted = false }
+    if selection.look.on && selection.look.scroll_width > 0.0 && bar_wanted {
         // the measured bar: a light track the height of header and body with a slim thumb,
         // 16 in from each end (where v3 has its arrow buttons)
         let lk = selection.look
-        let track_h = head_height + body_height
-        let content = f32(total) * row_extent
+        let track_h = head_height + body_height + lk.bar_top
+        let content = live_content
         let room = track_h - 32.0
         var thumb_h = room
         if content > body_height && content > 0.0 { thumb_h = room * body_height / content }
@@ -4406,11 +4440,18 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         // the thumb thickens under the pointer (the track keeps its width, so nothing moves)
         let track_key = key + 3300u64
         var thumb_w: f32 = 2.7
+        var thumb_nudge: f32 = 0.0
+        if lk.soft_lines {
+            // looks4-e: 2 wide, 0.4 right of the track's middle (measured), a pill 6 wide when pressed
+            thumb_w = 2.0
+            thumb_nudge = 0.4
+            if control.control_state(t, track_key, true, false).pressed { thumb_w = 6.0 }
+        }
         if control.control_state(t, track_key, true, false).hovered { thumb_w = 6.0 }
         var thumb_style = control.sized_style(thumb_w, thumb_h)
         thumb_style.background = paint.Brush { Solid: lk.thumb }
         thumb_style.radius = thumb_w * 0.5
-        thumb_style.margin = style.EdgeLengths { left: style.Length { Px: (lk.scroll_width - thumb_w) * 0.5 }, top: style.Length { Px: 16.0 + thumb_y }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        thumb_style.margin = style.EdgeLengths { left: style.Length { Px: (lk.scroll_width - thumb_w) * 0.5 + thumb_nudge }, top: style.Length { Px: 16.0 + thumb_y }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         let (thumb_holder, thumb_error) = mem.alloc[widget.Node](a, 1usize)
         if thumb_error != ok { ret (zero, TooLarge) }
         thumb_holder[0usize] = widget.box(0u64, thumb_style, zero)
@@ -4426,7 +4467,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             let (over_held, over_error) = mem.alloc[widget.Node](a, 1usize)
             if over_error != ok { ret (zero, TooLarge) }
             over_held[0usize] = bar_parts[1usize]
-            bar_parts[1usize] = widget.positioned(0u64, width + lk.bar_margin, 0.0, style.defaults(), over_held[0usize..1usize])
+            bar_parts[1usize] = widget.positioned(0u64, width + lk.bar_margin, 0.0 - lk.bar_top, style.defaults(), over_held[0usize..1usize])
             var over_style = style.defaults()
             over_style.width = style.Length { Px: width + lk.scroll_width + 18.0 }
             column_node[0usize] = widget.stack(0u64, over_style, bar_parts[0usize..2usize])

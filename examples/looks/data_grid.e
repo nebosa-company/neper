@@ -2,6 +2,8 @@
 // measured v3 TcxGrid (`gridlook.v3()`, docs/grid-parity); the Neper look is the theme's own grid.
 // Run from the repository root; see docs/ui/looks-howto.md.
 //
+// Run with an argument (`data_grid.exe states`) for the third sheet, data_grid_states.
+//
 // Two grids over one table. Left: a flat list with the filter row, alternating stripes, a selected
 // row (the harness taps the cell's centre) and a vertical scroll bar. Right: grouped by rarity, two
 // groups open, group rows, footer summaries.
@@ -290,6 +292,7 @@ fn coll_ink(ctx: *void, row: usize) -> (paint.Color, bool) {
     var letter = 71u8
     if row == 0usize { letter = 78u8 }
     if row == 1usize { letter = 77u8 }
+    if row == 2usize || row == 3usize { letter = 66u8 }
     let (ink, has_ink) = gl.card_ink(letter)
     ret (ink, has_ink)
 }
@@ -459,7 +462,129 @@ fn build_main(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     ret (1usize, ok)
 }
 
+// ---- sheet 3: data_grid_states, the top grid of the live main window in its interaction states ------------------
+// docs/ui/looks/ref/windows/states/grid-row-selected-focused-main@1x.png (576 x 179 crop at (216, 109)): a card pool as data
+// rows (no group box, filter row or navigator in view), the fourth row selected with the focus rectangle. The harness taps the
+// centre of the cell, which falls on that row.
+
+const SC_NAME: usize = 0usize
+const SC_ED: usize = 1usize
+const SC_COLOR: usize = 2usize
+const SC_TYPE: usize = 3usize
+const SC_RARITY: usize = 4usize
+const SC_FAV: usize = 5usize
+
+type States = struct { a: *mem.Arena, ready: bool, windows: bool, tbl: table.Table, view: view.View, group: grp.Grouping, scratch: mem.Arena, grid: dg.Grid }
+
+fn state_row(row: usize, col: usize) -> str {
+    if col == SC_ED { ret "MBC" }
+    if col == SC_COLOR { ret "N" }
+    if col == SC_TYPE {
+        if row == 0usize || row == 1usize { ret "Land" }
+        if row == 3usize { ret "Artifact â Equipment" }
+        ret "Artifact"
+    }
+    if col == SC_RARITY {
+        if row == 0usize { ret "C" }
+        if row == 1usize { ret "R" }
+        ret "U"
+    }
+    if row == 0usize { ret "Path of Ancestry" }
+    if row == 1usize { ret "Exotic Orchard" }
+    if row == 2usize { ret "Thought Vessel" }
+    if row == 3usize { ret "Swiftfoot Boots" }
+    ret "Mind Stone"
+}
+
+fn setup_states(s: *States) -> err {
+    let a = s.a
+    var spec: [6]table.Spec = zero
+    spec[SC_FAV] = table.Spec { name: "Fav", kind: table.Kind.Bool, heap_bytes: 0usize, dict_cap: 0usize }
+    spec[SC_NAME] = table.Spec { name: "Name", kind: table.Kind.Dict, heap_bytes: 512usize, dict_cap: 8usize }
+    spec[SC_ED] = table.Spec { name: "Edition", kind: table.Kind.Dict, heap_bytes: 64usize, dict_cap: 4usize }
+    spec[SC_COLOR] = table.Spec { name: "Color", kind: table.Kind.Dict, heap_bytes: 64usize, dict_cap: 4usize }
+    spec[SC_TYPE] = table.Spec { name: "Type", kind: table.Kind.Dict, heap_bytes: 256usize, dict_cap: 8usize }
+    spec[SC_RARITY] = table.Spec { name: "Rarity", kind: table.Kind.Dict, heap_bytes: 64usize, dict_cap: 4usize }
+    let (made, made_error) = table.create(a, spec[0..], 8usize)
+    if made_error != ok { ret made_error }
+    s.tbl = made
+    table.begin_load(&s.tbl)
+    var row = 0usize
+    while row < 8usize {
+        let (got, append_error) = table.append_row(&s.tbl)
+        if append_error != ok { ret append_error }
+        var col = 0usize
+        while col < 5usize {
+            try table.set_str(&s.tbl, col, got, state_row(row, col))
+            col += 1usize
+        }
+        table.set_bool(&s.tbl, SC_FAV, got, false)
+        row += 1usize
+    }
+    table.end_load(&s.tbl)
+    let (scratch_bytes, scratch_error) = mem.alloc[u8](a, 1048576usize)
+    if scratch_error != ok { ret scratch_error }
+    s.scratch = mem.arena_from(scratch_bytes)
+    let (v, v_error) = view.create(a, &s.tbl)
+    if v_error != ok { ret v_error }
+    s.view = v
+    let (g, g_error) = grp.create(a, &s.view, 8usize)
+    if g_error != ok { ret g_error }
+    s.group = g
+    var none: [1]grp.GroupLevel = zero
+    var order: [1]view.Key = zero
+    order[0usize] = view.column_key(SC_NAME, false, true)
+    try grp.group_by(&s.group, none[0usize..0usize], order[0usize..0usize], &s.scratch)
+    let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 8usize)
+    if specs_error != ok { ret specs_error }
+    let sk = grp.SummaryKind.Rows
+    specs[0usize] = dg.ColumnSpec { title: "", width: 12.0, column: SC_NAME, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[1usize] = dg.ColumnSpec { title: "Favorite", width: 23.0, column: SC_FAV, kind: dg.CellKind.Star, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[2usize] = dg.ColumnSpec { title: "", width: 21.0, column: SC_NAME, kind: dg.CellKind.Picture, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[3usize] = dg.ColumnSpec { title: "Name", width: 150.0, column: SC_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[4usize] = dg.ColumnSpec { title: "Edition", width: 70.0, column: SC_ED, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[5usize] = dg.ColumnSpec { title: "Color", width: 60.0, column: SC_COLOR, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[6usize] = dg.ColumnSpec { title: "Type", width: 150.0, column: SC_TYPE, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[7usize] = dg.ColumnSpec { title: "Rarity", width: 50.0, column: SC_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    let (g1, g1_error) = dg.create(a, &s.tbl, &s.group, specs[0usize..8usize], dg.no_events(), 300u64)
+    if g1_error != ok { ret g1_error }
+    s.grid = g1
+    var look = gl.v3()
+    look.header_height = 22.0
+    dg.set_look(&s.grid, look)
+    ret ok
+}
+
+fn build_states(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let s = mem.cast[*States](ctx)
+    if s.ready && s.windows != (t.tokens.profile == .Windows) { s.ready = false }
+    if !s.ready {
+        try setup_states(s)
+        s.ready = true
+        s.windows = t.tokens.profile == .Windows
+    }
+    let (body, body_error) = dg.build(a, &s.grid, t, 179.0)
+    if body_error != ok { ret (0usize, body_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (0usize, held_error) }
+    held[0usize] = body
+    var face = looks.size_style(576.0, 179.0)
+    face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    cells[0usize] = looks.Cell { caption: "Top grid of the live main window: selected focused row", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize]), drive: .None }
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize {
+        // `data_grid.exe states`: the states sheet alone (every sheet takes its own rigs; one run holds only so many)
+        let (only, only_error) = mem.alloc[States](a, 1usize)
+        if only_error != ok { ret only_error }
+        var only_seed: States = zero
+        only_seed.a = a
+        only[0usize] = only_seed
+        let quick = looks.Sheet { name: "data_grid_states", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 179.0, ctx: mem.cast[*void](&only[0usize]), build: build_states }
+        ret looks.run_all(a, &quick)
+    }
     let (apps, apps_error) = mem.alloc[App](a, 1usize)
     if apps_error != ok { ret apps_error }
     var seed: App = zero
