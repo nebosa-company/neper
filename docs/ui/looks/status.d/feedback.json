@@ -1,0 +1,7 @@
+{
+ "progress_bar": {"looks": {
+  "neper": {"status": "ready", "screenshot": "neper/progress_bar.png", "notes": "The baseline: the v2 pill bar (4 tall, stop dot), determinate and indeterminate."},
+  "windows": {"status": "review", "screenshot": "windows/progress_bar.png", "notes": "v3's TcxProgressBar with NativeStyle: 21 tall (DFM default height), 1 px frame, flat square green fill inside it, percent centred (ShowTextStyle cxtsText: black on the track, white over the fill), marquee as one travelling segment. Read from import.vcl.form.dfm; no capture of a v3 progress bar exists.",
+   "gaps": ["No v3 capture of a progress bar: the frame #BCBCBC, track #E6E6E6 and fill #06B025 are the Windows 10/11 comctl theme from memory", "Marquee segment width (a fifth of the bar) and speed (2 s) are guesses; the native glow highlight is not drawn", "Text is Segoe UI 11.2 px; v3 sets Tahoma 8 pt (Height -11) for this bar", "Not implemented: BarStyle cxbsGradient (main form: 0,89,130 to 0,62,91), vertical Orientation and PeakValue (statistics form), disabled state, error and paused tones", "progress_ring keeps the Neper look (v3 has none)"]}
+ }}
+}

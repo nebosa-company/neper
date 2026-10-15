@@ -3712,7 +3712,8 @@ type ProgressTone = enum u8 { Active, Error, Paused }
 // and a content colour for a ring inside a button (alpha 0: the tone's colours).
 // (D1381) With `delayed` the indicator keeps the spec's timing itself: it shows
 // only once `waiting` has held 300 ms and, once shown, stays 500 ms.
-type ProgressOptions = struct { thick: bool, full_bleed: bool, buffer: f32, tone: ProgressTone, phase: f32, content: paint.Color, delayed: bool, waiting: bool }
+// `text` (the Windows look only, v3's ShowTextStyle = cxtsText) draws the percent centred on a determinate bar.
+type ProgressOptions = struct { thick: bool, full_bleed: bool, buffer: f32, tone: ProgressTone, phase: f32, content: paint.Color, delayed: bool, waiting: bool, text: bool }
 
 // (D1381) A wait's show timing, kept on a holder that is built shown or not:
 // whether the wait has begun and when, and when the indicator appeared.
@@ -4023,6 +4024,95 @@ fn joined_words(a: *mem.Arena, first: str, second: str) -> (str, err) {
     ret (out[0usize..n], ok)
 }
 
+// One node as a slice, in the arena (the Windows look's blocks below).
+fn mem_one_node(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret zero }
+    one[0usize] = node
+    ret one[0usize..1usize]
+}
+
+// The Windows look's progress bar (docs/ui/looks, v3's TcxProgressBar with NativeStyle, so the
+// OS theme draws it): 21 tall, a 1 px #BCBCBC frame round a #E6E6E6 track, the fill #06B025
+// flat and square inside the frame, and with `options.text` the percent centred, black on the
+// track and white over the fill. Indeterminate (v3 Marquee) is one segment, a fifth of the
+// width, travelling the track. Every colour is the Windows 10/11 comctl theme from memory, not
+// a capture; tone, thick, buffer and full_bleed are not part of v3 and are ignored.
+fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {
+    let h: f32 = 21.0
+    let aimed = clamp_share(value)
+    var share = aimed
+    if !indeterminate { share = eased_share(t, key, aimed, true) }
+    let inner_w = width - 2.0
+    let inner_h = h - 2.0
+    let fill_color = style.hex(438309u32)
+    var frame = sized_style(width, h)
+    frame.background = paint.Brush { Solid: style.hex(15132390u32) }
+    frame.border = style.Border { width: 1.0, color: style.hex(12369084u32) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.box(0u64, frame, zero)
+    var n = 1usize
+    var words = text_options()
+    words.wrap = .None
+    if indeterminate {
+        let turn = progress_turn(t, options.phase, time.seconds(2i64))
+        let seg = inner_w * 0.2
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = bar_piece(key + 1u64, seg, inner_h, fill_color, 0.0)
+        let (moving, moving_error) = mem.alloc[widget.Node](a, 1usize)
+        if moving_error != ok { ret (zero, TooLarge) }
+        moving[0usize] = widget.positioned(0u64, (inner_w + seg) * turn - seg, 0.0, style.defaults(), held[0usize..1usize])
+        var window = sized_style(inner_w, inner_h)
+        window.overflow = .Clip
+        parts[n] = widget.positioned(0u64, 1.0, 1.0, style.defaults(), mem_one_node(a, widget.stack(0u64, window, moving[0usize..1usize])))
+        n += 1usize
+    } else {
+        var black: widget.Node = zero
+        var white: widget.Node = zero
+        if options.text {
+            let (percent, percent_error) = percent_text(a, share)
+            if percent_error != ok { ret (zero, percent_error) }
+            let (advance, _, _, metrics_error) = run_metrics(a, t, .Body, percent)
+            if metrics_error != ok { ret (zero, metrics_error) }
+            let (dark, dark_error) = colored_text(a, 0u64, percent, t, words, style.hex(0u32))
+            if dark_error != ok { ret (zero, dark_error) }
+            let (light, light_error) = colored_text(a, 0u64, percent, t, words, style.hex(16777215u32))
+            if light_error != ok { ret (zero, light_error) }
+            // Each label sits in a box of its own width, placed at the bar's centre, so the white
+            // copy inside the clipped fill lines up with the black one under it.
+            let at = (inner_w - advance) * 0.5
+            let box = sized_style(advance + 1.0, inner_h)
+            black = widget.positioned(0u64, 1.0 + at, 1.0, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, box, mem_one_node(a, dark))))
+            white = widget.positioned(0u64, at, 0.0, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, box, mem_one_node(a, light))))
+            parts[n] = black
+            n += 1usize
+        }
+        let done = share * inner_w
+        if done > 0.0 {
+            var fill = sized_style(done, inner_h)
+            fill.background = paint.Brush { Solid: fill_color }
+            fill.overflow = .Clip
+            var inside: []const widget.Node = zero
+            if options.text { inside = mem_one_node(a, white) }
+            parts[n] = widget.positioned(key + 1u64, 1.0, 1.0, style.defaults(), mem_one_node(a, widget.stack(0u64, fill, inside)))
+            n += 1usize
+        }
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    if indeterminate {
+        sem.states = accessibility.STATE_BUSY
+    } else {
+        let (shown, shown_error) = percent_text(a, aimed)
+        if shown_error != ok { ret (zero, shown_error) }
+        sem.value = shown
+    }
+    ret (widget.semantics(key, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(width, h), parts[0usize..n]))), ok)
+}
+
 fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {
     if options.delayed {
         let visible = busy_visible(t, key + 16384u64, options.waiting)
@@ -4036,6 +4126,10 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         }
         let (held, held_error) = busy_held(a, key, inner, visible)
         ret (held, held_error)
+    }
+    if t.tokens.profile == .Windows {
+        let (native, native_error) = progress_bar_windows(a, key, t, label, value, indeterminate, width, options)
+        ret (native, native_error)
     }
     let aimed = clamp_share(value)
     // (D1279) A determinate bar eases to each new value, never backwards.
