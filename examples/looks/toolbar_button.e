@@ -25,7 +25,7 @@ fn glyph(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, k
 
 // One bar of `buttons` (a group of the sizes in `groups` between separators), `width` wide;
 // under Windows a closed dxBar strip as v3 draws it, elsewhere a plain row.
-fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, groups: []const usize, width: f32, lead: u32, enabled: bool) -> (widget.Node, err) {
+fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, groups: []const usize, width: f32, lead: u32, enabled: bool, first_rule: usize) -> (widget.Node, err) {
     let kinds = [9]control.GlyphKind{ .Add, .Edit, .Search, .Filter, .Settings, .Refresh, .ArrowUp, .ArrowDown, .Check }
     let (nodes, nodes_error) = mem.alloc[widget.Node](a, 16usize)
     if nodes_error != ok { ret (zero, nodes_error) }
@@ -34,7 +34,10 @@ fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, b
     var g = 0usize
     while g < groups.len {
         if g > 0usize && t.tokens.profile == .Windows {
-            let (rule, rule_error) = navigation.windows_bar_separator(a, 21.0)
+            // The greys of the separators along the live toolbar (dark, light), by separator.
+            let darks = [5]u32{ 163u32, 165u32, 167u32, 175u32, 178u32 }
+            let lights = [5]u32{ 252u32, 249u32, 247u32, 237u32, 234u32 }
+            let (rule, rule_error) = navigation.windows_bar_separator_tone(a, darks[first_rule + g - 1usize], lights[first_rule + g - 1usize])
             if rule_error != ok { ret (zero, rule_error) }
             nodes[n] = rule
             n += 1usize
@@ -67,12 +70,12 @@ fn bars(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, ba
     let second = [3]usize{ 4usize, 2usize, 3usize }
     if t.tokens.profile != .Windows {
         // the Neper look keeps its round glyph buttons in one row, no separators
-        let (plain, plain_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, true)
+        let (plain, plain_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, true, 0usize)
         ret (plain, plain_error)
     }
-    let (left, left_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, enabled)
+    let (left, left_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, enabled, 0usize)
     if left_error != ok { ret (zero, left_error) }
-    let (right, right_error) = strip(a, t, action, base + 20u64, second[0usize..3usize], 232.0, 15987699u32, enabled)
+    let (right, right_error) = strip(a, t, action, base + 20u64, second[0usize..3usize], 232.0, 15987699u32, enabled, 3usize)
     if right_error != ok { ret (zero, right_error) }
     let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
     if both_error != ok { ret (zero, both_error) }

@@ -4,6 +4,7 @@
 // the dxBar strip with Tahoma 11 titles, a sunken open title and the popup menu below it.
 
 use e.mem
+use e.str as strs
 use e.ui.control
 use e.ui.looks
 use e.ui.navigation
@@ -55,7 +56,7 @@ fn bar(a: *mem.Arena, t: *const control.Theme, action: widget.Submit, base: widg
     while i < count {
         toggles[i] = action
         var commands: []const navigation.BarCommand = zero
-        if i == 1usize { commands = cards[0usize..6usize] }
+        commands = cards[0usize..6usize]
         menus[i] = navigation.BarMenu { label: titles[i], commands: commands }
         i += 1usize
     }
@@ -105,7 +106,63 @@ fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     ret (1usize, ok)
 }
 
+// The captured title states (ref/windows/menu_bar_open_<title>.png: the bar strip of
+// states/menu-bar-open-title-*, and menu_bar_hot_view.png: the left 298 px of the rest grab, where the
+// pointer rested on View). One cell, the strip 26 tall; an open title shows its menu below (clipped).
+type State = struct { open: usize, hot: bool }
+
+fn build_state(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let state = mem.cast[*State](ctx)
+    let (action, action_error) = actions_of(a)
+    if action_error != ok { ret (0usize, action_error) }
+    let (menu_bar, bar_error) = bar(a, t, *action, 10000u64, state.open, false)
+    if bar_error != ok { ret (0usize, bar_error) }
+    var drive: looks.Drive = .None
+    var w: f32 = 782.0
+    var x: f32 = 0.0
+    var h: f32 = 260.0
+    if state.hot {
+        // The pointer is driven to the cell's centre: a cell 1266 wide puts View (149 in the strip)
+        // there with the bar at x 484 and its full 782 px.
+        drive = .Hover
+        w = 1266.0
+        x = 484.0
+        h = 26.0
+    }
+    let (shifted, shifted_error) = placed(a, menu_bar, x, 0.0, w, h)
+    if shifted_error != ok { ret (0usize, shifted_error) }
+    cells[0usize] = looks.Cell { caption: "", node: shifted, drive: drive }
+    ret (1usize, ok)
+}
+
+fn run_state(a: *mem.Arena, name: str, open: usize, hot: bool) -> err {
+    let (state, state_error) = mem.alloc[State](a, 1usize)
+    if state_error != ok { ret state_error }
+    state[0usize] = State { open: open, hot: hot }
+    var w: f32 = 782.0
+    if hot { w = 1266.0 }
+    // An open title's menu hangs below the strip (the sheet is tall enough for it to stay put).
+    var h: f32 = 26.0
+    if !hot { h = 260.0 }
+    let sheet = looks.Sheet { name: name, cells: 1usize, columns: 1usize, cell_w: w, cell_h: h, ctx: mem.cast[*void](&state[0usize]), build: build_state }
+    ret looks.run_all(a, &sheet)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    var only = ""
+    if args.len > 1usize { only = args[1usize] }
+    if only.len > 0usize {
+        let names = [10]str{ "file", "cards", "search", "view", "cardart", "online", "reports", "tools", "admin", "help" }
+        var k = 0usize
+        while k < 10usize {
+            let pieces = [2]str{ "menu_bar_open_", names[k] }
+            let (full, full_error) = strs.join(a, pieces[0usize..2usize], "")
+            if full_error != ok { ret full_error }
+            if strs.eq(only, full) { ret run_state(a, full, k, false) }
+            k += 1usize
+        }
+        if strs.eq(only, "menu_bar_hot_view") { ret run_state(a, only, 99usize, true) }
+    }
     let sheet = looks.Sheet { name: "menu_bar", cells: 3usize, columns: 1usize, cell_w: 782.0, cell_h: 26.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
     let open_sheet = looks.Sheet { name: "menu_bar-open", cells: 1usize, columns: 1usize, cell_w: 520.0, cell_h: 190.0, ctx: zero, build: build_open }
