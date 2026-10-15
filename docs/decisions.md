@@ -41534,3 +41534,6 @@ Each of the 192 pieces of the hue square is a tap that picks its colour (`hue_ce
 
 ## D4151 - G012: the Footer style's colour paints the printed footer band
 Picking Footer and a colour paints the preview's footer band (the "Page 1" / date line; DZ-style-footer-in-preview-v5.png: light yellow, in `print_band` for the footer cells). Six styles still draw nothing (Caption, BandHeader, Group, Preview, Selection and the two card styles).
+
+## D4152 - G012: the Caption style's colour paints the printed title
+Picking Caption and a colour puts it behind the report title on the preview page (DZ-style-caption-in-preview-v5.png: light cyan behind "Collection"; `caption_look`). A first version set the colour on the padded wrapper and painted from the sheet's edge to the title (the padding is part of the node), so the heading is wrapped in its own box. Five styles still draw nothing (BandHeader, Group, Preview, Selection and the two card styles).

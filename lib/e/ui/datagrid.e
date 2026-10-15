@@ -5056,7 +5056,7 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if head_band_error != ok { ret (zero, head_band_error) }
     page[q] = head_band
     q += 1usize
-    page[q] = widget.padded(0u64, margin_px(grid, 0usize, sheet_wide) + across * 0.5 - 40.0, atleast(margin_px(grid, 1usize, sheet_wide) - margin_px(grid, 4usize, sheet_wide) - 12.0, 2.0), 0.0, 8.0, style.defaults(), one(a, heading))
+    page[q] = widget.padded(0u64, margin_px(grid, 0usize, sheet_wide) + across * 0.5 - 40.0, atleast(margin_px(grid, 1usize, sheet_wide) - margin_px(grid, 4usize, sheet_wide) - 12.0, 2.0), 0.0, 8.0, style.defaults(), one(a, widget.box(0u64, caption_look(grid), one(a, heading))))
     q += 1usize
     var r = 0usize
     while r < lines.len && q < 30usize && shown > 0usize {
@@ -11039,4 +11039,11 @@ fn hue_cell_rgb(index: usize) -> u32 {
     let g = u32((hue.green + (0.5 - hue.green) * fade) * 255.0 + 0.5)
     let b = u32((hue.blue + (0.5 - hue.blue) * fade) * 255.0 + 0.5)
     ret (r << 16u32) | (g << 8u32) | b
+}
+
+// The title heading's own style: the "Caption" style's colour from the Designer (list entry 1) as its background.
+fn caption_look(grid: *const Grid) -> style.Style {
+    var s = style.defaults()
+    if ((grid.dz_style_has >> 1u16) & 1u16) != 0u16 { s.background = paint.Brush { Solid: gl.rgb(grid.dz_style_rgb[1usize]) } }
+    ret s
 }
