@@ -41474,3 +41474,6 @@ D4129 left Print Preview failing with InvalidTree: its edit hit the wrong line (
 
 ## D4131 - G012: the footnote text area is editable
 The Footnote Properties text area is a text field too (`dz_foot_field`, `Grid.dz_foot`): typing "Foo" shows in it (TP7-report-footnote-typed-v5.png). The footnote text is kept but not printed on the preview page yet (v3 prints it under the table). A first attempt at this edit silently did not apply (the Edit tool refused a stale read) and its screenshot showed the old static box: read the file again before editing.
+
+## D4132 - G012: the footnote prints on the preview page
+The text of Footnote Properties is printed on the preview page under the footer band, at the left margin (`preview_footnote`, one line of up to 48 characters; TP8-footnote-in-preview-v5.png: "Foo"). v3's footnote placement and its Mode box (first page / every page) are not modelled; the Title's Mode likewise.

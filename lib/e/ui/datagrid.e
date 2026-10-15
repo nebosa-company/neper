@@ -5070,6 +5070,8 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if foot_band_error != ok { ret (zero, foot_band_error) }
     page[q] = foot_band
     q += 1usize
+    page[q] = preview_footnote(a, grid, margin_px(grid, 0usize, sheet_wide))
+    q += 1usize
     var sheet = control.sized_style(sheet_wide * zoom, sheet_high)
     sheet.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     sheet.border = style.Border { width: 1.0, color: gl.rgb(0x3C8CDCu32) }
@@ -10488,4 +10490,21 @@ fn dz_foot_field(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     options.height = 300.0
     let (field, field_error) = control.text_field(a, grid.key + MENU_KEY + 851261u64, grid.theme, "", grid.dz_foot[0usize..48usize], grid.dz_foot_len, widget.Change[str] { ctx: mem.cast[*void](grid), invoke: on_foot_text }, zero, options)
     ret (field, field_error)
+}
+
+// The footnote Footnote Properties holds, one line under the footer band (an empty box when there is none).
+fn preview_footnote(a: *mem.Arena, grid: *Grid, left: f32) -> widget.Node {
+    var none = control.sized_style(1.0, 1.0)
+    if grid.dz_foot_len == 0usize { ret widget.box(0u64, none, zero) }
+    let (b, b_error) = str.builder(a, 56usize)
+    if b_error != ok { ret widget.box(0u64, none, zero) }
+    var sb = b
+    var i = 0usize
+    while i < grid.dz_foot_len {
+        if str.push_byte(&sb, grid.dz_foot[i]) != ok { ret widget.box(0u64, none, zero) }
+        i += 1usize
+    }
+    let (words, words_error) = flat_text(a, grid, str.done(&sb), gl.rgb(0x000000u32))
+    if words_error != ok { ret widget.box(0u64, none, zero) }
+    ret widget.padded(0u64, left, 2.0, 0.0, 0.0, style.defaults(), one(a, words))
 }
