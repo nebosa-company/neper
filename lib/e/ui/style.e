@@ -816,3 +816,40 @@ fn adapt(t: *const ThemeTokens, a: Adaptation) -> ThemeTokens {
     }
     ret out
 }
+
+// ---- Windows look, group `choices` (docs/ui/looks): check box and radio mark -----------------
+// The native Windows 11 mark TcxCheckBox / TcxRadioButton draw with NativeStyle: a 13 unit box
+// (round for a radio) with a 1 unit #636363 edge on a #F3F3F3 face, or filled with the system
+// accent (`Primary`, #005FB8) with a white tick, dash or dot when chosen. Measured at rest from
+// docs/grid-parity/tcxgrid/00-options-interface-controls-v3.png and 00b-...; hover, pressed and
+// disabled are the Windows 11 conventions, not captured (see docs/ui/looks/status.d/choices.json).
+// `background` is the face, `foreground` the tick or dot, `border` the edge.
+fn windows_choice_resolve(t: *const ThemeTokens, chosen: bool, state: ControlState) -> ResolvedControl {
+    let ground = color(t, .Background)
+    var face = hex(15987699u32)
+    var edge = hex(6513507u32)
+    var ink = hex(16777215u32)
+    if chosen {
+        face = color(t, .Primary)
+        edge = face
+        if state.hovered && !state.pressed { face = mix(face, ground, 0.1) }
+        if state.pressed { face = mix(face, ground, 0.2) }
+        edge = face
+    } else {
+        if state.hovered && !state.pressed { face = layer(face, hex(0u32), 0.04) }
+        if state.pressed {
+            face = layer(face, hex(0u32), 0.09)
+            edge = mix(edge, ground, 0.25)
+        }
+    }
+    if state.disabled {
+        if chosen {
+            face = layer(ground, hex(0u32), 0.22)
+            edge = face
+        } else {
+            face = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            edge = mix(edge, ground, 0.6)
+        }
+    }
+    ret ResolvedControl { background: face, foreground: ink, border: edge, border_width: 1.2, focus_ring: 0.0, opacity: 1.0, radius: t.radii.sm, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: false, min_width: 13.0, min_height: 13.0, corners: zero }
+}

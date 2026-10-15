@@ -1,0 +1,76 @@
+{
+  "checkbox": {
+    "neper": "control.checkbox",
+    "app": "examples/looks/checkbox.e",
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/checkbox.png",
+        "notes": "The baseline: the v2 18 px box in its 40 px state circle, all states."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/checkbox.png",
+        "notes": "Rest unchecked and checked match the Options dialog capture at 150 %: 13 unit box (20 px), #F3F3F3 face with #636363 edge, #005FB8 fill with a white tick, caption 2 units after the box in 11.2 px Segoe UI, 21 unit row. Hover, pressed, disabled, indeterminate and the dotted focus rectangle are Windows 11 conventions, not captured.",
+        "gaps": [
+          "Hover, pressed and disabled colours are guesses (Windows 11 conventions); no v3 capture of any non-rest state",
+          "Indeterminate (white dash on the accent fill) is not in any v3 capture; no v3 dialog uses a tri-state box",
+          "The focus rectangle is a guess: 1 unit black dots every 2 units round the caption (DevExpress draws one; none captured). At 150 % the dots are antialiased, the real ones are 1 physical pixel",
+          "The tick is a stroked path (0.8 unit, 75 % white) fitted by eye to the captured glyph, not the Segoe Fluent Icons check",
+          "The face #F3F3F3 was measured on the #F0F0F0 dialog face; over a white parent it is probably different (the native face is translucent)",
+          "The box is 13 units, so 19.5 px at 150 %; the capture is a crisp 20 px (Windows rounds the glyph to whole pixels)",
+          "Mnemonic underline (&Symbol in v3 captions) is not drawn",
+          "Caption font is Segoe UI at 11.2 px by the shared tokens; the captured text is ClearType (coloured fringes), ours is grayscale",
+          "Dark and high-contrast Windows palettes: Neper colours with Windows metrics"
+        ]
+      }
+    }
+  },
+  "radio": {
+    "neper": "control.radio",
+    "app": "examples/looks/radio.e",
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/radio.png",
+        "notes": "The baseline: the v2 20 px ring in its 40 px state circle, all states."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/radio.png",
+        "notes": "Rest selected and unselected match the Options and Filter dialog captures at 150 %: 13 unit disc (20 px), #636363 ring on a #F3F3F3 face, #005FB8 disc with a white dot of about 5 units, 11.2 px caption 2 units after it. Hover, pressed, disabled and focus are Windows 11 conventions, not captured.",
+        "gaps": [
+          "Hover (larger dot), pressed (smaller dot, lighter fill) and disabled are guesses; no v3 capture of any non-rest radio",
+          "The dotted focus rectangle round the caption is a guess (see checkbox)",
+          "The captured selected radio has a thin darker ring between the fill and the dot; not drawn",
+          "Disc is 13 units, 19.5 px at 150 %; the capture is a crisp 20 px",
+          "Mnemonic underline is not drawn",
+          "Dark and high-contrast Windows palettes: Neper colours with Windows metrics"
+        ]
+      }
+    }
+  },
+  "radio_group": {
+    "neper": "control.radio_group",
+    "app": "examples/looks/radio_group.e",
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/radio_group.png",
+        "notes": "The baseline: v2 radios stacked with no frame."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/radio_group.png",
+        "notes": "Frame (1 unit #DCDCDC, 3 unit corners), caption cut into the top edge with its text 7 units in, and the radios match the Grids options page capture at 150 %. v3 spreads the items over the group's fixed height (105 units); this group packs its rows at 21 units.",
+        "gaps": [
+          "v3's TcxRadioGroup has a fixed height (105 in the DFM) and spreads its items evenly over it (about 42 units apart); control.radio_group has no height, so the rows pack at 21 units. Not drawn: the spread",
+          "The frame is as wide as its widest row; v3's groups are a fixed 325 units wide",
+          "Each radio inherits the radio gaps (hover, pressed, focus are guesses); the disabled caption colour (#6D6D6D) is a guess",
+          "The harness holds about four radio groups per sheet (max_states 128 in looks.open): a fifth cell fails with InvalidTree",
+          "Dark and high-contrast Windows palettes: Neper colours with Windows metrics"
+        ]
+      }
+    }
+  }
+}
