@@ -8495,6 +8495,8 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
         line.background = paint.Brush { Solid: ink }
         ret (widget.box(0u64, line, zero), ok)
     }
+    // The Windows look: v3's close X is 10 logical px across (docs/ui/looks), a 20 px glyph box.
+    if t.tokens.profile == .Windows && platform == .Windows && glyph == .Cross { side = 20.0 }
     let (mark, mark_error) = control.stroked_glyph(a, ink, glyph, side, 1.0)
     if mark_error != ok { ret (zero, mark_error) }
     ret (mark, ok)
@@ -8510,6 +8512,13 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     if options.platform == .Mac { words.align = .Center }
     var ink = style.color(t.tokens, .OnSurface)
     if !options.active { ink = style.color(t.tokens, .OnSurfaceVariant) }
+    // The Windows look: v3's dark Windows 11 caption, white 12 px regular title.
+    let windows = t.tokens.profile == .Windows && options.platform == .Windows
+    if windows {
+        ink = style.windows_caption_ink(options.active)
+        words.size = 12.0
+        words.weight = 400u32
+    }
     let (advance, _, _, metrics_error) = control.run_metrics(a, t, .LabelLarge, title)
     if metrics_error != ok { ret (zero, metrics_error) }
     let caption = win.caption_layout(width, caption_options, advance)
@@ -8572,6 +8581,10 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
             if slot.kind == .Close {
                 fill = style.color(t.tokens, .Error)
                 glyph_ink = style.color(t.tokens, .OnError)
+                if windows {
+                    fill = style.windows_caption_close(state.pressed)
+                    glyph_ink = style.hex(16777215u32)
+                }
             }
         }
         let (face, face_error) = caption_face(a, t, slot, options.platform, glyph_ink, options.active, state.hovered)
@@ -8600,6 +8613,7 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     var bar = control.sized_style(width, caption.bar.height)
     bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
     if !options.active { bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) } }
+    if windows { bar.background = paint.Brush { Solid: style.windows_caption_face(options.active) } }
     let (bar_cell, bar_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if bar_cell_error != ok { ret (zero, TooLarge) }
     bar_cell[0usize] = widget.stack(0u64, bar, parts[0usize..n])
