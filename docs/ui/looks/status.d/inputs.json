@@ -1,0 +1,159 @@
+{
+ "text_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/text_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Native Windows 11 edit as v3 draws it: white face, #EEEEEE 1 px border, #929292 foot line, 22 px high; matches the spin edit and report-title memo captures at 150 %.",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention, no v3 capture of a focused edit",
+     "Hover face (#F9F9F9) and the darker disabled/invalid colours are guesses",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight colour with white text (the edit cannot swap the text colour)",
+     "Font is the shared Segoe UI 11.2 px; v3 edits may be Tahoma 8 pt (the 7 in the spin capture is about 7 % larger and heavier, ClearType)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Only the lfFlat + NativeStyle edit is drawn; default-look edits (combo-like #D2D2D2 rounded border) are not"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/spin_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "Edit frame, 22 px height, text inset, foot line and the two 13 x 8 arrow buttons (#FDFDFD face, #DADADA border, black triangles) measured from the Statistics start-hand capture (09d) at 150 %.",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention, no v3 capture of a focused edit",
+     "Hover face (#F9F9F9) and the darker disabled/invalid colours are guesses",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight colour with white text (the edit cannot swap the text colour)",
+     "Font is the shared Segoe UI 11.2 px; v3 edits may be Tahoma 8 pt (the 7 in the spin capture is about 7 % larger and heavier, ClearType)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Only the lfFlat + NativeStyle edit is drawn; default-look edits (combo-like #D2D2D2 rounded border) are not",
+     "Arrow hover and pressed tints are guesses",
+     "Fast (double-arrow) buttons of Properties.SpinButtons.ShowFastButtons are not drawn",
+     "The Neper spin box has no disabled option, so no whole-control disabled cell"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/mask_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "Same native edit frame as the text edit; the mask accept rule drives the invalid cell.",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention, no v3 capture of a focused edit",
+     "Hover face (#F9F9F9) and the darker disabled/invalid colours are guesses",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight colour with white text (the edit cannot swap the text colour)",
+     "Font is the shared Segoe UI 11.2 px; v3 edits may be Tahoma 8 pt (the 7 in the spin capture is about 7 % larger and heavier, ClearType)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Only the lfFlat + NativeStyle edit is drawn; default-look edits (combo-like #D2D2D2 rounded border) are not",
+     "Password echo shows asterisks; v3 (eemPassword) shows Windows bullets",
+     "Mask editing behaviour is not a look item"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/memo.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/memo.png",
+    "notes": "Native edit frame at memo size with wrapped lines; white face, faint border and #929292 foot match the report-title memo capture (TP2).",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention, no v3 capture of a focused edit",
+     "Hover face (#F9F9F9) and the darker disabled/invalid colours are guesses",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight colour with white text (the edit cannot swap the text colour)",
+     "Font is the shared Segoe UI 11.2 px; v3 edits may be Tahoma 8 pt (the 7 in the spin capture is about 7 % larger and heavier, ClearType)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Only the lfFlat + NativeStyle edit is drawn; default-look edits (combo-like #D2D2D2 rounded border) are not",
+     "Scrollbar is the Neper scroll thumb overlay; the Windows scroll bar is another group's",
+     "Caret-line scrolling only; no capture of a memo with a scrollbar"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/button_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Edit frame plus an ellipsis mini button (#FDFDFD face, #DADADA border, radius 3, three dots) after the in-grid ellipsis capture (ED1).",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention, no v3 capture of a focused edit",
+     "Hover face (#F9F9F9) and the darker disabled/invalid colours are guesses",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight colour with white text (the edit cannot swap the text colour)",
+     "Font is the shared Segoe UI 11.2 px; v3 edits may be Tahoma 8 pt (the 7 in the spin capture is about 7 % larger and heavier, ClearType)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Only the lfFlat + NativeStyle edit is drawn; default-look edits (combo-like #D2D2D2 rounded border) are not",
+     "Ellipsis button size 17 x (height-4) is a guess; the capture only shows the in-grid 14 x 12 button",
+     "Button hover/pressed/disabled colours and the read-only treatment (button dimmed) are guesses"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/token_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/token_edit.png",
+    "notes": "Edit frame holding rounded tokens with a cross and a wrapping input; no v3 capture of a token edit exists.",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention, no v3 capture of a focused edit",
+     "Hover face (#F9F9F9) and the darker disabled/invalid colours are guesses",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight colour with white text (the edit cannot swap the text colour)",
+     "Font is the shared Segoe UI 11.2 px; v3 edits may be Tahoma 8 pt (the 7 in the spin capture is about 7 % larger and heavier, ClearType)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Only the lfFlat + NativeStyle edit is drawn; default-look edits (combo-like #D2D2D2 rounded border) are not",
+     "Token face #E8E8E8, border #D2D2D2, hover tint and cross colours are all guesses (no capture)",
+     "Selected/focused token state and the suggestion drop-down are not drawn",
+     "v3 token edits are fixed 26 / 45 px high (MaxLineCount); this one grows with its tokens",
+     "Hover on the close cross could not be driven separately by the harness (shows token hover)"
+    ]
+   }
+  }
+ }
+}
