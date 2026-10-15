@@ -24,6 +24,7 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 use e.ui.winbutton
+use e.ui.winedit
 
 // What a page is set in: the theme's tokens, the fonts in preference order, the
 // language for shaping, and the page's runtime, from which a control reads what the
@@ -5143,10 +5144,10 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // (D1453) `mono` sets the typed text in the theme's fixed-pitch face.
 // (looks) `flat`: under the Windows look, a combo box as a toolbar hosts it (v3's dxBar editors:
 // no rounded native frame, a flat white face and a grey drop button with a black triangle).
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool }
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32 }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32 }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -5482,11 +5483,11 @@ fn windows_bar(w: f32, thickness: f32, color: paint.Color) -> widget.Node {
 
 // The theme the Windows edits draw their text with: the second font (the rig registers Tahoma as
 // the second) first and `size` px text, as v3's edits draw Tahoma 8 pt (11 px).
-fn windows_edit_theme(a: *mem.Arena, t: *const Theme) -> (Theme, err) {
+fn windows_edit_theme(a: *mem.Arena, t: *const Theme, line_height: f32) -> (Theme, err) {
     let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
     if copies_error != ok { ret (*t, TooLarge) }
     copies[0usize] = *t.tokens
-    let small = style.TextStyle { size: 10.8, line_height: 13.0, weight: 400u16, italic: false }
+    let small = style.TextStyle { size: 10.8, line_height: line_height, weight: 400u16, italic: false }
     copies[0usize].text[17usize] = small
     var fonts = t.fonts
     if t.fonts.len >= 2usize {
@@ -5531,15 +5532,18 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         foot = side
     }
     if !options.enabled {
-        face = win_rgb(244u32, 244u32, 244u32)
+        // The disabled Card Art path edit (states/edit-button-ellipsis-pressed-options-cardart): a white face, grey text.
         side = win_rgb(230u32, 230u32, 230u32)
         foot = side
         ink = win_rgb(160u32, 160u32, 160u32)
     }
+    // v3 selects with the system highlight and white text.
+    let highlight = win_rgb(0u32, 120u32, 215u32)
+    let highlighted = win_rgb(255u32, 255u32, 255u32)
     var value_options = text_options()
     value_options.role = .BodyMedium
     value_options.mono = options.mono
-    let (ft, ft_error) = windows_edit_theme(a, t)
+    let (ft, ft_error) = windows_edit_theme(a, t, if_else(multiline, 13.0, 12.0))
     if ft_error != ok { ret (zero, ft_error) }
     let (text_look, style_error) = text_style_faced(a, &ft, value_options)
     if style_error != ok { ret (zero, style_error) }
@@ -5548,7 +5552,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: f32(options.rows) * line }
-    let edit_node = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: style.color(t.tokens, .Selection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let edit_node = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: zero, untabbed: false, ringed: false }, editor_style)
     let (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, edit_node)
     if named_error != ok { ret (zero, named_error) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
@@ -5583,7 +5587,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         scrolled_style.width = style.Length { Px: inner }
         let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
         if scrolled_error != ok { ret (zero, TooLarge) }
-        let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: style.color(t.tokens, .Selection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, scrolled_style))
+        let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: zero, untabbed: false, ringed: false }, scrolled_style))
         if scrolled_named_error != ok { ret (zero, scrolled_named_error) }
         scrolled[0usize] = scrolled_named
         var viewport = style.defaults()
@@ -5605,8 +5609,11 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     frame_style.background = paint.Brush { Solid: face }
     frame_style.border = style.Border { width: 1.0, color: side }
     frame_style.radius = t.tokens.radii.xs
+    // The chrome paints the rim: a square face under it.
+    frame_style.border = style.Border { width: 1.0, color: face }
+    frame_style.radius = 0.0
     frame_style.overflow = .Clip
-    var pad_y: f32 = 3.0
+    var pad_y: f32 = 4.0
     if multiline { pad_y = 3.0 }
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: pad + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: pad + options.end_space }, bottom: style.Length { Px: pad_y } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
@@ -5614,37 +5621,38 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     row[0usize] = value_stack
     var cross: ui_layout.CrossAlign = .Start
     let frame = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: cross, gap: 0.0 }, frame_style, row[0usize..1usize])
-    // The frame as the v3 dialogs show it at 100 % (docs/ui/looks/ref/windows/dialogs, Options pages): a
-    // 1 px #EDEDED border, a softer inner line (#F7F7F7 above, #FBFBFB at the sides, #FEFEFE below) and
-    // a 1.5 px foot drawn as two rows, #B8B8B8 over #C1C1C1 (the capture's pair varies with the
-    // window's vertical position: B3/C5, B8/C1, BD/BC).
-    let calm = options.enabled && !focused && !hovered && !options.invalid
-    let (bars, bars_error) = mem.alloc[widget.Node](a, 8usize)
-    if bars_error != ok { ret (zero, TooLarge) }
-    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 7usize)
+    // The frame as the v3 dialogs show it at 100 % (docs/ui/looks/ref/windows/states): the chrome node of e.ui.winedit
+    // draws the rim, foot, ellipsis and spin buttons pixel for pixel in rest, focused, pressed and disabled looks (the
+    // foot drifts with the control's y in the window, `options.window_y`); hover is rest on the #F9F9F9 face (a guess) and
+    // invalid keeps the plain red border and foot line (no capture).
+    // The frame as the v3 dialogs show it at 100 % (docs/ui/looks/ref/windows/states): the chrome node of e.ui.winedit
+    // draws the rim, foot, ellipsis and spin buttons pixel for pixel in rest, focused, pressed and disabled looks (the
+    // foot drifts with the control's y in the window, `options.window_y`); hover is rest on the #F9F9F9 face (a guess).
+    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 6usize)
     if stacked_error != ok { ret (zero, TooLarge) }
     stacked[0usize] = frame
-    var at_bar = 0usize
-    var layers_at = 1usize
     let w = options.width
-    if calm {
-        bars[0usize] = windows_bar(w - 4.0, 1.0, win_rgb(247u32, 247u32, 247u32))
-        bars[1usize] = windows_bar(1.0, h - 4.0, win_rgb(251u32, 251u32, 251u32))
-        bars[2usize] = windows_bar(1.0, h - 4.0, win_rgb(251u32, 251u32, 251u32))
-        bars[3usize] = windows_bar(w - 4.0, 1.0, win_rgb(254u32, 254u32, 254u32))
-        bars[4usize] = windows_bar(w - 2.0, 1.0, win_rgb(184u32, 184u32, 184u32))
-        bars[5usize] = windows_bar(w - 2.0, 1.0, win_rgb(193u32, 193u32, 193u32))
-        stacked[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), bars[0usize..1usize])
-        stacked[2usize] = widget.positioned(0u64, 1.0, 2.0, style.defaults(), bars[1usize..2usize])
-        stacked[3usize] = widget.positioned(0u64, w - 2.0, 2.0, style.defaults(), bars[2usize..3usize])
-        stacked[4usize] = widget.positioned(0u64, 2.0, h - 3.0, style.defaults(), bars[3usize..4usize])
-        stacked[5usize] = widget.positioned(0u64, 1.0, h - 2.0, style.defaults(), bars[4usize..5usize])
-        stacked[6usize] = widget.positioned(0u64, 1.0, h - 1.0, style.defaults(), bars[5usize..6usize])
-        layers_at = 7usize
-    } else {
-        bars[0usize] = windows_bar(w - 2.0, foot_h, foot)
-        stacked[1usize] = widget.positioned(0u64, 1.0, h - foot_h, style.defaults(), bars[0usize..1usize])
-        layers_at = 2usize
+    var chrome_state = 0u32
+    if focused { chrome_state = 1u32 }
+    if !options.enabled { chrome_state = 2u32 }
+    if options.chrome_pressed && options.enabled { chrome_state = 3u32 }
+    let (rim, rim_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim)
+    if rim_error != ok { ret (zero, rim_error) }
+    stacked[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, rim))
+    var layers_at = 2usize
+    if options.invalid {
+        // Invalid has no v3 look: a 1 px error outline over the rest chrome (a guess).
+        let (bars, bars_error) = mem.alloc[widget.Node](a, 4usize)
+        if bars_error != ok { ret (zero, TooLarge) }
+        bars[0usize] = windows_bar(w, 1.0, side)
+        bars[1usize] = windows_bar(w, 1.0, side)
+        bars[2usize] = windows_bar(1.0, h - 2.0, side)
+        bars[3usize] = windows_bar(1.0, h - 2.0, side)
+        stacked[2usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), bars[0usize..1usize])
+        stacked[3usize] = widget.positioned(0u64, 0.0, h - 1.0, style.defaults(), bars[1usize..2usize])
+        stacked[4usize] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), bars[2usize..3usize])
+        stacked[5usize] = widget.positioned(0u64, w - 1.0, 1.0, style.defaults(), bars[3usize..4usize])
+        layers_at = 6usize
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
@@ -5708,7 +5716,7 @@ fn windows_token(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, re
 // least (the v3 single-line token edit is 26, its two-line one 45).
 fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
-    let (ft, ft_error) = windows_edit_theme(a, t)
+    let (ft, ft_error) = windows_edit_theme(a, t, 13.0)
     if ft_error != ok { ret (zero, ft_error) }
     let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
     if items_error != ok { ret (zero, TooLarge) }
@@ -5786,55 +5794,23 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     ret (made, made_error)
 }
 
-// The small button a Windows edit carries at its end (a spin arrow, the ellipsis), `w` by `h`: a
-// `face` in a 1 px `edge` border with 2 px corners, and the top and bottom border rows redrawn in
-// `top` and `bottom` (v3's buttons are lighter above and darker below). Hover and press tints are
-// guesses.
-fn windows_mini_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, enabled: bool, w: f32, h: f32, face: paint.Color, edge: paint.Color, top: paint.Color, bottom: paint.Color, radius: f32, content: widget.Node) -> (widget.Node, err) {
+// A transparent hit target `w` by `h` over a button of a Windows edit (a spin arrow, the ellipsis): e.ui.winedit's chrome
+// draws the button, and the captures show no visible press on a spin arrow (hover is not captured).
+fn windows_hit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, enabled: bool, w: f32, h: f32) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
     var look = style.windows_resolve(t.tokens, .Filled, state)
-    look.background = face
-    look.border = edge
-    look.border_width = 1.0
-    var top_edge = top
-    var bottom_edge = bottom
-    if state.hovered && !state.pressed { look.background = win_rgb(235u32, 244u32, 252u32) }
-    if state.pressed { look.background = win_rgb(214u32, 233u32, 249u32) }
-    if !enabled {
-        look.background = win_rgb(244u32, 244u32, 244u32)
-        look.border = win_rgb(230u32, 230u32, 230u32)
-        top_edge = look.border
-        bottom_edge = look.border
-    }
-    look.radius = radius
+    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    look.background = clear
+    look.border = clear
+    look.border_width = 0.0
+    look.radius = 0.0
     look.padding = 0.0
     look.padding_y = 0.0
     look.custom_padding = true
     look.min_width = w
     look.min_height = h
-    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
-    if inner_error != ok { ret (zero, TooLarge) }
-    inner[0usize] = content
-    let centred = widget.aligned(0u64, .Center, .Center, sized_style(w - 2.0, h - 2.0), inner[0usize..1usize])
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, false, action, centred)
-    if node_error != ok { ret (zero, node_error) }
-    let (bars, bars_error) = mem.alloc[widget.Node](a, 2usize)
-    if bars_error != ok { ret (zero, TooLarge) }
-    bars[0usize] = windows_bar(w - 2.0, 1.0, top_edge)
-    bars[1usize] = windows_bar(w - 2.0, 1.0, bottom_edge)
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
-    if layers_error != ok { ret (zero, TooLarge) }
-    layers[0usize] = node
-    layers[1usize] = widget.positioned(0u64, 1.0, 0.0, style.defaults(), bars[0usize..1usize])
-    layers[2usize] = widget.positioned(0u64, 1.0, h - 1.0, style.defaults(), bars[1usize..2usize])
-    ret (widget.stack(0u64, sized_style(w, h), layers[0usize..3usize]), ok)
-}
-
-// A spin arrow button as the v3 dialogs draw it (Options Decks and Morph at 100 %): #FAFAFA face,
-// #DADADA sides, a lighter top row and a darker bottom row.
-fn windows_spin_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, enabled: bool, w: f32, h: f32, top: paint.Color, bottom: paint.Color, mark: widget.Node) -> (widget.Node, err) {
-    let (made, made_error) = windows_mini_button(a, key, t, label, action, enabled, w, h, win_rgb(250u32, 250u32, 250u32), win_rgb(218u32, 218u32, 218u32), top, bottom, 2.0, mark)
-    ret (made, made_error)
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, false, action, widget.box(0u64, sized_style(w, h), zero))
+    ret (node, node_error)
 }
 
 // `node` at (x, y) of a stack, as the one-element slice of layers a stack takes.
@@ -5853,12 +5829,12 @@ fn win_one(a: *mem.Arena, node: widget.Node) -> []widget.Node {
     ret one[0usize..1usize]
 }
 
-// A Windows spin edit: the edit with a stacked pair of arrows (15 wide: up 8 high, a 2 px band,
-// down 7 high) 3 px from its end and 2 from its top; with `fast` also the two fast buttons (left
-// and right arrows, 14 x 17) that DevExpress's SpinButtons.ShowFastButtons draws round them, as
-// the Options Decks page does. Up and Down step it as the Neper spin box does; the fast buttons
-// step by ten.
-fn windows_spin_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, fast: bool) -> (widget.Node, err) {
+// A Windows spin edit: the edit with a stacked pair of arrows (15 wide: up 8 high, a 2 px band, down 7 high) 3 px from
+// its end and 2 from its top; with `fast` also the two fast buttons (left and right arrows, 14 x 17) that DevExpress's
+// SpinButtons.ShowFastButtons draws round them, as the Options Decks page does. Up and Down step it as the Neper spin
+// box does; the fast buttons step by ten. e.ui.winedit's chrome draws the buttons (an arrow that cannot step is greyed:
+// a guess); `window_y` is the control's y in the v3 window (negative: where it is laid out).
+fn windows_spin_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, fast: bool, window_y: f32) -> (widget.Node, err) {
     let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
     if pair_error != ok { ret (zero, pair_error) }
     let (big_buttons, big_shortcuts, big_error) = step_pair(a, t, key + 4u64, key + 5u64, value, low, high, step * 10i64, change)
@@ -5869,69 +5845,45 @@ fn windows_spin_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var left_x = width - 17.0
     if fast { left_x = width - 47.0 }
     options.end_space = width - 3.0 - left_x
+    options.chrome_kind = 2u32
+    if fast { options.chrome_kind = 1u32 }
+    options.window_y = window_y
+    let can_up = value < high
+    let can_down = value > low
+    // The arrows left to right: (left,) up, down, (right).
+    if fast {
+        if !can_down { options.chrome_dim = options.chrome_dim | 1u32 }
+        if !can_up { options.chrome_dim = options.chrome_dim | 2u32 }
+        if !can_down { options.chrome_dim = options.chrome_dim | 4u32 }
+        if !can_up { options.chrome_dim = options.chrome_dim | 8u32 }
+    } else {
+        if !can_up { options.chrome_dim = options.chrome_dim | 1u32 }
+        if !can_down { options.chrome_dim = options.chrome_dim | 2u32 }
+    }
     let (editor, editor_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
     if editor_error != ok { ret (zero, editor_error) }
-    let ink = win_rgb(26u32, 26u32, 26u32)
-    let off = win_rgb(160u32, 160u32, 160u32)
-    var up_ink = ink
-    var down_ink = ink
-    if !(value < high) { up_ink = off }
-    if !(value > low) { down_ink = off }
-    let (up_arrow, up_mark_error) = beak(a, up_ink, .ChevronUp, 6.0, 4.0)
-    if up_mark_error != ok { ret (zero, up_mark_error) }
-    // The arrows are 6 wide, their middle between two pixels; the up arrow sits a row lower in
-    // its 8 high button than the down arrow in its 7.
-    let up_mark = widget.stack(0u64, sized_style(13.0, 6.0), win_one_at(a, up_arrow, 5.0, 2.0))
-    let (down_arrow, down_mark_error) = beak(a, down_ink, .ChevronDown, 6.0, 4.0)
-    if down_mark_error != ok { ret (zero, down_mark_error) }
-    let down_mark = widget.stack(0u64, sized_style(13.0, 5.0), win_one_at(a, down_arrow, 5.0, 0.5))
-    let (up, up_error) = windows_spin_button(a, key + 2u64, t, "Increase", &shortcuts[1usize].action, value < high, 15.0, 8.0, win_rgb(252u32, 252u32, 252u32), win_rgb(212u32, 212u32, 212u32), up_mark)
-    if up_error != ok { ret (zero, up_error) }
-    let (down, down_error) = windows_spin_button(a, key + 1u64, t, "Decrease", &shortcuts[0usize].action, value > low, 15.0, 7.0, win_rgb(234u32, 234u32, 234u32), win_rgb(213u32, 213u32, 213u32), down_mark)
-    if down_error != ok { ret (zero, down_error) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 16usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
     if layers_error != ok { ret (zero, TooLarge) }
-    let (bars, bars_error) = mem.alloc[widget.Node](a, 8usize)
-    if bars_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
     var used = 1usize
     var mid_x = width - 17.0
     if fast { mid_x = width - 32.0 }
-    // The band between the arrows and the shadow under the pair.
-    bars[0usize] = windows_bar(15.0, 2.0, win_rgb(229u32, 229u32, 229u32))
-    bars[1usize] = windows_bar(13.0, 1.0, win_rgb(227u32, 227u32, 227u32))
-    layers[used] = widget.positioned(0u64, mid_x, 10.0, style.defaults(), bars[0usize..1usize])
-    used += 1usize
+    let (up, up_error) = windows_hit(a, key + 2u64, t, "Increase", &shortcuts[1usize].action, can_up, 15.0, 8.0)
+    if up_error != ok { ret (zero, up_error) }
+    let (down, down_error) = windows_hit(a, key + 1u64, t, "Decrease", &shortcuts[0usize].action, can_down, 15.0, 7.0)
+    if down_error != ok { ret (zero, down_error) }
     layers[used] = widget.positioned(0u64, mid_x, 2.0, style.defaults(), win_one(a, up))
     used += 1usize
     layers[used] = widget.positioned(0u64, mid_x, 12.0, style.defaults(), win_one(a, down))
     used += 1usize
-    layers[used] = widget.positioned(0u64, mid_x + 1.0, 19.0, style.defaults(), bars[1usize..2usize])
-    used += 1usize
     if fast {
-        let (left_mark, left_mark_error) = beak(a, ink, .ChevronLeft, 4.0, 6.0)
-        if left_mark_error != ok { ret (zero, left_mark_error) }
-        let (right_mark, right_mark_error) = beak(a, ink, .ChevronRight, 4.0, 6.0)
-        if right_mark_error != ok { ret (zero, right_mark_error) }
-        let (left, left_error) = windows_spin_button(a, key + 4u64, t, "Decrease fast", &big_shortcuts[0usize].action, value > low, 14.0, 17.0, win_rgb(229u32, 229u32, 229u32), win_rgb(215u32, 215u32, 215u32), left_mark)
+        let (left, left_error) = windows_hit(a, key + 4u64, t, "Decrease fast", &big_shortcuts[0usize].action, can_down, 14.0, 17.0)
         if left_error != ok { ret (zero, left_error) }
-        let (right, right_error) = windows_spin_button(a, key + 5u64, t, "Increase fast", &big_shortcuts[1usize].action, value < high, 14.0, 17.0, win_rgb(229u32, 229u32, 229u32), win_rgb(215u32, 215u32, 215u32), right_mark)
+        let (right, right_error) = windows_hit(a, key + 5u64, t, "Increase fast", &big_shortcuts[1usize].action, can_up, 14.0, 17.0)
         if right_error != ok { ret (zero, right_error) }
-        bars[2usize] = windows_bar(12.0, 1.0, win_rgb(225u32, 225u32, 225u32))
-        bars[3usize] = windows_bar(12.0, 1.0, win_rgb(225u32, 225u32, 225u32))
-        bars[4usize] = windows_bar(1.0, 17.0, win_rgb(233u32, 233u32, 233u32))
-        bars[5usize] = windows_bar(1.0, 17.0, win_rgb(233u32, 233u32, 233u32))
-        layers[used] = widget.positioned(0u64, left_x + 14.0, 2.0, style.defaults(), bars[4usize..5usize])
-        used += 1usize
-        layers[used] = widget.positioned(0u64, mid_x + 15.0, 2.0, style.defaults(), bars[5usize..6usize])
-        used += 1usize
         layers[used] = widget.positioned(0u64, left_x, 2.0, style.defaults(), win_one(a, left))
         used += 1usize
         layers[used] = widget.positioned(0u64, width - 16.0, 2.0, style.defaults(), win_one(a, right))
-        used += 1usize
-        layers[used] = widget.positioned(0u64, left_x + 1.0, 19.0, style.defaults(), bars[2usize..3usize])
-        used += 1usize
-        layers[used] = widget.positioned(0u64, width - 15.0, 19.0, style.defaults(), bars[3usize..4usize])
         used += 1usize
     }
     let boxed = widget.stack(0u64, style.defaults(), layers[0usize..used])
@@ -5941,54 +5893,29 @@ fn windows_spin_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 }
 
 fn windows_spin(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
-    let (made, made_error) = windows_spin_with(a, key, t, label, buffer, value, low, high, step, change, typed, width, false)
+    let (made, made_error) = windows_spin_with(a, key, t, label, buffer, value, low, high, step, change, typed, width, false, -1.0)
     ret (made, made_error)
 }
 
-// The three dots of v3's ellipsis button: three 2 px dots, #AEAEAE over #CCCCCC (a 1.5 px dot).
-fn windows_dots_node(a: *mem.Arena, usable: bool) -> (widget.Node, err) {
-    var top = win_rgb(174u32, 174u32, 174u32)
-    var bottom = win_rgb(204u32, 204u32, 204u32)
-    if !usable {
-        top = win_rgb(205u32, 205u32, 205u32)
-        bottom = win_rgb(225u32, 225u32, 225u32)
-    }
-    let (bars, bars_error) = mem.alloc[widget.Node](a, 6usize)
-    if bars_error != ok { ret (zero, TooLarge) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 6usize)
-    if layers_error != ok { ret (zero, TooLarge) }
-    var i = 0usize
-    while i < 3usize {
-        bars[2usize * i] = windows_bar(2.0, 1.0, top)
-        bars[2usize * i + 1usize] = windows_bar(2.0, 1.0, bottom)
-        layers[2usize * i] = widget.positioned(0u64, 2.0 + 3.0 * f32(i), 1.0, style.defaults(), bars[2usize * i..2usize * i + 1usize])
-        layers[2usize * i + 1usize] = widget.positioned(0u64, 2.0 + 3.0 * f32(i), 2.0, style.defaults(), bars[2usize * i + 1usize..2usize * i + 2usize])
-        i += 1usize
-    }
-    ret (widget.stack(0u64, sized_style(10.0, 3.0), layers[0usize..6usize]), ok)
-}
-
-// A Windows button edit: the edit with the ellipsis button (16 wide, the edit's height less 4)
-// 1 px from its end, as the Options Decks and Card Art pages draw it.
+// A Windows button edit: the edit with the ellipsis button (16 wide, the edit's height less 5) 1 px from its end, as the
+// Options Decks and Card Art pages draw it (e.ui.winedit's chrome draws the button, pressed included).
 fn windows_button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, action: *const widget.Submit, button_label: str, options: FieldOptions) -> (widget.Node, err) {
-    var reserved = options
-    reserved.end_space = 15.0
-    let (editor, editor_error) = text_field(a, key, t, label, buffer, len, change, submit, reserved)
-    if editor_error != ok { ret (zero, editor_error) }
     var h = options.height
     if h <= 0.0 { h = t.tokens.metrics.control_height }
     let usable = options.enabled && !options.read_only
-    let (dots, dots_error) = windows_dots_node(a, usable)
-    if dots_error != ok { ret (zero, dots_error) }
-    let (ellipsis, button_error) = windows_mini_button(a, key + 1u64, t, button_label, action, usable, 16.0, h - 5.0, win_rgb(253u32, 253u32, 253u32), win_rgb(229u32, 229u32, 229u32), win_rgb(225u32, 225u32, 225u32), win_rgb(212u32, 212u32, 212u32), 4.0, dots)
+    var reserved = options
+    reserved.end_space = 15.0
+    reserved.chrome_kind = 3u32
+    reserved.chrome_pressed = control_state(t, key + 1u64, usable, false).pressed
+    let (editor, editor_error) = text_field(a, key, t, label, buffer, len, change, submit, reserved)
+    if editor_error != ok { ret (zero, editor_error) }
+    let (ellipsis, button_error) = windows_hit(a, key + 1u64, t, button_label, action, usable, 16.0, h - 5.0)
     if button_error != ok { ret (zero, button_error) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
-    layers[3usize] = ellipsis
-    layers[1usize] = widget.positioned(0u64, options.width - 17.0, 2.0, style.defaults(), layers[3usize..4usize])
-    layers[2usize] = widget.positioned(0u64, options.width - 15.0, h - 3.0, style.defaults(), win_one(a, windows_bar(12.0, 1.0, win_rgb(227u32, 227u32, 227u32))))
-    ret (widget.stack(0u64, style.defaults(), layers[0usize..3usize]), ok)
+    layers[1usize] = widget.positioned(0u64, options.width - 17.0, 2.0, style.defaults(), win_one(a, ellipsis))
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
 // A single-line text field.

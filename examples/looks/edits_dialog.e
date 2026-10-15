@@ -51,9 +51,12 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if buffer_error != ok { ret (0usize, buffer_error) }
         let key = u64(10usize * (i + 1usize))
         var node: widget.Node = zero
+        let ys = [6]f32{ 89.0, 159.0, 105.0, 169.0, 94.0, 385.0 }
+        let wy = ys[i]
         if i == 0usize {
             var options = control.field_options()
             options.width = 495.0
+            options.window_y = wy
             let (made, made_error) = control.password_field(a, key, t, "Old password", buffer, 0usize, widget.Change[str] { ctx: zero, invoke: noop_change }, widget.Submit { ctx: zero, invoke: noop_submit }, options)
             if made_error != ok { ret (0usize, made_error) }
             node = made
@@ -64,7 +67,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             if i == 2usize { value = 650i64 }
             if i == 3usize { value = 500i64 }
             if i != 1usize { width = 67.0 }
-            let (made, made_error) = control.windows_spin_with(a, key, t, "Spin", buffer, value, 1i64, 3000i64, 1i64, widget.Change[i64] { ctx: zero, invoke: noop_step }, widget.Change[str] { ctx: zero, invoke: noop_change }, width, i == 1usize)
+            let (made, made_error) = control.windows_spin_with(a, key, t, "Spin", buffer, value, 1i64, 3000i64, 1i64, widget.Change[i64] { ctx: zero, invoke: noop_step }, widget.Change[str] { ctx: zero, invoke: noop_change }, width, i == 1usize, wy)
             if made_error != ok { ret (0usize, made_error) }
             node = made
         }
@@ -78,6 +81,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             let n = copy_into(buffer, words)
             var options = control.field_options()
             options.width = width
+            options.window_y = wy
             let action = widget.Submit { ctx: zero, invoke: noop_submit }
             let actions = [1]widget.Submit{ action }
             let (made, made_error) = control.button_edit(a, key, t, "Path", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, action, &actions[0usize], "Browse", options)
