@@ -11389,3 +11389,113 @@ fn windows_tab_filler(a: *mem.Arena, t: *const Theme) -> widget.Node {
     column.height = style.Length { Px: 22.0 }
     ret widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column, parts[0usize..2usize])
 }
+
+// ---- looks: Windows (v3) scroll bar, appended block ----
+// v3's grid scroll bar (docs/grid-parity SB1/SB2, `gridlook.v3()`): a 16 wide #F0F0F0 track
+// whose arrow slots (16 at each end) are empty at rest, and a slim #858585 thumb, 2.7 wide,
+// thickening to 6 under the pointer. Hover thickness, the pressed colour and the hover arrows
+// are guesses. `collection.e` still draws the grid's own bar by hand; this is the same bar as
+// a control, `scroll_area` below.
+
+type ScrollArrows = struct { vertical: bool, ink: paint.Color }
+
+fn scroll_arrows_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let s = mem.cast[*ScrollArrows](ctx)
+    if s.vertical {
+        try v3_chevron(b, area.x + area.width * 0.5, area.y + 8.0, 0u8, s.ink)
+        ret v3_chevron(b, area.x + area.width * 0.5, area.y + area.height - 8.0, 1u8, s.ink)
+    }
+    try v3_chevron(b, area.x + 8.0, area.y + area.height * 0.5, 2u8, s.ink)
+    ret v3_chevron(b, area.x + area.width - 8.0, area.y + area.height * 0.5, 3u8, s.ink)
+}
+
+// The bar alone: `length` long along `vertical`, for a viewport of `view` px over `content`
+// px scrolled to `offset`. Keyed `key` (its hover and press state).
+fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, view: f32, content: f32, offset: f32) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    var w: f32 = 2.7
+    var ink = style.hex(8750469u32)
+    if state.hovered { w = 6.0 }
+    if state.pressed { ink = style.hex(6316128u32) }
+    let room = length - 32.0
+    var thick = style.defaults()
+    var track = sized_style(16.0, length)
+    if !vertical { track = sized_style(length, 16.0) }
+    track.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    if content > view && room > 0.0 {
+        var thumb_len = room * view / content
+        if thumb_len < 17.0 { thumb_len = 17.0 }
+        if thumb_len > room { thumb_len = room }
+        var share = offset / (content - view)
+        if share < 0.0 { share = 0.0 }
+        if share > 1.0 { share = 1.0 }
+        let at = 16.0 + (room - thumb_len) * share
+        let side = (16.0 - w) * 0.5
+        thick = sized_style(w, thumb_len)
+        thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        if !vertical {
+            thick = sized_style(thumb_len, w)
+            thick.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: side }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        }
+        thick.background = paint.Brush { Solid: ink }
+        thick.radius = w * 0.5
+        layers[count] = widget.box(0u64, thick, zero)
+        count += 1usize
+    }
+    if state.hovered || state.pressed {
+        let (arrows, arrows_error) = mem.alloc[ScrollArrows](a, 1usize)
+        if arrows_error != ok { ret (zero, TooLarge) }
+        arrows[0usize] = ScrollArrows { vertical: vertical, ink: style.hex(6316128u32) }
+        var none: []const widget.Node = zero
+        var fill = sized_style(16.0, length)
+        if !vertical { fill = sized_style(length, 16.0) }
+        layers[count] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&arrows[0usize]), measure: mark_measure, paint: scroll_arrows_paint, state: widget.bytes_of[ScrollArrows](&arrows[0usize]) } }, style: fill, children: none }
+        count += 1usize
+    }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = widget.stack(0u64, style.defaults(), layers[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 17u8
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_region_of(a, key, track, held[0usize..1usize])), ok)
+}
+
+fn widget_region_of(a: *mem.Arena, key: widget.Key, look: style.Style, children: []const widget.Node) -> []const widget.Node {
+    var out: []const widget.Node = zero
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret out }
+    one[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: zero, invoke: scroll_bar_gesture }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, look, children)
+    ret one[0usize..1usize]
+}
+
+// A scrolling viewport `width` x `height` over `children` whose content is `content` px long along
+// `axis`, scrolled to `offset`: the theme's own bar over the viewport, or, under the Windows
+// look, v3's bar beside it (the viewport's own thumb stays, invisible, for dragging and wheel).
+fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis, width: f32, height: f32, offset: f32, content: f32, children: []const widget.Node) -> (widget.Node, err) {
+    let vertical = axis == .Vertical
+    var thumb = with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
+    var view = sized_style(width, height)
+    view.overflow = .Clip
+    var along = height
+    if !vertical { along = width }
+    if t.tokens.profile != .Windows {
+        ret (widget.scroll(key, widget.Scroll { axis: axis, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, children), ok)
+    }
+    thumb = with_alpha(thumb, 0.0)
+    if vertical { view = sized_style(width - 16.0, height) } else { view = sized_style(width, height - 16.0) }
+    view.overflow = .Clip
+    let (bar, bar_error) = windows_scroll_bar(a, key + 3300u64, t, vertical, along, along, content, offset)
+    if bar_error != ok { ret (zero, bar_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.scroll(key, widget.Scroll { axis: axis, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, children)
+    parts[1usize] = bar
+    var direction: ui_layout.Axis = .Horizontal
+    if !vertical { direction = .Vertical }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: direction, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+fn scroll_bar_gesture(ctx: *void, g: widget.Gesture) -> err { ret ok }
