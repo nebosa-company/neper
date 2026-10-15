@@ -5789,6 +5789,11 @@ fn field_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown
 // The same head with `lead` (at most one node) before the value, 12 in and 12
 // before it (D961: the colour picker's 20 swatch).
 fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, h: f32, closed: GlyphKind, opened: GlyphKind, notch: bool, lead: []const widget.Node) -> (widget.Node, err) {
+    // The Windows look (docs/ui/looks, pickers): the native combo box face.
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = win_head(a, key, t, label, shown, chosen, open, toggle, true, lead)
+        ret (flat, flat_error)
+    }
     let state = control_state(t, key, true, false)
     let dense = h <= t.tokens.sizes.control_md
     let pad_x: f32 = if_else(dense, 12.0, 16.0)
@@ -5876,6 +5881,10 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
 // 4 below the field, matching its width; its rows are `menu_row`s.
 fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = win_select(a, key, t, label, options, selected, open, toggle, picks)
+        ret (flat, flat_error)
+    }
     let chosen = selected < options.len
     var shown = label
     if chosen { shown = options[selected] }
@@ -6003,6 +6012,10 @@ fn menu_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chosen:
 // one in the selection colour; the viewport is a list of list items in the tree,
 // the group above it labelled.
 fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = win_list_box(a, key, t, label, options, selected, picks, rows, width)
+        ret (flat, flat_error)
+    }
     let (chosen, chosen_error) = mem.alloc[bool](a, options.len)
     if chosen_error != ok { ret (zero, TooLarge) }
     var i = 0usize
@@ -9213,6 +9226,10 @@ fn move_fire(ctx: *void) -> err {
 // 12 each side, 36 tall with a pointer and 48 on touch, transparent; the active
 // row carries the `state-focus` layer of `on-surface`, a hovered one the hover layer.
 fn list_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, active: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = win_drop_row(a, key, t, label, active, action)
+        ret (flat, flat_error)
+    }
     let state = control_state(t, key, true, false)
     let ink = style.color(t.tokens, .OnSurface)
     var look = style.resolve(t.tokens, .Plain, state)
@@ -9260,9 +9277,12 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
     if listing {
         let (items, items_error) = mem.alloc[widget.Node](a, suggestions.len)
         if items_error != ok { ret (zero, TooLarge) }
+        // The Windows drop-down lights the row under the pointer, else the active one.
+        var lit = active
+        if t.tokens.profile == .Windows { lit = win_lit_row(t, first, suggestions.len, active) }
         i = 0usize
         while i < suggestions.len {
-            let (item, item_error) = list_row(a, first + u64(i), t, suggestions[i], i == active, &picks[i])
+            let (item, item_error) = list_row(a, first + u64(i), t, suggestions[i], i == lit, &picks[i])
             if item_error != ok { ret (zero, item_error) }
             var entry: widget.Semantics = zero
             entry.role = accessibility.ROLE_OPTION
@@ -9289,6 +9309,11 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
+        if t.tokens.profile == .Windows {
+            let (flat, flat_error) = win_sheet(a, t, key + 1048701u64, items[0usize..suggestions.len])
+            if flat_error != ok { ret (zero, flat_error) }
+            column[0usize] = flat
+        }
         var list_sem: widget.Semantics = zero
         list_sem.role = accessibility.ROLE_LISTBOX
         list_sem.label = label
@@ -9345,6 +9370,10 @@ fn autocomplete(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buf
 // the field's end, 4 from it -- 32 across with an 18 chevron with a pointer, 40
 // with a 24 on touch -- in `on-surface-variant`, pointing up while open.
 fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], choices: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (flat, flat_error) = win_combo_box(a, key, t, label, buffer, len, typed, choices, active, open, picks, activate, toggle, options)
+        ret (flat, flat_error)
+    }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var side = t.tokens.sizes.control_sm
     var size = t.tokens.sizes.icon_sm
@@ -12481,4 +12510,361 @@ fn windows_bar_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     if said_error != ok { ret (zero, said_error) }
     let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, checked, action, said)
     ret (node, node_error)
+}
+
+// ===================================================================================
+// The Windows look of the pickers (docs/ui/looks; combo box, image combo box, date edit,
+// list box): v3's DevExpress edit with its native-style frame (#FDFDFD face, 1 px #D2D2D2
+// border, radius 4, 21 tall, a thin chevron at the right) and the classic drop-down list
+// (white, the row under the pointer or the chosen one in #0078D7 with white text, 15 per
+// row). Measured from docs/grid-parity (tcxgrid/00b, 00c, IC1); guesses are listed in
+// docs/ui/looks/status.d/pickers.json.
+// ===================================================================================
+
+type WinLook = struct { face: paint.Color, edge: paint.Color, edge_width: f32, ink: paint.Color, chevron: paint.Color }
+
+fn win_row_height() -> f32 { ret 15.0 }
+fn win_icon_row_height() -> f32 { ret 18.0 }
+fn win_drop_rows() -> usize { ret 8usize }
+
+// The frame's colours by state. Measured: face, border, chevron at rest. Guessed: hover,
+// open or focused (the accent border of the pilot button), read-only and disabled.
+fn win_look(t: *const Theme, hovered: bool, pressed: bool, focused: bool, open: bool, enabled: bool, read_only: bool) -> WinLook {
+    var face = style.color(t.tokens, .SurfaceContainerLowest)
+    var ink = style.color(t.tokens, .Text)
+    var edge = style.color(t.tokens, .Border)
+    var chevron = style.hex(7368816u32)
+    var edge_width = t.tokens.borders.regular
+    if hovered && !open { face = style.layer(face, ink, 0.03) }
+    if hovered { chevron = ink }
+    if pressed { face = style.layer(face, ink, 0.06) }
+    if open || focused {
+        edge = style.hex(2723289u32)
+        edge_width = 1.33
+    }
+    if read_only { chevron = style.color(t.tokens, .TextMuted) }
+    if !enabled {
+        let ground = style.color(t.tokens, .Background)
+        face = style.mix(face, ground, 0.5)
+        ink = style.mix(ink, style.color(t.tokens, .SurfaceContainerLowest), 0.55)
+        edge = style.mix(edge, ground, 0.5)
+        chevron = ink
+        edge_width = t.tokens.borders.regular
+    }
+    ret WinLook { face: face, edge: edge, edge_width: edge_width, ink: ink, chevron: chevron }
+}
+
+fn win_chevron(a: *mem.Arena, color: paint.Color) -> (widget.Node, err) {
+    let (node, node_error) = stroked_glyph(a, color, .ChevronDown, 18.0, 1.3)
+    ret (node, node_error)
+}
+
+// The padding that keeps the frame 21 tall whatever its border (18 inside: the chevron).
+fn win_pad_y(edge_width: f32) -> f32 {
+    ret max_zero((3.0 - 2.0 * edge_width) * 0.5)
+}
+
+// A read-only head: a face that opens the list (keyed `key`), the value (or the label,
+// muted, before a choice) after an optional `lead` pic, the chevron at the end.
+fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, enabled: bool, lead: []const widget.Node) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    let c = win_look(t, state.hovered, state.pressed, state.focused, open, enabled, false)
+    var look = style.ResolvedControl { background: c.face, foreground: c.ink, border: c.edge, border_width: c.edge_width, focus_ring: 0.0, opacity: 1.0, radius: t.tokens.radii.sm, elevation: 0u8, padding: 0.0, padding_start: 2.5, padding_y: win_pad_y(c.edge_width), custom_padding: true, min_width: 112.0, min_height: 21.0, corners: zero }
+    var words = text_options()
+    words.role = .BodyMedium
+    words.wrap = .None
+    var value_color = c.ink
+    if !chosen && enabled { value_color = style.color(t.tokens, .TextMuted) }
+    let (value_node, value_error) = colored_text(a, 0u64, shown, t, words, value_color)
+    if value_error != ok { ret (zero, value_error) }
+    let (chevron, chevron_error) = win_chevron(a, c.chevron)
+    if chevron_error != ok { ret (zero, chevron_error) }
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 4usize)
+    if bits_error != ok { ret (zero, TooLarge) }
+    bits[0usize] = value_node
+    if lead.len == 1usize {
+        bits[2usize] = lead[0usize]
+        bits[3usize] = value_node
+        bits[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 3.0 }, style.defaults(), bits[2usize..4usize])
+    }
+    bits[1usize] = chevron
+    var spread = style.defaults()
+    spread.min_width = style.Length { Px: 112.0 - 3.0 - 2.0 }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 4.0 }, spread, bits[0usize..2usize])
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (head_node, head_error) = pressable_states(a, key, t, 3u8, shown, look, enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, content)
+    ret (head_node, head_error)
+}
+
+// The row of the drop-down that stands lit: the one under the pointer, else `active`.
+fn win_lit_row(t: *const Theme, first: widget.Key, count: usize, active: usize) -> usize {
+    if mem.address_of(t.runtime) == 0usize { ret active }
+    var i = 0usize
+    while i < count {
+        if widget.interaction(t.runtime, first + u64(i)).hovered { ret i }
+        i += 1usize
+    }
+    ret active
+}
+
+// A drop-down row: `label` (after an optional pic) 4 in, 15 tall (18 with an pic);
+// lit, #0078D7 under white text.
+fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: bool, action: *const widget.Submit, pic: []const widget.Node, focusable: bool) -> (widget.Node, err) {
+    var ink = style.color(t.tokens, .Text)
+    var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if lit {
+        ink = style.hex(16777215u32)
+        fill = style.hex(30935u32)
+    }
+    var h = win_row_height()
+    if pic.len == 1usize { h = win_icon_row_height() }
+    var words = text_options()
+    words.role = .BodyMedium
+    words.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, words, ink)
+    if label_error != ok { ret (zero, label_error) }
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+    if bits_error != ok { ret (zero, TooLarge) }
+    var used = 1usize
+    bits[0usize] = label_node
+    if pic.len == 1usize {
+        bits[0usize] = pic[0usize]
+        bits[1usize] = label_node
+        used = 2usize
+    }
+    var line_style = style.defaults()
+    line_style.width = style.Length { Percent: 100.0 }
+    line_style.height = style.Length { Px: h }
+    line_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, line_style, bits[0usize..used])
+    var row_style = style.defaults()
+    row_style.width = style.Length { Percent: 100.0 }
+    row_style.height = style.Length { Px: h }
+    row_style.background = paint.Brush { Solid: fill }
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: focusable }, row_style, body[0usize..1usize]), ok)
+}
+
+fn win_drop_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    var none: []const widget.Node = zero
+    let (made, made_error) = win_row(a, key, t, label, lit, action, none, false)
+    ret (made, made_error)
+}
+
+// The drop-down's frame round `items`: white, a 1 px grey edge, square; past
+// `win_drop_rows` rows the rows scroll in a viewport (keyed `scroll_key`).
+fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []const widget.Node) -> (widget.Node, err) {
+    var frame_style = style.defaults()
+    frame_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    frame_style.border = style.Border { width: 1.0, color: style.hex(12369084u32) }
+    frame_style.shadow = style.Shadow { offset: geometry.Point { x: 1.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.35) }
+    frame_style.min_width = style.Length { Px: 40.0 }
+    frame_style.overflow = .Clip
+    var shown: []const widget.Node = items
+    if items.len > win_drop_rows() {
+        var view_style = style.defaults()
+        view_style.width = style.Length { Percent: 100.0 }
+        view_style.height = style.Length { Px: f32(win_drop_rows()) * win_row_height() }
+        view_style.overflow = .Clip
+        let (view, view_error) = widget.scroll_view(a, scroll_key, .Vertical, view_style, items)
+        if view_error != ok { ret (zero, TooLarge) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = view
+        shown = held[0usize..1usize]
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, frame_style, shown), ok)
+}
+
+// The open list under a head: a modal overlay keyed `overlay_key` of the rows keyed
+// `first + index`, matching the anchor's width; a press outside fires `dismiss`.
+fn win_drop(a: *mem.Arena, overlay_key: widget.Key, anchor: widget.Key, first: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, picks: []const widget.Submit, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (items, items_error) = mem.alloc[widget.Node](a, options.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    let lit = win_lit_row(t, first, options.len, selected)
+    var i = 0usize
+    while i < options.len {
+        var pic: []const widget.Node = zero
+        if icons.len == options.len { pic = icons[i..i + 1usize] }
+        let (row, row_error) = win_row(a, first + u64(i), t, options[i], i == lit, &picks[i], pic, false)
+        if row_error != ok { ret (zero, row_error) }
+        var entry: widget.Semantics = zero
+        entry.role = accessibility.ROLE_OPTION
+        entry.label = options[i]
+        if i == selected { entry.states = accessibility.STATE_SELECTED }
+        let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+        if wrapped_error != ok { ret (zero, TooLarge) }
+        wrapped[0usize] = row
+        var stretched = style.defaults()
+        stretched.width = style.Length { Percent: 100.0 }
+        items[i] = widget.semantics(0u64, entry, stretched, wrapped[0usize..1usize])
+        i += 1usize
+    }
+    let (sheet_node, sheet_error) = win_sheet(a, t, overlay_key + 1048576u64, items[0usize..options.len])
+    if sheet_error != ok { ret (zero, sheet_error) }
+    var list_sem: widget.Semantics = zero
+    list_sem.role = accessibility.ROLE_LISTBOX
+    list_sem.label = label
+    list_sem.row_count = u32(options.len)
+    let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[1usize] = sheet_node
+    held[0usize] = widget.semantics(0u64, list_sem, style.defaults(), held[1usize..2usize])
+    ret (widget.overlay(overlay_key, widget.Overlay { anchor: anchor, placement: .BelowMatch, offset: geometry.Point { x: 0.0, y: 0.0 }, modal: true, dismiss: *dismiss }, style.defaults(), held[0usize..1usize]), ok)
+}
+
+// A select (and so a picker's popup): the head, and open, the drop-down keyed `key + 1`
+// with rows keyed `key + 2 + index`; no motion, as v3's list appears at once.
+fn win_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+    var none: []const widget.Node = zero
+    let (made, made_error) = win_image_select(a, key, t, label, options, none, selected, open, toggle, picks)
+    ret (made, made_error)
+}
+
+// An image combo box (TcxImageComboBox): a select whose rows, and head, lead with an
+// pic (`icons`, one 16 x 16 node per option, or none). Under the other looks it is the
+// plain select: no icons.
+fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+    if t.tokens.profile != .Windows {
+        let (plain, plain_error) = select(a, key, t, label, options, selected, open, toggle, picks)
+        ret (plain, plain_error)
+    }
+    let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, toggle, picks)
+    ret (made, made_error)
+}
+
+fn win_image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+    if picks.len != options.len { ret (zero, TooLarge) }
+    let chosen = selected < options.len
+    var shown = label
+    if chosen { shown = options[selected] }
+    var lead: []const widget.Node = zero
+    if chosen && icons.len == options.len { lead = icons[selected..selected + 1usize] }
+    let (head, head_error) = win_head(a, key, t, label, shown, chosen, open, toggle, true, lead)
+    if head_error != ok { ret (zero, head_error) }
+    var count = 1usize
+    if open { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count + 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    if open {
+        let (drop, drop_error) = win_drop(a, key + 1u64, key, key + 2u64, t, label, options, icons, selected, picks, toggle)
+        if drop_error != ok { ret (zero, drop_error) }
+        parts[1usize] = drop
+    }
+    parts[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_COMBOBOX
+    sem.label = label
+    sem.value = shown
+    if open { sem.states = accessibility.STATE_EXPANDED }
+    ret (widget.semantics(0u64, sem, style.defaults(), parts[count..count + 1usize]), ok)
+}
+
+// An editable combo box (TcxComboBox, lsEditList): the frame (keyed `key + 1048701`, the
+// list's anchor) holds the editor (keyed `key`) and the drop button (keyed `key + 1`,
+// firing `toggle`); the list is `suggesting`'s, in the Windows look (rows `key + 3 + index`).
+fn win_combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], choices: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    let enabled = options.enabled
+    let state_edit = control_state(t, key, enabled, false)
+    let state_button = control_state(t, key + 1u64, enabled, false)
+    let c = win_look(t, state_edit.hovered || state_button.hovered, false, state_edit.focused || state_button.focused, open, enabled, options.read_only)
+    var value_options = text_options()
+    value_options.role = .BodyMedium
+    let (text_look, style_error) = text_style_faced(a, t, value_options)
+    if style_error != ok { ret (zero, style_error) }
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: win_row_height() }
+    let (stack_parts, stack_error) = mem.alloc[widget.Node](a, 2usize)
+    if stack_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    if len == 0usize && options.placeholder.len != 0usize {
+        var hint = text_options()
+        hint.role = .BodyMedium
+        hint.wrap = .None
+        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, t, hint, style.color(t.tokens, .TextMuted))
+        if hint_error != ok { ret (zero, hint_error) }
+        stack_parts[at] = hint_node
+        at += 1usize
+    }
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: c.ink, selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style))
+    if named_error != ok { ret (zero, named_error) }
+    stack_parts[at] = named
+    at += 1usize
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    grow.overflow = .Clip
+    let (row_parts, row_error) = mem.alloc[widget.Node](a, 2usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row_parts[0usize] = widget.stack(0u64, grow, stack_parts[0usize..at])
+    let (chevron, chevron_error) = win_chevron(a, c.chevron)
+    if chevron_error != ok { ret (zero, chevron_error) }
+    var bare = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 18.0, min_height: 18.0, corners: zero }
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (opener, opener_error) = pressable_states(a, key + 1u64, t, 3u8, "Choices", bare, enabled && !options.read_only, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
+    if opener_error != ok { ret (zero, opener_error) }
+    row_parts[1usize] = opener
+    var frame_style = style.defaults()
+    frame_style.width = style.Length { Px: options.width }
+    frame_style.min_height = style.Length { Px: 21.0 }
+    frame_style.background = paint.Brush { Solid: c.face }
+    frame_style.border = style.Border { width: c.edge_width, color: c.edge }
+    frame_style.radius = t.tokens.radii.sm
+    let pad_y = style.Length { Px: win_pad_y(c.edge_width) }
+    frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.5 }, top: pad_y, right: style.Length { Px: 0.0 }, bottom: pad_y }
+    let frame_key = key + 1048701u64
+    let frame_node = widget.flex(frame_key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, frame_style, row_parts[0usize..2usize])
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting(a, frame_key, t, label, frame_node, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle)
+    ret (made, made_error)
+}
+
+// A list box (TcxListBox): a framed viewport (keyed `key`) `rows` rows tall of `options`,
+// the selected row #0078D7 under white text; past `rows` rows it scrolls. Rows are keyed
+// `key + 1 + index`.
+fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    if picks.len != options.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, options.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < options.len {
+        var none: []const widget.Node = zero
+        let (row, row_error) = win_row(a, key + 1u64 + u64(i), t, options[i], i == selected, &picks[i], none, true)
+        if row_error != ok { ret (zero, row_error) }
+        var entry: widget.Semantics = zero
+        entry.role = accessibility.ROLE_OPTION
+        entry.label = options[i]
+        entry.row = u32(i + 1usize)
+        entry.row_count = u32(options.len)
+        if i == selected { entry.states = accessibility.STATE_SELECTED }
+        let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+        if wrapped_error != ok { ret (zero, TooLarge) }
+        wrapped[0usize] = row
+        var stretched = style.defaults()
+        stretched.width = style.Length { Percent: 100.0 }
+        items[i] = widget.semantics(0u64, entry, stretched, wrapped[0usize..1usize])
+        i += 1usize
+    }
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: width }
+    view_style.height = style.Length { Px: f32(rows) * win_row_height() + 2.0 }
+    view_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+    view_style.border = style.Border { width: 1.0, color: style.color(t.tokens, .Border) }
+    view_style.radius = t.tokens.radii.sm
+    view_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    view_style.overflow = .Clip
+    let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
+    if view_error != ok { ret (zero, TooLarge) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = view
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_LISTBOX
+    sem.label = label
+    sem.row_count = u32(options.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
 }

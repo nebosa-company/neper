@@ -304,8 +304,23 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
             if again_error != ok { ret (zero, again_error) }
             let (tree, tree_error) = sheet(pass, &t, cells[0usize..again], s.columns, s.cell_w, s.cell_h)
             if tree_error != ok { ret (zero, tree_error) }
-            let (shot, shot_error) = shoot(rig, tree, step)
+            let (first_shot, shot_error) = shoot(rig, tree, step)
             if shot_error != ok { ret (zero, shot_error) }
+            var shot = first_shot
+            // (pickers) A hover that opens something lands on the element the first frame
+            // built: the pointer moves again over that layout, and the frame is taken again.
+            if drive == .Hover {
+                try testing.hover(&rig.harness, cx, cy)
+                step += 1i64
+                let pass_two = begin(rig)
+                let (twice, twice_error) = s.build(s.ctx, pass_two, &t, cells)
+                if twice_error != ok { ret (zero, twice_error) }
+                let (tree_two, tree_two_error) = sheet(pass_two, &t, cells[0usize..twice], s.columns, s.cell_w, s.cell_h)
+                if tree_two_error != ok { ret (zero, tree_two_error) }
+                let (shot_two, shot_two_error) = shoot(rig, tree_two, step)
+                if shot_two_error != ok { ret (zero, shot_two_error) }
+                shot = shot_two
+            }
             let x0 = usize(origin.x * rig.scale + 0.5)
             let y0 = usize(origin.y * rig.scale + 0.5)
             let w = u32(s.cell_w * rig.scale + 0.5)
