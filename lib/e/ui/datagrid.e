@@ -10186,13 +10186,8 @@ fn dz_style_name(i: usize) -> str {
 
 // A white box with words in it (a combo, a spin value): v3's Flat and Max Line Count.
 fn dz_field(a: *mem.Arena, grid: *Grid, text: str, width: f32) -> (widget.Node, err) {
-    let (words, words_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
-    if words_error != ok { ret (zero, words_error) }
-    var box = control.sized_style(width, 26.0)
-    box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
-    box.border = style.Border { width: 1.0, color: gl.rgb(0xC8C8C8u32) }
-    box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    ret (widget.box(0u64, box, one(a, widget.padded(0u64, 6.0, 4.0, 0.0, 0.0, style.defaults(), one(a, words)))), ok)
+    let (box, box_error) = v3_edit(a, grid, text, width)
+    ret (box, box_error)
 }
 
 // The Styles tab's list: thirteen named styles, each with its sample strip and "8 pt. Tahoma".
@@ -10260,14 +10255,12 @@ fn dz_button_ink(grid: *const Grid, i: usize) -> u32 {
 
 // A grey, inert button of the Styles tab (v3 enables them with a style picked).
 fn dz_grey_button(a: *mem.Arena, grid: *Grid, text: str, width: f32, top: f32) -> (widget.Node, err) {
-    let (words, words_error) = flat_text(a, grid, text, gl.rgb(dz_button_ink_for(grid, width)))
-    if words_error != ok { ret (zero, words_error) }
-    var box = control.sized_style(width, 24.0)
-    box.background = paint.Brush { Solid: gl.rgb(0xF4F4F4u32) }
-    box.border = style.Border { width: 1.0, color: gl.rgb(0xD0D0D0u32) }
-    box.radius = 3.0
-    box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    ret (widget.box(0u64, box, one(a, widget.padded(0u64, 8.0, 3.0, 0.0, 0.0, style.defaults(), one(a, words)))), ok)
+    let enabled = dz_button_ink_for(grid, width) == 0x000000u32
+    let (idle, idle_error) = mem.alloc[DesignTap](a, 1usize)
+    if idle_error != ok { ret (zero, control.TooLarge) }
+    idle[0usize] = DesignTap { grid: grid, kind: 255u8, value: 0usize }
+    let (button, button_error) = v3_button(a, grid, text, width, 0u64, &idle[0usize], enabled, top)
+    ret (button, button_error)
 }
 
 // The button column right of the style list: Font..., Color..., Texture..., Clear.
@@ -10390,14 +10383,8 @@ fn dz_button_ink_for(grid: *const Grid, width: f32) -> u32 {
 // ---- Title Properties / Footnote Properties: v3's "Report Title" window ----
 
 fn dz_dialog_button(a: *mem.Arena, grid: *Grid, text: str, tap: *DesignTap, key: u64) -> (widget.Node, err) {
-    let (label, label_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
-    if label_error != ok { ret (zero, label_error) }
-    var box = control.sized_style(120.0, 28.0)
-    box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
-    box.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
-    box.radius = 4.0
-    box.margin = style.EdgeLengths { left: style.Length { Px: 10.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, widget.padded(0u64, 44.0, 6.0, 0.0, 0.0, style.defaults(), one(a, label)))), ok)
+    let (button, button_error) = v3_button(a, grid, text, 0.0, key, tap, true, 0.0)
+    ret (button, button_error)
 }
 
 // The dialog body: Mode, the Text / Properties tabs, a white text area, OK and Cancel.
@@ -11103,4 +11090,49 @@ fn dz_channel_spin(a: *mem.Arena, grid: *Grid, channel: usize, value: u32) -> (w
     pair[0usize] = widget.padded(0u64, 4.0, 14.0, 0.0, 0.0, control.sized_style(34.0, 40.0), one(a, label))
     pair[1usize] = spin
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), pair[0usize..2usize]), ok)
+}
+
+// ---- v3's standard controls: sizes from the Delphi forms (TcxButton 75 x 23, edits 21 high), flat DevExpress look ----
+
+fn v3_button_w() -> f32 { ret 75.0 }
+fn v3_button_h() -> f32 { ret 23.0 }
+fn v3_edit_h() -> f32 { ret 21.0 }
+
+// The label of a v3 button, centred (grey when disabled).
+fn v3_button_label(a: *mem.Arena, grid: *Grid, text: str, enabled: bool) -> (widget.Node, err) {
+    var ink: u32 = 0x000000u32
+    if !enabled { ink = 0xA0A0A0u32 }
+    let (label, label_error) = flat_text(a, grid, text, gl.rgb(ink))
+    if label_error != ok { ret (zero, label_error) }
+    var centred = style.defaults()
+    centred.width = style.Length { Percent: 100.0 }
+    centred.height = style.Length { Percent: 100.0 }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, centred, one(a, label)), ok)
+}
+
+// A flat button, 75 x 23 (wider for a long label): #FDFDFD, a 1 px #ADADAD border, radius 3, 8 units from its left neighbour.
+// `tap` makes it live; a null `tap` draws it inert; `top` adds space above.
+fn v3_button(a: *mem.Arena, grid: *Grid, text: str, wide: f32, key: u64, tap: *DesignTap, live: bool, top: f32) -> (widget.Node, err) {
+    let (face, face_error) = v3_button_label(a, grid, text, live)
+    if face_error != ok { ret (zero, face_error) }
+    var width = v3_button_w()
+    if wide > width { width = wide }
+    var box = control.sized_style(width, v3_button_h())
+    box.background = paint.Brush { Solid: gl.rgb(0xFDFDFDu32) }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xADADADu32) }
+    box.radius = 3.0
+    box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    if !live { ret (widget.box(0u64, box, one(a, face)), ok) }
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, box, one(a, face)), ok)
+}
+
+// A flat edit or combo face, 21 high: white, a 1 px #ABABAB border, the text left.
+fn v3_edit(a: *mem.Arena, grid: *Grid, text: str, width: f32) -> (widget.Node, err) {
+    let (words, words_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
+    if words_error != ok { ret (zero, words_error) }
+    var box = control.sized_style(width, v3_edit_h())
+    box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    box.border = style.Border { width: 1.0, color: gl.rgb(0xABABABu32) }
+    box.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 2.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 2.0 } }
+    ret (widget.box(0u64, box, one(a, widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, style.defaults(), one(a, words)))), ok)
 }
