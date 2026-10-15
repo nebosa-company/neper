@@ -234,7 +234,7 @@ fn write_png(a: *mem.Arena, path: str, view: image.ConstImage) -> err {
     if writer_error != ok { ret writer_error }
     var held = state
     var writer = io.writer(mem.cast[*void](&held), io.memory_write)
-    try png.encode(&writer, view, png.EncodeOptions { compression: .Fast, interlace: false })
+    try png.encode(&writer, view, png.EncodeOptions { compression: .Balanced, interlace: false })
     ret fs.write_file(a, path, io.memory_bytes(&held))
 }
 
