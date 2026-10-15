@@ -1,0 +1,42 @@
+{
+ "data_grid": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/data_grid.png",
+    "notes": "The baseline: the theme's own data grid. The sheets build their grids afresh per look, so the Windows look no longer leaks into the Neper passes (the earlier 1.5x Neper render showed the Windows grid)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "Round 4 group e (fresh render, flat-pixel diff vs ref/windows and ref/windows/states at 100 %; 'flat' = reference pixels whose four neighbours are within 2 levels, so ClearType text and pictures are not in the numbers). data_grid_main (the pool grid with its group box, filter row and navigator over the collection grid): 1136 of 132614 flat px off by more than 2 (0.9 %), the backdrop picture band excluded (the whole sheet: 3590 of 135231). Geometry now exact to the pixel: 2 px frame, 19 px header over the filter row, 35 px group box, 4 px strip, 18 px group rows with their 2 px top lines, 19 px data rows with the 2 px foot lines, 2 px column lines, white indicator cells, 24 px footer with its lines, 23 px navigator with v3's button bitmaps and scroll thumb, the vertical bar (2 px thumb, content stops at the track). Bitmaps cut from the live capture: sort marks, expander box, filter funnel, equals mark, list glyph, star, row arrows, navigator buttons, header filter button. States: data_grid_states (top grid, 4th data row selected and focused, v3's dotted rectangle and long arrow): 2548 of 57344 flat px off; data_grid_states_pressed (Name header pressed, #BCDCF4): first 300 columns 2185 of 7200 px off by more than 2 (text included); data_grid_dialogs (Sort and Missing Set Cards grids, frameless, 18 and 19 px rows): 1432 of 56765 and 1346 of 29405 flat px off; data_grid_dialogs_sort (focused cell selection, the Sort dialog selects cells): 1432 of 56765. Captures: the navigator-button pressed grabs are identical to the navigator rest grab (v3 shows no pressed look there), and the unfocused selected-row grabs are identical to the focused ones (the posted kill-focus did not change them).",
+    "gaps": [
+     "Mismatch: text anti-aliasing (v3 ClearType, hinted Tahoma; ours grey, unhinted): interior text pixels never within 2 levels, ink boxes within about 1 px",
+     "Mismatch: card pictures, the row icons (discs stand in for the orange card-back and the black ninja), the backdrop picture behind the collection rows and the sort-order icons of the Sort dialog are artwork not in this repo",
+     "Mismatch: the vertical bar's thumb starts 35 px lower than the capture's (the capture's bar spans the group box, ours the table); its length follows our row count",
+     "Mismatch: frame inner ring is one colour (#C6C8CC); the capture varies it per side (#EAEAEC left, #C6C8CC top, #BFC2C6 bottom)",
+     "Mismatch: the group row focus rectangle is square (the capture's corners are rounded), the first group row's top lines are overpainted by it",
+     "Mismatch: minus (open) group expander box, enabled First/Previous bitmaps (mirror images of the captured Next buttons) and the disabled Next/Last bitmaps (mirrors of the disabled First/Previous) are not captured",
+     "Mismatch: footer cell edge pixels (a 1 px blend and border ring round each summary cell) are drawn as a plain cell",
+     "Unverified (no capture): hover of cells, rows, headers and navigator buttons; the unfocused selected row (our #D5E4EE with a near-black line comes from a 150 % capture; the 100 % grab shows the focused look); edit mode; disabled; sort and filter popups; the filter button of a hot unsorted header on hover (captured only while pressed)",
+     "Unverified at 150 %: the 100 % bitmaps are drawn pixel for pixel scaled by the harness, v3 is DPI unaware"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Round 4 group e (fresh render, flat-pixel diff vs ref/windows and ref/windows/states at 100 %; text excluded as for the data grid). vertical_grid (Deck Properties, General and the plain Computed rows): 47 of 41234 flat px off by more than 2 in the top 200 rows (the capture's pictures, bars and multi-cell rows of the lower half are not drawn). vertical_grid_states (new sheet, reference vertical_grid_states.png composed from the five state grabs): Name focused with its text selected (#0078D7 bar, white text) 53 of 41462 flat px off, Author selected 54 of 41584, Description selected with the open editor's ellipsis button 60 of 41383, Archetype selected 54 of 41944; General pressed (shut) 1545 of 42894: the caption's focus rectangle is not drawn and the Computed rows' pictures differ.",
+    "gaps": [
+     "Mismatch: General pressed: the dotted focus rectangle round the category caption is not drawn",
+     "Mismatch: the Computed category's picture, bar and multi-cell rows (Land/Creature/Spell icons, colour discs, the Strategy bar, the Legality tags) are artwork; plain text rows stand in",
+     "Mismatch: the File Name value differs from the state grabs (they show D:\\Temp\\claude\u000b3run\\Probe...)",
+     "Unverified (no capture): hover, an open combo editor's drop button (the Archetype grab shows none at rest), disabled, read-only rows"
+    ]
+   }
+  }
+ }
+}
