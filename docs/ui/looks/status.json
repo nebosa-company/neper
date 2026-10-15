@@ -1,0 +1,55 @@
+{
+ "schema": "neper-looks-status",
+ "updated": "2026-10-15",
+ "doc": "Truth source of docs/ui/looks-progress.html (scripts/render_looks.py). Edit this file, then run python scripts/render_looks.py. A look omitted from a control's `looks` is `planned`. Statuses: planned, started, review (renders, not yet within tolerance of the reference), ready (matches the reference at 100% and 150%). `screenshot` is relative to docs/ui/looks/.",
+ "looks": [
+  {"id": "neper", "label": "Neper", "profile": "Neper"},
+  {"id": "windows", "label": "Windows", "profile": "Windows"},
+  {"id": "cupertino", "label": "macOS / iOS", "profile": "CupertinoLike"},
+  {"id": "material", "label": "Android", "profile": "MaterialLike"}
+ ],
+ "controls": [
+  {"id": "label", "name": "Label", "delphi": "TcxLabel", "neper": "control.text"},
+  {"id": "button", "name": "Button", "delphi": "TcxButton", "neper": "control.button", "app": "examples/looks/button.e",
+   "looks": {
+    "neper": {"status": "ready", "screenshot": "neper/button.png", "notes": "The baseline: the existing v2 pill button, all states."},
+    "windows": {"status": "review", "screenshot": "windows/button.png", "notes": "Face, border, accent default/focus border, 75 x 22, radius 4 and centred label match the Options dialog captures; no reference capture of hover, pressed or disabled yet.",
+     "gaps": ["Hover, pressed and disabled colours are guesses (not in any capture)", "A focused button gets the accent border (native defaulted look); a dotted focus rectangle is not drawn", "Border is a clean 1 px line; the capture's is softer (ClearType-era antialiasing)", "Label is Segoe UI 11.2 px fitted by ink width; v3 button font face not confirmed", "button_with_icon and the loading state keep the Neper look", "Dark and high-contrast Windows palettes: Neper colours with Windows metrics"]}
+   }},
+  {"id": "checkbox", "name": "Check box", "delphi": "TcxCheckBox", "neper": "control.checkbox"},
+  {"id": "radio", "name": "Radio button", "delphi": "TcxRadioButton", "neper": "control.radio_group"},
+  {"id": "radio_group", "name": "Radio group", "delphi": "TcxRadioGroup", "neper": "control.radio_group"},
+  {"id": "text_edit", "name": "Text edit", "delphi": "TcxTextEdit", "neper": "control.text_field"},
+  {"id": "spin_edit", "name": "Spin edit", "delphi": "TcxSpinEdit", "neper": "control.spin_box"},
+  {"id": "combo_box", "name": "Combo box", "delphi": "TcxComboBox", "neper": "control.combo_box"},
+  {"id": "image_combo_box", "name": "Image combo box", "delphi": "TcxImageComboBox", "neper": "control.combo_box", "gap": "No per-item image in combo_box rows"},
+  {"id": "date_edit", "name": "Date edit", "delphi": "TcxDateEdit", "neper": "control.picker"},
+  {"id": "mask_edit", "name": "Mask edit", "delphi": "TcxMaskEdit", "neper": "control.formatted_field"},
+  {"id": "memo", "name": "Memo", "delphi": "TcxMemo", "neper": "control.text_area"},
+  {"id": "button_edit", "name": "Button edit", "delphi": "TcxButtonEdit", "neper": "control.button_edit"},
+  {"id": "token_edit", "name": "Token edit", "delphi": "TdxTokenEdit", "neper": "control.token_field"},
+  {"id": "check_list_box", "name": "Check list box", "delphi": "TcxCheckListBox", "neper": "control.multi_select_list"},
+  {"id": "progress_bar", "name": "Progress bar", "delphi": "TcxProgressBar", "neper": "control.progress_bar"},
+  {"id": "group_box", "name": "Group box", "delphi": "TcxGroupBox", "neper": "control.group_box"},
+  {"id": "page_control", "name": "Page control (tabs)", "delphi": "TcxPageControl", "neper": "control.tabs"},
+  {"id": "splitter", "name": "Splitter", "delphi": "TcxSplitter", "neper": "control.split_view"},
+  {"id": "status_bar", "name": "Status bar", "delphi": "TdxStatusBar", "neper": "navigation.status_bar"},
+  {"id": "toolbar_button", "name": "Toolbar button", "delphi": "TdxBarButton", "neper": "control.glyph_button"},
+  {"id": "menu_bar", "name": "Menu bar", "delphi": "TdxBarManager (main menu)", "neper": "navigation.menu_bar"},
+  {"id": "popup_menu", "name": "Popup menu", "delphi": "TdxBarPopupMenu", "neper": "overlay.menu"},
+  {"id": "hint", "name": "Hint (tooltip)", "delphi": "TcxHintStyleController", "neper": "overlay.tooltip"},
+  {"id": "scroll_bar", "name": "Scroll bar", "delphi": "TcxScrollBar", "neper": "widget.scrollbar"},
+  {"id": "list_box", "name": "List box", "delphi": "TcxListBox", "neper": "control.list_box"},
+  {"id": "tree_list", "name": "Tree list", "delphi": "TcxTreeList", "neper": "tree_adapter"},
+  {"id": "vertical_grid", "name": "Vertical grid (property grid)", "delphi": "TcxVerticalGrid", "neper": null, "gap": "No Neper property grid yet"},
+  {"id": "data_grid", "name": "Data grid", "delphi": "TcxGrid", "neper": "datagrid (own Look: gridlook.v3())",
+   "looks": {"windows": {"status": "started", "screenshot": "", "notes": "gridlook.v3() already draws the v3 grid (docs/grid-parity); not yet driven by the Windows profile or this harness."}}},
+  {"id": "dialog", "name": "Dialog (form chrome)", "delphi": "TForm / TcxButton row", "neper": "overlay.dialog"}
+ ],
+ "gaps": [
+  {"item": "Embedded browser", "delphi": "TWebBrowser / TEdgeBrowser", "note": "No Neper control; listed, not built."},
+  {"item": "Chart", "delphi": "TcxChart / TChart", "note": "e.gfx.chart draws charts but there is no chart control with a Windows look."},
+  {"item": "Tray icon", "delphi": "TTrayIcon", "note": "No Neper equivalent."},
+  {"item": "Native file dialogs", "delphi": "TOpenDialog / TSaveDialog", "note": "No Neper equivalent; the OS dialog is used."}
+ ]
+}
