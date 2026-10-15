@@ -610,6 +610,10 @@ fn windows(palette: Palette) -> ThemeTokens {
         put(&t, .SurfaceContainerLowest, 16645629u32)
         put(&t, .Selection, 10932991u32)
     }
+    // looks-polish: the Windows Dark and High-Contrast palettes (see windows_fill_dark, windows_fill_contrast).
+    if palette == .Dark { windows_fill_dark(&t) }
+    if palette == .HighContrast { windows_fill_contrast(&t, false) }
+    if palette == .HighContrastDark { windows_fill_contrast(&t, true) }
     // Flat square-ish corners: v3's buttons and fields are 3 px.
     t.radii = Radii { xs: 2.0, sm: 4.0, md: 4.0, lg: 4.0, xl: 4.0, full: 9999.0 }
     t.borders = Borders { hairline: 1.0, regular: 1.0, thick: 2.0 }
@@ -630,6 +634,88 @@ fn windows(palette: Palette) -> ThemeTokens {
     t.metrics = Metrics { hit_target: 22.0, control_height: 22.0, density: 1.0, focus_ring: 0.0, focus_offset: 0.0 }
     ret t
 }
+
+// ---- looks-polish: Windows Dark and High-Contrast palettes ------------------------------------
+// Dark is the Windows 11 dark theme: dialog face #202020, control face and field #2B2B2B, border
+// #5A5A5A, accent #4CC2FF, text white (values from the task brief and the WinUI dark ramp; no v3
+// capture exists in dark, so every Dark value is unmeasured). The contrast palettes are the Windows
+// system colours: `black` is "High contrast black" (window #000000, text #FFFFFF, GrayText
+// #3FF23F, Highlight #1AEBFF), the other "High contrast white" (window #FFFFFF, text #000000,
+// GrayText #600000, Highlight #37006E). Neper's HighContrast is white, HighContrastDark black.
+fn windows_fill_dark(t: *ThemeTokens) {
+    put(t, .Background, 0x202020u32)
+    put(t, .Surface, 0x2B2B2Bu32)
+    put(t, .SurfaceVariant, 0x202020u32)
+    put(t, .Primary, 0x4CC2FFu32)
+    put(t, .OnPrimary, 0x000000u32)
+    put(t, .FocusRing, 0x4CC2FFu32)
+    put(t, .Text, 0xFFFFFFu32)
+    put(t, .OnSurface, 0xFFFFFFu32)
+    put(t, .TextMuted, 0x9D9D9Du32)
+    put(t, .OnSurfaceVariant, 0x9D9D9Du32)
+    put(t, .Border, 0x5A5A5Au32)
+    put(t, .Outline, 0x5A5A5Au32)
+    put(t, .OutlineVariant, 0x454545u32)
+    put(t, .SurfaceContainerLowest, 0x2B2B2Bu32)
+    put(t, .SurfaceContainerLow, 0x272727u32)
+    put(t, .SurfaceContainer, 0x2B2B2Bu32)
+    put(t, .SurfaceContainerHigh, 0x323232u32)
+    put(t, .SurfaceContainerHighest, 0x3A3A3Au32)
+    put(t, .SurfaceDim, 0x1C1C1Cu32)
+    put(t, .SurfaceBright, 0x383838u32)
+    put(t, .Selection, 0x264F78u32)
+}
+
+fn windows_fill_contrast(t: *ThemeTokens, black: bool) {
+    var window = 0xFFFFFFu32
+    var ink = 0x000000u32
+    var gray = 0x600000u32
+    var highlight = 0x37006Eu32
+    var on_highlight = 0xFFFFFFu32
+    if black {
+        window = 0x000000u32
+        ink = 0xFFFFFFu32
+        gray = 0x3FF23Fu32
+        highlight = 0x1AEBFFu32
+        on_highlight = 0x000000u32
+    }
+    put(t, .Background, window)
+    put(t, .Surface, window)
+    put(t, .SurfaceVariant, window)
+    put(t, .Primary, highlight)
+    put(t, .OnPrimary, on_highlight)
+    put(t, .FocusRing, highlight)
+    put(t, .Text, ink)
+    put(t, .OnSurface, ink)
+    put(t, .TextMuted, gray)
+    put(t, .OnSurfaceVariant, gray)
+    put(t, .Border, ink)
+    put(t, .Outline, ink)
+    put(t, .OutlineVariant, ink)
+    put(t, .SurfaceContainerLowest, window)
+    put(t, .SurfaceContainerLow, window)
+    put(t, .SurfaceContainer, window)
+    put(t, .SurfaceContainerHigh, window)
+    put(t, .SurfaceContainerHighest, window)
+    put(t, .SurfaceDim, window)
+    put(t, .SurfaceBright, window)
+    put(t, .Selection, highlight)
+}
+
+// Whether a Windows token set is one of the two high-contrast palettes.
+fn windows_contrast(t: *const ThemeTokens) -> bool {
+    ret t.palette == .HighContrast || t.palette == .HighContrastDark
+}
+
+// The accent a Windows control draws its default, focused and checked border in: Light #298DD9
+// (measured on v3's default button, docs/ui/looks/windows-measurements.md), Dark #4CC2FF, and the
+// contrast palettes' Highlight.
+fn windows_accent(t: *const ThemeTokens) -> paint.Color {
+    if t.palette == .Dark { ret hex(0x4CC2FFu32) }
+    if windows_contrast(t) { ret color(t, .Primary) }
+    ret hex(0x298DD9u32)
+}
+// ---- end looks-polish palettes -----------------------------------------------------------------
 
 fn in_unit(v: f32) -> bool {
     ret finite(v) && v >= 0.0 && v <= 1.0
@@ -745,30 +831,78 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
     ret ResolvedControl { background: background, foreground: foreground, border: border, border_width: border_width, focus_ring: focus_ring, opacity: opacity, radius: t.radii.sm, elevation: elevation, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: false, min_width: 0.0, min_height: 0.0, corners: zero }
 }
 
-// The Windows look's button (docs/ui/looks): a #FDFDFD face with a 1 px border, 75 x 22 at
-// least, black label; `Default` (and a focused button) takes the accent border, as the native
-// theme draws a defaulted button; `Plain` is the label alone. Measured: face, border, accent,
-// size. Unmeasured, so a guess: the hover and pressed tints and the disabled colours.
+// The Windows look's button (docs/ui/looks): a #FDFDFD face with a 1 px border, 74 x 22 visible
+// (v3's 75 x 23 DFM box, the native theme draws it ~1.3 px inside), black label; `Default` (and a
+// focused or toggled-on button) takes the accent border, as the native theme draws a defaulted
+// button; `Plain` is the label alone. Measured (v3 at 150 %, docs/ui/looks/windows-measurements.md):
+// the rest face, border, accent, size, and the disabled face, border and label. Unmeasured, so a
+// guess: the hover and pressed faces and every Dark and contrast colour. High contrast draws the
+// button as the system does: button face and text, Highlight under the pointer.
 fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) -> ResolvedControl {
     var face = color(t, .SurfaceContainerLowest)
     var ink = color(t, .Text)
     var edge = color(t, .Border)
-    if variant == .Plain {
+    let contrast = windows_contrast(t)
+    let accent = windows_accent(t)
+    let plain = variant == .Plain
+    if plain {
         face = paint.rgba(0.0, 0.0, 0.0, 0.0)
         edge = face
     }
-    if state.hovered && !state.pressed { face = layer(face, ink, 0.04) }
-    if state.pressed { face = layer(face, ink, 0.08) }
-    if variant == .Default || state.focused { edge = hex(2723289u32) }
+    if state.selected {
+        if contrast {
+            face = color(t, .Primary)
+            ink = color(t, .OnPrimary)
+        }
+        if !contrast { face = mix(color(t, .SurfaceContainerLowest), accent, 0.2) }
+    }
+    var hover = hex(0xF6F6F6u32)
+    var press = hex(0xF0F0F0u32)
+    if t.palette == .Dark {
+        hover = hex(0x323232u32)
+        press = hex(0x272727u32)
+    }
+    if state.hovered && !state.pressed {
+        if contrast {
+            face = color(t, .Primary)
+            ink = color(t, .OnPrimary)
+        }
+        if !contrast && !plain && !state.selected { face = hover }
+        if !contrast && (plain || state.selected) { face = layer(face, ink, 0.04) }
+    }
+    if state.pressed {
+        if contrast {
+            face = color(t, .Primary)
+            ink = color(t, .OnPrimary)
+        }
+        if !contrast && !plain && !state.selected { face = press }
+        if !contrast && (plain || state.selected) { face = layer(face, ink, 0.08) }
+    }
+    if variant == .Default || state.focused || state.selected { edge = accent }
     if state.disabled {
-        face = mix(face, color(t, .Background), 0.5)
-        ink = mix(ink, color(t, .SurfaceContainerLowest), 0.55)
-        edge = mix(edge, color(t, .Background), 0.5)
+        // Measured on v3's disabled Apply: face #F9F9F9, border #EAEAEA, label #878787 (Light).
+        face = hex(0xF9F9F9u32)
+        edge = hex(0xEAEAEAu32)
+        ink = hex(0x878787u32)
+        if t.palette == .Dark {
+            face = hex(0x282828u32)
+            edge = hex(0x333333u32)
+            ink = hex(0x757575u32)
+        }
+        if contrast {
+            face = color(t, .SurfaceContainerLowest)
+            edge = color(t, .TextMuted)
+            ink = color(t, .TextMuted)
+        }
+        if plain { face = paint.rgba(0.0, 0.0, 0.0, 0.0) }
+        if plain { edge = face }
     }
     var stroke = t.borders.regular
-    if variant == .Default || state.focused { stroke = 1.33 }
-    let line = text_style(t, .Label).line_height
-    ret ResolvedControl { background: face, foreground: ink, border: edge, border_width: stroke, focus_ring: 0.0, opacity: 1.0, radius: t.radii.sm, elevation: 0u8, padding: 8.0, padding_start: 0.0, padding_y: (t.metrics.control_height - line) * 0.5, custom_padding: true, min_width: 75.0, min_height: t.metrics.control_height, corners: zero }
+    if (variant == .Default || state.focused || state.selected) && contrast {
+        stroke = 2.0
+    }
+    // 3 px sides and 2 px above and below the label leave the room v3's dotted focus rectangle sits in.
+    ret ResolvedControl { background: face, foreground: ink, border: edge, border_width: stroke, focus_ring: 0.0, opacity: 1.0, radius: t.radii.sm, elevation: 0u8, padding: 3.0, padding_start: 0.0, padding_y: 2.0, custom_padding: true, min_width: 73.33, min_height: 21.33, corners: zero }
 }
 
 // The v2 disabled look (D942): the container in the surface's content colour at
