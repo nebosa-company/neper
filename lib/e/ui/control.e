@@ -2395,12 +2395,201 @@ fn options_text(look: style.ResolvedControl) -> bool {
     ret !(look.background.alpha > 0.0) && !(look.border_width > 0.0)
 }
 
+// ---- looks-polish: the Windows look's button family ---------------------------------------------
+// One builder for v3's TcxButton as the native Windows 11 theme draws it (lfFlat and lfOffice11 with
+// NativeStyle look the same, docs/ui/looks/windows-measurements.md): the caption centred in a box of
+// at least 74 x 22, a 16 px picture before it (centred as a group, 4 px apart), a picture alone
+// (29 wide), a split's arrow part, the toggled-on state, the busy ring, and v3's dotted focus rectangle.
+type WindowsDots = struct { color: paint.Color }
+
+fn windows_dots_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+// A 1 px dotted rectangle: a dot every 2 px along all four edges of the area it is laid out in.
+fn windows_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*WindowsDots](ctx)
+    var x: f32 = 0.0
+    while x < area.width {
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + x, y: area.y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + x, y: area.y + area.height - 1.0, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        x += 2.0
+    }
+    var y: f32 = 2.0
+    while y < area.height - 1.0 {
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: area.y + y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + area.width - 1.0, y: area.y + y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        y += 2.0
+    }
+    ret ok
+}
+
+fn windows_dots(a: *mem.Arena, color: paint.Color, width: f32, height: f32) -> (widget.Node, err) {
+    let (dots, dots_error) = mem.alloc[WindowsDots](a, 1usize)
+    if dots_error != ok { ret (zero, TooLarge) }
+    dots[0usize] = WindowsDots { color: color }
+    var s = style.defaults()
+    s.width = style.Length { Px: width }
+    s.height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: windows_dots_measure, paint: windows_dots_paint, state: widget.bytes_of[WindowsDots](&dots[0usize]) } }, style: s, children: none }, ok)
+}
+
+// The button's box content: `row` centred in the room the look leaves inside its border and padding,
+// with the dotted focus rectangle laid over it while the keyboard has the focus.
+fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node) -> (widget.Node, err) {
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = row
+    var fill = style.defaults()
+    let edge = t.tokens.borders.regular + look.padding
+    fill.min_width = style.Length { Px: max_zero(look.min_width - edge * 2.0) }
+    fill.min_height = style.Length { Px: max_zero(look.min_height - (t.tokens.borders.regular + look.padding_y) * 2.0) }
+    let centred = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
+    if !(state.focus_visible && enabled) { ret (centred, ok) }
+    let (dots, dots_error) = windows_dots(a, style.color(t.tokens, .Text), max_of(max_zero(look.min_width - edge * 2.0), content_w), max_zero(look.min_height - (t.tokens.borders.regular + look.padding_y) * 2.0))
+    if dots_error != ok { ret (zero, dots_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = centred
+    layers[1usize] = dots
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+}
+
+// A Windows button: `picture` (when `has_icon`) then the caption (when `show_label`; `label` still
+// names it in the tree), `selected` the toggled-on face, `corners` nonzero for a split's head.
+fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, show_label: bool, selected: bool, corners: style.Corners, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, selected)
+    var look = style.windows_resolve(t.tokens, options.variant, state)
+    look.corners = corners
+    if !show_label { look.min_width = 29.33 }
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    var ink = look.foreground
+    if options.loading { ink.alpha = 0.0 }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    var content_w: f32 = 0.0
+    if has_icon && !options.loading {
+        parts[count] = picture
+        count += 1usize
+        content_w = 16.0
+    }
+    if show_label {
+        let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, ink)
+        if label_error != ok { ret (zero, label_error) }
+        parts[count] = label_node
+        count += 1usize
+        let (advance, fit, baseline, metrics_error) = run_metrics(a, t, .Label, label)
+        if metrics_error != ok { ret (zero, metrics_error) }
+        content_w += fit
+        if count == 2usize { content_w += 4.0 }
+    }
+    var row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), parts[0usize..count])
+    var states = 0u32
+    if options.loading {
+        // The caption keeps its width, unseen; a 14 ring takes the ink and stands centred over it.
+        var inked = progress_options()
+        inked.content = look.foreground
+        let (ring, ring_error) = progress_ring_of(a, 0u64, t, label, 0.0, true, 14.0, inked)
+        if ring_error != ok { ret (zero, ring_error) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = ring
+        layers[1usize] = row
+        layers[2usize] = widget.aligned(0u64, .Center, .Center, sized_style(max_of(max_zero(look.min_width - (t.tokens.borders.regular + look.padding) * 2.0), content_w), max_zero(look.min_height - (t.tokens.borders.regular + look.padding_y) * 2.0)), layers[0usize..1usize])
+        row = widget.stack(0u64, style.defaults(), layers[1usize..3usize])
+        states = accessibility.STATE_BUSY
+    }
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row)
+    if shown_error != ok { ret (zero, shown_error) }
+    let (node, node_error) = pressable_states(a, key, t, 3u8, label, look, options.enabled, selected, states, 0u32, 0u64, action, shown)
+    ret (node, node_error)
+}
+
+// A split button: the head (caption) and, joined to it, the arrow part keyed `key + 1` that fires
+// `toggle` for the menu the caller places, as `split_button` does. The two borders meet in the divider.
+fn windows_split(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, open: bool, toggle: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    let r = t.tokens.radii.sm
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (head, head_error) = windows_button(a, key, t, label, widget.spacer(0u64, 0.0), false, true, false, style.Corners { top_left: r, top_right: 0.0, bottom_right: 0.0, bottom_left: r }, action, options)
+    if head_error != ok { ret (zero, head_error) }
+    parts[0usize] = head
+    let state = control_state(t, key + 1u64, options.enabled, open)
+    var look = style.windows_resolve(t.tokens, options.variant, state)
+    look.corners = style.Corners { top_left: 0.0, top_right: r, bottom_right: r, bottom_left: 0.0 }
+    look.min_width = 20.0
+    look.padding = 3.0
+    let (chevron, chevron_error) = icon_square(a, look.foreground, .ChevronDown, 12.0)
+    if chevron_error != ok { ret (zero, chevron_error) }
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron)
+    if shown_error != ok { ret (zero, shown_error) }
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (tail, tail_error) = pressable_states(a, key + 1u64, t, 3u8, "More", look, options.enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, shown)
+    if tail_error != ok { ret (zero, tail_error) }
+    parts[1usize] = tail
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// A button with a drawn glyph before its caption (an empty `label`: the glyph alone, named "Button"
+// in the tree). The Windows look draws it as v3's picture button; the other looks as
+// `button_with_icon` / `icon_button`, with a glyph in place of a texture.
+fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    if t.tokens.profile == .Windows {
+        let ink = style.windows_resolve(t.tokens, options.variant, state).foreground
+        let (glyph_node, glyph_error) = icon_square(a, ink, kind, 16.0)
+        if glyph_error != ok { ret (zero, glyph_error) }
+        let (node, node_error) = windows_button(a, key, t, label, glyph_node, true, label.len != 0usize, false, zero, action, options)
+        ret (node, node_error)
+    }
+    let base = style.resolve(t.tokens, options.variant, state)
+    if label.len == 0usize {
+        let (look, size) = icon_look(t, base, options.variant, options.enabled)
+        let (mark, mark_error) = icon_square(a, look.foreground, kind, size)
+        if mark_error != ok { ret (zero, mark_error) }
+        let (node, node_error) = pressable(a, key, t, 3u8, "Button", look, options.enabled, false, action, mark)
+        ret (node, node_error)
+    }
+    var look = button_look(t, base, options.enabled)
+    look.padding_start = 16.0
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let icon_size = t.tokens.sizes.icon_sm
+    let (mark, mark_error) = icon_square(a, look.foreground, kind, icon_size)
+    if mark_error != ok { ret (zero, mark_error) }
+    parts[0usize] = mark
+    parts[1usize] = label_node
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize])
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, row)
+    ret (node, node_error)
+}
+// ---- end looks-polish: the Windows button family ----------------------------------------------
+
 // A button: its label in the resolved foreground; Enter and Space press it too.
 fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    // The Windows look (docs/ui/looks) draws its own face, border and size.
+    if t.tokens.profile == .Windows {
+        let (win, win_error) = windows_button(a, key, t, label, widget.spacer(0u64, 0.0), false, true, false, zero, action, options)
+        ret (win, win_error)
+    }
     let state = control_state(t, key, options.enabled, false)
     var look = button_look(t, style.resolve(t.tokens, options.variant, state), options.enabled)
-    // The Windows look (docs/ui/looks) draws its own face, border and size.
-    if t.tokens.profile == .Windows { look = style.windows_resolve(t.tokens, options.variant, state) }
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
@@ -2427,17 +2616,7 @@ fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *
     }
     let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
     if label_error != ok { ret (zero, label_error) }
-    var shown = label_node
-    if t.tokens.profile == .Windows {
-        // v3's buttons are a fixed minimum width with the label centred in it.
-        let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
-        if inner_error != ok { ret (zero, TooLarge) }
-        inner[0usize] = label_node
-        var fill = style.defaults()
-        fill.min_width = style.Length { Px: look.min_width - look.padding * 2.0 - look.border_width * 2.0 }
-        shown = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
-    }
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, shown)
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, label_node)
     ret (node, node_error)
 }
 
@@ -2491,6 +2670,11 @@ fn fab(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId
 // A button with a leading icon (D942): the icon at `sizes.icon_sm`, `spacing.sm` from
 // the label, 16px on the icon side.
 fn button_with_icon(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let picture = widget.image(0u64, widget.Image { texture: texture, fit: .Contain }, sized_style(16.0, 16.0))
+        let (win, win_error) = windows_button(a, key, t, label, picture, true, true, false, zero, action, options)
+        ret (win, win_error)
+    }
     var look = button_look(t, style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, false)), options.enabled)
     look.padding_start = 16.0
     var caption = text_options()
@@ -2527,6 +2711,11 @@ fn icon_look(t: *const Theme, look: style.ResolvedControl, variant: style.Contro
 }
 
 fn icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let picture = widget.image(0u64, widget.Image { texture: texture, fit: .Contain }, sized_style(16.0, 16.0))
+        let (win, win_error) = windows_button(a, key, t, label, picture, true, false, false, zero, action, options)
+        ret (win, win_error)
+    }
     var state = control_state(t, key, options.enabled, false)
     let (look, size) = icon_look(t, style.resolve(t.tokens, options.variant, state), options.variant, options.enabled)
     let picture = widget.image(0u64, widget.Image { texture: texture, fit: .Contain }, sized_style(size, size))
@@ -2540,6 +2729,10 @@ fn icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.T
 // rounded; on is the filled look with `radius-sm` corners (`radius-md` at touch
 // density), keeping that shape when disabled so the state still reads.
 fn toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (win, win_error) = windows_button(a, key, t, label, widget.spacer(0u64, 0.0), false, true, selected, zero, action, options)
+        ret (win, win_error)
+    }
     var shown: style.ControlVariant = options.variant
     if selected { shown = .Filled }
     var state = control_state(t, key, options.enabled, false)
@@ -7077,6 +7270,10 @@ fn glyph_button_badged(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Gl
 // at its outer end and `radius-xs` at the inner one; the trailing half is 36 wide at
 // pointer density (44 at touch) round an 18px chevron.
 fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (win, win_error) = windows_split(a, key, t, label, action, open, toggle, button_options())
+        ret (win, win_error)
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     let h = t.tokens.metrics.control_height

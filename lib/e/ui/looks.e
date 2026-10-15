@@ -31,7 +31,7 @@ use e.ui.widget
 
 // The four looks. Cupertino and Material have no tokens of their own yet: `theme_for` answers
 // the Neper tokens carrying their profile, and `run_all` does not render them.
-type Look = enum u8 { Neper, Windows, Cupertino, Material }
+type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark }
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible).
@@ -58,6 +58,7 @@ fn tahoma_path() -> str { ret "C:/Windows/Fonts/tahoma.ttf" }
 // with the matching profile, so a control that branches on it can start to.
 fn theme_for(look: Look) -> style.ThemeTokens {
     if look == .Windows { ret style.windows(.Light) }
+    if look == .WindowsDark { ret style.windows(.Dark) }
     var t = style.reference(.Light)
     if look == .Cupertino { t.profile = .CupertinoLike }
     if look == .Material { t.profile = .MaterialLike }
@@ -66,6 +67,7 @@ fn theme_for(look: Look) -> style.ThemeTokens {
 
 fn look_dir(look: Look) -> str {
     if look == .Windows { ret "windows" }
+    if look == .WindowsDark { ret "windows-dark" }
     if look == .Cupertino { ret "cupertino" }
     if look == .Material { ret "material" }
     ret "neper"
@@ -351,16 +353,17 @@ fn load_reference(a: *mem.Arena, path: str) -> (image.Image, bool) {
     ret (decoded, true)
 }
 
-// Renders `s` under the Neper and Windows looks at 100 % and 150 %.
+// Renders `s` under the Neper, Windows and Windows dark looks at 100 % and 150 %.
 fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
     var scale_index = 0usize
     while scale_index < 2usize {
         var scale: f32 = 1.0
         if scale_index == 1usize { scale = 1.5 }
         var look_index = 0usize
-        while look_index < 2usize {
+        while look_index < 3usize {
             var look: Look = .Neper
             if look_index == 1usize { look = .Windows }
+            if look_index == 2usize { look = .WindowsDark }
             let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
             if open_error != ok { ret open_error }
             set_look(rig, look)
