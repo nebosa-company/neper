@@ -41477,3 +41477,6 @@ The Footnote Properties text area is a text field too (`dz_foot_field`, `Grid.dz
 
 ## D4132 - G012: the footnote prints on the preview page
 The text of Footnote Properties is printed on the preview page under the footer band, at the left margin (`preview_footnote`, one line of up to 48 characters; TP8-footnote-in-preview-v5.png: "Foo"). v3's footnote placement and its Mode box (first page / every page) are not modelled; the Title's Mode likewise.
+
+## D4133 - G012: the Mode box of Title and Footnote Properties works
+A tap on the Mode box steps On First Page, On Every Page, Do Not Print (the three DevExpress report-title modes; v3's own list was not recorded, so this is from the component, not from the window). The title and the footnote print on the preview page accordingly (`dz_prints_here`; the default On First Page prints them on page 1 only). Seen: Every Page set, page 2 of the preview shows the title (TP9-title-mode-v5.png, TP10-title-every-page-v5.png). Not seen: first-page-only dropping the title on page 2, and Do Not Print.

@@ -165,6 +165,7 @@ dz_title_len: usize,
 dz_title_set: bool,
 dz_foot: [48]u8,
 dz_foot_len: usize,
+dz_modes: [2]u8,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
 pv_wide: u8,
@@ -9929,6 +9930,7 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
         }
         if t.kind == 5u8 { t.grid.dz_dirty = false }
         if t.kind == 6u8 { t.grid.dz_dlg = u8(t.value) }
+        if t.kind == 7u8 { t.grid.dz_modes[t.value] = (t.grid.dz_modes[t.value] + 1u8) % 3u8 }
         if t.kind == 2u8 {
             t.grid.print_open = false
             t.grid.wiz_open = false
@@ -10368,13 +10370,14 @@ fn dz_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 6usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
-    let (close, close_error) = mem.alloc[DesignTap](a, 1usize)
+    let (close, close_error) = mem.alloc[DesignTap](a, 2usize)
     if close_error != ok { ret (zero, control.TooLarge) }
     close[0usize] = DesignTap { grid: grid, kind: 6u8, value: 0usize }
+    close[1usize] = DesignTap { grid: grid, kind: 7u8, value: usize(grid.dz_dlg) - 1usize }
     let (title, title_error) = dz_heading(a, grid, heading)
     if title_error != ok { ret (zero, title_error) }
     rows[0usize] = title
-    let (mode, mode_error) = dz_field(a, grid, "Mode:   On First Page", 560.0)
+    let (mode, mode_error) = dz_mode_row(a, grid, &close[1usize])
     if mode_error != ok { ret (zero, mode_error) }
     rows[1usize] = mode
     let (tabs, tabs_error) = dz_field(a, grid, "Text      Properties", 200.0)
@@ -10414,6 +10417,7 @@ fn dz_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 
 // The report's title: what Title Properties holds, "Collection" until it has been opened.
 fn report_title(a: *mem.Arena, grid: *const Grid) -> (str, err) {
+    if !dz_prints_here(grid, 0usize) { ret ("", ok) }
     if !grid.dz_title_set { ret ("Collection", ok) }
     let (b, b_error) = str.builder(a, 56usize)
     if b_error != ok { ret ("", b_error) }
@@ -10495,7 +10499,7 @@ fn dz_foot_field(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 // The footnote Footnote Properties holds, one line under the footer band (an empty box when there is none).
 fn preview_footnote(a: *mem.Arena, grid: *Grid, left: f32) -> widget.Node {
     var none = control.sized_style(1.0, 1.0)
-    if grid.dz_foot_len == 0usize { ret widget.box(0u64, none, zero) }
+    if grid.dz_foot_len == 0usize || !dz_prints_here(grid, 1usize) { ret widget.box(0u64, none, zero) }
     let (b, b_error) = str.builder(a, 56usize)
     if b_error != ok { ret widget.box(0u64, none, zero) }
     var sb = b
@@ -10507,4 +10511,25 @@ fn preview_footnote(a: *mem.Arena, grid: *Grid, left: f32) -> widget.Node {
     let (words, words_error) = flat_text(a, grid, str.done(&sb), gl.rgb(0x000000u32))
     if words_error != ok { ret widget.box(0u64, none, zero) }
     ret widget.padded(0u64, left, 2.0, 0.0, 0.0, style.defaults(), one(a, words))
+}
+
+fn dz_mode_words(mode: u8) -> str {
+    if mode == 1u8 { ret "Mode:   On Every Page" }
+    if mode == 2u8 { ret "Mode:   Do Not Print" }
+    ret "Mode:   On First Page"
+}
+
+// The Mode box of Title / Footnote Properties: a tap steps first page, every page, not printed.
+fn dz_mode_row(a: *mem.Arena, grid: *Grid, tap: *DesignTap) -> (widget.Node, err) {
+    let (box, box_error) = dz_field(a, grid, dz_mode_words(grid.dz_modes[tap.value]), 560.0)
+    if box_error != ok { ret (zero, box_error) }
+    ret (widget.region(grid.key + MENU_KEY + 851270u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tap), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(570.0, 34.0), one(a, box)), ok)
+}
+
+// Whether the title (0) or footnote (1) prints on the page being shown.
+fn dz_prints_here(grid: *const Grid, which: usize) -> bool {
+    let mode = grid.dz_modes[which]
+    if mode == 2u8 { ret false }
+    if mode == 0u8 && grid.pv_page != 0usize { ret false }
+    ret true
 }
