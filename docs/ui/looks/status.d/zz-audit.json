@@ -1,0 +1,408 @@
+{
+ "label": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/label.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 7517, off by >2: 1194, max err 240. Captured states compared: 10 real labels (bold titles, links, grey Last update, 21 px product name, wrapped line). Not within tolerance.",
+    "gaps": [
+     "Mismatch: ink box within 1 px on only 6 of 10 labels; long Tahoma runs 195 vs 214 px and wrap 211 vs 230 px (unhinted text)",
+     "Mismatch: 21 px centred product name 1 px low",
+     "Unverified (no capture): disabled, hover, rotated, centred/other background"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/button.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 14389, off by >2: 58, max err 253. Captured states compared: normal, default (Enter), mnemonic, disabled at 73x22 and 83x24 (button.png); icon+caption, disabled icon+caption, glyph-only (button_kinds). Frame and fill pixels match; see gaps.",
+    "gaps": [
+     "Mismatch: button.png: frame and fill pixels exact (error 0) on 4 of 6, max 6 and 13 on one pixel each (disabled and mnemonic text pixels); text ink boxes within 1 px on all 6",
+     "Mismatch: button_kinds: frame and caption position match; the icon bitmaps are substitutes (v3 grid glyph vs our arrow), excluded as artwork, not tokens",
+     "Unverified (no capture): hover, pressed, keyboard focus, default+focus, toggle on/off, split, loading, plain"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/checkbox_dialog-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 5387, off by >2: 411, max err 213. Captured states compared: unchecked and checked, 8 boxes with labels. Not within tolerance.",
+    "gaps": [
+     "Mismatch: box top border 7 levels off (ref 233 vs ours 240 on the unchecked top edge), corner anti-alias up to 56",
+     "Mismatch: label ink boxes not within 1 px on every item (structural errors 29-97 px per item)",
+     "Unverified (no capture): hover, pressed, focus, disabled, indeterminate"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_dialog-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 52242, off by >2: 367, max err 222. Captured states compared: checked and unchecked in a group box, and 3 on the Filter page. Not within tolerance.",
+    "gaps": [
+     "Mismatch: ring anti-aliasing differs on every circle",
+     "Mismatch: label ink offset; group frame bottom/right edge differ",
+     "Unverified (no capture): hover, pressed, focus, disabled"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_group_dialog-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 125346, off by >2: 3900, max err 240. Captured states compared: 3 radio groups (Options pages) checked and unchecked. Not within tolerance.",
+    "gaps": [
+     "Mismatch: group frame and ring edges differ (3900 structural px off by >2, max 240)",
+     "Mismatch: caption/item ink not within 1 px everywhere",
+     "Unverified (no capture): hover, pressed, focus, disabled"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 31121, off by >2: 3946, max err 224. Captured states compared: only the empty mask edit frame (shared frame) and the path edits; no plain text edit with text/selection/focus captured. Not within tolerance.",
+    "gaps": [
+     "Mismatch: bottom border rows (y=20,21) differ on 494 px, up to 7 levels; end pixels differ",
+     "Mismatch: our text caret absent in ref (blink phase)",
+     "Unverified (no capture): focus, hover, selection, read-only, disabled, invalid"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 31121, off by >2: 3946, max err 224. Captured states compared: 3 spin edits: fast-button variant (4) and two plain (650, 500). Not within tolerance.",
+    "gaps": [
+     "Mismatch: spin button glyphs and button-box edges differ (max 224 and 46)",
+     "Mismatch: bottom border rows differ as in the text edit",
+     "Unverified (no capture): hover/pressed buttons, focus, disabled, read-only"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_dialog-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 28419, off by >2: 3175, max err 255. Captured states compared: closed combos (2 in dialog), edit-focused with blue underline, pick state with focus rect, flat/left. Not within tolerance.",
+    "gaps": [
+     "Mismatch: second dialog combo (Medium): top and bottom border rows off by up to 238 over 383 px each",
+     "Mismatch: edit state: caret only in ours; right edge column x=304 6 levels off; bottom blue line end pixels 25 off",
+     "Mismatch: pick: selection and focus rect differ (max 158, 202 px)",
+     "Mismatch: flat-left ref not located in our sheet (best match error 79)",
+     "Unverified (no capture): open list, hover, pressed, disabled, read-only, invalid"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image_combo_box_dialog-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 13034, off by >2: 697, max err 70. Captured states compared: 3 combos with image (closed). Not within tolerance.",
+    "gaps": [
+     "Mismatch: third combo 615 px off by >2 (max 64); first two combos max 66-70 on 26 and 56 px (arrow/inner edges)",
+     "Unverified (no capture): open, hover, focus, disabled"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): no capture to compare. Captured states compared: nothing: no date edit exists in any v3 capture. Not within tolerance.",
+    "gaps": [
+     "Mismatch: no reference exists; geometry derived from the combo, not measured",
+     "Unverified (no capture): every state"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 31121, off by >2: 3946, max err 224. Captured states compared: empty mask edit (Options Passwords). Not within tolerance.",
+    "gaps": [
+     "Mismatch: bottom 2 border rows differ on 494 of 496 px, 5 to 7 levels (ref ~236, ours 240); right end pixel differs",
+     "Unverified (no capture): text, focus, invalid, disabled, read-only"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/memo.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): no capture to compare. Captured states compared: nothing: no memo control is in the captures. Not within tolerance.",
+    "gaps": [
+     "Mismatch: no reference exists",
+     "Unverified (no capture): every state"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 31121, off by >2: 3946, max err 224. Captured states compared: 2 path edits with the ... button (My Decks, Card Art). Not within tolerance.",
+    "gaps": [
+     "Mismatch: text ink and ... button frame differ (max 207, 1100-1500 px)",
+     "Mismatch: bottom border rows differ",
+     "Unverified (no capture): hover/pressed of the button, focus, disabled, read-only"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/token_edit.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): no capture to compare. Captured states compared: nothing: no token edit in v3 captures. Not within tolerance.",
+    "gaps": [
+     "Mismatch: no reference exists",
+     "Unverified (no capture): every state"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/check_list_box_dialog-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 186617, off by >2: 5535, max err 255. Captured states compared: one populated list with checked/unchecked rows (Options). Not within tolerance.",
+    "gaps": [
+     "Mismatch: 5535 of 186617 structural px off, max 255 (item pitch and check boxes differ)",
+     "Unverified (no capture): hover, focus row, disabled, selection"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): no capture to compare. Captured states compared: nothing: the v3 progress bar is hidden (visible=false) in every main-window capture. Not within tolerance.",
+    "gaps": [
+     "Mismatch: no reference exists; track and #06B025 fill are guesses",
+     "Unverified (no capture): every state"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 82999, off by >2: 4940, max err 239. Captured states compared: Options group boxes (frame, caption). Not within tolerance.",
+    "gaps": [
+     "Mismatch: 4940 structural px off, max 239; frame/caption bands differ (max 25 on three plain boxes, ~1200 px each)",
+     "Unverified (no capture): disabled, focus"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control_filter-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 15756, off by >2: 3053, max err 242. Captured states compared: 5 tab strips (about, custom, filter, stats; bottom tabs). Not within tolerance.",
+    "gaps": [
+     "Mismatch: structural off-by-2: about 155, custom 47, filter 495, stats 124 px, max 128-242",
+     "Mismatch: bottom tabs: ref not located in our sheet (2232 px off)",
+     "Unverified (no capture): hover tab, pressed, focus on another tab, disabled tab, scroll buttons"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/splitter_dialog-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 10855, off by >2: 3330, max err 120. Captured states compared: vertical splitter strip in the Filter dialog and the live main-window splitters. Not within tolerance.",
+    "gaps": [
+     "Mismatch: splitter_dialog: strip fill off by 9 levels over 12x320 px (ref 243 vs ours 240); white column ends 1 row early",
+     "Mismatch: live splitter: ref not located in our sheet (match error 120)",
+     "Unverified (no capture): hover, drag, focus"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/status_bar.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 12412, off by >2: 90, max err 79. Captured states compared: main-window status bar (panels, grip) at rest. Not within tolerance.",
+    "gaps": [
+     "Mismatch: 2302 px off by >2: panel separator columns near x=281 and x=435 differ (row 0: ours #D4D4D4, ref #F0F0F0)",
+     "Mismatch: size grip pixels differ; text ink not compared",
+     "Unverified (no capture): hover, disabled, other panel contents"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toolbar_button.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 7622, off by >2: 384, max err 69. Captured states compared: enabled and disabled toolbar glyphs in the main toolbar. Not within tolerance.",
+    "gaps": [
+     "Mismatch: glyph set differs (v3 artwork vs ours): 384 of 7622 structural px off, max 69; ref and ours not at the same layout",
+     "Unverified (no capture): hover, pressed, checked, focus, dropdown"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 17196, off by >2: 277, max err 240. Captured states compared: main menu bar at rest. Not within tolerance.",
+    "gaps": [
+     "Mismatch: left edge column differs; 277 structural px off, max 240; item text ink offsets",
+     "Unverified (no capture): hover item, open item, pressed, disabled item"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 822992, off by >2: 70277, max err 255. Captured states compared: 10 real dropdown menus at rest (File to Help) and the dialog context menu. Not within tolerance.",
+    "gaps": [
+     "Mismatch: every menu: 64 to 3904 structural px off by >2 (online 480, max 80; file 1558; view 3904); text ink and separators not within tolerance",
+     "Mismatch: popup_menu_dialog: 55895 px off (layout differs)",
+     "Unverified (no capture): hover item, pressed, disabled items, submenu open"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/hint.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): no capture to compare. Captured states compared: nothing: no tooltip in the captures. Not within tolerance.",
+    "gaps": [
+     "Mismatch: no reference exists",
+     "Unverified (no capture): every state"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 2711, off by >2: 1345, max err 240. Captured states compared: live vertical scroll bar thumb and arrows (main grid). Not within tolerance.",
+    "gaps": [
+     "Mismatch: ref crop not found in our sheet at 100 % (1345 of 2711 structural px off, max 240)",
+     "Unverified (no capture): hover, pressed, disabled, horizontal"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/list_box_dialog-vs-ref.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 20702, off by >2: 373, max err 234. Captured states compared: one list with a selected row (Artist) and focus rect. Not within tolerance.",
+    "gaps": [
+     "Mismatch: left/right border column and focus rect differ; 373 of 20702 structural px off, max 234; row text ink",
+     "Unverified (no capture): hover, disabled, multi-select"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 251424, off by >2: 8650, max err 243. Captured states compared: two tree lists (tree, Rules Manager). Not within tolerance.",
+    "gaps": [
+     "Mismatch: tree_list ref not located (6998 of 83445 px off); rules list 1652 px off, max 242",
+     "Unverified (no capture): hover, focus row, disabled"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 120803, off by >2: 5527, max err 255. Captured states compared: one property grid (Deck Properties). Not within tolerance.",
+    "gaps": [
+     "Mismatch: 5527 of 120803 structural px off, max 255 (lower half of the grid)",
+     "Unverified (no capture): hover, edit mode, focus, disabled"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 198511, off by >2: 60920, max err 255. Captured states compared: main-window card grid at 100 % (data_grid_main only; the other refs are 150 %). Not within tolerance.",
+    "gaps": [
+     "Mismatch: 60920 of 198511 structural px off, max 255: grid lines and header bands offset (template aligned at (5,34)); unverified at 150 %",
+     "Unverified (no capture): hover, pressed header, focus cell, edit, disabled, sort/filter popups"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog.png",
+    "notes": "Audit 2026-10-15 (fresh render, pixel diff vs ref/windows at 100 %): structural px 917057, off by >2: 292733, max err 240. Captured states compared: title bars and buttons of 6+ dialogs; dialog bodies are app content. Not within tolerance.",
+    "gaps": [
+     "Mismatch: title bars: 882 of 81750 structural px off, max 217 (title text, close glyph)",
+     "Mismatch: dialog.png bodies: 42% px off because the sheet does not compose the body contents",
+     "Unverified (no capture): focus, inactive caption, resize, disabled"
+    ]
+   }
+  }
+ }
+}
