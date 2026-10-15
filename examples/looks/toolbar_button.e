@@ -23,33 +23,62 @@ fn glyph(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, k
     ret (round, round_error)
 }
 
-fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key) -> (widget.Node, err) {
-    let kinds = [8]control.GlyphKind{ .Add, .Edit, .Search, .Filter, .Settings, .Refresh, .ArrowUp, .ArrowDown }
-    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 10usize)
+// One bar of `buttons` (a group of the sizes in `groups` between separators), `width` wide;
+// under Windows a closed dxBar strip as v3 draws it, elsewhere a plain row.
+fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, groups: []const usize, width: f32, lead: u32, enabled: bool) -> (widget.Node, err) {
+    let kinds = [9]control.GlyphKind{ .Add, .Edit, .Search, .Filter, .Settings, .Refresh, .ArrowUp, .ArrowDown, .Check }
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 16usize)
     if nodes_error != ok { ret (zero, nodes_error) }
     var n = 0usize
-    var i = 0usize
-    while i < 8usize {
-        if i == 3usize || i == 6usize {
-            let (rule, rule_error) = navigation.windows_bar_separator(a, 22.0)
+    var b = 0usize
+    var g = 0usize
+    while g < groups.len {
+        if g > 0usize && t.tokens.profile == .Windows {
+            let (rule, rule_error) = navigation.windows_bar_separator(a, 21.0)
             if rule_error != ok { ret (zero, rule_error) }
             nodes[n] = rule
             n += 1usize
         }
-        let (button, button_error) = glyph(a, t, action, base + u64(i), kinds[i], "Tool", i != 5usize, i == 2usize)
-        if button_error != ok { ret (zero, button_error) }
-        nodes[n] = button
-        n += 1usize
-        i += 1usize
+        var j = 0usize
+        while j < groups[g] {
+            let (button, button_error) = glyph(a, t, action, base + u64(b), kinds[b % 9usize], "Tool", enabled, false)
+            if button_error != ok { ret (zero, button_error) }
+            nodes[n] = button
+            n += 1usize
+            b += 1usize
+            j += 1usize
+        }
+        g += 1usize
     }
     if t.tokens.profile == .Windows {
-        let (bar, bar_error) = navigation.windows_bar_strip(a, nodes[0usize..n], 24.0, true, 300.0)
+        let (bar, bar_error) = navigation.windows_bar_strip(a, nodes[0usize..n], 26.0, true, width, false, lead, true)
         ret (bar, bar_error)
     }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
-    if row_error != ok { ret (zero, nodes_error) }
+    if row_error != ok { ret (zero, row_error) }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), nodes[0usize..n])
     ret (row[0usize], ok)
+}
+
+// The two bars at the left of v3's second toolbar row (the buttons disabled, as captured):
+// 2 + 2 + 1 + 3 buttons, then 4 + 2 + 3.
+fn bars(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, enabled: bool) -> (widget.Node, err) {
+    let first = [4]usize{ 2usize, 2usize, 1usize, 3usize }
+    let second = [3]usize{ 4usize, 2usize, 3usize }
+    if t.tokens.profile != .Windows {
+        // the Neper look keeps its round glyph buttons in one row, no separators
+        let (plain, plain_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, true)
+        ret (plain, plain_error)
+    }
+    let (left, left_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, enabled)
+    if left_error != ok { ret (zero, left_error) }
+    let (right, right_error) = strip(a, t, action, base + 20u64, second[0usize..3usize], 232.0, 15987699u32, enabled)
+    if right_error != ok { ret (zero, right_error) }
+    let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+    if both_error != ok { ret (zero, both_error) }
+    both[0usize] = left
+    both[1usize] = right
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), both[0usize..2usize]), ok)
 }
 
 // Cells: the whole strip; then one button at rest, hovered, pressed, keyboard-focused, checked,
@@ -59,9 +88,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     let action = &actions[0usize]
-    let (bar, bar_error) = strip(a, t, action, 100u64)
+    let (bar, bar_error) = bars(a, t, action, 100u64, false)
     if bar_error != ok { ret (0usize, bar_error) }
-    cells[0usize] = looks.Cell { caption: "Strip", node: bar, drive: .None }
+    cells[0usize] = looks.Cell { caption: "Bars (Windows: v3 second toolbar row, disabled as captured)", node: bar, drive: .None }
     let captions = [8]str{ "Rest", "Hover", "Pressed", "Focus", "Checked", "Disabled", "Caption", "Caption hover" }
     var i = 0usize
     while i < 8usize {
@@ -92,6 +121,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "toolbar_button", cells: 9usize, columns: 3usize, cell_w: 320.0, cell_h: 44.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "toolbar_button", cells: 9usize, columns: 1usize, cell_w: 447.0, cell_h: 26.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
