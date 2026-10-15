@@ -41480,3 +41480,6 @@ The text of Footnote Properties is printed on the preview page under the footer 
 
 ## D4133 - G012: the Mode box of Title and Footnote Properties works
 A tap on the Mode box steps On First Page, On Every Page, Do Not Print (the three DevExpress report-title modes; v3's own list was not recorded, so this is from the component, not from the window). The title and the footnote print on the preview page accordingly (`dz_prints_here`; the default On First Page prints them on page 1 only). Seen: Every Page set, page 2 of the preview shows the title (TP9-title-mode-v5.png, TP10-title-every-page-v5.png). Not seen: first-page-only dropping the title on page 2, and Do Not Print.
+
+## D4134 - G012: the default First Page mode seen
+With the default On First Page the title prints on page 1 only: page 2 has no heading (TP11-title-first-page-only-v5.png). Do Not Print is still unseen.
