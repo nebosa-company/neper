@@ -1,4 +1,30 @@
 {
+  "label": {
+    "neper": "control.text",
+    "app": "examples/looks/label.e",
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/label.png",
+        "notes": "The baseline: control.text in the Neper type scale, same samples."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/label.png",
+        "notes": "No control.e branch: the Windows tokens already set the body text to 11.2 px regular black (ink width of \"Row Color:\" is 78 px at 150 %, identical to the Grids options capture). The sheet shows v3's TcxLabel styles read from the DFMs: bold, 13 px, clGray (#808080) hints, disabled, the hot-link style (#336CCC underlined), a clWhite and a clBtnFace background, word wrap and a clipped long label.",
+        "gaps": [
+          "Disabled colour (#6D6D6D, GrayText) is a guess; no captured disabled label",
+          "The hot-link underline is a 1 unit line under the text (no underline in control.text); it has no hover state here",
+          "The accelerator underline (&Color in v3 captions) is not drawn",
+          "Bold needs Segoe UI Bold, now registered as font 9 in e.ui.looks (the harness had regular faces only); bold use in v3 is Tahoma bold, face not confirmed",
+          "A clipped label shows no ellipsis (the box clips); v3's AutoSize = False label also just clips",
+          "Rotated labels (Properties.Angle = 90) are not drawn",
+          "Captured text is ClearType (coloured fringes), ours is grayscale",
+          "Two cells with the same text in one sheet failed with InvalidTree in the harness; the sheet avoids duplicates"
+        ]
+      }
+    }
+  },
   "checkbox": {
     "neper": "control.checkbox",
     "app": "examples/looks/checkbox.e",

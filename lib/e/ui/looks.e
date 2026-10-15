@@ -53,6 +53,8 @@ fn caption_h() -> f32 { ret 16.0 }
 fn out_root() -> str { ret "docs/ui/looks" }
 fn segoe_path() -> str { ret "C:/Windows/Fonts/segoeui.ttf" }
 fn tahoma_path() -> str { ret "C:/Windows/Fonts/tahoma.ttf" }
+// Segoe UI Bold (font id 9), last in the chain: only a control that asks for weight 700 reaches it.
+fn segoe_bold_path() -> str { ret "C:/Windows/Fonts/segoeuib.ttf" }
 
 // The tokens of a look, Light palette. Cupertino and Material are planned: the Neper tokens
 // with the matching profile, so a control that branches on it can start to.
@@ -86,6 +88,8 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     if segoe_error != ok { ret (rig, segoe_error) }
     let (tahoma_bytes, tahoma_error) = fs.read_file(a, tahoma_path(), 16777216usize)
     if tahoma_error != ok { ret (rig, tahoma_error) }
+    let (bold_bytes, bold_error) = fs.read_file(a, segoe_bold_path(), 16777216usize)
+    if bold_error != ok { ret (rig, bold_error) }
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret (rig, device_error) }
     let (q, queue_error) = gpu.queue(device)
@@ -93,13 +97,15 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 4u32)
     if renderer_error != ok { ret (rig, renderer_error) }
     rig.renderer = r
-    let (fonts, fonts_error) = mem.alloc[shape.Font](a, 2usize)
+    let (fonts, fonts_error) = mem.alloc[shape.Font](a, 3usize)
     if fonts_error != ok { ret (rig, fonts_error) }
     fonts[0usize] = shape.Font { id: 7u32, data: segoe_bytes, face_index: 0u32 }
     fonts[1usize] = shape.Font { id: 8u32, data: tahoma_bytes, face_index: 0u32 }
+    fonts[2usize] = shape.Font { id: 9u32, data: bold_bytes, face_index: 0u32 }
     try scene.register_font(&rig.renderer, fonts[0usize])
     try scene.register_font(&rig.renderer, fonts[1usize])
-    rig.fonts = fonts[0usize..2usize]
+    try scene.register_font(&rig.renderer, fonts[2usize])
+    rig.fonts = fonts[0usize..3usize]
     let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 4000usize, max_states: 128usize, state_bytes: 256usize, state_classes: 4u16, max_depth: 24u16, max_commands: 16384usize })
     if runtime_error != ok { ret (rig, runtime_error) }
     rig.runtime = rt
