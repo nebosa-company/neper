@@ -60,17 +60,17 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let one_cell = widget.stack(0u64, first, parts[0usize..4usize])
     cells[0usize] = looks.Cell { caption: "Interface page", node: one_cell, drive: .None }
     // Grids page: crop (220,96)-(510,160); the controls at page x 224, y 102/132.
-    let (b0, f0) = one(a, t, action, 11u64, "Show Foil Symbol", true, 4.0, 6.0, 21.0)
+    let (b0, f0) = one(a, t, action, 11u64, "Show Foil &Symbol", true, 4.0, 6.0, 21.0)
     if f0 != ok { ret (0usize, f0) }
-    let (b1, f1) = one(a, t, action, 12u64, "Show Filter Row", true, 4.0, 36.0, 21.0)
+    let (b1, f1) = one(a, t, action, 12u64, "Show Filter &Row", true, 4.0, 36.0, 21.0)
     if f1 != ok { ret (0usize, f1) }
     parts[4usize] = b0
     parts[5usize] = b1
     cells[1usize] = looks.Cell { caption: "Grids page", node: widget.stack(0u64, first, parts[4usize..6usize]), drive: .None }
     // Morph page: crop (210,240)-(500,272); Flip at page x 215 (21 tall), Back at 342 (17 tall), y 247.
-    let (c0, g0) = one(a, t, action, 21u64, "Show 'Flip' button", true, 5.0, 7.0, 21.0)
+    let (c0, g0) = one(a, t, action, 21u64, "Show '&Flip' button", true, 5.0, 7.0, 21.0)
     if g0 != ok { ret (0usize, g0) }
-    let (c1, g1) = one(a, t, action, 22u64, "Show 'Back' button", true, 132.0, 7.0, 17.0)
+    let (c1, g1) = one(a, t, action, 22u64, "Show '&Back' button", true, 132.0, 7.0, 17.0)
     if g1 != ok { ret (0usize, g1) }
     parts[6usize] = c0
     parts[7usize] = c1
