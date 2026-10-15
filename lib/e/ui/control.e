@@ -1579,6 +1579,10 @@ fn group_options() -> GroupOptions {
 fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: GroupOptions, children: []const widget.Node) -> (widget.Node, err) {
     let plain = options.variant == .Plain
     let collapsible = mem.address_of(options.toggle) != 0usize
+    if t.tokens.profile == .Windows && !collapsible {
+        let (framed, framed_error) = windows_group_box(a, key, t, label, options, children)
+        ret (framed, framed_error)
+    }
     var row_h: f32 = t.tokens.sizes.control_lg
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { row_h = t.tokens.sizes.control_xl }
     var fade: f32 = 1.0
@@ -6163,16 +6167,30 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     let sharing = options.fixed && options.width > 0.0
     var least: f32 = 48.0
     if sharing && labels.len > 0usize { least = max_of(90.0, options.width / f32(labels.len)) }
-    let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
+    let (items, items_error) = mem.alloc[widget.Node](a, labels.len * 2usize + 2usize)
     if items_error != ok { ret (zero, TooLarge) }
     let (slide, slide_cell) = tab_slide(t, key, selected, key + 1u64 + u64(selected))
-    let sliding = slide != 0.0
+    let windows = t.tokens.profile == .Windows
+    let sliding = slide != 0.0 && !windows
+    var item_count = labels.len
+    var windex = 0usize
     var i = 0usize
     while i < labels.len {
         let chosen = i == selected
         let tab_key = key + 1u64 + u64(i)
         let enabled = tab_enabled(&options, i)
         let state = control_state(t, tab_key, enabled, chosen)
+        if windows {
+            // The Windows look (v3's lfUltraFlat page control): tabs and separators in a row.
+            let (tab, sep, tab_error) = windows_tab(a, t, tab_key, labels[i], chosen, enabled, state, &picks[i], i + 1usize < labels.len && i + 1usize != selected && !chosen)
+            if tab_error != ok { ret (zero, tab_error) }
+            items[windex] = tab
+            items[windex + 1usize] = sep
+            windex += 2usize
+            item_count = windex
+            i += 1usize
+            continue
+        }
         var ink = style.color(t.tokens, .OnSurfaceVariant)
         if chosen && options.secondary { ink = style.color(t.tokens, .OnSurface) }
         if chosen && !options.secondary { ink = style.color(t.tokens, .Primary) }
@@ -6256,13 +6274,19 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         strip.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: none, right: none, bottom: none }
     }
     if sharing { strip.width = style.Length { Px: options.width } }
+    if windows {
+        strip.padding = style.defaults().padding
+        items[windex] = windows_tab_filler(a, t)
+        item_count = windex + 1usize
+        if options.width > 0.0 { strip.width = style.Length { Px: options.width } }
+    }
     let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 2usize)
     if bar_parts_error != ok { ret (zero, TooLarge) }
-    bar_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 0.0 }, strip, items[0usize..labels.len])
+    bar_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 0.0 }, strip, items[0usize..item_count])
     // (D1254) A scrollable bar with a width scrolls its strip sideways (keyed
     // `key + 1048576`), clamped, with no thumb; while the selected tab has the
     // focus the strip brings it fully into view.
-    if !sharing && options.width > 0.0 && mem.address_of(t.runtime) != 0usize {
+    if !sharing && !windows && options.width > 0.0 && mem.address_of(t.runtime) != 0usize {
         let strip_key = key + 1048576u64
         var margin: f32 = 0.0
         if !touch { margin = t.tokens.sizes.control_md }
@@ -6329,9 +6353,11 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     var line = style.defaults()
     line.height = style.Length { Px: t.tokens.sizes.divider }
     line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+    if windows { line.height = style.Length { Px: 0.0 } }
     bar_parts[1usize] = widget.box(0u64, line, zero)
     var bar = style.defaults()
     bar.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    if windows { bar.background = paint.Brush { Solid: style.color(t.tokens, .Surface) } }
     if options.width > 0.0 { bar.width = style.Length { Px: options.width } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
@@ -6578,10 +6604,75 @@ fn resizable_pane(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, a
 // A sash's paint (D966): the line across the sash's middle (on whole pixels),
 // `line_width` thick, and a 4 x 48 fully rounded grip on it (none while `grip`
 // is clear), or, as a dock layout's, a 4px bar in place of the line.
-type Sash = struct { line: paint.Color, line_width: f32, grip: paint.Color, across: bool, arena: *mem.Arena }
+// The Windows look (v3's TcxSplitter, simple hot zone): `v3` paints `face` over the strip and
+// a hot zone `hot_len` long, `edge` framed, with a chevron toward the first pane at each end
+// (`ink`) and a dotted line (`dots`) between them.
+type Sash = struct { line: paint.Color, line_width: f32, grip: paint.Color, across: bool, arena: *mem.Arena, v3: bool, face: paint.Color, edge: paint.Color, dots: paint.Color, ink: paint.Color, hot_len: f32, hot_face: paint.Color }
+
+// ---- looks: Windows (v3) splitter, appended block ----
+
+// A 7 x 4 chevron of 2-thick strokes centred on (cx, cy); dir 0 up, 1 down, 2 left, 3 right.
+fn v3_chevron(b: *scene.Builder, cx: f32, cy: f32, dir: u8, ink: paint.Color) -> err {
+    var c: f32 = -3.0
+    while c <= 3.0 {
+        var o = c
+        if o < 0.0 { o = 0.0 - o }
+        var r = geometry.rect(cx + c, cy - 2.5 + o, 1.5, 2.0)
+        if dir == 1u8 { r = geometry.rect(cx + c, cy + 0.5 - o, 1.5, 2.0) }
+        if dir == 2u8 { r = geometry.rect(cx - 2.5 + o, cy + c, 2.0, 1.5) }
+        if dir == 3u8 { r = geometry.rect(cx + 0.5 - o, cy + c, 2.0, 1.5) }
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: r, brush: paint.Brush { Solid: ink } } })
+        c += 1.0
+    }
+    ret ok
+}
+
+fn sash_paint_v3(s: *Sash, b: *scene.Builder, area: geometry.Rect) -> err {
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: area, brush: paint.Brush { Solid: s.face } } })
+    var along = area.height
+    var thick = area.width
+    if s.across {
+        along = area.width
+        thick = area.height
+    }
+    var len = s.hot_len
+    if len > along - 2.0 { len = along - 2.0 }
+    if len < 24.0 { ret ok }
+    let start = f32(i64((along - len) * 0.5))
+    var zone = geometry.rect(area.x, area.y + start, thick, len)
+    var inner = geometry.rect(area.x + 1.0, area.y + start + 1.0, thick - 2.0, len - 2.0)
+    if s.across {
+        zone = geometry.rect(area.x + start, area.y, len, thick)
+        inner = geometry.rect(area.x + start + 1.0, area.y + 1.0, len - 2.0, thick - 2.0)
+    }
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: zone, brush: paint.Brush { Solid: s.edge } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: inner, brush: paint.Brush { Solid: s.hot_face } } })
+    // Chevrons 6 from each end of the zone, the dotted line between them, a dot every 3.
+    let mid = thick * 0.5
+    var dir = 2u8
+    if s.across {
+        dir = 0u8
+    }
+    if s.across {
+        try v3_chevron(b, area.x + start + 7.0, area.y + mid, dir, s.ink)
+        try v3_chevron(b, area.x + start + len - 7.0, area.y + mid, dir, s.ink)
+    } else {
+        try v3_chevron(b, area.x + mid, area.y + start + 7.0, dir, s.ink)
+        try v3_chevron(b, area.x + mid, area.y + start + len - 7.0, dir, s.ink)
+    }
+    var at: f32 = 15.0
+    while at < len - 14.0 {
+        var dot = geometry.rect(area.x + mid - 0.5, area.y + start + at, 1.0, 1.0)
+        if s.across { dot = geometry.rect(area.x + start + at, area.y + mid - 0.5, 1.0, 1.0) }
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: dot, brush: paint.Brush { Solid: s.dots } } })
+        at += 3.0
+    }
+    ret ok
+}
 
 fn sash_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let s = mem.cast[*Sash](ctx)
+    if s.v3 { ret sash_paint_v3(s, b, area) }
     // `across`: the sash lies along x (a bottom panel's), else along y.
     if s.across {
         try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x, area.y + f32(i64((area.height - s.line_width) * 0.5)), area.width, s.line_width), brush: paint.Brush { Solid: s.line } } })
@@ -6713,6 +6804,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     // across, WCAG 2.5.8's minimum: it reaches 8 over each side, its line centred.
     var reach: f32 = 0.0
     if !touch { reach = 8.0 }
+    if t.tokens.profile == .Windows { reach = 0.0 }
     let over = style.Length { Px: 0.0 - reach }
     let flat = style.Length { Px: 0.0 }
     if vertical {
@@ -6758,7 +6850,17 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     }
     let (sashes, sashes_error) = mem.alloc[Sash](a, 1usize)
     if sashes_error != ok { ret (zero, TooLarge) }
-    sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: grip_color, across: vertical, arena: a }
+    sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: grip_color, across: vertical, arena: a, v3: false, face: sashes_line, edge: sashes_line, dots: sashes_line, ink: sashes_line, hot_len: 0.0, hot_face: sashes_line }
+    if t.tokens.profile == .Windows {
+        // v3: measured at 150 % (03-main-pool-deck-v3.png): the strip is the dialog face, the hot
+        // zone a #A0A0A0 frame with near-black chevrons and #248ADB dots. Hover and press tints are guesses.
+        var zone_edge = style.hex(10526880u32)
+        var zone_face = style.color(t.tokens, .Background)
+        if state.hovered { zone_edge = style.hex(8303850u32) }
+        if state.hovered { zone_face = style.hex(15069691u32) }
+        if state.pressed { zone_face = style.hex(13427959u32) }
+        sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: paint.rgba(0.0, 0.0, 0.0, 0.0), across: vertical, arena: a, v3: true, face: style.color(t.tokens, .Background), edge: zone_edge, dots: style.hex(2394843u32), ink: style.hex(1842204u32), hot_len: 144.0, hot_face: zone_face }
+    }
     var paint_style = style.defaults()
     paint_style.width = full
     paint_style.height = full
@@ -11106,3 +11208,294 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
     sem.row_count = u32(items.len)
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
 }
+
+// ---- looks: Windows (v3) containers, appended block (group box, section header) ----
+// Measured from docs/grid-parity/tcxgrid/09b-statistics-probability-v3.png and
+// 00-options-interface-controls-v3.png at 150 %. The frame is the theme's OutlineVariant
+// (#DCDCDC) on the dialog face; the caption stands 2 inside a gap cut in the top edge.
+
+// A group box as v3 draws it (TcxGroupBox, lfStandard): a 1 px frame whose top edge runs
+// through the middle of the caption, the caption on the dialog face 8 in from the left,
+// `children` stacked inside. `width` 0 sizes it to its content.
+fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: GroupOptions, children: []const widget.Node) -> (widget.Node, err) {
+    let face = style.color(t.tokens, .Background)
+    var ink = style.color(t.tokens, .Text)
+    if !options.enabled { ink = style.mix(ink, face, 0.55) }
+    var frame = style.defaults()
+    frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 7.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
+    if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: style.color(t.tokens, .OutlineVariant) } }
+    if options.width > 0.0 { frame.width = style.Length { Px: options.width } }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, children.len)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < children.len {
+        rows[i] = children[i]
+        i += 1usize
+    }
+    var caption = text_options()
+    caption.wrap = .None
+    let (heading, heading_error) = colored_text(a, 0u64, label, t, caption, ink)
+    if heading_error != ok { ret (zero, heading_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = heading
+    var cut = style.defaults()
+    cut.background = paint.Brush { Solid: face }
+    cut.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 0.0 } }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[2usize] = widget.box(0u64, cut, held[0usize..1usize])
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, frame, rows[0usize..children.len])
+    parts[1usize] = widget.positioned(0u64, 6.0, 0.0, style.defaults(), parts[2usize..3usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), widget_stack_of(a, parts[0usize..2usize])), ok)
+}
+
+// A stack of `nodes` as the single child list `widget.semantics` wants.
+fn widget_stack_of(a: *mem.Arena, nodes: []const widget.Node) -> []const widget.Node {
+    var out: []const widget.Node = zero
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret out }
+    one[0usize] = widget.stack(0u64, style.defaults(), nodes)
+    ret one[0usize..1usize]
+}
+
+// The section header of v3's option pages (a plain panel with a grey gradient): 24 tall,
+// #808080 at the left running to #C0C0C0 at the right, the title bold white 8 in, `aside`
+// (may be empty) in black at the right end. `width` 0 stretches to the parent.
+type SectionBar = struct { stops: [2]paint.Stop }
+
+fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let s = mem.cast[*SectionBar](ctx)
+    let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: area.x, y: area.y }, end: geometry.Point { x: area.x + area.width, y: area.y }, stops: s.stops[0usize..2usize] } }
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: area, brush: brush } })
+    // The 1 px top and bottom edge, a shade darker than the gradient (#808080).
+    let edge = paint.Brush { Solid: s.stops[0usize].color }
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x, area.y, area.width, 1.0), brush: edge } })
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x, area.y + area.height - 1.0, area.width, 1.0), brush: edge } })
+}
+
+fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, aside: str, width: f32) -> (widget.Node, err) {
+    let (bars, bars_error) = mem.alloc[SectionBar](a, 1usize)
+    if bars_error != ok { ret (zero, TooLarge) }
+    bars[0usize].stops[0usize] = paint.Stop { offset: 0.0, color: style.hex(8421504u32) }
+    bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex(12632256u32) }
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    var none: []const widget.Node = zero
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 6usize)
+    if nodes_error != ok { ret (zero, TooLarge) }
+    nodes[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&bars[0usize]), measure: mark_measure, paint: section_bar_paint, state: widget.bytes_of[SectionBar](&bars[0usize]) } }, style: fill, children: none }
+    var heading = text_options()
+    heading.wrap = .None
+    heading.weight = 700u32
+    let (head_node, head_error) = colored_text(a, 0u64, title, t, heading, style.hex(16777215u32))
+    if head_error != ok { ret (zero, head_error) }
+    var side = text_options()
+    side.wrap = .None
+    let (side_node, side_error) = colored_text(a, 0u64, aside, t, side, style.hex(0u32))
+    if side_error != ok { ret (zero, side_error) }
+    nodes[2usize] = head_node
+    nodes[3usize] = widget.spacer(0u64, 1.0)
+    nodes[4usize] = side_node
+    var row = style.defaults()
+    row.width = style.Length { Percent: 100.0 }
+    row.height = style.Length { Percent: 100.0 }
+    row.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+    nodes[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, row, nodes[2usize..5usize])
+    var holder = sized_style(width, 24.0)
+    if !(width > 0.0) { holder.width = style.Length { Percent: 100.0 } }
+    ret (widget.stack(key, holder, nodes[0usize..2usize]), ok)
+}
+
+// ---- looks: Windows (v3) page control tabs, appended block ----
+// v3's TcxPageControl is lfUltraFlat with HotTrack (statistics.vcl.form.dfm; measured on
+// 09b-statistics-probability-v3.png at 150 %): a white strip 22 tall, tabs 21 with 8 sides and no
+// chrome, a 1 px #2B2B2B line under the strip, #B0B0B0 hairlines between tabs; the selected tab
+// is a #2B2B2B frame open at the bottom on the dialog face; the hot tab's label is blue.
+
+fn v3_tab_line() -> style.Style {
+    var s = style.defaults()
+    s.height = style.Length { Px: 1.0 }
+    s.background = paint.Brush { Solid: style.hex(2829099u32) }
+    ret s
+}
+
+// One tab and the hairline that follows it (`with_sep`; else a 1 px gap carrying only the
+// strip's bottom line). Both are 22 tall.
+fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, chosen: bool, enabled: bool, state: style.ControlState, action: *const widget.Submit, with_sep: bool) -> (widget.Node, widget.Node, err) {
+    var ink = style.color(t.tokens, .Text)
+    if state.hovered && enabled { ink = style.hex(26316u32) }
+    if !enabled { ink = style.mix(ink, style.color(t.tokens, .Surface), 0.6) }
+    var caption = text_options()
+    caption.wrap = .None
+    let (label_ink_node, label_ink_error) = colored_text(a, 0u64, label, t, caption, ink)
+    if label_ink_error != ok { ret (zero, zero, label_ink_error) }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if chosen { look.background = style.color(t.tokens, .Background) }
+    look.foreground = ink
+    look.border_width = 0.0
+    look.radius = 0.0
+    look.opacity = 1.0
+    look.custom_padding = true
+    look.padding = 8.0
+    look.padding_y = 3.0
+    if chosen { look.padding_y = 2.0 }
+    look.min_height = 21.0
+    let (press, press_error) = pressable_states(a, tab_key, t, 19u8, label, look, enabled, chosen, 0u32, 0u32, 0u64, action, label_ink_node)
+    if press_error != ok { ret (zero, zero, press_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+    if held_error != ok { ret (zero, zero, TooLarge) }
+    held[0usize] = press
+    var tab = press
+    if chosen {
+        var frame = style.defaults()
+        frame.background = paint.Brush { Solid: style.hex(2829099u32) }
+        frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 0.0 } }
+        tab = widget.box(0u64, frame, held[0usize..1usize])
+    } else {
+        held[1usize] = widget.box(0u64, v3_tab_line(), zero)
+        tab = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), held[0usize..2usize])
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, zero, TooLarge) }
+    var mark = style.defaults()
+    mark.width = style.Length { Px: 1.0 }
+    mark.height = style.Length { Px: 14.0 }
+    mark.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 4.0 } }
+    if with_sep { mark.background = paint.Brush { Solid: style.hex(11579568u32) } }
+    parts[0usize] = widget.box(0u64, mark, zero)
+    parts[1usize] = widget.box(0u64, v3_tab_line(), zero)
+    var column = style.defaults()
+    column.width = style.Length { Px: 1.0 }
+    let sep = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column, parts[0usize..2usize])
+    ret (tab, sep, ok)
+}
+
+// The strip's bottom line to the right of the last tab.
+fn windows_tab_filler(a: *mem.Arena, t: *const Theme) -> widget.Node {
+    var none: []const widget.Node = zero
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret widget.spacer(0u64, 1.0) }
+    parts[0usize] = widget.spacer(0u64, 1.0)
+    parts[1usize] = widget.box(0u64, v3_tab_line(), none)
+    var column = style.defaults()
+    column.width = style.Length { Flex: 1.0 }
+    column.height = style.Length { Px: 22.0 }
+    ret widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column, parts[0usize..2usize])
+}
+
+// ---- looks: Windows (v3) scroll bar, appended block ----
+// v3's grid scroll bar (docs/grid-parity SB1/SB2, `gridlook.v3()`): a 16 wide #F0F0F0 track
+// whose arrow slots (16 at each end) are empty at rest, and a slim #858585 thumb, 2.7 wide,
+// thickening to 6 under the pointer. Hover thickness, the pressed colour and the hover arrows
+// are guesses. `collection.e` still draws the grid's own bar by hand; this is the same bar as
+// a control, `scroll_area` below.
+
+type ScrollArrows = struct { vertical: bool, ink: paint.Color }
+
+fn scroll_arrows_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let s = mem.cast[*ScrollArrows](ctx)
+    if s.vertical {
+        try v3_chevron(b, area.x + area.width * 0.5, area.y + 8.0, 0u8, s.ink)
+        ret v3_chevron(b, area.x + area.width * 0.5, area.y + area.height - 8.0, 1u8, s.ink)
+    }
+    try v3_chevron(b, area.x + 8.0, area.y + area.height * 0.5, 2u8, s.ink)
+    ret v3_chevron(b, area.x + area.width - 8.0, area.y + area.height * 0.5, 3u8, s.ink)
+}
+
+// The bar alone: `length` long along `vertical`, for a viewport of `view` px over `content`
+// px scrolled to `offset`. Keyed `key` (its hover and press state).
+fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, view: f32, content: f32, offset: f32) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    var w: f32 = 2.7
+    var ink = style.hex(8750469u32)
+    if state.hovered { w = 6.0 }
+    if state.pressed { ink = style.hex(6316128u32) }
+    let room = length - 32.0
+    var thick = style.defaults()
+    var track = sized_style(16.0, length)
+    if !vertical { track = sized_style(length, 16.0) }
+    track.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    if content > view && room > 0.0 {
+        var thumb_len = room * view / content
+        if thumb_len < 17.0 { thumb_len = 17.0 }
+        if thumb_len > room { thumb_len = room }
+        var share = offset / (content - view)
+        if share < 0.0 { share = 0.0 }
+        if share > 1.0 { share = 1.0 }
+        let at = 16.0 + (room - thumb_len) * share
+        let side = (16.0 - w) * 0.5
+        thick = sized_style(w, thumb_len)
+        thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        if !vertical {
+            thick = sized_style(thumb_len, w)
+            thick.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: side }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        }
+        thick.background = paint.Brush { Solid: ink }
+        thick.radius = w * 0.5
+        layers[count] = widget.box(0u64, thick, zero)
+        count += 1usize
+    }
+    if state.hovered || state.pressed {
+        let (arrows, arrows_error) = mem.alloc[ScrollArrows](a, 1usize)
+        if arrows_error != ok { ret (zero, TooLarge) }
+        arrows[0usize] = ScrollArrows { vertical: vertical, ink: style.hex(6316128u32) }
+        var none: []const widget.Node = zero
+        var fill = sized_style(16.0, length)
+        if !vertical { fill = sized_style(length, 16.0) }
+        layers[count] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&arrows[0usize]), measure: mark_measure, paint: scroll_arrows_paint, state: widget.bytes_of[ScrollArrows](&arrows[0usize]) } }, style: fill, children: none }
+        count += 1usize
+    }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = widget.stack(0u64, style.defaults(), layers[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 17u8
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_region_of(a, key, track, held[0usize..1usize])), ok)
+}
+
+fn widget_region_of(a: *mem.Arena, key: widget.Key, look: style.Style, children: []const widget.Node) -> []const widget.Node {
+    var out: []const widget.Node = zero
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret out }
+    one[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: zero, invoke: scroll_bar_gesture }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, look, children)
+    ret one[0usize..1usize]
+}
+
+// A scrolling viewport `width` x `height` over `children` whose content is `content` px long along
+// `axis`, scrolled to `offset`: the theme's own bar over the viewport, or, under the Windows
+// look, v3's bar beside it (the viewport's own thumb stays, invisible, for dragging and wheel).
+fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis, width: f32, height: f32, offset: f32, content: f32, children: []const widget.Node) -> (widget.Node, err) {
+    let vertical = axis == .Vertical
+    var thumb = with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
+    var view = sized_style(width, height)
+    view.overflow = .Clip
+    var along = height
+    if !vertical { along = width }
+    if t.tokens.profile != .Windows {
+        ret (widget.scroll(key, widget.Scroll { axis: axis, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, children), ok)
+    }
+    thumb = with_alpha(thumb, 0.0)
+    if vertical { view = sized_style(width - 16.0, height) } else { view = sized_style(width, height - 16.0) }
+    view.overflow = .Clip
+    let (bar, bar_error) = windows_scroll_bar(a, key + 3300u64, t, vertical, along, along, content, offset)
+    if bar_error != ok { ret (zero, bar_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.scroll(key, widget.Scroll { axis: axis, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, children)
+    parts[1usize] = bar
+    var direction: ui_layout.Axis = .Horizontal
+    if !vertical { direction = .Vertical }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: direction, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+fn scroll_bar_gesture(ctx: *void, g: widget.Gesture) -> err { ret ok }

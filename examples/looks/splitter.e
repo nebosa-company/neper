@@ -1,0 +1,53 @@
+// The splitter (TcxSplitter) in every state under every look: docs/ui/looks/<look>/splitter.png.
+// Run from the repository root; see docs/ui/looks-howto.md.
+
+use e.gfx.paint
+use e.mem
+use e.ui.control
+use e.ui.layout as ui_layout
+use e.ui.looks
+use e.ui.style
+use e.ui.widget
+
+fn noop_change(ctx: *void, value: f32) -> err { ret ok }
+
+// A pane: a white box with a grey frame, standing for the panels v3 splits.
+fn pane() -> widget.Node {
+    var s = style.defaults()
+    s.width = style.Length { Percent: 100.0 }
+    s.height = style.Length { Percent: 100.0 }
+    s.background = paint.Brush { Solid: style.hex(16777215u32) }
+    s.border = style.Border { width: 1.0, color: style.hex(8554384u32) }
+    ret widget.box(0u64, s, zero)
+}
+
+// Eight cells, a split of 200 x 120: the sash standing upright (panes side by side) at rest,
+// hovered, dragged and keyboard-focused, then the same four lying down (panes above and below).
+fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let captions = [8]str{ "Rest", "Hover", "Dragged", "Focus", "Rest", "Hover", "Dragged", "Focus" }
+    var i = 0usize
+    while i < 8usize {
+        var axis: ui_layout.Axis = .Horizontal
+        var position: f32 = 96.0
+        if i >= 4usize {
+            axis = .Vertical
+            position = 56.0
+        }
+        let change = widget.Change[f32] { ctx: zero, invoke: noop_change }
+        let (node, node_error) = control.split_view(a, u64(1000usize * (i + 1usize)), t, axis, pane(), pane(), position, 40.0, 40.0, change, 200.0, 120.0)
+        if node_error != ok { ret (0usize, node_error) }
+        var drive: looks.Drive = .None
+        let step = i % 4usize
+        if step == 1usize { drive = .Hover }
+        if step == 2usize { drive = .Press }
+        if step == 3usize { drive = .Focus }
+        cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
+        i += 1usize
+    }
+    ret (8usize, ok)
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let sheet = looks.Sheet { name: "splitter", cells: 8usize, columns: 4usize, cell_w: 200.0, cell_h: 120.0, ctx: zero, build: build }
+    ret looks.run_all(a, &sheet)
+}
