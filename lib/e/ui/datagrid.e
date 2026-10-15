@@ -166,6 +166,8 @@ dz_title_set: bool,
 dz_foot: [48]u8,
 dz_foot_len: usize,
 dz_pick_color: u32,
+dz_style_rgb: [13]u32,
+dz_style_has: u16,
 dz_modes: [2]u8,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
@@ -9932,6 +9934,8 @@ fn on_design_tap(ctx: *void, g: widget.Gesture) -> err {
         if t.kind == 5u8 { t.grid.dz_dirty = false }
         if t.kind == 6u8 { t.grid.dz_dlg = u8(t.value) }
         if t.kind == 8u8 { t.grid.dz_style = 0u8 }
+        if t.kind == 9u8 { t.grid.dz_pick_color = windows_basic(t.value) ^ 0xFFFFFFu32 }
+        if t.kind == 10u8 { dz_apply_color(t.grid) }
         if t.kind == 7u8 { t.grid.dz_modes[t.value] = (t.grid.dz_modes[t.value] + 1u8) % 3u8 }
         if t.kind == 2u8 {
             t.grid.print_open = false
@@ -10199,8 +10203,7 @@ fn dz_style_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let (face, face_error) = flat_text(a, grid, "8 pt. Tahoma", gl.rgb(dz_list_ink(grid)))
         if face_error != ok { ret (zero, face_error) }
         var strip = control.sized_style(50.0, 14.0)
-        strip.background = paint.Brush { Solid: gl.rgb(0xE0E0E0u32) }
-        if i == 7usize { strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) } }
+        strip.background = paint.Brush { Solid: gl.rgb(dz_strip_rgb(grid, i)) }
         strip.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
         strip.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
         let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
@@ -10714,9 +10717,11 @@ fn dz_font_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 
 // ---- the Color Editor of the Styles tab (v3: the DevExpress colour editor) ----
 
-fn dz_swatch_grid(a: *mem.Arena, rows_n: usize, filled: bool) -> (widget.Node, err) {
+fn dz_swatch_grid(a: *mem.Arena, grid: *Grid, rows_n: usize, filled: bool) -> (widget.Node, err) {
     let (rows, rows_error) = mem.alloc[widget.Node](a, rows_n + 1usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
+    let (taps, taps_error) = mem.alloc[DesignTap](a, 49usize)
+    if taps_error != ok { ret (zero, control.TooLarge) }
     var r = 0usize
     while r < rows_n {
         let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
@@ -10728,6 +10733,10 @@ fn dz_swatch_grid(a: *mem.Arena, rows_n: usize, filled: bool) -> (widget.Node, e
             cell.margin = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 2.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
             if filled { cell.background = paint.Brush { Solid: gl.rgb(windows_basic(r * 8usize + c)) } }
             cells[c] = widget.box(0u64, cell, zero)
+            if filled {
+                taps[r * 8usize + c] = DesignTap { grid: grid, kind: 9u8, value: r * 8usize + c }
+                cells[c] = widget.region(grid.key + MENU_KEY + 851400u64 + u64(r * 8usize + c), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[r * 8usize + c]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, cell, zero)
+            }
             c += 1usize
         }
         rows[r] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..8usize])
@@ -10741,11 +10750,11 @@ fn dz_color_left(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if parts_error != ok { ret (zero, control.TooLarge) }
     let (basic_head, basic_error) = dz_heading(a, grid, "Basic Colors")
     if basic_error != ok { ret (zero, basic_error) }
-    let (basic, basic_grid_error) = dz_swatch_grid(a, 6usize, true)
+    let (basic, basic_grid_error) = dz_swatch_grid(a, grid, 6usize, true)
     if basic_grid_error != ok { ret (zero, basic_grid_error) }
     let (custom_head, custom_error) = dz_heading(a, grid, "Custom Colors")
     if custom_error != ok { ret (zero, custom_error) }
-    let (custom, custom_grid_error) = dz_swatch_grid(a, 2usize, false)
+    let (custom, custom_grid_error) = dz_swatch_grid(a, grid, 2usize, false)
     if custom_grid_error != ok { ret (zero, custom_grid_error) }
     let (define, define_error) = dz_field(a, grid, "Define Custom Colors >>", 300.0)
     if define_error != ok { ret (zero, define_error) }
@@ -10761,17 +10770,33 @@ fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
     var square = control.sized_style(300.0, 190.0)
-    square.background = paint.Brush { Solid: gl.rgb(0xFF9060u32) }
+    let picked = grid.dz_pick_color ^ 0xFFFFFFu32
+    square.background = paint.Brush { Solid: gl.rgb(picked) }
     square.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
     parts[0usize] = widget.box(0u64, square, zero)
     var i = 0usize
     while i < 6usize {
-        var words = "H:  0"
-        if i == 1usize { words = "S:  0" }
-        if i == 2usize { words = "L:  255" }
-        if i == 3usize { words = "R:  255" }
-        if i == 4usize { words = "G:  255" }
-        if i == 5usize { words = "B:  255" }
+        var label = "H:"
+        var value: u32 = 0u32
+        if i == 1usize { label = "S:" }
+        if i == 2usize {
+            label = "L:"
+            value = 255u32
+        }
+        if i == 3usize {
+            label = "R:"
+            value = (picked >> 16u32) & 255u32
+        }
+        if i == 4usize {
+            label = "G:"
+            value = (picked >> 8u32) & 255u32
+        }
+        if i == 5usize {
+            label = "B:"
+            value = picked & 255u32
+        }
+        let (words, words_error) = dz_channel_text(a, label, value)
+        if words_error != ok { ret (zero, words_error) }
         let (box, box_error) = dz_field(a, grid, words, 140.0)
         if box_error != ok { ret (zero, box_error) }
         parts[1usize + i] = box
@@ -10783,9 +10808,10 @@ fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn dz_color_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize)
     if rows_error != ok { ret (zero, control.TooLarge) }
-    let (close, close_error) = mem.alloc[DesignTap](a, 1usize)
+    let (close, close_error) = mem.alloc[DesignTap](a, 2usize)
     if close_error != ok { ret (zero, control.TooLarge) }
     close[0usize] = DesignTap { grid: grid, kind: 6u8, value: 0usize }
+    close[1usize] = DesignTap { grid: grid, kind: 10u8, value: 0usize }
     let (title, title_error) = dz_heading(a, grid, "Color Editor")
     if title_error != ok { ret (zero, title_error) }
     rows[0usize] = title
@@ -10798,7 +10824,7 @@ fn dz_color_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     halves[0usize] = left
     halves[1usize] = right
     rows[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(680.0, 410.0), halves[0usize..2usize])
-    let (ok_button, ok_error) = dz_dialog_button(a, grid, "OK", &close[0usize], grid.key + MENU_KEY + 851254u64)
+    let (ok_button, ok_error) = dz_dialog_button(a, grid, "OK", &close[1usize], grid.key + MENU_KEY + 851254u64)
     if ok_error != ok { ret (zero, ok_error) }
     let (cancel_button, cancel_error) = dz_dialog_button(a, grid, "Cancel", &close[0usize], grid.key + MENU_KEY + 851255u64)
     if cancel_error != ok { ret (zero, cancel_error) }
@@ -10818,4 +10844,30 @@ fn windows_basic(i: usize) -> u32 {
     let colors: [48]u32 = [48]u32{ 0xFF8080u32, 0xFFFF80u32, 0x80FF80u32, 0x00FF80u32, 0x80FFFFu32, 0x0080FFu32, 0xFF80C0u32, 0xFF80FFu32, 0xFF0000u32, 0xFFFF00u32, 0x80FF00u32, 0x00FF40u32, 0x00FFFFu32, 0x0080C0u32, 0x8080C0u32, 0xFF00FFu32, 0x804040u32, 0xFF8040u32, 0x00FF00u32, 0x008080u32, 0x004080u32, 0x8080FFu32, 0x800040u32, 0xFF0080u32, 0x800000u32, 0xFF8000u32, 0x008000u32, 0x008040u32, 0x0000FFu32, 0x0000A0u32, 0x800080u32, 0x8000FFu32, 0x400000u32, 0x804000u32, 0x004000u32, 0x004040u32, 0x000080u32, 0x000040u32, 0x400040u32, 0x400080u32, 0x000000u32, 0x808000u32, 0x808040u32, 0x808080u32, 0x408080u32, 0xC0C0C0u32, 0x400040u32, 0xFFFFFFu32 }
     if i >= 48usize { ret 0xFFFFFFu32 }
     ret colors[i]
+}
+
+// OK in the Color Editor: the picked colour becomes the picked style's sample colour.
+fn dz_apply_color(grid: *Grid) {
+    if grid.dz_style != 0u8 {
+        let at = usize(grid.dz_style) - 1usize
+        grid.dz_style_rgb[at] = grid.dz_pick_color ^ 0xFFFFFFu32
+        grid.dz_style_has = grid.dz_style_has | (1u16 << u16(at))
+    }
+    grid.dz_dlg = 0u8
+}
+
+// "R:  255": a label and a channel of the colour picked in the Color Editor.
+fn dz_channel_text(a: *mem.Arena, label: str, value: u32) -> (str, err) {
+    let (b, b_error) = str.builder(a, 16usize)
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    if str.push(&sb, label) != ok || str.push(&sb, "  ") != ok || str.push_u64(&sb, u64(value)) != ok { ret ("", control.TooLarge) }
+    ret (str.done(&sb), ok)
+}
+
+// The sample strip of a style: the colour picked for it in the Color Editor, else the defaults.
+fn dz_strip_rgb(grid: *const Grid, i: usize) -> u32 {
+    if ((grid.dz_style_has >> u16(i)) & 1u16) != 0u16 { ret grid.dz_style_rgb[i] }
+    if i == 7usize { ret 0xA0A0A0u32 }
+    ret 0xE0E0E0u32
 }
