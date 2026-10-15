@@ -1,0 +1,193 @@
+{
+ "text_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/text_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Same native edit frame as the matched mask edit (Options Passwords, 495 x 21 at 100 %: #EDEDED border, #F7F7F7 / #FBFBFB / #FEFEFE inner lines, #B8B8B8 / #C1C1C1 two-row foot, Tahoma 10.8 px text at (3, 3)). No v3 dialog shows a TcxTextEdit with text at 100 %, so the text rows are checked through the button edit, whose text is the same inner edit. Real-dialog sheet: windows/edits_dialog.png against ref/windows/edits_dialog.png.",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention; the Options dialogs were captured inactive, so no capture shows a focused v3 edit",
+     "Hover face (#F9F9F9) and the disabled / invalid colours are guesses (no capture)",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; the red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight with white text (the edit cannot swap the text colour)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Text is grayscale-antialiased where v3 is ClearType (coloured fringes): ink extents agree within 1 px but pixels do not",
+     "The frame's 1 px #EBEBEB shadow column right of the box (outside the DFM width) and the foot's per-window variation (B3/C5, B8/C1, BD/BC rows) are not reproduced: one B8/C1 pair is drawn",
+     "No capture of a v3 TcxTextEdit (Input, Password, Batch Update and the registration sheets were not opened); frame and text geometry are inherited from the matched mask and button edits",
+     "Font is Tahoma at 10.8 px (v3 Tahoma 8 pt = 11 px, fitted by ink width of the Options path text: 270 px reference vs 270 ours); the DFM names Tahoma -11 for the memo, the other edits inherit the form font"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/spin_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "Matches both Options captures at 100 %: the 121 x 21 Decks spin with fast buttons (left, up/down pair, right) and the 67 x 21 Morph spins (up/down pair). Sheet edits_dialog (reference ref/windows/edits_dialog.png, diff windows/edits_dialog-diff.png): frame exact apart from the corner pixels; arrow glyphs are within a pixel but a few pixels differ by up to 136 levels (triangle antialiasing). Statistics Hand Size spin at 150 % has the same two-arrow shape. Real-dialog sheet: windows/edits_dialog.png against ref/windows/edits_dialog.png.",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention; the Options dialogs were captured inactive, so no capture shows a focused v3 edit",
+     "Hover face (#F9F9F9) and the disabled / invalid colours are guesses (no capture)",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; the red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight with white text (the edit cannot swap the text colour)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Text is grayscale-antialiased where v3 is ClearType (coloured fringes): ink extents agree within 1 px but pixels do not",
+     "The frame's 1 px #EBEBEB shadow column right of the box (outside the DFM width) and the foot's per-window variation (B3/C5, B8/C1, BD/BC rows) are not reproduced: one B8/C1 pair is drawn",
+     "Arrow hover and pressed tints are guesses (no capture of a hovered arrow)",
+     "The fast buttons step by 10 (DevExpress LargeIncrement default); the spin_edit sheet shows the plain two-arrow variant only, the fast variant is shown in edits_dialog",
+     "Fast arrows are 4 x 6 triangles approximating a 4 x 7 ClearType glyph",
+     "Font is Tahoma at 10.8 px (v3 Tahoma 8 pt = 11 px, fitted by ink width of the Options path text: 270 px reference vs 270 ours); the DFM names Tahoma -11 for the memo, the other edits inherit the form font",
+     "The Neper spin box has no disabled option, so no whole-control disabled cell"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/mask_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "The empty password mask edit matches the three Options Passwords instances at 100 % (frame max error 36 levels at the end pixels, mean 0.36 over the cell). Typing, selection, masks and echo are not captured. Real-dialog sheet: windows/edits_dialog.png against ref/windows/edits_dialog.png.",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention; the Options dialogs were captured inactive, so no capture shows a focused v3 edit",
+     "Hover face (#F9F9F9) and the disabled / invalid colours are guesses (no capture)",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; the red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight with white text (the edit cannot swap the text colour)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Text is grayscale-antialiased where v3 is ClearType (coloured fringes): ink extents agree within 1 px but pixels do not",
+     "The frame's 1 px #EBEBEB shadow column right of the box (outside the DFM width) and the foot's per-window variation (B3/C5, B8/C1, BD/BC rows) are not reproduced: one B8/C1 pair is drawn",
+     "Password echo shows asterisks; v3 (eemPassword) shows Windows bullets",
+     "Only the empty edit has a capture; text, caret and invalid are not",
+     "Mask editing behaviour is not a look item",
+     "Font is Tahoma at 10.8 px (v3 Tahoma 8 pt = 11 px, fitted by ink width of the Options path text: 270 px reference vs 270 ours); the DFM names Tahoma -11 for the memo, the other edits inherit the form font"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/memo.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/memo.png",
+    "notes": "Same frame as the matched edits (checked against the Report Title memo at 150 %: #EEEEEE border, soft inner line, #929292 / #C3C3C3 foot). Tahoma 10.8 px with 13 px lines (DFM: memo font Tahoma -11). Real-dialog sheet: windows/edits_dialog.png against ref/windows/edits_dialog.png.",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention; the Options dialogs were captured inactive, so no capture shows a focused v3 edit",
+     "Hover face (#F9F9F9) and the disabled / invalid colours are guesses (no capture)",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; the red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight with white text (the edit cannot swap the text colour)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Text is grayscale-antialiased where v3 is ClearType (coloured fringes): ink extents agree within 1 px but pixels do not",
+     "The frame's 1 px #EBEBEB shadow column right of the box (outside the DFM width) and the foot's per-window variation (B3/C5, B8/C1, BD/BC rows) are not reproduced: one B8/C1 pair is drawn",
+     "Only the 150 % Report Title memo capture exists (one line, rest); wrapped, multi-line and scrolled states are not captured",
+     "Scrollbar is the Neper scroll thumb overlay; the Windows scroll bar is another group's",
+     "Caret-line scrolling only",
+     "Font is Tahoma at 10.8 px (v3 Tahoma 8 pt = 11 px, fitted by ink width of the Options path text: 270 px reference vs 270 ours); the DFM names Tahoma -11 for the memo, the other edits inherit the form font"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/button_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Matches the Options Decks (495 x 21) and Card Art (464 x 21) button edits at 100 %: 16 x 17 ellipsis button at 1 px from the end and 2 from the top (#FDFDFD face, #E5E5E5 sides, lighter top, #D4D4D4 bottom, #E3E3E3 shadow row, three 2 px dots #AEAEAE / #CCCCCC); frame and button max error 79 levels (rounded corner pixels), text ink within 1 px. Real-dialog sheet: windows/edits_dialog.png against ref/windows/edits_dialog.png.",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention; the Options dialogs were captured inactive, so no capture shows a focused v3 edit",
+     "Hover face (#F9F9F9) and the disabled / invalid colours are guesses (no capture)",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; the red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight with white text (the edit cannot swap the text colour)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Text is grayscale-antialiased where v3 is ClearType (coloured fringes): ink extents agree within 1 px but pixels do not",
+     "The frame's 1 px #EBEBEB shadow column right of the box (outside the DFM width) and the foot's per-window variation (B3/C5, B8/C1, BD/BC rows) are not reproduced: one B8/C1 pair is drawn",
+     "Button hover, pressed and disabled colours are guesses (no capture)",
+     "Read-only treatment (button dimmed) is a guess",
+     "The ellipsis button's 2 px soft side border is drawn as one #E5E5E5 pixel",
+     "Font is Tahoma at 10.8 px (v3 Tahoma 8 pt = 11 px, fitted by ink width of the Options path text: 270 px reference vs 270 ours); the DFM names Tahoma -11 for the memo, the other edits inherit the form font"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/token_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/token_edit.png",
+    "notes": "Edit frame holding rounded tokens with a cross and a wrapping input, Tahoma text; no v3 capture of a token edit exists (TdxTokenEdit sits on the Filter dialog's Cards tab, which no capture shows open).",
+    "gaps": [
+     "Focused edit: accent #005FB8 2 px foot line is a Windows 11 convention; the Options dialogs were captured inactive, so no capture shows a focused v3 edit",
+     "Hover face (#F9F9F9) and the disabled / invalid colours are guesses (no capture)",
+     "Read-only draws like rest (v3 StyleReadOnly sets no colour); not captured",
+     "Invalid has no v3 look; the red 1 px border is a guess",
+     "Selection is the light Selection token with black text; Windows draws the highlight with white text (the edit cannot swap the text colour)",
+     "Placeholder (DevExpress null prompt) colour #808080 and show-when-unfocused rule are guesses",
+     "Text is grayscale-antialiased where v3 is ClearType (coloured fringes): ink extents agree within 1 px but pixels do not",
+     "The frame's 1 px #EBEBEB shadow column right of the box (outside the DFM width) and the foot's per-window variation (B3/C5, B8/C1, BD/BC rows) are not reproduced: one B8/C1 pair is drawn",
+     "Token face #E8E8E8, border #D2D2D2, hover tint and cross colours are all guesses (no capture)",
+     "Selected/focused token state and the suggestion drop-down are not drawn",
+     "v3 token edits are fixed 26 / 45 px high (MaxLineCount 2 = 45); this one grows with its tokens",
+     "Hover on the close cross could not be driven separately by the harness"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "app": "examples/looks/date_edit.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/date_edit.png",
+    "notes": "The baseline: overlay.date_picker_with with a typed field (stray carets are the harness's focus slot, as in the other sheets)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Unchanged by round 3: v3's TcxDateEdit (deck registration sheets, DFM: ebsFlat, ShowTime False) is in no capture, so the closed edit keeps the combo-box frame and the drop-down calendar stays the Neper calendar in Windows colours. The calendar drop-down is not captured by any dialog, open or closed.",
+    "gaps": [
+     "No capture of the DevExpress calendar drop-down exists: the panel is the Neper calendar (rounded Primary disc for the chosen day, grey hover disc, chevron month arrows, Mo Tu We header) in Windows colours, not the DX layout",
+     "DateButtons in the DFM are Clear, Now and Today (ckDateTime): only Today and Clear are drawn, no time part, no Now",
+     "Panel edge, shadow and padding are guesses (those of the combo box's list)",
+     "Hover, focused and drop button states are the combo box's guessed ones",
+     "Read-only date edits (deck properties: Properties.EditProperties.ReadOnly) and the clear (x) button are not drawn",
+     "The date format hint and invalid message of overlay.date_entry keep the Neper look",
+     "Round 3: no capture of a TcxDateEdit exists at 100 % or 150 % (the registration-sheet dialogs were not opened); nothing could be measured"
+    ]
+   }
+  }
+ }
+}
