@@ -10726,7 +10726,7 @@ fn dz_swatch_grid(a: *mem.Arena, rows_n: usize, filled: bool) -> (widget.Node, e
             var cell = control.sized_style(32.0, 30.0)
             cell.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
             cell.margin = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 2.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-            if filled { cell.background = paint.Brush { Solid: bar_palette(u8(r * 8usize + c)) } }
+            if filled { cell.background = paint.Brush { Solid: gl.rgb(windows_basic(r * 8usize + c)) } }
             cells[c] = widget.box(0u64, cell, zero)
             c += 1usize
         }
@@ -10741,7 +10741,7 @@ fn dz_color_left(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if parts_error != ok { ret (zero, control.TooLarge) }
     let (basic_head, basic_error) = dz_heading(a, grid, "Basic Colors")
     if basic_error != ok { ret (zero, basic_error) }
-    let (basic, basic_grid_error) = dz_swatch_grid(a, 4usize, true)
+    let (basic, basic_grid_error) = dz_swatch_grid(a, 6usize, true)
     if basic_grid_error != ok { ret (zero, basic_grid_error) }
     let (custom_head, custom_error) = dz_heading(a, grid, "Custom Colors")
     if custom_error != ok { ret (zero, custom_error) }
@@ -10760,7 +10760,7 @@ fn dz_color_left(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, control.TooLarge) }
-    var square = control.sized_style(300.0, 220.0)
+    var square = control.sized_style(300.0, 190.0)
     square.background = paint.Brush { Solid: gl.rgb(0xFF9060u32) }
     square.border = style.Border { width: 1.0, color: gl.rgb(0xA0A0A0u32) }
     parts[0usize] = widget.box(0u64, square, zero)
@@ -10811,4 +10811,11 @@ fn dz_color_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     panel.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     panel.border = style.Border { width: 1.0, color: gl.rgb(0x8E9092u32) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, panel, rows[0usize..3usize]), ok)
+}
+
+// The 48 basic colours of v3's Color Editor, sampled from its window (CE1-color-editor-v3.png), row by row.
+fn windows_basic(i: usize) -> u32 {
+    let colors: [48]u32 = [48]u32{ 0xFF8080u32, 0xFFFF80u32, 0x80FF80u32, 0x00FF80u32, 0x80FFFFu32, 0x0080FFu32, 0xFF80C0u32, 0xFF80FFu32, 0xFF0000u32, 0xFFFF00u32, 0x80FF00u32, 0x00FF40u32, 0x00FFFFu32, 0x0080C0u32, 0x8080C0u32, 0xFF00FFu32, 0x804040u32, 0xFF8040u32, 0x00FF00u32, 0x008080u32, 0x004080u32, 0x8080FFu32, 0x800040u32, 0xFF0080u32, 0x800000u32, 0xFF8000u32, 0x008000u32, 0x008040u32, 0x0000FFu32, 0x0000A0u32, 0x800080u32, 0x8000FFu32, 0x400000u32, 0x804000u32, 0x004000u32, 0x004040u32, 0x000080u32, 0x000040u32, 0x400040u32, 0x400080u32, 0x000000u32, 0x808000u32, 0x808040u32, 0x808080u32, 0x408080u32, 0xC0C0C0u32, 0x400040u32, 0xFFFFFFu32 }
+    if i >= 48usize { ret 0xFFFFFFu32 }
+    ret colors[i]
 }

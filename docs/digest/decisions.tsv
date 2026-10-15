@@ -2718,4 +2718,5 @@ D4135	369	G012: Clear unpicks the picked style
 D4136	815	G012: the Styles tab's Style Sheets row and the native-styles states, from v3
 D4137	252	G012: the style list's text greys with native styles off
 D4138	684	G012: the Font window of the Styles tab
-D4139	845	G012: the Color Editor window of the Styles tab
+D4139	846	G012: the Color Editor window of the Styles tab
+D4140	596	G012: the Color Editor's 48 basic colours are v3's
