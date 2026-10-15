@@ -11453,6 +11453,21 @@ fn stat_tab_name(i: usize) -> str {
     ret "Advanced"
 }
 
+// The width of a tab: v3 puts a 22 px picture before the name, so the name is drawn after that space.
+fn stat_tab_w(i: usize) -> f32 {
+    if i == 0usize { ret 56.5 }
+    if i == 1usize { ret 54.0 }
+    if i == 2usize { ret 73.0 }
+    if i == 3usize { ret 61.0 }
+    if i == 4usize { ret 93.5 }
+    if i == 5usize { ret 89.0 }
+    if i == 6usize { ret 96.5 }
+    if i == 7usize { ret 74.5 }
+    if i == 8usize { ret 74.0 }
+    if i == 9usize { ret 77.5 }
+    ret 67.5
+}
+
 fn stat_banner_text(i: usize) -> str {
     if i == 0usize { ret "Card breakdown by card colors." }
     if i == 1usize { ret "Card breakdown by rarity." }
@@ -11461,9 +11476,8 @@ fn stat_banner_text(i: usize) -> str {
     if i == 4usize { ret "Mana cost analysis of the deck." }
     if i == 5usize { ret "Mana product analysis of the deck." }
     if i == 6usize { ret "Power analysis of the deck." }
-    if i == 7usize { ret "Detailed turn breakdown by drawing cards probability. Probability is the measure of how likely an event is." }
+    if i == 7usize { ret "Detailed turn breakdown by drawing cards probability." }
     if i == 8usize { ret "Mana Slots analysis (known as George Baxter Analysis) allows you to evaluate the actual mana required to play the cards." }
-    if i == 9usize { ret "" }
     ret "Descriptive statistics on main deck card characteristics."
 }
 
@@ -11478,42 +11492,405 @@ fn stat_tabs(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         taps[i] = DesignTap { grid: grid, kind: 20u8, value: i }
         let (label, label_error) = flat_text(a, grid, stat_tab_name(i), gl.rgb(0x000000u32))
         if label_error != ok { ret (zero, label_error) }
-        var tab = control.sized_style(68.0, 24.0)
+        var tab = control.sized_style(stat_tab_w(i), 26.0)
         if usize(grid.sw_tab) == i { tab.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
         tab.border = style.Border { width: 1.0, color: gl.rgb(0xD0D0D0u32) }
-        cells[i] = widget.region(grid.key + MENU_KEY + 852200u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[i]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, tab, one(a, widget.padded(0u64, 3.0, 5.0, 0.0, 0.0, style.defaults(), one(a, label))))
+        cells[i] = widget.region(grid.key + MENU_KEY + 852200u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&taps[i]), invoke: on_design_tap }, gestures: 1u8, enabled: true, focusable: false }, tab, one(a, widget.padded(0u64, 20.0, 5.0, 0.0, 0.0, style.defaults(), one(a, label))))
         i += 1usize
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(760.0, 26.0), cells[0usize..11usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(889.0, 26.0), cells[0usize..11usize]), ok)
 }
 
+// The grey banner under the tabs, 40 high; the Probability one has a second line.
 fn stat_banner(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (words, words_error) = flat_text(a, grid, stat_banner_text(usize(grid.sw_tab)), gl.rgb(0x000000u32))
     if words_error != ok { ret (zero, words_error) }
-    var bar = control.sized_style(760.0, 26.0)
+    let (more, more_error) = flat_text(a, grid, "Probability is the measure of how likely an event is.", gl.rgb(0x000000u32))
+    if more_error != ok { ret (zero, more_error) }
+    var lines = one(a, words)
+    if grid.sw_tab == 7u8 {
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, control.TooLarge) }
+        pair[0usize] = words
+        pair[1usize] = more
+        lines = pair[0usize..2usize]
+    }
+    var bar = control.sized_style(889.0, 40.0)
     bar.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
     bar.border = style.Border { width: 1.0, color: gl.rgb(0xC8C8C8u32) }
-    ret (widget.aligned(0u64, .Center, .Center, bar, one(a, words)), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, bar, lines), ok)
 }
 
 fn stat_editions(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let titles: [3]str = [3]str{ "Edition", "Abbreviation", "Quantity" }
-    let widths: [3]f32 = [3]f32{ 300.0, 300.0, 158.0 }
+    let widths: [3]f32 = [3]f32{ 297.0, 298.0, 294.5 }
     let aligns: [3]u8 = [3]u8{ 0u8, 1u8, 1u8 }
     let cells: [3]str = [3]str{ "Mystery Booster Commander Edition", "MBC", "12" }
     let inks: [1]u32 = [1]u32{ 0xFF1493u32 }
-    let (grid_node, grid_error) = st_table(a, grid, titles[0usize..3usize], widths[0usize..3usize], aligns[0usize..3usize], cells[0usize..3usize], inks[0usize..1usize], 2usize, 255usize, false, "", 760.0, 352.0)
-    ret (grid_node, grid_error)
+    let (tbl, tbl_error) = st_table(a, grid, titles[0usize..3usize], widths[0usize..3usize], aligns[0usize..3usize], cells[0usize..3usize], inks[0usize..1usize], 2usize, 255usize, false, "", 889.0, 394.0)
+    ret (tbl, tbl_error)
 }
 
 fn stat_advanced(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let titles: [6]str = [6]str{ "Characteristic", "Power", "Toughness", "CMC", "Mana Product", "# of Rules" }
-    let widths: [6]f32 = [6]f32{ 150.0, 122.0, 122.0, 122.0, 122.0, 120.0 }
+    let widths: [6]f32 = [6]f32{ 207.0, 137.0, 137.0, 137.0, 137.0, 135.0 }
     let aligns: [6]u8 = [6]u8{ 0u8, 2u8, 2u8, 2u8, 2u8, 2u8 }
-    let cells: [108]str = [108]str{ "Count (N)", "2", "2", "9", "5", "12", "Missing (N*)", "10", "10", "3", "7", "0", "Arithmetic Mean", "2.500", "2.500", "2.556", "5.000", "1.000", "Trimmed Mean (5%)", "2.500", "2.500", "2.556", "5.000", "1.000", "Harmonic Mean", "2.400", "2.400", "2.400", "5.000", "1.000", "Geometric Mean", "2.449", "2.449", "2.473", "5.000", "1.000", "MSSD", "0.500", "0.500", "0.375", "0.000", "0.000", "Mode", "-INF", "-INF", "2", "5", "1", "Mode Frequency", "0", "0", "5", "5", "12", "Standard Deviation", "0.707", "0.707", "0.726", "0.000", "0.000", "Population Std Dev", "0.500", "0.500", "0.685", "0.000", "0.000", "Sum", "5", "5", "23", "25", "12", "Sum of Squares", "13", "13", "63", "125", "12", "Variance", "0.500", "0.500", "0.528", "0.000", "0.000", "Total Variance", "0.500", "0.500", "4.222", "0.000", "0.000", "Population Variance", "0.250", "0.250", "0.469", "0.000", "0.000", "Minimum", "2", "2", "2", "5", "1", "Quartile 1 (Q1)", "2.000", "2.000", "2.000", "5.000", "1.000" }
+    let cells: [102]str = [102]str{ "Count (N)", "2", "2", "9", "5", "12", "Missing (N*)", "10", "10", "3", "7", "0", "Arithmetic Mean", "2.500", "2.500", "2.556", "5.000", "1.000", "Trimmed Mean (5%)", "2.500", "2.500", "2.556", "5.000", "1.000", "Harmonic Mean", "2.400", "2.400", "2.400", "5.000", "1.000", "Geometric Mean", "2.449", "2.449", "2.473", "5.000", "1.000", "MSSD", "0.500", "0.500", "0.375", "0.000", "0.000", "Mode", "-INF", "-INF", "2", "5", "1", "Mode Frequency", "0", "0", "5", "5", "12", "Standard Deviation", "0.707", "0.707", "0.726", "0.000", "0.000", "Population Std Dev", "0.500", "0.500", "0.685", "0.000", "0.000", "Sum", "5", "5", "23", "25", "12", "Sum of Squares", "13", "13", "63", "125", "12", "Variance", "0.500", "0.500", "0.528", "0.000", "0.000", "Total Variance", "0.500", "0.500", "4.222", "0.000", "0.000", "Population Variance", "0.250", "0.250", "0.469", "0.000", "0.000", "Minimum", "2", "2", "2", "5", "1" }
     let no_inks: [0]u32 = zero
-    let (grid_node, grid_error) = st_table(a, grid, titles[0usize..6usize], widths[0usize..6usize], aligns[0usize..6usize], cells[0usize..108usize], no_inks[0usize..0usize], 255usize, 255usize, true, "", 760.0, 352.0)
-    ret (grid_node, grid_error)
+    let (tbl, tbl_error) = st_table(a, grid, titles[0usize..6usize], widths[0usize..6usize], aligns[0usize..6usize], cells[0usize..102usize], no_inks[0usize..0usize], 255usize, 255usize, true, "", 889.0, 394.0)
+    ret (tbl, tbl_error)
+}
+
+// ---- small absolute-layout pieces for the controls on the Statistics tabs ----
+
+fn st_place(a: *mem.Arena, x: f32, y: f32, node: widget.Node) -> widget.Node {
+    ret widget.positioned(0u64, x * 0.9, y, style.defaults(), one(a, node))
+}
+
+// A bare rectangle at (x, y): fill and 1 px line colours, a corner radius.
+fn st_rect(a: *mem.Arena, x: f32, y: f32, w: f32, h: f32, fill: u32, line: u32, radius: f32) -> (widget.Node, err) {
+    let (none, none_error) = mem.alloc[widget.Node](a, 1usize)
+    if none_error != ok { ret (zero, control.TooLarge) }
+    var box = control.sized_style(w * 0.9, h)
+    box.background = paint.Brush { Solid: gl.rgb(fill) }
+    box.border = style.Border { width: 1.0, color: gl.rgb(line) }
+    box.radius = radius
+    ret (st_place(a, x, y, widget.box(0u64, box, none[0usize..0usize])), ok)
+}
+
+// Words at (x, y); bold is the faux-bold of the Designer.
+fn st_words(a: *mem.Arena, grid: *Grid, x: f32, y: f32, text: str, ink: u32, bold: bool) -> (widget.Node, err) {
+    let (first, first_error) = flat_text(a, grid, text, gl.rgb(ink))
+    if first_error != ok { ret (zero, first_error) }
+    if bold {
+        let (heavy, heavy_error) = faux_bold(a, grid, text, first)
+        if heavy_error != ok { ret (zero, heavy_error) }
+        ret (st_place(a, x, y, heavy), ok)
+    }
+    ret (st_place(a, x, y, first), ok)
+}
+
+// A group box: a 1 px #DCDCDC frame with its caption over the top edge.
+fn st_group(a: *mem.Arena, grid: *Grid, x: f32, y: f32, w: f32, h: f32, caption: str) -> (widget.Node, err) {
+    let (frame, frame_error) = st_rect(a, x, y + 8.0, w, h - 8.0, 0xF0F0F0u32, 0xDCDCDCu32, 3.0)
+    if frame_error != ok { ret (zero, frame_error) }
+    let (words, words_error) = flat_text(a, grid, caption, gl.rgb(0x000000u32))
+    if words_error != ok { ret (zero, words_error) }
+    var cap = style.defaults()
+    cap.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, control.TooLarge) }
+    pair[0usize] = frame
+    pair[1usize] = widget.positioned(0u64, (x + 6.0) * 0.9, y, cap, one(a, words))
+    ret (widget.stack(0u64, style.defaults(), pair[0usize..2usize]), ok)
+}
+
+// A radio line at (x, y): a 13 px disc, a blue dot inside when chosen, the words after it.
+fn st_radio(a: *mem.Arena, grid: *Grid, x: f32, y: f32, on: bool, text: str) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    var fill: u32 = 0xFFFFFFu32
+    if on { fill = 0x0A64C8u32 }
+    let (disc, disc_error) = st_rect(a, x, y + 2.0, 14.0, 14.0, fill, 0x6E6E6Eu32, 7.0)
+    if disc_error != ok { ret (zero, disc_error) }
+    parts[0usize] = disc
+    let (words, words_error) = st_words(a, grid, x + 20.0, y, text, 0x000000u32, false)
+    if words_error != ok { ret (zero, words_error) }
+    parts[1usize] = words
+    if on {
+        let (dot, dot_error) = st_rect(a, x + 4.0, y + 6.0, 6.0, 6.0, 0xFFFFFFu32, 0xFFFFFFu32, 3.0)
+        if dot_error != ok { ret (zero, dot_error) }
+        parts[2usize] = dot
+        ret (widget.stack(0u64, style.defaults(), parts[0usize..3usize]), ok)
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+// A spin box at (x, y): the value in a 21 high edit, two small arrows in a strip at its right.
+fn st_spin(a: *mem.Arena, grid: *Grid, x: f32, y: f32, w: f32, text: str) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (edit, edit_error) = st_rect(a, x, y, w, 21.0, 0xFFFFFFu32, 0xABABABu32, 0.0)
+    if edit_error != ok { ret (zero, edit_error) }
+    parts[0usize] = edit
+    let (value, value_error) = st_words(a, grid, x + 4.0, y + 3.0, text, 0x000000u32, false)
+    if value_error != ok { ret (zero, value_error) }
+    parts[1usize] = value
+    let (up, up_error) = st_words(a, grid, x + w - 14.0, y - 1.0, "▴", 0x404040u32, false)
+    if up_error != ok { ret (zero, up_error) }
+    parts[2usize] = up
+    let (down, down_error) = st_words(a, grid, x + w - 14.0, y + 8.0, "▾", 0x404040u32, false)
+    if down_error != ok { ret (zero, down_error) }
+    parts[3usize] = down
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..4usize]), ok)
+}
+
+// A flat v3 button at (x, y), 23 high, `ink` the label colour (grey when idle).
+fn st_button(a: *mem.Arena, grid: *Grid, x: f32, y: f32, w: f32, text: str, ink: u32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (face, face_error) = st_rect(a, x, y, w, 23.0, 0xFDFDFDu32, 0xADADADu32, 3.0)
+    if face_error != ok { ret (zero, face_error) }
+    parts[0usize] = face
+    var left = x + (w - 7.8 * f32(text.len)) / 2.0
+    if left < x + 4.0 { left = x + 4.0 }
+    let (words, words_error) = st_words(a, grid, left, y + 3.0, text, ink, false)
+    if words_error != ok { ret (zero, words_error) }
+    parts[1usize] = words
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+// ---- Probability: the card list, Operator and Mode, the turn bars ----
+
+fn stat_prob_table(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let titles: [3]str = [3]str{ "Card Name", "Deck Qty", "Desired Qty" }
+    let widths: [3]f32 = [3]f32{ 396.0, 181.0, 182.5 }
+    let aligns: [3]u8 = [3]u8{ 0u8, 1u8, 1u8 }
+    let cells: [30]str = [30]str{ "Jet Collector", "1", "0", "Euru, Acorn Scrounger", "1", "0", "Dust to Dust", "1", "0", "Chaos Warp", "1", "0", "Chromatic Lantern", "1", "0", "Fellwar Stone", "1", "0", "Jeweled Amulet", "1", "0", "Mind Stone", "1", "0", "Swiftfoot Boots", "1", "0", "Thought Vessel", "1", "0" }
+    let no_inks: [0]u32 = zero
+    let (tbl, tbl_error) = st_table(a, grid, titles[0usize..3usize], widths[0usize..3usize], aligns[0usize..3usize], cells[0usize..30usize], no_inks[0usize..0usize], 255usize, 255usize, false, "", 774.0, 230.0)
+    ret (st_place(a, 6.0, 10.0, tbl), tbl_error)
+}
+
+fn stat_prob_bars(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 36usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    var n = 0usize
+    let names: [11]str = [11]str{ "T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T5" }
+    var t = 0usize
+    while t < 11usize {
+        var x = 16.0 + 32.0 * f32(t)
+        if t == 10usize { x = 349.0 }
+        let name = names[t]
+        let (bar, bar_error) = st_rect(a, x, 281.0, 27.0, 67.0, 0xE8E8E8u32, 0xA0A0A0u32, 0.0)
+        if bar_error != ok { ret (zero, bar_error) }
+        parts[n] = bar
+        let (pct, pct_error) = st_words(a, grid, x + 3.0, 288.0, "0%", 0x000000u32, false)
+        if pct_error != ok { ret (zero, pct_error) }
+        parts[n + 1usize] = pct
+        let (label, label_error) = st_words(a, grid, x + 3.0, 352.0, name, 0x000000u32, true)
+        if label_error != ok { ret (zero, label_error) }
+        parts[n + 2usize] = label
+        n += 3usize
+        t += 1usize
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
+}
+
+fn stat_probability(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 16usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (tbl, tbl_error) = stat_prob_table(a, grid)
+    if tbl_error != ok { ret (zero, tbl_error) }
+    parts[0usize] = tbl
+    let (op, op_error) = st_group(a, grid, 874.0, 6.0, 113.0, 74.0, "Operator:")
+    if op_error != ok { ret (zero, op_error) }
+    parts[1usize] = op
+    let (and_radio, and_error) = st_radio(a, grid, 882.0, 24.0, true, "And")
+    if and_error != ok { ret (zero, and_error) }
+    parts[2usize] = and_radio
+    let (or_radio, or_error) = st_radio(a, grid, 882.0, 52.0, false, "Or")
+    if or_error != ok { ret (zero, or_error) }
+    parts[3usize] = or_radio
+    let (mode, mode_error) = st_group(a, grid, 874.0, 91.0, 113.0, 70.0, "Mode:")
+    if mode_error != ok { ret (zero, mode_error) }
+    parts[4usize] = mode
+    let (least, least_error) = st_radio(a, grid, 882.0, 109.0, true, "At Least")
+    if least_error != ok { ret (zero, least_error) }
+    parts[5usize] = least
+    let (exactly, exactly_error) = st_radio(a, grid, 882.0, 135.0, false, "Exactly")
+    if exactly_error != ok { ret (zero, exactly_error) }
+    parts[6usize] = exactly
+    let (combo, combo_error) = st_group(a, grid, 6.0, 252.0, 980.0, 125.0, "Probability of drawing current combo:")
+    if combo_error != ok { ret (zero, combo_error) }
+    parts[7usize] = combo
+    let (bars, bars_error) = stat_prob_bars(a, grid)
+    if bars_error != ok { ret (zero, bars_error) }
+    parts[8usize] = bars
+    let (rule, rule_error) = st_rect(a, 337.0, 266.0, 1.0, 105.0, 0xA0A0A0u32, 0xA0A0A0u32, 0.0)
+    if rule_error != ok { ret (zero, rule_error) }
+    parts[9usize] = rule
+    let (turn, turn_error) = st_words(a, grid, 385.0, 272.0, "Turn", 0x000000u32, false)
+    if turn_error != ok { ret (zero, turn_error) }
+    parts[10usize] = turn
+    let (spin, spin_error) = st_spin(a, grid, 385.0, 295.0, 44.0, "5")
+    if spin_error != ok { ret (zero, spin_error) }
+    parts[11usize] = spin
+    let (describe, describe_error) = st_button(a, grid, 898.0, 272.0, 76.0, "Describe", 0xA0A0A0u32)
+    if describe_error != ok { ret (zero, describe_error) }
+    parts[12usize] = describe
+    let (clear, clear_error) = st_button(a, grid, 898.0, 306.0, 76.0, "Clear", 0x000000u32)
+    if clear_error != ok { ret (zero, clear_error) }
+    parts[13usize] = clear
+    ret (widget.stack(0u64, control.sized_style(889.0, 394.0), parts[0usize..14usize]), ok)
+}
+
+// ---- Mana Slots: the card list and the needed-slots panel ----
+
+fn stat_slots_table(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let titles: [4]str = [4]str{ "Card", "Qty", "Cost", "Importance" }
+    let widths: [4]f32 = [4]f32{ 290.0, 132.5, 132.5, 166.5 }
+    let aligns: [4]u8 = [4]u8{ 0u8, 1u8, 1u8, 0u8 }
+    let cells: [40]str = [40]str{ "Chaos Warp", "1", "RCC", "Average", "Chromatic Lantern", "1", "CCC", "Average", "Dust to Dust", "1", "WWC", "Average", "Euru, Acorn Scrounger", "1", "BGCC", "Average", "Fellwar Stone", "1", "CC", "Average", "Jet Collector", "1", "GC", "Average", "Jeweled Amulet", "1", "", "Average", "Mind Stone", "1", "CC", "Average", "Swiftfoot Boots", "1", "CC", "Average", "Thought Vessel", "1", "CC", "Average" }
+    let inks: [10]u32 = [10]u32{ 0xFF2020u32, 0x808080u32, 0x606060u32, 0xFF6A2Au32, 0x808080u32, 0x1E9A1Eu32, 0x808080u32, 0x808080u32, 0x808080u32, 0x808080u32 }
+    let (tbl, tbl_error) = st_table(a, grid, titles[0usize..4usize], widths[0usize..4usize], aligns[0usize..4usize], cells[0usize..40usize], inks[0usize..10usize], 0usize, 255usize, false, "", 721.0, 366.0)
+    ret (st_place(a, 6.0, 10.0, tbl), tbl_error)
+}
+
+// One line of the needed-slots panel: a coloured disc and "4.00 (17.73%)".
+fn stat_slot_line(a: *mem.Arena, grid: *Grid, y: f32, disc: u32, text: str, ink: u32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (ball, ball_error) = st_rect(a, 832.0, y, 20.0, 20.0, disc, 0x404040u32, 10.0)
+    if ball_error != ok { ret (zero, ball_error) }
+    parts[0usize] = ball
+    let (words, words_error) = st_words(a, grid, 860.0, y + 2.0, text, ink, false)
+    if words_error != ok { ret (zero, words_error) }
+    parts[1usize] = words
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+fn stat_mana_slots(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 12usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (tbl, tbl_error) = stat_slots_table(a, grid)
+    if tbl_error != ok { ret (zero, tbl_error) }
+    parts[0usize] = tbl
+    let (panel, panel_error) = st_group(a, grid, 822.0, 6.0, 163.0, 204.0, "Needed Mana Slots:")
+    if panel_error != ok { ret (zero, panel_error) }
+    parts[1usize] = panel
+    let discs: [6]u32 = [6]u32{ 0xF5CD3Cu32, 0xBFE3F5u32, 0x3A3A3Au32, 0xD9534Fu32, 0x2DB34Au32, 0xD9D5C8u32 }
+    let texts: [6]str = [6]str{ "4.00 (17.73%)", "0.00 (0.00%)", "3.00 (13.30%)", "3.00 (13.30%)", "4.24 (18.81%)", "8.32 (36.86%)" }
+    var i = 0usize
+    while i < 6usize {
+        var ink: u32 = 0x000000u32
+        if i == 1usize { ink = 0xA0A0A0u32 }
+        let (line, line_error) = stat_slot_line(a, grid, 30.0 + 25.0 * f32(i), discs[i], texts[i], ink)
+        if line_error != ok { ret (zero, line_error) }
+        parts[2usize + i] = line
+        i += 1usize
+    }
+    let (total, total_error) = st_words(a, grid, 835.0, 190.0, "Total slots: 22.56", 0x000000u32, true)
+    if total_error != ok { ret (zero, total_error) }
+    parts[8usize] = total
+    let (help, help_error) = st_button(a, grid, 825.0, 223.0, 77.0, "Help", 0x000000u32)
+    if help_error != ok { ret (zero, help_error) }
+    parts[9usize] = help
+    ret (widget.stack(0u64, control.sized_style(889.0, 394.0), parts[0usize..10usize]), ok)
+}
+
+// ---- Start Hand: the deck, the hand, the cards in play and the discard pile ----
+
+fn stat_hand_deck(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let titles: [2]str = [2]str{ "No", "Card" }
+    let widths: [2]f32 = [2]f32{ 27.0, 160.0 }
+    let aligns: [2]u8 = [2]u8{ 0u8, 0u8 }
+    let cells: [10]str = [10]str{ "1", "Chaos Warp (3)", "2", "Jeweled Amulet (0)", "3", "Exotic Orchard (0)", "4", "Mind Stone (2)", "5", "Thought Vessel (2)" }
+    let inks: [5]u32 = [5]u32{ 0xFF2020u32, 0x808080u32, 0x808080u32, 0x808080u32, 0x808080u32 }
+    let (tbl, tbl_error) = st_table(a, grid, titles[0usize..2usize], widths[0usize..2usize], aligns[0usize..2usize], cells[0usize..10usize], inks[0usize..5usize], 255usize, 255usize, false, "", 187.0, 341.0)
+    ret (st_place(a, 4.0, 83.0, tbl), tbl_error)
+}
+
+fn stat_hand_hand(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let titles: [2]str = [2]str{ "No", "Card (CMC)" }
+    let widths: [2]f32 = [2]f32{ 38.5, 387.0 }
+    let aligns: [2]u8 = [2]u8{ 0u8, 0u8 }
+    let cells: [14]str = [14]str{ "1", "Euru, Acorn Scrounger (4)", "2", "Jet Collector (2)", "3", "Swiftfoot Boots (2)", "4", "Fellwar Stone (2)", "5", "Dust to Dust (3)", "6", "Path of Ancestry (0)", "7", "Chromatic Lantern (3)" }
+    let inks: [7]u32 = [7]u32{ 0xFF6A2Au32, 0x1E9A1Eu32, 0x808080u32, 0x808080u32, 0x606060u32, 0x808080u32, 0x808080u32 }
+    let (tbl, tbl_error) = st_table(a, grid, titles[0usize..2usize], widths[0usize..2usize], aligns[0usize..2usize], cells[0usize..14usize], inks[0usize..7usize], 255usize, 255usize, false, "", 426.0, 341.0)
+    ret (st_place(a, 258.0, 83.0, tbl), tbl_error)
+}
+
+fn stat_hand_pile(a: *mem.Arena, grid: *Grid, y: f32, h: f32) -> (widget.Node, err) {
+    let titles: [2]str = [2]str{ "No", "Card" }
+    let widths: [2]f32 = [2]f32{ 27.0, 160.0 }
+    let aligns: [2]u8 = [2]u8{ 0u8, 0u8 }
+    let none: [0]str = zero
+    let no_inks: [0]u32 = zero
+    let (tbl, tbl_error) = st_table(a, grid, titles[0usize..2usize], widths[0usize..2usize], aligns[0usize..2usize], none[0usize..0usize], no_inks[0usize..0usize], 255usize, 255usize, false, "<No cards were found in the deck>", 187.0, h)
+    ret (st_place(a, 778.0, y, tbl), tbl_error)
+}
+
+fn stat_hand_arrows(a: *mem.Arena, grid: *Grid, x: f32, y: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (forward, forward_error) = st_button(a, grid, x, y, 30.0, "»", 0xA0A0A0u32)
+    if forward_error != ok { ret (zero, forward_error) }
+    parts[0usize] = forward
+    let (back, back_error) = st_button(a, grid, x, y + 26.0, 30.0, "«", 0xA0A0A0u32)
+    if back_error != ok { ret (zero, back_error) }
+    parts[1usize] = back
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+fn stat_hand_top(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (size, size_error) = st_words(a, grid, 177.0, 8.0, "Hand Size", 0x000000u32, false)
+    if size_error != ok { ret (zero, size_error) }
+    parts[0usize] = size
+    let (spin, spin_error) = st_spin(a, grid, 177.0, 31.0, 70.0, "7")
+    if spin_error != ok { ret (zero, spin_error) }
+    parts[1usize] = spin
+    let names: [5]str = [5]str{ "New Hand", "Mulligan", "Draw Card", "Draw All", "Setup..." }
+    let lefts: [5]f32 = [5]f32{ 258.0, 342.0, 428.0, 514.0, 907.0 }
+    var i = 0usize
+    while i < 5usize {
+        let (button, button_error) = st_button(a, grid, lefts[i], 31.0, 76.0, names[i], 0x000000u32)
+        if button_error != ok { ret (zero, button_error) }
+        parts[2usize + i] = button
+        i += 1usize
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..7usize]), ok)
+}
+
+fn stat_hand_labels(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let names: [4]str = [4]str{ "Cards in Deck", "Cards in Hand", "Cards in Play", "Cards in Discard Pile" }
+    let xs: [4]f32 = [4]f32{ 4.0, 255.0, 779.0, 779.0 }
+    let ys: [4]f32 = [4]f32{ 76.0, 76.0, 76.0, 323.0 }
+    var i = 0usize
+    while i < 4usize {
+        let (words, words_error) = st_words(a, grid, xs[i], ys[i] - 14.0, names[i], 0x000000u32, false)
+        if words_error != ok { ret (zero, words_error) }
+        parts[i] = words
+        i += 1usize
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..4usize]), ok)
+}
+
+fn stat_start_hand(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 10usize)
+    if parts_error != ok { ret (zero, control.TooLarge) }
+    let (top, top_error) = stat_hand_top(a, grid)
+    if top_error != ok { ret (zero, top_error) }
+    parts[0usize] = top
+    let (labels, labels_error) = stat_hand_labels(a, grid)
+    if labels_error != ok { ret (zero, labels_error) }
+    parts[1usize] = labels
+    let (deck, deck_error) = stat_hand_deck(a, grid)
+    if deck_error != ok { ret (zero, deck_error) }
+    parts[2usize] = deck
+    let (hand, hand_error) = stat_hand_hand(a, grid)
+    if hand_error != ok { ret (zero, hand_error) }
+    parts[3usize] = hand
+    let (play, play_error) = stat_hand_pile(a, grid, 83.0, 215.0)
+    if play_error != ok { ret (zero, play_error) }
+    parts[4usize] = play
+    let (discard, discard_error) = stat_hand_pile(a, grid, 330.0, 94.0)
+    if discard_error != ok { ret (zero, discard_error) }
+    parts[5usize] = discard
+    let (left_arrows, left_error) = stat_hand_arrows(a, grid, 220.0, 218.0)
+    if left_error != ok { ret (zero, left_error) }
+    parts[6usize] = left_arrows
+    let (play_arrows, play_arrows_error) = stat_hand_arrows(a, grid, 740.0, 162.0)
+    if play_arrows_error != ok { ret (zero, play_arrows_error) }
+    parts[7usize] = play_arrows
+    let (discard_arrows, discard_arrows_error) = stat_hand_arrows(a, grid, 740.0, 356.0)
+    if discard_arrows_error != ok { ret (zero, discard_arrows_error) }
+    parts[8usize] = discard_arrows
+    ret (widget.stack(0u64, control.sized_style(889.0, 434.0), parts[0usize..9usize]), ok)
 }
 
 // The tab's content: the grid tabs are built; the chart tabs say so.
@@ -11522,13 +11899,25 @@ fn stat_content(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let (node, node_error) = stat_editions(a, grid)
         ret (node, node_error)
     }
+    if grid.sw_tab == 7u8 {
+        let (node, node_error) = stat_probability(a, grid)
+        ret (node, node_error)
+    }
+    if grid.sw_tab == 8u8 {
+        let (node, node_error) = stat_mana_slots(a, grid)
+        ret (node, node_error)
+    }
+    if grid.sw_tab == 9u8 {
+        let (node, node_error) = stat_start_hand(a, grid)
+        ret (node, node_error)
+    }
     if grid.sw_tab == 10u8 {
         let (node, node_error) = stat_advanced(a, grid)
         ret (node, node_error)
     }
     let (note, note_error) = flat_text(a, grid, "(this tab is not built yet)", gl.rgb(0x808080u32))
     if note_error != ok { ret (zero, note_error) }
-    var blank = control.sized_style(760.0, 352.0)
+    var blank = control.sized_style(889.0, 394.0)
     blank.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
     ret (widget.aligned(0u64, .Center, .Center, blank, one(a, note)), ok)
 }
@@ -11539,20 +11928,26 @@ fn statistics_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (close, close_error) = mem.alloc[DesignTap](a, 1usize)
     if close_error != ok { ret (zero, control.TooLarge) }
     close[0usize] = DesignTap { grid: grid, kind: 22u8, value: 0usize }
-    let (title, title_error) = window_title(a, grid, 2u8, "Statistics", 780.0, 32.0, false)
+    let (title, title_error) = window_title(a, grid, 2u8, "Statistics", 891.0, 32.0, false)
     if title_error != ok { ret (zero, title_error) }
     rows[0usize] = title
     let (tabs, tabs_error) = stat_tabs(a, grid)
     if tabs_error != ok { ret (zero, tabs_error) }
     rows[1usize] = tabs
-    let (banner, banner_error) = stat_banner(a, grid)
-    if banner_error != ok { ret (zero, banner_error) }
-    rows[2usize] = banner
+    var n = 2usize
+    if grid.sw_tab != 9u8 {
+        let (banner, banner_error) = stat_banner(a, grid)
+        if banner_error != ok { ret (zero, banner_error) }
+        rows[n] = banner
+        n += 1usize
+    }
     let (content, content_error) = stat_content(a, grid)
     if content_error != ok { ret (zero, content_error) }
-    rows[3usize] = content
-    let (button, button_error) = v3_button(a, grid, "Close", 0.0, grid.key + MENU_KEY + 852300u64, &close[0usize], true, 8.0)
+    rows[n] = content
+    n += 1usize
+    let (button, button_error) = v3_button(a, grid, "Close", 0.0, grid.key + MENU_KEY + 852300u64, &close[0usize], true, 6.0)
     if button_error != ok { ret (zero, button_error) }
-    rows[4usize] = widget.padded(0u64, 680.0, 0.0, 0.0, 0.0, style.defaults(), one(a, button))
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sw_frame(780.0, 480.0), rows[0usize..5usize]), ok)
+    rows[n] = widget.padded(0u64, 810.0, 0.0, 0.0, 0.0, style.defaults(), one(a, button))
+    n += 1usize
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sw_frame(891.0, 530.0), rows[0usize..n]), ok)
 }

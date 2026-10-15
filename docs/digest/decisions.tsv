@@ -2738,4 +2738,5 @@ D4155	504	G012: the Color Editor's R, G and B are spin boxes
 D4156	308	G012: typing in the Color Editor's R box seen
 D4157	296	G012: typing in the Color Editor's G and B boxes seen
 D4158	1723	G012: TcxGrid audit, and v3's own control sizes for the hand-built dialogs
-D4159	694	G012: Messages, Options > Shortcuts and Statistics (Editions, Advanced) as read-only v3-style tables
+D4159	695	G012: Messages, Options > Shortcuts and Statistics (Editions, Advanced) as read-only v3-style tables
+D4160	979	G012: Statistics Probability, Mana Slots and Start Hand tabs, and the window laid out to v3's capture
