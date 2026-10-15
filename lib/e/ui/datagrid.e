@@ -10777,11 +10777,14 @@ fn dz_color_right(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var i = 0usize
     while i < 6usize {
         var label = "H:"
-        var value: u32 = 0u32
-        if i == 1usize { label = "S:" }
+        var value: u32 = hsl_channel(picked, 0usize)
+        if i == 1usize {
+            label = "S:"
+            value = hsl_channel(picked, 1usize)
+        }
         if i == 2usize {
             label = "L:"
-            value = 255u32
+            value = hsl_channel(picked, 2usize)
         }
         if i == 3usize {
             label = "R:"
@@ -10891,4 +10894,34 @@ fn dz_row_fill(grid: *const Grid, row: usize) -> u32 {
     if row % 2usize == 0usize { at = 6usize }
     if ((grid.dz_style_has >> u16(at)) & 1u16) != 0u16 { ret grid.dz_style_rgb[at] }
     ret dz_content_fill(grid)
+}
+
+// One channel (0 hue, 1 saturation, 2 lightness) of an 0xRRGGBB colour, each scaled 0..255 (v3's white reads L 255).
+fn hsl_channel(rgb: u32, which: usize) -> u32 {
+    let r = i32((rgb >> 16u32) & 255u32)
+    let g = i32((rgb >> 8u32) & 255u32)
+    let b = i32(rgb & 255u32)
+    var hi = r
+    if g > hi { hi = g }
+    if b > hi { hi = b }
+    var lo = r
+    if g < lo { lo = g }
+    if b < lo { lo = b }
+    let sum = hi + lo
+    let span = hi - lo
+    if which == 2usize { ret u32(sum / 2) }
+    if span == 0 { ret 0u32 }
+    if which == 1usize {
+        var dark = sum
+        if dark > 255 { dark = 510 - sum }
+        ret u32(span * 255 / dark)
+    }
+    // hue in sixths of the circle, then scaled so a full turn is 255
+    var sixth: i32 = 0
+    if hi == r { sixth = ((g - b) * 255 / span) }
+    if hi == g { sixth = 2 * 255 + ((b - r) * 255 / span) }
+    if hi == b { sixth = 4 * 255 + ((r - g) * 255 / span) }
+    var turn = sixth / 6
+    if turn < 0 { turn += 255 }
+    ret u32(turn)
 }

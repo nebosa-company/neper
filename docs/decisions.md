@@ -41516,3 +41516,6 @@ Picking Content and a colour fills the preview's data cells (DZ-style-content-in
 
 ## D4145 - G012: Content Even Rows and Odd Rows stripe the printed table
 `print_row` and `print_cell` take the row number instead of a header flag (row 0 is the header); `dz_row_fill` picks the Even Rows style's colour for the 1st, 3rd, 5th data row and the Odd Rows style's for the 2nd, 4th ..., else the Content colour (DZ-style-even-odd-in-preview-v5.png: yellow even, cyan odd). Which of the two is "even" (row index 0 or 1) is my reading of the DevExpress convention, not recorded from v3. Seven styles still draw nothing.
+
+## D4146 - G012: the Color Editor's H, S and L follow the pick
+`hsl_channel` computes hue, saturation and lightness of the picked colour, each on a 0 to 255 scale (v3's white reads L 255; its hue and saturation scale was inferred from that one number, not recorded): teal 0 / 128 / 128 reads H 127, S 255, L 64 (CE5-color-editor-hsl-v5.png), salmon 255 / 128 / 128 reads H 0, S 255, L 191. The boxes are still not editable, the hue square, hex box and custom colours are not built.
