@@ -11,7 +11,10 @@
 
 use e.mem
 use e.ui.collection
+use e.gfx.paint
 use e.ui.control
+use e.ui.layout as ui_layout
+use e.ui.style
 use e.ui.gridlook as gl
 use e.ui.looks
 use e.ui.widget
@@ -126,6 +129,54 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key) -> (widg
     ret (node, node_error)
 }
 
+fn none_of(ctx: *void, parent: widget.Key) -> usize { ret 0usize }
+
+// The Conditional Formatting Rules Manager's list (view-conditional-formatting@1x.png): no rules,
+// five columns, a TcxGrid-style frame (1 px #828790, #A7AAB0 over #D5D7DA at the top). Reference:
+// ref/windows/tree_list_rules.png, 664 x 257.
+fn rules_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key) -> (widget.Node, err) {
+    let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
+    if tahoma_error != ok { ret (zero, tahoma_error) }
+    let (copies, copies_error) = mem.alloc[control.Theme](a, 1usize)
+    if copies_error != ok { ret (zero, copies_error) }
+    copies[0usize] = tahoma
+    let (columns, columns_error) = mem.alloc[collection.Column](a, 5usize)
+    if columns_error != ok { ret (zero, columns_error) }
+    columns[0usize] = collection.Column { title: "Rule (applied in order shown)", width: 257.0 }
+    columns[1usize] = collection.Column { title: "Format", width: 105.0 }
+    columns[2usize] = collection.Column { title: "Applies to", width: 103.0 }
+    columns[3usize] = collection.Column { title: "Apply to the record", width: 112.0 }
+    columns[4usize] = collection.Column { title: "Stop If True", width: 85.0 }
+    var held = t
+    if t.tokens.profile == .Windows { held = &copies[0usize] }
+    let source = collection.TreeSource { ctx: mem.cast[*void](held), count: none_of, key: key_of, has_children: has_children, build: build_row }
+    let cells = collection.CellSource { ctx: mem.cast[*void](held), cell: build_cell }
+    var none: []const widget.Key = zero
+    var options: collection.TreeOptions = zero
+    options.height = 237.0
+    let (node, node_error) = collection.tree_table_with(a, key, held, "Rules", columns[0usize..5usize], source, cells, none, none, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, 99usize, false, widget.Change[usize] { ctx: zero, invoke: noop_sort }, widget.Change[collection.Reorder] { ctx: zero, invoke: noop_reorder }, widget.Change[collection.ColumnResize] { ctx: zero, invoke: noop_resize }, 17.0, options)
+    if node_error != ok { ret (zero, node_error) }
+    // the frame
+    let (held_nodes, held_error) = mem.alloc[widget.Node](a, 3usize)
+    if held_error != ok { ret (zero, held_error) }
+    var top_a = looks.size_style(662.0, 1.0)
+    top_a.background = paint.Brush { Solid: gl.rgb(0xA7AAB0u32) }
+    var top_b = looks.size_style(662.0, 1.0)
+    top_b.background = paint.Brush { Solid: gl.rgb(0xD5D7DAu32) }
+    held_nodes[0usize] = widget.box(0u64, top_a, zero)
+    held_nodes[1usize] = widget.box(0u64, top_b, zero)
+    held_nodes[2usize] = node
+    var inner = looks.size_style(662.0, 256.0)
+    inner.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, column_error) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, held_nodes[0usize..3usize])
+    var wrap = looks.size_style(664.0, 257.0)
+    wrap.background = paint.Brush { Solid: gl.rgb(0x828790u32) }
+    wrap.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, wrap, column[0usize..1usize]), ok)
+}
+
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (left, left_error) = filter_list(a, t, 1000u64)
     if left_error != ok { ret (0usize, left_error) }
@@ -133,7 +184,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (1usize, ok)
 }
 
+fn build_rules(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (right, right_error) = rules_list(a, t, 2000u64)
+    if right_error != ok { ret (0usize, right_error) }
+    cells[0usize] = looks.Cell { caption: "Conditional Formatting Rules list (empty)", node: right, drive: .None }
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let sheet = looks.Sheet { name: "tree_list", cells: 1usize, columns: 1usize, cell_w: 305.0, cell_h: 319.0, ctx: zero, build: build }
-    ret looks.run_all(a, &sheet)
+    try looks.run_all(a, &sheet)
+    let second = looks.Sheet { name: "tree_list_rules", cells: 1usize, columns: 1usize, cell_w: 664.0, cell_h: 257.0, ctx: zero, build: build_rules }
+    ret looks.run_all(a, &second)
 }

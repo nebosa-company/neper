@@ -5599,10 +5599,12 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var column_style = style.defaults()
     column_style.width = style.Length { Px: width }
     column_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    // looks3-e: the empty part of a v3 tree list is the window colour
+    if t.tokens.profile == .Windows { column_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..part_count])
-    if t.tokens.profile == .Windows && options.height > 0.0 {
+    if t.tokens.profile == .Windows && options.height > 0.0 && f32(table_total) * control.if_else(row_height_of > 0.0, row_height_of, 19.0) > options.height {
         // looks3-e: v3's 16 wide bar beside header and rows, as tall as both
         var row_pitch = row_height_of
         if !(row_pitch > 0.0) { row_pitch = gl.v3().row_height }
