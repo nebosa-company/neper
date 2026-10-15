@@ -5066,7 +5066,7 @@ fn print_panel(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (filter_text, filter_error) = flat_text(a, grid, "<Filter is Empty>", gl.rgb(0xFFFFFFu32))
     if filter_error != ok { ret (zero, filter_error) }
     var strip = control.sized_style(across * zoom, 22.0)
-    strip.background = paint.Brush { Solid: gl.rgb(0xA0A0A0u32) }
+    strip.background = paint.Brush { Solid: gl.rgb(dz_strip_rgb(grid, 7usize)) }
     strip.margin = style.EdgeLengths { left: style.Length { Px: margin_px(grid, 0usize, sheet_wide) }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     page[q] = widget.box(0u64, strip, one(a, widget.padded(0u64, 4.0, 2.0, 0.0, 0.0, style.defaults(), one(a, filter_text))))
     q += 1usize

@@ -41507,3 +41507,6 @@ A tap on a basic colour fills the editor's square with it and sets the R, G and 
 
 ## D4142 - G012: the Header style's colour reaches the printed report
 Picking the Header style, a colour in the Color Editor and OK paints the preview's header row with it (DZ-style-header-in-preview-v5.png: teal header row, `print_header_fill`; light grey until then). The other twelve styles' colours are kept but do not draw anything yet (Content, Even/Odd rows, Footer, Group, Filter Bar ... would each map to a part of the page), and neither do their fonts.
+
+## D4143 - G012: the Filter Bar style's colour paints the printed filter strip
+Same route as the Header style (D4142): picking Filter Bar and a colour paints the preview's "<Filter is Empty>" strip (DZ-style-filterbar-in-preview-v5.png: teal strip). Eleven styles still draw nothing. A first run picked Footer by mistake (my click was 22 px low), which is why the first screenshot showed the grey strip.
