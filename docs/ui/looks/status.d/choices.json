@@ -52,6 +52,31 @@
       }
     }
   },
+  "check_list_box": {
+    "neper": "control.multi_select_list",
+    "app": "examples/looks/check_list_box.e",
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/check_list_box.png",
+        "notes": "The baseline: the v2 multi-select list (selection fill, 40 px rows, state circles)."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/check_list_box.png",
+        "notes": "No v3 form uses a TcxCheckListBox (no such class in the DFMs), so there is nothing to match the list against. The rows are the measured native check box mark (see checkbox) at 21 unit row height on a white viewport.",
+        "gaps": [
+          "No v3 reference: the viewport edge (1 unit #ABABAB, square), the 21 unit row height, the 4 unit left inset and the white face are guesses carried over from the combo box and grid measurements",
+          "Selection (a highlighted current row, distinct from checked) is not drawn: control.multi_select_list has one flag per row, checked, and no current-row state; DevExpress lfFlat would draw one",
+          "Hover has no row highlight, only the mark's own hover colour (guessed, see checkbox); DevExpress check lists do not hot-track rows by default",
+          "The focus rectangle round a row's caption is a guess (see checkbox); the harness's Tab sequence lands it on the last row",
+          "No disabled state: the control takes no enabled flag",
+          "Overflow (more rows than the viewport, a scroll bar) is not shown in the sheet and the scroll bar has no Windows look yet",
+          "The count bar variant (multi_select_list_counted) keeps the Neper look"
+        ]
+      }
+    }
+  },
   "radio": {
     "neper": "control.radio",
     "app": "examples/looks/radio.e",

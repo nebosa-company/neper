@@ -3558,6 +3558,40 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
     ret (widget.semantics(key, sem, style.defaults(), stacked[0usize..1usize]), ok)
 }
 
+
+// A TcxCheckListBox in the Windows look: v3 has none, so this is the native check box mark per
+// row on a white viewport with a 1 unit #ABABAB edge (the field edge the combo boxes measure),
+// 21 unit rows, the mark 4 units in. A row's focus is the dotted rectangle round its caption.
+fn windows_check_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, options.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < options.len {
+        let (row, row_error) = windows_choice(a, key + 1u64 + u64(i), t, 4u8, options[i], chosen[i], false, false, &picks[i], true)
+        if row_error != ok { ret (zero, row_error) }
+        items[i] = row
+        i += 1usize
+    }
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: width }
+    view_style.height = style.Length { Px: f32(rows) * 21.0 + 2.0 }
+    view_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    view_style.border = style.Border { width: 1.0, color: style.hex(11250603u32) }
+    view_style.padding = edges(4.0, 0.0, 1.0, 0.0)
+    view_style.overflow = .Clip
+    let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
+    if view_error != ok { ret (zero, TooLarge) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = view
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_LISTBOX
+    sem.label = label
+    sem.row_count = u32(options.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
 // (D1264) The switch's own part: its 52 x 32 track and thumb in the 40 circle
 // of its state layer, 60 x 40, for a control that stands it beside other
 // content (a control row).
@@ -5334,6 +5368,10 @@ fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options
 // Unframed (D958), it is the rows alone on the container, for a frame around more.
 fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32, multi: bool, framed: bool) -> (widget.Node, err) {
     if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows && multi && framed {
+        let (drawn, drawn_error) = windows_check_list(a, key, t, label, options, chosen, picks, rows, width)
+        ret (drawn, drawn_error)
+    }
     let (items, items_error) = mem.alloc[widget.Node](a, options.len)
     if items_error != ok { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
