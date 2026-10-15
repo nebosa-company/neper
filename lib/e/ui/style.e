@@ -142,7 +142,9 @@ type States = struct { hover: f32, focus: f32, pressed: f32, dragged: f32, disab
 type Sizes = struct { control_xs: f32, control_sm: f32, control_md: f32, control_lg: f32, control_xl: f32, target_touch: f32, target_pointer: f32, icon_xs: f32, icon_sm: f32, icon_md: f32, icon_lg: f32, divider: f32, outline_focused: f32 }
 type Metrics = struct { hit_target: f32, control_height: f32, density: f32, focus_ring: f32, focus_offset: f32 }
 type Palette = enum u8 { Light, Dark, HighContrast, Custom, HighContrastDark }
-type Profile = enum u8 { Neper, DesktopDense, Touch, MaterialLike, CupertinoLike }
+// `Windows` is the MTG Studio v3 look (`windows`): the native-style Windows face of the
+// DevExpress controls; a control branches on it only where its shape differs.
+type Profile = enum u8 { Neper, DesktopDense, Touch, MaterialLike, CupertinoLike, Windows }
 type Direction = enum u8 { LeftToRight, RightToLeft }
 // ---- GENERATED from docs/ux/tokens.json by scripts/render_ux_theme.py; do not edit ----
 
@@ -522,7 +524,9 @@ fn fill_type_scale(t: *ThemeTokens) {
 type ControlState = struct { hovered: bool, pressed: bool, focused: bool, focus_visible: bool, selected: bool, disabled: bool, read_only: bool, invalid: bool }
 // Plain is the v2 text button; Tonal, Elevated and Danger are the v2 additions (D942).
 // `Container` is the FAB's primary container (D944).
-type ControlVariant = enum u8 { Filled, Outlined, Plain, Tonal, Elevated, Danger, Container }
+// `Default` is the button the Enter key presses: Filled everywhere, except that the Windows
+// look draws it as a plain face button with an accent border.
+type ControlVariant = enum u8 { Filled, Outlined, Plain, Tonal, Elevated, Danger, Container, Default }
 // `elevation` is the shadow level the control casts; `padding` and `padding_start`
 // are its horizontal padding when the control sets them (zero: the pressable's own);
 // with `custom_padding` they and `padding_y` are taken exactly, zero included; a
@@ -569,6 +573,61 @@ fn reference(palette: Palette) -> ThemeTokens {
     t.durations = Durations { short1: 50u32, short2: 100u32, short3: 150u32, short4: 200u32, medium1: 250u32, medium2: 300u32, medium3: 350u32, medium4: 400u32, long1: 450u32, long2: 500u32, stagger: 30u32 }
     // The Neper profile is a pointer host's: density -1, 32 tall, 32 targets.
     t.metrics = Metrics { hit_target: 32.0, control_height: 32.0, density: 1.0, focus_ring: 3.0, focus_offset: 2.0 }
+    ret t
+}
+
+// A colour from 0xRRGGBB.
+fn hex(value: u32) -> paint.Color {
+    ret paint.rgba(f32((value >> 16u32) & 255u32) / 255.0, f32((value >> 8u32) & 255u32) / 255.0, f32(value & 255u32) / 255.0, 1.0)
+}
+
+fn put(t: *ThemeTokens, role: ColorRole, value: u32) {
+    t.colors[color_index(role)] = hex(value)
+}
+
+// The Windows look: MTG Studio v3's DevExpress controls as the program draws them, measured
+// from docs/grid-parity (tcxgrid/00-options-*-v3.png at 150 % DPI, tokens.json). Only the Light
+// palette is measured; the others take the Neper colours with the Windows metrics. Controls
+// read the face of a button or field from `SurfaceContainerLowest` (#FDFDFD), the frame of a
+// group box from `OutlineVariant`, and the dialog face from `Background` (#F0F0F0).
+// Unmeasured: the disabled and hover/pressed colours (see docs/ui/looks/status.json gaps).
+fn windows(palette: Palette) -> ThemeTokens {
+    var t = reference(palette)
+    t.profile = .Windows
+    if palette == .Light {
+        put(&t, .Background, 15790320u32)
+        put(&t, .Surface, 16777215u32)
+        put(&t, .SurfaceVariant, 15790320u32)
+        put(&t, .Primary, 24504u32)
+        put(&t, .FocusRing, 24504u32)
+        put(&t, .Text, 0u32)
+        put(&t, .OnSurface, 0u32)
+        put(&t, .TextMuted, 7171437u32)
+        put(&t, .OnSurfaceVariant, 7171437u32)
+        put(&t, .Border, 13816530u32)
+        put(&t, .Outline, 13816530u32)
+        put(&t, .OutlineVariant, 14474460u32)
+        put(&t, .SurfaceContainerLowest, 16645629u32)
+        put(&t, .Selection, 10932991u32)
+    }
+    // Flat square-ish corners: v3's buttons and fields are 3 px.
+    t.radii = Radii { xs: 2.0, sm: 3.0, md: 4.0, lg: 4.0, xl: 4.0, full: 9999.0 }
+    t.borders = Borders { hairline: 1.0, regular: 1.0, thick: 2.0 }
+    var e: [6]f32 = zero
+    t.elevation = e
+    // 9 pt (12 px) body text; v3's labels are regular weight, not the Neper semibold.
+    let body = TextStyle { size: 12.0, line_height: 16.0, weight: 400u16, italic: false }
+    t.text[0] = body
+    t.text[1] = body
+    t.text[4] = body
+    t.text[17] = body
+    t.text[18] = body
+    t.text[19] = body
+    t.sizes.control_xs = 18.0
+    t.sizes.control_sm = 22.0
+    t.sizes.outline_focused = 1.0
+    // Buttons, combo boxes and text fields are 22 layout units high.
+    t.metrics = Metrics { hit_target: 22.0, control_height: 22.0, density: 1.0, focus_ring: 1.0, focus_offset: 0.0 }
     ret t
 }
 

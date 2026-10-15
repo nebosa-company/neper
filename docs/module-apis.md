@@ -11175,11 +11175,11 @@ type Borders = struct { hairline: f32, regular: f32, thick: f32 }
 type Motion = struct { fast_ms: u32, normal_ms: u32, slow_ms: u32, reduced: bool }
 type Metrics = struct { hit_target: f32, control_height: f32, density: f32, focus_ring: f32, focus_offset: f32 }
 type Palette = enum u8 { Light, Dark, HighContrast, Custom }
-type Profile = enum u8 { Neper, DesktopDense, Touch, MaterialLike, CupertinoLike }
+type Profile = enum u8 { Neper, DesktopDense, Touch, MaterialLike, CupertinoLike, Windows }
 type Direction = enum u8 { LeftToRight, RightToLeft }
 type ThemeTokens = struct { palette: Palette, profile: Profile, direction: Direction, colors: [14]paint.Color, text: [7]TextStyle, spacing: Spacing, radii: Radii, borders: Borders, elevation: [4]f32, motion: Motion, metrics: Metrics }
 type ControlState = struct { hovered: bool, pressed: bool, focused: bool, selected: bool, disabled: bool, read_only: bool, invalid: bool }
-type ControlVariant = enum u8 { Filled, Outlined, Plain }
+type ControlVariant = enum u8 { Filled, Outlined, Plain, Tonal, Elevated, Danger, Container, Default }
 type ResolvedControl = struct { background: paint.Color, foreground: paint.Color, border: paint.Color, border_width: f32, focus_ring: f32, opacity: f32, radius: f32 }
 type SizeClass = enum u8 { Compact, Medium, Expanded }
 type Capabilities = struct { hover: bool, fine_pointer: bool, keyboard: bool, touch: bool, pen: bool, resizable: bool, multi_window: bool, insets: geometry.Insets }
@@ -11190,6 +11190,7 @@ fn validate(value: *const Style) -> err
 fn color(t: *const ThemeTokens, role: ColorRole) -> paint.Color
 fn text_style(t: *const ThemeTokens, role: TextRole) -> TextStyle
 fn reference(palette: Palette) -> ThemeTokens
+fn windows(palette: Palette) -> ThemeTokens
 fn validate_theme(t: *const ThemeTokens) -> err
 fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) -> ResolvedControl
 fn size_class(width: f32) -> SizeClass
