@@ -139,6 +139,20 @@ SHEETS["list_box_dialog"] = (1, 152, 287, [
     ("view-show-columns", 14, 57, 152, 154, 0, 0, 133),
 ])
 
+SHEETS["page_control_filter"] = (1, 229, 22, [
+    ("search-filter-top", 8, 31, 229, 22, 0),           # Blocks / Formats / Editions, Cards, Options
+])
+SHEETS["page_control_custom"] = (1, 96, 22, [
+    ("view-show-columns", 12, 33, 96, 22, 0),           # Bands, Columns (chosen)
+])
+
+SHEETS["page_control_stats"] = (1, 126, 24, [
+    ("deck-statistics", 8, 31, 126, 24, 0),             # Colors (chosen, focused), Rarity
+])
+SHEETS["page_control_about"] = (1, 120, 24, [
+    ("help-about", 8, 31, 120, 24, 0),                  # MTG Studio (chosen), Details
+])
+
 if __name__ == "__main__":
     command, name = sys.argv[1], sys.argv[2]
     if command == "ref":
