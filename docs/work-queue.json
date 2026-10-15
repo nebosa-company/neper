@@ -933,10 +933,10 @@
       "group": "Library",
       "order": 165,
       "title": "UI looks: one widget set in a Windows (MTG Studio v3) look, then macOS/iOS and Android",
-      "score": 0.1,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Plan docs/ui/looks-plan.md, decision D5108, progress docs/ui/looks-progress.html (docs/ui/looks/status.json). Acceptance: (1) Profile.Windows and style.windows from the v3 captures; (2) e.ui.looks renders every control's states offscreen per look at 100% and 150% into docs/ui/looks/<look>/<control>.png beside the v3 reference; (3) the ~30 controls of the plan each reach ready (Windows PNG within tolerance of docs/ui/looks/ref/windows at both scales); (4) CupertinoLike and MaterialLike get tokens and idiom branches (later); (5) controls with no Neper equivalent are listed, not built. PART (D5108): items 1 and 2 done; the button is the pilot (Windows look in review: face, border, size, label, default/focus border match the Options dialog; hover, pressed, disabled are guesses). NOT DONE: the other 29 controls, the reference captures, tolerance comparison, dark and high-contrast Windows palettes, Cupertino and Material."
+      "evidence": "Plan docs/ui/looks-plan.md, decision D5108, progress docs/ui/looks-progress.html (docs/ui/looks/status.json). Acceptance: (1) Profile.Windows and style.windows from the v3 captures; (2) e.ui.looks renders every control's states offscreen per look at 100% and 150% into docs/ui/looks/<look>/<control>.png beside the v3 reference; (3) the ~30 controls of the plan each reach ready (Windows PNG within tolerance of docs/ui/looks/ref/windows at both scales); (4) CupertinoLike and MaterialLike get tokens and idiom branches (later); (5) controls with no Neper equivalent are listed, not built. PART (D5108, 2026-10-15): items 1 and 2 done. All 30 controls render under Neper and Windows at 100% and 150% (32 apps in examples/looks, one worktree lane per group merged into master); every Windows look is in review (none ready): the v3 captures that exist (docs/grid-parity) cover rest states, while hover, pressed, focused, disabled and most dialogs have no capture and are listed per control in docs/ui/looks/status.d/*.json. The Windows dark palette is rendered for the button only. NOT DONE: reference captures of the v3 program for the missing controls and states (screen access was declined), tolerance comparison, ready status, dark and high-contrast sheets for the other controls, Cupertino and Material."
     }
   ]
 }
