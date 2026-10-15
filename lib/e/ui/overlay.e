@@ -4653,7 +4653,15 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         anchor = key + 2u64
     }
     var head: widget.Node = zero
-    if footer.typing {
+    if footer.typing && t.tokens.profile == .Windows {
+        // The Windows look (docs/ui/looks, pickers): v3's TcxDateEdit, an edit with a drop button.
+        var typed_look = control.field_options()
+        typed_look.width = 120.0
+        let (flat_head, flat_head_error) = control.win_edit_frame(a, key, t, label, footer.buffer, footer.len, footer.typed, open, trigger, typed_look)
+        if flat_head_error != ok { ret (zero, flat_head_error) }
+        head = flat_head
+        anchor = key + 1048701u64
+    } else if footer.typing {
         var typed_look = control.field_options()
         typed_look.width = 7.0 * cell + 32.0
         let (typed_head, typed_head_error) = clocked_field_glyph(a, key, t, label, footer.buffer, footer.len, footer.typed, "", true, open, trigger, typed_look, .Calendar)
@@ -4683,6 +4691,8 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
             today_press[0usize] = widget.Submit { ctx: mem.cast[*void](&todays[0usize]), invoke: day_fire }
             var plain = control.button_options()
             plain.variant = .Plain
+            // v3's date buttons are real buttons.
+            if t.tokens.profile == .Windows { plain.variant = .Filled }
             let (today_button, today_error) = control.button(a, base + 64u64, t, "Today", &today_press[0usize], plain)
             if today_error != ok { ret (zero, today_error) }
             let (clear_button, clear_error) = control.button(a, base + 65u64, t, "Clear", footer.clear, plain)
@@ -4706,7 +4716,17 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         var raised_style = control.surface_style(t, raised)
         raised_style.padding.top = style.Length { Px: 8.0 }
         raised_style.width = style.Length { Px: 7.0 * cell + 32.0 }
-        let (lifted, lifted_error) = dismissable(a, base + 1u64, anchor, .Below, label, widget.box(0u64, raised_style, inside[0usize..1usize]), toggle, 4.0)
+        var gap_below: f32 = 4.0
+        if t.tokens.profile == .Windows {
+            // The drop-down sits against the edit: white, a grey edge, square, a hard shadow.
+            raised_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+            raised_style.border = style.Border { width: 1.0, color: style.hex(12369084u32) }
+            raised_style.shadow = style.Shadow { offset: geometry.Point { x: 1.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.35) }
+            raised_style.radius = 0.0
+            raised_style.padding = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 6.0 } }
+            gap_below = 0.0
+        }
+        let (lifted, lifted_error) = dismissable(a, base + 1u64, anchor, .Below, label, widget.box(0u64, raised_style, inside[0usize..1usize]), toggle, gap_below)
         if lifted_error != ok { ret (zero, lifted_error) }
         popup_node = lifted
     }

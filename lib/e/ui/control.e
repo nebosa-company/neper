@@ -12767,6 +12767,16 @@ fn win_image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // list's anchor) holds the editor (keyed `key`) and the drop button (keyed `key + 1`,
 // firing `toggle`); the list is `suggesting`'s, in the Windows look (rows `key + 3 + index`).
 fn win_combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], choices: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    let (frame_node, frame_error) = win_edit_frame(a, key, t, label, buffer, len, typed, open, toggle, options)
+    if frame_error != ok { ret (zero, frame_error) }
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting(a, key + 1048701u64, t, label, frame_node, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle)
+    ret (made, made_error)
+}
+
+// The frame of an editable drop-down (keyed `key + 1048701`): the editor (keyed `key`) and the
+// drop button (keyed `key + 1`, firing `toggle`) in the native-style box.
+fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
     let enabled = options.enabled
     let state_edit = control_state(t, key, enabled, false)
     let state_button = control_state(t, key + 1u64, enabled, false)
@@ -12816,11 +12826,7 @@ fn win_combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     frame_style.radius = t.tokens.radii.sm
     let pad_y = style.Length { Px: win_pad_y(c.edge_width) }
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.5 }, top: pad_y, right: style.Length { Px: 0.0 }, bottom: pad_y }
-    let frame_key = key + 1048701u64
-    let frame_node = widget.flex(frame_key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, frame_style, row_parts[0usize..2usize])
-    var none: []const widget.Node = zero
-    let (made, made_error) = suggesting(a, frame_key, t, label, frame_node, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle)
-    ret (made, made_error)
+    ret (widget.flex(key + 1048701u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, frame_style, row_parts[0usize..2usize]), ok)
 }
 
 // A list box (TcxListBox): a framed viewport (keyed `key`) `rows` rows tall of `options`,

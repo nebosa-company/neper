@@ -1,0 +1,100 @@
+{
+  "combo_box": {
+    "app": "examples/looks/combo_box.e",
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/combo_box.png",
+        "notes": "The baseline: the v2 outlined combo box in the same cells. Open lists are on neper/combo_box_lists.png (run the app with an argument, `combo_box.exe lists`); the list opens fading, so one frame shows it part way."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/combo_box.png",
+        "notes": "Frame measured from the Options dialog (capture 00b, 150 %): #FDFDFD face, 1 px #D2D2D2 border, radius 4, 21 tall (30 px at 150 %), a thin grey chevron 8 wide centred 8.7 from the right edge, text 2.5 in. The drop-down list (windows/combo_box_lists.png) is the DevExpress popup of captures 00c and IC1: white, rows 15 tall, the lit row #0078D7 under white text, no motion, 8 rows then a scrolling viewport. Same drawing under control.select (and so the picker popup) and under the date edit's head; the editable combo keeps its editor, Up/Down/Enter/Escape and filtering unchanged.",
+        "gaps": [
+          "Hover (3 % face tint), open and focused (the accent #298DD9 1.33 px border of the pilot button), pressed, drop button hot (black chevron), disabled and read-only colours are guesses: no capture shows those states of this control",
+          "Text is 11.2 px Segoe UI; in capture 00b the text is about 3 % narrower (11 px?)",
+          "The drop-down's frame is a uniform 1 px #BCBCBC with a 1 x 2 shadow: capture 00c shows light top and left edges and a dark #696969 right and bottom edge, which one uniform border cannot draw",
+          "Row height is 15 (capture IC1, 22.4 px at 150 %); capture 00c measures 14 (21 px at 150 %)",
+          "No dotted focus rectangle on the lit row (capture IC1 has one)",
+          "Row under the pointer wins over the chosen one (as DevExpress); the chevron does not flip when open (native)",
+          "The scrollbar in a long list is the generic thumb of widget.scroll_view, not the Windows scroll bar (see scroll_bar)",
+          "DropDownRows (10 in some v3 filter combos) is not an option: the viewport is 8 rows",
+          "The main-form Mode combo (capture 00c: square flat frame, raised grey drop button with a black triangle) and the in-grid editor of IC1 (grey list, blue frame, blue drop button) use other v3 styles and are not drawn",
+          "Dark and high-contrast palettes: Neper colours with Windows metrics (the harness's windows-dark sheet renders with the dark Windows tokens, unreviewed)"
+        ]
+      }
+    }
+  },
+  "image_combo_box": {
+    "neper": "control.image_select",
+    "gap": "No per-item image in Neper's combo box rows; control.image_select adds it for the Windows look and is the plain select under the others",
+    "app": "examples/looks/image_combo_box.e",
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/image_combo_box.png",
+        "notes": "The baseline: control.select (no pictures: control.image_select falls back to it under the other looks)."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/image_combo_box.png",
+        "notes": "control.image_select: the combo box's frame and drop-down with a 16 px picture leading the head's value and every row (rows 18 tall with a picture). Drawn glyphs stand in for the image list's bitmaps.",
+        "gaps": [
+          "No v3 capture shows a picture in an image combo box (capture IC1's list has none): the 16 px picture, its 3 px gap to the text and the 18 px row height are guesses",
+          "Frame, chevron and drop-down colours are those of the combo box, with its guessed states (hover, open, focused, disabled)",
+          "The head is at least 112 wide, not the DFM's 121 (Width = 121 in batch_update); there is no width option",
+          "The in-grid editor style of capture IC1 (grey list, blue frame and drop button) is not drawn",
+          "Nothing chosen shows the label muted; v3 shows an empty edit",
+          "Keyboard: the open list has no Up/Down/Enter handling (control.select has none either)"
+        ]
+      }
+    }
+  },
+  "date_edit": {
+    "app": "examples/looks/date_edit.e",
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/date_edit.png",
+        "notes": "The baseline: overlay.date_picker_with with a typed field (stray carets are the harness's focus slot, as in the other sheets)."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/date_edit.png",
+        "notes": "A typed date: the combo box's frame (edit and drop button, 120 wide) with the calendar docked against it in a white panel with a grey edge and a hard shadow, Today and Clear as Windows buttons below the days. The typed edit keeps its parsing (Enter commits, the form reformats on blur).",
+        "gaps": [
+          "No capture of the DevExpress calendar drop-down exists: the panel is the Neper calendar (rounded Primary disc for the chosen day, grey hover disc, chevron month arrows, Mo Tu We header) in Windows colours, not the DX layout",
+          "DateButtons in the DFM are Clear, Now and Today (ckDateTime): only Today and Clear are drawn, no time part, no Now",
+          "Panel edge, shadow and padding are guesses (those of the combo box's list)",
+          "Hover, focused and drop button states are the combo box's guessed ones",
+          "Read-only date edits (deck properties: Properties.EditProperties.ReadOnly) and the clear (x) button are not drawn",
+          "The date format hint and invalid message of overlay.date_entry keep the Neper look"
+        ]
+      }
+    }
+  },
+  "list_box": {
+    "app": "examples/looks/list_box.e",
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/list_box.png",
+        "notes": "The baseline: the v2 list box (rounded frame, check on the chosen row)."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/list_box.png",
+        "notes": "Framed viewport with the combo box's face and border (#FDFDFD, #D2D2D2, radius 4) and the drop-down's rows (15 tall, chosen row #0078D7 under white text), scrolling past its rows. v3 has no TListBox or TcxListBox (only TcxCheckListBox): this is derived from the combo box evidence, not a capture of a list box.",
+        "gaps": [
+          "No v3 list box exists to measure: frame, row height 15 and selection colour are taken from the combo box and its drop-down",
+          "No hover effect (DevExpress list boxes have none without hot tracking); the Hover sheet cell is therefore unchanged",
+          "No dotted focus rectangle on the current row and no focus frame: the Windows tokens draw no focus ring",
+          "control.list_box has no disabled option, so there is no disabled cell",
+          "The scrollbar is the generic thumb of widget.scroll_view, not the Windows scroll bar (see scroll_bar)",
+          "TcxCheckListBox (print_proxies) is control.multi_select_list and keeps its look (see check_list_box)"
+        ]
+      }
+    }
+  }
+}
