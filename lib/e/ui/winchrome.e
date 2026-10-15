@@ -64,13 +64,68 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         }
         ret ok
     }
-    if g.kind == 0u32 { ret glyph_rect(b, area, 16.8, 15.25, 10.0, 0.75, g.ink, g.alpha) }
-    // the captured outline is 0.92 thick on the left and top, 1.13 on the right and bottom (antialiasing of a 1 px line)
-    try glyph_rect(b, area, 16.75, 10.75, 10.0, 0.92, g.ink, g.alpha)
-    try glyph_rect(b, area, 16.75, 19.62, 10.0, 1.13, g.ink, g.alpha)
-    try glyph_rect(b, area, 16.75, 11.67, 0.92, 7.95, g.ink, g.alpha)
-    ret glyph_rect(b, area, 25.62, 11.67, 1.13, 7.95, g.ink, g.alpha)
+    // looks4: the dash and the square as per-pixel coverage (0 to 255) of the live active main window caption (white on
+    // #1F2022: a full line is 191 = 0.75), 11 columns from x = 16 of the 46 wide button; the square 11 rows from y = 10.
+    // looks4: the close X of a 33 wide dialog caption whose button starts on an odd pixel (About, Options) is a half pixel
+    // to the left of the one on an even pixel (Search for Card): 12 columns from x = 11 of the button, 11 rows from y = 10.
+    if g.kind == 4u32 {
+        var e = 0usize
+        while e < 10usize {
+            try glyph_rect(b, area, 17.0 + f32(e), 15.0, 1.0, 1.0, g.ink, g.alpha * 191.0 / 255.0)
+            e += 1usize
+        }
+        ret ok
+    }
+    if g.kind == 5u32 {
+        let box = square_cover_odd()
+        var m = 0usize
+        while m < 110usize {
+            if box[m] != 0u32 { try glyph_rect(b, area, 17.0 + f32(m % 10usize), 10.0 + f32(m / 10usize), 1.0, 1.0, g.ink, g.alpha * f32(box[m]) / 255.0) }
+            m += 1usize
+        }
+        ret ok
+    }
+    if g.kind == 6u32 {
+        let wide = cross46_cover_odd()
+        var n = 0usize
+        while n < 121usize {
+            if wide[n] != 0u32 { try glyph_rect(b, area, 18.0 + f32(n % 11usize), 10.0 + f32(n / 11usize), 1.0, 1.0, g.ink, g.alpha * f32(wide[n]) / 255.0) }
+            n += 1usize
+        }
+        ret ok
+    }
+    if g.kind == 3u32 {
+        let odd = cross_cover_odd()
+        var k = 0usize
+        while k < 132usize {
+            if odd[k] != 0u32 { try glyph_rect(b, area, 11.0 + f32(k % 12usize), 10.0 + f32(k / 12usize), 1.0, 1.0, g.ink, g.alpha * f32(odd[k]) / 255.0) }
+            k += 1usize
+        }
+        ret ok
+    }
+    if g.kind == 0u32 {
+        let dash = dash_cover()
+        var d = 0usize
+        while d < 11usize {
+            try glyph_rect(b, area, 16.0 + f32(d), 15.0, 1.0, 1.0, g.ink, g.alpha * f32(dash[d]) / 255.0)
+            d += 1usize
+        }
+        ret ok
+    }
+    let square = square_cover()
+    var q = 0usize
+    while q < 121usize {
+        if square[q] != 0u32 { try glyph_rect(b, area, 16.0 + f32(q % 11usize), 10.0 + f32(q / 11usize), 1.0, 1.0, g.ink, g.alpha * f32(square[q]) / 255.0) }
+        q += 1usize
+    }
+    ret ok
 }
+
+fn cross_cover_odd() -> [132]u32 { ret [132]u32{ 14u32, 41u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 26u32, 43u32, 0u32, 39u32, 207u32, 75u32, 0u32, 0u32, 0u32, 0u32, 0u32, 26u32, 189u32, 119u32, 0u32, 0u32, 75u32, 206u32, 67u32, 0u32, 0u32, 0u32, 26u32, 178u32, 130u32, 0u32, 0u32, 0u32, 0u32, 67u32, 206u32, 75u32, 0u32, 26u32, 190u32, 130u32, 9u32, 0u32, 0u32, 0u32, 0u32, 0u32, 75u32, 206u32, 78u32, 178u32, 130u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 78u32, 230u32, 164u32, 9u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 26u32, 178u32, 164u32, 206u32, 67u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 26u32, 190u32, 130u32, 9u32, 67u32, 206u32, 75u32, 0u32, 0u32, 0u32, 0u32, 26u32, 178u32, 130u32, 0u32, 0u32, 0u32, 75u32, 206u32, 67u32, 0u32, 0u32, 26u32, 189u32, 130u32, 9u32, 0u32, 0u32, 0u32, 0u32, 67u32, 206u32, 72u32, 0u32, 46u32, 119u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 73u32, 129u32, 0u32 } }
+
+fn dash_cover() -> [11]u32 { ret [11]u32{ 48u32, 191u32, 191u32, 191u32, 191u32, 191u32, 191u32, 191u32, 191u32, 191u32, 143u32 } }
+
+fn square_cover() -> [121]u32 { ret [121]u32{ 4u32, 47u32, 64u32, 64u32, 64u32, 64u32, 64u32, 64u32, 64u32, 58u32, 12u32, 47u32, 218u32, 171u32, 171u32, 171u32, 171u32, 171u32, 171u32, 171u32, 214u32, 140u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 98u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 97u32, 191u32, 58u32, 214u32, 98u32, 96u32, 96u32, 96u32, 96u32, 96u32, 97u32, 178u32, 175u32, 12u32, 140u32, 191u32, 191u32, 191u32, 191u32, 191u32, 191u32, 191u32, 175u32, 36u32 } }
 
 fn glyph_node(a: *mem.Arena, kind: u32, ink: u32, alpha: f32, width: f32) -> (widget.Node, err) {
     let (gs, gs_error) = mem.alloc[Glyph](a, 1usize)
@@ -82,3 +137,8 @@ fn glyph_node(a: *mem.Arena, kind: u32, ink: u32, alpha: f32, width: f32) -> (wi
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&gs[0usize]), measure: icon_measure, paint: glyph_paint, state: widget.bytes_of[Glyph](&gs[0usize]) } }, style: s, children: none }, ok)
 }
+
+// looks4: the same glyphs of a caption whose buttons start on an odd pixel (Deck Legality, 539 wide): the dash is 10
+// full pixels at x = 17 to 26, the square 10 columns from x = 17 and the X 11 columns from x = 18 of the 46 wide button.
+fn square_cover_odd() -> [110]u32 { ret [110]u32{ 26u32, 62u32, 64u32, 64u32, 64u32, 64u32, 64u32, 64u32, 62u32, 26u32, 197u32, 185u32, 171u32, 171u32, 171u32, 171u32, 171u32, 171u32, 185u32, 197u32, 227u32, 36u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 33u32, 224u32, 227u32, 36u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 32u32, 223u32, 227u32, 36u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 32u32, 223u32, 227u32, 36u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 32u32, 223u32, 227u32, 36u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 32u32, 223u32, 227u32, 36u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 32u32, 223u32, 227u32, 36u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 32u32, 223u32, 227u32, 126u32, 96u32, 96u32, 96u32, 96u32, 96u32, 96u32, 125u32, 227u32, 79u32, 186u32, 191u32, 191u32, 191u32, 191u32, 191u32, 191u32, 186u32, 79u32 } }
+fn cross46_cover_odd() -> [121]u32 { ret [121]u32{ 43u32, 25u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 39u32, 14u32, 116u32, 188u32, 25u32, 0u32, 0u32, 0u32, 0u32, 0u32, 74u32, 202u32, 39u32, 0u32, 129u32, 175u32, 25u32, 0u32, 0u32, 0u32, 65u32, 204u32, 74u32, 0u32, 0u32, 8u32, 129u32, 188u32, 25u32, 0u32, 74u32, 204u32, 65u32, 0u32, 0u32, 0u32, 0u32, 0u32, 129u32, 175u32, 76u32, 204u32, 74u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 8u32, 163u32, 228u32, 76u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 65u32, 204u32, 163u32, 175u32, 25u32, 0u32, 0u32, 0u32, 0u32, 0u32, 74u32, 204u32, 65u32, 8u32, 129u32, 188u32, 25u32, 0u32, 0u32, 0u32, 65u32, 204u32, 74u32, 0u32, 0u32, 0u32, 129u32, 175u32, 25u32, 0u32, 73u32, 204u32, 65u32, 0u32, 0u32, 0u32, 0u32, 8u32, 129u32, 188u32, 24u32, 131u32, 73u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 116u32, 43u32 } }

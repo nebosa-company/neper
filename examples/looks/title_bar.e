@@ -26,12 +26,12 @@ fn one(a: *mem.Arena, t: *const control.Theme, key: widget.Key, title: str, acti
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let captions = [7]str{ "Search for Card: dialog, active", "About MTG Studio: inactive", "Deck Legality: resizable", "Options: inactive, wide", "Main window: long title", "Close hovered (no capture)", "Maximised (no capture)" }
-    let titles = [7]str{ "Search for Card", "About MTG Studio", "Deck Legality", "Options", "MTG Studio - Card Pool [Assertions] [No Optimization]", "Search for Card", "Deck Legality" }
-    let widths = [7]f32{ 309.0, 436.0, 539.0, 712.0, 784.0, 309.0, 539.0 }
+    let captions = [8]str{ "Search for Card: dialog, active", "About MTG Studio: inactive", "Deck Legality: resizable", "Options: inactive, wide", "Main window: long title", "Close hovered (no capture)", "Maximised (no capture)", "Main window: inactive" }
+    let titles = [8]str{ "Search for Card", "About MTG Studio", "Deck Legality", "Options", "MTG Studio - Card Pool [Assertions] [No Optimization]", "Search for Card", "Deck Legality", "MTG Studio - Card Pool [Assertions] [No Optimization]" }
+    let widths = [8]f32{ 309.0, 436.0, 539.0, 712.0, 784.0, 309.0, 539.0, 784.0 }
     var i = 0usize
-    while i < 7usize {
-        let (node, node_error) = one(a, t, u64(i + 1usize) * 10u64, titles[i], i != 1usize && i != 3usize, i == 2usize || i == 4usize || i == 6usize, i != 2usize && i != 6usize, i == 6usize, widths[i])
+    while i < 8usize {
+        let (node, node_error) = one(a, t, u64(i + 1usize) * 10u64, titles[i], i != 1usize && i != 3usize && i != 7usize, i == 2usize || i == 4usize || i == 6usize || i == 7usize, i != 2usize && i != 6usize, i == 6usize, widths[i])
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 5usize { drive = .Hover }
@@ -44,11 +44,11 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: captions[i], node: boxed, drive: drive }
         i += 1usize
     }
-    ret (7usize, ok)
+    ret (8usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
     // Hover is driven at the middle of the cell: for the close-only bar that is not the X, so the cell shows the rest bar.
-    let sheet = looks.Sheet { name: "title_bar", cells: 7usize, columns: 1usize, cell_w: 784.0, cell_h: 31.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "title_bar", cells: 8usize, columns: 1usize, cell_w: 784.0, cell_h: 31.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

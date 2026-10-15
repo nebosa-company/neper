@@ -1,0 +1,67 @@
+{
+  "button": {
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/button.png",
+        "notes": "The baseline: the existing v2 pill button. The sheet now has ten cells (the Windows evidence sizes); the Neper pixels of the earlier sheets (button.png, button_kinds.png) render identically to master."
+      },
+      "windows": {
+        "status": "matched",
+        "screenshot": "windows/button.png",
+        "notes": "Round 4 (live state grabs docs/ui/looks/ref/windows/states, diffed at scale 1.0 against windows/button.png, button_kinds.png and the new button_shift.png; max per-channel error outside the caption area): rest 0, default 0, mnemonic 0, disabled 85x25 0, pressed Cancel 0 (Search), pressed default OK 0 (Sort), pressed 85x25 OK 0 (Conditional Formatting), default+focused OK 85x25 0, default 85x25 0, normal 85x25 0, pressed picture button (New Rule, 125x25) 0 outside the picture, focused non-default Invert 9 (only the soft ring rows that blend with the Filter dialog's #F9F9F9 face instead of #F0F0F0; dotted rectangle, sides and face exact), default shift (OK yields its accent while Cancel is pressed) 0. Caption ink boxes within 1 px on all 11 cells. New: e.ui.winbutton pressed ring (kind 3: face #CCE4F7, ring #005499, soft rows #5088B6/#88B4D8 and #4484B8/#A0BCD3), a pixel-exact focus rectangle painter (the dots are #555555/#AAAAAA on the normal face, #665E57/#99A1A8 on the pressed one; a pressed button is also focused), and the default shift: widget.focused_role lets a Default button give up its accent while another button holds the focus or is pressed (button_shift.png, ref button_shift.png). windows_resolve's pressed face is now #CCE4F7. Script: scripts/looks_ref_a/btn4.py.",
+        "gaps": [
+          "Unverified: hover (face #F6F6F6): DevExpress reads the real pointer, no capture is possible",
+          "Not reproduced (captured): the buttons of the four DPI-scaled forms (Options, Deck Properties, Deck Legality, About) draw a resampled ring whose sub-pixel phase differs per button (74 px wide, two-column sides), so rest, default, pressed and focused states captured there differ from ours by up to 70 levels at the ring; the crisp-ring dialogs (Search, Sort, Missing Set Cards, Filter, Conditional Formatting, Statistics) are the matched family",
+          "Unverified: focused non-default Cancel of Options only exists in the resampled form; keyboard focus on a default button (accent + dots) is matched on the 85x25 conditional formatting OK",
+          "Unverified: toggled-on face, split button, busy ring, plain button (no capture); the Deck Legality format toggle pressed is resampled",
+          "Pictures are drawn glyphs: the first rows of the picture differ from v3's bitmaps (artwork)",
+          "Text is grayscale and unhinted; the capture is ClearType",
+          "Dark and high-contrast palettes keep the old look with Windows metrics (no capture)"
+        ]
+      }
+    }
+  },
+  "label": {
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/label.png",
+        "notes": "The baseline: control.text in the Neper type scale, same strings as the Windows sheet (the sheet's cells changed to the real v3 labels; the Neper pixels of the old sheet are unchanged)."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/label.png",
+        "notes": "Round 4: the pressed link of About (states/label-link-pressed-about-support) is pixel-identical to its rest grab (difference bbox empty), so v3's TcxLabel has no pressed look and the sheet's new cell 12 (Hot-link, pressed) equals cell 7 against the same crop. Also fixed: labels with ParentFont = False and no Style.Font (Deck Properties file name, Missing Set Cards description) draw DevExpress's default Segoe UI 9 pt (12 px), not Tahoma: control.windows_label_faced; the path label now spans 212 px of ink against 213 in the capture (was 195) and the wrapped line 229 against 229. Ink boxes agree within 1 px on 6 of 10 real labels (within 2 px on all ten, widest miss the bold 13 px MTG Studio title, 4 px wider than the hinted capture).",
+        "gaps": [
+          "Mismatch: text is grayscale and unhinted, the capture is hinted ClearType: no label is within 2 levels per channel on its glyph pixels; ink boxes off by 2 px on the hot-link, path and bold title labels",
+          "Mismatch: the centred 21 px product name sits 1 px low",
+          "Unverified: disabled label (#6D6D6D guess), hover (no capture possible), rotated labels, other backgrounds",
+          "The Options page title bars (bold white on grey gradient) are a panel, not a TcxLabel"
+        ]
+      }
+    }
+  },
+  "dialog": {
+    "looks": {
+      "neper": {
+        "status": "ready",
+        "screenshot": "neper/dialog.png",
+        "notes": "The baseline: the v2 card over a scrim (dialog.png, dialog_wide.png), the alert with icon (dialog_message.png) and the frameless title bar (title_bar.png). The Neper pixels of the earlier sheets are unchanged."
+      },
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/dialog.png",
+        "notes": "Round 4: caption states against the live grabs (windows/title_bar.png, ref title_bar.png, script scripts/looks_ref_a/tb4.py; max error outside the title text and inside the bar): active Search 2, inactive About 2, active Deck Legality 2, inactive Options 2, active main window 2 and the new inactive main window (WM_NCACTIVATE 0 grab) 2; caption face #1F2022 active and #202020 inactive exact, program icon within 2, inactive caption ink corrected to #787878. Caption buttons are now per-pixel coverage tables of the capture: minimise dash, maximise square and close X reproduce within 2 levels on the 46 wide buttons of even and odd width windows (Deck Legality sits half a pixel right) and the 33 wide dialog X in both phases (About and Options sit half a pixel left of Search). dialog.png now also has About and Options ACTIVE as their fresh rest grabs show them (ref composites dialog.png, dialog_wide.png via dg4.py); button rings of Search, Sort and Missing Set Cards are exact (0).",
+        "gaps": [
+          "Mismatch: title text is grayscale and unhinted, ClearType in the capture: title ink boxes within 1 px on dialogs, 2 px wider on the long main window title",
+          "Mismatch: buttons of About, Options and Deck Properties are the resampled ring (see button): up to 70 levels at the ring",
+          "Unverified: caption button hover and pressed (WM_NCLBUTTONDOWN not tried: the system loop watches the real pointer), maximised restore glyph, disabled glyph dim level",
+          "Dialog content (combo, radio group, grid, page control...) is left blank in the sheets: other controls; the message box has no capture",
+          "Each dialog's face colour is its own (the Filter dialog is #F9F9F9, the others #F0F0F0): not modelled",
+          "The capture is square cornered without DWM border or shadow; overlay.dialog still centres a fixed 420 px card (guess)"
+        ]
+      }
+    }
+  }
+}

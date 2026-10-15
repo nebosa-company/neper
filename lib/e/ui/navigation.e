@@ -8491,6 +8491,14 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
         var which = 0u32
         if slot.kind == .Maximize { which = 1u32 }
         if slot.kind == .Close { which = 2u32 }
+        // a dialog's 33 wide close button on an odd pixel draws its X half a pixel left (winchrome.cross_cover_odd)
+        if slot.kind == .Close && slot.rect.width < 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 { which = 3u32 }
+        // the 46 wide buttons of a window of odd width start on an odd pixel and draw all three glyphs half a pixel right
+        if slot.rect.width > 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 {
+            if slot.kind == .Minimize { which = 4u32 }
+            if slot.kind == .Maximize { which = 5u32 }
+            if slot.kind == .Close { which = 6u32 }
+        }
         let (shape, shape_error) = winchrome.glyph_node(a, which, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), ink.alpha, slot.rect.width)
         ret (shape, shape_error)
     }

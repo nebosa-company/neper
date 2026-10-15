@@ -1001,7 +1001,7 @@ fn windows_caption_face(active: bool) -> paint.Color {
 
 fn windows_caption_ink(active: bool) -> paint.Color {
     if active { ret hex(16777215u32) }
-    ret hex(8158332u32)
+    ret hex(7895160u32)
 }
 
 // The close button's hover (#C42B1C) and pressed (#B22A1B) faces; its glyph turns white.
