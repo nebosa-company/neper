@@ -41546,3 +41546,6 @@ Recorded from v3 (TX1-texture-opens-file-dialog-v3.png): with a style picked, Te
 
 ## D4155 - G012: the Color Editor's R, G and B are spin boxes
 R, G and B are labelled spin boxes (0 to 255, arrows step 8, typed digits set the value; `dz_channel_spin`, `dz_set_pick_channel`): two taps on R's up arrow gave 16 and the preview, hex ($ 108080) and H/S/L followed (CE10-color-editor-rgb-spin-v5.png). H, S, L and the hex box are still read-only, "Define Custom Colors >>" is still a static box, and typing in the boxes was not tried. The dialog grew to 700 x 590 to hold the taller boxes.
+
+## D4156 - G012: typing in the Color Editor's R box seen
+Select-all and "200" typed into the R spin box gave R 200, $ C88080, H 0, S 100, L 164 and the matching preview (CE11-color-editor-rgb-typed-v5.png), so the typed path of D4155 works as the arrows do. G and B share the handler, not separately tried.

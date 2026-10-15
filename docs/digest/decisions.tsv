@@ -2734,4 +2734,5 @@ D4151	355	G012: the Footer style's colour paints the printed footer band
 D4152	510	G012: the Caption style's colour paints the printed title
 D4153	763	G012: the styles with nothing to paint
 D4154	649	G012: Texture... opens the system's file dialog (not built, by decision)
-D4155	503	G012: the Color Editor's R, G and B are spin boxes
+D4155	504	G012: the Color Editor's R, G and B are spin boxes
+D4156	307	G012: typing in the Color Editor's R box seen
