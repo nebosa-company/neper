@@ -2019,6 +2019,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if look.on {
             var head_fill = look.header
             if state.hovered { head_fill = look.header_hover }
+            // looks4-e: a pressed header is #BCDCF4 (live capture, states/grid-header-pressed-main)
+            if state.pressed && look.soft_lines { head_fill = gl.rgb(0xBCDCF4u32) }
             head_style.background = paint.Brush { Solid: head_fill }
         }
         // (D1345) The dragged header lifts: `surface-container-highest` at elevation 4.
