@@ -1939,16 +1939,17 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 1u8 {
             glyph_header = true
             // a column marked with the favourite star shows it in place of a title
-            let (star, star_error) = gl.mark(a, .StarOutline, paint.rgba(0.71, 0.71, 0.71, 1.0), look.header, 15.0, 15.0)
+            let (star, star_error) = gl.pixels(a, gl.gx_star(), gl.gx_star_w(), gl.gx_star_h())
             if star_error != ok { ret (zero, star_error) }
-            body[0usize] = star
+            // looks4-e: the live capture's faint star, 2 px below the top of the header row
+            body[0usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one_node(a, star))
         }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 {
             glyph_header = true
             // the customization glyph of the row indicator
-            let (glyph_node, glyph_error) = gl.mark(a, .ListGlyph, gl.rgb(0x2C5B9Eu32), gl.rgb(0x7F96B5u32), 11.0, 11.0)
+            let (glyph_node, glyph_error) = gl.pixels(a, gl.gx_list(), gl.gx_list_w(), gl.gx_list_h())
             if glyph_error != ok { ret (zero, glyph_error) }
-            body[0usize] = glyph_node
+            body[0usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one_node(a, glyph_node))
         }
         var b = 1usize
         if sorted || state.hovered {
@@ -1967,6 +1968,14 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             turning[0usize] = arrow
             body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * flipped, offset: zero }, control.sized_style(t.tokens.sizes.icon_sm, t.tokens.sizes.icon_sm), turning[0usize..1usize])
             b = 2usize
+            if look.on {
+                // looks4-e: v3 marks the sort with an outlined triangle (up ascending, down descending), 8 x 9
+                var pic = gl.gx_sort_up()
+                if sorted && column_descending { pic = gl.gx_sort_down() }
+                let (tri, tri_error) = gl.pixels(a, pic, gl.gx_sort_up_w(), gl.gx_sort_up_h())
+                if tri_error != ok { ret (zero, tri_error) }
+                body[1usize] = tri
+            }
         }
         var line_style = style.defaults()
         line_style.height = style.Length { Flex: 1.0 }
@@ -2000,7 +2009,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         // A tap sorts; a drag begins a reorder; a drop on it ends one.
         // the row indicator's header is a button: no handle, the cell takes the whole column
         var grip_here = grip
-        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 { grip_here = 0.0 }
+        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 {
+            grip_here = 0.0
+            // looks4-e: the indicator's header still ends in the two-pixel line
+            if look.soft_lines { grip_here = 2.0 }
+        }
         var head_style = control.sized_style(control.max_zero(columns[i].width - grip_here), inner)
         head_style.background = paint.Brush { Solid: control.with_alpha(strong, control.state_opacity(t, state)) }
         if look.on {
@@ -2022,6 +2035,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let sides = style.Length { Px: pad }
         let flat = style.Length { Px: 0.0 }
         head_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+        // looks4-e: the live capture's header captions stand a pixel lower
+        if look.on && look.soft_lines { head_style.padding = style.EdgeLengths { left: sides, top: style.Length { Px: 2.0 }, right: sides, bottom: flat } }
         if glyph_header { head_style.padding = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat } }
         head_style.overflow = .Clip
         let (tapped, tapped_error) = mem.alloc[widget.Node](a, 1usize)
@@ -2106,6 +2121,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             mark = control.sized_style(1.0, inner)
             mark.background = paint.Brush { Solid: look.line }
             mark.margin = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: flat, right: flat, bottom: flat }
+            if look.soft_lines { mark.margin = style.EdgeLengths { left: style.Length { Px: grip_here - 2.0 }, top: flat, right: flat, bottom: flat } }
         }
         if active && !(look.on && has_lifted_column) {
             mark = control.sized_style(3.0, inner)
@@ -2123,6 +2139,20 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)
         if drawn_error != ok { ret (zero, TooLarge) }
         drawn[0usize] = widget.box(0u64, mark, zero)
+        if look.on && look.soft_lines && !active && !lands_here {
+            // looks4-e: the header's column line is two pixels wide (#EBEBEB, #F8F8F8), as the grid's
+            var first_line = control.sized_style(1.0, inner)
+            first_line.background = paint.Brush { Solid: gl.rgb(0xEBEBEBu32) }
+            var second_line = control.sized_style(1.0, inner)
+            second_line.background = paint.Brush { Solid: gl.rgb(0xF8F8F8u32) }
+            let (two_lines, two_lines_error) = mem.alloc[widget.Node](a, 2usize)
+            if two_lines_error != ok { ret (zero, TooLarge) }
+            two_lines[0usize] = widget.box(0u64, first_line, zero)
+            two_lines[1usize] = widget.box(0u64, second_line, zero)
+            var pair_style = style.defaults()
+            pair_style.margin = mark.margin
+            drawn[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, pair_style, two_lines[0usize..2usize])
+        }
         let (grip_node, grip_node_error) = mem.alloc[widget.Node](a, 1usize)
         if grip_node_error != ok { ret (zero, TooLarge) }
         // (D1598) The handle stands `grip` (8) in the header but takes input 24
@@ -2336,7 +2366,7 @@ const ROW_LOADING: u32 = 2u32
 // focusable so its words can be read, and Disabled in the tree.
 fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool, conditions: u32, look: TableLook) -> (widget.Node, err) {
     let disabled = (conditions & ROW_DISABLED) != 0u32
-    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 2usize)
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 3usize * columns.len + 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
     let sides = style.Length { Px: pad }
     let flat = style.Length { Px: 0.0 }
@@ -2371,15 +2401,23 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         body[0usize] = cells[c]
         var width = columns[c].width
         if grid || look.on { width -= t.tokens.sizes.divider }
+        // looks4-e: v3 draws its grid lines two pixels wide: a line and a lighter one beside it
+        if look.on && look.soft_lines && !look.vertical_off { width -= 1.0 }
         var cell_style = control.sized_style(control.max_zero(width), extent)
         cell_style.overflow = .Clip
         // a group row's label runs on over the cells beside it, with no column lines
         let group_row = look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8
         if group_row { cell_style.overflow = .Visible }
-        cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+        var group_top = flat
+        if group_row && look.soft_lines { group_top = style.Length { Px: 2.0 } }
+        cell_style.padding = style.EdgeLengths { left: sides, top: group_top, right: sides, bottom: flat }
         // a picture column's cells have no side padding
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, c) != 0u8 {
             cell_style.padding = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat }
+        }
+        // looks4-e: the row indicator's cells are white whatever the row's fill
+        if look.on && look.soft_lines && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, c) == 3u8 {
+            cell_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
         }
         let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
         if framed_error != ok { ret (zero, TooLarge) }
@@ -2397,6 +2435,12 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             if look.on { line.background = paint.Brush { Solid: look.line } }
             boxed[n] = widget.box(0u64, line, zero)
             n += 1usize
+            if look.on && look.soft_lines {
+                var soft = control.sized_style(1.0, extent)
+                soft.background = paint.Brush { Solid: gl.rgb(0xF8F8F8u32) }
+                boxed[n] = widget.box(0u64, soft, zero)
+                n += 1usize
+            }
         }
         c += 1usize
     }
@@ -2424,6 +2468,12 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     row_style.height = style.Length { Px: extent }
     // a group footer is taller than a row (v3's 29 px)
     if look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 2u8 { row_style.height = style.Length { Px: extent + look.footer_extra } }
+    // looks4-e: a group row is one pixel shorter than a data row
+    var soft_group = false
+    if look.on && look.soft_lines && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8 {
+        soft_group = true
+        row_style.height = style.Length { Px: extent - 1.0 }
+    }
     row_style.background = paint.Brush { Solid: fill }
     // the current row carries the line (with several rows selected it is the one with the focus)
     var lined_row = selected
@@ -2443,7 +2493,42 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         with_line[0usize] = lined[0usize]
         with_line[2usize] = widget.box(0u64, rule_style, zero)
         with_line[1usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), with_line[2usize..3usize])
-        lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..2usize])
+        if look.soft_lines {
+            // looks4-e: two pixels at the foot of a row, the dark one last under a white row, first under a grey one
+            // (measured on the live capture: grey rows #E7E7E7 then #EBEBEB, white rows #F0F0F0 then #E5E5E5)
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            var first_px = gl.rgb(0xE7E7E7u32)
+            var second_px = gl.rgb(0xEBEBEBu32)
+            if fill_is_light(look, index) {
+                first_px = gl.rgb(0xF0F0F0u32)
+                second_px = gl.rgb(0xE5E5E5u32)
+            }
+            var one_style = control.sized_style(4000.0, 1.0)
+            one_style.background = paint.Brush { Solid: first_px }
+            var two_style = control.sized_style(4000.0, 1.0)
+            two_style.background = paint.Brush { Solid: second_px }
+            pair[0usize] = widget.positioned(0u64, 0.0, extent - 2.0, style.defaults(), one_node(a, widget.box(0u64, one_style, zero)))
+            pair[1usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, two_style, zero)))
+            with_line[1usize] = pair[0usize]
+            with_line[2usize] = pair[1usize]
+        }
+        var stacked_count = 2usize
+        if look.soft_lines { stacked_count = 3usize }
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
+    }
+    if soft_group {
+        // two pixels at the top of a group row (measured: #E5E5E5 then #E7E7E7), the cells below them
+        let (with_top, with_top_error) = mem.alloc[widget.Node](a, 3usize)
+        if with_top_error != ok { ret (zero, TooLarge) }
+        var top_a = control.sized_style(4000.0, 1.0)
+        top_a.background = paint.Brush { Solid: gl.rgb(0xE5E5E5u32) }
+        var top_b = control.sized_style(4000.0, 1.0)
+        top_b.background = paint.Brush { Solid: gl.rgb(0xE7E7E7u32) }
+        with_top[0usize] = lined[0usize]
+        with_top[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one_node(a, widget.box(0u64, top_a, zero)))
+        with_top[2usize] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), one_node(a, widget.box(0u64, top_b, zero)))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_top[0usize..3usize])
     }
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
@@ -2550,7 +2635,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32 }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -10705,3 +10790,14 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     ret (widget.semantics(0u64, sem, style.defaults(), root[0usize..1usize]), ok)
 }
 // ---- end looks3-e ------------------------------------------------------------------------------
+
+// looks4-e: one node as a slice.
+fn one_node(a: *mem.Arena, node: widget.Node) -> []widget.Node {
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret zero }
+    held[0usize] = node
+    ret held[0usize..1usize]
+}
+
+// looks4-e: whether row `index` of a measured-look table is a white one (the zebra's odd rows).
+fn fill_is_light(look: TableLook, index: usize) -> bool { ret index % 2usize == 1usize }

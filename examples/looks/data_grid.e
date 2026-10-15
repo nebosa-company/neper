@@ -30,6 +30,7 @@ const C_PRICE: usize = 3usize
 type App = struct {
     a: *mem.Arena,
     ready: bool,
+    windows: bool,
     tbl: table.Table,
     flat_view: view.View,
     flat: grp.Grouping,
@@ -164,9 +165,15 @@ fn framed(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid, w: f32, h: f32
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let app = mem.cast[*App](ctx)
+    // a grid keeps the look it was given: the pass of another look builds its grids afresh
+    if app.ready && app.windows != (t.tokens.profile == .Windows) { app.ready = false }
     if !app.ready {
         try setup(app)
         app.ready = true
+        app.windows = t.tokens.profile == .Windows
+    }
+    if t.tokens.profile != .Windows {
+        // the grids keep their look between renders: the Neper pass must not inherit the Windows one
     }
     let (left, left_error) = framed(a, t, &app.list_grid, 460.0, 300.0)
     if left_error != ok { ret (0usize, left_error) }
@@ -195,6 +202,7 @@ const CC_BUY: usize = 4usize
 type Main = struct {
     a: *mem.Arena,
     ready: bool,
+    windows: bool,
     pool: table.Table,
     pool_view: view.View,
     pool_group: grp.Grouping,
@@ -302,10 +310,10 @@ fn coll_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spe
 }
 
 fn pool_specs(a: *mem.Arena) -> ([]dg.ColumnSpec, err) {
-    let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 8usize)
+    let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 9usize)
     if specs_error != ok { ret (zero, specs_error) }
     let sk = grp.SummaryKind.Rows
-    specs[0usize] = dg.ColumnSpec { title: "", width: 11.3, column: PC_KEY, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[0usize] = dg.ColumnSpec { title: "", width: 12.0, column: PC_KEY, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[1usize] = dg.ColumnSpec { title: "Favorite", width: 38.0, column: PC_KEY, kind: dg.CellKind.Star, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[2usize] = dg.ColumnSpec { title: "ES", width: 21.0, column: PC_RARITY, kind: dg.CellKind.Picture, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[3usize] = dg.ColumnSpec { title: "Legal", width: 75.0, column: PC_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: true, editable: false, choice: false }
@@ -313,14 +321,16 @@ fn pool_specs(a: *mem.Arena) -> ([]dg.ColumnSpec, err) {
     specs[5usize] = dg.ColumnSpec { title: "Edition", width: 70.0, column: PC_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: true, editable: false, choice: false }
     specs[6usize] = dg.ColumnSpec { title: "Color", width: 60.0, column: PC_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: true, editable: false, choice: false }
     specs[7usize] = dg.ColumnSpec { title: "Type", width: 54.0, column: PC_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: true, editable: false, choice: false }
+    // the columns v3 has beyond the pane (the capture's scroll thumb says the content is about 1315 px wide)
+    specs[8usize] = dg.ColumnSpec { title: "Power", width: 817.0, column: PC_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: true, editable: false, choice: false }
     ret (specs, ok)
 }
 
 fn coll_specs(a: *mem.Arena) -> ([]dg.ColumnSpec, err) {
-    let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 9usize)
+    let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 10usize)
     if specs_error != ok { ret (zero, specs_error) }
     let sk = grp.SummaryKind.Rows
-    specs[0usize] = dg.ColumnSpec { title: "", width: 11.3, column: CC_NAME, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[0usize] = dg.ColumnSpec { title: "", width: 12.0, column: CC_NAME, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[1usize] = dg.ColumnSpec { title: "", width: 21.0, column: CC_EDITION, kind: dg.CellKind.Picture, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[2usize] = dg.ColumnSpec { title: "Name", width: 150.0, column: CC_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[3usize] = dg.ColumnSpec { title: "Edition", width: 70.0, column: CC_EDITION, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
@@ -329,6 +339,7 @@ fn coll_specs(a: *mem.Arena) -> ([]dg.ColumnSpec, err) {
     specs[6usize] = dg.ColumnSpec { title: "Buy at", width: 65.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: 2, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     specs[7usize] = dg.ColumnSpec { title: "Sell at", width: 65.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: 2, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     specs[8usize] = dg.ColumnSpec { title: "Se", width: 12.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[9usize] = dg.ColumnSpec { title: "Set", width: 1595.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     ret (specs, ok)
 }
 
@@ -380,6 +391,8 @@ fn setup_main(m: *Main) -> err {
     dg.show_filter_row(&m.pool_grid, true)
     dg.show_group_box(&m.pool_grid, true)
     dg.show_navigator(&m.pool_grid, true)
+    dg.set_pane_hint(&m.pool_grid, 493.0)
+    dg.set_count_column(&m.pool_grid, 4usize)
     dg.set_footer_label(&m.pool_grid, "Count")
     dg.show_sort(&m.pool_grid, 5usize, true)
     // v3 opens on the first group row: the arrow in the indicator, the dotted rectangle, "1 of n"
@@ -397,7 +410,10 @@ fn setup_main(m: *Main) -> err {
     dg.set_look(&m.coll_grid, look)
     dg.set_row_ink(&m.coll_grid, mem.cast[*void](m), coll_ink)
     dg.set_footer_label(&m.coll_grid, "Rows")
+    dg.set_grid_lines(&m.coll_grid, dg.GridLines.Both)
+    dg.set_immediate_edit(&m.coll_grid, true)
     dg.show_navigator(&m.coll_grid, true)
+    dg.set_pane_hint(&m.coll_grid, 493.0)
     dg.show_sort(&m.coll_grid, 1usize, true)
     // v3 centres Edition, Qty and Used (the Alignment popup centre, aligns[origin] == 2)
     m.coll_grid.aligns[3usize] = 2u8
@@ -408,7 +424,7 @@ fn setup_main(m: *Main) -> err {
 
 // A grid at the width and height it has in the capture, on the form's face.
 fn boxed(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid, w: f32, h: f32) -> (widget.Node, err) {
-    let (body, body_error) = dg.build(a, grid, t, h + 22.0)
+    let (body, body_error) = dg.build(a, grid, t, h + 25.0)
     if body_error != ok { ret (zero, body_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, held_error) }
@@ -420,22 +436,26 @@ fn boxed(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid, w: f32, h: f32)
 
 fn build_main(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let m = mem.cast[*Main](ctx)
+    if m.ready && m.windows != (t.tokens.profile == .Windows) { m.ready = false }
     if !m.ready {
         try setup_main(m)
         m.ready = true
+        m.windows = t.tokens.profile == .Windows
     }
-    let (upper, upper_error) = boxed(a, t, &m.pool_grid, 497.0, 210.0)
+    if t.tokens.profile != .Windows {
+    }
+    let (upper, upper_error) = boxed(a, t, &m.pool_grid, 497.0, 213.0)
     if upper_error != ok { ret (0usize, upper_error) }
-    let (lower, lower_error) = boxed(a, t, &m.coll_grid, 497.0, 244.0)
+    let (lower, lower_error) = boxed(a, t, &m.coll_grid, 497.0, 242.0)
     if lower_error != ok { ret (0usize, lower_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (0usize, parts_error) }
     parts[0usize] = upper
     parts[1usize] = lower
-    var face = looks.size_style(500.0, 468.0)
+    var face = looks.size_style(560.0, 520.0)
     face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-    face.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    cells[0usize] = looks.Cell { caption: "Pool and collection grids as in the v3 main window", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 10.0 }, face, parts[0usize..2usize]), drive: .None }
+    face.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    cells[0usize] = looks.Cell { caption: "Pool and collection grids as in the v3 main window", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, face, parts[0usize..2usize]), drive: .None }
     ret (1usize, ok)
 }
 
@@ -452,6 +472,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var mseed: Main = zero
     mseed.a = a
     mains[0usize] = mseed
-    let second = looks.Sheet { name: "data_grid_main", cells: 1usize, columns: 1usize, cell_w: 500.0, cell_h: 468.0, ctx: mem.cast[*void](&mains[0usize]), build: build_main }
+    let second = looks.Sheet { name: "data_grid_main", cells: 1usize, columns: 1usize, cell_w: 560.0, cell_h: 520.0, ctx: mem.cast[*void](&mains[0usize]), build: build_main }
     ret looks.run_all(a, &second)
 }
