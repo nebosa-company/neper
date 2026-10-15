@@ -2703,8 +2703,16 @@ fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Glyp
 // and `underline` (fsUnderline: the hot-link style) underlines the whole run. One line unless `width` is above 0,
 // which wraps the words in that width (Properties.WordWrap).
 fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32) -> (widget.Node, err) {
+    let (node, node_error) = windows_label_faced(a, t, value, size, weight, ink, underline, width, 8u32)
+    ret (node, node_error)
+}
+
+// looks4: the same label in another face. A TcxLabel with ParentFont = False and no Style.Font of its own (v3's Deck
+// Properties file name, Missing Set Cards description) draws DevExpress's default font, Segoe UI 9 pt = 12 px (face 7);
+// the ones that inherit the form font or set Style.Font are Tahoma (face 8).
+fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32, face: u32) -> (widget.Node, err) {
     var options = text_options()
-    options.face = 8u32
+    options.face = face
     options.size = size
     options.weight = weight
     options.wrap = .None
