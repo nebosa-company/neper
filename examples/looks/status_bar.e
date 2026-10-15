@@ -68,7 +68,31 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (5usize, ok)
 }
 
+// The report preview window's status bar (ref/windows/status_bar_report.png: 1280 x 19 at (8, 742) of
+// dialogs/reports-combos-from-collection@1x.png): "Page 1 of 1" in a first panel, one panel for the rest.
+fn build_report(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (items, items_error) = mem.alloc[navigation.StatusItem](a, 3usize)
+    if items_error != ok { ret (0usize, items_error) }
+    items[0usize] = navigation.status_item("Page 1 of 1")
+    items[0usize].drop_order = 77u8
+    items[0usize].panel_width = 199.0
+    items[1usize] = navigation.status_item("")
+    items[1usize].panel_width = 538.0
+    items[2usize] = navigation.status_item("")
+    items[2usize].fills = true
+    let (bar, bar_error) = navigation.status_bar_of(a, 9000u64, t, items[0usize..3usize], false, 1280.0)
+    if bar_error != ok { ret (0usize, bar_error) }
+    let (shown, shown_error) = placed(a, bar, 0.0, 0.0, 1280.0, 19.0)
+    if shown_error != ok { ret (0usize, shown_error) }
+    cells[0usize] = looks.Cell { caption: "Report preview window", node: shown, drive: .None }
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize {
+        let report = looks.Sheet { name: "status_bar_report", cells: 1usize, columns: 1usize, cell_w: 1280.0, cell_h: 19.0, ctx: zero, build: build_report }
+        ret looks.run_all(a, &report)
+    }
     let sheet = looks.Sheet { name: "status_bar", cells: 5usize, columns: 1usize, cell_w: 784.0, cell_h: 19.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

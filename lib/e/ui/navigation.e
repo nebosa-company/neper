@@ -543,6 +543,10 @@ fn status_move_fire(ctx: *void) -> err {
 }
 
 fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, mode: bool, width: f32) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows && items.len > 0usize && items[0usize].drop_order == 77u8 {
+        let (report, report_error) = windows_status_bar_report(a, key, t, items, width)
+        ret (report, report_error)
+    }
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = windows_status_bar_of(a, key, t, items, width)
         ret (flat, flat_error)
@@ -10066,3 +10070,71 @@ fn windows_bar_separator_tone(a: *mem.Arena, dark: u32, light: u32) -> (widget.N
 
 // (looks4-f) Tahoma 11 px (8 pt, v3's status bar text): GDI's whole-pixel advances, face 2.
 fn windows_gdi_regular_11() -> str { ret "34486;72446844446666666666448885:7677667745658786876676:666444866665664662352866664546686655458" }
+
+
+// ---- looks4-e: the status bar of the report preview window (live capture dialogs/reports-*@1x.png), a flat bar without
+// the main window's panel edges, joints or grip: a #DFDFDF line on top, #F5F5F5 at the foot, the first panel's text 1 px in
+// and 3 down, a two pixel separator (#D9D9D9, #EEEEEE) at the end of each panel but the last. An item whose `drop_order` is
+// 77 in first place selects it; `panel_width` is the width up to the separator's first pixel.
+fn windows_status_bar_report(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, width: f32) -> (widget.Node, err) {
+    let (bt, bt_error) = control.windows_bar_theme(a, t)
+    if bt_error != ok { ret (zero, bt_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize * items.len + 6usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    parts[n] = windows_rect(0.0, 0.0, width, 19.0, 15790320u32)
+    n += 1usize
+    parts[n] = windows_rect(0.0, 0.0, width, 1.0, 14671839u32)
+    n += 1usize
+    parts[n] = windows_rect(0.0, 18.0, width, 1.0, 16119285u32)
+    n += 1usize
+    var at: f32 = 0.0
+    var i = 0usize
+    while i < items.len {
+        var caption = control.text_options()
+        caption.role = .BodyMedium
+        caption.wrap = .None
+        caption.size = 11.0
+        if items[i].text.len != 0usize {
+            let (said, _, said_run_width, said_error) = windows_gdi_run(a, &bt, caption, items[i].text, style.hex(0u32), 2u8, 2.0, false)
+            if said_error != ok { ret (zero, said_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = said
+            parts[n] = widget.positioned(0u64, at + 1.0, 3.0, control.sized_style(said_run_width, 13.0), held[0usize..1usize])
+            n += 1usize
+        }
+        if items[i].panel_width > 0.0 && !items[i].fills {
+            at += items[i].panel_width
+            // the separators fade with their distance from the left edge (measured: #D9D9D9 / #EEEEEE, then #DFDFDF / #E7E7E7)
+            var dark = 14277081u32
+            var light = 15658734u32
+            if i == 1usize {
+                dark = 14671839u32
+                light = 15198183u32
+            }
+            parts[n] = windows_rect(at, 2.0, 1.0, 15.0, dark)
+            n += 1usize
+            parts[n] = windows_rect(at + 1.0, 2.0, 1.0, 15.0, light)
+            n += 1usize
+            parts[n] = windows_rect(at, 1.0, 1.0, 1.0, 15204582u32)
+            n += 1usize
+            parts[n] = windows_rect(at + 1.0, 1.0, 1.0, 1.0, 15724527u32)
+            n += 1usize
+            parts[n] = windows_rect(at, 17.0, 1.0, 1.0, 14803425u32)
+            n += 1usize
+            parts[n] = windows_rect(at + 1.0, 17.0, 1.0, 1.0, 15658734u32)
+            n += 1usize
+            at += 2.0
+        }
+        i += 1usize
+    }
+    // the bar's last column (#E6E6E6, lighter at both ends)
+    parts[n] = windows_rect(width - 1.0, 2.0, 1.0, 15.0, 15132390u32)
+    n += 1usize
+    parts[n] = windows_rect(width - 1.0, 1.0, 1.0, 1.0, 15461356u32)
+    n += 1usize
+    parts[n] = windows_rect(width - 1.0, 17.0, 1.0, 1.0, 15329769u32)
+    n += 1usize
+    ret (widget.stack(0u64, control.sized_style(width, 19.0), parts[0usize..n]), ok)
+}
