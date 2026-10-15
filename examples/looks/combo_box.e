@@ -201,7 +201,38 @@ fn build_lists(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 // The Focus cell comes last of the states: the runtime keeps the focus on a tree slot, which a
 // later pass could land in a cell. One sheet per run (a rig is about 100 MB of the arena):
 // `combo_box.exe` writes combo_box.png (the states), `combo_box.exe lists` combo_box_lists.png.
+// The toolbar combos of the v3 main window (flat, TcxBarEditItem), as the live capture
+// ref/windows/combo_box_flat*.png shows them: the Mode combo with a value, the empty one at the
+// left of the toolbar, a disabled one. Under the Neper look `flat` is ignored.
+fn build_flat(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let colors = [4]str{ "Collection from Pool", "Collection from Deck", "Pool", "Deck" }
+    let captions = [3]str{ "Mode", "Empty", "Disabled" }
+    var i = 0usize
+    while i < 3usize {
+        var options = control.field_options()
+        options.flat = true
+        options.width = 127.0
+        var value = "Collection from Pool"
+        if i == 1usize {
+            options.width = 148.0
+            value = ""
+        }
+        if i == 2usize {
+            options.enabled = false
+        }
+        let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, value, colors[0usize..4usize], 0usize, false, options, 6.0, 8.0, 40.0)
+        if node_error != ok { ret (0usize, node_error) }
+        cells[i] = looks.Cell { caption: captions[i], node: node, drive: .None }
+        i += 1usize
+    }
+    ret (3usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 2usize {
+        let flat = looks.Sheet { name: "combo_box_flat", cells: 3usize, columns: 3usize, cell_w: 170.0, cell_h: 50.0, ctx: zero, build: build_flat }
+        ret looks.run_all(a, &flat)
+    }
     let (passes, passes_error) = mem.alloc[Pass](a, 1usize)
     if passes_error != ok { ret passes_error }
     passes[0usize] = Pass { call: 0usize }

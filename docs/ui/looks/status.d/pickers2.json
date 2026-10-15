@@ -1,0 +1,105 @@
+{
+ "combo_box": {
+  "app": "examples/looks/combo_box.e",
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/combo_box.png",
+    "notes": "The baseline: the v2 outlined combo box in the same cells. Open lists are on neper/combo_box_lists.png (run the app with an argument, `combo_box.exe lists`); the list opens fading, so one frame shows it part way."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box.png",
+    "notes": "Frame measured from the Options dialog (capture 00b, 150 %): #FDFDFD face, 1 px #D2D2D2 border, radius 4, 21 tall (30 px at 150 %), a thin grey chevron 8 wide centred 8.7 from the right edge, text 2.5 in. The drop-down list (windows/combo_box_lists.png) is the DevExpress popup of captures 00c and IC1: white, rows 15 tall, the lit row #0078D7 under white text, no motion, 8 rows then a scrolling viewport. Same drawing under control.select (and so the picker popup) and under the date edit's head; the editable combo keeps its editor, Up/Down/Enter/Escape and filtering unchanged. Round 2: the live capture of the main window (ref/windows/main-window@1x.png, 100 %) shows the toolbar combos (TcxBarEditItem: Mode, and the small one at the left) in a flat style, now drawn with FieldOptions.flat (windows/combo_box_flat.png, beside ref/windows/combo_box_flat.png): 16 tall white face, 1 px #FAFAFA frame, a #F5F5F5 line under it, text 2 px in, a 12 wide drop button (#F0F0F0, 1 px #F7F7F7 edges) with a black 5 x 3 triangle (top 68.35, apex 71.3 in the capture).",
+    "gaps": [
+     "Hover (3 % face tint), open and focused (the accent #298DD9 1.33 px border of the pilot button), pressed, drop button hot (black chevron), disabled and read-only colours are guesses: no capture shows those states of this control",
+     "Text is 11.2 px Segoe UI; in capture 00b the text is about 3 % narrower (11 px?)",
+     "The drop-down's frame is a uniform 1 px #BCBCBC with a 1 x 2 shadow: capture 00c shows light top and left edges and a dark #696969 right and bottom edge, which one uniform border cannot draw",
+     "Row height is 15 (capture IC1, 22.4 px at 150 %); capture 00c measures 14 (21 px at 150 %)",
+     "No dotted focus rectangle on the lit row (capture IC1 has one)",
+     "Row under the pointer wins over the chosen one (as DevExpress); the chevron does not flip when open (native)",
+     "The scrollbar in a long list is the generic thumb of widget.scroll_view, not the Windows scroll bar (see scroll_bar)",
+     "DropDownRows (10 in some v3 filter combos) is not an option: the viewport is 8 rows",
+     "Dark and high-contrast palettes: Neper colours with Windows metrics (the harness's windows-dark sheet renders with the dark Windows tokens, unreviewed)",
+     "Flat toolbar combo: hover, open, focused, disabled and read-only states have no capture (a disabled one only greys the ink and the arrow); the drop-down list under it is the dialog combo's list, v3's toolbar combo list is not captured",
+     "Flat toolbar combo: the capture's text is about 5 % wider than ours (Tahoma-like 11 px bar font vs the 11.7 px bar theme); frame, button and arrow match to the pixel at 100 %",
+     "The rounded native combo (dialog) and the flat toolbar combo are two v3 styles chosen by FieldOptions.flat; the in-grid editor combo of capture IC1 is not drawn",
+     "The in-grid editor of IC1 (grey list, blue frame, blue drop button) is not drawn"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/splitter.png",
+    "notes": "The baseline: the v2 sash (1 px line, grip on hover, primary line while dragged)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/splitter.png",
+    "notes": "v3's TcxSplitter (8 thick, simple hot zone), re-measured on the live 100 % capture: the strip is the dialog face; the hot zone is on whole pixels, 140 long upright (frame #ADADAD, dots #8EBFE6) and 151 long lying (frame #919398, dots #99C4E7), chevrons #131313 9 px from each end, 1 x 2 dots every 3 starting 16 px from the ends. windows/splitter_live.png renders both at the real length next to ref/windows/splitter_live*.png; windows/splitter.png is the state sheet.",
+    "gaps": [
+     "The zone length is per orientation (140 upright, 151 lying) because two samples show it; v3's rule for it (it is not centred on the strip in the capture) is not found",
+     "Zone end caps and the lying zone's 1 px outer halo (#B9BCC0 / #BFC2C6 rows) are not drawn: the frame is one uniform colour",
+     "The dots are a flat blend colour (the capture anti-aliases them half a pixel off the pixel grid)",
+     "Hover and dragged colours (blue-tinted zone) are guesses; v3 drags a dotted XOR line instead",
+     "The hot zone's toggle-panel click (collapse) is not wired; chevron direction is fixed toward the first pane",
+     "Chevron is a 7 x 4 staircase, the capture's is 6 x 4",
+     "A fresh split_view eases open (collapsible), so the first frame of the sheet shows the strip at a fractional place and the second pane over its last column",
+     "Sash input reach is 8 (v3) rather than the Neper 24"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/scroll_bar.png",
+    "notes": "The baseline: the v2 overlay thumb (4 wide, 8 when the pointer is in the trailing 12) via control.scroll_area."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar.png",
+    "notes": "The grid's v3 bars as a control (control.scroll_area), re-measured on the live 100 % capture (windows/scroll_bar_live.png beside ref/windows/scroll_bar_live*.png): vertical bar 16 wide #F0F0F0 track, 16 empty arrow slots, a 2 wide #858585 thumb with square ends; horizontal bar (in a grid's navigator row) a 9 thick #858585 block with square ends. Hover widening, pressed colour and arrows are still guesses (the capture is at rest).",
+    "gaps": [
+     "Vertical thumb is 2.0 wide on the pixel grid; the capture anti-aliases it across 3 columns (0.54 + 1 + 0.46) because v3's track sits half a pixel off",
+     "Hover thickness 6 (vertical) and 9 (horizontal) are estimates: only the bars at rest are captured",
+     "Pressed thumb colour (#606060) and the hover arrows (7 x 4 chevrons) are guesses: the captures show no arrows",
+     "The horizontal bar in v3 has no track of its own (the navigator row is its ground); its 16 slots and thumb length rule are not measured",
+     "Disabled bar not drawn",
+     "Thumb dragging and clicks on the track or arrows go through the viewport's own invisible thumb, not the drawn bar",
+     "The grid's own bar in collection.e is a separate hand-drawn copy (still 2.7 wide) and is not yet switched to this control",
+     "The track is the dialog face, so it only shows beside a white pane"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/page_control.png",
+    "notes": "The baseline: v2 tabs (primary indicator) and the tab view."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control.png",
+    "notes": "lfUltraFlat tabs as in the statistics dialog: white strip, 21 tall tabs with 8 sides, #2B2B2B line under the strip, #B0B0B0 hairlines, selected tab framed #2B2B2B open at the bottom on #F0F0F0, hot tab label blue; keyboard shortcuts, semantics and tab_view are the shared ones. Round 2: tpBottom strip (the card info page control of the main window, 100 % capture), TabsOptions.bottom with picture tabs (TabsOptions.icons, caption optional): rule rows #9A9A9A + #5B5B5B above the white strip, selected tab #F0F0F0 framed #060606 left and right with the two bottom rows #9D9D9D + #585858, 34 wide (8 + 16 + 8 + borders), unselected picture tabs 32 wide without chrome, the strip starting 5 px before the first tab; windows/page_control_bottom.png beside ref/windows/page_control_bottom.png. The `Rarity` tab at the top of the pool grid is the grid's group-by header chip, not a page control (data_grid).",
+    "gaps": [
+     "v3's tab pictures are bitmaps from an image list; glyphs stand in (Picture, Calendar), so the pictures differ",
+     "The strip rule is two grey rows because the capture's 1 px line falls between pixels; the colours are read off those rows",
+     "Bottom strip with captions (the decks strip, pcDecks) is drawn from the same code but has no capture; the Go-dialog button and the gradient options are not drawn",
+     "The top strip (statistics dialog) keeps its 150 % measurements (#2B2B2B line); the bottom strip at 100 % reads nearly black (#060606), so the top strip's frame colour is probably #060606 too but is not changed",
+     "Hot-tracked label is also underlined in v3; underline not drawn; hover blue is #0066CC from ClearType-fringed pixels; disabled tab ink is a guess; pressed looks like hover",
+     "Hover and focus of a picture tab are not captured (the hover cell of the sheet does not put the pointer on a tab)",
+     "The thin grey page border above the bottom strip (the capture's #E3E1DC / #FAFAFA rows) is not drawn",
+     "Overflowing tabs: v3 scroll buttons or multi-row are not drawn under this look; tabs at the sides and close buttons are not in the captures",
+     "The widget harness holds 128 element states, so the sheet has six bars"
+    ]
+   }
+  }
+ }
+}

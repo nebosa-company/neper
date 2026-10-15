@@ -78,7 +78,50 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (8usize, ok)
 }
 
+// The two bars as the live capture of the v3 main window shows them (ref/windows/scroll_bar_live*.png),
+// at rest: the grid's vertical bar (16 wide, the thumb 2 wide) and a horizontal bar (a 9 thick block).
+fn build_live(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    var i = 0usize
+    while i < 2usize {
+        let vertical = i == 0usize
+        var axis: ui_layout.Axis = .Vertical
+        var direction: ui_layout.Axis = .Horizontal
+        var width: f32 = 40.0
+        var height: f32 = 150.0
+        if !vertical {
+            axis = .Horizontal
+            direction = .Vertical
+            width = 150.0
+            height = 40.0
+        }
+        let (kids, kids_error) = content(a, vertical, 300.0)
+        if kids_error != ok { ret (0usize, kids_error) }
+        let (bar, bar_error) = control.scroll_area(a, u64(10000usize * (i + 1usize)), t, axis, width, height, 0.0, 300.0, kids[0usize..1usize])
+        if bar_error != ok { ret (0usize, bar_error) }
+        var holder = style.defaults()
+        holder.width = style.Length { Px: width }
+        holder.height = style.Length { Px: height }
+        let node = widget.flex(0u64, ui_layout.Flex { axis: direction, main: .Start, cross: .Start, gap: 0.0 }, holder, mem_one(a, bar))
+        var caption = "Vertical"
+        if !vertical { caption = "Horizontal" }
+        cells[i] = looks.Cell { caption: caption, node: node, drive: .None }
+        i += 1usize
+    }
+    ret (2usize, ok)
+}
+
+fn mem_one(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 1usize)
+    if nodes_error != ok { ret zero }
+    nodes[0usize] = node
+    ret nodes[0usize..1usize]
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize {
+        let live = looks.Sheet { name: "scroll_bar_live", cells: 2usize, columns: 2usize, cell_w: 200.0, cell_h: 190.0, ctx: zero, build: build_live }
+        ret looks.run_all(a, &live)
+    }
     let sheet = looks.Sheet { name: "scroll_bar", cells: 8usize, columns: 4usize, cell_w: 140.0, cell_h: 120.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
