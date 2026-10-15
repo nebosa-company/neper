@@ -1,0 +1,403 @@
+{
+ "label": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/label.png",
+    "notes": "Audit 2: 10 labels compared, structure 52 px off outside text (max 34); the pressed link has no cell; text is unhinted grayscale, ink boxes within 1 px on 6 of 10 and the 21 px title 1 px low.",
+    "gaps": [
+     "Mismatch: ink boxes more than 1 px off on 4 of 10 labels (long Tahoma runs 195 vs 214 px)",
+     "Captured but not compared: link pressed (states/label-link-pressed-about-support) has no cell",
+     "Unverified: hover (needs the real pointer: not capturable), disabled, rotated"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button.png",
+    "notes": "Audit 2 (was matched): rest, default, mnemonic, disabled and 4 pressed/focus cells compared, frames exact except the focused Invert top and bottom rows off 3 and 6 levels over 127 px; 19 of 32 captured pressed/focus states have no cell; the ring tile loses its top and bottom border at 75x32 and is dotted at 1.5x.",
+    "gaps": [
+     "Mismatch: focused non-default button ring rows 3 and 6 levels off (127 px, tolerance 2)",
+     "Baked ring tile: a 75x32 button renders without its top and bottom border, 1.5x shows dotted rings",
+     "Captured but not compared: pressed Options Apply, Cancel, OK, Change, Reset, Set, Filter All and Clear, About OK, Deck Legality Close and Standard, Deck Properties OK, Advanced Filter OK and Open; focused Options Apply, Cancel, Change, Deck Legality Modern; disabled Edit Rule",
+     "Unverified: hover (needs the real pointer: not capturable), toggle, split, loading, plain"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/checkbox_states-vs-ref.png",
+    "notes": "Audit 2: 9 of 9 captured states have a cell and structure is exact outside text (0 px), but the box edge rows are up to 30 levels off on all 13 boxes (42 to 86 px each) and label ink is offset.",
+    "gaps": [
+     "Mismatch: box top and bottom edge rows off by up to 30 levels (tolerance 2) in every cell",
+     "Unverified: hover (needs the real pointer: not capturable), disabled, indeterminate"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_states-vs-ref.png",
+    "notes": "Audit 2: 11 of 14 captured states have a cell, structure 4 px off outside text (max 13), but ring anti-aliasing differs (up to 200 levels) and 3 captures have no cell.",
+    "gaps": [
+     "Mismatch: ring pixels differ on every circle",
+     "Captured but not compared: focused Search within and Collection, pressed Move next row",
+     "Unverified: hover (needs the real pointer: not capturable), disabled"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_group_states-vs-ref.png",
+    "notes": "Audit 2: 15 cells compared, group frame lines 13 levels off over 1790 px (radio_group_states), ring and caption ink as for radio.",
+    "gaps": [
+     "Mismatch: frame lines 13 levels off (tolerance 2), 1790 px",
+     "Unverified: hover (needs the real pointer: not capturable), disabled"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Audit 2: password edit rest and one focused state exact (0 px off, max 1); the second focused capture and the hot key edit have no cell; the baked tile shows dotted seams at 1.5x.",
+    "gaps": [
+     "Baked edit chrome: dotted seams at 1.5x (correct at widths 200 to 640 and other y)",
+     "Captured but not compared: focused Old password, hot key edit focused",
+     "Unverified: hover (needs the real pointer: not capturable), selection, read-only, disabled, invalid"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "Audit 2 (was review): rest cells exact (0 px off, max 1) and 3 states compared, 5 of 8 captured pressed arrows have no cell; the baked tile is dotted at 1.5x (correct at other widths).",
+    "gaps": [
+     "Baked edit chrome: dotted seams and blobbed arrows at 1.5x",
+     "Captured but not compared: arrows up, down, left, right pressed (Max same cards, Morph speed)",
+     "Unverified: hover (needs the real pointer: not capturable), disabled, read-only"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_open_size2.png",
+    "notes": "Audit 2: 5 of 28 captured states have a cell and 23 open-list and drop-button states do not; 23829 structural px off outside text over 15 sheets (max 255), open list sheets worst.",
+    "gaps": [
+     "Mismatch: open-list sheets combo_box_open_color 7761 and open_size 7548 structural px off",
+     "Captured but not compared: 23 open-list, drop-button and editable-focus states",
+     "Unverified: hover (needs the real pointer: not capturable), disabled, read-only"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image_combo_box_open_condition.png",
+    "notes": "Audit 2: 8 sheets compared, 17427 structural px off outside text (open lists 6872 to 7249 each, max 255); the 3 captured open and cell-editor states have no cell.",
+    "gaps": [
+     "Mismatch: open lists condition and art",
+     "Captured but not compared: open list, cell editor",
+     "Unverified: hover (needs the real pointer: not capturable), disabled"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Audit 2: no date edit exists in any v3 capture; nothing to compare.",
+    "gaps": [
+     "Unverified: every state"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "Audit 2 (was matched): rest and focused password mask edit exact (0 px off, max 1), but the second focused capture has no cell and the baked tile shows dotted seams at 1.5x (correct at other widths and y).",
+    "gaps": [
+     "Baked edit chrome: dotted seams at 1.5x",
+     "Captured but not compared: focused Old password",
+     "Unverified: text, invalid, disabled, read-only"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/memo.png",
+    "notes": "Audit 2: no memo in any v3 capture; nothing to compare.",
+    "gaps": [
+     "Unverified: every state"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Audit 2 (was matched): the ellipsis frame is up to 23 levels off (37 to 50 px) and the focused path edit with selection 479 px off (max 157), aligned 1 px off horizontally; dotted at 1.5x.",
+    "gaps": [
+     "Mismatch: ellipsis button rounded frame up to 23 levels off; focused and selected path edit up to 157 levels over 479 px",
+     "Baked chrome: dotted seams at 1.5x",
+     "Unverified: hover (needs the real pointer: not capturable), disabled, read-only"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/token_edit.png",
+    "notes": "Audit 2: no token edit in v3 captures; nothing to compare.",
+    "gaps": [
+     "Unverified: every state"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/check_list_box_states-vs-ref.png",
+    "notes": "Audit 2: 6 of 6 captured states have a cell, 1956 structural px off outside text (max 253): item pitch and check boxes differ.",
+    "gaps": [
+     "Mismatch: check box and row geometry",
+     "Unverified: hover (needs the real pointer: not capturable), disabled"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Audit 2: the v3 progress bar was never on screen in any capture (3 progress frames show the report window only).",
+    "gaps": [
+     "Unverified: every state"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "Audit 2 (was matched): 3 of 4 instances near exact (7 to 33 px off, max 56 on corners); the third Options group box sits 1 px left with its frame up to 95 levels off over 40 px.",
+    "gaps": [
+     "Mismatch: one group box instance offset 1 px (frame x 0 and 504, up to 95 levels)",
+     "Unverified: disabled, focus"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control_cards-vs-ref.png",
+    "notes": "Audit 2: 13 of 15 captured tab states compared, 7665 structural px off outside text (max 255): tab strip frames and selected tab edges differ; bottom tabs 2295 px.",
+    "gaps": [
+     "Mismatch: statistics tab strips about 450 px off each, bottom tabs 2295 px",
+     "Captured but not compared: left tab second selected, statistics tab 1",
+     "Unverified: hover (needs the real pointer: not capturable), disabled tab, scroll buttons"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/splitter_dialog-vs-ref.png",
+    "notes": "Audit 2: Filter splitter strip fill 9 levels off over 12x320 px; live splitters 1467 and 1242 px off (max 120); the 3 pressed captures have no cell.",
+    "gaps": [
+     "Mismatch: dialog splitter fill 243 vs 240; live splitter strips",
+     "Captured but not compared: pressed filter, horizontal, vertical",
+     "Unverified: hover (needs the real pointer: not capturable), drag"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/status_bar.png",
+    "notes": "Audit 2 (was matched): main-window status bar exact outside text (10 px off, max 4); the report-window status bar has panel separators 10 to 23 levels off over 83 px.",
+    "gaps": [
+     "Mismatch: report-window separator columns (x 189, 729 to 740, 1269) 10 to 23 levels off",
+     "Unverified: hover (needs the real pointer: not capturable), disabled"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toolbar_button.png",
+    "notes": "Audit 2: one sheet, 277 structural px off outside the glyphs (max 69); no toolbar state can be captured.",
+    "gaps": [
+     "Mismatch: layout offset to the capture",
+     "Unverified: hover (needs the real pointer: not capturable), pressed, checked, focus, dropdown (toolbars ignore posted messages)"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "Audit 2: 9 open-title captures and rest compared, frames exact except 4 px 18 levels off (x 334), title ink mostly 1 to 2 px off in y.",
+    "gaps": [
+     "Mismatch: 4 px 18 levels off; title text ink offset",
+     "Unverified: hover (needs the real pointer: not capturable), disabled item"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Audit 2 (was matched): 26 of 26 captured menus compared; frames, rows, separators and text boxes align (1573 of 2478917 structural px off outside text, ink within 1 px) but 12 px runs (mnemonic underline or check glyph) are 63 to 240 levels off in View, Search and Print menus, icons are placeholders.",
+    "gaps": [
+     "Mismatch: 12 px runs at 63 to 240 levels in the View, Search and sub-menus",
+     "Placeholder icons (artwork excluded)",
+     "Unverified: hover (needs the real pointer: not capturable), disabled items"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/hint.png",
+    "notes": "Audit 2: no tooltip capture is possible or exists.",
+    "gaps": [
+     "Unverified: every state"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar_states.png",
+    "notes": "Audit 2: live scroll bar 684 structural px off outside text (max 240); 5 of 6 pressed captures have no cell.",
+    "gaps": [
+     "Mismatch: thumb and arrows",
+     "Captured but not compared: thumb pressed in 4 places, arrow pressed",
+     "Unverified: hover (needs the real pointer: not capturable), disabled, horizontal"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/list_box_focus-vs-ref.png",
+    "notes": "Audit 2: 2 of 2 captured states compared, 445 structural px off outside text (max 47): border column and focus rectangle.",
+    "gaps": [
+     "Mismatch: border column and focus rect",
+     "Unverified: hover (needs the real pointer: not capturable), disabled, multi-select"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list.png",
+    "notes": "Audit 2: 4 of 5 captured states compared, 10069 structural px off outside text (max 206): rows, expanders and check boxes differ; the empty list focus has no cell.",
+    "gaps": [
+     "Mismatch: tree rows and glyphs",
+     "Unverified: hover (needs the real pointer: not capturable), disabled"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Audit 2: 0 of 4 captured Deck Properties states have a cell; the rest sheet has 4096 structural px off outside text (max 232), the states sheet 25140.",
+    "gaps": [
+     "Mismatch: lower half of the grid and states sheet",
+     "Captured but not compared: category pressed, combo editor, text editor, focused row, selected row",
+     "Unverified: hover (needs the real pointer: not capturable), edit mode, disabled"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "Audit 2: 9 of 15 captured states have a cell; 74116 structural px off outside text over 6 sheets (max 174): grid lines and header bands offset.",
+    "gaps": [
+     "Mismatch: data_grid_main 19227, states 13534, missing 19429, sort 10752",
+     "Captured but not compared: shortcuts, bottom grid, sort and editions row states, 2 pressed headers",
+     "Unverified: hover (needs the real pointer: not capturable), edit, disabled, sort and filter popups, 150 %"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog.png",
+    "notes": "Audit 2: title bars 180 structural px off outside text (max 209); dialog bodies are not composed by the sheet (the large difference there is app content); inactive caption captured for the main window only.",
+    "gaps": [
+     "Mismatch: title text and close glyph",
+     "Unverified: caption hover and pressed, resize, disabled"
+    ]
+   }
+  }
+ }
+}
