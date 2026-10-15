@@ -163,6 +163,8 @@ dz_dlg: u8,
 dz_title: [48]u8,
 dz_title_len: usize,
 dz_title_set: bool,
+dz_foot: [48]u8,
+dz_foot_len: usize,
 pv_tenths: [6]u8,
 pv_hund: [6]u8,
 pv_wide: u8,
@@ -10388,6 +10390,11 @@ fn dz_dialog(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if title_field_error != ok { ret (zero, title_field_error) }
         rows[3usize] = widget.padded(0u64, 8.0, 6.0, 0.0, 0.0, style.defaults(), one(a, title_field))
     }
+    if grid.dz_dlg == 2u8 {
+        let (foot_field, foot_field_error) = dz_foot_field(a, grid)
+        if foot_field_error != ok { ret (zero, foot_field_error) }
+        rows[3usize] = widget.padded(0u64, 8.0, 6.0, 0.0, 0.0, style.defaults(), one(a, foot_field))
+    }
     let (ok_button, ok_error) = dz_dialog_button(a, grid, "OK", &close[0usize], grid.key + MENU_KEY + 851250u64)
     if ok_error != ok { ret (zero, ok_error) }
     let (cancel_button, cancel_error) = dz_dialog_button(a, grid, "Cancel", &close[0usize], grid.key + MENU_KEY + 851251u64)
@@ -10457,4 +10464,28 @@ fn preview_heading(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if text_error != ok { ret (zero, text_error) }
     let (node, node_error) = flat_text(a, grid, text, gl.rgb(0x000000u32))
     ret (node, node_error)
+}
+
+fn on_foot_text(ctx: *void, value: str) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    var n = value.len
+    if n > 48usize { n = 48usize }
+    var i = 0usize
+    while i < n {
+        grid.dz_foot[i] = value[i]
+        i += 1usize
+    }
+    grid.dz_foot_len = n
+    ret ok
+}
+
+// The text area of Footnote Properties: an editable field, empty until typed in.
+fn dz_foot_field(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    var options = control.field_options()
+    options.rows = 12u32
+    options.filled = false
+    options.width = 550.0
+    options.height = 300.0
+    let (field, field_error) = control.text_field(a, grid.key + MENU_KEY + 851261u64, grid.theme, "", grid.dz_foot[0usize..48usize], grid.dz_foot_len, widget.Change[str] { ctx: mem.cast[*void](grid), invoke: on_foot_text }, zero, options)
+    ret (field, field_error)
 }

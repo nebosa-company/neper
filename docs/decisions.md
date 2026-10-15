@@ -41471,3 +41471,6 @@ The text area of Title Properties is a real text field seeded with "Card Pool" (
 
 ## D4130 - G012: repair of D4129 (Print Preview broke); the title reaches the preview
 D4129 left Print Preview failing with InvalidTree: its edit hit the wrong line (an earlier insert had shifted the line numbers) and overwrote the width loop in `print_panel`, and the heading code added more locals to that large builder. The width loop is restored and the heading is built by `preview_heading` (a helper, as the HANDOVER trap says). With it the edited title is the preview's heading (TP6-title-in-preview-v5.png: "CardAbc Pool"), which D4129 claimed but had not been seen. The fixture did not catch the break because it does not draw the print window; lesson: look at the window after every change to a builder, and never patch by line number after another edit in the same file.
+
+## D4131 - G012: the footnote text area is editable
+The Footnote Properties text area is a text field too (`dz_foot_field`, `Grid.dz_foot`): typing "Foo" shows in it (TP7-report-footnote-typed-v5.png). The footnote text is kept but not printed on the preview page yet (v3 prints it under the table). A first attempt at this edit silently did not apply (the Edit tool refused a stale read) and its screenshot showed the old static box: read the file again before editing.
