@@ -11,11 +11,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATUS = ROOT / "docs/ui/looks/status.json"
 OUT = ROOT / "docs/ui/looks-progress.html"
-ORDER = ["planned", "started", "review", "ready"]
+# review = renders, with unmeasured or mismatching states; matched = every state that has a v3 capture
+# reproduces it within tolerance (hover, pressed and other uncaptured states are listed as unverified);
+# ready = matched and no unverified state is left.
+ORDER = ["planned", "started", "review", "matched", "ready"]
 
 CSS = """
-:root{--bg:#f6f7f9;--fg:#1c1e22;--mut:#5d6470;--card:#fff;--line:#d9dde3;--planned:#8a909b;--started:#b36b00;--review:#1a62b8;--ready:#1f7a3d;--chip:#eef0f3}
-@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e8ec;--mut:#9aa1ad;--card:#1c1f25;--line:#323741;--planned:#8f96a3;--started:#e0a040;--review:#6aa7f0;--ready:#5dc07c;--chip:#272b33}}
+:root{--bg:#f6f7f9;--fg:#1c1e22;--mut:#5d6470;--card:#fff;--line:#d9dde3;--planned:#8a909b;--started:#b36b00;--review:#1a62b8;--matched:#0e7490;--ready:#1f7a3d;--chip:#eef0f3}
+@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e8ec;--mut:#9aa1ad;--card:#1c1f25;--line:#323741;--planned:#8f96a3;--started:#e0a040;--review:#6aa7f0;--matched:#4cc4e0;--ready:#5dc07c;--chip:#272b33}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,"Segoe UI",sans-serif}
 main{max-width:1200px;margin:0 auto;padding:16px}h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.1rem;margin:1.6em 0 .5em}
 .mut{color:var(--mut)}.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
@@ -23,7 +26,7 @@ main{max-width:1200px;margin:0 auto;padding:16px}h1{font-size:1.4rem;margin:.2em
 .box b{display:block;margin-bottom:4px}.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--chip);margin:6px 0}
 .bar i{display:block;height:100%}.counts{display:flex;gap:8px;flex-wrap:wrap;font-size:.85rem}
 .chip{display:inline-block;border-radius:10px;padding:0 8px;font-size:.78rem;font-weight:600;color:#fff;line-height:1.5}
-.s-planned{background:var(--planned)}.s-started{background:var(--started)}.s-review{background:var(--review)}.s-ready{background:var(--ready)}
+.s-planned{background:var(--planned)}.s-started{background:var(--started)}.s-review{background:var(--review)}.s-matched{background:var(--matched)}.s-ready{background:var(--ready)}
 .filter{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}.filter button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:16px;padding:4px 12px;font:inherit;cursor:pointer}
 .filter button[aria-pressed=true]{background:var(--fg);color:var(--bg)}
 table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:8px}
