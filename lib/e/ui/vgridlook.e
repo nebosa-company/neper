@@ -147,7 +147,10 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             try fill(b, x + f.vs2[r], top, 1.0, rh, 0xB3B3B6u32)
             try fill(b, x + f.vs2[r] + 1.0, top, 1.0, rh, 0xEEEEEFu32)
         }
-        if f.tops[r] { try fill(b, x + 15.0, top - 1.0, w - 16.0, 1.0, 0xCFCFD1u32) }
+        // looks11-g1: the first row's top hairline drifts too (live capture: #DBDBDD at y 23, #CFCFD1 at y 216)
+        var top_drift = (f.rows[r] - 24.0) * 0.0622
+        if top_drift < 0.0 { top_drift = 0.0 }
+        if f.tops[r] { try fill(b, x + 15.0, top - 1.0, w - 16.0, 1.0, 0xDBDBDDu32 - u32(top_drift + 0.5) * 0x010101u32) }
         if f.selected[r] {
             if style.windark_active() {
                 // (round 7) the focused row's header: #264F78 between #3A6EA5 lines
@@ -155,9 +158,16 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
                 try winpx.fill(b, x + 15.0, top, value_x - 15.0, rh, style.hex_raw(0x264F78u32))
                 try winpx.fill(b, x + 15.0, top + rh, value_x - 15.0, 1.0, style.hex_raw(0x3A6EA5u32))
             } else {
-                try fill(b, x + 15.0, top - 1.0, value_x - 15.0, 1.0, 0x3D87C4u32)
+                // looks11-g1: the selected header's two lines drift towards each other down the grid (live capture: #3D87C4 / #6190B8 at the
+                // first row, #488AC0 / #568DBC at y 137): 0.0965 levels a pixel, green by a quarter and blue by a third of that
+                var sel_k = (f.rows[r] - 24.0) * 0.0965
+                if sel_k < 0.0 { sel_k = 0.0 }
+                let kr = u32(sel_k + 0.5)
+                let kg = u32(sel_k * 0.27 + 0.5)
+                let kb = u32(sel_k * 0.36 + 0.5)
+                try fill(b, x + 15.0, top - 1.0, value_x - 15.0, 1.0, ((0x3Du32 + kr) << 16u32) | ((0x87u32 + kg) << 8u32) | (0xC4u32 - kb))
                 try fill(b, x + 15.0, top, value_x - 15.0, rh, 0x0078D7u32)
-                try fill(b, x + 15.0, top + rh, value_x - 15.0, 1.0, 0x6190B8u32)
+                try fill(b, x + 15.0, top + rh, value_x - 15.0, 1.0, ((0x61u32 - kr) << 16u32) | ((0x90u32 - kg) << 8u32) | (0xB8u32 + kb))
             }
         }
         // the hairlines under the row; the last row's light one is the next band's top line
@@ -167,7 +177,8 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             try fill(b, x + 15.0, top + rh, w - 16.0, 1.0, dark)
         }
         if f.lasts[r] { try fill(b, x + 1.0, top + rh, 13.0, 1.0, 0xC7C7C9u32) }
-        if !f.lasts[r] { try fill(b, x + 15.0, top + rh + 1.0, w - 16.0, 1.0, light) }
+        // looks11-g1: the grid's last row has no band under it, so its light hairline is its own (live capture: #C7C7CA at y 338)
+        if !f.lasts[r] || r + 1 == f.rows.len { try fill(b, x + 15.0, top + rh + 1.0, w - 16.0, 1.0, light) }
         r += 1usize
     }
     // the frame: classic edit-control bevel colours, measured

@@ -9019,13 +9019,13 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             var undo_style = style.defaults()
             undo_style.padding = style.EdgeLengths { left: style.Length { Px: nav_left(grid) }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
             let undone = widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, undo_style, with_undo[0usize..shown + 1usize])
-            if footer_edged_on(grid) { ret (nav_line_under(a, undone, grid.look.footer_band.red < grid.look.footer_band.green - 0.05), ok) }
+            if footer_edged_on(grid) || nav_rule_on(grid) { ret (nav_line_under(a, undone, grid.look.footer_band.red < grid.look.footer_band.green - 0.05), ok) }
             ret (undone, ok)
         }
         var live_style = style.defaults()
         live_style.padding = style.EdgeLengths { left: style.Length { Px: nav_left(grid) }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         let live_flex = widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: live_gap }, live_style, cells[0usize..shown])
-        if footer_edged_on(grid) { ret (nav_line_under(a, live_flex, grid.look.footer_band.red < grid.look.footer_band.green - 0.05), ok) }
+        if footer_edged_on(grid) || nav_rule_on(grid) { ret (nav_line_under(a, live_flex, grid.look.footer_band.red < grid.look.footer_band.green - 0.05), ok) }
         ret (live_flex, ok)
     }
     ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), cells[0usize..shown]), ok)
@@ -9351,6 +9351,9 @@ fn filter_panel_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
 fn win_look(grid: *const Grid) -> bool { ret grid.look.on && grid.theme.tokens.profile == .Windows }
 
 fn footer_edged_on(grid: *const Grid) -> bool { ret grid.look.footer_edges && win_look(grid) }
+
+// looks11-g1: the top grid's navigator has a two-pixel #F7F7F7 rule whose second row the buttons overlap: one pixel box, then the navigator's own first row
+fn nav_rule_on(grid: *const Grid) -> bool { ret grid.look.nav_rule && win_look(grid) }
 
 fn nav_left(grid: *const Grid) -> f32 {
     if win_look(grid) { ret 0.0 }
@@ -10167,7 +10170,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             if made_filter_error != ok { ret (zero, made_filter_error) }
             v3_filter = made_filter
         }
-        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select, dialog_lines: grid.look.dialog_lines, foot_set: grid.look.foot_set, foot_drift: grid.look.foot_drift, foot_g1: grid.look.foot_g1, foot_g2: grid.look.foot_g2, foot_w1: grid.look.foot_w1, foot_w2: grid.look.foot_w2, top_edge_on: !dotted_focus && grid.look.idle_on, top_edge: lk.idle_top, plain_col: grid.look.plain_col, soft_a0: grid.look.soft_a0, soft_x0: grid.look.soft_x0, soft_slope: grid.look.soft_slope }
+        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select, dialog_lines: grid.look.dialog_lines, foot_set: grid.look.foot_set, foot_drift: grid.look.foot_drift, foot_g1: grid.look.foot_g1, foot_g2: grid.look.foot_g2, foot_w1: grid.look.foot_w1, foot_w2: grid.look.foot_w2, top_edge_on: !dotted_focus && grid.look.idle_on, top_edge: lk.idle_top, plain_col: grid.look.plain_col, soft_a0: grid.look.soft_a0, soft_x0: grid.look.soft_x0, soft_slope: grid.look.soft_slope, top_fit: grid.look.nav_rule }
     }
     // group footers are taller: the list of the entries that are
     if has_extras(grid) && grid.look.on {
@@ -10278,6 +10281,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             var rule = style.defaults()
             rule.width = style.Length { Percent: 100.0 }
             rule.height = style.Length { Px: 2.0 }
+            if nav_rule_on(grid) { rule.height = style.Length { Px: 1.0 } }
             rule.background = paint.Brush { Solid: gl.rgb(0xF7F7F7u32) }
             parts[at] = widget.box(0u64, rule, zero)
         } else {
@@ -10351,10 +10355,10 @@ fn ring_marks_over(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (wid
     var made = 1usize
     at = 0usize
     while at < text.len && made <= count {
-        var field: [4]u32 = zero
+        var field: [5]u32 = zero
         var hex: u32 = 0u32
         var k = 0usize
-        while k < 4usize && at < text.len {
+        while k < 5usize && at < text.len {
             var value: u32 = 0u32
             while at < text.len && text[at] != 32u8 && text[at] != 59u8 {
                 if k == 3usize { value = value * 16u32 + gl.hex_digit(text[at]) } else { value = value * 10u32 + (u32(text[at]) - 48u32) }
@@ -10365,7 +10369,10 @@ fn ring_marks_over(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (wid
             if at < text.len && text[at] == 32u8 { at += 1usize }
         }
         hex = field[3usize]
-        parts[made] = footer_px(a, f32(field[0usize]), f32(field[1usize]), 1.0, f32(field[2usize]), hex)
+        // looks11-g1: an optional fifth number is the run's width (default 1)
+        var run_w: f32 = 1.0
+        if field[4usize] > 0u32 { run_w = f32(field[4usize]) }
+        parts[made] = footer_px(a, f32(field[0usize]), f32(field[1usize]), run_w, f32(field[2usize]), hex)
         made += 1usize
         if at < text.len && text[at] == 59u8 { at += 1usize }
     }

@@ -14409,6 +14409,14 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         }
         thick.background = paint.Brush { Solid: ink }
         layers[count] = widget.box(0u64, thick, zero)
+        // looks11-g1: at rest the live grid bar's thumb is three pixel columns (#B6 #85 #BF) with soft ends, 7 px from the bar's first pixel
+        if vertical && !state.pressed && !state.hovered && !scroll_bar_crisp && !style.windows_dark_on() && thumb_len >= 6.0 {
+            let (pixel_thumb, pixel_thumb_error) = windows_thumb(a, thumb_len)
+            if pixel_thumb_error != ok { ret (zero, pixel_thumb_error) }
+            var pixel_style = sized_style(3.0, thumb_len)
+            pixel_style.margin = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: style.Length { Px: at - 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            layers[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, pixel_style, one_widget(a, pixel_thumb))
+        }
         count += 1usize
     }
     // looks5-e: a vertical bar shows only the arrow the pointer is on (live captures; the thumb widens over the bar)
@@ -18985,3 +18993,53 @@ fn linux_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, pic
     ret (node, node_error)
 }
 // ---- end the Linux look ---------------------------------------------------------------------------------
+
+// looks11-g1: the resting vertical thumb of the live top grid as 3 pixel columns: two end rows (#D1 #B7 #D6, #B9 #8A #C1 on top; #BB #8D #C3, #DC #CB #DF
+// at the foot) and #B6 #85 #BF between
+fn windows_thumb(a: *mem.Arena, h: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 16usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    let tops = [6]u32{ 0xD1D1D1u32, 0xB7B7B7u32, 0xD6D6D6u32, 0xB9B9B9u32, 0x8A8A8Au32, 0xC1C1C1u32 }
+    let feet = [6]u32{ 0xBBBBBBu32, 0x8D8D8Du32, 0xC3C3C3u32, 0xDBDBDBu32, 0xC9C9C9u32, 0xDEDEDEu32 }
+    let body = [3]u32{ 0xB6B6B6u32, 0x858585u32, 0xBFBFBFu32 }
+    var c = 0usize
+    while c < 3usize {
+        let col = f32(c)
+        var s0 = sized_style(1.0, 1.0)
+        s0.background = paint.Brush { Solid: gl.rgb(tops[c]) }
+        parts[n] = widget.positioned(0u64, col, 0.0, style.defaults(), one_widget(a, widget.box(0u64, s0, zero)))
+        n += 1usize
+        var s1 = sized_style(1.0, 1.0)
+        s1.background = paint.Brush { Solid: gl.rgb(tops[3usize + c]) }
+        parts[n] = widget.positioned(0u64, col, 1.0, style.defaults(), one_widget(a, widget.box(0u64, s1, zero)))
+        n += 1usize
+        var sb = sized_style(1.0, h - 4.0)
+        sb.background = paint.Brush { Solid: gl.rgb(body[c]) }
+        parts[n] = widget.positioned(0u64, col, 2.0, style.defaults(), one_widget(a, widget.box(0u64, sb, zero)))
+        n += 1usize
+        var s2 = sized_style(1.0, 1.0)
+        s2.background = paint.Brush { Solid: gl.rgb(feet[c]) }
+        parts[n] = widget.positioned(0u64, col, h - 2.0, style.defaults(), one_widget(a, widget.box(0u64, s2, zero)))
+        n += 1usize
+        c += 1usize
+    }
+    var s3: widget.Node = zero
+    var k = 0usize
+    while k < 3usize {
+        var sf = sized_style(1.0, 1.0)
+        sf.background = paint.Brush { Solid: gl.rgb(feet[3usize + k]) }
+        s3 = widget.positioned(0u64, f32(k), h - 1.0, style.defaults(), one_widget(a, widget.box(0u64, sf, zero)))
+        parts[n] = s3
+        n += 1usize
+        k += 1usize
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
+}
+
+fn one_widget(a: *mem.Arena, node: widget.Node) -> []widget.Node {
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 1usize)
+    if nodes_error != ok { ret zero }
+    nodes[0usize] = node
+    ret nodes[0usize..1usize]
+}

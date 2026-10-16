@@ -1,0 +1,57 @@
+{
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_top.png",
+    "notes": "Round 11 (g1), structural pixels off at 100 % (scripts/looks_sum.py; flat runs, 2 levels; card pictures, icons, backdrop and the navigator button bitmaps excluded as artwork): top cells 328/135 down from 2829/2489 (nav excluded in the new numbers; with the navigator included about 800 per cell, from 6328 whole-sheet before), hover sheets 97-199 per cell (from 2000-2300), shortcuts states 734/810, 352/352, 285 (from 2593/6286, 2656/7031, 5952), shortcuts hover 699-1061 (from 1455-1901), sort/missing unchanged (98-456, 465-538). Causes fixed: Windows top grid footer off, navigator rule one pixel under the rows overlapped by the buttons, alpha column lines (indicator column too), header rule, per-cell frame ring marks, resting thumb as the live 3 pixel columns with end caps; Shortcuts list last column no longer shrunk the others (fractional lines), Options grid focused when a header or row is pressed. Group sheets (grouped by Edition) are not fitted: group row order, indent column and group box differ.",
+    "gaps": [
+     "Not matched: group sheets (data_grid_group*, hover8 right cell) 1700-3000 px: group order, indent column, group box not as v3",
+     "Shortcuts and Sort hover cells: header hover face bottom row and frame ring pixels still off (about 100-800 px); Missing list: frame foot marks and bar left edge",
+     "Navigator button bitmaps of the top grid differ in their edge rows from the bottom grid's (artwork, excluded from the counts)",
+     "Unverified: 150 %, edit mode, disabled; windows dark re-rendered without native dark reference for grids"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list_rules.png",
+    "notes": "Round 11 (g1): tree_list_rules compared with the live capture at 100 %: structural pixels off 16 (from 1462 in audit 3); all remaining differences are header text ClearType (ink boxes agree within 1 px). Fixed: frame (#A7AAB0 top over corners, #ABAFB5 foot), column widths (lines on the live pixels) and no line at the last column's edge. tree_list, tree_list_check/focus, hover and expanded sheets unchanged (30-121 px).",
+    "gaps": [
+     "Other tree states (check, focus, hover, expanded) not re-fitted this round",
+     "Native list view states (disabled, gridlines, sort arrows) not added"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Round 11 (g1): vertical_grid_states cells 464/415/415/415/1516 px (from 1250-1728 plus the pips), hover cells 162 each (from 1201), vertical_grid General section 0 px. Fixed: the first row's top hairline and the selected header's two lines drift down the grid, the last row's light hairline. Excluded as artwork: mana pip pictures and Legality cells (x 280-330, y 250-340).",
+    "gaps": [
+     "State 5 (General shut, focused band) not matched: focused band dotted rectangle and band line drift (1516 px)",
+     "Computed section icons/gradients are app artwork and not drawn",
+     "Unverified: 150 %, disabled, dark"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar_live.png",
+    "notes": "Round 11 (g1): the resting vertical thumb (control.windows_scroll_bar and the grid bar) is now the live 3 pixel columns #B6 #85 #BF with end caps (#D1 #B7 #D6 / #B9 #8A #C1 on top, #BB #8D #C3 / #DB #C9 #DE at the foot) 7 px from the track's #F7F7F7 pixel; top cap exact, foot within 2 levels of both captures, body exact.",
+    "gaps": [
+     "Not matched: hover/pressed thumb, arrows, horizontal bar re-fit and the native disabled bar (ref/windows-native/light/vscroll-disabled) were not done this round",
+     "scroll_bar_live is not compared cell by cell (ref is a 24 x 118 grid crop, ours a control sheet)"
+    ]
+   }
+  }
+ }
+}

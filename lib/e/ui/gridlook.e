@@ -80,6 +80,7 @@ type Look = struct {
     ring_right: paint.Color,
     // looks9-w1: the live footer's cells carry their own edge pixels (the green collection footer)
     footer_edges: bool,
+    nav_rule: bool,
     // looks9-w1: the column (1-based) whose cells never take the selection's fill (the collection grid's Edition column)
     plain_col: usize,
     // looks9-w1: the column lines are a 1 px DCDCDC line at a fractional place: coverage soft_a0 at x = soft_x0 of the row, falling soft_slope per px (0 = the old ramp)
@@ -161,6 +162,7 @@ fn v3() -> Look {
         ring_bottom: rgb(0xB9BCC0u32),
         ring_right: rgb(0xB5B8BDu32),
         footer_edges: false,
+        nav_rule: false,
         plain_col: 0usize,
         soft_a0: 0.0,
         soft_x0: 0.0,
