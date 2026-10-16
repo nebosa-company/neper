@@ -2778,4 +2778,5 @@ D5142	1062	The WPT reftests run through the real stack from disk (browser 0.6, 9
 D5143	621	Web fonts are fetched at page load and registered with the font set and renderer (browser 3.15)
 D5144	658	SVG images are vector image refs painted by e.gfx.svg (browser 3.13)
 D5145	631	GitHub's home page loaded once the render tool's arenas were big enough; style memory is the gap (browser 1.13h)
-D5146	932	Style data is indexed by hash and parsed in scratch memory (browser 1.13h)
+D5146	933	Style data is indexed by hash and parsed in scratch memory (browser 1.13h)
+D5147	654	color-mix() and contrast-color() resolve against the element's colour (browser 1.13g)

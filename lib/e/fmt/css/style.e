@@ -248,6 +248,14 @@ fn parse_color_value(c: *const Context, v: str, current: u32) -> (u32, bool) {
         let (inner, inner_ok) = parse_color_value(c, picked, current)
         ret (inner, inner_ok)
     }
+    if str.starts_with(low, "color-mix(") {
+        let (mixed, mixed_ok) = cv.parse_color_mix(c.a, t, true, current)
+        ret (mixed, mixed_ok)
+    }
+    if str.starts_with(low, "contrast-color(") {
+        let (contrast, contrast_ok) = cv.parse_contrast_color(c.a, t, true, current)
+        ret (contrast, contrast_ok)
+    }
     let (rgba, parsed) = cv.parse_color(c.a, t)
     ret (rgba, parsed)
 }
@@ -895,7 +903,16 @@ fn apply_misc(ap: *Ap, prop: str, v: str) -> bool {
     }
     if str.eq(prop, "background-color") {
         let (col, good) = parse_color_value(ap.c, v, s.color)
-        if good { s.background_color = col }
+        if good {
+            s.background_color = col
+            // A colour function that mentions currentcolor is resolved again where it is inherited (the child's own `color`).
+            let bg_low = cv.lower(ap.a, v)
+            if (str.starts_with(cv.trim_ws(bg_low), "color-mix(") || str.starts_with(cv.trim_ws(bg_low), "contrast-color(")) && str.contains(bg_low, "currentcolor") {
+                put_extra(ap, "x-bg-currentcolor", cv.trim_ws(v))
+            } else {
+                drop_extra(ap, "x-bg-currentcolor")
+            }
+        }
         ret true
     }
     if str.eq(prop, "list-style-type") {
@@ -1024,6 +1041,19 @@ fn apply_wide(ap: *Ap, prop: str, keyword: str) {
     if str.eq(keyword, "unset") || str.eq(keyword, "revert") || str.eq(keyword, "revert-layer") { take_parent = tier_inherits(prop) }
     if take_parent {
         copy_prop(ap, ap.parent, prop)
+        if str.eq(prop, "background-color") {
+            var k = 0usize
+            while k < ap.parent.extras.len {
+                if str.eq(ap.parent.extras[k].name, "x-bg-currentcolor") {
+                    let (col, good) = parse_color_value(ap.c, ap.parent.extras[k].value, ap.s.color)
+                    if good {
+                        ap.s.background_color = col
+                        put_extra(ap, "x-bg-currentcolor", ap.parent.extras[k].value)
+                    }
+                }
+                k += 1usize
+            }
+        }
     } else {
         let init = initial_style()
         copy_prop(ap, &init, prop)

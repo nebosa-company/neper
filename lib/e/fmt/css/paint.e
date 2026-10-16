@@ -1146,6 +1146,14 @@ fn parse_color_text(p: *Painter, tok: str, current: u32) -> (u32, bool) {
     let low = cv.lower(p.a, cv.trim_ws(tok))
     if str.eq(low, "currentcolor") { ret (current, true) }
     if str.eq(low, "transparent") { ret (0u32, true) }
+    if str.starts_with(low, "color-mix(") {
+        let (mixed, mixed_ok) = cv.parse_color_mix(p.a, tok, true, current)
+        ret (mixed, mixed_ok)
+    }
+    if str.starts_with(low, "contrast-color(") {
+        let (contrast, contrast_ok) = cv.parse_contrast_color(p.a, tok, true, current)
+        ret (contrast, contrast_ok)
+    }
     let (col, good) = cv.parse_color(p.a, tok)
     ret (col, good)
 }
