@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>ABV - GTM</title>
+
+<style type="text/css">
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+</style>
+
+<!-- Google Tag Manager -->
+<script type="text/javascript">(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-P74CWJ');</script>
+<!-- End Google Tag Manager -->
+
+<script type="text/javascript">
+(function(w, d){
+
+    console.log('### Gtm html v.3.6.17 ###');
+
+    w.addEventListener('message', receiveMessage, false);
+    w.addEventListener('load', function(){
+        top.window.postMessage('abv_gtm', '*');
+    });
+
+    function receiveMessage(e)
+    {
+        const 
+            o =  /(?=^(\{)).*?(?=(\})$)/.test( e.data )? JSON.parse( e.data ) : {},
+            check = !/(abv\.bg)$|(dox\.bg)$/.test(e.origin) || !Object.keys( o ).length;
+
+        if ( check ) return;
+
+        if( 'event' in o ) {
+            
+            if('event' in o && o.event === 'virtualPageview'){
+                Object.assign( o, { 
+                    pageHostname: e.origin.replace(/^https?:\/\//, ''),
+                } );
+            }
+
+            if ('pageName' in o && typeof o.pageName === 'string') {
+                o.pageName = !o.pageName.startsWith('/') ? '/' + o.pageName : o.pageName;
+                console.log('### New Data Obj :', o.pageName, o);
+            }
+            
+            window.dataLayer.push(o);
+            
+        } else if( 'consent' in o ) {
+            setCookie( o.consent.name, o.consent.value, 365 );
+        }
+
+        console.log('### Abv GTM receiver check dataLayer v.1.4: ');
+        console.log( window.dataLayer );
+
+        const 
+            abv = dataLayer.filter(c => 'event' in c && c.event === 'virtualPageviewABV'),
+            vp = dataLayer.filter(c => 'event' in c && c.event === 'virtualPageview'),
+            obj = vp.length? vp[vp.length - 1] : abv.lenght? abv[abv.length - 1] : {},
+            path = 'pageName' in obj? obj.pageName : 'pagePath' in obj? obj.pagePath : '/';
+
+        if( Object.keys( obj ).length ) 
+            history.replaceState(obj, location.pathname, path);
+        else 
+            history.replaceState({}, location.pathname, '/');
+
+        console.log('### Abv GTM receiver path state ~: ', history.state, path, '\n ~ object path: ', obj);
+
+    }
+
+    function setCookie(cname, cvalue, exdays) {
+        let d = new Date();
+        d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
+        const expires = 'expires='+ d.toUTCString();
+        document.cookie = cname + '=' + cvalue + ';' + expires + ';path=/';
+    }
+
+    function getCookie(cname) {
+
+        let name = cname + '=',
+            decodedCookie = decodeURIComponent(document.cookie),
+            ca = decodedCookie.split(';');
+        
+        for(let i = 0; i < ca.length; i++) {
+
+            let c = ca[i];
+
+            while (c.charAt(0) == ' ') {
+                c = c.substring(1);
+            }
+            
+            if (c.indexOf(name) == 0) {
+                return c.substring(name.length, c.length);
+            }
+        }
+
+        return '';
+    }
+
+})(window, document);
+</script>
+</head>
+
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript>
+    <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-P74CWJ" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+</noscript>
+<!-- End Google Tag Manager (noscript) --> 
+</body>
+</html>

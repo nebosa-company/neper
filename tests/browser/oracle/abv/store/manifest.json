@@ -1,0 +1,5242 @@
+[
+ {
+  "key": "-fb6c80381dda527",
+  "method": "GET",
+  "url": "https://www.abv.bg",
+  "finalUrl": "https://www.abv.bg",
+  "status": 200,
+  "contentType": "text/html;charset=UTF-8",
+  "headers": {
+   "connection": "keep-alive",
+   "set-cookie": "_abv_home_auth=; Expires=Thu, 01 Jan 1970 00:00:10 GMT; Path=/; Secure,_abv_home_auth_access=; Expires=Thu, 01 Jan 1970 00:00:10 GMT; Path=/; Secure,_abv_home_auth_id=; Expires=Thu, 01 Jan 1970 00:00:10 GMT; Path=/; Secure,_abv_home_auth_req=K4Gj74m7yZPf_zb06dLU0MLjamL01vmNCdlgOBzo_XA=#home#ZaOl8f3IY8x0vfX6mqGDSQgCANpaxE5Beypks4tGCpu5mWgfGxp2A6KreGEREX7Kaca341ry20gAprncfLQdGgi489xGeAMz5PQOM9IfwX72R1Hgnnqi3o4iKIty4ADT#GRtRw2fkt7PXaBLjCKnN3W45HlJLSt0u_10R-ocCTnXkhvU3hNpR2O3MMULyna7ZHxfQ6ugddviA_4gXoCmaQDh8UW8tzT8z79XIaPnGtgLY7oLAuhZN5AEZ6Ty0QWuL#VsLB2xh3IrqWQD1IisNDBpq041YZeK-CTyWLC09gVMc#yTrOa8jvyo7Nb3Kk56jpjjkJzs7MTlSWPrdWWk-z1y0#-EH4rG6XSD5WiRVVFEeNtc0kt-jGCWULhu-MTQA-F6k; Path=/; Secure; HttpOnly; SameSite=Lax; Priority=High,_abv_login_csrf_token=c9c0b1dc-5397-476d-a98f-1dd0f9a20a5d; Domain=abv.bg; Path=/; Secure; HttpOnly; SameSite=lax",
+   "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+   "transfer-encoding": "chunked",
+   "date": "Fri, 16 Oct 2026 15:49:11 GMT",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "strict-transport-security": "max-age=31536000 ; includeSubDomains,max-age=31536000; includeSubDomains",
+   "content-type": "text/html;charset=UTF-8",
+   "pragma": "no-cache",
+   "x-xss-protection": "0",
+   "content-language": "en-US",
+   "server": "nginx",
+   "x-frame-options": "DENY,SAMEORIGIN",
+   "x-content-type-options": "nosniff",
+   "expires": "0"
+  },
+  "bytes": 9337
+ },
+ {
+  "key": "-4d00226a28b8593d",
+  "method": "GET",
+  "url": "https://www.abv.bg/js/jquery.min.js",
+  "finalUrl": "https://www.abv.bg/js/jquery.min.js",
+  "status": 200,
+  "contentType": "text/javascript",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:11 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "167868",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "text/javascript",
+   "server": "nginx"
+  },
+  "bytes": 167868
+ },
+ {
+  "key": "-65e2993a326abc8d",
+  "method": "GET",
+  "url": "https://www.abv.bg/js/profile-choice.js?v=1.0",
+  "finalUrl": "https://www.abv.bg/js/profile-choice.js?v=1.0",
+  "status": 200,
+  "contentType": "text/javascript",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:11 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "3907",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "text/javascript",
+   "server": "nginx"
+  },
+  "bytes": 3907
+ },
+ {
+  "key": "-58e8a9ccf0c13805",
+  "method": "GET",
+  "url": "https://www.abv.bg/js/main.min.js?v=3.6",
+  "finalUrl": "https://www.abv.bg/js/main.min.js?v=3.6",
+  "status": 200,
+  "contentType": "text/javascript",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:11 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "159118",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "text/javascript",
+   "server": "nginx"
+  },
+  "bytes": 159118
+ },
+ {
+  "key": "111618bd128e37df",
+  "method": "GET",
+  "url": "https://www.abv.bg/css/main.min.css?v=3.4",
+  "finalUrl": "https://www.abv.bg/css/main.min.css?v=3.4",
+  "status": 200,
+  "contentType": "text/css",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "transfer-encoding": "chunked",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "text/css",
+   "server": "nginx"
+  },
+  "bytes": 32513
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-72011d5b81988806",
+  "method": "GET",
+  "url": "https://www.abv.bg/css/profile-choice.css?v=1.1",
+  "finalUrl": "https://www.abv.bg/css/profile-choice.css?v=1.1",
+  "status": 200,
+  "contentType": "text/css",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "transfer-encoding": "chunked",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "text/css",
+   "server": "nginx"
+  },
+  "bytes": 1513
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "-563e0646c78fd4fe",
+  "method": "GET",
+  "url": "https://www.abv.bg/home/getdata",
+  "finalUrl": "https://www.abv.bg/home/getdata",
+  "status": 403,
+  "contentType": "text/html;charset=UTF-8",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+   "transfer-encoding": "chunked",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "strict-transport-security": "max-age=31536000 ; includeSubDomains,max-age=31536000; includeSubDomains",
+   "content-type": "text/html;charset=UTF-8",
+   "pragma": "no-cache",
+   "x-xss-protection": "0",
+   "content-language": "en-US",
+   "server": "nginx",
+   "x-frame-options": "DENY",
+   "x-content-type-options": "nosniff",
+   "expires": "0"
+  },
+  "bytes": 276
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-1aaf7ab18827a02d",
+  "method": "GET",
+  "url": "https://img.abv.bg/e/s/gtm.html?t=1792165752087",
+  "finalUrl": "https://img.abv.bg/e/s/gtm.html?t=1792165752087",
+  "status": 200,
+  "contentType": "text/html",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Aug 2026 16:32:50 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "transfer-encoding": "chunked",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "etag": "W/\"6a95acb2-eb1\"",
+   "content-type": "text/html",
+   "server": "nginx"
+  },
+  "bytes": 3761
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-3d0fcddad1388a39",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/greenabv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/greenabv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 17 Jun 2025 11:36:43 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4838",
+   "etag": "\"6851534b-12e6\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4838
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:12 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "-704378174f371104",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/abv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/abv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 16 Jun 2025 06:58:54 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4826",
+   "etag": "\"684fc0ae-12da\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4826
+ },
+ {
+  "key": "-3d0fcddad1388a39",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/greenabv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/greenabv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 17 Jun 2025 11:36:43 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4838",
+   "etag": "\"6851534b-12e6\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4838
+ },
+ {
+  "key": "-704378174f371104",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/abv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/abv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 16 Jun 2025 06:58:54 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4826",
+   "etag": "\"684fc0ae-12da\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4826
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "-3d0fcddad1388a39",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/greenabv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/greenabv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 17 Jun 2025 11:36:43 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4838",
+   "etag": "\"6851534b-12e6\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4838
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-3d0fcddad1388a39",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/greenabv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/greenabv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 17 Jun 2025 11:36:43 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4838",
+   "etag": "\"6851534b-12e6\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4838
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "-704378174f371104",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/abv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/abv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 16 Jun 2025 06:58:54 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4826",
+   "etag": "\"684fc0ae-12da\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4826
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "-3d0fcddad1388a39",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/greenabv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/greenabv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 17 Jun 2025 11:36:43 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4838",
+   "etag": "\"6851534b-12e6\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4838
+ },
+ {
+  "key": "-704378174f371104",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/abv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/abv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 16 Jun 2025 06:58:54 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4826",
+   "etag": "\"684fc0ae-12da\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4826
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "-183d1b234ffe8ae1",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/mobile_web.png",
+  "finalUrl": "https://img.abv.bg/images/mobile_web.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 10:23:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "6349",
+   "etag": "\"65f17e93-18cd\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 6349
+ },
+ {
+  "key": "-704378174f371104",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/abv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/abv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 16 Jun 2025 06:58:54 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4826",
+   "etag": "\"684fc0ae-12da\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4826
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-3d0fcddad1388a39",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/greenabv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/greenabv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 17 Jun 2025 11:36:43 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4838",
+   "etag": "\"6851534b-12e6\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4838
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "056e98369f98320b",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "finalUrl": "https://img.abv.bg/images/shown.svg?1792165752232",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 17 Oct 2022 08:55:27 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "405",
+   "etag": "\"634d187f-195\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 405
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "56a05786e0c494a8",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/huawei-app-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Thu, 10 Jul 2025 14:59:37 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "8310",
+   "etag": "\"686fd559-2076\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 8310
+ },
+ {
+  "key": "-704378174f371104",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/abv+.svg",
+  "finalUrl": "https://img.abv.bg/ico/abv+.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 16 Jun 2025 06:58:54 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "4826",
+   "etag": "\"684fc0ae-12da\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 4826
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:12 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "0378c4d25c427fba",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/abv-small-logo.svg",
+  "finalUrl": "https://img.abv.bg/images/abv-small-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Sat, 15 Aug 2026 08:29:50 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "9448",
+   "etag": "\"6a80237e-24e8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 9448
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2ce15520c3247a82",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/app-store-badge.svg",
+  "finalUrl": "https://img.abv.bg/images/app-store-badge.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "10804",
+   "etag": "\"65f17757-2a34\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10804
+ },
+ {
+  "key": "-5af049f3e2111148",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/google-play-badge.png",
+  "finalUrl": "https://img.abv.bg/images/google-play-badge.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Wed, 13 Mar 2024 09:52:23 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "12122",
+   "etag": "\"65f17757-2f5a\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 12122
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "0314da5a90a6a893",
+  "method": "GET",
+  "url": "https://bimg.abv.bg/fonts/open_sans_semibold.woff2",
+  "finalUrl": "https://bimg.abv.bg/fonts/open_sans_semibold.woff2",
+  "status": 404,
+  "contentType": "text/html",
+  "headers": {
+   "connection": "keep-alive",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "transfer-encoding": "chunked",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-type": "text/html",
+   "server": "nginx"
+  },
+  "bytes": 146
+ },
+ {
+  "key": "13ed5b2cbafbb837",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/trustsuite.svg",
+  "finalUrl": "https://img.abv.bg/images/trustsuite.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 14 Aug 2026 13:42:14 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "16931",
+   "etag": "\"6a7f1b36-4223\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 16931
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "5d10ff9f5ff21de1",
+  "method": "GET",
+  "url": "https://bimg.abv.bg/fonts/open_sans.woff2",
+  "finalUrl": "https://bimg.abv.bg/fonts/open_sans.woff2",
+  "status": 404,
+  "contentType": "text/html",
+  "headers": {
+   "connection": "keep-alive",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "transfer-encoding": "chunked",
+   "content-encoding": "gzip",
+   "vary": "Accept-Encoding",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-type": "text/html",
+   "server": "nginx"
+  },
+  "bytes": 146
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "2dfebe93374a1c28",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/gdpr.svg",
+  "finalUrl": "https://img.abv.bg/images/gdpr.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Mon, 31 Mar 2025 09:52:20 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31704",
+   "etag": "\"67ea65d4-7bd8\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31704
+ },
+ {
+  "key": "-29330608996a68b9",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "finalUrl": "https://img.abv.bg/images/footer-logo.svg?v=1.0",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Fri, 15 Mar 2024 09:24:56 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "31074",
+   "etag": "\"65f413e8-7962\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 31074
+ },
+ {
+  "key": "-65c5a5e954e39052",
+  "method": "GET",
+  "url": "https://abv.bg/i/abv-logo.svg",
+  "finalUrl": "https://abv.bg/i/abv-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "10063",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10063
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:13 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:13 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:14 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:14 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "18ed7c2c6d277fd5",
+  "method": "GET",
+  "url": "https://img.abv.bg/images/305x250-9.png",
+  "finalUrl": "https://img.abv.bg/images/305x250-9.png",
+  "status": 200,
+  "contentType": "image/png",
+  "headers": {
+   "connection": "keep-alive",
+   "cache-control": "max-age=604800",
+   "last-modified": "Fri, 11 Sep 2020 09:20:19 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "content-length": "40000",
+   "etag": "\"5f5b4153-9c40\"",
+   "content-type": "image/png",
+   "server": "nginx",
+   "expires": "Fri, 23 Oct 2026 15:49:14 GMT"
+  },
+  "bytes": 40000
+ },
+ {
+  "key": "-65c5a5e954e39052",
+  "method": "GET",
+  "url": "https://abv.bg/i/abv-logo.svg",
+  "finalUrl": "https://abv.bg/i/abv-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "10063",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10063
+ },
+ {
+  "key": "-70a67d4cd6f812cb",
+  "method": "GET",
+  "url": "https://img.abv.bg/ico/abv.svg?v=2",
+  "finalUrl": "https://img.abv.bg/ico/abv.svg?v=2",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Wed, 04 Mar 2026 09:21:15 GMT",
+   "accept-ranges": "bytes",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "content-length": "1489",
+   "etag": "\"69a7f98b-5d1\"",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 1489
+ },
+ {
+  "key": "-65c5a5e954e39052",
+  "method": "GET",
+  "url": "https://abv.bg/i/abv-logo.svg",
+  "finalUrl": "https://abv.bg/i/abv-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "10063",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10063
+ },
+ {
+  "key": "-65c5a5e954e39052",
+  "method": "GET",
+  "url": "https://abv.bg/i/abv-logo.svg",
+  "finalUrl": "https://abv.bg/i/abv-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "10063",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10063
+ },
+ {
+  "key": "-65c5a5e954e39052",
+  "method": "GET",
+  "url": "https://abv.bg/i/abv-logo.svg",
+  "finalUrl": "https://abv.bg/i/abv-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "10063",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10063
+ },
+ {
+  "key": "-65c5a5e954e39052",
+  "method": "GET",
+  "url": "https://abv.bg/i/abv-logo.svg",
+  "finalUrl": "https://abv.bg/i/abv-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:14 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "10063",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10063
+ },
+ {
+  "key": "-65c5a5e954e39052",
+  "method": "GET",
+  "url": "https://abv.bg/i/abv-logo.svg",
+  "finalUrl": "https://abv.bg/i/abv-logo.svg",
+  "status": 200,
+  "contentType": "image/svg+xml",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 08:22:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:49:15 GMT",
+   "accept-ranges": "bytes",
+   "strict-transport-security": "max-age=31536000; includeSubDomains",
+   "content-length": "10063",
+   "x-frame-options": "SAMEORIGIN",
+   "content-type": "image/svg+xml",
+   "server": "nginx"
+  },
+  "bytes": 10063
+ }
+]

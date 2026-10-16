@@ -1,0 +1,62 @@
+/* The "АБВ Профил" question of the header's profile link (templates/fragments/profile-choice.html). */
+
+.abv-profile-choice {
+    width: 380px;
+    max-width: calc(100% - 20px);
+    margin: auto; /* main.min.css zeroes every margin; a modal <dialog> centres itself with auto margins */
+    padding: 0; /* the box fills the dialog, so a click on the dialog itself is a click on the backdrop */
+    border: 0;
+    border-radius: 6px;
+    background: #f0f0f0;
+    color: inherit; /* the font is inherited from the page; the colour is not, a <dialog> sets its own */
+}
+
+.abv-profile-choice:not([open]) {
+    display: none; /* a browser without <dialog> would render the element inline */
+}
+
+.abv-profile-choice::backdrop {
+    background: rgba(0, 0, 0, .5);
+}
+
+.abv-profile-choice-box {
+    padding: 15px 25px 20px;
+}
+
+.abv-profile-choice h2 {
+    margin: 0 0 15px;
+    font-size: 21px;
+    font-size: 1.3125rem;
+    font-weight: 400;
+}
+
+.abv-profile-choice p {
+    margin: 0 0 20px;
+    line-height: 1.4;
+}
+
+.abv-profile-choice p.abv-profile-choice-answers {
+    margin: 0;
+}
+
+.abv-profile-choice a.button {
+    display: inline-block;
+    margin: 0 10px 0 0;
+    padding: 0 15px;
+    line-height: 30px;
+    text-align: center;
+    text-decoration: none;
+}
+
+.abv-profile-choice a.button:active {
+    padding: 1px 14px 0 16px;
+}
+
+.abv-profile-choice a.abv-profile-choice-no {
+    background: #2f2f2f;
+}
+
+.abv-profile-choice a.button:focus-visible {
+    outline: 2px solid #2f2f2f;
+    outline-offset: 2px;
+}

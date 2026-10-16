@@ -1,0 +1,4 @@
+nodes=3
+id=1 p=-1 k=SnapshotNodeKind.block lm=SnapshotLayoutMode.block fl=CssFloat.none w=null w%=null bg=ffffffff col=ff000000 fs=16.0 txt=""
+id=2 p=0 k=SnapshotNodeKind.block lm=SnapshotLayoutMode.block fl=CssFloat.none w=null w%=null bg=null col=ff000000 fs=16.0 txt=""
+id=3 p=1 k=SnapshotNodeKind.text lm=SnapshotLayoutMode.block fl=CssFloat.none w=null w%=null bg=null col=ff000000 fs=16.0 txt="This domain is for use i"

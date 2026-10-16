@@ -1,0 +1,9 @@
+url=https://www.abv.bg
+nodes=79
+size=1900x1494
+docHeight=1494.0
+displayItems=50
+images=16
+webFonts=0
+misses=77
+pngFnv=-5cbe949f2e5daa00

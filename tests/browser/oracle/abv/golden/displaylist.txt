@@ -1,0 +1,51 @@
+items=50 fixed=0 docHeight=1494.0
+FillRect 0.0,0.0,1900.0,1000.0 #ffffffff
+PaintImage 10.0,56.0,61.0,27.0 id=1073741831
+FillRect 69.0,56.0,2.0,27.0 #ffd4d0c8
+PaintImage 0.0,4.0,25.0,25.0 id=4
+PaintParagraph 0.0,29.0 w=215.8 h=16.0
+PaintImage 0.0,42.0,101.0,15.0 id=6
+PaintParagraph 1710.0,4.0 w=181.0 h=14.0
+FillRect 0.0,0.0,1900.0,35.0 #fff0f0f0
+FillRect 0.0,34.0,1900.0,1.0 #ffe0e0e0
+FillRect 577.9,138.0,640.0,277.0 #ffb8e6fd
+PaintParagraph 602.9,153.0 w=315.0 h=24.0
+PaintParagraph 602.9,192.0 w=315.0 h=13.0
+FillRect 602.9,208.0,201.8,1.0 #ffb9b9b9
+FillRect 602.9,243.0,201.8,1.0 #ffb9b9b9
+FillRect 602.9,208.0,1.0,36.0 #ffb9b9b9
+FillRect 803.7,208.0,1.0,36.0 #ffb9b9b9
+PaintParagraph 602.9,254.0 w=315.0 h=13.0
+FillRect 602.9,270.0,305.5,1.0 #ffb9b9b9
+FillRect 602.9,305.0,305.5,1.0 #ffb9b9b9
+FillRect 602.9,270.0,1.0,36.0 #ffb9b9b9
+FillRect 907.5,270.0,1.0,36.0 #ffb9b9b9
+PaintImage 884.9,257.0,26.0,26.0 id=45
+FillRect 602.9,280.0,99.0,30.0 #ff1e930c
+PaintParagraph 602.9,280.0 w=99.0 h=14.0
+PaintParagraph 701.9,280.0 w=216.0 h=13.0
+PaintParagraph 602.9,319.0 w=315.0 h=14.0
+FillRect 602.9,310.0,315.0,1.0 #ffcccccc
+PaintImage 917.9,138.0,300.0,0.0 id=1073741874
+PaintParagraph 1237.9,138.0 w=300.0 h=11.0
+PaintImage 597.9,53.0,163.0,66.0 id=1073741840
+PaintParagraph -7402.1,53.0 w=163.0 h=37.0
+FillRect 1189.9,78.0,348.0,36.0 #ffffffff
+FillRect 1189.9,78.0,348.0,1.0 #ffe0e0e0
+FillRect 1189.9,113.0,348.0,1.0 #ffe0e0e0
+FillRect 1189.9,78.0,1.0,36.0 #ffe0e0e0
+FillRect 1457.9,78.0,80.0,36.0 #ff2f2f2f
+PaintParagraph 1457.9,78.0 w=80.0 h=14.0
+FillRect 0.0,1098.0,1900.0,396.0 #fff0f0f0
+PaintParagraph 510.0,1118.0 w=920.0 h=70.0
+PaintParagraph 510.0,1208.0 w=680.0 h=32.0
+FillRRect
+ClipRectLayer
+PaintParagraph 845.0,1260.0 w=130.5 h=43.0
+PaintImage 683.0,1336.9,128.0,40.0 id=68
+PaintImage 821.0,1336.9,128.0,40.0 id=70
+PaintImage 959.0,1336.9,128.0,40.0 id=72
+PaintImage 1097.0,1330.9,120.0,58.0 id=74
+PaintParagraph 470.0,1319.0 w=960.0 h=71.0
+PaintParagraph 470.0,1438.0 w=245.2 h=12.0
+PaintImage 715.2,1419.0,50.0,55.0 id=78

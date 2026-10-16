@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<!--
+Copyright (c) 1995-2019, craigslist, Inc.
+-->
+<html>
+<head>
+    <script type="text/javascript">
+        (function () {
+            var i, k, end;
+            var localStorage = false;
+            var localStorageIsAvailable = false;
+            var testKey = 'key';
+            var testValue = 'value';
+            try {
+                localStorage = window.localStorage;
+
+                var deleteList = [];
+                for (i = 0, end = localStorage.length; i < end; i++) {
+                    k = localStorage.key(i);
+                    if (/^undefined:/.test(k) || /^[^:]+:[^:]+:/.test(k)) {
+                        deleteList.push(k);
+                    }
+                }
+                deleteList.forEach(function (k) {
+                    localStorage.removeItem(k);
+                });
+
+                localStorage.setItem(testKey, testValue);
+                if (localStorage.getItem(testKey) === testValue) {
+                    localStorage.removeItem(testKey);
+                    if (localStorage.getItem(testKey) === null) {
+                        localStorageIsAvailable = true
+                    }
+                }
+            } catch (e) {
+            }
+
+            var referrer = document.referrer.match(/https:\/\/[^/]+/);
+            referrer = referrer && referrer[0];
+            if (!/\.craigslist.org$/.test(referrer)) {
+                return;
+            }
+
+            if (!localStorageIsAvailable) {
+                window.parent.postMessage(JSON.stringify({ action: 'fail' }), referrer);
+                return;
+            }
+
+            window.addEventListener("message", function (e) {
+                var data = JSON.parse(e.data);
+                var messageAction = data.action;
+                var messageData = data.data;
+                if (e.origin === referrer) {
+                    switch (messageAction) {
+                        case 'clear':
+                            localStorage.clear();
+                            return;
+
+                        case 'update':
+                            messageData.deleted.forEach(function (k) {
+                                localStorage.removeItem(k)
+                            });
+                            Object.keys(messageData.updates).forEach(function (k) {
+                                localStorage.setItem(k, messageData.updates[k]);
+                            });
+                            return;
+
+                        case 'set':
+                            localStorage.setItem(messageData.key, messageData.value);
+                            return;
+
+                        case 'remove':
+                            localStorage.removeItem(messageData.key);
+                            return;
+
+                        default:
+                            // ignore
+                    }
+                }
+            });
+
+            try {
+                var data = {};
+                for (k, i = 0, end = localStorage.length; i < end; i++) {
+                    k = localStorage.key(i);
+                    data[k] = localStorage.getItem(k);
+                }
+                window.parent.postMessage(JSON.stringify({ action: 'init', data: data }), referrer);
+            } catch (e) {
+                window.parent.postMessage(JSON.stringify({ action: 'fail' }), referrer);
+            }
+        }())
+    </script>
+</head>
+<body></body>
+</html>

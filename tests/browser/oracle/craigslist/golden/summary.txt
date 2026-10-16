@@ -1,0 +1,9 @@
+url=https://www.craigslist.org/about/sites
+nodes=2627
+size=1900x2400
+docHeight=3055.7
+displayItems=62
+images=0
+webFonts=0
+misses=0
+pngFnv=-2cca53a1816d8b78

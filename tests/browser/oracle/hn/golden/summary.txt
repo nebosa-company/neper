@@ -1,0 +1,9 @@
+url=https://news.ycombinator.com
+nodes=431
+size=1900x1113
+docHeight=1113.0
+displayItems=172
+images=32
+webFonts=0
+misses=0
+pngFnv=7e2c60bdd048a0b4

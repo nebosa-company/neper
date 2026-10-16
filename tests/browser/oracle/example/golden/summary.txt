@@ -1,0 +1,9 @@
+url=https://example.com/
+nodes=3
+size=1900x334
+docHeight=334.0
+displayItems=2
+images=0
+webFonts=0
+misses=0
+pngFnv=-10e60eafbc60aa5a

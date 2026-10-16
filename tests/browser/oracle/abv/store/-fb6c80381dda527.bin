@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <title>АБВ Поща - Вход</title>
+    <meta charset="utf-8" />
+    <link rel="canonical" href="https://www.abv.bg/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="https://img.abv.bg/ico/abv.svg?v=2" />
+    <link rel="icon" type="image/png" sizes="48x48" href="https://img.abv.bg/ico/abv.png?v2" />
+    <meta name="theme-color" content="#1ba916" />
+    <meta name="description" content="АБВ Поща е бърза, удобна и сигурна! Разполагате с 15 GB пространство, управлявате контакти, а пощата ви е защитена. Писмата ви са навсякъде с вас, с мобилното приложение на АБВ." />
+    <meta name="google-play-app" content="app-id=bg.abv.andro.emailapp" />
+    <meta name="facebook-domain-verification" content="r8wf98ijnb3q5toqh0t9p5gtvkh6qq" />
+    <meta name="apple-itunes-app" content="app-id=1024988497" />
+    <link rel="apple-touch-icon" href="https://img.abv.bg/abvmobile/i/ABV_icon_144x144_v2.png" />
+    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="https://img.abv.bg/abvmobile/i/ABV_icon_144x144_v2.png" />
+    <link rel="apple-touch-icon-precomposed" sizes="167x167" href="https://img.abv.bg/abvmobile/i/ABV_icon_167x167.png" />
+
+    <meta name="client-base-url" content="/" />
+
+    <!-- mobile vs desktop bundle selected server-side from the User-Agent (see LoginController/UserAgentService) -->
+    <link rel="stylesheet" type="text/css" href="./css/main.min.css?v=3.4" />
+    <!-- common scripts -->
+    <script type="text/javascript" src="./js/jquery.min.js"></script>
+    <script type="text/javascript" src="./js/main.min.js?v=3.6" defer></script>
+    <!-- common scripts -->
+    <!-- the "АБВ Профил" question of the header's profile link; only the desktop header has that link -->
+    <link rel="stylesheet" type="text/css" href="./css/profile-choice.css?v=1.1" />
+    <script type="text/javascript" src="./js/profile-choice.js?v=1.0" defer></script>
+</head>
+
+<body id="abv-oauth">
+
+<script>
+    window.dataURL = document.querySelector('meta[name="client-base-url"]').content + 'data';
+</script>
+
+
+
+<header class="ribbon x"></header>
+<!-- main content -->
+<main id="siteContent" class="mainWrapper">
+    <!-- login form -->
+    <div class="abv-loginLeft">
+        <form id="loginForm" class="abv-cont abv-entrance fl" action="https://id.abv.bg/login" method="post"><input type="hidden" name="_csrf" value="Tt1jX52zJdfvMJCQIVRJpTThKE0j0rDQYPEp5uSUhOa6Bd_RLeQAb_-CQbTCBaOpFnl9kgKFBSwa6tb9UZVN1oKt5dSKZOq1"/>
+            <input type="hidden" name="response_type" value="code">
+            <input type="hidden" name="client_id" value="home">
+            <input type="hidden" name="scope" value="openid profile read write">
+            <input type="hidden" name="state" value="K4Gj74m7yZPf_zb06dLU0MLjamL01vmNCdlgOBzo_XA=">
+            <input type="hidden" name="redirect_uri" value="https://home.abv.bg/login/oauth2/code/home">
+            <input type="hidden" name="nonce" value="VsLB2xh3IrqWQD1IisNDBpq041YZeK-CTyWLC09gVMc">
+            <input type="hidden" name="code_challenge" value="yTrOa8jvyo7Nb3Kk56jpjjkJzs7MTlSWPrdWWk-z1y0">
+            <input type="hidden" name="code_challenge_method" value="S256">
+            <input type="hidden" name="ts" value="1792165751">
+
+            <h2>Вход в АБВ Поща</h2>
+            <h3>АБВ потребител:</h3>
+            <p>
+                <input id="username" name="username" type="text" class="abv-LoginField" value="" maxlength="128" />
+                <!-- <span class="abv-red abv-error">Моля попълнете полето АБВ потребител.</span> -->
+            </p>
+            <h3>Парола:</h3>
+            <p>
+                <input id="password" name="password" data-min-chars="6" type="password" value="" maxlength="30" />
+                <!-- <span class="abv-red abv-error">Моля попълнете полето Парола.</span> -->
+            </p>
+
+            
+
+            <p class="x">
+                <input id="loginBut" type="submit" value="Вход" class="fl" />
+                <a href="https://passport.abv.bg/app/profiles/lostpass" class="abv-ml10 fl">Забравена парола</a>
+            </p>
+            <p>
+                Нямаш профил в АБВ? <a href="https://passport.abv.bg/app/profiles/registration"><strong>Регистрирай се!</strong></a>
+            </p>
+        </form>
+    </div>
+    <!-- /login form -->
+</main>
+<!-- /main content -->
+
+<footer></footer>
+
+<dialog id="profileChoice" class="abv-profile-choice"
+        aria-labelledby="profileChoiceTitle" aria-describedby="profileChoiceText"
+        data-cookie-domain="abv.bg">
+    <div class="abv-profile-choice-box">
+        <h2 id="profileChoiceTitle">АБВ Профил</h2>
+        <p id="profileChoiceText">Искате ли да пробвате новия АБВ Профил?</p>
+        <p class="abv-profile-choice-answers">
+            <a class="button" data-answer="yes" href="https://profile.abv.bg">Да</a>
+            <a class="button abv-profile-choice-no" data-answer="no" href="https://passport.abv.bg/app/profiles/login">Не</a>
+        </p>
+    </div>
+</dialog>
+
+<script>
+(function () {
+    // A document restored from the bfcache comes back with the hidden state/PKCE of an authorization
+    // request that no longer exists — AuthorizationFailureHandler dropped the cookie and the re-render
+    // at "/" minted a new one — so the restored form would die at the callback on a state mismatch
+    // (authorization_request_not_found, deliberately silent) even for a correct password. Chrome
+    // declines to cache this page at all (notRestoredReasons: response-cache-control-no-store), but
+    // Safari's page cache ignores no-store, so the guard earns its keep there.
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            location.reload();
+        }
+    });
+
+    // This document can be the SECOND entry for its own URL: the login POST opened a history entry of
+    // its own and the 302 chain (IdP -> callback -> "/") only replaced inside it, leaving the page we
+    // came from behind us at the same URL. Whether that duplicate exists is an ENGINE decision the
+    // server cannot know — Gecko folds a load whose committed URL equals the current entry's, Chrome
+    // and WebKit append — so it is measured, not assumed, and nothing below is specific to a login
+    // error: each render records its URL and the history depth, and the entry behind this one is a
+    // same-URL duplicate exactly when this load added one entry to a render that was at this URL.
+    //
+    // Being wrong the other way is destructive — Firefox holds a single entry, so replacing it strands
+    // the user off-site — so every uncertain path opts out: an unreadable baseline, a jump of more than
+    // one entry, a different URL, or a back/forward/reload load, which appended nothing and therefore
+    // cannot have created a duplicate.
+    var LENGTH_KEY = 'abv_history_length';
+    var HREF_KEY = 'abv_history_href';
+
+    var navigationType = (performance.getEntriesByType('navigation')[0] || {}).type;
+    var previousLength, previousHref;
+    try {
+        previousLength = parseInt(sessionStorage.getItem(LENGTH_KEY), 10);
+        previousHref = sessionStorage.getItem(HREF_KEY);
+        sessionStorage.setItem(LENGTH_KEY, String(history.length));
+        sessionStorage.setItem(HREF_KEY, location.href);
+    } catch (e) {
+        return; // storage unavailable — leave the browser's own behaviour alone
+    }
+
+    if (navigationType !== 'navigate'
+            || history.length !== previousLength + 1
+            || previousHref !== location.href) {
+        return;
+    }
+
+    // Spending this entry instead of pushing a new one puts Back one press from a live page. Applies to
+    // any link that would navigate THIS tab, whatever its host: replacing a dead entry is right for all
+    // of them. Everything that lands somewhere else is left to the browser.
+    document.addEventListener('click', function (event) {
+        if (event.defaultPrevented || event.button !== 0
+                || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return; // new tab / new window — that navigation is not ours to replace
+        }
+
+        var link = event.target.closest && event.target.closest('a[href]');
+        if (!link || link.hasAttribute('download')) {
+            return; // not a navigation
+        }
+        if (link.target && link.target !== '_self') {
+            return; // lands in another tab or frame
+        }
+        if (link.protocol !== 'http:' && link.protocol !== 'https:') {
+            return; // mailto:, tel:, javascript: — no document navigation
+        }
+        if (link.hash && link.origin === location.origin
+                && link.pathname === location.pathname && link.search === location.search) {
+            return; // same-document anchor jump
+        }
+
+        event.preventDefault();
+        location.replace(link.href);
+    });
+})();
+</script>
+
+</body>
+</html>

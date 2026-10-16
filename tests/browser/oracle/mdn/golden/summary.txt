@@ -1,0 +1,9 @@
+url=https://developer.mozilla.org/en-US/docs/Web/CSS
+nodes=281
+size=1900x2400
+docHeight=4042.4
+displayItems=142
+images=0
+webFonts=13
+misses=0
+pngFnv=-2298f7e0fb5ce88f

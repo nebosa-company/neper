@@ -1,0 +1,86 @@
+/*
+ * The header's "АБВ профил" link (built by main.min.js) asks whether to use the new АБВ Профил, and the answer is
+ * remembered for 7 days in a cookie on the parent domain, so every host under it can read it. With an answer saved the
+ * link goes straight to that answer's page; the question and its two addresses come from the page
+ * (templates/fragments/profile-choice.html).
+ */
+(function (document, location) {
+    var dialog = document.getElementById('profileChoice');
+    if (!dialog || typeof dialog.showModal !== 'function') {
+        return; // no <dialog> support: the link keeps its own address, the legacy page
+    }
+
+    var COOKIE_NAME = '_abv_new_profile';
+    var COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // seconds
+    // The link is found by the address main.min.js gives it, and marked, because its address changes on first use.
+    var LINK = 'header a[href="https://passport.abv.bg/app/profiles/login"], header a[data-profile-choice]';
+
+    function savedAnswer() {
+        var match = new RegExp('(?:^|;\\s*)' + COOKIE_NAME + '=(yes|no)(?:;|$)').exec(document.cookie);
+        return match ? match[1] : null;
+    }
+
+    function saveAnswer(answer) {
+        document.cookie = COOKIE_NAME + '=' + answer
+                + '; Max-Age=' + COOKIE_MAX_AGE
+                + '; Domain=' + dialog.getAttribute('data-cookie-domain')
+                + '; Path=/; SameSite=Lax'
+                + (location.protocol === 'https:' ? '; Secure' : '');
+    }
+
+    function answerUrl(answer) {
+        return dialog.querySelector('a[data-answer="' + answer + '"]').href;
+    }
+
+    // The link is pointed at the saved answer's page (the legacy one while there is none) before the browser follows
+    // it, so a new tab or window opened with a modifier key, the middle button or the context menu goes there too.
+    // Only a plain click with no saved answer is stopped, to ask the question. Capture phase: this runs before the
+    // document click handler of login.html, which skips a click whose default action was prevented.
+    function onLinkActivation(event) {
+        var link = event.target.closest && event.target.closest(LINK);
+        if (!link) {
+            return;
+        }
+        link.setAttribute('data-profile-choice', '');
+
+        var answer = savedAnswer();
+        link.href = answerUrl(answer || 'no');
+
+        if (answer || event.type !== 'click' || event.button !== 0
+                || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+        }
+        event.preventDefault();
+        dialog.showModal();
+    }
+
+    document.addEventListener('click', onLinkActivation, true);
+    document.addEventListener('auxclick', onLinkActivation, true);
+    document.addEventListener('contextmenu', onLinkActivation, true);
+
+    // The answers are plain links: the cookie is written on the way, and the browser (or login.html's handler) follows
+    // them like any other link.
+    dialog.addEventListener('click', function (event) {
+        var answer = event.target.closest('a[data-answer]');
+        if (answer) {
+            saveAnswer(answer.getAttribute('data-answer'));
+        }
+    });
+
+    // A click on the backdrop targets the <dialog> itself, as the box fills it. One that was pressed inside the box
+    // (a text selection dragged out of it) does not close it.
+    var pressedOnBackdrop = false;
+    dialog.addEventListener('pointerdown', function (event) {
+        pressedOnBackdrop = event.target === dialog;
+    });
+    dialog.addEventListener('click', function (event) {
+        if (pressedOnBackdrop && event.target === dialog) {
+            dialog.close();
+        }
+    });
+
+    // Closed on the way out, so a page restored from the back-forward cache does not come back with the question open.
+    window.addEventListener('pagehide', function () {
+        dialog.close();
+    });
+})(document, location);

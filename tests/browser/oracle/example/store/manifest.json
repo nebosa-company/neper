@@ -1,0 +1,49 @@
+[
+ {
+  "key": "4f231131329a5b84",
+  "method": "GET",
+  "url": "https://example.com/",
+  "finalUrl": "https://example.com/",
+  "status": 200,
+  "contentType": "text/html; charset=utf-8",
+  "headers": {
+   "connection": "keep-alive",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "last-modified": "Tue, 13 Oct 2026 22:05:48 GMT",
+   "date": "Fri, 16 Oct 2026 15:45:12 GMT",
+   "transfer-encoding": "chunked",
+   "content-encoding": "gzip",
+   "age": "12778",
+   "cf-ray": "a4b830745e6805e7-MAD",
+   "cf-cache-status": "HIT",
+   "content-type": "text/html; charset=utf-8",
+   "server": "cloudflare",
+   "allow": "GET, HEAD"
+  },
+  "bytes": 577
+ },
+ {
+  "key": "4a24559888926aa6",
+  "method": "GET",
+  "url": "https://example.com/s.js",
+  "finalUrl": "https://example.com/s.js",
+  "status": 200,
+  "contentType": "text/javascript; charset=utf-8",
+  "headers": {
+   "connection": "keep-alive",
+   "last-modified": "Tue, 13 Oct 2026 22:05:48 GMT",
+   "transfer-encoding": "chunked",
+   "date": "Fri, 16 Oct 2026 15:45:12 GMT",
+   "content-encoding": "gzip",
+   "age": "12673",
+   "cf-cache-status": "HIT",
+   "content-type": "text/javascript; charset=utf-8",
+   "server": "cloudflare",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-ray": "a4b8307528aa05e7-MAD",
+   "etag": "W/\"6aceab3c-7ab\"",
+   "allow": "GET, HEAD"
+  },
+  "bytes": 1963
+ }
+]
