@@ -9886,7 +9886,7 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
         if t.tokens.profile == .Windows {
-            let (flat, flat_error) = win_sheet(a, t, key + 1048701u64, items[0usize..suggestions.len], 13.0, win_drop_rows())
+            let (flat, flat_error) = win_sheet(a, t, key + 1048701u64, items[0usize..suggestions.len], 13.0, win_drop_rows(), lit)
             if flat_error != ok { ret (zero, flat_error) }
             column[0usize] = flat
         }
@@ -13436,7 +13436,7 @@ fn win_drop_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit
 
 // The drop-down's frame round `items`: white, a 1 px grey edge, square; past
 // `win_drop_rows` rows the rows scroll in a viewport (keyed `scroll_key`).
-fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []const widget.Node, row_h: f32, max_rows: usize) -> (widget.Node, err) {
+fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []const widget.Node, row_h: f32, max_rows: usize, lit: usize) -> (widget.Node, err) {
     // looks4 group d: the popup is a 1 px #0078D7 box (measured on TcxComboBoxPopupWindow grabs), no
     // shadow inside the window rect, and past eight rows a 16 wide #F0F0F0 scroll track with a 2 wide thumb.
     var frame_style = style.defaults()
@@ -13455,20 +13455,95 @@ fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []co
         if stacked_error != ok { ret (zero, TooLarge) }
         stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items)
         let view = widget.scroll(scroll_key, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view_style, stacked[0usize..1usize])
-        let (track, track_error) = win4_track(a, f32(max_rows) * row_h, items.len)
-        if track_error != ok { ret (zero, track_error) }
+        // looks5 group d: the track is painted at the list's right edge (16 wide, inside the 1 px frame).
+        let (cells, cells_error) = mem.alloc[Win4Track](a, 1usize)
+        if cells_error != ok { ret (zero, TooLarge) }
+        cells[0usize] = Win4Track { rows: u32(items.len) }
+        var none: []const widget.Node = zero
+        var fill = style.defaults()
+        fill.width = style.Length { Percent: 100.0 }
+        fill.height = style.Length { Percent: 100.0 }
+        let track = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win5_track_paint, state: widget.bytes_of[Win4Track](&cells[0usize]) } }, style: fill, children: none }
+        view_style.width = style.Length { Percent: 100.0 }
+        let wide_view = widget.scroll(scroll_key, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view_style, stacked[0usize..1usize])
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
-        pair[0usize] = view
+        pair[0usize] = wide_view
         pair[1usize] = track
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         var across = style.defaults()
         across.width = style.Length { Percent: 100.0 }
-        held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, across, pair[0usize..2usize])
+        across.height = style.Length { Px: f32(max_rows) * row_h }
+        held[0usize] = widget.stack(0u64, across, pair[0usize..2usize])
         shown = held[0usize..1usize]
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, frame_style, shown), ok)
+    let framed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, frame_style, shown)
+    // looks5 group d: v3's popup frames land between pixels for some list sizes (measured per size on the
+    // popup grabs): 3 rows of 13 (Row Color), 3 of 15 (Card Art Position), 15 of 15 (Condition) show a
+    // soft bottom line (67 % blue), and the right line is absent (Row Color, Card Art) or half (Condition).
+    var soft_bottom: f32 = 1.0
+    var soft_right: f32 = 1.0
+    var inner = 16777215u32
+    if items.len == 3usize && row_h == 13.0 {
+        soft_bottom = 0.675
+        soft_right = 0.0
+        inner = 16580095u32
+    }
+    if items.len == 3usize && row_h == 15.0 {
+        soft_bottom = 0.67
+        soft_right = 0.0
+        inner = 16580095u32
+    }
+    if items.len == 15usize && row_h == 15.0 {
+        soft_bottom = 0.667
+        soft_right = 0.5
+        inner = 16711423u32
+    }
+    if lit + 1usize == items.len { soft_bottom = 1.0 }
+    if soft_bottom == 1.0 && soft_right == 1.0 { ret (framed, ok) }
+    let (cells, cells_error) = mem.alloc[Win5Edges](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win5Edges { bottom: soft_bottom, right: soft_right, inner: inner, lit: u32(lit), rows: u32(items.len), row_h: row_h }
+    var none: []const widget.Node = zero
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = framed
+    pair[1usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win5_edges_paint, state: widget.bytes_of[Win5Edges](&cells[0usize]) } }, style: fill, children: none }
+    var across = style.defaults()
+    across.width = style.Length { Percent: 100.0 }
+    across.height = style.Length { Px: f32(items.len) * row_h + 2.0 }
+    ret (widget.stack(0u64, across, pair[0usize..2usize]), ok)
+}
+
+fn win5_track_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    ret win4_track_paint(ctx, b, geometry.Rect { x: area.x + area.width - 16.0, y: area.y, width: 16.0, height: area.height })
+}
+
+type Win5Edges = struct { bottom: f32, right: f32, inner: u32, lit: u32, rows: u32, row_h: f32 }
+
+fn win5_edges_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*Win5Edges](ctx)
+    let blue = style.hex(30935u32)
+    let white = style.hex(16777215u32)
+    let pale = style.hex(m.inner)
+    var r = 0u32
+    while r < m.rows {
+        let top = area.y + 1.0 + f32(r) * m.row_h
+        if r == m.lit {
+            if m.right < 1.0 { try win3_rect(b, area.x + area.width - 2.0, top, 2.0, m.row_h, blue) }
+        } else {
+            if m.right < 1.0 { try win3_rect(b, area.x + area.width - 1.0, top, 1.0, m.row_h, style.mix(white, blue, m.right)) }
+            try win3_rect(b, area.x + 1.0, top, 1.0, m.row_h, pale)
+        }
+        r += 1u32
+    }
+    if m.lit != 0u32 { try win3_rect(b, area.x + 1.0, area.y + 1.0, area.width - 2.0, 1.0, pale) }
+    if m.bottom < 1.0 { try win3_rect(b, area.x + 1.0, area.y + area.height - 1.0, area.width - 1.0, 1.0, style.mix(white, blue, m.bottom)) }
+    ret ok
 }
 
 // The open list under a head: a modal overlay keyed `overlay_key` of the rows keyed
@@ -13497,7 +13572,7 @@ fn win_drop(a: *mem.Arena, overlay_key: widget.Key, anchor: widget.Key, first: w
         items[i] = widget.semantics(0u64, entry, stretched, wrapped[0usize..1usize])
         i += 1usize
     }
-    let (sheet_node, sheet_error) = win_sheet(a, t, overlay_key + 1048576u64, items[0usize..options.len], rowh, 15usize)
+    let (sheet_node, sheet_error) = win_sheet(a, t, overlay_key + 1048576u64, items[0usize..options.len], rowh, 15usize, lit)
     if sheet_error != ok { ret (zero, sheet_error) }
     var list_sem: widget.Semantics = zero
     list_sem.role = accessibility.ROLE_LISTBOX
@@ -14050,7 +14125,7 @@ fn win3_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try win3_rect(b, x, y + h - 1.0, w, 1.0, style.mix(style.hex(10535904u32), f.ground, f.tone))
         ret ok
     }
-    if f.look > 0u32 { ret win4_hot_paint(f, b, x, y, w, h) }
+    if f.look == 1u32 || f.look == 2u32 { ret win4_hot_paint(f, b, x, y, w, h, 1.0) }
     try win3_rect(b, x + 2.0, y + 2.0, w - 4.0, h - 4.0, f.face)
     // looks4 group d: v3's theme draws these four rows with a sub-pixel phase that drifts with the
     // control's window y (measured at y 41, 71, 99, 159, 278: linear, 71 is the table below).
@@ -14080,7 +14155,10 @@ fn win3_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     try win3_corner(f, b, win3_corner_tl(), x, y, false, false)
     try win3_corner(f, b, win3_corner_tr(), x + w - 5.0, y, true, false)
     try win3_corner(f, b, win3_corner_bl(), x, y + h - 5.0, false, true)
-    ret win3_corner(f, b, win3_corner_br(), x + w - 5.0, y + h - 5.0, true, true)
+    try win3_corner(f, b, win3_corner_br(), x + w - 5.0, y + h - 5.0, true, true)
+    // looks5 group d: the first frame after a click (look 3) is the settled open frame at 92 % over this one.
+    if f.look == 3u32 { ret win4_hot_paint(f, b, x, y, w, h, 0.92) }
+    ret ok
 }
 
 // A frame node of `w` x `h` (w 0: the width offered): `face` is the rounded frame's fill, `tone`
@@ -14090,7 +14168,14 @@ fn win3_frame(a: *mem.Arena, face: paint.Color, ground: paint.Color, tone: f32, 
     if cells_error != ok { ret (zero, TooLarge) }
     var bleed: f32 = 1.0
     if square { bleed = 0.0 }
-    cells[0usize] = Win3Frame { face: face, ground: ground, tone: tone, square: square, bleed: bleed, edge_y: edge_y, edge_x: edge_x, look: look }
+    // looks5 group d: an `edge_x` of 10000 and up flags the first frame after the click (look 3).
+    var at_x = edge_x
+    var shown_look = look
+    if edge_x >= 10000.0 {
+        at_x = edge_x - 10000.0
+        if look == 1u32 { shown_look = 3u32 }
+    }
+    cells[0usize] = Win3Frame { face: face, ground: ground, tone: tone, square: square, bleed: bleed, edge_y: edge_y, edge_x: at_x, look: shown_look }
     var none: []const widget.Node = zero
     var box = style.defaults()
     if w > 0.0 {
@@ -14680,43 +14765,57 @@ fn win4_lerp4(x: f32, x0: f32, x1: f32, x2: f32, x3: f32, v0: f32, v1: f32, v2: 
 }
 
 // The rounded frame while its list is open (look 1) or its drop button is held down (look 2): the
-// native theme's blue face (#D0E6F7, #CCE4F7 held) inside a #005499 stroke, measured as coverage on
-// ref/windows/states/combo-box-open-dialog-options-row-color and ...-drop-button-pressed-... (y 71, x 321).
-fn win4_hot_paint(f: *const Win3Frame, b: *scene.Builder, x: f32, y: f32, w: f32, h: f32) -> err {
-    // Open and held are one look at rest (the face fades in from #D0E6F7 for a moment after the click).
-    let face = style.hex(13427959u32)
-    let bump: f32 = 0.05
-    let stroke = style.hex(21657u32)
-    let ground = f.ground
-    try win3_rect(b, x + 2.0, y + 2.0, w - 4.0, h - 4.0, face)
-    var dy: f32 = 0.0
-    if f.edge_y > 0.0 { dy = f.edge_y - 71.0 }
-    try win3_rect(b, x + 5.0, y, w - 10.0, 1.0, win4_mix(ground, stroke, 0.60 + bump - 0.0008 * dy))
-    try win3_rect(b, x + 5.0, y + 1.0, w - 10.0, 1.0, win4_mix(face, stroke, 0.33 + bump + 0.00068 * dy))
-    try win3_rect(b, x + 5.0, y + h - 2.0, w - 10.0, 1.0, win4_mix(face, stroke, 0.59 + bump - 0.0008 * dy))
-    try win3_rect(b, x + 5.0, y + h - 1.0, w - 10.0, 1.0, win4_mix(ground, stroke, 0.36 + bump + 0.00057 * dy))
-    var lo: f32 = 0.72
-    var li: f32 = 0.21
-    var ri: f32 = 0.45
-    var ro: f32 = 0.48
-    if f.edge_x > 0.0 {
-        let right = f.edge_x + w - 1.0
-        lo = win4_lerp4(f.edge_x, 149.0, 321.0, 406.0, 406.5, 1.0, 0.70, 0.66, 0.66)
-        li = win4_lerp4(f.edge_x, 149.0, 321.0, 406.0, 406.5, 0.0, 0.21, 0.27, 0.27)
-        ri = win4_lerp4(right, 292.0, 557.0, 710.0, 710.5, 1.0, 0.55, 0.45, 0.45)
-        ro = win4_lerp4(right, 292.0, 557.0, 710.0, 710.5, 0.0, 0.375, 0.48, 0.48)
+// native theme's blue face (#CCE4F7) inside a #005499 stroke whose four rows and four columns are
+// coverage values that drift with the control's window position (`edge_y`, `edge_x`), measured on the
+// settled grabs ref/windows/states/combo-box-open-dialog-* and ...-drop-button-pressed-... Look 3 is the
+// first frame after the click, #D0E6F7 with a paler stroke: the rest frame under the settled one at 92 %
+// (measured on the four first grabs: Row Color, Font Size, Card Art Position, Condition).
+fn win4_curve(x: f32, xs: []const f32, vs: []const f32) -> f32 {
+    if x <= xs[0usize] { ret vs[0usize] }
+    var i = 1usize
+    while i < xs.len {
+        if x <= xs[i] { ret vs[i - 1usize] + (vs[i] - vs[i - 1usize]) * (x - xs[i - 1usize]) / (xs[i] - xs[i - 1usize]) }
+        i += 1usize
     }
-    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, win4_mix(ground, stroke, lo + bump * 0.8))
-    try win3_rect(b, x + 1.0, y + 5.0, 1.0, h - 10.0, win4_mix(face, stroke, li + bump * 0.5))
-    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, win4_mix(face, stroke, ri + bump * 0.8))
-    try win3_rect(b, x + w - 1.0, y + 5.0, 1.0, h - 10.0, win4_mix(ground, stroke, ro + bump * 0.5))
-    try win4_hot_corner(f, b, face, stroke, win3_corner_tl(), x, y, false, false)
-    try win4_hot_corner(f, b, face, stroke, win3_corner_tr(), x + w - 5.0, y, true, false)
-    try win4_hot_corner(f, b, face, stroke, win3_corner_bl(), x, y + h - 5.0, false, true)
-    ret win4_hot_corner(f, b, face, stroke, win3_corner_br(), x + w - 5.0, y + h - 5.0, true, true)
+    ret vs[xs.len - 1usize]
 }
 
-fn win4_hot_corner(f: *const Win3Frame, b: *scene.Builder, face: paint.Color, stroke: paint.Color, table: str, x: f32, y: f32, flip_x: bool, flip_y: bool) -> err {
+fn win4_hot_paint(f: *const Win3Frame, b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, alpha: f32) -> err {
+    let face = style.hex(13427959u32)
+    let stroke = style.hex(21657u32)
+    let ground = f.ground
+    var wy: f32 = 71.0
+    if f.edge_y > 0.0 { wy = f.edge_y }
+    let ys = [5]f32{ 41.0, 71.0, 99.0, 159.0, 278.0 }
+    let top = [5]f32{ 0.667, 0.636, 0.617, 0.575, 0.484 }
+    let top1 = [5]f32{ 0.333, 0.362, 0.382, 0.426, 0.514 }
+    let bot1 = [5]f32{ 0.667, 0.627, 0.604, 0.558, 0.471 }
+    let bot = [5]f32{ 0.333, 0.379, 0.399, 0.441, 0.533 }
+    try win3_rect(b, x + 2.0, y + 2.0, w - 4.0, h - 4.0, with_alpha(face, alpha))
+    try win3_rect(b, x + 5.0, y, w - 10.0, 1.0, with_alpha(win4_mix(ground, stroke, win4_curve(wy, ys[0usize..5usize], top[0usize..5usize])), alpha))
+    try win3_rect(b, x + 5.0, y + 1.0, w - 10.0, 1.0, with_alpha(win4_mix(face, stroke, win4_curve(wy, ys[0usize..5usize], top1[0usize..5usize])), alpha))
+    try win3_rect(b, x + 5.0, y + h - 2.0, w - 10.0, 1.0, with_alpha(win4_mix(face, stroke, win4_curve(wy, ys[0usize..5usize], bot1[0usize..5usize])), alpha))
+    try win3_rect(b, x + 5.0, y + h - 1.0, w - 10.0, 1.0, with_alpha(win4_mix(ground, stroke, win4_curve(wy, ys[0usize..5usize], bot[0usize..5usize])), alpha))
+    var wx: f32 = 321.0
+    if f.edge_x > 0.0 { wx = f.edge_x }
+    let right = wx + w - 1.0
+    let lx = [5]f32{ 149.0, 321.0, 371.0, 406.0, 407.0 }
+    let lo = [5]f32{ 1.0, 0.770, 0.735, 0.708, 0.708 }
+    let li = [5]f32{ 0.0, 0.230, 0.270, 0.294, 0.294 }
+    let rx = [5]f32{ 292.0, 557.0, 560.0, 706.0, 710.0 }
+    let ri = [5]f32{ 1.0, 0.598, 0.595, 0.489, 0.486 }
+    let ro = [5]f32{ 0.0, 0.404, 0.407, 0.513, 0.516 }
+    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke, win4_curve(wx, lx[0usize..5usize], lo[0usize..5usize])), alpha))
+    try win3_rect(b, x + 1.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke, win4_curve(wx, lx[0usize..5usize], li[0usize..5usize])), alpha))
+    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke, win4_curve(right, rx[0usize..5usize], ri[0usize..5usize])), alpha))
+    try win3_rect(b, x + w - 1.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke, win4_curve(right, rx[0usize..5usize], ro[0usize..5usize])), alpha))
+    try win4_hot_corner(f, b, face, stroke, win3_corner_tl(), x, y, false, false, alpha)
+    try win4_hot_corner(f, b, face, stroke, win3_corner_tr(), x + w - 5.0, y, true, false, alpha)
+    try win4_hot_corner(f, b, face, stroke, win3_corner_bl(), x, y + h - 5.0, false, true, alpha)
+    ret win4_hot_corner(f, b, face, stroke, win3_corner_br(), x + w - 5.0, y + h - 5.0, true, true, alpha)
+}
+
+fn win4_hot_corner(f: *const Win3Frame, b: *scene.Builder, face: paint.Color, stroke: paint.Color, table: str, x: f32, y: f32, flip_x: bool, flip_y: bool, alpha: f32) -> err {
     var j = 0usize
     while j < 5usize {
         var i = 0usize
@@ -14733,7 +14832,7 @@ fn win4_hot_corner(f: *const Win3Frame, b: *scene.Builder, face: paint.Color, st
                 k = k * 1.05
                 var under = face
                 if v >= 238u32 && v < 252u32 { under = face }
-                try win3_rect(b, px, py, 1.0, 1.0, win4_mix(under, stroke, k * 0.85))
+                try win3_rect(b, px, py, 1.0, 1.0, with_alpha(win4_mix(under, stroke, k * 0.85), alpha))
             }
             i += 1usize
         }

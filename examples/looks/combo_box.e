@@ -300,9 +300,9 @@ fn build_pick(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
 type Open = struct { name: str, width: f32, high: f32, edge_x: f32, edge_y: f32, active: usize, rows: usize, set: usize }
 
 fn open_spec(n: usize) -> Open {
-    if n == 1usize { ret Open { name: "combo_box_open_color", width: 389.0, high: 41.0, edge_x: 321.0, edge_y: 71.0, active: 1usize, rows: 3usize, set: 0usize } }
+    if n == 1usize { ret Open { name: "combo_box_open_color", width: 389.0, high: 41.0, edge_x: 10321.0, edge_y: 71.0, active: 1usize, rows: 3usize, set: 0usize } }
     if n == 2usize { ret Open { name: "combo_box_open_color2", width: 389.0, high: 41.0, edge_x: 321.0, edge_y: 71.0, active: 2usize, rows: 3usize, set: 0usize } }
-    if n == 3usize { ret Open { name: "combo_box_open_size", width: 389.0, high: 54.0, edge_x: 321.0, edge_y: 159.0, active: 1usize, rows: 4usize, set: 1usize } }
+    if n == 3usize { ret Open { name: "combo_box_open_size", width: 389.0, high: 54.0, edge_x: 10321.0, edge_y: 159.0, active: 1usize, rows: 4usize, set: 1usize } }
     if n == 4usize { ret Open { name: "combo_box_open_size2", width: 389.0, high: 54.0, edge_x: 321.0, edge_y: 159.0, active: 3usize, rows: 4usize, set: 1usize } }
     if n == 5usize { ret Open { name: "combo_box_open_show", width: 143.0, high: 106.0, edge_x: 149.0, edge_y: 41.0, active: 1usize, rows: 21usize, set: 2usize } }
     ret Open { name: "combo_box_open_show2", width: 143.0, high: 106.0, edge_x: 149.0, edge_y: 41.0, active: 2usize, rows: 21usize, set: 2usize }

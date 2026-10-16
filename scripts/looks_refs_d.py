@@ -195,10 +195,10 @@ for _n, _src in [("combo_box_held", "combo-box-drop-button-pressed-options-row-c
 # image combo (TcxImageComboBox) heads and their popup lists, 15 px rows
 for _n, _head, _hx, _hy, _hw, _list, _lw, _lh, _with_head in [
     ("image_combo_box_open_auth", "combo-box-open-dialog-options-auth-type", 371, 71, 189, "combo-box-open-list-options-auth-type", 189, 32, True),
-    ("image_combo_box_open_auth2", "combo-box-open-dialog-options-auth-type-row2", 371, 71, 189, "combo-box-open-list-options-auth-type-row2", 189, 32, False),
+    ("image_combo_box_open_auth2", "combo-box-open-dialog-options-auth-type-row2", 371, 71, 189, "combo-box-open-list-options-auth-type-row2", 189, 32, True),
     ("image_combo_box_open_art", "combo-box-open-dialog-options-card-art-position", 406, 278, 151, "combo-box-open-list-options-card-art-position", 151, 47, True),
     ("image_combo_box_open_condition", "combo-box-open-dialog-options-condition", 371, 99, 335, "combo-box-open-list-options-condition", 335, 227, True),
-    ("image_combo_box_open_condition2", "combo-box-open-dialog-options-condition-row2", 371, 99, 335, "combo-box-open-list-options-condition-row2", 335, 227, False),
+    ("image_combo_box_open_condition2", "combo-box-open-dialog-options-condition-row2", 371, 99, 335, "combo-box-open-list-options-condition-row2", 335, 227, True),
 ]:
     _parts = [(_list, 0, 0, _lw, _lh, 4, 25, "RB" if ("condition" in _list or "card-art" in _list) else "")]
     if _with_head:

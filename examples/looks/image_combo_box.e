@@ -201,8 +201,8 @@ type Open = struct { name: str, width: f32, rows: usize, active: usize, edge_x: 
 fn open_spec(n: usize) -> Open {
     if n == 1usize { ret Open { name: "image_combo_box_open_auth", width: 189.0, rows: 2usize, active: 0usize, edge_x: 371.0, edge_y: 71.0, set: 0usize } }
     if n == 2usize { ret Open { name: "image_combo_box_open_auth2", width: 189.0, rows: 2usize, active: 1usize, edge_x: 371.0, edge_y: 71.0, set: 0usize } }
-    if n == 3usize { ret Open { name: "image_combo_box_open_art", width: 151.0, rows: 3usize, active: 0usize, edge_x: 406.0, edge_y: 278.0, set: 1usize } }
-    if n == 4usize { ret Open { name: "image_combo_box_open_condition", width: 335.0, rows: 15usize, active: 0usize, edge_x: 371.0, edge_y: 99.0, set: 2usize } }
+    if n == 3usize { ret Open { name: "image_combo_box_open_art", width: 151.0, rows: 3usize, active: 0usize, edge_x: 10406.0, edge_y: 278.0, set: 1usize } }
+    if n == 4usize { ret Open { name: "image_combo_box_open_condition", width: 335.0, rows: 15usize, active: 0usize, edge_x: 10371.0, edge_y: 99.0, set: 2usize } }
     ret Open { name: "image_combo_box_open_condition2", width: 335.0, rows: 15usize, active: 3usize, edge_x: 371.0, edge_y: 99.0, set: 2usize }
 }
 
