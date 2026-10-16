@@ -10862,6 +10862,24 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // source returns are laid over the painted cells (a plain text node draws the idle v3 cell). The
 // selected row is the grid's focused one: blue header, white name, a dotted rectangle round its
 // value cell. `options.height` (when larger than the content) is the grid's whole height.
+// looks5-e: the shape of a row of the Windows property grid when it is not the plain 17 px one: its content height, up to two extra
+// lines in its header cell and in its value cell (x from the grid's left edge, 0 for none) and the captions of its header cells
+// (centred between the lines). An application sets the shapes before it builds the grid (Deck Properties' Computed rows).
+type PropertyShape = struct { height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str }
+var property_shapes: [64]PropertyShape = zero
+
+fn property_row_shape(index: usize, height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str) {
+    if index < 64usize { property_shapes[index] = PropertyShape { height: height, hs1: hs1, hs2: hs2, vs1: vs1, vs2: vs2, l1: l1, l2: l2, l3: l3 } }
+}
+
+fn property_shapes_clear() {
+    var at = 0usize
+    while at < 64usize {
+        property_shapes[at] = PropertyShape { height: 0.0, hs1: 0.0, hs2: 0.0, vs1: 0.0, vs2: 0.0, l1: "", l2: "", l3: "" }
+        at += 1usize
+    }
+}
+
 fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32, options: PropertyGridOptions) -> (widget.Node, err) {
     let total = source.count(source.ctx)
     if total > 256usize { ret (zero, TooLarge) }
@@ -10877,7 +10895,13 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     let (row_last, row_last_error) = mem.alloc[bool](a, total + 1usize)
     let (toggles, toggles_error) = mem.alloc[GroupToggle](a, total + 1usize)
     let (actions, actions_error) = mem.alloc[widget.Submit](a, total + 1usize)
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize * total + 2usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize * total + 2usize)
+    let (row_h, row_h_error) = mem.alloc[f32](a, total + 1usize)
+    let (row_hs1, row_hs1_error) = mem.alloc[f32](a, total + 1usize)
+    let (row_hs2, row_hs2_error) = mem.alloc[f32](a, total + 1usize)
+    let (row_vs1, row_vs1_error) = mem.alloc[f32](a, total + 1usize)
+    let (row_vs2, row_vs2_error) = mem.alloc[f32](a, total + 1usize)
+    if row_h_error != ok || row_hs1_error != ok || row_hs2_error != ok || row_vs1_error != ok || row_vs2_error != ok { ret (zero, TooLarge) }
     if band_y_error != ok || band_first_error != ok || band_open_error != ok || row_y_error != ok || row_sel_error != ok || row_top_error != ok || row_last_error != ok || toggles_error != ok || actions_error != ok || parts_error != ok { ret (zero, TooLarge) }
     var bands = 0usize
     var rows = 0usize
@@ -10957,6 +10981,17 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     }
                     let chosen = options.selected != 0u64 && p.key == options.selected
                     row_y[rows] = cursor
+                    var rh: f32 = 17.0
+                    var shape: PropertyShape = zero
+                    if k < 64usize {
+                        shape = property_shapes[k]
+                        if shape.height > 0.0 { rh = shape.height }
+                    }
+                    row_h[rows] = rh
+                    row_hs1[rows] = shape.hs1
+                    row_hs2[rows] = shape.hs2
+                    row_vs1[rows] = shape.vs1
+                    row_vs2[rows] = shape.vs2
                     row_sel[rows] = chosen
                     row_top[rows] = first_row
                     row_last[rows] = last
@@ -10981,7 +11016,7 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     name_sem.label = p.name
                     name_sem.row = u32(k + 1usize)
                     name_sem.column = 1u32
-                    var name_box = control.sized_style(name_width - 17.0, 17.0)
+                    var name_box = control.sized_style(name_width - 17.0, rh)
                     name_box.overflow = .Clip
                     let (name_flex, name_flex_error) = mem.alloc[widget.Node](a, 1usize)
                     if name_flex_error != ok { ret (zero, TooLarge) }
@@ -11002,7 +11037,7 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     value_sem.label = p.name
                     value_sem.row = u32(k + 1usize)
                     value_sem.column = 2u32
-                    var value_box = control.sized_style(control.max_zero(width - value_x - 2.0), 17.0)
+                    var value_box = control.sized_style(control.max_zero(width - value_x - 2.0), rh)
                     value_box.overflow = .Clip
                     let (value_flex, value_flex_error) = mem.alloc[widget.Node](a, 1usize)
                     if value_flex_error != ok { ret (zero, TooLarge) }
@@ -11012,8 +11047,34 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     value_holder[0usize] = widget.semantics(0u64, value_sem, style.defaults(), value_flex[0usize..1usize])
                     parts[n] = widget.positioned(0u64, value_x + 2.0, cursor - 1.0, style.defaults(), value_holder[0usize..1usize])
                     n += 1usize
+                    // the captions of the header cells, each centred between the lines
+                    var seg_from: f32 = 15.0
+                    var seg_at = 0usize
+                    while seg_at < 3usize {
+                        var seg_to: f32 = name_width + 1.0
+                        var seg_text = shape.l1
+                        if seg_at == 0usize && shape.hs1 > 0.0 { seg_to = shape.hs1 }
+                        if seg_at == 1usize {
+                            seg_text = shape.l2
+                            if shape.hs2 > 0.0 { seg_to = shape.hs2 }
+                        }
+                        if seg_at == 2usize { seg_text = shape.l3 }
+                        if seg_text.len > 0usize {
+                            let (seg_node, seg_error) = control.colored_text(a, 0u64, seg_text, &tahoma, line, ink)
+                            if seg_error != ok { ret (zero, seg_error) }
+                            let (seg_held, seg_held_error) = mem.alloc[widget.Node](a, 1usize)
+                            if seg_held_error != ok { ret (zero, TooLarge) }
+                            seg_held[0usize] = seg_node
+                            var seg_box = control.sized_style(seg_to - seg_from, rh)
+                            seg_box.overflow = .Clip
+                            parts[n] = widget.positioned(0u64, seg_from, cursor, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, seg_box, seg_held[0usize..1usize])))
+                            n += 1usize
+                        }
+                        seg_from = seg_to + 2.0
+                        seg_at += 1usize
+                    }
                     rows += 1usize
-                    cursor += 19.0
+                    cursor += rh + 2.0
                     first_row = false
                 }
                 k += 1usize
@@ -11024,7 +11085,7 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     }
     var height = cursor + 1.0
     if options.height > height { height = options.height }
-    let (frame, frame_error) = vg.node(a, vg.Frame { width: width, height: height, bands: band_y[0usize..bands], firsts: band_first[0usize..bands], opens: band_open[0usize..bands], rows: row_y[0usize..rows], selected: row_sel[0usize..rows], tops: row_top[0usize..rows], lasts: row_last[0usize..rows], name_width: name_width, stops: zero })
+    let (frame, frame_error) = vg.node(a, vg.Frame { width: width, height: height, bands: band_y[0usize..bands], firsts: band_first[0usize..bands], opens: band_open[0usize..bands], rows: row_y[0usize..rows], selected: row_sel[0usize..rows], tops: row_top[0usize..rows], lasts: row_last[0usize..rows], name_width: name_width, stops: zero, heights: row_h[0usize..rows], hs1: row_hs1[0usize..rows], hs2: row_hs2[0usize..rows], vs1: row_vs1[0usize..rows], vs2: row_vs2[0usize..rows] })
     if frame_error != ok { ret (zero, frame_error) }
     parts[0usize] = frame
     let (root, root_error) = mem.alloc[widget.Node](a, 1usize)
