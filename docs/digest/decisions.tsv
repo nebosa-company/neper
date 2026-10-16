@@ -2740,4 +2740,9 @@ D4157	296	G012: typing in the Color Editor's G and B boxes seen
 D4158	1723	G012: TcxGrid audit, and v3's own control sizes for the hand-built dialogs
 D4159	695	G012: Messages, Options > Shortcuts and Statistics (Editions, Advanced) as read-only v3-style tables
 D4160	981	G012: Statistics Probability, Mana Slots and Start Hand tabs, and the window laid out to v3's capture
-D5108	1209	Looks: one widget set, a Windows profile, offscreen per-control sheets
+D5108	1210	Looks: one widget set, a Windows profile, offscreen per-control sheets
+D5109	1233	Looks architecture: profiles, status overlays, the e.ui.looks harness, offscreen PNG sheets
+D5110	1008	The Windows reference is captured live from a launched copy of v3
+D5111	718	Status definitions and the audit rule for looks
+D5112	865	Baked pixel tiles for exact chrome, parametric drawing for the rest
+D5113	740	Popup menu widths follow GDI's Tahoma, not the shaper
