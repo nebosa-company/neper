@@ -73,10 +73,11 @@ def glyph_mask(img):
     h, w, _ = img.shape
     lum = (img * np.array([0.299, 0.587, 0.114])).sum(axis=2)
     m = np.zeros((h, w), bool)
-    m[3:h - 3, 3:max(4, w - 22)] = lum[3:h - 3, 3:max(4, w - 22)] > 70
+    m[ZONE[1]:h - ZONE[1], ZONE[0]:max(4, w - ZONE[2])] = lum[ZONE[1]:h - ZONE[1], ZONE[0]:max(4, w - ZONE[2])] > 70
     return ndimage.binary_dilation(m, structure=np.ones((3, 3), bool))
 
 
+ZONE = [3, 3, 22]  # text zone: x start, y inset, right margin (the button or chevron tile)
 FLAT = [0, 0, 0]
 _CACHE = {}
 
@@ -103,17 +104,17 @@ def ink_box(img):
     lum = (img * np.array([0.299, 0.587, 0.114])).sum(axis=2)
     h, w, _ = img.shape
     z = np.zeros((h, w), bool)
-    z[3:h - 3, 3:max(4, w - 22)] = lum[3:h - 3, 3:max(4, w - 22)] > 70
+    z[ZONE[1]:h - ZONE[1], ZONE[0]:max(4, w - ZONE[2])] = lum[ZONE[1]:h - ZONE[1], ZONE[0]:max(4, w - ZONE[2])] > 70
     ys, xs = np.where(z)
     return None if len(xs) == 0 else (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max()))
 
 
-def best(ref, sheet, x, y, w, h, search, wide=0):
+def best(ref, sheet, x, y, w, h, search, wide=0, anchor=None):
     rh, rw, _ = ref.shape
     top = None
     for dy in range(-search - wide // 2, search + wide // 2 + 1):
         for dx in range(-search - wide, search + wide + 1):
-            px, py = x + (w - rw) // 2 + dx, y + (h - rh) // 2 + dy
+            px, py = (x + anchor[0] + dx, y + anchor[1] + dy) if anchor else (x + (w - rw) // 2 + dx, y + (h - rh) // 2 + dy)
             if px < 0 or py < 0 or px + rw > sheet.shape[1] or py + rh > sheet.shape[0]:
                 continue
             r = compare(ref, sheet[py:py + rh, px:px + rw])
@@ -134,22 +135,40 @@ NATIVE_DARK = [("edit-rest", 0, 0), ("edit-hover", 1, 0), ("edit-focus", 2, 0), 
                ("combo-list-disabled", 23, 0)]
 
 
+NATIVE_DARK += [("button-rest", 24, 0), ("button-default", 25, 0), ("button-focus", 26, 0), ("button-default-focus", 27, 0),
+                ("button-pressed", 28, 0), ("button-default-pressed", 29, 0), ("button-disabled", 30, 0)]
+_i = 31
+for _kind, _states in (("checkbox", ("unchecked", "checked", "indeterminate")), ("radio", ("unchecked", "checked"))):
+    for _st in _states:
+        for _col in ("rest", "focus", "pressed", "disabled"):
+            NATIVE_DARK.append(("%s-%s-%s" % (_kind, _st, _col), _i, 0))
+            _i += 1
+
+
+NATIVE_DARK += [("label-rest", 51, 0), ("label-disabled", 52, 0)]
+
+
 def table(sheet="native_dark", spec=None, cols=7, cw=200, ch=60, only=None):
     sh = load(OURS + sheet + ".png")
     tot = 0
     for stem, idx, rect in (spec or NATIVE_DARK):
         if only and not stem.startswith(only):
             continue
-        img, (rx, ry, rw, rh) = native(stem, rect=rect)
+        img, (rx, ry, rw, rh) = native(stem, rect=rect, pad=-1 if stem.startswith("button") else 0)  # a button's window rect has a 1 px margin
         ref = img[ry:ry + rh, rx:rx + rw]
         col, row = idx % cols, idx // cols
         x, y = 12 + col * (cw + 10), 12 + row * (16 + 4 + ch + 10) + 20
-        r, at = best(ref, sh, x, y, cw, ch, 4, 40 if any(k in stem for k in ('hover-up', 'hover-down', 'pressed', 'arrow')) else 0)
+        ZONE[:] = [0, 0, 0] if stem.startswith('label') else [3, 3, 22]
+        _CACHE.clear()
+        anchor = (40, 19) if stem.startswith(("checkbox", "radio", "label")) else None
+        anchor = (40, 19) if stem.startswith(("checkbox", "radio", "label")) else None
+        r, at = best(ref, sh, x, y, cw, ch, 0 if stem.startswith('label') else 4, 0 if anchor else (40 if any(k in stem for k in ('hover-up', 'hover-down', 'pressed', 'arrow')) else 0), anchor)
         tot += r[5] + r[0]
         o = sh[at[1]:at[1] + rh, at[0]:at[0] + rw]
         bb_r, bb_o = ink_box(ref), ink_box(o)
         agree = bb_r is not None and bb_o is not None and max(abs(p - q) for p, q in zip(bb_r, bb_o)) <= 1
-        print("ink %s %s %s" % (bb_r, bb_o, "ok" if agree else "DIFF"), end="  ")
+        pk = lambda im: int(((im * np.array([0.299, 0.587, 0.114])).sum(axis=2)[3:rh - 3, 3:max(4, rw - 22)]).max())
+        print("ink %s %s %s peak %d/%d" % (bb_r, bb_o, "ok" if agree else "DIFF", pk(ref), pk(o)), end="  ")
         print("%-24s %3dx%-3d flat off %4d / %4d (max %3d)  chrome off %4d (text-adjacent %4d)  at %s" % (stem, rw, rh, r[5], r[4], r[6], r[0], r[1], at))
     print("total (flat + chrome) off", tot)
 

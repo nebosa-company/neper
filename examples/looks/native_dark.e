@@ -55,6 +55,14 @@ fn aimed(a: *mem.Arena, node: widget.Node, w: f32, h: f32, x: f32, y: f32) -> (w
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), row[0usize..2usize]), ok)
 }
 
+// `node` at a whole pixel (x, y) of a cell-sized holder, so an odd sized control does not land on a half pixel.
+fn placed(a: *mem.Arena, node: widget.Node, x: f32, y: f32) -> (widget.Node, err) {
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, inner_error) }
+    inner[0usize] = widget.positioned(0u64, x, y, style.defaults(), control.mem_one_node(a, node))
+    ret (widget.stack(0u64, sized(cell_w(), cell_h()), inner[0usize..1usize]), ok)
+}
+
 fn max_f(a: f32, b: f32) -> f32 {
     if a > b { ret a }
     ret b
@@ -148,6 +156,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let edit_names = [7]str{ "edit-rest", "edit-hover", "edit-focus", "edit-selected", "edit-readonly", "edit-disabled", "edit-password" }
     let spin_names = [7]str{ "spin-rest", "spin-hover-up", "spin-hover-down", "spin-pressed-up", "spin-pressed-down", "spin-focus", "spin-disabled" }
     let combo_names = [6]str{ "rest", "hover", "hover-arrow", "focus", "", "disabled" }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
+    if actions_error != ok { ret (0usize, actions_error) }
+    actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     var at = 0usize
     var i = 0usize
     while i < 7usize {
@@ -195,10 +206,78 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         kind += 1usize
     }
+    // buttons: rest, default, focus, default-focus, pressed, default-pressed, disabled (native 110 x 32: DFM 111 x 33)
+    let button_default = [7]bool{ false, true, false, true, false, true, false }
+    var b = 0usize
+    while b < 7usize {
+        var options = control.button_options()
+        options.width = 110.0
+        options.height = 31.0
+        if button_default[b] { options.variant = .Default }
+        if b == 6usize { options.enabled = false }
+        let (node, node_error) = control.button(a, u64(2000usize + 10usize * b), t, "Button", &actions[0usize], options)
+        if node_error != ok { ret (0usize, node_error) }
+        var drive: looks.Drive = .None
+        if b == 2usize || b == 3usize { drive = .Focus }
+        if b == 4usize || b == 5usize { drive = .Press }
+        let (boxed, boxed_error) = placed(a, node, 45.0, 14.0)
+        if boxed_error != ok { ret (0usize, boxed_error) }
+        cells[at] = looks.Cell { caption: "button", node: boxed, drive: drive }
+        at += 1usize
+        b += 1usize
+    }
+    // check boxes then radios: rest, focus, pressed, disabled of unchecked and checked (check boxes also indeterminate)
+    var kind2 = 0usize
+    while kind2 < 2usize {
+        var state = 0usize
+        while state < 3usize {
+            if kind2 == 1usize && state == 2usize {
+                state += 1usize
+                continue
+            }
+            var col = 0usize
+            while col < 4usize {
+                var node: widget.Node = zero
+                var node_error: err = ok
+                let key = u64(3000usize + 500usize * kind2 + 40usize * state + 10usize * col)
+                if kind2 == 0usize {
+                    let (made, made_error) = control.checkbox(a, key, t, "Sample label", state == 1usize, state == 2usize, &actions[0usize], col != 3usize)
+                    node = made
+                    node_error = made_error
+                } else {
+                    let (made, made_error) = control.radio(a, key, t, "Sample label", state == 1usize, &actions[0usize], col != 3usize)
+                    node = made
+                    node_error = made_error
+                }
+                if node_error != ok { ret (0usize, node_error) }
+                var drive: looks.Drive = .None
+                if col == 1usize { drive = .Focus }
+                if col == 2usize { drive = .Press }
+                let (boxed, boxed_error) = placed(a, node, 40.0, 19.0)
+                if boxed_error != ok { ret (0usize, boxed_error) }
+                cells[at] = looks.Cell { caption: "choice", node: boxed, drive: drive }
+                at += 1usize
+                col += 1usize
+            }
+            state += 1usize
+        }
+        kind2 += 1usize
+    }
+    // labels: label-rest and label-disabled (native static text, white Segoe UI 9 pt; the disabled capture is white too: the app colours it)
+    var l = 0usize
+    while l < 2usize {
+        let (word, word_error) = control.windows_label_faced(a, t, "Static text label", 12.0, 400u32, style.hex_raw(0xFFFFFFu32), false, 0.0, 7u32, 0.0, 0.0, false)
+        if word_error != ok { ret (0usize, word_error) }
+        let (boxed, boxed_error) = placed(a, word, 40.0, 19.0)
+        if boxed_error != ok { ret (0usize, boxed_error) }
+        cells[at] = looks.Cell { caption: "label", node: boxed, drive: .None }
+        at += 1usize
+        l += 1usize
+    }
     ret (at, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark", cells: 24usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark", cells: 53usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

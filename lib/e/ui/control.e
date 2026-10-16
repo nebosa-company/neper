@@ -2537,10 +2537,15 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     fill.min_height = style.Length { Px: max_zero(look.min_height - (look.border_width + look.padding_y) * 2.0) }
     let ringed = ring < 4u32
     // v3's caption sits 1 px left of and above the centre of the box (measured on Cancel and Apply).
-    if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: shift_x }, top: style.Length { Px: shift_y }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
+    var pad_left = shift_x
+    // round 12: the native dark label is centred (v3's light caption sits 1 px left of centre).
+    if t.tokens.palette == .Dark { pad_left += 2.0 }
+    if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: pad_left }, top: style.Length { Px: shift_y }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
     let centred = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
     // A pressed button is focused too: v3 shows the dotted rectangle on it (states/button-pressed-*).
-    let focus = (state.focus_visible || state.focused || state.pressed) && enabled
+    // round 12: the native dark pressed button (button-pressed) shows no dotted rectangle: that is v3's light behaviour.
+    var focus = (state.focus_visible || state.focused || state.pressed) && enabled
+    if t.tokens.palette == .Dark { focus = state.focus_visible && enabled }
     if !focus && !ringed { ret (centred, ok) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
@@ -2641,10 +2646,12 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     }
     if show_label {
         // v3 draws Tahoma 8 pt (11 px) on its buttons and underlines the '&' mnemonic at the baseline.
-        if t.tokens.profile == .Windows {
+        if t.tokens.profile == .Windows && t.tokens.palette != .Dark {
             caption.face = 8u32
             caption.size = 11.0
         }
+        // round 12: the native Windows 11 dark button label is Segoe UI 9 pt (12 px), laid out by DirectWrite-style shaping, not GDI.
+        if t.tokens.profile == .Windows && t.tokens.palette == .Dark { caption.size = 12.0 }
         var shown_label = label
         var mark_at = label.len
         if t.tokens.profile == .Windows {
@@ -2659,7 +2666,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         var hinted_w: f32 = 0.0
         var hinted_before: f32 = 0.0
         var hinted_mark: f32 = 0.0
-        if t.tokens.profile == .Windows {
+        if t.tokens.profile == .Windows && t.tokens.palette != .Dark {
             let (hrow, hw, hbefore, hmark, hok, hrow_error) = windows_hinted_row(a, t, caption, shown_label, mark_at, ink, false)
             if hrow_error != ok { ret (zero, hrow_error) }
             if hok {
@@ -2849,7 +2856,20 @@ fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, we
         mark_w = at_w
     }
     var words: widget.Node = hinted
-    if !has_hinted {
+    // round 12: the native dark static is Segoe UI 9 pt as DirectWrite shapes it (label-rest: ink from x 0, cap top on row 3), not v3's
+    // GDI hinted advances; a Segoe label of the dark look is laid out the same way.
+    let native_dark = t.tokens.palette == .Dark && t.tokens.profile == .Windows && face == 7u32
+    if native_dark {
+        let (dark_t, dark_error) = windows_edit_theme(a, t, 13.0)
+        if dark_error != ok { ret (zero, dark_error) }
+        let (dark_words, dark_words_error) = colored_text(a, 0u64, shown, &dark_t, options, ink)
+        if dark_words_error != ok { ret (zero, dark_words_error) }
+        let (dark_adv, dark_fit, dark_base, dark_metrics_error) = run_metrics_faced(a, &dark_t, options, shown)
+        if dark_metrics_error != ok { ret (zero, dark_metrics_error) }
+        // one row up: the line box of the shaped run puts the cap top on row 4, the native static on row 3
+        words = widget.stack(0u64, sized_style(dark_fit, 15.0), mem_one_node(a, widget.positioned(0u64, 0.0, 0.0 - 1.0, style.defaults(), mem_one_node(a, dark_words))))
+        has_hinted = false
+    } else if !has_hinted {
         let (plain_words, words_error) = colored_text(a, 0u64, shown, t, options, ink)
         if words_error != ok { ret (zero, words_error) }
         words = plain_words
@@ -2859,7 +2879,12 @@ fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, we
     var inset: f32 = 1.0
     if face == 7u32 { inset = 2.0 }
     if has_hinted && box_w > hinted_w { inset = math.floor[f32]((box_w - hinted_w) * 0.5) }
-    plain.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    var inset_top: f32 = 1.0
+    if native_dark {
+        inset = 0.0
+        inset_top = 0.0
+    }
+    plain.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: style.Length { Px: inset_top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     if mark_at >= shown.len && !underline {
         ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, words)), ok)
     }
@@ -4336,6 +4361,11 @@ fn windows_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, lab
 // radio group's rows are 42). A check box has 2 units of transparent border at its left, a radio none.
 fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, phase: Phase) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
+    // round 12: a stand-alone dark check box or radio follows the native Windows 11 dark one (22 high, Segoe UI 9 pt).
+    if t.tokens.palette == .Dark && t.tokens.profile == .Windows && high <= 24.0 {
+        let (native_row, native_error) = windows_dark_choice(a, key, t, role, label, chosen, mixed, round, action, enabled, state)
+        ret (native_row, native_error)
+    }
     let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, high, phase)
     if mark_error != ok { ret (zero, mark_error) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
@@ -4370,6 +4400,102 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, row_style, parts[0usize..2usize])
+    let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
+    if region_error != ok { ret (zero, TooLarge) }
+    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, style.defaults(), inner[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = role
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if chosen { sem.states = accessibility.STATE_CHECKED }
+    if mixed { sem.states = sem.states | accessibility.STATE_MIXED }
+    if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
+}
+
+
+// ---- round 12: the native Windows 11 dark check box and radio ---------------------------------------------------------------
+// checkbox-* and radio-* of docs/ui/looks/ref/windows-native/dark (the 140 x 22 control rect): the 13 x 13 mark at (0, 4), the caption in
+// Segoe UI 12 px at x 16 (its ink starts at 17) with the cap top on row 6, white (#CCCCCC disabled), and while focused the dotted
+// rectangle (DrawFocusRect: pixels where x + y is odd from the corner, #DFDFDF over the #202020 page) from (15, 2), 17 high and the
+// text's advance + 3 wide, behind the caption.
+type DarkDots = struct { w: f32, h: f32, rgb: u32 }
+
+fn dark_dots_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn dark_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*DarkDots](ctx)
+    let w = i32(d.w)
+    let h = i32(d.h)
+    let lit = style.hex_raw(d.rgb)
+    let dark = style.hex_raw(0u32)
+    // XOR with the page: alternate pixels become the inverse (odd x + y from the corner) and black, corners included
+    var i: i32 = 0
+    while i < w {
+        var top = dark
+        if i % 2 == 1 { top = lit }
+        try winpx.fill(b, area.x + f32(i), area.y, 1.0, 1.0, top)
+        var low = dark
+        if (i + h - 1) % 2 == 1 { low = lit }
+        try winpx.fill(b, area.x + f32(i), area.y + f32(h - 1), 1.0, 1.0, low)
+        i += 1
+    }
+    var j: i32 = 1
+    while j < h - 1 {
+        var left = dark
+        if j % 2 == 1 { left = lit }
+        try winpx.fill(b, area.x, area.y + f32(j), 1.0, 1.0, left)
+        var right = dark
+        if (j + w - 1) % 2 == 1 { right = lit }
+        try winpx.fill(b, area.x + f32(w - 1), area.y + f32(j), 1.0, 1.0, right)
+        j += 1
+    }
+    ret ok
+}
+
+fn dark_dots(a: *mem.Arena, w: f32, h: f32, rgb: u32) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[DarkDots](a, 1usize)
+    if made_error != ok { ret (zero, TooLarge) }
+    made[0usize] = DarkDots { w: w, h: h, rgb: rgb }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: dark_dots_measure, paint: dark_dots_paint, state: widget.bytes_of[DarkDots](&made[0usize]) } }, style: sized_style(w, h), children: none }, ok)
+}
+
+fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, state: style.ControlState) -> (widget.Node, err) {
+    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, 22.0, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
+    if mark_error != ok { ret (zero, mark_error) }
+    let (ft, ft_error) = windows_edit_theme(a, t, 15.0)
+    if ft_error != ok { ret (zero, ft_error) }
+    let (shown, mark_at, shown_error) = winbutton.mnemonic(a, label)
+    if shown_error != ok { ret (zero, shown_error) }
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    var ink = style.hex_raw(0xFFFFFFu32)
+    if !enabled { ink = style.hex_raw(0xCCCCCCu32) }
+    let (words, words_error) = colored_text(a, 0u64, shown, &ft, caption, ink)
+    if words_error != ok { ret (zero, words_error) }
+    let (advance, fit, base, metrics_error) = run_metrics_faced(a, &ft, caption, shown)
+    if metrics_error != ok { ret (zero, metrics_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, mark_node))
+    n += 1usize
+    let focus = state.focus_visible && enabled
+    if focus {
+        let (dots, dots_error) = dark_dots(a, f32(i32(fit + 0.5)) + 1.0, 17.0, 0xDFDFDFu32)
+        if dots_error != ok { ret (zero, dots_error) }
+        layers[n] = widget.positioned(0u64, 15.0, 2.0, style.defaults(), mem_one_node(a, dots))
+        n += 1usize
+    }
+    layers[n] = widget.positioned(0u64, 16.0, 3.0, style.defaults(), mem_one_node(a, words))
+    n += 1usize
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.stack(0u64, sized_style(18.0 + fit + 2.0, 22.0), layers[0usize..n])
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
     region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, style.defaults(), inner[0usize..1usize])
