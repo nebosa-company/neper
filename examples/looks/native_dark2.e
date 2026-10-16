@@ -85,10 +85,17 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if ht_cell_error != ok { ret (0usize, ht_cell_error) }
     cells[at] = looks.Cell { caption: "hscroll-hover-track", node: ht_cell, drive: .Hover }
     at += 1usize
+    // 8: tooltip-balloon (159 x 74 at (30, 52) of its 260 x 126 capture; here at (30, 40))
+    let (balloon, balloon_error) = control.win_native_balloon(a, 7080u64, t, "Tip title", "This is the tooltip text")
+    if balloon_error != ok { ret (0usize, balloon_error) }
+    let (balloon_cell, balloon_cell_error) = placed(a, balloon, 30.0, 40.0)
+    if balloon_cell_error != ok { ret (0usize, balloon_cell_error) }
+    cells[at] = looks.Cell { caption: "tooltip-balloon", node: balloon_cell, drive: .None }
+    at += 1usize
     ret (at, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark2", cells: 8usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark2", cells: 9usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

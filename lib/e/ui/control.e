@@ -2540,7 +2540,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     var pad_left = shift_x
     var pad_right: f32 = 2.0
     // round 13: a negative shift moves the caption left (a native split button's caption sits 8 px left of the middle): the room goes on the right
-    if shift_x < 0.0 {
+    if shift_x < 0.0 && win_dark(t) {
         pad_left = 0.0
         pad_right = 2.0 - 2.0 * shift_x
     }
@@ -7062,7 +7062,7 @@ fn windows_button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
     layers[1usize] = widget.positioned(0u64, options.width - 17.0, 2.0, style.defaults(), win_one(a, ellipsis))
-    ret (widget.stack(0u64, style.defaults(), layers[0usize..1usize]), ok)
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
 // A single-line text field.
@@ -7136,7 +7136,7 @@ fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
     layers[1usize] = widget.positioned(0u64, options.width - 4.0 - side, max_zero((h - side) * 0.5), style.defaults(), held[3usize..4usize])
-    ret (widget.stack(0u64, style.defaults(), layers[0usize..1usize]), ok)
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
 // A search field: a single line whose Enter is the search (`submit`), with a clear
@@ -9653,7 +9653,7 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
         inset_y = drop - 2.0
     }
     layers[1usize] = widget.positioned(0u64, inset_x, inset_y, style.defaults(), held[0usize..1usize])
-    ret (widget.stack(key, sized_style(w, h), layers[0usize..1usize]), ok)
+    ret (widget.stack(key, sized_style(w, h), layers[0usize..2usize]), ok)
 }
 // ---- end looks5 group d (hints) -------------------------------------------------------------------------------
 
@@ -10943,7 +10943,7 @@ fn button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buff
         stack_layers[0usize] = editor
         stack_layers[2usize] = trail
         stack_layers[1usize] = widget.positioned(0u64, options.width - 4.0 - 40.0, max_zero((field_h - 40.0) * 0.5), style.defaults(), stack_layers[2usize..3usize])
-        ret (widget.stack(0u64, style.defaults(), stack_layers[0usize..1usize]), ok)
+        ret (widget.stack(0u64, style.defaults(), stack_layers[0usize..2usize]), ok)
     }
     var dots: widget.Node = zero
     if t.tokens.profile == .CupertinoLike {
@@ -10969,7 +10969,7 @@ fn button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buff
     layers[0usize] = editor
     layers[2usize] = dots
     layers[1usize] = widget.positioned(0u64, dots_x, max_zero((h - dots_box) * 0.5), style.defaults(), layers[2usize..3usize])
-    ret (widget.stack(0u64, style.defaults(), layers[0usize..1usize]), ok)
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
 // A spin box's arrow: 24 x 24 with `radius-xs` corners, a 16 chevron in
@@ -19945,6 +19945,66 @@ fn native_tooltip_corner_node(a: *mem.Arena, which: usize) -> (widget.Node, err)
     }
     let (tile, tile_error) = wintile.tile_node(a, 6usize, 6usize, px[0usize..36usize])
     ret (tile, tile_error)
+}
+
+// round 13: the native Windows 11 dark balloon tip (tooltip-balloon of docs/ui/looks/ref/windows-native/dark, 159 x 74): the black window
+// corner, the white rounded outline with its tail and the #2B2B2B face are the captured pixels as run lengths (each row: its run count, then
+// length and grey of each run; the text and icon box is left face), the icon a blue disc, the title Segoe UI 15 px and the text 12 px.
+type DarkBalloon = struct { rows: u32 }
+
+fn dark_balloon_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let data = [684]u8{ 1,159,0,3,1,0,1,255,157,0,3,2,0,2,255,155,0,3,3,0,3,255,153,0,3,4,0,3,255,152,0,3,4,0,5,255,150,0,5,5,0,2,255,1,43,3,255,148,0,5,6,0,2,255,2,43,3,255,146,0,5,7,0,2,255,3,43,2,255,145,0,5,8,0,1,255,4,43,3,255,143,0,5,8,0,2,255,5,43,3,255,141,0,5,9,0,2,255,6,43,3,255,139,0,5,10,0,2,255,7,43,2,255,138,0,5,11,0,2,255,7,43,3,255,136,0,5,12,0,1,255,9,43,3,255,134,0,5,12,0,2,255,10,43,3,255,132,0,5,13,0,2,255,11,43,2,255,131,0,5,14,0,1,255,12,43,3,255,129,0,5,5,0,10,255,14,43,124,255,6,0,5,3,0,3,255,146,43,3,255,4,0,5,2,0,2,255,150,43,2,255,3,0,5,1,0,2,255,152,43,2,255,2,0,5,1,0,1,255,154,43,1,255,2,0,4,2,255,154,43,2,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,1,255,156,43,1,255,1,0,4,2,255,154,43,2,255,1,0,5,1,0,1,255,154,43,1,255,2,0,5,1,0,2,255,152,43,2,255,2,0,5,2,0,2,255,150,43,2,255,3,0,5,3,0,3,255,146,43,3,255,4,0,3,5,0,148,255,6,0,1,159,0 }
+    var at = 0usize
+    var y = 0usize
+    while y < 74usize {
+        let count = usize(data[at])
+        at += 1usize
+        var x: f32 = 0.0
+        var k = 0usize
+        while k < count {
+            let len = f32(data[at])
+            let v = u32(data[at + 1usize])
+            at += 2usize
+            if v != 0u32 { try winpx.fill(b, area.x + x, area.y + f32(y), len, 1.0, style.hex_raw((v << 16u32) | (v << 8u32) | v)) }
+            if v == 0u32 { try winpx.fill(b, area.x + x, area.y + f32(y), len, 1.0, style.hex_raw(0u32)) }
+            x += len
+            k += 1usize
+        }
+        y += 1usize
+    }
+    ret ok
+}
+
+fn win_native_balloon(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, hint_text: str) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[DarkBalloon](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = DarkBalloon { rows: 74u32 }
+    var none: []const widget.Node = zero
+    let chrome = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: mark_measure, paint: dark_balloon_paint, state: widget.bytes_of[DarkBalloon](&cells[0usize]) } }, style: sized_style(159.0, 74.0), children: none }
+    let (ft, ft_error) = windows_edit_theme_kerned(a, t, 15.0)
+    if ft_error != ok { ret (zero, ft_error) }
+    var head = text_options()
+    head.role = .BodyMedium
+    head.wrap = .None
+    head.size = 15.0
+    let (head_node, head_error) = colored_text(a, 0u64, title, &ft, head, style.hex_raw(0xFFFFFFu32))
+    if head_error != ok { ret (zero, head_error) }
+    var body = text_options()
+    body.role = .BodyMedium
+    body.wrap = .None
+    body.size = 12.0
+    let (body_node, body_error) = colored_text(a, 0u64, hint_text, &ft, body, style.hex_raw(0xFFFFFFu32))
+    if body_error != ok { ret (zero, body_error) }
+    var disc = sized_style(16.0, 16.0)
+    disc.radius = 8.0
+    disc.background = paint.Brush { Solid: style.hex_raw(0x1E78D2u32) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = chrome
+    layers[1usize] = widget.positioned(0u64, 12.0, 30.0, disc, zero)
+    layers[2usize] = widget.positioned(0u64, 33.0, 28.0, style.defaults(), widget_one_of(a, head_node))
+    layers[3usize] = widget.positioned(0u64, 33.0, 49.0, style.defaults(), widget_one_of(a, body_node))
+    ret (widget.stack(key, sized_style(159.0, 74.0), layers[0usize..4usize]), ok)
 }
 
 fn win_native_tooltip(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, width: f32, height: f32) -> (widget.Node, err) {

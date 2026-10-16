@@ -242,7 +242,7 @@ SHEET2 = [("vscroll-rest", 0, 0, (20, 10), None), ("hscroll-rest", 1, 0, (16, 20
           ("vscroll-hover-arrow", 0, 0, (20, 10), None), ("vscroll-hover-thumb", 0, 0, (20, 10), None),
           ("vscroll-hover-track", 0, 0, (20, 10), None), ("vscroll-pressed-thumb", 0, 0, (20, 10), None),
           ("hscroll-hover-arrow", 1, 0, (16, 20), None), ("hscroll-hover-thumb", 1, 0, (16, 20), None),
-          ("hscroll-pressed-thumb", 1, 0, (16, 20), None)]
+          ("hscroll-pressed-thumb", 1, 0, (16, 20), None), ("tooltip-balloon", 8, 1, (30, 40), None)]
 # not compared: hscroll-hover-track (the whole bar rect is the #202020 window colour: the bar was not painted in that capture)
 
 
@@ -353,6 +353,38 @@ def menu_elements():
     return res
 
 
+def palette_presence():
+    """Presence of the native dark list view and tree colours in our dark sheets (v3's stripes and geometry stay, so this is a palette
+    check, not a pixel diff): each colour must occur in the native captures and in at least one of our grid or tree sheets."""
+    import collections
+
+    def counts(path, box=None):
+        a = sd.load(path)
+        if box:
+            a = a[box[1]:box[3], box[0]:box[2]]
+        return collections.Counter(map(tuple, a.reshape(-1, 3).tolist()))
+
+    lv = counts(sd.NATIVE + "dark/listview-selected-focused@1x.png", (12, 10, 238, 140))
+    lu = counts(sd.NATIVE + "dark/listview-selected-unfocused@1x.png", (12, 10, 238, 140))
+    tf = counts(sd.NATIVE + "dark/tree-selected-focused@1x.png", (16, 10, 184, 140))
+    tu = counts(sd.NATIVE + "dark/tree-selected-unfocused@1x.png", (16, 10, 184, 140))
+    ours = collections.Counter()
+    for name in ("data_grid", "data_grid_states", "data_grid_hover", "tree_list", "tree_list_focus", "tree_list_hover"):
+        path = sd.OURS + name + ".png"
+        if os.path.exists(path):
+            ours.update(counts(path))
+    want = [("list view header #191919", (25, 25, 25), lv), ("list view face #202020", (32, 32, 32), lv), ("list view frame #828790", (130, 135, 144), lv),
+            ("list view chosen row focused #1A364D", (26, 54, 77), lv), ("list view chosen line focused #0078D4", (0, 120, 212), lv),
+            ("list view chosen row unfocused #1B1B1B", (27, 27, 27), lu), ("list view chosen line unfocused #131313", (19, 19, 19), lu),
+            ("list view track #171717", (23, 23, 23), lv), ("tree row focused #626262", (98, 98, 98), tf), ("tree row unfocused #333333", (51, 51, 51), tu)]
+    res = []
+    for name, colour, native in want:
+        ok = native.get(colour, 0) > 0 and ours.get(colour, 0) > 0
+        print("%-42s %-4s native %5d px, ours %6d px" % (name, "PASS" if ok else "FAIL", native.get(colour, 0), ours.get(colour, 0)))
+        res.append(ok)
+    return res
+
+
 def open_table(outdir):
     """combo-*-open captures: the head (150 x 23) and its list (150 x 122) against native_dark_open<n> (head at (20, 8) of a cell at (12, 32))."""
     ok_all = []
@@ -392,6 +424,10 @@ if __name__ == "__main__":
         sys.exit(0)
     if "--menu" in sys.argv:
         r = menu_elements()
+        print("PASS %d / %d" % (sum(r), len(r)))
+        sys.exit(0)
+    if "--palette" in sys.argv:
+        r = palette_presence()
         print("PASS %d / %d" % (sum(r), len(r)))
         sys.exit(0)
     if "--mask" in sys.argv:
