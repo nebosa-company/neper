@@ -50,6 +50,26 @@ fn new_lexer(a: *mem.Arena, src: str) -> Lexer {
 fn is_id_start(c: u8) -> bool { ret (c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || c == 36u8 || c == 95u8 || c >= 128u8 }
 fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
 fn is_id_part(c: u8) -> bool { ret is_id_start(c) || is_digit(c) }
+
+// The byte length of the non-ASCII whitespace or line terminator at `at` (NBSP, BOM, U+1680, U+2000..200A, U+2028/9, U+202F,
+// U+205F, U+3000), or 0: such a character ends an identifier although its bytes look like identifier bytes.
+fn uspace_len(s: str, at: usize) -> usize {
+    if at >= s.len { ret 0usize }
+    let c = s[at]
+    if c == 194u8 && at + 1usize < s.len && s[at + 1usize] == 160u8 { ret 2usize }
+    if c == 239u8 && at + 2usize < s.len && s[at + 1usize] == 187u8 && s[at + 2usize] == 191u8 { ret 3usize }
+    if c == 225u8 && at + 2usize < s.len && s[at + 1usize] == 154u8 && s[at + 2usize] == 128u8 { ret 3usize }
+    if c == 226u8 && at + 2usize < s.len && s[at + 1usize] == 128u8 && ((s[at + 2usize] >= 128u8 && s[at + 2usize] <= 138u8) || s[at + 2usize] == 168u8 || s[at + 2usize] == 169u8 || s[at + 2usize] == 175u8) { ret 3usize }
+    if c == 226u8 && at + 2usize < s.len && s[at + 1usize] == 129u8 && s[at + 2usize] == 159u8 { ret 3usize }
+    if c == 227u8 && at + 2usize < s.len && s[at + 1usize] == 128u8 && s[at + 2usize] == 128u8 { ret 3usize }
+    ret 0usize
+}
+
+fn id_part_at(s: str, at: usize) -> bool {
+    let c = s[at]
+    if c >= 128u8 { ret uspace_len(s, at) == 0usize }
+    ret is_id_part(c)
+}
 fn hex_value(c: u8) -> i32 {
     if c >= 48u8 && c <= 57u8 { ret i32(c) - 48i32 }
     if c >= 97u8 && c <= 102u8 { ret i32(c) - 87i32 }
@@ -203,7 +223,7 @@ fn put_unit(b: *str.Builder, src: str, c: i64, after: usize) -> usize {
 fn read_ident(lx: *Lexer) -> (str, bool, err) {
     let start = lx.pos
     var at = start
-    while at < lx.src.len && is_id_part(lx.src[at]) { at += 1usize }
+    while at < lx.src.len && id_part_at(lx.src, at) { at += 1usize }
     if at >= lx.src.len || lx.src[at] != 92u8 {
         lx.pos = at
         ret (lx.src[start..at], false, ok)
@@ -214,7 +234,7 @@ fn read_ident(lx: *Lexer) -> (str, bool, err) {
     var pos = start
     while pos < lx.src.len {
         let c = lx.src[pos]
-        if is_id_part(c) {
+        if id_part_at(lx.src, pos) {
             let pe = str.push_byte(&out, c)
             pos += 1usize
         } else if c == 92u8 && pos + 1usize < lx.src.len && lx.src[pos + 1usize] == 117u8 {

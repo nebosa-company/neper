@@ -25734,6 +25734,673 @@ type Parsed = struct { program: ast.Program, message: str, line: u32 }
 fn parse_program(a: *mem.Arena, source: str) -> (Parsed, err)
 ```
 
+### `e.js.interp`
+
+```neper
+error Throw
+error OutOfMemory
+error Unsupported
+const C_OBJECT: u8 = 0u8
+const C_ARRAY: u8 = 1u8
+const C_FUNCTION: u8 = 2u8
+const C_ERROR: u8 = 3u8
+const C_BOOLEAN: u8 = 4u8
+const C_NUMBER: u8 = 5u8
+const C_STRING: u8 = 6u8
+const C_SYMBOL: u8 = 7u8
+const C_DATE: u8 = 8u8
+const C_REGEXP: u8 = 9u8
+const C_ARGUMENTS: u8 = 10u8
+const C_MAP: u8 = 11u8
+const C_SET: u8 = 12u8
+const C_PROMISE: u8 = 13u8
+const C_GENERATOR: u8 = 14u8
+const C_BOUND: u8 = 15u8
+const C_PROXY: u8 = 16u8
+const C_WEAKMAP: u8 = 17u8
+const C_WEAKSET: u8 = 18u8
+const C_BIGINT: u8 = 19u8
+const C_ARRAYBUFFER: u8 = 20u8
+const C_TYPEDARRAY: u8 = 21u8
+const C_DATAVIEW: u8 = 22u8
+const C_ITERATOR: u8 = 23u8
+const P_WRITABLE: u8 = 1u8
+const P_ENUMERABLE: u8 = 2u8
+const P_CONFIGURABLE: u8 = 4u8
+const P_ACCESSOR: u8 = 8u8
+const P_DEFAULT: u8 = 7u8
+const P_HIDDEN: u8 = 5u8
+type Sym = struct { description: str, has_description: bool, id: u32, registered: bool, private: bool }
+type Value = union enum u8 { Undefined, Null, Bool: bool, Num: f64, Str: str, Sym: *Sym, Obj: *Obj }
+type Key = struct { name: str, sym: *Sym, idx: i64 }
+type Prop = struct { key: Key, value: Value, getter: *Obj, setter: *Obj, flags: u8 }
+type NativeFn = fn(*Interp, Value, []const Value) -> (Value, err)
+type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool }
+const B_CONST: u8 = 1u8
+const B_TDZ: u8 = 2u8
+const B_STRICT_CONST: u8 = 4u8
+type Binding = struct { name: str, value: Value, flags: u8 }
+type Obj = struct
+const K_NONE: u8 = 0u8
+const K_BASE: u8 = 1u8
+const K_DERIVED: u8 = 2u8
+type Protos = struct
+type Interp = struct
+fn null_interp() -> *Interp
+fn undefv() -> Value
+fn null_value() -> Value
+fn bool_value(b: bool) -> Value
+fn num_value(n: f64) -> Value
+fn str_value(s: str) -> Value
+fn obj_value(o: *Obj) -> Value
+fn is_undefined(v: Value) -> bool
+fn is_null(v: Value) -> bool
+fn is_nullish(v: Value) -> bool
+fn is_object(v: Value) -> bool
+fn is_number(v: Value) -> bool
+fn is_string(v: Value) -> bool
+fn as_object(v: Value) -> *Obj
+fn null_obj() -> *Obj
+fn null_sym() -> *Sym
+fn is_callable(v: Value) -> bool
+fn is_array(v: Value) -> bool
+fn is_nan(x: f64) -> bool
+fn is_finite(x: f64) -> bool
+fn is_infinite(x: f64) -> bool
+fn nan() -> f64
+fn infinity() -> f64
+fn is_neg_zero(x: f64) -> bool
+fn trunc(x: f64) -> f64
+fn floor(x: f64) -> f64
+fn to_integer(x: f64) -> f64
+fn to_uint32_bits(x: f64) -> u32
+fn to_int32_value(x: f64) -> i32
+fn push_digits(b: *str.Builder, s: str)
+fn number_to_string(a: *mem.Arena, x: f64) -> str
+fn is_js_space(c: u8) -> bool
+fn space_len(s: str, at: usize) -> usize
+fn trim_js(s: str) -> str
+fn digit_value(c: u8) -> i32
+fn string_to_number(a: *mem.Arena, input: str) -> f64
+fn is_ascii(s: str) -> bool
+fn decode_at(s: str, at: usize) -> (u32, usize)
+fn units(s: str) -> usize
+fn unit_at(s: str, idx: usize) -> (u32, bool)
+fn byte_of_unit(s: str, idx: usize) -> usize
+fn put_cp(b: *str.Builder, c: u32)
+fn substring_units(a: *mem.Arena, s: str, from: usize, to: usize) -> str
+fn array_index_of(s: str) -> i64
+fn key_of(s: str) -> Key
+fn key_of_symbol(s: *Sym) -> Key
+fn is_symbol_key(k: Key) -> bool
+fn keys_equal(x: Key, y: Key) -> bool
+fn strict_equals(x: Value, y: Value) -> bool
+fn same_value_zero(x: Value, y: Value) -> bool
+fn same_value(x: Value, y: Value) -> bool
+fn to_boolean(v: Value) -> bool
+fn type_of(v: Value) -> str
+fn throw_value(it: *Interp, v: Value) -> err
+fn new_obj(it: *Interp, class: u8, proto: *Obj) -> *Obj
+fn new_plain(it: *Interp) -> *Obj
+fn make_error(it: *Interp, proto: *Obj, message: str) -> Value
+fn throw_type(it: *Interp, message: str) -> err
+fn throw_range(it: *Interp, message: str) -> err
+fn throw_reference(it: *Interp, message: str) -> err
+fn throw_syntax(it: *Interp, message: str) -> err
+fn throw_plain(it: *Interp, message: str) -> err
+fn new_symbol(it: *Interp, description: str, has: bool) -> *Sym
+fn hole_value(it: *Interp) -> Value
+fn is_hole(it: *Interp, v: Value) -> bool
+fn index_of_prop(o: *const Obj, key: Key) -> (usize, bool)
+fn rebuild_index(it: *Interp, o: *Obj)
+fn append_prop(it: *Interp, o: *Obj, p: Prop) -> err
+fn remove_prop_at(it: *Interp, o: *Obj, at: usize)
+fn define_data(it: *Interp, o: *Obj, key: Key, val: Value, flags: u8) -> err
+fn define_accessor_raw(it: *Interp, o: *Obj, key: Key, getter: *Obj, setter: *Obj, flags: u8) -> err
+fn set_named(it: *Interp, o: *Obj, name: str, val: Value) -> err
+fn set_hidden(it: *Interp, o: *Obj, name: str, val: Value) -> err
+fn new_array(it: *Interp) -> *Obj
+fn array_length(o: *const Obj) -> f64
+fn array_push(it: *Interp, o: *Obj, v: Value) -> err
+fn array_from(it: *Interp, items: []const Value) -> *Obj
+fn array_set_length(it: *Interp, o: *Obj, len: f64)
+fn get_own(it: *Interp, o: *Obj, key: Key) -> (Prop, bool)
+fn prim_string(o: *const Obj) -> str
+fn proto_of(o: *const Obj) -> (*Obj, bool)
+fn get_prop(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err)
+fn zero_args() -> []const Value
+fn get_named(it: *Interp, o: *Obj, name: str) -> (Value, err)
+fn proxy_get(it: *Interp, p: *Obj, key: Key, receiver: Value) -> (Value, err)
+fn proto_for_primitive(it: *Interp, v: Value) -> (*Obj, bool)
+fn describe_key(it: *Interp, key: Key) -> str
+fn get_value(it: *Interp, base: Value, key: Key) -> (Value, err)
+fn str_concat3(it: *Interp, x: str, y: str, z: str) -> str
+fn str_concat(it: *Interp, x: str, y: str) -> str
+fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (bool, err)
+fn one_arg(it: *Interp, v: Value) -> []const Value
+fn two_args(it: *Interp, x: Value, y: Value) -> []const Value
+fn write_own_value(it: *Interp, o: *Obj, key: Key, val: Value) -> (bool, err)
+fn create_data(it: *Interp, o: *Obj, key: Key, val: Value) -> (bool, err)
+fn put(it: *Interp, base: Value, key: Key, val: Value, strict: bool) -> err
+fn has_own(it: *Interp, o: *Obj, key: Key) -> bool
+fn has_property(it: *Interp, o: *Obj, key: Key) -> bool
+fn delete_prop(it: *Interp, o: *Obj, key: Key) -> bool
+type Desc = struct
+fn empty_desc() -> Desc
+fn data_desc(val: Value, flags: u8) -> Desc
+fn prop_to_desc(p: Prop) -> Desc
+fn define_own(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err)
+fn materialize_elements(it: *Interp, o: *Obj) -> bool
+fn index_string(it: *Interp, i: usize) -> str
+fn to_primitive(it: *Interp, v: Value, hint: str) -> (Value, err)
+fn to_number(it: *Interp, v: Value) -> (f64, err)
+fn to_string(it: *Interp, v: Value) -> (str, err)
+fn to_object(it: *Interp, v: Value) -> (*Obj, err)
+fn to_property_key(it: *Interp, v: Value) -> (Key, err)
+fn to_length(it: *Interp, v: Value) -> (f64, err)
+fn to_int32(it: *Interp, v: Value) -> (i32, err)
+fn to_uint32(it: *Interp, v: Value) -> (u32, err)
+fn length_of(it: *Interp, o: *Obj) -> (f64, err)
+fn get_index(it: *Interp, o: *Obj, i: f64) -> (Value, err)
+fn set_index(it: *Interp, o: *Obj, i: f64, val: Value) -> err
+fn same_object(x: *Obj, y: *Obj) -> bool
+fn instance_of(it: *Interp, v: Value, ctor: Value) -> (bool, err)
+fn ordinary_has_instance(it: *Interp, ctor: Value, v: Value) -> (bool, err)
+fn loose_equals(it: *Interp, x: Value, y: Value) -> (bool, err)
+fn new_env(it: *Interp, parent: *Env) -> *Env
+fn null_env() -> *Env
+fn env_index(e: *const Env, name: str) -> (usize, bool)
+fn declare(it: *Interp, e: *Env, name: str, val: Value, flags: u8) -> err
+fn declare_var(it: *Interp, e: *Env, name: str) -> err
+type Frame = struct
+const CK_NORMAL: u8 = 0u8
+const CK_BREAK: u8 = 1u8
+const CK_CONTINUE: u8 = 2u8
+const CK_RETURN: u8 = 3u8
+type Completion = struct { kind: u8, value: Value, label: str }
+fn normal() -> Completion
+fn lookup_value(it: *Interp, f: *Frame, name: str) -> (Value, err)
+fn assign_name(it: *Interp, f: *Frame, name: str, val: Value) -> err
+fn init_binding(it: *Interp, e: *Env, name: str, val: Value) -> err
+fn proto_value_of(it: *Interp, ctor: *Obj, fallback: *Obj) -> (*Obj, err)
+fn count_params_length(f: *const Frame, fid: u32) -> f64
+fn make_function(it: *Interp, f: *Frame, fid: u32) -> (*Obj, err)
+fn make_native(it: *Interp, name: str, length: u32, native: NativeFn) -> *Obj
+fn add_method(it: *Interp, o: *Obj, name: str, length: u32, native: NativeFn)
+fn add_getter(it: *Interp, o: *Obj, name: str, native: NativeFn)
+fn add_value(it: *Interp, o: *Obj, name: str, val: Value)
+fn this_coerce(it: *Interp, v: Value) -> Value
+fn call_function(it: *Interp, fv: Value, this_val: Value, args: []const Value) -> (Value, err)
+fn is_constructor(v: Value) -> bool
+fn construct(it: *Interp, fv: Value, args: []const Value, new_target: Value) -> (Value, err)
+fn init_fields(it: *Interp, ctor: *Obj, inst: *Obj) -> err
+fn field_define(it: *Interp, inst: *Obj, key: Key, val: Value) -> err
+fn call_js(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_target: Value, constructing: bool) -> (Value, err)
+fn bind_function(it: *Interp, f: *Frame, fo: *Obj, n: ast.Node, args: []const Value) -> err
+fn bind_name(it: *Interp, f: *Frame, name: str, val: Value, mode: u8) -> err
+fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err
+fn target_name(f: *const Frame, id: u32) -> str
+fn eval_named(it: *Interp, f: *Frame, id: u32, name: str) -> (Value, err)
+fn set_function_name(it: *Interp, v: Value, name: str)
+type Iter = struct { obj: Value, next: Value, array: *Obj, is_array: bool, pos: usize }
+fn get_iterator(it: *Interp, v: Value) -> (Iter, err)
+fn iterator_step(it: *Interp, iter: Iter) -> (Value, bool, err)
+fn iterator_close(it: *Interp, iter: Iter) -> err
+fn iterate_to_list(it: *Interp, v: Value) -> (list.List[Value], err)
+fn own_keys(it: *Interp, o: *Obj) -> ([]const Key, err)
+fn key_to_value(k: Key) -> Value
+fn member_key(it: *Interp, f: *Frame, n: ast.Node) -> (Key, err)
+fn fmod_js(x: f64, y: f64) -> f64
+fn arith(it: *Interp, op: u8, x: f64, y: f64) -> f64
+fn compare_values(it: *Interp, x: Value, y: Value, left_first: bool) -> (i32, bool, err)
+fn num_of(v: Value) -> f64
+fn value_str(v: Value) -> str
+fn compare_utf16(x: str, y: str) -> i32
+fn binary_op(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err)
+fn eval_args(it: *Interp, f: *Frame, first: u32, count: u32) -> ([]const Value, err)
+fn describe_callee(f: *const Frame, id: u32) -> str
+fn eval_callee(it: *Interp, f: *Frame, id: u32) -> (Value, Value, err)
+error OptShort
+fn eval_super_member(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err)
+fn eval_call(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err)
+fn tick(it: *Interp) -> err
+fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err)
+fn is_symbol_value(v: Value) -> bool
+fn make_regexp(it: *Interp, pattern: str, flags: str) -> (Value, err)
+fn eval_tagged(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err)
+fn freeze_object(it: *Interp, o: *Obj)
+fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err)
+fn eval_update(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err)
+fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err)
+fn eval_object(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err)
+fn zero_keys() -> []const Key
+fn key_name_for_function(it: *Interp, key: Key) -> str
+fn copy_data_properties(it: *Interp, tgt: *Obj, source: Value, excluded: []const Key) -> err
+fn eval_class(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err)
+fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Value, err)
+fn default_constructor(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn is_lexical_decl(f: *const Frame, id: u32) -> bool
+fn hoist_declarations(it: *Interp, f: *Frame, first: u32, count: u32) -> err
+fn declare_pattern_names(it: *Interp, f: *Frame, pid: u32, flags: u8) -> err
+fn has_lexical(f: *const Frame, first: u32, count: u32) -> bool
+fn exec_body(it: *Interp, f: *Frame, bid: u32) -> (Completion, err)
+fn exec_block(it: *Interp, f: *Frame, bn: ast.Node) -> (Completion, err)
+fn label_matches(c: Completion, label: str) -> bool
+fn loop_exit(c: Completion, labels: []const str) -> (bool, bool)
+fn exec(it: *Interp, f: *Frame, id: u32) -> (Completion, err)
+fn zero_labels() -> []const str
+fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Completion, err)
+fn exec_for(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Completion, err)
+fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Completion, err)
+fn for_body(it: *Interp, f: *Frame, n: ast.Node, target_id: u32, v: Value, decl_mode: u8, lexical: bool, flags: u8, saved: *Env) -> (Completion, err)
+fn is_reference_error(it: *Interp) -> bool
+fn exec_try(it: *Interp, f: *Frame, n: ast.Node) -> (Completion, err)
+fn exec_switch(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Completion, err)
+fn new_frame_global(it: *Interp, prog: *const ast.Program) -> Frame
+fn run_program(it: *Interp, prog: *const ast.Program) -> (Value, err)
+fn hoist_lexical_only(it: *Interp, f: *Frame, first: u32, count: u32) -> err
+fn eval_source(it: *Interp, source: str) -> (Value, err)
+fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err)
+fn env_is_var_scope(it: *Interp, e: *Env) -> bool
+error GenReturn
+type GenState = struct
+const GS_START: u8 = 0u8
+const GS_SUSPENDED: u8 = 1u8
+const GS_RUNNING: u8 = 2u8
+const GS_DONE: u8 = 3u8
+const RM_NEXT: u8 = 0u8
+const RM_THROW: u8 = 1u8
+const RM_RETURN: u8 = 2u8
+fn gen_state_of(f: *const Frame) -> *GenState
+fn gen_thread_main(gs: *GenState)
+fn gen_resume(it: *Interp, gs: *GenState, mode: u8, val: Value) -> (Value, bool, err)
+fn gen_suspend(it: *Interp, gs: *GenState, v: Value, raw: bool) -> (u8, Value)
+fn gen_yield(it: *Interp, f: *Frame, v: Value) -> (Value, err)
+fn gen_yield_star(it: *Interp, f: *Frame, iterable: Value) -> (Value, err)
+fn make_suspendable(it: *Interp, fo: *Obj, f: Frame, n: ast.Node) -> (Value, err)
+fn await_value(it: *Interp, f: *Frame, v: Value) -> (Value, err)
+fn async_step(it: *Interp, gs: *GenState, mode: u8, val: Value)
+fn async_fulfilled(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn async_rejected(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+type Reaction = struct { is_reject: bool, handler: Value, cap_promise: Value, cap_resolve: Value, cap_reject: Value, has_cap: bool }
+type PromiseState = struct { state: u8, result: Value, fulfill: list.List[Reaction], reject: list.List[Reaction], handled: bool }
+type Job = struct { kind: u8, a: Value, b: Value, c: Value, d: Value, is_reject: bool }
+fn promise_state_of(o: *Obj) -> *PromiseState
+fn new_promise_with_proto(it: *Interp, proto: *Obj) -> (*Obj, err)
+fn new_promise(it: *Interp) -> (*Obj, err)
+fn enqueue_job(it: *Interp, j: Job)
+fn trigger_reactions(it: *Interp, reactions: list.List[Reaction], arg: Value)
+fn promise_fulfill(it: *Interp, p: *Obj, v: Value)
+fn promise_reject(it: *Interp, p: *Obj, v: Value) -> err
+fn promise_resolve_with(it: *Interp, p: *Obj, resolution: Value) -> err
+type ResolveCell = struct { promise: *Obj, done: bool }
+fn resolving_resolve(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn resolving_reject(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn create_resolving_functions(it: *Interp, p: *Obj) -> (*Obj, *Obj, err)
+type Capability = struct { promise: Value, resolve: Value, reject: Value }
+fn capability_executor(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn new_promise_capability(it: *Interp, ctor: Value) -> (Capability, err)
+fn perform_then(it: *Interp, p: *Obj, on_ful: Value, on_rej: Value, cap: Capability, has_cap: bool)
+fn promise_then_raw(it: *Interp, p: *Obj, on_ful: Value, on_rej: Value) -> err
+fn promise_resolve_value(it: *Interp, v: Value) -> (*Obj, err)
+fn run_job(it: *Interp, j: Job) -> err
+fn run_jobs(it: *Interp) -> err
+```
+
+### `e.js.b_array`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn len_of(it: *js.Interp, o: *js.Obj) -> (f64, err)
+fn set_length(it: *js.Interp, o: *js.Obj, n: f64) -> err
+fn rel_index(it: *js.Interp, v: js.Value, len: f64, default_value: f64) -> (f64, err)
+fn cb_check(it: *js.Interp, f: js.Value) -> err
+fn array_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_is_array(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_from_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_push_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_pop(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_shift(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_unshift(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_splice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn is_concat_spreadable(it: *js.Interp, v: js.Value) -> (bool, err)
+fn array_concat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_join(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_reverse(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_last_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_includes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err)
+fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Value
+fn four_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value, w: js.Value) -> []const js.Value
+fn array_for_each(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 0u8)
+fn array_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 1u8)
+fn array_filter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 2u8)
+fn array_some(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 3u8)
+fn array_every(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 4u8)
+fn array_find(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 5u8)
+fn array_find_index(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 6u8)
+fn array_find_last(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 7u8)
+fn array_find_last_index(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 8u8)
+fn reduce_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, right: bool) -> (js.Value, err)
+fn array_reduce(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = reduce_with(it, this_val, args, false)
+fn array_reduce_right(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = reduce_with(it, this_val, args, true)
+fn array_fill(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_copy_within(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn sort_compare(it: *js.Interp, cmp: js.Value, x: js.Value, y: js.Value) -> (f64, err)
+fn merge_sort(it: *js.Interp, cmp: js.Value, items: []js.Value, tmp: []js.Value, lo: usize, hi: usize) -> err
+fn array_sort(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, mapper: js.Value, this_arg: js.Value, start: f64) -> (f64, err)
+fn array_flat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_flat_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn make_array_iterator(it: *js.Interp, o: *js.Obj, kind: f64) -> js.Value
+fn array_keys(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_values(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn iter_result(it: *js.Interp, v: js.Value, done: bool) -> js.Value
+fn array_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn iterator_proto_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_species_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_array(it: *js.Interp)
+```
+
+### `e.js.b_string`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn this_str(it: *js.Interp, this_val: js.Value) -> (str, err)
+fn string_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn this_string_value(it: *js.Interp, v: js.Value) -> (str, err)
+fn string_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn from_char_code(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn from_code_point(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_raw(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn char_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn char_code_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn code_point_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn index_of_units(it: *js.Interp, s: str, needle: str, from: usize) -> f64
+fn string_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_last_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn is_regexp_value(it: *js.Interp, v: js.Value) -> (bool, err)
+fn string_includes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_starts_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_ends_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn clamp_index(it: *js.Interp, v: js.Value, len: f64, default_value: f64) -> (f64, err)
+fn string_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_substring(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_substr(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn map_case(it: *js.Interp, s: str, upper: bool) -> str
+fn string_to_upper(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_to_lower(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_trim(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn trim_start_str(s: str) -> str
+fn trim_end_str(s: str) -> str
+fn string_trim_start(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_trim_end(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn pad(it: *js.Interp, this_val: js.Value, args: []const js.Value, at_start: bool) -> (js.Value, err)
+fn string_pad_start(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = pad(it, this_val, args, true)
+fn string_pad_end(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = pad(it, this_val, args, false)
+fn string_repeat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_concat_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_split(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_locale_compare(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_normalize(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn expand_replacement(it: *js.Interp, matched: str, s: str, position: usize, captures: []const js.Value, replacement: str) -> str
+fn replace_impl(it: *js.Interp, this_val: js.Value, args: []const js.Value, all: bool) -> (js.Value, err)
+fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Value
+fn string_replace(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = replace_impl(it, this_val, args, false)
+fn string_replace_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = replace_impl(it, this_val, args, true)
+fn delegate(it: *js.Interp, this_val: js.Value, args: []const js.Value, sym: *js.Sym, extra_flags: str) -> (js.Value, err)
+fn string_match(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = delegate(it, this_val, args, it.sym_match, "")
+fn string_match_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_search(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = delegate(it, this_val, args, it.sym_search, "")
+fn string_iterator(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn result_object(it: *js.Interp, v: js.Value, done: bool) -> *js.Obj
+fn install_string(it: *js.Interp)
+```
+
+### `e.js.b_number`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn boolean_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn this_boolean(it: *js.Interp, v: js.Value) -> (bool, err)
+fn boolean_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn boolean_value_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn number_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn this_number(it: *js.Interp, v: js.Value) -> (f64, err)
+fn digit_char(d: u32) -> u8
+fn radix_string(it: *js.Interp, x: f64, radix: u32) -> str
+fn number_to_string_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn number_value_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn number_to_locale_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn sig_digits(it: *js.Interp, x: f64, sig: usize) -> (str, i64)
+fn number_to_fixed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn sig_digits_fixed(it: *js.Interp, x: f64, frac: usize) -> (str, i64)
+fn number_to_exponential(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn shortest_digits(it: *js.Interp, x: f64) -> (str, i64)
+fn number_to_precision(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn number_is_integer(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn number_is_safe_integer(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn number_is_finite(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn number_is_nan(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn global_is_nan(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn global_is_finite(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn parse_float_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn parse_int_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_number(it: *js.Interp)
+fn m1(it: *js.Interp, args: []const js.Value) -> (f64, err)
+fn math_abs(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_floor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_ceil(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_round(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_trunc(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_sign(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_sqrt(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_cbrt(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_pow(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_exp(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_expm1(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_log(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_log2(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_log10(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_log1p(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_sin(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_cos(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_tan(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_asin(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_acos(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_atan(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_atan2(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_sinh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_cosh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_tanh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_asinh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_acosh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_atanh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_hypot(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_max(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_min(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_random(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_fround(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_clz32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn math_imul(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_math(it: *js.Interp)
+```
+
+### `e.js.b_json`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+type P = struct { s: str, i: usize }
+fn skip_ws(p: *P)
+fn syntax(it: *js.Interp, p: *P) -> err
+fn parse_string(it: *js.Interp, p: *P) -> (str, err)
+fn parse_value(it: *js.Interp, p: *P, depth: u32) -> (js.Value, err)
+fn revive(it: *js.Interp, holder: *js.Obj, key: js.Key, reviver: js.Value) -> (js.Value, err)
+fn json_parse(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+type S = struct
+fn quote(it: *js.Interp, s: str) -> str
+fn ser(it: *js.Interp, st: *S, holder: *js.Obj, key: js.Key, value_in: js.Value, indent: str) -> (str, bool, err)
+fn join_items(it: *js.Interp, items: list.List[str], open: str, close: str, indent: str, inner: str, step: str) -> str
+fn json_stringify(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_json(it: *js.Interp)
+```
+
+### `e.js.b_control`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn iter_result(it: *js.Interp, v: js.Value, done: bool) -> js.Value
+fn this_generator(it: *js.Interp, v: js.Value) -> (*js.GenState, err)
+fn generator_resume(it: *js.Interp, this_val: js.Value, args: []const js.Value, mode: u8) -> (js.Value, err)
+fn generator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = generator_resume(it, this_val, args, js.RM_NEXT)
+fn generator_return(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = generator_resume(it, this_val, args, js.RM_RETURN)
+fn generator_throw(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = generator_resume(it, this_val, args, js.RM_THROW)
+fn generator_function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_generators(it: *js.Interp)
+fn this_promise(it: *js.Interp, v: js.Value) -> (*js.Obj, err)
+fn promise_ctor_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn species_constructor(it: *js.Interp, o: *js.Obj, default_ctor: js.Value) -> (js.Value, err)
+fn promise_then(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn promise_catch(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn then_finally_value(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn then_finally_thrower(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn finally_step(it: *js.Interp, this_val: js.Value, args: []const js.Value, rejecting: bool) -> (js.Value, err)
+fn then_finally_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = finally_step(it, this_val, args, false)
+fn catch_finally_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = finally_step(it, this_val, args, true)
+fn promise_finally(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn promise_resolve_static(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn promise_reject_static(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn promise_with_resolvers(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+type Agg = struct { values: *js.Obj, remaining: f64, resolve: js.Value, reject: js.Value, done: bool }
+fn agg_of(o: *js.Obj) -> *Agg
+fn aggregate_element(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err)
+fn agg_fulfilled(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = aggregate_element(it, this_val, args, 0u8)
+fn agg_settled_ok(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = aggregate_element(it, this_val, args, 1u8)
+fn agg_settled_err(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = aggregate_element(it, this_val, args, 2u8)
+fn agg_rejected(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = aggregate_element(it, this_val, args, 3u8)
+fn combinator(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err)
+fn promise_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = combinator(it, this_val, args, 0u8)
+fn promise_all_settled(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = combinator(it, this_val, args, 1u8)
+fn promise_any(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = combinator(it, this_val, args, 2u8)
+fn promise_race(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = combinator(it, this_val, args, 3u8)
+fn species_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_promise(it: *js.Interp)
+fn reflect_apply(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_like(it: *js.Interp, v: js.Value) -> ([]const js.Value, err)
+fn reflect_construct(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_target(it: *js.Interp, args: []const js.Value) -> (*js.Obj, err)
+fn reflect_define_property(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn to_desc(it: *js.Interp, v: js.Value) -> (js.Desc, err)
+fn reflect_delete_property(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_get_own_property_descriptor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_get_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_set_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_has(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_is_extensible(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_prevent_extensions(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reflect_own_keys(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_reflect(it: *js.Interp)
+```
+
+### `e.js.realm`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn make_ctor(it: *js.Interp, name: str, length: u32, native: js.NativeFn, proto: *js.Obj) -> *js.Obj
+fn object_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_proto_has_own(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_proto_value_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_proto_is_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_proto_property_is_enumerable(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_get_proto(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_set_proto(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_prototype(it: *js.Interp, o: *js.Obj, v: js.Value) -> err
+fn to_descriptor(it: *js.Interp, v: js.Value) -> (js.Desc, err)
+fn from_descriptor(it: *js.Interp, d: js.Desc) -> js.Value
+fn object_define_property(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn define_properties_from(it: *js.Interp, o: *js.Obj, props: js.Value) -> err
+fn object_define_properties(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_create(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_get_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_set_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_get_own_property_descriptor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_get_own_property_descriptors(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn keys_array(it: *js.Interp, o: *js.Obj, mode: u8, want_symbols: bool) -> (js.Value, err)
+fn object_keys(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_values(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_get_own_property_names(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_get_own_property_symbols(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_assign(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_is(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_freeze(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_seal(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_prevent_extensions(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_is_extensible(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_is_frozen_or_sealed(it: *js.Interp, v: js.Value, frozen: bool) -> bool
+fn object_is_frozen(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_is_sealed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_from_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_has_own(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_define_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_define_setter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn lookup_accessor(it: *js.Interp, this_val: js.Value, key_arg: js.Value, want_getter: bool) -> (js.Value, err)
+fn object_lookup_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_lookup_setter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_to_locale_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_object(it: *js.Interp)
+fn function_proto_call(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_like_to_list(it: *js.Interp, v: js.Value) -> ([]const js.Value, err)
+fn function_proto_apply(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn function_proto_bind(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn function_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn function_proto_has_instance(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn function_proto_noop(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_function(it: *js.Interp)
+fn error_ctor_common(it: *js.Interp, proto_default: *js.Obj, args: []const js.Value) -> (js.Value, err)
+fn error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.error_proto, args)
+fn type_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.type_error, args)
+fn range_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.range_error, args)
+fn syntax_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.syntax_error, args)
+fn reference_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.reference_error, args)
+fn eval_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.eval_error, args)
+fn uri_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.uri_error, args)
+fn error_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_error_type(it: *js.Interp, name: str, proto: *js.Obj, native: js.NativeFn, parent_ctor: *js.Obj, has_parent: bool) -> *js.Obj
+fn install_errors(it: *js.Interp)
+fn symbol_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn this_symbol(it: *js.Interp, v: js.Value) -> (*js.Sym, err)
+fn symbol_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn symbol_proto_value_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn symbol_description(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn symbol_for(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn symbol_key_for(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn symbol_to_primitive(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn well_known(it: *js.Interp, ctor: *js.Obj, name: str) -> *js.Sym
+fn install_symbol(it: *js.Interp)
+fn global_print(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn host_eval_script(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn host_gc(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_host(it: *js.Interp)
+fn global_this(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_globals(it: *js.Interp)
+fn global_eval(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn new_realm(a: *mem.Arena) -> (*js.Interp, err)
+fn run(it: *js.Interp, source: str) -> (js.Value, err)
+```
+
 ### `e.fmt.html.template`
 
 ```neper

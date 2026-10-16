@@ -2659,6 +2659,120 @@
    "blocked_by": []
   },
   {
+   "name": "e.js.interp",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.data.map",
+    "e.js.ast",
+    "e.js.parser",
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.sync",
+    "e.thread"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.js.b_array",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.js.interp",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.js.b_string",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.js.interp",
+    "e.mem",
+    "e.str",
+    "e.text.unicode"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.js.b_number",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.js.interp",
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.js.b_json",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.js.interp",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.js.b_control",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.js.interp",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.js.realm",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.io",
+    "e.js.ast",
+    "e.js.b_array",
+    "e.js.b_control",
+    "e.js.b_json",
+    "e.js.b_number",
+    "e.js.b_string",
+    "e.js.interp",
+    "e.js.parser",
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.fmt.html.template",
    "layer": 6,
    "surface": "partial",
