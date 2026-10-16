@@ -1,0 +1,404 @@
+{
+ "label": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/label.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. label-rest 150 x 20 at the capture's origin: 0 of 1915 flat px off, 5 chrome px (glyph edge px left of the ink zone), ink (0,3,78,11) against (0,3,79,11), within 1 px; label-disabled the same (0 of 1879 flat, 5 chrome). A dark Segoe UI label is now DirectWrite-style shaped text on the native baseline (cap top on row 3), no longer v3's GDI hinted advances.",
+    "gaps": [
+     "Tahoma labels (face 8, the v3 dialogs' font) keep Tahoma 11 px in dark; only Segoe labels follow the native static",
+     "label-disabled in the capture is the same white as rest (the gallery colours the static text), so it is no reference for a disabled label: ours stays the mapped grey",
+     "syslink-* (link colours) is not compared: the link colour stays v3's #336CCC lifted toward white",
+     "Not compared pixel for pixel: ClearType fringes against our greyscale text"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/button.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. Native 110 x 32 window rect = a 108 x 30 visible box (DFM 110 x 31 here): button-rest, button-default, button-focus, button-default-focus, button-pressed, button-default-pressed and button-disabled each 0 flat and 0 chrome px off (2314 to 2331 flat px at rest, 484 pressed): ring corners, faces and focus dots exact; label Segoe UI 12 px centred, ink (37,10,70,18) against (37,10,71,18). A pressed dark button no longer shows the dotted rectangle (native button-pressed has none).",
+    "gaps": [
+     "Not compared: button-split-* (split button), button-icon-* (picture and caption), hover-pressed (identical to pressed); toggle, loading and plain kinds keep the older drawing",
+     "button-hover is pixel-identical to rest in the capture (no distinct hover look): the #3C3C3C hover face stays a guess",
+     "Label ink is 1 px narrower than the capture on the right (DirectWrite shaping against the native advances)"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/checkbox.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. The 12 native dark captures (unchecked, checked and indeterminate; rest, focus, pressed, disabled) 140 x 22: 0 flat and 0 chrome px off in all 12 (1426 to 1943 flat px each), ink boxes within 1 px ((3,4,82,17) rest, (3,3,83,18) focus). The 13 x 13 marks are the native tiles, the caption Segoe UI 12 px from x 16 and white (#CCCCCC disabled), the focus rectangle DrawFocusRect (alternating #DFDFDF and black from the corner, 17 high).",
+    "gaps": [
+     "checkbox-*-hover is pixel-identical to rest in the capture: hover has no distinct reference",
+     "A check box inside a group with rows above 24 px keeps the older v3 row layout (Tahoma)",
+     "Mnemonic underlines are not drawn in the dark native row (the native control shows them only after Alt)"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/radio.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. The 8 native dark radio captures: the 13 x 13 ring and dot tiles and the focus rectangle are 0 flat and 0 chrome px off in all of them (1348 to 1923 flat px); disabled captions ink (3,4,82,17), focus ink (3,3,83,18), both within 1 px.",
+    "gaps": [
+     "radio-*-rest, -pressed and -checked captions are drawn dark on the dark page in the capture (the gallery set no text colour: peaks 69 to 185 against our 253): not copied, so the text of 6 of 8 captures is not compared",
+     "A radio inside a radio group (rows above 24 px) keeps the older Tahoma row"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/radio_group.png",
+    "notes": "No native dark reference: the native group box stays light (#DCDCDC frame) in the dark gallery, so the frame cannot be compared; the stand-alone radio rows it holds follow the native dark radio only where the row is 24 px or lower. Contrast: frame #333333 against the page 1.29 : 1 (below the 3 : 1 bar for a control border), caption white 16.3 : 1.",
+    "gaps": [
+     "No native or real-app dark reference for the group frame",
+     "The frame is a decorative #333333 line, 1.29 : 1 against the page: it fails the 3 : 1 border bar, so the status stays started",
+     "The rows inside are not rebuilt to the native 22 px row"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/text_edit.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. Every native dark edit capture 150 x 24 against our dark edit (DFM width 149, 24 high, Segoe UI 12 px, text origin x 6, 15 px line): edit-rest, edit-hover, edit-focus, edit-selected, edit-readonly, edit-disabled and edit-password each 0 flat px off and 0 chrome px off (1872 to 2253 flat px each, max 0 levels, nothing cut). Ink boxes within 1 px at rest and disabled ((6,6,58,15) against (6,6,57,14)); the password bullets are U+25CF 7 px apart as drawn natively (the engine's asterisk mask is hidden under an overlay); the selection box is the exact #0078D7 rectangle.",
+    "gaps": [
+     "edit-focus: the capture's caret ends the ink at x 58, ours 2 px further right (the text is 1 px wider there: DirectWrite shaping against the native advances); the caret is a system overlay",
+     "edit-hover is pixel-identical to rest in the capture: no distinct hover look to match",
+     "Unverified: invalid (no native state; a 1 px red outline), long text, placeholder colour",
+     "Multi-line is the memo control; the dark single-line control height is the native 24 (v3's 22 is light only)"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/spin_edit.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. All 7 native dark spin captures 74 x 24 (edit 58 + up-down 18): spin-rest, -hover-up, -hover-down, -pressed-up, -pressed-down, -focus, -disabled each 0 flat and 0 chrome px off (797 to 900 flat px), the arrows, held faces (#626262), the white focus frame and the text selection included; ink within 1 px at rest.",
+    "gaps": [
+     "spin-pressed-*: the capture shows a caret in the field that ours (hidden caret) does not draw; flat and chrome pixels still 0",
+     "Unverified: arrows dimmed at the bounds (taken from the disabled capture's glyph, no native single-arrow capture); the four-arrow v3 fast spin edit draws the native up-down only"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/combo_box.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. Closed: combo-edit-{rest, hover, hover-arrow, focus, disabled} and combo-list-{rest, hover, hover-arrow, focus, disabled} 150 x 23 (DFM 149 x 22) each 0 flat and 0 chrome px off (1575 to 2427 flat px); open: combo-edit-open, combo-edit-open-hover-row, combo-list-open and combo-list-open-hover-row (head 23 + list 122 = 145 rows) each 0 flat, 0 chrome of 12,924 to 14,286 flat px: 15 px Segoe rows, the #7A7A7A list line one px wider than the head box, #0078D7 lit row, the dotted XOR rectangle on a list-style combo only, the white line and 15 column #666666 button of an open editable combo. Ink within 1 px.",
+    "gaps": [
+     "combo-*-hover is pixel-identical to rest in the capture; combo-edit-hover-arrow shows an empty field there (capture artefact: ours keeps the text, which is excluded from the flat count)",
+     "The native drop list's scroll bar (a light unthemed one past 8 rows) is not copied; ours is the dark bar",
+     "The flat (toolbar) combo has no native counterpart and keeps the mapped v3 look"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/image_combo_box.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. The head and drop list share the combo box code, so the frame, rows, lit row, selected text and list are the exact native combo-list / combo-edit ones above (0 flat, 0 chrome); no native combo has pictures, so the picture cells cannot be compared.",
+    "gaps": [
+     "Pictures are v3's bitmaps drawn as glyphs: no native reference",
+     "Open lists past 8 rows scroll: the native scroll bar there is light (not copied)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/date_edit.png",
+    "notes": "No native dark reference: the native date-time picker and month calendar stay light under DarkMode (README). The editable field and its button are the native dark combo (0 flat, 0 chrome against combo-edit-*), the calendar popup is the best Windows 11 dark look from the palette: text white on #2B2B2B 14.2 : 1, today ring #4CC2FF 8.1 : 1; not compared with a real dark app (no safe dark Win32 calendar to capture).",
+    "gaps": [
+     "No native dark reference for the calendar popup (it stays light under DarkMode)",
+     "Native DTP and MonthCal glyph and layout are not reproduced (see the light entry)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/mask_edit.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. The frame states of the mask edit against the native edit captures (the mask edit is an edit control; no native mask capture exists, so the text differs by content and is excluded): mask_edit.png cells rest, hover, focus, selected, disabled and read-only each 0 flat and 0 chrome px off against edit-rest, -hover, -focus, -selected, -disabled, -readonly (1504 to 1930 flat px each, DFM width 149, 24 high); the password cell draws bullets.",
+    "gaps": [
+     "No native capture of a mask edit: the typed text, the invalid look (a 1 px red outline guess) and the long text are unverified",
+     "edit-hover is pixel-identical to rest in the capture"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/memo.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. edit-multiline-vscroll 168 x 90: the left 148 px (everything but the vertical bar) is 0 flat and 0 chrome px off of 9624 flat px, ink box exactly (7,6,57,86): six 15 px Segoe lines, text origin (7, 6), the unfocused edit showing its first line, the last line cut at the foot as in the capture.",
+    "gaps": [
+     "The native bar (17 px, #F0F0F0, a light unthemed bar: DarkMode_Explorer is not applied to it) is not copied: ours is the dark 17 px bar, so the right 20 px of the capture are not compared",
+     "Unverified: invalid, placeholder, focused scroll position"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/button_edit.png",
+    "notes": "No native dark capture has an edit with an ellipsis button: the frame is the native dark edit (24 high, 0 flat and 0 chrome px off against edit-*, text excluded), the ellipsis button (16 wide, the edit's height less 5, #333333 face, #9B9B9B line, white dots) is a guess.",
+    "gaps": [
+     "The ellipsis button geometry and dots are guesses (no native reference)",
+     "Invalid: a red outline guess"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/token_edit.png",
+    "notes": "No native or real-app reference for tokens: only the edit frame (24 high) is native (0 flat, 0 chrome against edit-*); the chips keep the mapped v3 guess.",
+    "gaps": [
+     "No native or v3 reference for the chips"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/check_list_box.png",
+    "notes": "Unchanged from audit 4: the face #202020 and the selected row #1A364D come from the native dark list view, whose check boxes are light-theme boxes (ours are the native dark check box: mismatch by design); no per-cell diff against checklist-* was made in round 12.",
+    "gaps": [
+     "Check marks: native dark list view shows light-theme boxes, ours the native dark check box",
+     "Disabled and unfocused selected rows have no cell",
+     "The native list scroll bar is light-themed and not copied"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/progress_bar.png",
+    "notes": "No native dark reference: the native progress bar is the light one (uxtheme has no dark progress bar). Best Windows 11 dark look from the palette: fill #4CC2FF against the #202020 page 8.1 : 1; the track #3C3C3C is 1.5 : 1 against the page (decorative, no border); not compared with a real dark app.",
+    "gaps": [
+     "No native dark reference exists",
+     "Paused (#FFD800) and error (#FF99A4) tones are not measured"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/group_box.png",
+    "notes": "No native dark reference (the native group box frame stays light #DCDCDC in dark). Best dark look from the palette: frame #333333 against the page 1.29 : 1 (fails the 3 : 1 border bar), caption white 15.6 to 16.3 : 1; no real dark app group box to compare with.",
+    "gaps": [
+     "No native dark reference: the capture is the unthemed light frame",
+     "The frame is below the 3 : 1 border bar, so the status stays started",
+     "Disabled has no distinct native look (groupbox-disabled is pixel-identical to rest)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/page_control.png",
+    "notes": "No native dark reference: the native tab control stays light on #202020 under DarkMode. Best dark look from the palette: tab text white on #2B2B2B 14.2 : 1; the selected tab outline and the strip's edge are #5A5A5A line work (2.4 : 1 against the page, below the 3 : 1 bar); not compared with a real dark app.",
+    "gaps": [
+     "No native dark reference exists",
+     "The tab outlines are 2.4 : 1 against the page: below the 3 : 1 bar for every state"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/splitter.png",
+    "notes": "No native gallery control and no real dark app splitter to compare with; the bar is the palette's #2B2B2B grip on #202020 (1.3 : 1 against the page, the grip dots #B0B0B1 7.5 : 1).",
+    "gaps": [
+     "No native or live dark reference exists"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/status_bar.png",
+    "notes": "No native dark reference: the native status bar stays light under DarkMode. Best dark look from the palette: text white on #2B2B2B 13.5 to 14.2 : 1 (every panel and the progress panel), no drawn border; a real dark Win32 status bar is light, so there is none to compare with.",
+    "gaps": [
+     "No native dark reference exists",
+     "Panel hover is none (as v3); the progress fill is a guess"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/toolbar_button.png",
+    "notes": "No native dark reference: the native dark toolbar is the light one on #202020 (hot #E5F3FF, near-black text). Best dark look from the palette: icon and text #CECECE on the #3C3C3C hot face 7.0 : 1; the hot border #4A4A4A is 1.8 : 1 against the page (below the 3 : 1 bar). The toolbar_button app traps at HEAD (build_hot returns 10 cells for 9), so these sheets were not re-rendered in round 12.",
+    "gaps": [
+     "Hot, pressed, checked and disabled washes are guesses from the Windows 11 ramp",
+     "No native dark theme: cannot be matched"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/menu_bar.png",
+    "notes": "No native dark reference: the native menu bar stays white under DarkMode. Best dark look from the palette: titles white on #202020 16.3 : 1, hot and open washes unmeasured; no real dark Win32 menu bar exists to compare with.",
+    "gaps": [
+     "Hot/open washes are guesses; title paddings are v3's"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/popup_menu.png",
+    "notes": "Unchanged from audit 4: frame #808080, body #2C2C2C and separator #3E3E3E equal the native dark menu-popup-rest; the native menu is 202 x 134 with 22 px items and a rounded white keyboard outline, ours keeps v3's item geometry, so no per-cell diff was made.",
+    "gaps": [
+     "Native selection is a white rounded outline with no fill (keyboard); v3's filled hot row kept",
+     "Item geometry (row height, icon column, text origin) is v3's, not the native 202 x 134",
+     "Check glyph and submenu chevron are v3 pictures, not compared"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/hint_native.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. tooltip-rest 126 x 20: 0 flat and 0 chrome px off of 880 flat px (a square #767676 line round a #2B2B2B face, white Segoe UI 12 px text at (5, 1)); hint_native.png now draws it for the dark look.",
+    "gaps": [
+     "tooltip-balloon (rounded 8, icon, title; 159 x 74) has no Neper cell: not every native dark state is covered",
+     "The grid header hint variant keeps the mapped v3 bevel",
+     "Native tooltip is ClearType; ours greyscale (text excluded from the count)"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/scroll_bar.png",
+    "notes": "Round 12 strict diff (scripts/looks_strict_dark.py; evidence sheets windows-dark/native_dark.png, native_dark_open0-3.png, native_dark2.png): flat = reference pixels equal to all 8 neighbours outside glyphs, off when a channel differs by more than 2 levels; chrome = the other pixels outside text; the whole native rect counts, nothing is cut. vscroll-rest 17 x 170 and hscroll-rest 178 x 17: each 0 flat and 0 chrome px off (2352 and 2460 flat px): the 17 px #171717 bar, the 2 px thumb on columns or rows 8 and 9, #959595 between #858585 end rows. Hover and pressed-thumb captures are pixel-identical to rest.",
+    "gaps": [
+     "vscroll-pressed-arrow (the pressed 17 x 17 arrow button, #1E1E1E track and #333333 thumb) and vscroll-disabled / hscroll-disabled (dimmed arrows, no thumb) are not reproduced",
+     "Hover colour and widening of the thumb (v3's 6 px hover pill) are unverified: the native hover capture equals rest",
+     "hscroll-hover-* and -pressed-* are not drawn as cells"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/list_box.png",
+    "notes": "No native dark list box exists (the native list box stays light under DarkMode: its selection is white on white), so this is justified by contrast and by the real dark list the gallery does have, the combo drop list: frame #7A7A7A against the #202020 page 3.80 : 1 (>= 3 : 1), rows white 16.3 : 1, the chosen row white on #0078D7 4.5 : 1, the same colours and line as combo-list-open (0 flat, 0 chrome against it); rows are v3's 19 px customization-list rows, not the native 15 px.",
+    "gaps": [
+     "No native dark list box reference (README: list box stays light)",
+     "Disabled and multi-select are not captured",
+     "The native listbox keeps the #0078D7 selection when the list loses focus; v3's list hides it (kept)"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/tree_list_expanded.png",
+    "notes": "Unchanged from audit 4: row, selection and line colours come from the native dark tree captures; no per-cell diff was made in round 12.",
+    "gaps": [
+     "v3 +/- boxes and check boxes are the light tiles mapped to dark; native uses chevrons and a #60CDFF focus ring, not reproduced",
+     "Native tree-disabled and classic-lines not in the sheet"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/vertical_grid_states.png",
+    "notes": "No native property grid exists, so nothing is compared: selection #264F78 and the band gradient are palette guesses; text white on #2B2B2B 14.2 : 1; the grid lines are 1.3 : 1 against the page.",
+    "gaps": [
+     "Selection #264F78 and the band gradient are guesses (native list view selection is #1A364D)"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/data_grid_main.png",
+    "notes": "Unchanged from audit 4: header, separator, frame and selection colours come from the native dark list view captures; no per-cell diff against listview-* was made in round 12 (the dark edit and combo editors inside a grid now follow the native 24 and 23 px metrics).",
+    "gaps": [
+     "Native header text is near-black in the capture (not a usable reference)",
+     "Native gridlines are #F0F0F0 in dark (system colour quirk): not copied",
+     "Group rows, footer and navigator have no native equivalent"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/title_bar_native.png",
+    "notes": "Unchanged from audit 4: the window caption cells match the native dark window captions; dialog close buttons (33 against 46 wide), the message box and the task dialog are not matched. The message box and task dialog stay light natively: best dark look from the palette, button borders #909090 5.1 : 1 and #5E5E5E 2.5 : 1 against the page.",
+    "gaps": [
+     "Dialog close button 33 wide (v3) against the native 46",
+     "Dark message box and task dialog: no native dark reference (the native ones stay light)",
+     "Hot and pressed caption buttons: the native hot captures equal rest"
+    ]
+   }
+  }
+ }
+}
