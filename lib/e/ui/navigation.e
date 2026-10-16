@@ -8683,13 +8683,13 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
                 glyph_ink = style.color(t.tokens, .OnError)
                 if windows {
                     fill = style.windows_caption_close(state.pressed)
-                    glyph_ink = style.hex(16777215u32)
+                    glyph_ink = style.hex_raw(16777215u32)
                 }
             }
             // looks5: v3's hovered minimise and maximise buttons wash #2C2D2F over the dark caption (states/hover-caption-*)
             if windows && slot.kind != .Close && !options.light && !options.tool {
                 fill = style.windows_caption_hot()
-                if state.pressed { fill = style.mix(fill, style.hex(16777215u32), 0.06) }
+                if state.pressed { fill = style.mix(fill, style.hex_raw(16777215u32), 0.06) }
             }
         }
         let (face, face_error) = caption_face(a, t, slot, options.platform, glyph_ink, options.active, state.hovered)
@@ -8746,6 +8746,8 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     if !options.active { bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) } }
     if windows { bar.background = paint.Brush { Solid: style.windows_caption_face(options.active) } }
     if windows && (options.light || options.tool) { bar.background = paint.Brush { Solid: style.windows_caption_light_face() } }
+    // Windows 11 dark: a thin #484848 edge keeps the #1F2022 caption apart from the #202020 window ground.
+    if windows && t.tokens.palette == .Dark { bar.border = style.Border { width: 1.0, color: style.hex_raw(0x484848u32) } }
     let (bar_cell, bar_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if bar_cell_error != ok { ret (zero, TooLarge) }
     bar_cell[0usize] = widget.stack(0u64, bar, parts[0usize..n])

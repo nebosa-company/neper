@@ -4388,7 +4388,7 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     caption.wrap = .None
     caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
-    if current { ink = style.hex(16777215u32) }
+    if current { ink = style.hex_raw(16777215u32) }
     let (words, words_width, words_error) = choices_words(a, dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
@@ -5246,10 +5246,22 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     if !indeterminate { share = eased_share(t, key, aimed, true) }
     let inner_w = width - 2.0
     let inner_h = h - 2.0
-    let fill_color = style.hex(438309u32)
+    var fill_color = style.hex(438309u32)
+    var track_color = style.hex(15132390u32)
+    var rim_color = style.hex(12369084u32)
+    var ink_track = style.hex(0u32)
+    var ink_fill = style.hex(16777215u32)
+    // The Windows 11 dark bar: a #3A3A3A track in a #5A5A5A rim, the accent #60CDFF fill, white on the track and black over the fill.
+    if t.tokens.palette == .Dark {
+        fill_color = style.hex_raw(0x60CDFFu32)
+        track_color = style.hex_raw(0x3A3A3Au32)
+        rim_color = style.hex_raw(0x5A5A5Au32)
+        ink_track = style.hex_raw(0xFFFFFFu32)
+        ink_fill = style.hex_raw(0x000000u32)
+    }
     var frame = sized_style(width, h)
-    frame.background = paint.Brush { Solid: style.hex(15132390u32) }
-    frame.border = style.Border { width: 1.0, color: style.hex(12369084u32) }
+    frame.background = paint.Brush { Solid: track_color }
+    frame.border = style.Border { width: 1.0, color: rim_color }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = widget.box(0u64, frame, zero)
@@ -5277,9 +5289,9 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
             if percent_error != ok { ret (zero, percent_error) }
             let (advance, _, _, metrics_error) = run_metrics(a, t, .Body, percent)
             if metrics_error != ok { ret (zero, metrics_error) }
-            let (dark, dark_error) = colored_text(a, 0u64, percent, t, words, style.hex(0u32))
+            let (dark, dark_error) = colored_text(a, 0u64, percent, t, words, ink_track)
             if dark_error != ok { ret (zero, dark_error) }
-            let (light, light_error) = colored_text(a, 0u64, percent, t, words, style.hex(16777215u32))
+            let (light, light_error) = colored_text(a, 0u64, percent, t, words, ink_fill)
             if light_error != ok { ret (zero, light_error) }
             // Each label sits in a box of its own width, placed at the bar's centre, so the white
             // copy inside the clipped fill lines up with the black one under it.
@@ -8860,6 +8872,11 @@ fn win5_hint_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try win3_rect(b, x, y, 1.0, h, style.hex(6579300u32))
         try win3_rect(b, x + 1.0, y + h - 1.0, w - 1.0, 1.0, style.hex(9737364u32))
         ret win3_rect(b, x + 1.0, y + h - 1.0, 1.0, 1.0, style.hex(9671571u32))
+    }
+    if style.windark_active() {
+        // The Windows 11 dark tooltip: a #2B2B2B face in a 1 px #5A5A5A frame, white text.
+        try win3_rect(b, x, y, w, h, style.hex_raw(0x5A5A5Au32))
+        ret win3_rect(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, style.hex_raw(0x2B2B2Bu32))
     }
     try win3_rect(b, x, y, w, h, style.hex(16777185u32))
     try win3_rect(b, x, y, w, 1.0, style.hex(14935011u32))
@@ -13684,7 +13701,7 @@ fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title
 fn v3_tab_line() -> style.Style {
     var s = style.defaults()
     s.height = style.Length { Px: 1.0 }
-    s.background = paint.Brush { Solid: style.hex(2829099u32) }
+    s.background = paint.Brush { Solid: win_tab_edge() }
     ret s
 }
 
@@ -13758,7 +13775,7 @@ fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, 
         tab = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), held[1usize..4usize])
     } else if chosen {
         var frame = style.defaults()
-        frame.background = paint.Brush { Solid: style.hex(2829099u32) }
+        frame.background = paint.Brush { Solid: win_tab_edge() }
         frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 0.0 } }
         tab = widget.box(0u64, frame, held[0usize..1usize])
     } else {
@@ -14373,7 +14390,7 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
     var ink = style.color(t.tokens, .Text)
     var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
     if lit {
-        ink = style.hex(16777215u32)
+        ink = style.hex_raw(16777215u32)
         fill = style.hex(30935u32)
     }
     var h = line
@@ -17964,3 +17981,9 @@ fn cupertino_menu_row_parts(a: *mem.Arena, t: *const Theme, key: widget.Key, lab
     ret (look, content, ok)
 }
 // ---- end the Cupertino look (block 5) ---------------------------------------------------------------
+
+// The selected tab's frame: v3's near-black #2B2B2B; in the Windows dark look a #9D9D9D line (black on the dark strip would be invisible, white too harsh).
+fn win_tab_edge() -> paint.Color {
+    if style.windark_active() { ret style.hex_raw(0x9D9D9Du32) }
+    ret style.hex(2829099u32)
+}

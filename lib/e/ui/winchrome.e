@@ -25,7 +25,7 @@ fn icon_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if pixels[i] != 0u32 {
             // looks5: each pixel is 0xAARRGGBB: the colour and its share over the caption (solved from the icon on the dark and the
             // light caption), so the icon sits on either
-            var color = style.hex(pixels[i] & 0xFFFFFFu32)
+            var color = style.hex_raw(pixels[i] & 0xFFFFFFu32)
             color.alpha = f32(pixels[i] / 16777216u32) / 255.0
             try winpx.fill(b, area.x + f32(i % 16usize), area.y + f32(i / 16usize), 1.0, 1.0, color)
         }
@@ -50,7 +50,7 @@ fn icon_node() -> widget.Node {
 type Glyph = struct { kind: u32, ink: u32, alpha: f32, width: f32 }
 
 fn glyph_rect(b: *scene.Builder, area: geometry.Rect, x: f32, y: f32, w: f32, h: f32, ink: u32, alpha: f32) -> err {
-    var c = style.hex(ink)
+    var c = style.hex_raw(ink)
     c.alpha = alpha
     ret winpx.fill(b, area.x + x, area.y + y, w, h, c)
 }

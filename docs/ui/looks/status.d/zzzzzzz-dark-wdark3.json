@@ -1,0 +1,82 @@
+{
+ "combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/combo_box.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Light chrome is mapped to Windows 11 dark through style.hex (set_windark: neutral tone curve, light tints to dark tints, mid accents lifted a little); tokens are the Windows 11 dark ramp (#202020 ground, #2B2B2B faces, #5A5A5A rims, #4CC2FF accent). Frame, rim, drop button, hot and pressed drop button, disabled, read only, hint and the focus underline come from the light tiles through the map; open lists (combo_box_open_*, combo_box_list_color) have #2B2B2B rows and a #0078D7 hot row with white text.",
+    "gaps": "Rest/hover/pressed/focus/open/disabled all render; hover and pressed drop-button tints and the focus underline shade (about #0A84E6, not #4CC2FF) are map results, not Windows 11 values; flat card variants and combo_box_pick unreviewed."
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/image_combo_box.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Light chrome is mapped to Windows 11 dark through style.hex (set_windark: neutral tone curve, light tints to dark tints, mid accents lifted a little); tokens are the Windows 11 dark ramp (#202020 ground, #2B2B2B faces, #5A5A5A rims, #4CC2FF accent). As the combo; the open list rows are #2B2B2B with a #0078D7 hot row and white text, the 16 px pictures keep their colours.",
+    "gaps": "Open-head blue (#1B5A9A) is the mapped light tint; the item pictures are the light art unchanged."
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/list_box.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Light chrome is mapped to Windows 11 dark through style.hex (set_windark: neutral tone curve, light tints to dark tints, mid accents lifted a little); tokens are the Windows 11 dark ramp (#202020 ground, #2B2B2B faces, #5A5A5A rims, #4CC2FF accent). #2B2B2B face, mapped inset rim, white rows, #17517F selected row, white focus dots, scroll thumb mapped.",
+    "gaps": "Selected row is the mapped v3 selection tint, not #264F78; hover row has no fill in v3 either."
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/page_control.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Light chrome is mapped to Windows 11 dark through style.hex (set_windark: neutral tone curve, light tints to dark tints, mid accents lifted a little); tokens are the Windows 11 dark ramp (#202020 ground, #2B2B2B faces, #5A5A5A rims, #4CC2FF accent). Strip #2B2B2B, labels white, selected tab framed by a lighter line, separators mapped.",
+    "gaps": "The v3 selected-tab frame tile is still bright on its top edge (map of near-black); no accent underline (v3 has none); not a Windows 11 tab strip."
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/splitter.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Light chrome is mapped to Windows 11 dark through style.hex (set_windark: neutral tone curve, light tints to dark tints, mid accents lifted a little); tokens are the Windows 11 dark ramp (#202020 ground, #2B2B2B faces, #5A5A5A rims, #4CC2FF accent). Zone, grip and arrow tile mapped to dark; panes #2B2B2B with #5A5A5A-class rims.",
+    "gaps": "Hover and dragged tints are the map of the light ones, unverified."
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/hint.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Light chrome is mapped to Windows 11 dark through style.hex (set_windark: neutral tone curve, light tints to dark tints, mid accents lifted a little); tokens are the Windows 11 dark ramp (#202020 ground, #2B2B2B faces, #5A5A5A rims, #4CC2FF accent). #2B2B2B face, 1 px #5A5A5A border, white text (plain, wrapped, shortcut, rich).",
+    "gaps": "The grid header hint variant keeps the mapped v3 bevel."
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/progress_bar.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Light chrome is mapped to Windows 11 dark through style.hex (set_windark: neutral tone curve, light tints to dark tints, mid accents lifted a little); tokens are the Windows 11 dark ramp (#202020 ground, #2B2B2B faces, #5A5A5A rims, #4CC2FF accent). #3A3A3A track in a #5A5A5A rim, #60CDFF accent fill (light v3 is green #06B025; the brief asked for the accent), percent white on the track and black over the fill, marquee segment likewise.",
+    "gaps": "Green kept in light only; no dark capture."
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/dialog.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Light chrome is mapped to Windows 11 dark through style.hex (set_windark: neutral tone curve, light tints to dark tints, mid accents lifted a little); tokens are the Windows 11 dark ramp (#202020 ground, #2B2B2B faces, #5A5A5A rims, #4CC2FF accent). Caption #1F2022 (v3's own) with a 1 px #484848 window edge, #2B2B2B message area (dialog_message.png), #202020 body and button strip, dark buttons with the accent default; title bars (title_bar.png) take the same edge, #3C3C3C minimise/maximise hover wash, #C42B1C close; the DevExpress light captions become #2B2B2B with white text.",
+    "gaps": "Close hover, maximised and inactive tints unverified; the Customization tool window's red close box is the light pixel art mapped; dialog_more*/wide sheets not reviewed."
+   }
+  }
+ }
+}
