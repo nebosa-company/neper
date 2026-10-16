@@ -26,7 +26,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     let action = &actions[0usize]
-    let labels = [5]str{ "Hide splash screen on start", "Show Filter &Row", "Show Foil &Symbol", "Use Morph effect", "Show tooltips" }
+    let labels = [5]str{ "Hide splash screen on start", "Show Filter &Row", "Show Foil &Symbol", "&Use Morph effect", "Show tooltips" }
     let checked = [5]bool{ false, false, true, true, true }
     let columns = [3]str{ "rest", "pressed", "focus" }
     let window_xs = [5]f32{ 215.0, 224.0, 224.0, 215.0, 215.0 }

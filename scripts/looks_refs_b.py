@@ -195,7 +195,12 @@ EXISTING["checkbox_dialog"] = (3, 290, 117, [(220, 117), (290, 64), (290, 32)])
 EXISTING["radio_dialog"] = (2, 280, 120, [(254, 120), (280, 36)])
 EXISTING["radio_group_dialog"] = (1, 496, 224, [(496, 224), (302, 116)])
 EXISTING["group_box_dialog"] = (1, 525, 108, [(525, 108), (510, 28), (510, 28), (510, 28)])
-EXISTING["check_list_box_dialog"] = (1, 500, 348, [(500, 348)])
+
+# Check list box dialogs: the Rules and Prices lists (495 x 343) and the Card Art list (464 x 308, item images).
+SHEETS["check_list_box_dialog"] = (1, 500, 348, [
+    (D + "dialog-options-rules-rest@1x.png", 213, 92, 500, 348, 0),
+    (D + "dialog-options-prices-rest@1x.png", 213, 92, 500, 348, 0),
+    (D + "dialog-options-cardart-rest@1x.png", 213, 69, 468, 312, 0)])
 
 # Radio button (TcxRadioButton, 17 tall): Missing Set Cards and the Filter dialog. The Filter dialog's focused
 # grabs show the disc in its pressed look (a stale press), so only Missing Only has a focus cell.
@@ -257,7 +262,8 @@ SHEETS["choices_filter"] = (4, 220, 190, [
     (T, 598, 87, 84, 21),
     (T, 598, 135, 84, 21),
     (T, 210, 67, 182, 14),
-    (T, 21, 247, 182, 14)])
+    (T, 21, 247, 182, 14),
+    (T, 598, 188, 84, 21)])
 
 
 def gdi_table():

@@ -4193,30 +4193,65 @@ fn windows_check_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
 
 // The list's two unit edge, measured on the 100 % captures: an outer line (top #ACAFB4, left
 // #93979F, right #B7BABE, bottom #AAAEB3) and an inner one (#D0D2D5, #ECEDEE, #C2C5C9, #D1D3D6).
-type ListEdge = struct { unused: u8 }
+type ListEdge = struct { art: bool }
 
 fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let e = mem.cast[*ListEdge](ctx)
     let x = area.x
     let y = area.y
     let w = area.width
     let h = area.height
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, w, 1.0), brush: paint.Brush { Solid: style.hex(11317172u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + h - 1.0, w, 1.0), brush: paint.Brush { Solid: style.hex(11185843u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + 1.0, 1.0, h - 2.0), brush: paint.Brush { Solid: style.hex(9672607u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, y + 1.0, 1.0, h - 2.0), brush: paint.Brush { Solid: style.hex(12040894u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 1.0, w - 2.0, 1.0), brush: paint.Brush { Solid: style.hex(13685461u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + h - 2.0, w - 2.0, 1.0), brush: paint.Brush { Solid: style.hex(13751254u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 2.0, 1.0, h - 4.0), brush: paint.Brush { Solid: style.hex(15527406u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 2.0, y + 2.0, 1.0, h - 4.0), brush: paint.Brush { Solid: style.hex(12764617u32) } } })
+    // looks5: the Card Art list's frame is the same eight lines measured on its own capture (the theme's bitmap is
+    // resampled at another phase: right and bottom lines 3 to 5 levels off the Rules list's).
+    var top_outer = 11317172u32
+    var bottom_outer = 11185843u32
+    var left_outer = 9672607u32
+    var right_outer = 12040894u32
+    var top_inner = 13685461u32
+    var bottom_inner = 13751254u32
+    var left_inner = 15527406u32
+    var right_inner = 12764617u32
+    var corner_tl = 11975101u32
+    var corner_tl_in = 12895946u32
+    var corner_tr = 13487825u32
+    var corner_tr_in = 11185588u32
+    var corner_bl = 11909309u32
+    var corner_bl_in = 12961740u32
+    var corner_br = 13422289u32
+    var corner_br_in = 11251380u32
+    if e.art {
+        top_outer = 11185587u32
+        bottom_outer = 11514551u32
+        right_outer = 12238017u32
+        top_inner = 13816791u32
+        bottom_inner = 13422289u32
+        right_inner = 12632775u32
+        corner_tl = 11909052u32
+        corner_tl_in = 12961996u32
+        corner_tr = 13553618u32
+        corner_tr_in = 11120051u32
+        corner_bl = 12172224u32
+        corner_bl_in = 12633031u32
+        corner_br = 13685460u32
+        corner_br_in = 10922672u32
+    }
+    try winpx.fill(b, x, y, w, 1.0, style.hex(top_outer))
+    try winpx.fill(b, x, y + h - 1.0, w, 1.0, style.hex(bottom_outer))
+    try winpx.fill(b, x, y + 1.0, 1.0, h - 2.0, style.hex(left_outer))
+    try winpx.fill(b, x + w - 1.0, y + 1.0, 1.0, h - 2.0, style.hex(right_outer))
+    try winpx.fill(b, x + 1.0, y + 1.0, w - 2.0, 1.0, style.hex(top_inner))
+    try winpx.fill(b, x + 1.0, y + h - 2.0, w - 2.0, 1.0, style.hex(bottom_inner))
+    try winpx.fill(b, x + 1.0, y + 2.0, 1.0, h - 4.0, style.hex(left_inner))
+    try winpx.fill(b, x + w - 2.0, y + 2.0, 1.0, h - 4.0, style.hex(right_inner))
     // looks5: the four corners are blended in the capture (outer and inner pixel of each).
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(11975101u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 1.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(12895946u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, y, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(13487825u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 2.0, y + 1.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(11185588u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + h - 1.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(11909309u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + h - 2.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(12961740u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, y + h - 1.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(13422289u32) } } })
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 2.0, y + h - 2.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(11251380u32) } } })
+    try winpx.fill(b, x, y, 1.0, 1.0, style.hex(corner_tl))
+    try winpx.fill(b, x + 1.0, y + 1.0, 1.0, 1.0, style.hex(corner_tl_in))
+    try winpx.fill(b, x + w - 1.0, y, 1.0, 1.0, style.hex(corner_tr))
+    try winpx.fill(b, x + w - 2.0, y + 1.0, 1.0, 1.0, style.hex(corner_tr_in))
+    try winpx.fill(b, x, y + h - 1.0, 1.0, 1.0, style.hex(corner_bl))
+    try winpx.fill(b, x + 1.0, y + h - 2.0, 1.0, 1.0, style.hex(corner_bl_in))
+    try winpx.fill(b, x + w - 1.0, y + h - 1.0, 1.0, 1.0, style.hex(corner_br))
+    ret winpx.fill(b, x + w - 2.0, y + h - 2.0, 1.0, 1.0, style.hex(corner_br_in))
 }
 
 // One row of the check list, `width` wide, 15 tall: the native check box mark 1.15 in, the caption
@@ -4350,7 +4385,7 @@ fn windows_check_list_rows(a: *mem.Arena, key: widget.Key, t: *const Theme, labe
     if view_error != ok { ret (zero, TooLarge) }
     let (marks, marks_error) = mem.alloc[ListEdge](a, 1usize)
     if marks_error != ok { ret (zero, TooLarge) }
-    marks[0usize] = ListEdge { unused: 0u8 }
+    marks[0usize] = ListEdge { art: art }
     let (edge, edge_error) = mem.alloc[widget.Node](a, 1usize)
     if edge_error != ok { ret (zero, TooLarge) }
     var fill = style.defaults()

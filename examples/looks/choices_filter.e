@@ -175,7 +175,11 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let (c7, ce7) = cell(a, t, "Additional group, top left", extra, 220.0, 190.0)
     if ce7 != ok { ret (0usize, ce7) }
     cells[7usize] = c7
-    ret (8usize, ok)
+    // The third Whole Words box (598,188) is the second's twin.
+    let (c8, ce8) = cell(a, t, "Whole Words (third)", stack_of(a, 88.0, 21.0, parts[8usize..9usize]), 220.0, 190.0)
+    if ce8 != ok { ret (0usize, ce8) }
+    cells[8usize] = c8
+    ret (9usize, ok)
 }
 
 fn stack_of(a: *mem.Arena, w: f32, h: f32, kids: []const widget.Node) -> widget.Node {
@@ -186,6 +190,6 @@ fn stack_of(a: *mem.Arena, w: f32, h: f32, kids: []const widget.Node) -> widget.
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "choices_filter", cells: 8usize, columns: 4usize, cell_w: 220.0, cell_h: 190.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "choices_filter", cells: 9usize, columns: 4usize, cell_w: 220.0, cell_h: 190.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
