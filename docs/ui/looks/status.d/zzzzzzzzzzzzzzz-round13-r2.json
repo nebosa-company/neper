@@ -1,0 +1,34 @@
+{
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Round 13 (r2), metric: a reference flat pixel is off when ours differs by more than 2 levels (reference mask alone); excluded only glyph pixels within 2 px of text ink (ink = more than 60 levels from the row-window median, runs of 11 excluded); no artwork is excluded because the v3 bitmaps are now reproduced from the captures. Deck Properties states sheet (5 crops of states/*): 52 flat px off in all five (was 7887 chrome and 8460 text in audit 5), of which 44 are the tag foot row of the General pressed crop (11 levels, the tags' last pixel row lies on a drifting hairline) and 2 per crop are the Archetype value glyphs; scripts/looks_strict.py: 3 of 5 crops pass (Name focused, Author selected, Description selected 0 chrome px), the Archetype combo editor has 3 glyph px of 20 levels and General pressed the 42 foot px. Hover sheet (5 grabs): 10 flat px off in total, 5 of 5 pass at 0 chrome px. First sheet (dialog grab, older capture with other text): 6 flat px off, 0 chrome px, the ink boxes of its names are 1 to 3 px off (the older grab's text sits 1 to 2 px left). The computed rows' pictures (Land, Crea and Spell icons, colour icons, Strategy bar with marker, Legality tags) are the capture's own pixels (v3 artwork), the numbers and captions sit where the grabs have them, the last row ends its gutter, a band under a shut band follows the first band's lines, the band base line darkens with the gradient, the selected Name text box has the captured fractional box.",
+    "gaps": [
+     "The dotted focus rectangle is drawn as 1 px dots; the capture's is two rows thick with XOR-like colours (its top row follows the hairline); the pixels are non-flat in the reference and so not counted, not modelled",
+     "The tag foot row of Legality (42 px, 11 levels in the General pressed state) and the strategy marker's two left columns (the editor box clips them) are not exact",
+     "In-place grid editor combo (Archetype): 3 glyph px up to 20 levels; v3's text is 12 px GDI-wide, ours 11.7 px outline",
+     "Shared: bitmap glyphs now paint runs of equal pixels as one rectangle (identical pixels, a tenth of the commands); the grids' hairline drift is a linear fit over two states (within 2 levels), not v3's layout arithmetic",
+     "Audit 5 unverified (no capture): other editors, disabled"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list_expanded.png",
+    "notes": "Round 13 (r2), same metric as vertical_grid (reference flat pixel off above 2 levels, only glyph pixels within 2 px of ink excluded; v3's set symbols and the guide lines are NOT excluded and not drawn). Flat px off per sheet, before and after (this metric): tree_list 264 to 6, tree_list_check 245 to 115, tree_list_expanded 1592 to 264 (two crops), tree_list_focus 248 to 115, tree_list_hover 894 to 66 (three crops), tree_list_hover2 596 to 44 (two crops), tree_list_rules 16 unchanged. 110 of the 115 in check and focus are the scroll thumb (ours 15 px long, the capture's runs the whole crop). Refitted this round: plus and minus boxes 2 px up, check boxes 1 up and 1 left, edition abbreviations 5 right, top-level names and the dates 2 right, the Released header, no line after the last header column, no cream frame round a selected row, the row foot pixel under the cells before the selection, and the focus rectangle as the captures show it (two rows along the top and bottom in the cream and in the blue selection's colours, one along the sides, 256 px wide).",
+    "gaps": [
+     "Tree guide lines (the dotted vertical and horizontal connectors of the child rows) and v3's coloured edition symbols are not drawn; they are artwork or non-flat pixels, not counted by the flat metric",
+     "The focus rectangle's outer top row is hidden under the header when the first row is selected (the header paints above the rows), so those 256 non-flat px differ in the cream sheets",
+     "Scroll thumb in the focus and check sheets is 15 px long against the capture's full-height thumb (110 px); a taller list in the 90 px cell shifted the header by 4 px, not solved",
+     "Child-row names are 1 px lower than the capture on rows 54 to 224 (ink inside the glyph zone, not counted); scripts/looks_strict.py passes 0 of 4 expanded crops on the ink-box rule (ClearType against grayscale text)",
+     "Audit 5 unverified (no capture): disabled"
+    ]
+   }
+  }
+ }
+}

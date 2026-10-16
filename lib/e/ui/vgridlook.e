@@ -115,7 +115,8 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         // the capture's hairlines drift 0.013 px a row (fractional layout): dark C6 -> CE, light D9 -> D2
         // looks5-e: the drift follows the row's place down the grid, not the category (live capture: #C5C5C8 over #DADADB
         // at the first row, #D1D1D3 over #CECED0 at y 234, #D8D8D9 over #C7C7CA at y 337)
-        var drift = (f.rows[r] - 51.0) * 0.065
+        // looks13-r2: refitted on both Deck Properties states (the first row 0, #C7 at row top 62, #D8 at 320): +2 at row top 62, 0.0659 a pixel
+        var drift = (f.rows[r] - 62.0) * 0.0659 + 2.0
         if drift < 0.0 { drift = 0.0 }
         k = u32(drift + 0.5)
         let dark = 0xC5C5C8u32 + k * 0x010101u32
@@ -123,7 +124,9 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         // looks5-e: a row may be taller than 17 (Deck Properties' Computed rows), with extra cell lines in its header and value
         var rh: f32 = 17.0
         if r < f.heights.len { rh = f.heights[r] }
-        let tall = rh + 3.0
+        var tall = rh + 3.0
+        // looks13-r2: the grid's last row ends its gutter at its own hairline (live capture: the gutter stops at y 338)
+        if r + 1 == f.rows.len { tall = rh + 1.0 }
         // the gutter and its line, over the whole row (hairline row included)
         try fill(b, x + 1.0, top - 1.0, 13.0, tall, 0xF0F0F0u32)
         try fill(b, x + 1.0, top - 1.0, 1.0, tall, 0xEFEFEFu32)
@@ -177,6 +180,11 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             try fill(b, x + 15.0, top + rh, w - 16.0, 1.0, dark)
         }
         if f.lasts[r] { try fill(b, x + 1.0, top + rh, 13.0, 1.0, 0xC7C7C9u32) }
+        if r + 1 == f.rows.len {
+            // looks13-r2: the grid's last row: the gutter's hairline pair (live capture: #CFCFD1 at y 337, #C7C7CA across the gutter and its line at y 338)
+            try fill(b, x + 1.0, top + rh, 13.0, 1.0, 0xCFCFD1u32)
+            try fill(b, x + 1.0, top + rh + 1.0, 14.0, 1.0, 0xC7C7CAu32)
+        }
         // looks11-g1: the grid's last row has no band under it, so its light hairline is its own (live capture: #C7C7CA at y 338)
         if !f.lasts[r] || r + 1 == f.rows.len { try fill(b, x + 15.0, top + rh + 1.0, w - 16.0, 1.0, light) }
         r += 1usize
@@ -197,11 +205,33 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             seam = 0xE4E4E4u32
             base = 0xB2B2B5u32
         }
+        // looks13-r2: a band right under a shut band (live capture, General pressed): its top line #BEBEBF and the first band's seam and
+        // base; a shut band keeps no gutter seam when another band follows it directly
+        var stacked = false
+        if i > 0usize && !f.opens[i - 1usize] && f.bands[i] - f.bands[i - 1usize] < 22.5 {
+            stacked = true
+            edge = 0xBEBEBFu32
+            seam = 0xE4E4E4u32
+            base = 0xB2B2B5u32
+        }
+        var gutter_seam = true
+        if !f.opens[i] && i + 1usize < f.bands.len && f.bands[i + 1usize] - f.bands[i] < 22.5 { gutter_seam = false }
         // the gradient: constant to x 230, down to #B7B7B7 at 318, constant after
         try across(b, x + 1.0, top + 1.0, w - 2.0, 20.0, 328.0, f.stops)
         try fill(b, x + 1.0, top, w - 2.0, 1.0, edge)
-        try fill(b, x + 1.0, top + 21.0, 13.0, 1.0, seam)
+        if gutter_seam { try fill(b, x + 1.0, top + 21.0, 13.0, 1.0, seam) } else { try fill(b, x + 1.0, top + 21.0, 13.0, 1.0, base) }
         try fill(b, x + 14.0, top + 21.0, w - 15.0, 1.0, base)
+        // looks13-r2: the base line darkens with the gradient from x 230 (live capture: #B2 -> #A9 at x 328 in the first band, #B8 -> #AC in the others)
+        var shade: f32 = 12.0
+        if f.firsts[i] || stacked { shade = 9.0 }
+        var gx: f32 = 230.0
+        while gx < w - 1.0 {
+            var kk = (gx - 230.0) * shade / 98.0
+            if kk > shade { kk = shade }
+            let dd = u32(kk + 0.5)
+            if dd > 0u32 { try fill(b, x + gx, top + 21.0, 1.0, 1.0, base - dd * 0x010101u32) }
+            gx += 1.0
+        }
         try fill(b, x + w - 1.0, top, 1.0, 22.0, 0x8E9199u32)
         try chevron(b, x + 312.0, top + 5.0, !f.opens[i])
         i += 1usize
@@ -212,7 +242,7 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if f.selected[r] {
             var dh: f32 = 17.0
             if r < f.heights.len { dh = f.heights[r] }
-            try dotted(b, x + value_x + 1.0, y + f.rows[r] - 1.0, w - value_x - 1.0, dh + 1.0, 0x6A6A6Au32)
+            try dotted(b, x + value_x + 1.0, y + f.rows[r] - 1.0, w - value_x - 2.0, dh + 1.0, 0x6A6A6Au32)
         }
         r += 1usize
     }

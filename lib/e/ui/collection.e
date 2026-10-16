@@ -2229,6 +2229,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             mark.background = paint.Brush { Solid: look.line }
             mark.margin = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: flat, right: flat, bottom: flat }
             if look.soft_lines { mark.margin = style.EdgeLengths { left: style.Length { Px: grip_here - 2.0 }, top: flat, right: flat, bottom: flat } }
+            // looks13-r2: the tree list's last column has no line at its right edge (live capture)
+            if look.tree_dots && i + 1usize == columns.len { mark.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
         }
         if active && !(look.on && has_lifted_column) {
             mark = control.sized_style(3.0, inner)
@@ -2758,7 +2760,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     if look.focus_on { lined_row = row_key == look.focus_key }
     let dotted_row = look.on && lined_row && look.soft_lines && look.dotted_focus
     // looks5-e: the idle selected row has no frame: its top edge is the line above it and its foot pair the edge colour and #F1F1F1
-    if look.on && lined_row && !dotted_row && !look.top_edge_on { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
+    if look.on && lined_row && !dotted_row && !look.top_edge_on && !look.tree_dots { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
     if lined_error != ok { ret (zero, TooLarge) }
     var content_look = style.defaults()
@@ -2852,17 +2854,34 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     }
     if look.on && selected && look.tree_dots {
         // looks4-e: the tree list's selected row has a dotted rectangle from x = 32 (measured, tree_list.png)
-        let (tree_dots, tree_dots_error) = gl.mark(a, .DotsSoftLeft, gl.rgb(0x5B5C62u32), gl.rgb(0xA4A39Du32), 4000.0, 18.0)
+        // looks13-r2: the capture's two-pixel focus rectangle, 256 px wide (the table's 288 less the 32 before it), blue on the focused selection
+        var blue_focus = false
+        if fill.red == look.selected_focus.red && fill.green == look.selected_focus.green && fill.blue == look.selected_focus.blue { blue_focus = true }
+        var tree_total: f32 = 0.0
+        var tree_at = 0usize
+        while tree_at < columns.len {
+            tree_total += columns[tree_at].width
+            tree_at += 1usize
+        }
+        var tree_wide = tree_total - 32.0
+        if tree_wide < 8.0 || tree_wide > 4000.0 { tree_wide = 4000.0 }
+        let (tree_dots, tree_dots_error) = gl.tree_focus(a, blue_focus, tree_wide, 18.0)
         if tree_dots_error != ok { ret (zero, tree_dots_error) }
         // the selection's fill starts at x = 32, under the cells; the cells before it stay white
         var band = control.sized_style(4000.0, extent)
         band.background = paint.Brush { Solid: fill }
-        let (with_band, with_band_error) = mem.alloc[widget.Node](a, 3usize)
+        let (with_band, with_band_error) = mem.alloc[widget.Node](a, 4usize)
         if with_band_error != ok { ret (zero, TooLarge) }
         with_band[0usize] = widget.positioned(0u64, 32.0, 0.0, style.defaults(), one_node(a, widget.box(0u64, band, zero)))
         with_band[1usize] = lined[0usize]
         with_band[2usize] = widget.positioned(0u64, 32.0, 0.0 - 1.0, style.defaults(), one_node(a, tree_dots))
-        lined[0usize] = widget.stack(0u64, style.defaults(), with_band[0usize..3usize])
+        // looks13-r2: the row's foot pixel under the cells before the selection (live capture: #F4F4F4 under a white row, #FAFAFA under a grey one)
+        var foot_px = gl.rgb(0xF4F4F4u32)
+        if index % 2usize == 0usize { foot_px = gl.rgb(0xFAFAFAu32) }
+        var foot_box = control.sized_style(32.0, 1.0)
+        foot_box.background = paint.Brush { Solid: foot_px }
+        with_band[3usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, foot_box, zero)))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_band[0usize..4usize])
     }
     if dotted_row {
         // looks4-e: a focused selected row carries v3's dotted focus rectangle, not a line
@@ -5604,7 +5623,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             if box_held_error != ok { ret (none, TooLarge) }
             box_held[0usize] = box
             var hit = control.sized_style(14.0, tall)
-            hit.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 4.0 }, right: flat, bottom: flat }
+            hit.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 2.0 }, right: flat, bottom: flat }
             twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, hit, box_held[0usize..1usize])
         }
         if entry.branch && !win {
@@ -11250,17 +11269,40 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // looks5-e: the shape of a row of the Windows property grid when it is not the plain 17 px one: its content height, up to two extra
 // lines in its header cell and in its value cell (x from the grid's left edge, 0 for none) and the captions of its header cells
 // (centred between the lines). An application sets the shapes before it builds the grid (Deck Properties' Computed rows).
-type PropertyShape = struct { height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str }
+type PropertyShape = struct { height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str, tx1: f32, tx2: f32, tx3: f32, px1: f32, px2: f32, px3: f32, pic1: str, pic2: str, pic3: str, pic_w: f32, pic_h: f32 }
 var property_shapes: [64]PropertyShape = zero
 
 fn property_row_shape(index: usize, height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str) {
-    if index < 64usize { property_shapes[index] = PropertyShape { height: height, hs1: hs1, hs2: hs2, vs1: vs1, vs2: vs2, l1: l1, l2: l2, l3: l3 } }
+    if index < 64usize { property_shapes[index] = PropertyShape { height: height, hs1: hs1, hs2: hs2, vs1: vs1, vs2: vs2, l1: l1, l2: l2, l3: l3, tx1: 0.0, tx2: 0.0, tx3: 0.0, px1: 0.0, px2: 0.0, px3: 0.0, pic1: "", pic2: "", pic3: "", pic_w: 0.0, pic_h: 0.0 } }
+}
+
+// looks13-r2: the left edges of the three header captions of a shaped row, where v3 draws them left-aligned after a picture (0 = centred)
+// looks13-r2: three pictures (pixel strings of `w` x `h`) at the given x in the header of a shaped row, as v3 draws the Land, Crea and Spell icons
+fn property_row_pics(index: usize, x1: f32, p1: str, x2: f32, p2: str, x3: f32, p3: str, w: f32, h: f32) {
+    if index < 64usize {
+        property_shapes[index].px1 = x1
+        property_shapes[index].px2 = x2
+        property_shapes[index].px3 = x3
+        property_shapes[index].pic1 = p1
+        property_shapes[index].pic2 = p2
+        property_shapes[index].pic3 = p3
+        property_shapes[index].pic_w = w
+        property_shapes[index].pic_h = h
+    }
+}
+
+fn property_row_text_x(index: usize, x1: f32, x2: f32, x3: f32) {
+    if index < 64usize {
+        property_shapes[index].tx1 = x1
+        property_shapes[index].tx2 = x2
+        property_shapes[index].tx3 = x3
+    }
 }
 
 fn property_shapes_clear() {
     var at = 0usize
     while at < 64usize {
-        property_shapes[at] = PropertyShape { height: 0.0, hs1: 0.0, hs2: 0.0, vs1: 0.0, vs2: 0.0, l1: "", l2: "", l3: "" }
+        property_shapes[at] = PropertyShape { height: 0.0, hs1: 0.0, hs2: 0.0, vs1: 0.0, vs2: 0.0, l1: "", l2: "", l3: "", tx1: 0.0, tx2: 0.0, tx3: 0.0, px1: 0.0, px2: 0.0, px3: 0.0, pic1: "", pic2: "", pic3: "", pic_w: 0.0, pic_h: 0.0 }
         at += 1usize
     }
 }
@@ -11426,7 +11468,8 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     value_sem.row = u32(k + 1usize)
                     value_sem.column = 2u32
                     var value_box = control.sized_style(control.max_zero(width - value_x - 2.0), rh)
-                    value_box.overflow = .Clip
+                    // looks13-r2: the shaped Computed rows carry v3 bitmaps that cover the row's hairlines
+                    if shape.height <= 0.0 { value_box.overflow = .Clip }
                     let (value_flex, value_flex_error) = mem.alloc[widget.Node](a, 1usize)
                     if value_flex_error != ok { ret (zero, TooLarge) }
                     value_flex[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, value_box, valued[0usize..1usize])
@@ -11455,11 +11498,42 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                             seg_held[0usize] = seg_node
                             var seg_box = control.sized_style(seg_to - seg_from, rh)
                             seg_box.overflow = .Clip
-                            parts[n] = widget.positioned(0u64, seg_from, cursor, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, seg_box, seg_held[0usize..1usize])))
+                            var tx = shape.tx1
+                            if seg_at == 1usize { tx = shape.tx2 }
+                            if seg_at == 2usize { tx = shape.tx3 }
+                            if tx > 0.0 {
+                                seg_box = control.sized_style(seg_to - tx, rh)
+                                seg_box.overflow = .Clip
+                                parts[n] = widget.positioned(0u64, tx, cursor, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, seg_box, seg_held[0usize..1usize])))
+                            } else {
+                                parts[n] = widget.positioned(0u64, seg_from, cursor, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, seg_box, seg_held[0usize..1usize])))
+                            }
                             n += 1usize
                         }
                         seg_from = seg_to + 2.0
                         seg_at += 1usize
+                    }
+                    if shape.pic_w > 0.0 {
+                        var pic_at = 0usize
+                        while pic_at < 3usize {
+                            var pic = shape.pic1
+                            var pic_x = shape.px1
+                            if pic_at == 1usize {
+                                pic = shape.pic2
+                                pic_x = shape.px2
+                            }
+                            if pic_at == 2usize {
+                                pic = shape.pic3
+                                pic_x = shape.px3
+                            }
+                            if pic.len > 0usize {
+                                let (pic_node, pic_error) = gl.pixels(a, pic, shape.pic_w, shape.pic_h)
+                                if pic_error != ok { ret (zero, pic_error) }
+                                parts[n] = widget.positioned(0u64, pic_x, cursor, style.defaults(), one_node(a, pic_node))
+                                n += 1usize
+                            }
+                            pic_at += 1usize
+                        }
                     }
                     rows += 1usize
                     cursor += rh + 2.0

@@ -268,7 +268,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels, DotsSoft, DotsSoftLeft, SelDots, GroupRect, ChipRing }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels, DotsSoft, DotsSoftLeft, SelDots, GroupRect, ChipRing, TreeFocus }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape, pix: str, cols: usize, skip: usize }
 
@@ -336,6 +336,7 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     if m.shape == Shape.Pixels { ret pixels_paint(m, b, area) }
     if m.shape == Shape.DotsSoft || m.shape == Shape.DotsSoftLeft { ret dots_soft_paint(m, b, area) }
     if m.shape == Shape.SelDots { ret sel_dots_paint(m, b, area) }
+    if m.shape == Shape.TreeFocus { ret tree_focus_paint(m, b, area) }
     if m.shape == Shape.GroupRect { ret group_rect_paint(m, b, area) }
     if m.shape == Shape.ChipRing { ret chip_ring_paint(m, b, area) }
     if m.shape == Shape.StarOutline || m.shape == Shape.StarFilled {
@@ -971,18 +972,32 @@ fn pix_digit(c: u8) -> f32 {
 fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
     var at = 0usize
     var n = 0usize
+    // looks13-r2: runs of equal pixels in a row are one rectangle (the same pixels, far fewer commands: v3's bitmaps are mostly flat)
     while at + 6usize <= m.pix.len {
+        let col = n % m.cols
+        var run = 1usize
+        if col >= m.skip {
+            while col + run < m.cols && at + (run + 1usize) * 6usize <= m.pix.len {
+                var same = true
+                var d = 0usize
+                while d < 6usize {
+                    if m.pix[at + d] != m.pix[at + run * 6usize + d] { same = false }
+                    d += 1usize
+                }
+                if !same { break }
+                run += 1usize
+            }
+        }
         let ri = u32(pix_digit(m.pix[at]) * 16.0 + pix_digit(m.pix[at + 1usize]))
         let gi = u32(pix_digit(m.pix[at + 2usize]) * 16.0 + pix_digit(m.pix[at + 3usize]))
         let bi = u32(pix_digit(m.pix[at + 4usize]) * 16.0 + pix_digit(m.pix[at + 5usize]))
         // (round 7) under the Windows dark map the bitmap's pixels take their dark counterpart (a no-op in light)
         let shown = rgb(ri * 65536u32 + gi * 256u32 + bi)
-        let col = n % m.cols
         let px = f32(col) - f32(m.skip)
         let py = f32(n / m.cols)
-        if col >= m.skip { try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, 1.0, 1.0, shown) }
-        at += 6usize
-        n += 1usize
+        if col >= m.skip { try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, f32(run), 1.0, shown) }
+        at += 6usize * run
+        n += run
     }
     ret ok
 }
@@ -1204,6 +1219,98 @@ fn sel_dots_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
         dy += 1.0
     }
     ret ok
+}
+
+// looks13-r2: the tree list's focus rectangle as the Filter dialog captures show it, two pixels thick along the top and the bottom (outer
+// then inner rows) and one along the sides, dots of opposite phase on the two rows: `m.cols` 0 on the inactive cream selection, 1 on the
+// focused blue one. The area is `height` rows from the outer top row; x counts from the rectangle's left edge (even x = the left edge).
+fn tree_focus_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
+    let x0 = f32(i64(area.x + 0.5))
+    let y0 = f32(i64(area.y + 0.5))
+    let w = i64(area.width + 0.5)
+    let h = i64(area.height + 0.5)
+    var t_even: u32 = 0x61636Fu32
+    var t_odd: u32 = 0xF2F0E5u32
+    var i_even: u32 = 0xA4A39Du32
+    var i_odd: u32 = 0xECE9D8u32
+    var u_even: u32 = 0x5B5C62u32
+    var u_odd: u32 = 0xECE9D8u32
+    var o_even: u32 = 0xB1B2B7u32
+    var o_odd: u32 = 0xF9F8F2u32
+    var side_a: u32 = 0x5B5C62u32
+    var side_b: u32 = 0xA4A39Du32
+    var left_top: u32 = 0xA4A39Du32
+    if m.cols == 1usize {
+        t_even = 0xBEDCFAu32
+        t_odd = 0x8B6D4Fu32
+        i_even = 0xA6D2FFu32
+        i_odd = 0x8C9BAAu32
+        u_even = 0xA6D2FFu32
+        u_odd = 0x736455u32
+        o_even = 0xD7E5F4u32
+        o_odd = 0xBDAFA0u32
+        side_a = 0x736455u32
+        side_b = 0x8C9BAAu32
+        left_top = 0x736455u32
+    }
+    var dx: i64 = 0i64
+    while dx < w {
+        let even = dx % 2i64 == 0i64
+        var tc = t_odd
+        var ic = i_odd
+        var uc = u_odd
+        var oc = o_odd
+        if even {
+            tc = t_even
+            ic = i_even
+            uc = u_even
+            oc = o_even
+        }
+        try winpx.fill(b, x0 + f32(dx), y0, 1.0, 1.0, rgb(tc))
+        try winpx.fill(b, x0 + f32(dx), y0 + 1.0, 1.0, 1.0, rgb(ic))
+        try winpx.fill(b, x0 + f32(dx), y0 + f32(h) - 2.0, 1.0, 1.0, rgb(uc))
+        try winpx.fill(b, x0 + f32(dx), y0 + f32(h) - 1.0, 1.0, 1.0, rgb(oc))
+        dx += 1i64
+    }
+    // the sides, from the inner top row down to the inner bottom row (rows are counted from the first inner row)
+    var dy: i64 = 1i64
+    while dy < h - 1i64 {
+        let from_top = dy - 1i64
+        var left_c = side_a
+        var right_c = side_a
+        if m.cols == 1usize {
+            // blue: the left edge is #736455 on the first inner row and every other row after it, #8C9BAA between; the right edge the other way
+            if from_top % 2i64 == 1i64 { left_c = side_b }
+            right_c = side_b
+            if from_top % 2i64 == 1i64 { right_c = side_a }
+        } else {
+            // cream: the left edge starts #A4A39D, then #5B5C62; the right edge starts #5B5C62
+            left_c = left_top
+            if from_top % 2i64 == 1i64 { left_c = side_a }
+            right_c = side_a
+            if from_top % 2i64 == 1i64 { right_c = side_b }
+        }
+        try winpx.fill(b, x0, y0 + f32(dy), 1.0, 1.0, rgb(left_c))
+        try winpx.fill(b, x0 + f32(w) - 1.0, y0 + f32(dy), 1.0, 1.0, rgb(right_c))
+        dy += 1i64
+    }
+    ret ok
+}
+
+// A tree list's focus rectangle (see `tree_focus_paint`), `width` x `height` from its outer top row.
+fn tree_focus(a: *mem.Arena, blue: bool, width: f32, height: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
+    if marks_error != ok { ret (zero, marks_error) }
+    var kind = 0usize
+    if blue { kind = 1usize }
+    marks[0usize] = Mark { arena: a, color: rgb(0u32), inner: rgb(0u32), shape: Shape.TreeFocus, pix: "", cols: kind, skip: 0usize }
+    var size = style.defaults()
+    size.width = style.Length { Px: width }
+    size.height = style.Length { Px: height }
+    size.min_width = style.Length { Px: width }
+    size.min_height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: size, children: none }, ok)
 }
 
 // A selected row's focus rectangle: `width` x `height`, its left edge `left` px in.
