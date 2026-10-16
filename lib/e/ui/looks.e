@@ -481,10 +481,11 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
             scale = only_scale
         }
         var look_index = 0usize
-        while look_index < 3usize {
+        while look_index < 4usize {
             var look: Look = .Neper
             if look_index == 1usize { look = .Windows }
             if look_index == 2usize { look = .WindowsDark }
+            if look_index == 3usize { look = .NeperDark }
             let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
             if open_error != ok { ret open_error }
             set_look(rig, look)
