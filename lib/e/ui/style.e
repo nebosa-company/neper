@@ -1293,7 +1293,8 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
     var press = hex_raw(0xCCE4F7u32)
     if t.palette == .Dark {
         hover = hex_raw(0x3C3C3Cu32)
-        press = hex_raw(0x323232u32)
+        // round 10: the native dark pressed face (docs/ui/looks/ref/windows-native/dark/button-pressed): #666666
+        press = hex_raw(0x666666u32)
     }
     if state.hovered && !state.pressed {
         if contrast {
@@ -1321,9 +1322,10 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
         edge = hex_raw(0xEAEAEAu32)
         ink = hex_raw(0x878787u32)
         if t.palette == .Dark {
-            face = hex_raw(0x2B2B2Bu32)
-            edge = hex_raw(0x3A3A3Au32)
-            ink = hex_raw(0x787878u32)
+            // round 10: the native dark disabled button: face #333333, ring #404040, label #CCCCCC (button-disabled)
+            face = hex_raw(0x333333u32)
+            edge = hex_raw(0x404040u32)
+            ink = hex_raw(0xCCCCCCu32)
         }
         if contrast {
             face = color(t, .SurfaceContainerLowest)

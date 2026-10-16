@@ -2544,7 +2544,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     if ringed {
         // a button of a DPI-scaled form draws its focus rectangle with the ring, shifted with it
         var dots_kind = 0u32
-        if focus && (shift_x != 0.0 || shift_y != 0.0) {
+        if focus && (shift_x != 0.0 || shift_y != 0.0) && t.tokens.palette != .Dark {
             dots_kind = 1u32
             if state.pressed { dots_kind = 2u32 }
         }
@@ -2556,7 +2556,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     layers[n] = centred
     n += 1usize
     if focus {
-        if ringed && shift_x == 0.0 && shift_y == 0.0 {
+        if ringed && ((shift_x == 0.0 && shift_y == 0.0) || t.tokens.palette == .Dark) {
             let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, t.tokens.palette == .Dark)
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
@@ -2599,14 +2599,9 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         // Light: a hovered button wears the accent ring (measured). Dark: only the face changes (Windows 11 dark).
         let accent_hover = t.tokens.palette == .Light && state.hovered && !state.pressed && options.enabled
         if variant == .Default || state.focus_visible || state.focused || selected || accent_hover { rk = 1u32 }
-        if state.pressed && !state.disabled && !selected {
-            rk = 3u32
-            // Dark: a pressed plain button keeps its grey stroke, a default one its accent.
-            if t.tokens.palette == .Dark {
-                rk = 0u32
-                if variant == .Default { rk = 1u32 }
-            }
-        }
+        // round 10: the native dark ring is white only for the default button; a focused plain one keeps its grey ring (dotted rectangle only)
+        if t.tokens.palette == .Dark && variant != .Default && !selected { rk = 0u32 }
+        if state.pressed && !state.disabled && !selected { rk = 3u32 }
         if state.disabled { rk = 2u32 }
         face = windows_rgb(look.background)
         look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
