@@ -535,9 +535,10 @@ fn ring_paint_shifted(d: *const Ring, b: *scene.Builder, area: geometry.Rect) ->
                 }
                 if corner || !exact {
                     value = bilinear_value(d, ox, oy, w, h)
-                } else if oy < 6 {
+                } else if oy < 6 && ox >= 5 && ox < w - 5 {
+                    // looks12: the first straight row of a side (oy 5, h - 6) is the side's, not the top or bottom rail's: the rail only spans between the corner cells
                     value = band3(f32(oy) - phase_y(d, oy, h), 1.0 / 3.0, 4.0 / 3.0, 0u32, top_line, face)
-                } else if oy >= h - 6 {
+                } else if oy >= h - 6 && ox >= 5 && ox < w - 5 {
                     value = band3(f32(oy) - phase_y(d, oy, h), f32(h) - 5.0 / 3.0, f32(h) - 2.0 / 3.0, face, bottom_line, 0u32)
                 } else if ox < 6 {
                     value = band3(f32(ox) - phase_x(d, ox, w), 0.0, 1.0, 0u32, side_line, face)

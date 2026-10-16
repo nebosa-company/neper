@@ -1,0 +1,204 @@
+{
+ "combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_focus.png",
+    "notes": "Round 12 (scripts/looks_strict.py: a reference flat pixel counts as off when ours differs by more than 2 levels, chrome and text apart, the reference mask alone). Every combo sheet has 0 chrome px off except: list_show and open_show sheets 2 to 3 px at 4 levels (list row edge), list_size and open_size sheets 15 px (the lit row text starts 1 px right of the capture), combo_hover cell 2 10 px at 3 levels. The two audit 4 pixels are fixed (the card combo button corner is now white; the first-click open frame no longer coats its corner twice); the Mode toolbar separator runs the whole bar so the flat Mode sheets pass with no masked pixel (card sheets: the neighbouring toolbar icons from x 167 are masked).",
+    "gaps": [
+     "Unverified: disabled and read-only closed combos (v3 never showed them; the native Win32 combo is a different frame family: face #FAFAFA, chevron #BDBDBD against ours #F7F7F7 and #E0E0E0)",
+     "Sub-pixel focus rectangle: the two captured focused list combos only (Row Color at window x 321, Show at x 149); any other focused list combo keeps the old fixed greys",
+     "The top-right and bottom-right corner pixels of the Row Color focus rectangle are 13 levels lighter than the grab (dots that share a pixel compound instead of adding)",
+     "Text: v3's ClearType colour fringes are not reproduced (grayscale); ink boxes at the 150 level are 1 to 3 px short of the ClearType stems on a few lines",
+     "Composite references: each open-list sheet joins an exact head crop and an exact popup crop (no single capture holds both windows)",
+     "Hover over the combo edit of Auth Type and Search is identical to rest (no distinct look)",
+     "Scale (looks_scale_check): 2.0 100.0 % of runs hold",
+     "Audit 4: the combo edit's right rule is 221 in the capture against 227 in ours along 14 px (a rare colour, not structural by the definition)",
+     "Round 12: the in-place grid editor combo (Deck Properties, Archetype) is the exact grab cell 3 of vertical_grid_states (equal to states/vertical-grid-editor-combo-deck-properties-archetype at (16,79)); on its editor row 3 chrome px up to 20 levels remain; v3's text is 12 px GDI-wide, ours 11.7 px outline",
+     "Round 12 unfixed: the lit row text of the Font Size and Row Color lists starts 1 px right of the capture; a list row edge pixel is 4 levels off in the Show lists"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/image_combo_box_open_condition.png",
+    "notes": "Round 12 (scripts/looks_strict.py: a reference flat pixel counts as off when ours differs by more than 2 levels, chrome and text apart, the reference mask alone). All image combo sheets (rest, hover, held, cell editor, open heads and lists) have 0 chrome px off. The open Art 2, Authentication 2 and Condition 2 sheets now keep the committed item in the head while the highlight is lower (the capture's head shows Stretch; ours showed the lit item); the 4 level head pixel is fixed (first-click frame corner). The Sort list: the picture 2 px before the text, None at the edge, Tahoma 12 px at GDI advances; 2 glyph px (136 levels, text) remain.",
+    "gaps": [
+     "Composite references: each open sheet joins an exact head crop and an exact popup crop (no single capture holds both windows)",
+     "Pictures are v3's coloured bitmaps drawn as placeholders where the sheet has them (artwork excluded)",
+     "Scale (looks_scale_check): 2.0 94.9 % of runs hold",
+     "Round 12: pictures are v3's bitmaps drawn as placeholders (artwork, excluded); the Sort list's 2 residual px are glyph shapes",
+     "Unverified: disabled, row hover"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "Round 12 (scripts/looks_strict.py: a reference flat pixel counts as off when ours differs by more than 2 levels, chrome and text apart, the reference mask alone). The Select Format reference is the untouched Deck Legality crop again (interior no longer blanked) and our cell carries its twelve format buttons: frame, buttons and caption 0 chrome px off (the ring fix below removed 16 px at button corners). The three Options title bars: decided that the ink is text (white bold title, black General): 0 chrome px off, ink boxes agree at the 60 level (476 against 475); at 100 and 150 the capture's ClearType blur leaves fewer pixels on a gradient, so that rule cannot pass; the v3 icon at the right is artwork. The page header hover grab (hover-panel-options-header) is pixel-identical to rest, so the rest crop is its cell. Deck Legality in dialog_more2 now draws the group frame: 0 px off.",
+    "gaps": [
+     "Unverified: disabled, focus (no capture)",
+     "Disabled: native has no distinct look; the dimmed caption is a guess",
+     "Round 12: disabled and focus have no capture; the title bar ink rule fails at 100 and 150 on ClearType (text), kept as a documented decision"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Round 12 (scripts/looks_strict.py: a reference flat pixel counts as off when ours differs by more than 2 levels, chrome and text apart, the reference mask alone). 76 menu sheets (every sel, h, sub and base menu) compared as one placed crop each with v3's icon column (x 6 to 22, bitmaps) masked: 59 have 0 chrome px off; 17 (cardart 3 px, cards and sub_cards 4 px, dialog 5 px) are single glyph pixels (a dash, a stem) up to 57 levels; the check glyph row of Collection from Card Pool equals the capture pixel for pixel including the 255 and 240 dither; mnemonic underlines match. popup_menu_sel_file_h10 had a blank last row where the capture shows Exit (Alt+X): fixed (40 px). Ink-line boxes: 0 bad lines in most menus, up to 3 of 9 in the dialog sheet (ClearType).",
+    "gaps": [
+     "Remaining non-artwork: Cards Print arrow row 4 px up to 7 levels, File 2 px, Tools 1 px (5 levels), Search/Cardart text stems up to 139 levels at 1 to 2 px (ClearType)",
+     "Unverified: disabled items beyond the captured menus",
+     "Scale: popup_menu_file 2.0 100 %; 1.5 79.2 % (informational)",
+     "Round 12: icon bitmaps are v3 artwork (placeholders here) and masked; the 8 states audit 4 listed without a cell are the menu-switch and menu-bar-open grabs, whose popup crops are the sel and menu_bar_open sheets (the NO CELL bands are the main window's own Alt-underlined menu bar rows)"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_states.png",
+    "notes": "Round 12 (scripts/looks_strict.py: a reference flat pixel counts as off when ours differs by more than 2 levels, chrome and text apart, the reference mask alone). Ring phase bug fixed (winbutton.ring_paint_shifted: the first straight row of a side was painted with the top or bottom rail's band): every button of the DPI-scaled forms has 0 chrome px off (it left 1 to 2 px at up to 25 levels per button). button_states: all chrome 0, 23 of 33 cells pass (the rest fail the ink rule on the text baseline row or v3 icon art). The disabled Edit Rule button has its cell (button_states cell 14, an exact crop of states/button-disabled-conditional-formatting-edit-rule at 297,244; the grab differs from rest elsewhere). New sheet button_arrows: the four Card Art arrow buttons (25 x 28, picture only) of dialog-options-cardart-rest and the move-up grab, 0 chrome px (arrow art masked); the grab's pressed button had already handled the click, so every arrow shows its rest look.",
+    "gaps": [
+     "Unverified: toggle, split, loading and plain kinds (no capture); disabled has one capture",
+     "Scale: 1.5x ring tile is uneven (informational)",
+     "Edit Rule and New Rule pictures are v3 bitmap artwork (decided: not text), drawn as a placeholder glyph and excluded",
+     "Round 12: toggle, split, loading and plain kinds still have no capture",
+     "Round 12: the ink rule fails on 10 button_states cells only by the text baseline row (our glyph row is darker), not geometry"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/radio_states-vs-ref.png",
+    "notes": "Round 12 (scripts/looks_strict.py: a reference flat pixel counts as off when ours differs by more than 2 levels, chrome and text apart, the reference mask alone). All radio sheets (radio_states 8 of 8, radio_hover 10 of 10, radio_dialog 5 of 5, radio_group_* 23 of 23) have 0 chrome px off. The hover over Search Cards: its grab differs from rest by one 1 x 14 black column at x 23, the blinking caret of the focused Search edit; the radio's own pixels equal rest, so radio_hover cell Search, Cards is its cell.",
+    "gaps": [
+     "Captured but identical to rest: 9 hover grabs and 1 pressed grab show no distinct look",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 100 %; 1.5 87.2 % of runs hold (informational)",
+     "Disabled: native light capture only (the dot and ring tile exact); the native light radio-checked-pressed capture is blank, so pressed stays v3's",
+     "Round 12: disabled has the native light capture only"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Round 12: the three progress-while-computing-combos frames are the FastReport preview window (toolbar, 'of 0', gray page area, status bar Page 0 of 0, then the page): no TcxProgressBar appears in them, so there is nothing to compare and no cell. The only TcxProgressBar in the captures is the main window's status bar one (controls.json: 148 x 14 at (293, 576), visible False); its DFM is cxbsGradient, BeginColor #005982, EndColor #003E5B, Enabled False, ShowText False. Never drawn in any grab.",
+    "gaps": [
+     "Height 21 (v3 DFM default) against the native 16: the theme part scaled, unverified against a v3 capture of the import form",
+     "Marquee: the native block is at least 126 wide and overdraws the frame edge; our 0.6 segment is a guess; the lighter lower half is not drawn",
+     "Native vertical bar has no Neper cell (v3's statistics bar is a flat vertical bar, not captured)",
+     "Percent text (v3 cxtsText) has no native counterpart; main-window bar (148 x 21, cxbsGradient teal, Enabled False) is DevExpress-drawn and was never captured: it still draws the native look",
+     "Native disabled progress is drawn identical to enabled (green); we do the same",
+     "Audit 4 uncaptured: every state (3 progress frames show the report window only)",
+     "Round 12: the status bar bar is 148 x 14, not 21; its DFM gradient #005982 to #003E5B is not reproduced (never captured)"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog_message.png",
+    "notes": "Round 12: dialog_more, dialog_more2 and dialog_more3 re-rendered at HEAD (stale since 85c946922); Deck Legality now draws its Select Format group (kind 6 item): the group cell and its buttons compare with 0 chrome px off; the Filter, Advanced Filter, Rules Manager, Statistics and Customization bodies are app content (grids, web view) not composed.",
+    "gaps": [
+     "Dialog close button: v3's 33 wide one kept; the native dialog's is 46 wide (56 flat px off in the dialog cells)",
+     "Caption buttons are 1 px right of the native window's (v3 geometry kept)",
+     "Task dialog (command links, footer, verification box) is captured natively but has no Neper control: not built",
+     "Message box width is fixed at 338; Windows sizes it to the text",
+     "Caption hot and pressed: the native hot captures equal rest; pressed is not capturable",
+     "Info, warning and error message box bitmaps were not captured; Info draws the question bitmap",
+     "The OK button's dotted keyboard focus cue (visible in the native capture) is not drawn: a driven focus on the modal dialog reached no button",
+     "Message box text 11.7 px stands for the native 12 px hinted line (ClearType in the capture)",
+     "Message box icon is a 96 DPI tile: blocky at 1.5x",
+     "Audit 4 uncaptured: caption pressed (not capturable), resize, disabled; inactive caption only for the main window",
+     "Round 12: dialog bodies not composed (grid, web view, tool window)"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Round 12: still no TcxTextEdit with a frame in any capture. Closest evidence: the in-place TcxTextEdit of the Deck Properties vertical grid (Name row, focused, text selected) is cell 0 of vertical_grid_states: the selection starts about 3 px left of ours and 1 px higher. No change. Audit 4: the 37 edit crops of edits_dialog, edits_states and edits_hover match (0 chrome px, max 4 levels on 8 text-edge px) and both hot key edit states pass, but no TcxTextEdit is captured: the hot key and password edits stand in.",
+    "gaps": [
+     "No TcxTextEdit capture: v3 shows only the TcxMaskEdit password fields and a hot key edit (same chrome, different class)",
+     "Unverified: selection, disabled (v3's captured disabled edit is the button edit's: white face, #A0A0A0 text; the native Win32 edit has a #F0F0F0 face and #6D6D6D text), invalid (no native state)",
+     "Read-only: face #F0F0F0 from the native light capture; the frame is v3's tile (the native Win32 edit draws a crisper 1 px border, 8 levels apart in the foot)",
+     "Text: ClearType colour fringes not reproduced (grayscale); the hot key cell's fringe 3 px left of the C is up to 94 levels (text, excluded)",
+     "Scale (looks_scale_check): 2.0 93.1 % of runs hold; edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Audit 4: audit 3's hot key focused ink box (3 px) now agrees; the status stays review because the control itself has no capture",
+     "Audit 4 uncaptured: every state of a TcxTextEdit; selection, read-only, disabled, invalid"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/memo.png",
+    "notes": "Round 12: still no TcxMemo in any capture (census of every controls.json: no TcxMemo, TcxTextEdit or TcxDateEdit window). No change. Audit 4: no TcxMemo is in any v3 capture; only the native multi-line edit was sampled (rim 236 to 238, foot 131 against 187 and 190), so nothing is verified pixel for pixel.",
+    "gaps": [
+     "No v3 capture of any memo (Import wizard Confirm page and the Notes window are not captured)",
+     "Unverified: every state (rest, hover, focus, selection, disabled, read-only #F0F0F0 from the native edit, invalid, placeholder, scroll bar)",
+     "Wrapping is the outline font's, not GDI's whole-pixel advances (the memo is multi-line, so the GDI text path is not used)",
+     "Scroll bar: ours is the Neper thin scroll bar; the native multi-line edit and v3 (NativeStyle) draw the system scroll bar",
+     "Audit 4 uncaptured: every state"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Round 12: no TcxDateEdit window in any capture (Deck Properties' Created and Modified rows are TcxDateEditProperties cells shown as text). No change. Audit 4: no TcxDateEdit with an editor or drop button is in any v3 capture, so nothing is compared.",
+    "gaps": [
+     "Unverified: every state (no v3 capture of an editing date edit; its drop button, calendar popup, Today and Clear buttons are DevExpress-drawn and never shown)",
+     "Native DTP (160 x 26, #8D8D8D line, calendar icon and arrow glyph, #0078D4 focus frame) and MonthCal (Sun to Sat, right-aligned days, #979797 frame, Today row) are a different control and are not reproduced",
+     "No disabled cell: the date picker has no enabled option",
+     "Audit 4 uncaptured: every state"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/toolbar_button_row.png",
+    "notes": "Round 12: toolbar_button toolbar_button_hot no longer traps (build_hot returned 10 cells for 9). Audit 4: all 11 strips match (0 flat px off outside v3's icon bitmaps) and 14 hot, pressed and hint states pass with 10 hover grabs identical to rest.",
+    "gaps": [
+     "v3 icon artwork (34 to 39 flat-run px per strip) is a drawn glyph here and excluded",
+     "Reference edit: last row of the three toolbar ref crops (foreign grid border) replaced",
+     "Unverified: checked, focus, dropdown, disabled (hover grabs identical to rest)",
+     "Audit 4: the last row (y 25, x 288 on) of the 3 toolbar reference crops is an edited row, not a capture; the v3 icon bitmaps (groups up to 20 x 20 px) are excluded from both images",
+     "Audit 4 uncaptured: checked, focus, dropdown, disabled"
+    ]
+   }
+  }
+ }
+}

@@ -8,11 +8,17 @@ import numpy as np
 
 
 def flat_mask(a):
-    h, w, _ = a.shape
+    run = run_mask(a)
     key = (a[:, :, 0].astype(np.int64) << 16) | (a[:, :, 1].astype(np.int64) << 8) | a[:, :, 2]
     vals, counts = np.unique(key, return_counts=True)
     common = set(vals[counts >= 30].tolist())
-    ok = np.isin(key, list(common))
+    return run & np.isin(key, list(common))
+
+
+def run_mask(a):
+    """Pixels in a row or column run of 11 or more equal pixels (any colour, any count)."""
+    h, w, _ = a.shape
+    key = (a[:, :, 0].astype(np.int64) << 16) | (a[:, :, 1].astype(np.int64) << 8) | a[:, :, 2]
     run = np.zeros((h, w), bool)
     for y in range(h):
         x = 0
@@ -32,7 +38,7 @@ def flat_mask(a):
             if e - y + 1 >= 11:
                 run[y:e + 1, x] = True
             y = e + 1
-    return run & ok
+    return run
 
 
 def struct_mask(a):

@@ -31,6 +31,9 @@ type Item = struct { kind: u32, x: f32, y: f32, w: f32, h: f32, text: str, flag:
 // its own exact phase (rcx + x * rkx, rcy + y * rky, looks9: scripts/looks_ref_a/fitring.py), the caption the old one
 type Form = struct { title: str, width: f32, height: f32, active: bool, tkind: u32, bottom: bool, kx: f32, ky: f32, cx: f32, cy: f32, rkx: f32, rky: f32, rcx: f32, rcy: f32, items: [24]Item, count: usize }
 
+fn group_dx() -> f32 { ret 0.0 }
+fn group_dy() -> f32 { ret 0.0 }
+
 fn item(kind: u32, x: f32, y: f32, w: f32, h: f32, text: str, flag: bool) -> Item {
     ret Item { kind: kind, x: x, y: y, w: w, h: h, text: text, flag: flag, bg: 0u32 }
 }
@@ -203,8 +206,8 @@ fn form(i: usize) -> Form {
         f.height = 479.0
         f.tkind = 1u32
         f.bottom = true
-        f.items = [24]Item{ itemb(0u32, 22.0, 448.0, 75.0, 23.0, "Help", false, 0x000000u32), itemb(3u32, 103.0, 451.0, 270.0, 17.0, "Last update on October 10, 2026", false, 0x000000u32), itemb(0u32, 460.0, 448.0, 75.0, 23.0, "Close", false, 0x000000u32), itemb(0u32, 446.0, 95.0, 75.0, 23.0, "P&easant", false, 0x000000u32), itemb(0u32, 365.0, 95.0, 75.0, 23.0, "&Brawl", false, 0x000000u32), itemb(0u32, 284.0, 95.0, 75.0, 23.0, "Comm &1v1", false, 0x000000u32), itemb(0u32, 203.0, 95.0, 75.0, 23.0, "&Commander", false, 0x000000u32), itemb(0u32, 122.0, 95.0, 75.0, 23.0, "&2HG", false, 0x000000u32), itemb(0u32, 41.0, 95.0, 75.0, 23.0, "&Pauper", false, 0x000000u32), itemb(0u32, 122.0, 66.0, 75.0, 23.0, "&Modern", false, 0x000000u32), itemb(0u32, 446.0, 66.0, 75.0, 23.0, "&All", false, 0x000000u32), itemb(0u32, 365.0, 66.0, 75.0, 23.0, "&Vintage", false, 0x000000u32), itemb(0u32, 284.0, 66.0, 75.0, 23.0, "&Legacy", false, 0x000000u32), itemb(0u32, 203.0, 66.0, 75.0, 23.0, "&Pioneer", false, 0x000000u32), itemb(0u32, 41.0, 66.0, 75.0, 23.0, "&Standard", false, 0x000000u32), none, none, none, none, none, none, none, none, none }
-        f.count = 15usize
+        f.items = [24]Item{ itemb(0u32, 22.0, 448.0, 75.0, 23.0, "Help", false, 0x000000u32), itemb(3u32, 103.0, 451.0, 270.0, 17.0, "Last update on October 10, 2026", false, 0x000000u32), itemb(0u32, 460.0, 448.0, 75.0, 23.0, "Close", false, 0x000000u32), itemb(0u32, 446.0, 95.0, 75.0, 23.0, "P&easant", false, 0x000000u32), itemb(0u32, 365.0, 95.0, 75.0, 23.0, "&Brawl", false, 0x000000u32), itemb(0u32, 284.0, 95.0, 75.0, 23.0, "Comm &1v1", false, 0x000000u32), itemb(0u32, 203.0, 95.0, 75.0, 23.0, "&Commander", false, 0x000000u32), itemb(0u32, 122.0, 95.0, 75.0, 23.0, "&2HG", false, 0x000000u32), itemb(0u32, 41.0, 95.0, 75.0, 23.0, "&Pauper", false, 0x000000u32), itemb(0u32, 122.0, 66.0, 75.0, 23.0, "&Modern", false, 0x000000u32), itemb(0u32, 446.0, 66.0, 75.0, 23.0, "&All", false, 0x000000u32), itemb(0u32, 365.0, 66.0, 75.0, 23.0, "&Vintage", false, 0x000000u32), itemb(0u32, 284.0, 66.0, 75.0, 23.0, "&Legacy", false, 0x000000u32), itemb(0u32, 203.0, 66.0, 75.0, 23.0, "&Pioneer", false, 0x000000u32), itemb(0u32, 41.0, 66.0, 75.0, 23.0, "&Standard", false, 0x000000u32), itemb(6u32, 26.0, 39.0, 513.0, 93.0, "Select Format ", false, 0x000000u32), none, none, none, none, none, none, none, none }
+        f.count = 16usize
     }
     if i == 13usize {
         f.title = "Statistics"
@@ -278,6 +281,12 @@ fn window(a: *mem.Arena, t: *const control.Theme, i: usize, action: *const widge
                 n += 1usize
             }
             parts[n] = at(a, it.x - 8.0 + 1.0, it.y + 1.0, b)
+        } else if it.kind == 6u32 {
+            // looks12: a TcxGroupBox (Deck Legality's Select Format); its frame lines sit 0.4 px past the whole pixel as captured
+            var held_none: []const widget.Node = zero
+            let (framed, framed_error) = control.windows_group_exact(a, key, t, it.text, true, it.w, it.h, 0.0, 6.35, it.w + 0.4, it.h - 0.65, held_none)
+            if framed_error != ok { ret (zero, framed_error) }
+            parts[n] = at(a, it.x - 8.0 + group_dx(), it.y + group_dy(), framed)
         } else {
             var size: f32 = 11.0
             var weight = 400u32
