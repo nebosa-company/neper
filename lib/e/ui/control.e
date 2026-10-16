@@ -14588,9 +14588,27 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     // round 12: the native dark bar is thin both ways: the thumb is 2 thick on rows 8 and 9 of the 17 (hscroll-rest)
     if style.windows_dark_on() && !vertical { w = 2.0 }
     var ink = style.hex(8750469u32)
-    if state.hovered && vertical { w = 6.0 }
-    if state.pressed { w = 6.0 }
+    // round 13: the 6 px pill shows only while the pointer is on the thumb (live captures: over the track or an arrow the thumb stays thin)
+    var pill_hot = state.hovered || state.pressed
+    if vertical && !crisp && (state.hovered || state.pressed) && mem.address_of(t.runtime) != 0usize && length > 32.0 && content > view {
+        let (pill_box, has_pill_box) = keyed_bounds(t.runtime, key)
+        if has_pill_box {
+            let pill_y = widget.pointer_position(t.runtime).y - pill_box.y
+            let pill_room = length - 32.0
+            var pill_len = pill_room * view / content
+            if pill_len < 17.0 { pill_len = 17.0 }
+            if pill_len > pill_room { pill_len = pill_room }
+            var pill_share = offset / (content - view)
+            if pill_share < 0.0 { pill_share = 0.0 }
+            if pill_share > 1.0 { pill_share = 1.0 }
+            let pill_at = 16.0 + (pill_room - pill_len) * pill_share
+            pill_hot = pill_y >= pill_at && pill_y < pill_at + pill_len
+        }
+    }
+    if state.hovered && vertical && pill_hot { w = 6.0 }
+    if state.pressed && pill_hot { w = 6.0 }
     if state.pressed && !vertical { w = 12.0 }
+    let hot_pill = pill_hot && (state.hovered || state.pressed)
     let room = length - 32.0
     var dark_track = style.hex_raw(0x171717u32)
     var thick = style.defaults()
@@ -14620,8 +14638,10 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     edge.background = paint.Brush { Solid: style.hex(16250871u32) }
     if crisp { edge.background = paint.Brush { Solid: style.hex(16777215u32) } }
     if style.windows_dark_on() { edge.background = paint.Brush { Solid: dark_track } }
-    layers[count] = widget.box(0u64, edge, zero)
-    count += 1usize
+    if vertical || crisp || style.windows_dark_on() {
+        layers[count] = widget.box(0u64, edge, zero)
+        count += 1usize
+    }
     if content > view && room > 0.0 {
         var thumb_len = room * view / content
         if thumb_len < 17.0 { thumb_len = 17.0 }
@@ -14638,7 +14658,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             if state.pressed || state.hovered { side = 6.0 }
             lift = 0.0
         }
-        if state.pressed && vertical && !crisp {
+        if state.pressed && vertical && !crisp && pill_hot {
             side = (16.0 - w) * 0.5
             lift = 0.0
         }
@@ -14659,6 +14679,10 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             }
         }
         thick.background = paint.Brush { Solid: ink }
+        if !vertical && !crisp && !style.windows_dark_on() && thumb_len >= 14.0 {
+            thick.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+            thick.border = style.Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+        }
         layers[count] = widget.box(0u64, thick, zero)
         if style.windows_dark_on() && !vertical && !state.pressed && !state.hovered && thumb_len > 3.0 {
             var inner = sized_style(thumb_len - 2.0, 2.0)
@@ -14674,8 +14698,26 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             count += 1usize
             layers[count] = widget.box(0u64, inner, zero)
         }
+        if !vertical && !crisp && !style.windows_dark_on() && thumb_len >= 14.0 {
+            // round 13: the navigator's horizontal thumb, rows of end pixels round a constant body (main window grabs, rest and hot)
+            let (hthumb, hthumb_error) = windows_hthumb(a, thumb_len, state.hovered || state.pressed)
+            if hthumb_error != ok { ret (zero, hthumb_error) }
+            var htop: f32 = 2.0
+            if state.hovered || state.pressed { htop = 0.0 }
+            var hstyle = sized_style(thumb_len, 14.0)
+            hstyle.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: htop }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            layers[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, hstyle, one_widget(a, hthumb))
+        }
         // looks11-g1: at rest the live grid bar's thumb is three pixel columns (#B6 #85 #BF) with soft ends, 7 px from the bar's first pixel
-        if vertical && !state.pressed && !state.hovered && !crisp && !style.windows_dark_on() && thumb_len >= 6.0 {
+        if vertical && hot_pill && !crisp && !style.windows_dark_on() && thumb_len >= 6.0 {
+            // round 13: the hot or held thumb is the capture's 7 pixel pill (columns of end pixels cut from the main window grabs)
+            let (pill_node, pill_error) = windows_pill(a, thumb_len)
+            if pill_error != ok { ret (zero, pill_error) }
+            var pill_style = sized_style(7.0, thumb_len)
+            pill_style.margin = style.EdgeLengths { left: style.Length { Px: 5.0 }, top: style.Length { Px: at - 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            layers[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, pill_style, one_widget(a, pill_node))
+        }
+        if vertical && !hot_pill && !crisp && !style.windows_dark_on() && thumb_len >= 6.0 {
             let (pixel_thumb, pixel_thumb_error) = windows_thumb(a, thumb_len)
             if pixel_thumb_error != ok { ret (zero, pixel_thumb_error) }
             var pixel_style = sized_style(3.0, thumb_len)
@@ -14686,6 +14728,17 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     }
     // looks5-e: a vertical bar shows only the arrow the pointer is on (live captures; the thumb widens over the bar)
     var arrow_done = false
+    if state.pressed && vertical && !crisp && !pill_hot && mem.address_of(t.runtime) != 0usize {
+        // round 13: the lower end held down shows the pressed arrow (states/scroll-bar-arrow-pressed-main-vertical)
+        let (held_box, has_held_box) = keyed_bounds(t.runtime, key)
+        if has_held_box && widget.pointer_position(t.runtime).y - held_box.y > length - 16.0 {
+            let (held_arrow, held_arrow_error) = gl.pixels(a, gl.gx_arrow_down(), gl.gx_arrow_down_w(), gl.gx_arrow_down_h())
+            if held_arrow_error != ok { ret (zero, held_arrow_error) }
+            layers[count] = widget.positioned(0u64, 4.0, length - 11.0, style.defaults(), one_widget(a, held_arrow))
+            count += 1usize
+        }
+        arrow_done = true
+    }
     if state.hovered && !state.pressed && vertical && mem.address_of(t.runtime) != 0usize {
         arrow_done = true
         let (bar_box, has_bar_box) = keyed_bounds(t.runtime, key)
@@ -14697,7 +14750,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             if bar_y < 16.0 { hot_pix = gl.gx_arrow_hot_up() }
             if bar_y > length - 16.0 {
                 hot_pix = gl.gx_arrow_hot_down()
-                hot_top = length - 13.0
+                hot_top = length - 12.0
             }
             if hot_pix.len > 0usize {
                 let (hot, hot_error) = gl.pixels(a, hot_pix, gl.gx_arrow_hot_w(), gl.gx_arrow_hot_h())
@@ -14710,7 +14763,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             }
         }
     }
-    if state.hovered && !state.pressed && !arrow_done {
+    if state.hovered && !state.pressed && !arrow_done && (crisp || style.windows_dark_on()) {
         let (arrows, arrows_error) = mem.alloc[ScrollArrows](a, 1usize)
         if arrows_error != ok { ret (zero, TooLarge) }
         arrows[0usize] = ScrollArrows { vertical: vertical, ink: style.hex(6316128u32) }
@@ -19613,6 +19666,151 @@ fn windows_thumb(a: *mem.Arena, h: f32) -> (widget.Node, err) {
         parts[n] = s3
         n += 1usize
         k += 1usize
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
+}
+
+// round 13: the navigator's horizontal thumb of the live main window: `rows` of (6 left pixels, the body, 6 right pixels), 10 rows at rest
+// (rim #BA, body #858585), 14 rows hot or held (rounded). `w` is the thumb's width, `hot` selects the rows.
+fn windows_hthumb(a: *mem.Arena, w: f32, hot: bool) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 220usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    // rest: top rim, 8 body rows, bottom rim
+    let rest_l: [3][6]u32 = [3][6]u32{
+        [6]u32{ 0xCDCDCDu32, 0xBCBCBCu32, 0xBABABAu32, 0xBABABAu32, 0xBABABAu32, 0xBABABAu32 },
+        [6]u32{ 0xABABABu32, 0x898989u32, 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32 },
+        [6]u32{ 0xCECECEu32, 0xBCBCBCu32, 0xBABABAu32, 0xBABABAu32, 0xBABABAu32, 0xBABABAu32 } }
+    let rest_r: [3][6]u32 = [3][6]u32{
+        [6]u32{ 0xBABABAu32, 0xBABABAu32, 0xBABABAu32, 0xBABABAu32, 0xBFBFBFu32, 0xDFDFDFu32 },
+        [6]u32{ 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32, 0x8E8E8Eu32, 0xCECECEu32 },
+        [6]u32{ 0xBABABAu32, 0xBABABAu32, 0xBABABAu32, 0xBABABAu32, 0xBFBFBFu32, 0xDFDFDFu32 } }
+    let rest_m: [3]u32 = [3]u32{ 0xBABABAu32, 0x858585u32, 0xBABABAu32 }
+    let rest_h: [3]f32 = [3]f32{ 1.0, 8.0, 1.0 }
+    // hot: 3 top rows, 8 body rows, 3 bottom rows
+    let hot_l: [7][6]u32 = [7][6]u32{
+        [6]u32{ 0xF0F0F0u32, 0xDCDCDCu32, 0xC4C4C4u32, 0xBBBBBBu32, 0xBABABAu32, 0xBABABAu32 },
+        [6]u32{ 0xDADADAu32, 0xADADADu32, 0x8F8F8Fu32, 0x868686u32, 0x858585u32, 0x858585u32 },
+        [6]u32{ 0xB5B5B5u32, 0x8C8C8Cu32, 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32 },
+        [6]u32{ 0xA7A7A7u32, 0x878787u32, 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32 },
+        [6]u32{ 0xB8B8B8u32, 0x8D8D8Du32, 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32 },
+        [6]u32{ 0xDCDCDCu32, 0xABABABu32, 0x8E8E8Eu32, 0x868686u32, 0x858585u32, 0x858585u32 },
+        [6]u32{ 0xF0F0F0u32, 0xDADADAu32, 0xC3C3C3u32, 0xBBBBBBu32, 0xBABABAu32, 0xBABABAu32 } }
+    let hot_r: [7][6]u32 = [7][6]u32{
+        [6]u32{ 0xBABABAu32, 0xBABABAu32, 0xBCBCBCu32, 0xCACACAu32, 0xE5E5E5u32, 0xF0F0F0u32 },
+        [6]u32{ 0x858585u32, 0x858585u32, 0x878787u32, 0x959595u32, 0xC0C0C0u32, 0xE6E6E6u32 },
+        [6]u32{ 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32, 0x989898u32, 0xD4D4D4u32 },
+        [6]u32{ 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32, 0x898989u32, 0xCCCCCCu32 },
+        [6]u32{ 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32, 0x969696u32, 0xD3D3D3u32 },
+        [6]u32{ 0x858585u32, 0x858585u32, 0x878787u32, 0x979797u32, 0xC0C0C0u32, 0xE5E5E5u32 },
+        [6]u32{ 0xBABABAu32, 0xBABABAu32, 0xBCBCBCu32, 0xCDCDCDu32, 0xE6E6E6u32, 0xF0F0F0u32 } }
+    let hot_m: [7]u32 = [7]u32{ 0xBABABAu32, 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32, 0xBABABAu32 }
+    let hot_h: [7]f32 = [7]f32{ 1.0, 1.0, 1.0, 8.0, 1.0, 1.0, 1.0 }
+    var rows = 3usize
+    if hot { rows = 7usize }
+    var y: f32 = 0.0
+    var r = 0usize
+    while r < rows {
+        var h: f32 = 0.0
+        var m: u32 = 0u32
+        if hot {
+            h = hot_h[r]
+            m = hot_m[r]
+        } else {
+            h = rest_h[r]
+            m = rest_m[r]
+        }
+        // the row as runs of equal pixels (#F0F0F0 is the track: left out)
+        var run_value: u32 = 0u32
+        var run_start: f32 = 0.0
+        var c = 0usize
+        while c <= 13usize {
+            var value: u32 = 0u32
+            var cx: f32 = 0.0
+            var cw: f32 = 1.0
+            if c < 6usize {
+                cx = f32(c)
+                if hot { value = hot_l[r][c] } else { value = rest_l[r][c] }
+            } else if c == 6usize {
+                cx = 6.0
+                cw = w - 12.0
+                value = m
+            } else if c < 13usize {
+                cx = w - 6.0 + f32(c - 7usize)
+                if hot { value = hot_r[r][c - 7usize] } else { value = rest_r[r][c - 7usize] }
+            } else {
+                cx = w
+                value = 1u32
+            }
+            if c == 0usize {
+                run_value = value
+                run_start = 0.0
+            } else if value != run_value || c == 13usize {
+                if run_value != 0xF0F0F0u32 {
+                    var piece = sized_style(cx - run_start, h)
+                    piece.background = paint.Brush { Solid: gl.rgb(run_value) }
+                    parts[n] = widget.positioned(0u64, run_start, y, style.defaults(), one_widget(a, widget.box(0u64, piece, zero)))
+                    n += 1usize
+                }
+                run_value = value
+                run_start = cx
+            }
+            c += 1usize
+        }
+        y += h
+        r += 1usize
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
+}
+
+// round 13: the 7 wide pill of a hot or held vertical thumb of the live main window (states/hover-scroll-bar-vertical-thumb): per column the
+// end pixels (top, then bottom) round a constant body; columns 0 and 6 start a row lower. `h` is the pill's height.
+fn windows_pill(a: *mem.Arena, h: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 48usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    let tops: [7][4]u32 = [7][4]u32{
+        [4]u32{ 0xDCDCDCu32, 0xC2C2C2u32, 0xB7B7B7u32, 0u32 },
+        [4]u32{ 0xDEDEDEu32, 0xB0B0B0u32, 0x8F8F8Fu32, 0x868686u32 },
+        [4]u32{ 0xC0C0C0u32, 0x909090u32, 0u32, 0u32 },
+        [4]u32{ 0xB3B3B3u32, 0x888888u32, 0u32, 0u32 },
+        [4]u32{ 0xC0C0C0u32, 0x909090u32, 0u32, 0u32 },
+        [4]u32{ 0xDFDFDFu32, 0xB5B5B5u32, 0x929292u32, 0x868686u32 },
+        [4]u32{ 0xE1E1E1u32, 0xCACACAu32, 0xC0C0C0u32, 0u32 } }
+    let feet: [7][4]u32 = [7][4]u32{
+        [4]u32{ 0xB8B8B8u32, 0xC9C9C9u32, 0xE4E4E4u32, 0u32 },
+        [4]u32{ 0x878787u32, 0x959595u32, 0xBBBBBBu32, 0xE3E3E3u32 },
+        [4]u32{ 0x949494u32, 0xCFCFCFu32, 0u32, 0u32 },
+        [4]u32{ 0x898989u32, 0xC8C8C8u32, 0u32, 0u32 },
+        [4]u32{ 0x989898u32, 0xD2D2D2u32, 0u32, 0u32 },
+        [4]u32{ 0x878787u32, 0x969696u32, 0xC1C1C1u32, 0xE6E6E6u32 },
+        [4]u32{ 0xC1C1C1u32, 0xCDCDCDu32, 0xE5E5E5u32, 0u32 } }
+    let ends: [7]usize = [7]usize{ 3usize, 4usize, 2usize, 2usize, 2usize, 4usize, 3usize }
+    let first: [7]usize = [7]usize{ 1usize, 0usize, 0usize, 0usize, 0usize, 0usize, 1usize }
+    let body: [7]u32 = [7]u32{ 0xB6B6B6u32, 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32, 0x858585u32, 0xBFBFBFu32 }
+    var c = 0usize
+    while c < 7usize {
+        let col = f32(c)
+        let k = ends[c]
+        let top_at = f32(first[c])
+        let foot_at = h - f32(first[c]) - f32(k)
+        var j = 0usize
+        while j < k {
+            var st = sized_style(1.0, 1.0)
+            st.background = paint.Brush { Solid: gl.rgb(tops[c][j]) }
+            parts[n] = widget.positioned(0u64, col, top_at + f32(j), style.defaults(), one_widget(a, widget.box(0u64, st, zero)))
+            n += 1usize
+            var sf = sized_style(1.0, 1.0)
+            sf.background = paint.Brush { Solid: gl.rgb(feet[c][j]) }
+            parts[n] = widget.positioned(0u64, col, foot_at + f32(j), style.defaults(), one_widget(a, widget.box(0u64, sf, zero)))
+            n += 1usize
+            j += 1usize
+        }
+        var sb = sized_style(1.0, h - 2.0 * (top_at + f32(k)))
+        sb.background = paint.Brush { Solid: gl.rgb(body[c]) }
+        parts[n] = widget.positioned(0u64, col, top_at + f32(k), style.defaults(), one_widget(a, widget.box(0u64, sb, zero)))
+        n += 1usize
+        c += 1usize
     }
     ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
 }

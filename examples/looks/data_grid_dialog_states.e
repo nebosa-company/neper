@@ -10,6 +10,7 @@ use e.data.tablegroup as grp
 use e.data.tableview as view
 use e.gfx.paint
 use e.mem
+use e.str as strs
 use e.ui.control
 use e.ui.datagrid as dg
 use e.ui.gridlook as gl
@@ -32,7 +33,8 @@ type App = struct {
     grids: [MAX]dg.Grid,
     scratch: mem.Arena,
     hover: bool,
-    first: usize
+    first: usize,
+    name: str
 }
 
 fn sort_name(row: usize) -> str {
@@ -261,6 +263,10 @@ fn arrange(app: *App, k: usize) {
         look.foot_w1 = gl.rgb(0xE9E9E9u32)
         look.foot_w2 = gl.rgb(0xE8E8E8u32)
         look.header_line = gl.rgb(0xF5F5F5u32)
+        // round 13: with the first row selected the line under the header is the selection's top edge (#E5EEF4)
+        var first_row_held = k + app.first == 0usize
+        if app.hover { first_row_held = true }
+        if first_row_held { look.header_line = gl.rgb(0xE5EEF4u32) }
         // looks11-g1: the live column lines as alpha blends (fitted to the Shortcuts list: x = 22, 152, 347)
         look.soft_a0 = 0.84
         look.soft_x0 = 22.0
@@ -273,6 +279,7 @@ fn arrange(app: *App, k: usize) {
         look.ring_left_i = gl.rgb(0xECEDEEu32)
         look.ring_right = gl.rgb(0xBBBDC1u32)
         look.ring_bottom = gl.rgb(0xCED0D4u32)
+        look.ring_marks = dialog_marks(app.name, k)
     } else {
         look.frame_none = true
         look.dialog_lines = true
@@ -534,7 +541,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
             name = names[part]
         }
     }
+    seed.name = name
     apps[0usize] = seed
     let sheet = looks.Sheet { name: name, cells: seed.cells, columns: cols, cell_w: w, cell_h: h, ctx: mem.cast[*void](&apps[0usize]), build: build }
     ret looks.run_all(a, &sheet)
 }
+
+// BEGIN GENERATED (scripts/looks_dialog_marks.py)
+fn dialog_marks(sheet: str, cell: usize) -> str {
+    if strs.eq(sheet, "data_grid_shortcuts_hover") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 bbc6cf;154 1 1 b9c7d3 194;348 1 1 c8ced5;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 d9e5ed;154 20 1 d6e7f2 193;347 20 1 d9e4eb;348 20 1 e1e9ef;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
+    if strs.eq(sheet, "data_grid_shortcuts_hover") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 bcc5ce;349 1 1 b9c7d3 129;478 1 1 c5cdd5;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 dae4eb;349 20 1 d6e7f2 128;477 20 1 d9e4ed;478 20 1 edf0f3;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
+    if strs.eq(sheet, "data_grid_shortcuts_hover2") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
+    if strs.eq(sheet, "data_grid_shortcuts_hover2") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 4;484 20 1 c6c6c6;485 20 1 909090;486 20 1 858585 3;489 20 1 919191;490 20 1 c6c6c6;491 20 1 f0f0f0 4" }
+    if strs.eq(sheet, "data_grid_shortcuts_hover3") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 4;484 20 1 c6c6c6;485 20 1 909090;486 20 1 858585 3;489 20 1 919191;490 20 1 c6c6c6;491 20 1 f0f0f0 4" }
+    if strs.eq(sheet, "data_grid_shortcuts_hover3") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
+    if strs.eq(sheet, "data_grid_shortcuts_hover4") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
+    if strs.eq(sheet, "data_grid_shortcuts_states") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
+    if strs.eq(sheet, "data_grid_shortcuts_states") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 aebfcd;154 1 1 a7bdd0 194;348 1 1 c0cad4;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 dde6ec;154 20 1 dce8f1 193;347 20 1 d5e1ea;348 20 1 e6ebee;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
+    if strs.eq(sheet, "data_grid_shortcuts_states2") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 efefef;347 20 1 e8e8e8;348 20 1 ececec;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
+    if strs.eq(sheet, "data_grid_shortcuts_states2") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 efefef;347 20 1 e8e8e8;348 20 1 ececec;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
+    if strs.eq(sheet, "data_grid_shortcuts_states3") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 efefef;347 20 1 e8e8e8;348 20 1 ececec;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 4;484 20 1 c6c6c6;485 20 1 909090;486 20 1 858585 3;489 20 1 919191;490 20 1 c6c6c6;491 20 1 f0f0f0 4" }
+    ret ""
+}
+// END GENERATED
