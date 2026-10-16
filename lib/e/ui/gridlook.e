@@ -56,6 +56,8 @@ type Look = struct {
     dialog_lines: bool,
     // looks5-e: the two pixels at the foot of a grey and of a white row, when set
     foot_set: bool,
+    // looks5-e: the foot pixels drift with the row's place down the grid (levels per 100 px, 1.0 as measured on the Shortcuts and top grids)
+    foot_drift: f32,
     // looks5-e: a grid without the focus paints its selected row in this fill and edge (the Options grids), else as focused
     // looks5-e: a group row carries "(Count: n)" (the View > Group by captures; the main window's Rarity groups do not)
     group_counts: bool,
@@ -113,6 +115,7 @@ fn v3() -> Look {
         frame_none: false,
         dialog_lines: false,
         foot_set: false,
+        foot_drift: 0.0,
         group_counts: false,
         idle_on: false,
         idle_fill: rgb(0xD5E4EEu32),

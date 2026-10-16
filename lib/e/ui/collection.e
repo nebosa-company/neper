@@ -2577,6 +2577,22 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                     first_px = look.foot_w1
                     second_px = look.foot_w2
                 }
+                if look.foot_drift != 0.0 {
+                    // the capture's pixels drift: white rows #EA/#E7 to #F1/#E4, grey rows #E4/#F0 to #E7/#EA over 250 px
+                    let place = f32(index) * extent * 0.01 * look.foot_drift
+                    var drift_first = look.foot_g1
+                    var drift_second = look.foot_g2
+                    var first_rate: f32 = 1.19
+                    var second_rate: f32 = 0.0 - 2.38
+                    if fill_is_light(look, index) {
+                        drift_first = look.foot_w1
+                        drift_second = look.foot_w2
+                        first_rate = 2.8
+                        second_rate = 0.0 - 1.2
+                    }
+                    first_px = paint.rgba(drift_first.red + place * first_rate / 255.0, drift_first.green + place * first_rate / 255.0, drift_first.blue + place * first_rate / 255.0, 1.0)
+                    second_px = paint.rgba(drift_second.red + place * second_rate / 255.0, drift_second.green + place * second_rate / 255.0, drift_second.blue + place * second_rate / 255.0, 1.0)
+                }
             }
             var one_style = control.sized_style(4000.0, 1.0)
             one_style.background = paint.Brush { Solid: first_px }
@@ -2783,7 +2799,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }

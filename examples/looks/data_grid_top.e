@@ -198,10 +198,11 @@ fn setup(app: *App) -> err {
         look.ring_left_o = gl.rgb(0x90949Cu32)
         look.ring_left_i = gl.rgb(0xEFF0F1u32)
         look.foot_set = true
-        look.foot_g1 = gl.rgb(0xE5E5E5u32)
-        look.foot_g2 = gl.rgb(0xF0F0F0u32)
-        look.foot_w1 = gl.rgb(0xEBEBEBu32)
-        look.foot_w2 = gl.rgb(0xE7E7E7u32)
+        look.foot_drift = 1.0
+        look.foot_g1 = gl.rgb(0xE3E3E3u32)
+        look.foot_g2 = gl.rgb(0xF2F2F2u32)
+        look.foot_w1 = gl.rgb(0xE9E9E9u32)
+        look.foot_w2 = gl.rgb(0xE8E8E8u32)
         // the View > Group by captures: group rows carry their counts, the group box is shown
         if k >= 25usize && k < 31usize { look.group_counts = true }
         dg.set_look(&app.grids[k], look)

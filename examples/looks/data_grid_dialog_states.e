@@ -248,10 +248,12 @@ fn arrange(app: *App, k: usize) {
         look.row_height = 18.0
         look.header_height = 19.0
         look.foot_set = true
-        look.foot_g1 = gl.rgb(0xE4E4E4u32)
-        look.foot_g2 = gl.rgb(0xF0F0F0u32)
-        look.foot_w1 = gl.rgb(0xEBEBEBu32)
-        look.foot_w2 = gl.rgb(0xE7E7E7u32)
+        // the foot pixels at the top of the list; they drift down it
+        look.foot_drift = 1.0
+        look.foot_g1 = gl.rgb(0xE3E3E3u32)
+        look.foot_g2 = gl.rgb(0xF2F2F2u32)
+        look.foot_w1 = gl.rgb(0xE9E9E9u32)
+        look.foot_w2 = gl.rgb(0xE8E8E8u32)
         look.header_line = gl.rgb(0xFFFFFFu32)
         look.idle_on = true
         look.idle_top = gl.rgb(0xE5EEF4u32)
