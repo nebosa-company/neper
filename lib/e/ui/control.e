@@ -5292,7 +5292,7 @@ fn mem_one_node(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
 }
 
 // The Windows look's progress bar (docs/ui/looks, v3's TcxProgressBar with NativeStyle, so the
-// OS theme draws it): 21 tall, a 1 px #BCBCBC frame round a #E6E6E6 track, the fill #06B025
+// OS theme draws it): 21 tall, a 1 px #BCBCBC frame round a #E6E6E6 track, the fill #0F7B0F (native capture)
 // flat and square inside the frame, and with `options.text` the percent centred, black on the
 // track and white over the fill. Indeterminate (v3 Marquee) is one segment, a fifth of the
 // width, travelling the track. Every colour is the Windows 10/11 comctl theme from memory, not
@@ -5304,7 +5304,9 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     if !indeterminate { share = eased_share(t, key, aimed, true) }
     let inner_w = width - 2.0
     let inner_h = h - 2.0
-    var fill_color = style.hex(438309u32)
+    var fill_color = style.hex_raw(0x0F7B0Fu32)
+    if options.tone == .Paused { fill_color = style.hex_raw(0x9D5D00u32) }
+    if options.tone == .Error { fill_color = style.hex_raw(0xC42B1Cu32) }
     var track_color = style.hex(15132390u32)
     var rim_color = style.hex(12369084u32)
     var ink_track = style.hex(0u32)
@@ -5312,6 +5314,8 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     // The Windows 11 dark bar: a #3A3A3A track in a #5A5A5A rim, the accent #60CDFF fill, white on the track and black over the fill.
     if t.tokens.palette == .Dark {
         fill_color = style.hex_raw(0x60CDFFu32)
+        if options.tone == .Paused { fill_color = style.hex_raw(0xFCE100u32) }
+        if options.tone == .Error { fill_color = style.hex_raw(0xFF99A4u32) }
         track_color = style.hex_raw(0x3A3A3Au32)
         rim_color = style.hex_raw(0x5A5A5Au32)
         ink_track = style.hex_raw(0xFFFFFFu32)
@@ -5328,7 +5332,7 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     words.wrap = .None
     if indeterminate {
         let turn = progress_turn(t, options.phase, time.seconds(2i64))
-        let seg = inner_w * 0.2
+        let seg = inner_w * 0.6
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = bar_piece(key + 1u64, seg, inner_h, fill_color, 0.0)
