@@ -109,16 +109,17 @@ throwaway; never point a script at the repo or installed exe.
 
 ## Looks, Light and Dark
 
-Eight looks (`looks.Look`), folders `docs/ui/looks/{neper,neper-dark,windows,windows-dark,cupertino,cupertino-dark,material,material-dark}/<sheet>[@1.5x].png`.
+Ten looks (`looks.Look`), folders `docs/ui/looks/{neper,neper-dark,windows,windows-dark,linux,linux-dark,cupertino,cupertino-dark,material,material-dark}/<sheet>[@1.5x].png`.
 `looks.run_all` renders Neper, Windows and Windows dark (and Neper dark where the app's harness version does) at 1.0
-and 1.5; `looks.run_cupertino` and `looks.run_material` render the Light and Dark of the platform looks. Dark has no live
-reference (v3 has no dark mode, nor do Apple and Android): its evidence is the platform's published dark palette, so its
-status is at most `started`, never `matched`.
+and 1.5; `looks.run_cupertino` and `looks.run_material` render the Light and Dark of the platform looks, `looks.run_linux` the Linux pair. Windows, Apple and
+Android Dark have no live reference (v3 has no dark mode, nor are Apple and Android captured): their evidence is the platform's
+published dark palette, so their status is at most `started`, never `matched`. Linux Dark has the real library's dark crops.
 
-`docs/ui/looks-progress.html` shows four flavor columns (Neper, Windows, macOS / iOS, Android), each cell holding the Light
-and the Dark thumbnail side by side with their own status chip, notes and gaps; the eight summary boxes are one per look
-(`status.json` `looks`: `neper`, `neper_dark`, `windows`, `windows_dark`, `cupertino`, `cupertino_dark`, `material`,
-`material_dark`). Overlay look ids are those ids; screenshot paths use the hyphenated folders (`windows-dark/button.png`).
+`docs/ui/looks-progress.html` shows five flavor columns in priority order (Windows, Linux, Neper, macOS / iOS, Android), each
+cell holding the Light and the Dark thumbnail side by side with their own status chip, notes and gaps; the ten summary boxes are
+one per look (`status.json` `looks`: `windows`, `windows_dark`, `linux`, `linux_dark`, `neper`, `neper_dark`, `cupertino`,
+`cupertino_dark`, `material`, `material_dark`). Overlay look ids are those ids; screenshot paths use the hyphenated folders
+(`linux-dark/button.png`).
 
 - Auto entry: a control with no entry for a look gets `started` with the note "Rendered from the platform palette; not
   compared with a real screen." when `docs/ui/looks/<look dir>/<name>.png` exists, `<name>` being the control id, then its
@@ -138,6 +139,33 @@ and the Dark thumbnail side by side with their own status chip, notes and gaps; 
 `scripts/cup_run.sh [name[:arg] ...]` compiles and runs them one at a time (a modal overlay renders one per process:
 `popup:open`, `menu:hover`, `alert:open`). Controls branch on `t.tokens.profile == .CupertinoLike`; the drawing helpers
 (`cup_*`, `cupertino_*`) are appended at the end of `lib/e/ui/control.e`, a few in `overlay.e` and `navigation.e`.
+
+## Linux sheets
+
+`style.adwaita(palette)` (profile `Linux`) is `looks.Look.Linux` / `LinuxDark`. A sheet is `examples/looks/linux_<control>.e` that
+calls `looks.run_linux` and names its sheet like the control (`button`, as the Cupertino and Android ones do), so the output is
+`docs/ui/looks/linux[-dark]/<control>[@1.5x].png` and the auto entry finds it. Run it like any other, from the worktree root
+(`neper-self.exe emit-executable examples/looks/linux_button.e <root> x64 windows <out>.exe --arena 4g`, then the exe).
+
+- Controls branch on `t.tokens.profile == .Linux` (`control.button` calls `linux_button`; its helpers sit at the end of
+  `control.e`). The button's colours are `style.adwaita_resolve`, mirroring `windows_resolve`. The runtime's focus ring is off
+  (`metrics.focus_ring` 0): GTK draws the ring inside the control's edge (2 px, offset -2), so a control draws it as its border.
+- The reference crops are composed into a sheet-shaped picture by `python -I scripts/linux/compose_ref.py [name]` (`SHEETS`
+  there holds the cell order and geometry of each sheet; keep it in step with the app) into
+  `docs/ui/looks/ref/linux/composite/{light,dark}/<name>.png`. `run_linux` finds it and writes
+  `docs/ui/looks/linux[-dark]/<name>-vs-ref.png` (reference left, ours right) at 100 %; the library has no 1.5x crops.
+  `python -I scripts/linux/compose_ref.py --diff <name>` prints, per cell, the pixels that are flat in the reference and outside
+  its label or icon box (grown by 3 px; the 3 px around the control's box count, so a box one pixel too big shows) with the largest
+  difference and how many are off by more than 2 levels, then the same over every pixel outside the label box (edges and rings
+  included). The first number is the one for `matched`.
+- Fonts: the Cantarell files in `docs/ui/looks/ref/linux/fonts` (OFL, `LICENSE.txt` beside them) are read by `run_linux` only, as
+  font ids 13 (regular) and 14 (bold), ahead of the Windows faces. A control asks for a weight through its role (`Label` is bold
+  here, the body regular): `control.text_style_faced_plain` honours the role's weight for Linux as it does for Android.
+- Libadwaita specifics that matter: button labels are bold; a text button has 17 px sides, an icon button 9, an icon with a caption
+  10; GTK lays a label out in whole pixels (Pango hinting), which `control.linux_label_width` approximates; flat buttons have no
+  face until hovered; a disabled control is the whole control at 50 % opacity; the focus ring is the accent at 50 %.
+- Corners use `widget.set_arc_corners` for Linux as for Android: true circular arcs make the 6 px corners and the 34 px circle
+  match the library's antialiasing to 2 levels.
 
 ## Scales (1.25, 1.5, 2.0)
 

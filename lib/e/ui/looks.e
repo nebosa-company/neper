@@ -32,7 +32,7 @@ use e.ui.widget
 
 // The four looks. Cupertino and Material have no tokens of their own yet: `theme_for` answers
 // the Neper tokens carrying their profile, and `run_all` does not render them.
-type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, MaterialDark, CupertinoDark, NeperDark }
+type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, MaterialDark, CupertinoDark, NeperDark, Linux, LinuxDark }
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
@@ -45,7 +45,7 @@ type Build = fn(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []Cel
 // A sheet: `name` is the file stem (the control), `columns` cells per row, each cell a box of
 // `cell_w` x `cell_h` logical px with the control centred in it and its caption above.
 type Sheet = struct { name: str, cells: usize, columns: usize, cell_w: f32, cell_h: f32, ctx: *void, build: Build }
-type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, flip: bool, width: f32, height: f32, scale: f32, material_fonts: []shape.Font }
+type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, flip: bool, width: f32, height: f32, scale: f32, material_fonts: []shape.Font, linux_fonts: []shape.Font }
 error Failed
 
 // looks5-e: where a driven cell's pointer goes, as an offset from the cell's centre (default none): an app sets it
@@ -71,6 +71,10 @@ fn roboto_medium_path() -> str { ret "C:/Windows/Fonts/Roboto-Medium.ttf" }
 fn segoe_bold_path() -> str { ret "C:/Windows/Fonts/segoeuib.ttf" }
 // Tahoma Bold (font id 10), last: v3 draws bold labels, captions, the Options pages' header title and the bars' group headers in it.
 fn tahoma_bold_path() -> str { ret "C:/Windows/Fonts/tahomabd.ttf" }
+// The Linux look's Cantarell (SIL OFL, converted from the distro's OTF to TrueType by scripts/linux/otf2ttf.py: this text
+// engine reads glyf outlines only), font ids 13 and 14, read by `run_linux` alone (so the other looks need nothing).
+fn cantarell_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Regular.ttf" }
+fn cantarell_bold_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Bold.ttf" }
 
 // The tokens of a look, Light palette. Cupertino and Material are planned: the Neper tokens
 // with the matching profile, so a control that branches on it can start to.
@@ -79,6 +83,8 @@ fn theme_for(look: Look) -> style.ThemeTokens {
     if look == .WindowsDark { ret style.windows(.Dark) }
     if look == .NeperDark { ret style.reference(.Dark) }
     if look == .Material { ret style.material(.Light) }
+    if look == .Linux { ret style.adwaita(.Light) }
+    if look == .LinuxDark { ret style.adwaita(.Dark) }
     if look == .MaterialDark { ret style.material(.Dark) }
     if look == .Cupertino { ret style.cupertino(.Light) }
     if look == .CupertinoDark { ret style.cupertino(.Dark) }
@@ -93,6 +99,8 @@ fn look_dir(look: Look) -> str {
     if look == .Cupertino { ret "cupertino" }
     if look == .CupertinoDark { ret "cupertino-dark" }
     if look == .Material { ret "material" }
+    if look == .Linux { ret "linux" }
+    if look == .LinuxDark { ret "linux-dark" }
     if look == .MaterialDark { ret "material-dark" }
     ret "neper"
 }
@@ -100,6 +108,8 @@ fn look_dir(look: Look) -> str {
 // The font files and the frame storage, read and allocated by the first rig and shared by the rest.
 var shared_fonts: [6][]u8 = zero
 var shared_fonts_read: bool = false
+var shared_linux: [2][]u8 = zero
+var shared_linux_read: bool = false
 var shared_storage: []u8 = zero
 
 fn read_fonts(a: *mem.Arena) -> err {
@@ -114,6 +124,19 @@ fn read_fonts(a: *mem.Arena) -> err {
         i += 1usize
     }
     shared_fonts_read = true
+    ret ok
+}
+
+fn read_linux_fonts(a: *mem.Arena) -> err {
+    if shared_linux_read { ret ok }
+    let sa = stable(a)
+    let (regular, regular_error) = fs.read_file(sa, cantarell_path(), 16777216usize)
+    if regular_error != ok { ret regular_error }
+    let (bold, bold_error) = fs.read_file(sa, cantarell_bold_path(), 16777216usize)
+    if bold_error != ok { ret bold_error }
+    shared_linux[0usize] = regular
+    shared_linux[1usize] = bold
+    shared_linux_read = true
     ret ok
 }
 
@@ -199,6 +222,20 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     try scene.register_font(&rig.renderer, fonts[2usize])
     try scene.register_font(&rig.renderer, fonts[3usize])
     rig.fonts = fonts[0usize..4usize]
+    // The Linux look: Cantarell Regular (id 13) and Bold (14) lead, the Windows faces follow for glyphs Cantarell lacks.
+    if shared_linux_read {
+        let (gtk, gtk_error) = mem.alloc[shape.Font](a, 6usize)
+        if gtk_error != ok { ret (rig, gtk_error) }
+        gtk[0usize] = shape.Font { id: 13u32, data: shared_linux[0usize], face_index: 0u32 }
+        gtk[1usize] = shape.Font { id: 14u32, data: shared_linux[1usize], face_index: 0u32 }
+        gtk[2usize] = fonts[0usize]
+        gtk[3usize] = fonts[2usize]
+        gtk[4usize] = fonts[1usize]
+        gtk[5usize] = fonts[3usize]
+        try scene.register_font(&rig.renderer, gtk[0usize])
+        try scene.register_font(&rig.renderer, gtk[1usize])
+        rig.linux_fonts = gtk[0usize..6usize]
+    }
     let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 16384usize, max_states: 1024usize, state_bytes: 65536usize, state_classes: 8u16, max_depth: 48u16, max_commands: 49152usize })
     if runtime_error != ok { ret (rig, runtime_error) }
     rig.runtime = rt
@@ -234,8 +271,9 @@ fn set_look(rig: *Rig, look: Look) {
     rig.tokens = theme_for(look)
     // The Windows dark look maps the light literals of its tile painters (style.hex) to dark; nothing else does.
     style.set_windark(look == .WindowsDark)
-    widget.set_arc_corners(rig.tokens.profile == .MaterialLike)
+    widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
+    if (look == .Linux || look == .LinuxDark) && rig.linux_fonts.len > 0usize { rig.fonts = rig.linux_fonts }
 }
 
 // The control theme of the rig: its tokens, fonts and runtime.
@@ -654,6 +692,53 @@ fn run_cupertino(a: *mem.Arena, s: *const Sheet) -> err {
             if path_error != ok { ret path_error }
             let (ours, render_error) = render_sheet(rig, s, path)
             if render_error != ok { ret render_error }
+            close_rig(rig)
+            look_index += 1usize
+        }
+        scale_index += 1usize
+    }
+    ret ok
+}
+
+// The Linux look, Light and Dark, at 100 % and 150 %: docs/ui/looks/linux and linux-dark. Beside each, when the real GTK
+// reference exists as a composite laid out like the sheet (docs/ui/looks/ref/linux/composite/{light,dark}/<name>[@1.5x].png,
+// scripts/linux/compose_ref.py), docs/ui/looks/<linux dir>/<name>-vs-ref[@1.5x].png (reference left, ours right).
+fn run_linux(a: *mem.Arena, s: *const Sheet) -> err {
+    try read_linux_fonts(a)
+    var scale_index = 0usize
+    while scale_index < 2usize {
+        var scale: f32 = 1.0
+        if scale_index == 1usize { scale = 1.5 }
+        var look_index = 0usize
+        while look_index < 2usize {
+            var look: Look = .Linux
+            var scheme = "light"
+            if look_index == 1usize {
+                look = .LinuxDark
+                scheme = "dark"
+            }
+            let ra = rig_scope(a)
+            let (rig, open_error) = open(ra, sheet_width(s), sheet_height(s), scale)
+            if open_error != ok { ret open_error }
+            set_look(rig, look)
+            let (folder, folder_error) = path_of(ra, look_dir(look), "", "", 1.0, "")
+            if folder_error != ok { ret folder_error }
+            try fs.make_dirs(ra, folder)
+            let (path, path_error) = path_of(ra, look_dir(look), s.name, "", scale, ".png")
+            if path_error != ok { ret path_error }
+            let (ours, render_error) = render_sheet(rig, s, path)
+            if render_error != ok { ret render_error }
+            let dir_parts = [2]str{ "ref/linux/composite/", scheme }
+            let (reference_dir, reference_dir_error) = strs.join(ra, dir_parts[0usize..2usize], "")
+            if reference_dir_error != ok { ret reference_dir_error }
+            let (reference_path, reference_path_error) = path_of(ra, reference_dir, s.name, "", scale, ".png")
+            if reference_path_error != ok { ret reference_path_error }
+            let (reference, has_reference) = load_reference(ra, reference_path)
+            if has_reference {
+                let (pair_path, pair_error) = path_of(ra, look_dir(look), s.name, "-vs-ref", scale, ".png")
+                if pair_error != ok { ret pair_error }
+                try beside(ra, const_view(reference), ours, pair_path)
+            }
             close_rig(rig)
             look_index += 1usize
         }

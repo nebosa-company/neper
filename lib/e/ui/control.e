@@ -41,7 +41,7 @@ type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Fon
 // looks5 (Windows look): `shift_x`, `shift_y` the sub-pixel offset v3's DPI-scaled forms (Options, Deck Properties, Deck Legality, About) draw
 // their buttons at (see e.ui.winbutton); zero for the crisp dialogs. `focused` draws the keyboard focus on it without the keyboard (a
 // window that has just opened has its default button focused: v3's About), for the looks sheets.
-type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool }
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool, circular: bool }
 // (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
 // theme's fonts that match best lead the fallback chain (`text_style_faced`).
 // (D1458) `size`, when above 0, sets the text's size in place of its role's,
@@ -123,7 +123,7 @@ fn text_style_faced_plain(a: *mem.Arena, t: *const Theme, options: TextOptions) 
     }
     // The Android look draws the role's own weight (Roboto Medium for the M3 label and title styles).
     var asked = options.weight
-    if asked == 0u32 && t.tokens.profile == .MaterialLike { asked = u32(style.text_style(t.tokens, options.role).weight) }
+    if asked == 0u32 && (t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux) { asked = u32(style.text_style(t.tokens, options.role).weight) }
     if (asked == 0u32 && !options.italic && !options.mono) || made.fonts.len < 2usize { ret (made, ok) }
     let (ordered, ordered_error) = mem.alloc[layout.FontChoice](a, made.fonts.len)
     let (costs, costs_error) = mem.alloc[u32](a, made.fonts.len)
@@ -2345,7 +2345,7 @@ fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
 // ------------------------------------------------------- the button family (D818, P1-06)
 
 fn button_options() -> ButtonOptions {
-    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false }
+    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false, circular: false }
 }
 
 // The control state of a keyed element under the page's runtime, with what the
@@ -2368,7 +2368,7 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
 // The theme's focus ring on the page's runtime (D940): the runtime paints it round
 // whichever element the keyboard focuses, so a control need only hand it the look.
 fn focus_look(t: *const Theme) {
-    widget.set_arc_corners(t.tokens.profile == .MaterialLike)
+    widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux)
     if mem.address_of(t.runtime) == 0usize { ret }
     widget.set_focus_ring(t.runtime, style.color(t.tokens, .FocusRing), t.tokens.metrics.focus_ring, t.tokens.metrics.focus_offset)
     // v2 (D983, widget plan P5-02): a touch theme's press ripple is `on-surface`
@@ -2739,6 +2739,12 @@ fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Glyp
         let (node, node_error) = windows_button(a, key, t, label, glyph_node, true, label.len != 0usize, false, zero, action, options)
         ret (node, node_error)
     }
+    if t.tokens.profile == .Linux {
+        let (glyph_node, glyph_error) = icon_square(a, style.adwaita_resolve(t.tokens, options.variant, state).foreground, kind, 16.0)
+        if glyph_error != ok { ret (zero, glyph_error) }
+        let (node, node_error) = linux_button(a, key, t, label, glyph_node, true, action, options)
+        ret (node, node_error)
+    }
     let base = style.resolve(t.tokens, options.variant, state)
     if label.len == 0usize {
         let (look, size) = icon_look(t, base, options.variant, options.enabled)
@@ -2922,6 +2928,10 @@ fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_button(a, key, t, label, widget.spacer(0u64, 0.0), false, action, options)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_button(a, key, t, label, widget.spacer(0u64, 0.0), false, action, options)
+        ret (gtk, gtk_error)
     }
     let state = control_state(t, key, options.enabled, false)
     var look = button_look(t, style.resolve(t.tokens, options.variant, state), options.enabled)
@@ -18547,3 +18557,76 @@ fn win_tab_edge() -> paint.Color {
     if style.windark_active() { ret style.hex_raw(0x9D9D9Du32) }
     ret style.hex(2829099u32)
 }
+
+// ---- the Linux look (profile Linux, libadwaita 1.5) -------------------------------------------------
+// The width GTK gives a label: Pango with hinted metrics (GTK's default) rounds every glyph advance to a whole pixel, so
+// "Button" is 48 px where its unhinted advance is 46.3. The sum of the rounded one-letter advances stands for it (kerning is
+// ignored); a caption with a non-ASCII letter takes its plain advance rounded.
+fn linux_label_width(a: *mem.Arena, t: *const Theme, caption: TextOptions, label: str) -> (f32, err) {
+    var ascii = true
+    var i = 0usize
+    while i < label.len {
+        if label[i] >= 128u8 { ascii = false }
+        i += 1usize
+    }
+    if !ascii {
+        let (advance, fit, baseline, whole_error) = run_metrics_faced(a, t, caption, label)
+        ret (f32(u32(fit + 0.5)), whole_error)
+    }
+    var sum: f32 = 0.0
+    i = 0usize
+    while i < label.len {
+        let (advance, fit, baseline, letter_error) = run_metrics_faced(a, t, caption, label[i..i + 1usize])
+        if letter_error != ok { ret (0.0, letter_error) }
+        sum += f32(u32(advance + 0.5))
+        i += 1usize
+    }
+    ret (sum, ok)
+}
+
+// A GTK button: a 34 high face (`style.adwaita_resolve`) holding an optional 16 px picture, 6 px from the caption;
+// `circular` makes a picture-only button a 34 circle (the `circular` style class), otherwise 6 px corners.
+fn linux_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    var state = control_state(t, key, options.enabled, false)
+    if options.focused && options.enabled { state.focus_visible = true }
+    var look = style.adwaita_resolve(t.tokens, options.variant, state)
+    let alone = label.len == 0usize
+    if alone {
+        look.padding = 9.0
+        look.padding_y = look.padding
+        look.min_width = 34.0
+        if options.circular { look.radius = 17.0 }
+    }
+    // libadwaita: `button.text-button` has 17 px sides; a button with a picture (an AdwButtonContent) keeps the 10.
+    if !alone && !has_icon { look.padding = 17.0 }
+    if !alone { look.padding_y = look.padding_y - 1.0 }
+    if options.width > 0.0 { look.min_width = options.width }
+    if options.height > 0.0 { look.min_height = options.height }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    if has_icon {
+        parts[count] = picture
+        count += 1usize
+    }
+    if !alone {
+        var caption = text_options()
+        caption.role = .Label
+        caption.wrap = .None
+        let (word, word_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        // GTK lays a label out in whole pixels (the box is the caption's width rounded) and sits the Cantarell line
+        // 1 px above the middle (measured on the library's own buttons): a 21 high holder, the line 2 px off its foot.
+        let (wide, wide_error) = linux_label_width(a, t, caption, label)
+        if wide_error != ok { ret (zero, wide_error) }
+        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+        parts[count] = widget.aligned(0u64, .Center, .Center, sized_style(wide, 21.0), mem_one_node(a, held))
+        count += 1usize
+    }
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 6.0 }, style.defaults(), parts[0usize..count])
+    var name = label
+    if alone { name = "Button" }
+    let (node, node_error) = pressable(a, key, t, 3u8, name, look, options.enabled, false, action, row)
+    ret (node, node_error)
+}
+// ---- end the Linux look ---------------------------------------------------------------------------------

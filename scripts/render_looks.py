@@ -2,10 +2,10 @@
 
 One self-contained page (inline CSS and JS, no external assets; thumbnails are the repository's own
 PNGs under docs/ui/looks/, inlined as 150 px high base64 so the page opens from file:// with no
-network): eight looks (status.json "looks": neper, neper_dark, windows, windows_dark, cupertino,
-cupertino_dark, material, material_dark) shown as four flavor columns, each cell holding the Light and
-the Dark thumbnail side by side with its own status chip, notes and gaps; one summary box per look, a
-status filter and the gap list. Never hand-edited. `python scripts/render_looks.py`.
+network): ten looks (status.json "looks": windows, windows_dark, linux, linux_dark, neper, neper_dark,
+cupertino, cupertino_dark, material, material_dark) shown as five flavor columns in the maintainer's priority
+order (Windows, Linux, Neper, macOS / iOS, Android), each cell holding the Light and the Dark thumbnail side by
+side with its own status chip, notes and gaps; one summary box per look, a status filter and the gap list. Never hand-edited. `python scripts/render_looks.py`.
 
 Overlays (docs/ui/looks/status.d/*.json): {"<control id>": {"looks": {"<look id>": {...}}}}; an entry
 replaces the base entry of that look wholesale. An id that is not in status.json controls is added as an
@@ -13,7 +13,7 @@ extra row ("Platform idiom controls", delphi column "(none)") only when its entr
 
 Auto entry: a control with no entry for a look, whose picture docs/ui/looks/<look dir>/<name>.png exists
 (look dir = look id with hyphens, name = control id, then the control's `app` sheet name, then its
-`sheet`), is shown as `started` (rendered from the platform palette, not compared with a real screen).
+`sheet`; Linux sheets are named like the control, as the Cupertino and Android ones are), is shown as `started` (rendered from the platform palette, not compared with a real screen).
 An overlay or base entry always wins.
 """
 import base64
@@ -39,9 +39,10 @@ CACHE = Path(tempfile.gettempdir()) / "neper-looks-thumbs"
 # ready = matched and no unverified state is left.
 ORDER = ["planned", "started", "review", "matched", "ready"]
 NOTE_AUTO = "Rendered from the platform palette; not compared with a real screen."
-# The four flavor columns: (heading, light look id, dark look id, what it stands for).
-FLAVORS = [("Neper", "neper", "neper_dark", "the app's own look"),
-           ("Windows", "windows", "windows_dark", "Windows 11; Light is audited against v3 captures"),
+# The five flavor columns, in the maintainer's priority order: (heading, light look id, dark look id, what it stands for).
+FLAVORS = [("Windows", "windows", "windows_dark", "Windows 11; Light is audited against v3 captures"),
+           ("Linux", "linux", "linux_dark", "GNOME, libadwaita 1.5 / GTK 4.14; Light and Dark are rendered headlessly from the real library (docs/ui/looks/ref/linux)"),
+           ("Neper", "neper", "neper_dark", "the app's own look"),
            ("macOS / iOS", "cupertino", "cupertino_dark", "Apple HIG (UIKit / AppKit)"),
            ("Android", "material", "material_dark", "Material 3")]
 
@@ -49,14 +50,14 @@ CSS = """
 :root{--bg:#f6f7f9;--fg:#1c1e22;--mut:#5d6470;--card:#fff;--line:#d9dde3;--planned:#8a909b;--started:#b36b00;--review:#1a62b8;--matched:#0e7490;--ready:#1f7a3d;--chip:#eef0f3}
 @media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e8ec;--mut:#9aa1ad;--card:#1c1f25;--line:#323741;--planned:#8f96a3;--started:#e0a040;--review:#6aa7f0;--matched:#4cc4e0;--ready:#5dc07c;--chip:#272b33}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,"Segoe UI",sans-serif}
-main{max-width:1500px;margin:0 auto;padding:16px}h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.1rem;margin:1.6em 0 .5em}
+main{max-width:1800px;margin:0 auto;padding:16px}h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.1rem;margin:1.6em 0 .5em}
 .mut{color:var(--mut)}.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .box{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
 .box b{display:block;margin-bottom:2px}.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--chip);margin:6px 0}
 .bar i{display:block;height:100%}.counts{display:flex;gap:4px 8px;flex-wrap:wrap;font-size:.8rem}
 .chip{display:inline-block;border-radius:10px;padding:0 8px;font-size:.78rem;font-weight:600;color:#fff;line-height:1.5}
 .s-planned{background:var(--planned)}.s-started{background:var(--started)}.s-review{background:var(--review)}.s-matched{background:var(--matched)}.s-ready{background:var(--ready)}
-.legend{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 0}
+.legend{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0 0}
 .legend div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:.85rem}.legend b{display:block}
 .filter{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}.filter button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:16px;padding:4px 12px;font:inherit;cursor:pointer}
 .filter button[aria-pressed=true]{background:var(--fg);color:var(--bg)}
@@ -209,7 +210,7 @@ def main():
     p.append('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">')
     p.append("<title>Neper looks progress</title><style>%s</style></head><body><main>" % CSS)
     p.append("<h1>Neper looks progress</h1>")
-    p.append('<p class="mut">One widget set, four platform flavors, each in a Light and a Dark look (docs/ui/looks-plan.md). Generated from '
+    p.append('<p class="mut">One widget set, five platform flavors in priority order (Windows, Linux, Neper, macOS / iOS, Android), each in a Light and a Dark look (docs/ui/looks-plan.md). Generated from '
              'docs/ui/looks/status.json and status.d by scripts/render_looks.py; updated %s. %d Delphi-equivalent controls and %d platform idiom controls. '
              'A look with no status entry whose picture exists is shown as started: rendered from the platform palette, not compared with a real screen.</p>'
              % (escape(data.get("updated", "")), len(controls), len(extra_rows)))
