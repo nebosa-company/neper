@@ -2527,6 +2527,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                 line.background = paint.Brush { Solid: paint.rgba(first_level, first_level, first_level, 1.0) }
                 if c == 0usize && t.tokens.profile == .Windows && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 {
                     line.background = paint.Brush { Solid: gl.rgb(0xEAEAEAu32) }
+                    // looks11-g1: the top grid's indicator line is a solid #E8E8E8 and a faint second pixel
+                    if look.top_fit { line.background = paint.Brush { Solid: gl.rgb(0xE8E8E8u32) } }
                 }
                 // looks9-w1: the live collection grid's lines are alpha blends of one #DCDCDC pixel straddling two pixels
                 if look.soft_a0 > 0.0 && t.tokens.profile == .Windows && !(c == 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8) {
@@ -2546,6 +2548,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                     let second_level = (248.0 - ramp * 9.0) / 255.0
                     soft.background = paint.Brush { Solid: paint.rgba(second_level, second_level, second_level, 1.0) }
                     if c == 0usize && t.tokens.profile == .Windows && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { soft.background = paint.Brush { Solid: gl.rgb(0xFAFAFAu32) } }
+                    if look.top_fit && c == 0usize && t.tokens.profile == .Windows && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { soft.background = paint.Brush { Solid: paint.rgba(soft_base(t) + 0.043, soft_base(t) + 0.043, soft_base(t) + 0.043, 0.125) } }
                     if soft_cover > 0.0 { soft.background = paint.Brush { Solid: paint.rgba(soft_base(t), soft_base(t), soft_base(t), soft_cover) } }
                 }
                 boxed[n] = widget.box(0u64, soft, zero)
@@ -2915,7 +2918,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32 }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4742,6 +4745,15 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         let (thumb_holder, thumb_error) = mem.alloc[widget.Node](a, 1usize)
         if thumb_error != ok { ret (zero, TooLarge) }
         thumb_holder[0usize] = widget.box(0u64, thumb_style, zero)
+        if lk.top_fit && lk.soft_lines && !lk.dialog_lines && t.tokens.profile == .Windows && thumb_w < 3.0 && thumb_h >= 6.0 {
+            // looks11-g1: the live top grid's resting thumb is three pixel columns (#B6 #85 #BF) with soft ends (live capture, Name column)
+            let (win_thumb, win_thumb_error) = control.windows_thumb(a, thumb_h)
+            if win_thumb_error != ok { ret (zero, win_thumb_error) }
+            var win_style = control.sized_style(3.0, thumb_h)
+            win_style.margin = thumb_style.margin
+            win_style.margin.left = style.Length { Px: thumb_left - 0.5 }
+            thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, win_style, one_node(a, win_thumb))
+        }
         // looks5-e: the lower end of the track pressed shows the down arrow (live capture, main window)
         if lk.soft_lines && control.control_state(t, track_key, true, false).pressed && mem.address_of(t.runtime) != 0usize {
             let (track_box, has_track_box) = control.keyed_bounds(t.runtime, track_key)

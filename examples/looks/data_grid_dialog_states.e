@@ -183,6 +183,12 @@ fn blank_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, sp
     ret ok
 }
 
+// looks11-g1: the live Shortcuts list is 477 px wide inside its frame: the last column fits it exactly (the Windows look only)
+fn shortcut_w(app: *App) -> f32 {
+    if app.windows { ret 130.0 }
+    ret 131.0
+}
+
 fn specs_of(a: *mem.Arena, app: *App) -> ([]dg.ColumnSpec, err) {
     let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 4usize)
     if specs_error != ok { ret (zero, specs_error) }
@@ -196,7 +202,7 @@ fn specs_of(a: *mem.Arena, app: *App) -> ([]dg.ColumnSpec, err) {
         specs[0usize] = dg.ColumnSpec { title: "", width: 22.0, column: 0usize, kind: dg.CellKind.Picture, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
         specs[1usize] = dg.ColumnSpec { title: "Group", width: 130.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
         specs[2usize] = dg.ColumnSpec { title: "Command", width: 195.0, column: 1usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-        specs[3usize] = dg.ColumnSpec { title: "Shortcut", width: 131.0, column: 2usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+        specs[3usize] = dg.ColumnSpec { title: "Shortcut", width: shortcut_w(app), column: 2usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
         ret (specs[0usize..4usize], ok)
     }
     specs[0usize] = dg.ColumnSpec { title: "Edition", width: 215.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
@@ -254,7 +260,11 @@ fn arrange(app: *App, k: usize) {
         look.foot_g2 = gl.rgb(0xF2F2F2u32)
         look.foot_w1 = gl.rgb(0xE9E9E9u32)
         look.foot_w2 = gl.rgb(0xE8E8E8u32)
-        look.header_line = gl.rgb(0xFFFFFFu32)
+        look.header_line = gl.rgb(0xF5F5F5u32)
+        // looks11-g1: the live column lines as alpha blends (fitted to the Shortcuts list: x = 22, 152, 347)
+        look.soft_a0 = 0.84
+        look.soft_x0 = 22.0
+        look.soft_slope = 0.0 - 0.00077
         look.idle_on = true
         look.idle_top = gl.rgb(0xE5EEF4u32)
         look.ring_top_o = gl.rgb(0xAAADB3u32)
@@ -292,6 +302,8 @@ fn arrange(app: *App, k: usize) {
     if app.family == 1usize && kk == 0usize { selected = 0usize }
     if app.family == 2usize { focused = kk == 1usize || kk == 0usize }
     if kk == 2usize { focused = true }
+    // looks11-g1: the Options grid with a header pressed holds the focus (live capture: the selected row is the focused blue)
+    if app.family == 1usize && kk >= 1usize { focused = true }
     if app.family == 0usize && kk >= 1usize { focused = true }
     app.grids[k].selected_row = selected
     app.grids[k].has_position = true
