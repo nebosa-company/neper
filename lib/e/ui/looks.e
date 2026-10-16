@@ -32,7 +32,7 @@ use e.ui.widget
 
 // The four looks. Cupertino and Material have no tokens of their own yet: `theme_for` answers
 // the Neper tokens carrying their profile, and `run_all` does not render them.
-type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, MaterialDark, CupertinoDark }
+type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, MaterialDark, CupertinoDark, NeperDark }
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
@@ -66,6 +66,7 @@ fn tahoma_bold_path() -> str { ret "C:/Windows/Fonts/tahomabd.ttf" }
 fn theme_for(look: Look) -> style.ThemeTokens {
     if look == .Windows { ret style.windows(.Light) }
     if look == .WindowsDark { ret style.windows(.Dark) }
+    if look == .NeperDark { ret style.reference(.Dark) }
     if look == .Material { ret style.material(.Light) }
     if look == .MaterialDark { ret style.material(.Dark) }
     if look == .Cupertino { ret style.cupertino(.Light) }
@@ -77,6 +78,7 @@ fn theme_for(look: Look) -> style.ThemeTokens {
 fn look_dir(look: Look) -> str {
     if look == .Windows { ret "windows" }
     if look == .WindowsDark { ret "windows-dark" }
+    if look == .NeperDark { ret "neper-dark" }
     if look == .Cupertino { ret "cupertino" }
     if look == .CupertinoDark { ret "cupertino-dark" }
     if look == .Material { ret "material" }
