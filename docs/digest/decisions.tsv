@@ -2781,4 +2781,5 @@ D5145	631	GitHub's home page loaded once the render tool's arenas were big enoug
 D5146	933	Style data is indexed by hash and parsed in scratch memory (browser 1.13h)
 D5147	655	color-mix() and contrast-color() resolve against the element's colour (browser 1.13g)
 D5148	874	The JavaScript front end is a flat-tree lexer and parser checked against test262 (browser 5.2, 5.14)
-D5149	1223	The JavaScript interpreter: tree walker with thread-backed coroutines (browser 5.3-5.11)
+D5149	1224	The JavaScript interpreter: tree walker with thread-backed coroutines (browser 5.3-5.11)
+D5150	1133	RegExp as a continuation-chain backtracker over UTF-16 units; typed arrays as an exotic object (browser 5.8-5.10)

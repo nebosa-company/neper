@@ -26401,6 +26401,349 @@ fn new_realm(a: *mem.Arena) -> (*js.Interp, err)
 fn run(it: *js.Interp, source: str) -> (js.Value, err)
 ```
 
+### `e.js.regex`
+
+```neper
+const NONE: u32 = 4294967295u32
+const R_EMPTY: u8 = 0u8
+const R_CHAR: u8 = 1u8
+const R_ANY: u8 = 2u8
+const R_CLASS: u8 = 3u8
+const R_SEQ: u8 = 4u8
+const R_ALT: u8 = 5u8
+const R_GROUP: u8 = 6u8
+const R_REPEAT: u8 = 7u8
+const R_BOL: u8 = 8u8
+const R_EOL: u8 = 9u8
+const R_WORDB: u8 = 10u8
+const R_NWORDB: u8 = 11u8
+const R_BACKREF: u8 = 12u8
+const R_LOOK: u8 = 13u8
+const R_NAMEDREF: u8 = 14u8
+type Node = struct { kind: u8, a: u32, b: u32, c: u32, d: u32, greedy: bool, neg: bool, back: bool }
+type Range = struct { lo: u32, hi: u32 }
+type Class = struct { first: u32, count: u32, neg: bool }
+type Regex = struct
+type Parse = struct
+error SyntaxErr
+fn fail(p: *Parse, m: str) -> err
+fn mk(p: *Parse, kind: u8) -> (u32, err)
+fn nd(p: *Parse, id: u32) -> *Node
+fn peek(p: *const Parse) -> i64
+fn peek_at(p: *const Parse, k: usize) -> i64
+fn eat(p: *Parse, c: u8) -> bool
+fn next_cp(p: *Parse) -> (u32, usize)
+fn is_digit(c: i64) -> bool
+fn hex_val(c: i64) -> i64
+fn add_range(p: *Parse, lo: u32, hi: u32) -> err
+fn add_class_escape(p: *Parse, c: u8) -> err
+fn parse_escape_value(p: *Parse, in_class: bool) -> (u32, bool, u8, err)
+fn parse_class(p: *Parse) -> (u32, err)
+fn parse_group_name(p: *Parse) -> (str, err)
+fn parse_escape_value_after_u(p: *Parse) -> (u32, bool, u8, err)
+fn put_cp(b: *str.Builder, c: u32)
+fn parse_int(p: *Parse) -> i64
+fn commit(p: *Parse, ids: *const list.List[u32]) -> (u32, err)
+fn parse_disjunction(p: *Parse) -> (u32, err)
+fn parse_alternative(p: *Parse) -> (u32, err)
+fn atom_quantifiable(kind: u8, back: bool) -> bool
+fn parse_term(p: *Parse) -> (u32, err)
+fn prescan(p: *Parse)
+fn compile(a: *mem.Arena, pattern: []const u16, flags: str) -> (Regex, str, err)
+fn parse_top(p: *Parse) -> (u32, err)
+const K_TOP: u8 = 0u8
+const K_SEQ: u8 = 1u8
+const K_GROUP_END: u8 = 2u8
+const K_REPEAT: u8 = 3u8
+const K_LOOK_END: u8 = 4u8
+type Cont = struct { kind: u8, node: u32, index: u32, count: u32, pos: i64, back: bool, next: *Cont, has_next: bool }
+type M = struct
+fn canon(m: *const M, c: u32) -> u32
+fn is_word(c: u32) -> bool
+fn is_line_term(c: u32) -> bool
+fn char_at(m: *const M, pos: i64) -> (u32, i64)
+fn char_before(m: *const M, pos: i64) -> (u32, i64)
+fn class_has(m: *const M, cid: u32, c: u32) -> bool
+fn new_cont(m: *M, kind: u8, node: u32, index: u32, count: u32, pos: i64, back: bool, next: *Cont, has_next: bool) -> *Cont
+fn call_cont(m: *M, k: *Cont, pos: i64) -> bool
+fn repeat_step(m: *M, node: u32, count: u32, pos: i64, next: *Cont, back: bool) -> bool
+fn group_range(m: *const M, node: u32) -> (u32, u32)
+fn clear_groups(m: *M, node: u32)
+fn save_groups(m: *M, node: u32) -> []i64
+fn restore_groups(m: *M, node: u32, saved: []i64)
+fn step(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool
+fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool
+fn save_caps(m: *M) -> []i64
+fn restore_caps(m: *M, saved: []i64)
+type Match = struct { caps: []const i64, found: bool, aborted: bool }
+fn do_match(m: *M, root: u32, pos: i64)
+fn match_at(a: *mem.Arena, re: *const Regex, input: []const u16, pos: i64) -> Match
+fn zero_cont() -> *Cont
+fn exec(a: *mem.Arena, re: *const Regex, input: []const u16, start: usize, sticky: bool) -> Match
+```
+
+### `e.js.b_regexp`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+type Compiled = struct { re: rx.Regex, source: str, flags: str }
+fn compiled_of(o: *js.Obj) -> *Compiled
+fn is_regexp_obj(v: js.Value) -> bool
+fn zero_ptr() -> *void
+fn to_units(a: *mem.Arena, s: str) -> []const u16
+fn from_units(it: *js.Interp, units: []const u16, from: usize, to: usize) -> str
+fn escape_source(it: *js.Interp, src: str) -> str
+fn regexp_create(it: *js.Interp, proto: *js.Obj, source: str, flags: str) -> (js.Value, err)
+fn regexp_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn this_regexp(it: *js.Interp, v: js.Value) -> (*Compiled, err)
+fn advance_index(s: str, units_len: usize, index: f64, unicode: bool) -> f64
+fn builtin_exec(it: *js.Interp, r: *js.Obj, s: str) -> (js.Value, err)
+fn regexp_exec_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn regexp_exec(it: *js.Interp, r: js.Value, s: str) -> (js.Value, err)
+fn regexp_test(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn regexp_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn regexp_source(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn regexp_flags_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn flag_getter(it: *js.Interp, this_val: js.Value, which: u8) -> (js.Value, err)
+fn fg_indices(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 0u8)
+fn fg_global(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 1u8)
+fn fg_ignore_case(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 2u8)
+fn fg_multiline(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 3u8)
+fn fg_dot_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 4u8)
+fn fg_unicode(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 5u8)
+fn fg_unicode_sets(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 6u8)
+fn fg_sticky(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 7u8)
+fn flags_of(it: *js.Interp, rx_val: js.Value) -> (str, err)
+fn set_last_index(it: *js.Interp, r: js.Value, v: f64) -> err
+fn get_last_index(it: *js.Interp, r: js.Value) -> (f64, err)
+fn regexp_match(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn regexp_match_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn iter_result(it: *js.Interp, v: js.Value, done: bool) -> js.Value
+fn regexp_string_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn regexp_search(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_substitution(it: *js.Interp, matched: str, s: str, position: usize, captures: []const js.Value, named: js.Value, replacement: str) -> (str, err)
+fn regexp_replace(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn regexp_split(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn regexp_compile(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn species_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_regexp(it: *js.Interp)
+```
+
+### `e.js.b_collections`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+type Entry = struct { key: js.Value, value: js.Value, live: bool, next: usize }
+const NIL: usize = 18446744073709551615usize
+type Store = struct { entries: list.List[Entry], index: map.Map[u64, usize], live: usize, weak: bool }
+fn hash_value(v: js.Value) -> u64
+fn store_of(o: *js.Obj) -> *Store
+fn new_store(it: *js.Interp, o: *js.Obj, weak: bool) -> err
+fn find_entry(st: *Store, key: js.Value) -> (usize, bool)
+fn store_set(it: *js.Interp, st: *Store, key_in: js.Value, value: js.Value) -> err
+fn store_delete(st: *Store, key: js.Value) -> bool
+fn this_store(it: *js.Interp, v: js.Value, class: u8, name: str) -> (*Store, err)
+fn zero_ptr() -> *void
+fn construct_collection(it: *js.Interp, class: u8, proto_default: *js.Obj, weak: bool, args: []const js.Value, adder: str, pairs: bool) -> (js.Value, err)
+fn map_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = construct_collection(it, js.C_MAP, it.protos.map, false, args, "set", true)
+fn set_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = construct_collection(it, js.C_SET, it.protos.set, false, args, "add", false)
+fn weakmap_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = construct_collection(it, js.C_WEAKMAP, it.protos.weakmap, true, args, "set", true)
+fn weakset_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = construct_collection(it, js.C_WEAKSET, it.protos.weakset, true, args, "add", false)
+fn map_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn map_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn map_has(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn map_delete(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn store_clear(st: *Store)
+fn map_clear(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn map_size(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn map_for_each(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn three(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Value
+fn make_iterator(it: *js.Interp, o: *js.Obj, kind: f64, proto: *js.Obj) -> js.Value
+fn iter_result(it: *js.Interp, v: js.Value, done: bool) -> js.Value
+fn collection_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value, class: u8) -> (js.Value, err)
+fn map_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = collection_iterator_next(it, this_val, args, js.C_MAP)
+fn set_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = collection_iterator_next(it, this_val, args, js.C_SET)
+fn map_keys(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn map_values(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn map_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn map_group_by(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn species_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_map(it: *js.Interp)
+fn set_add(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_has(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_delete(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_clear(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_size(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_for_each(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_values(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_set(it: *js.Interp)
+fn weak_key_ok(v: js.Value) -> bool
+fn weakmap_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn weakmap_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn weakmap_has(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn weakmap_delete(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn weakset_add(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn weakset_has(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn weakset_delete(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_weak(it: *js.Interp)
+```
+
+### `e.js.b_date`
+
+```neper
+fn ms_per_day() -> f64
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn fmod(x: f64, y: f64) -> f64
+fn day_of(t: f64) -> f64
+fn time_within_day(t: f64) -> f64
+fn days_in_year(y: f64) -> f64
+fn day_from_year(y: f64) -> f64
+fn time_from_year(y: f64) -> f64
+fn year_from_time(t: f64) -> f64
+fn in_leap_year(t: f64) -> bool
+fn day_within_year(t: f64) -> f64
+fn month_start(m: i32, leap: bool) -> f64
+fn month_from_time(t: f64) -> f64
+fn date_from_time(t: f64) -> f64
+fn week_day(t: f64) -> f64
+fn hour_from_time(t: f64) -> f64
+fn min_from_time(t: f64) -> f64
+fn sec_from_time(t: f64) -> f64
+fn ms_from_time(t: f64) -> f64
+fn make_time(hour: f64, min: f64, sec: f64, ms: f64) -> f64
+fn make_day(year: f64, month: f64, date: f64) -> f64
+fn make_date(day: f64, tms: f64) -> f64
+fn time_clip(t: f64) -> f64
+fn now_ms() -> f64
+fn this_time(it: *js.Interp, v: js.Value) -> (*js.Obj, err)
+fn digits(s: str, at: usize, n: usize) -> (f64, bool)
+fn parse_iso(s: str) -> f64
+fn month_index(s: str) -> i32
+fn parse_text(s: str) -> f64
+fn parse_date(s_in: str) -> f64
+fn pad(it: *js.Interp, v: f64, width: usize) -> str
+fn day_name(t: f64) -> str
+fn month_name(t: f64) -> str
+fn date_string(it: *js.Interp, t: f64) -> str
+fn time_string(it: *js.Interp, t: f64) -> str
+fn to_date_string_full(it: *js.Interp, t: f64) -> str
+fn utc_string(it: *js.Interp, t: f64) -> str
+fn iso_string(it: *js.Interp, t: f64) -> str
+fn date_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn date_now(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn date_parse_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn date_utc(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn getter(it: *js.Interp, this_val: js.Value, kind: u8) -> (js.Value, err)
+fn get_full_year(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 0u8)
+fn get_month(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 1u8)
+fn get_date(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 2u8)
+fn get_day(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 3u8)
+fn get_hours(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 4u8)
+fn get_minutes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 5u8)
+fn get_seconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 6u8)
+fn get_milliseconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 7u8)
+fn get_time(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 8u8)
+fn get_year(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 9u8)
+fn get_timezone_offset(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 10u8)
+fn setter(it: *js.Interp, this_val: js.Value, args: []const js.Value, first: u8, max_args: usize) -> (js.Value, err)
+fn set_full_year(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 0u8, 3usize)
+fn set_month(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 1u8, 2usize)
+fn set_date(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 2u8, 1usize)
+fn set_hours(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 3u8, 4usize)
+fn set_minutes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 4u8, 3usize)
+fn set_seconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 5u8, 2usize)
+fn set_milliseconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 6u8, 1usize)
+fn set_time(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn to_string_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn to_date_string_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn to_time_string_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn to_utc_string_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn to_iso_string_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn to_json_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn value_of_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn to_primitive_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_date(it: *js.Interp)
+```
+
+### `e.js.b_typed`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn new_buffer(it: *js.Interp, proto: *js.Obj, len: usize) -> (*js.Obj, err)
+fn array_buffer_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn this_buffer(it: *js.Interp, v: js.Value) -> (*js.Buf, *js.Obj, err)
+fn buffer_byte_length(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn buffer_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn buffer_is_view(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn species_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn detached_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn max_byte_length_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn resizable_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn detach_host(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_array_buffer(it: *js.Interp)
+fn kind_name(kind: u8) -> str
+fn validate_ta(it: *js.Interp, v: js.Value) -> (*js.Obj, err)
+fn alloc_ta(it: *js.Interp, kind: u8, proto: *js.Obj, buffer: *js.Obj, offset: usize, length: usize, tracking: bool) -> (*js.Obj, err)
+fn ta_default_proto(it: *js.Interp, kind: u8) -> *js.Obj
+fn create_typed(it: *js.Interp, kind: u8, proto: *js.Obj, length: usize) -> (*js.Obj, err)
+fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Value, err)
+fn ctor_int8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 1u8, args)
+fn ctor_uint8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 2u8, args)
+fn ctor_uint8c(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 3u8, args)
+fn ctor_int16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 4u8, args)
+fn ctor_uint16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 5u8, args)
+fn ctor_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 6u8, args)
+fn ctor_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 7u8, args)
+fn ctor_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 8u8, args)
+fn ctor_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 9u8, args)
+fn abstract_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn typed_create(it: *js.Interp, ctor: js.Value, args: []const js.Value, min_len: f64) -> (*js.Obj, err)
+fn species_create(it: *js.Interp, exemplar: *js.Obj, args: []const js.Value, min_len: f64) -> (*js.Obj, err)
+fn ta_buffer_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_byte_length_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_byte_offset_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_length_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_tag_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_subarray(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_fill(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_filter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_sort_compare(it: *js.Interp, cmp: js.Value, x: js.Value, y: js.Value) -> (f64, err)
+fn ta_merge(it: *js.Interp, cmp: js.Value, items: []js.Value, tmp: []js.Value, lo: usize, hi: usize) -> err
+fn sorted_values(it: *js.Interp, o: *js.Obj, cmp: js.Value) -> ([]js.Value, err)
+fn ta_sort(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_to_sorted(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_to_reversed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn guarded(it: *js.Interp, this_val: js.Value) -> err
+fn g_for_each(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_every(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_some(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_find(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_find_index(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_find_last(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_find_last_index(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_last_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_includes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_join(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_reverse(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_reduce(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_reduce_right(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_copy_within(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_keys(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_values(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn g_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_to_locale_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_from(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ta_of_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_typed_arrays(it: *js.Interp)
+```
+
 ### `e.fmt.html.template`
 
 ```neper
