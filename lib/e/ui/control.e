@@ -11433,6 +11433,7 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         if t.tokens.profile == .Windows { lit = win_lit_row(t, first, suggestions.len, active) }
         i = 0usize
         while i < suggestions.len {
+            win_row_parity = i % 2usize
             let (item, item_error) = list_row(a, first + u64(i), t, suggestions[i], i == lit, &picks[i])
             if item_error != ok { ret (zero, item_error) }
             var entry: widget.Semantics = zero
@@ -15432,6 +15433,8 @@ fn win_lit_row(t: *const Theme, first: widget.Key, count: usize, active: usize) 
 // lit, #0078D7 under white text.
 // round 12: whether the lit row of a drop list wears the XOR focus rectangle: the native dark list-style combo does, the editable one does not.
 var win_drop_dots: bool = true
+// round 13: the parity of the index of the row being built (a dark list's XOR rectangle phase, see win4_xor_paint)
+var win_row_parity: usize = 0usize
 
 fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: bool, action: *const widget.Submit, pic: []const widget.Node, focusable: bool, line: f32) -> (widget.Node, err) {
     var ink = style.color(t.tokens, .Text)
@@ -15495,7 +15498,7 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
     body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: row_gap }, line_style, bits[0usize..used])
     if lit && win_drop_dots {
         // looks4 group d: the lit row carries v3's XOR focus rectangle (orange on the blue).
-        let (dots, dots_error) = win4_xor_dots(a, t.tokens.palette == .Dark && t.tokens.profile == .Windows)
+        let (dots, dots_error) = win4_xor_dots(a, t.tokens.palette == .Dark && t.tokens.profile == .Windows, f32(win_row_parity))
         if dots_error != ok { ret (zero, dots_error) }
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
@@ -15715,6 +15718,7 @@ fn win_drop_body(a: *mem.Arena, overlay_key: widget.Key, first: widget.Key, t: *
     while i < options.len {
         var pic: []const widget.Node = zero
         if icons.len == options.len { pic = icons[i..i + 1usize] }
+        win_row_parity = i % 2usize
         let (row, row_error) = win_row(a, first + u64(i), t, options[i], i == lit, &picks[i], pic, false, rowh)
         if row_error != ok { ret (zero, row_error) }
         var entry: widget.Semantics = zero
@@ -16292,8 +16296,118 @@ fn win3_lines(a: *mem.Arena) -> (widget.Node, err) {
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win3_lines_paint, state: widget.bytes_of[Win3Lines](&cells[0usize]) } }, style: fill, children: none }, ok)
 }
 
+// round 13: the native Windows 11 dark list box (listbox-* of docs/ui/looks/ref/windows-native/dark): a #828790 line, a white one inside it
+// and the #202020 face from (2, 2), rows 15 high with the text origin at x 4 (Segoe UI 12 px), a chosen row #0078D7 under white text over
+// the whole row (the list's 99 px left of its scroll column) whether or not the list has the focus, the focus's XOR rectangle round it.
+// The capture's scroll column is the light unthemed one (the gallery leaves list boxes out of dark mode); this look keeps its dark bar there.
+type DarkListFrame = struct { w: f32, h: f32 }
+
+fn dark_list_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*DarkListFrame](ctx)
+    try win3_rect(b, area.x, area.y, m.w, m.h, style.hex_raw(0x828790u32))
+    try win3_rect(b, area.x + 1.0, area.y + 1.0, m.w - 2.0, m.h - 2.0, style.hex_raw(0xFFFFFFu32))
+    try win3_rect(b, area.x + 2.0, area.y + 2.0, 98.0 - 0.0, m.h - 4.0, style.hex_raw(0x202020u32))
+    ret win3_rect(b, area.x + 100.0, area.y + 2.0, m.w - 102.0, m.h - 4.0, style.hex_raw(0x171717u32))
+}
+
+fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    if picks.len != options.len { ret (zero, TooLarge) }
+    let (dark_t, dark_error) = windows_edit_theme(a, t, 15.0)
+    if dark_error != ok { ret (zero, dark_error) }
+    let (items, items_error) = mem.alloc[widget.Node](a, options.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < options.len {
+        let row_key = key + 1u64 + u64(i)
+        let state = control_state(t, row_key, true, false)
+        var words = text_options()
+        words.role = .BodyMedium
+        words.wrap = .None
+        var ink = style.hex_raw(0xFFFFFFu32)
+        let (label_node, label_error) = colored_text(a, 0u64, options[i], &dark_t, words, ink)
+        if label_error != ok { ret (zero, label_error) }
+        var line_style = style.defaults()
+        line_style.width = style.Length { Px: 97.0 }
+        line_style.height = style.Length { Px: 15.0 }
+        line_style.padding = edges(2.0, 0.0, 0.0, 0.0)
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        let (text_held, text_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if text_held_error != ok { ret (zero, TooLarge) }
+        text_held[0usize] = label_node
+        layers[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, text_held[0usize..1usize])
+        var count = 1usize
+        if state.focused {
+            let (dots_plain, dots_error) = win4_xor_dots(a, true, f32(i % 2usize))
+            if dots_error != ok { ret (zero, dots_error) }
+            var dots = dots_plain
+            dots.style = sized_style(97.0, 15.0)
+            layers[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, dots))
+            count = 2usize
+        }
+        var row_style = style.defaults()
+        row_style.width = style.Length { Px: 97.0 }
+        row_style.height = style.Length { Px: 15.0 }
+        if i == selected { row_style.background = paint.Brush { Solid: style.hex_raw(0x0078D7u32) } }
+        var stack_style = style.defaults()
+        stack_style.width = style.Length { Px: 97.0 }
+        stack_style.height = style.Length { Px: 15.0 }
+        let (stack_held, stack_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if stack_held_error != ok { ret (zero, TooLarge) }
+        stack_held[0usize] = widget.stack(0u64, stack_style, layers[0usize..count])
+        let shown = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, stack_held[0usize..1usize])
+        var entry: widget.Semantics = zero
+        entry.role = accessibility.ROLE_OPTION
+        entry.label = options[i]
+        entry.row = u32(i + 1usize)
+        entry.row_count = u32(options.len)
+        if i == selected { entry.states = accessibility.STATE_SELECTED }
+        let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+        if wrapped_error != ok { ret (zero, TooLarge) }
+        wrapped[0usize] = shown
+        items[i] = widget.semantics(0u64, entry, style.defaults(), wrapped[0usize..1usize])
+        i += 1usize
+    }
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: 97.0 }
+    view_style.height = style.Length { Px: f32(rows) * 15.0 + 1.0 }
+    view_style.overflow = .Clip
+    // the list scrolls under the pointer and the wheel; its own thumb stays hidden (the dark bar in the scroll column is drawn below)
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..options.len])
+    let view = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view_style, column[0usize..1usize])
+    let (frames, frames_error) = mem.alloc[DarkListFrame](a, 1usize)
+    if frames_error != ok { ret (zero, TooLarge) }
+    let height = f32(rows) * 15.0 + 5.0
+    frames[0usize] = DarkListFrame { w: width, h: height }
+    var none: []const widget.Node = zero
+    var fill = sized_style(width, height)
+    let frame = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&frames[0usize]), measure: win3_measure, paint: dark_list_frame_paint, state: widget.bytes_of[DarkListFrame](&frames[0usize]) } }, style: fill, children: none }
+    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 3usize)
+    if stacked_error != ok { ret (zero, TooLarge) }
+    stacked[0usize] = frame
+    stacked[1usize] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), widget_one_of(a, view))
+    var layers_used = 2usize
+    if options.len > usize(rows) {
+        let (bar, bar_error) = windows_scroll_bar(a, key + 8888u64, t, true, f32(rows) * 15.0 + 1.0, f32(rows), f32(options.len), 0.0)
+        if bar_error != ok { ret (zero, bar_error) }
+        stacked[2usize] = widget.positioned(0u64, width - 18.0, 2.0, style.defaults(), widget_one_of(a, bar))
+        layers_used = 3usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_LISTBOX
+    sem.label = label
+    sem.row_count = u32(options.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, height), stacked[0usize..layers_used]))), ok)
+}
+
 fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
+    if win_dark(t) {
+        let (native, native_error) = win_dark_list_box(a, key, t, label, options, selected, picks, rows, width)
+        ret (native, native_error)
+    }
     let (dialog_t, dialog_error) = win3_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
     let (items, items_error) = mem.alloc[widget.Node](a, options.len)
@@ -17265,20 +17379,19 @@ fn win4_xor_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let h = u32(area.height) - 1u32
     let m = mem.cast[*Win3Lines](ctx)
     if m.shade > 0.5 {
-        // round 13: the native dark popup's XOR rectangle inverts where the window coordinates x + y are even (combo-*-open: the top and
-        // bottom rows at odd x of a row whose top is on an odd line, the right column on the even lines), corners included
-        let ox = u32(area.x + 0.01)
-        let oy = u32(area.y + 0.01)
+        // round 13: the native dark list XORs its focus rectangle where (client x + client y) is odd; the row's client origin is its list's
+        // (rows are 15 high), so a dot of the row's own (i, j) is on when i + j + the row's index is odd (`shade` is 1 + the index's parity)
+        let par = u32(m.shade) - 1u32
         var i = 0u32
         while i <= w {
-            if ((ox + i + oy) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y, 1.0, 1.0, dot) }
-            if ((ox + i + oy + h) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h), 1.0, 1.0, dot) }
+            if ((i + par) & 1u32) == 1u32 { try win3_rect(b, area.x + f32(i), area.y, 1.0, 1.0, dot) }
+            if ((i + h + par) & 1u32) == 1u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h), 1.0, 1.0, dot) }
             i += 1u32
         }
         var k = 1u32
         while k < h {
-            if ((ox + oy + k) & 1u32) == 0u32 { try win3_rect(b, area.x, area.y + f32(k), 1.0, 1.0, dot) }
-            if ((ox + w + oy + k) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(w), area.y + f32(k), 1.0, 1.0, dot) }
+            if ((k + par) & 1u32) == 1u32 { try win3_rect(b, area.x, area.y + f32(k), 1.0, 1.0, dot) }
+            if ((w + k + par) & 1u32) == 1u32 { try win3_rect(b, area.x + f32(w), area.y + f32(k), 1.0, 1.0, dot) }
             k += 1u32
         }
         ret ok
@@ -17302,11 +17415,11 @@ fn win4_xor_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     ret ok
 }
 
-fn win4_xor_dots(a: *mem.Arena, dark: bool) -> (widget.Node, err) {
+fn win4_xor_dots(a: *mem.Arena, dark: bool, parity: f32) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[Win3Lines](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
     var tint: f32 = 0.0
-    if dark { tint = 1.0 }
+    if dark { tint = 1.0 + parity }
     cells[0usize] = Win3Lines { shade: tint }
     var none: []const widget.Node = zero
     var fill = style.defaults()

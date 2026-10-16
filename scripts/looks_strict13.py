@@ -252,6 +252,13 @@ SHEET3 = [("button-split", 0, 0, (20, 20), None), ("button-split-pressed", 1, 0,
           ("button-icon", 3, 0, (20, 20), None), ("button-icon-disabled", 4, 0, (20, 20), None), ("button-icon-hover", 3, 0, (20, 20), None)]
 
 
+# native_dark4 (examples/looks/native_dark4.e): list box (16, 10), check list (16, 10) and the popup menu (20, 20) in 260 x 200 cells
+SHEET4 = [("listbox-rest", 0, 0, (16, 10), (99, 110)), ("listbox-selected-focused", 1, 0, (16, 10), (99, 110)),
+          ("listbox-selected-unfocused", 2, 0, (16, 10), (99, 110)), ("listbox-hover", 2, 0, (16, 10), (99, 110)),
+          ("checklist-rest", 3, 0, (16, 10), None), ("checklist-selected-focused", 4, 0, (16, 10), None)]
+# listbox: only the 99 columns left of the scroll column are compared (the capture's scroll column is the light unthemed one)
+
+
 def open_table(outdir):
     """combo-*-open captures: the head (150 x 23) and its list (150 x 122) against native_dark_open<n> (head at (20, 8) of a cell at (12, 32))."""
     ok_all = []
@@ -279,6 +286,10 @@ if __name__ == "__main__":
         sys.exit(0)
     if "--three" in sys.argv:
         r = sheet_table("native_dark3", 4, 260, 200, SHEET3, ([a.split("=", 1)[1] for a in sys.argv if a.startswith("--dump=")] or [None])[0])
+        print("PASS %d / %d" % (sum(r), len(r)))
+        sys.exit(0)
+    if "--four" in sys.argv:
+        r = sheet_table("native_dark4", 4, 260, 200, SHEET4, ([a.split("=", 1)[1] for a in sys.argv if a.startswith("--dump=")] or [None])[0], search=4)
         print("PASS %d / %d" % (sum(r), len(r)))
         sys.exit(0)
     if "--mask" in sys.argv:
