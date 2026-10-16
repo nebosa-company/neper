@@ -58,7 +58,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             var shown_ink = style.hex(s.ink)
             // round 10: the light disabled label is the native static's #A0A0A0 (docs/ui/looks/ref/windows-native/light/label-disabled)
             if i == 10usize { shown_ink = style.hex(0xA0A0A0u32) }
-            let (word, word_error) = control.windows_label_faced(a, t, s.text, s.size, s.weight, shown_ink, s.underline, s.width, s.face, centre_w, phase_of(i))
+            let (word, word_error) = control.windows_label_faced(a, t, s.text, s.size, s.weight, shown_ink, s.underline, s.width, s.face, centre_w, phase_of(i), false)
             node = word
             node_error = word_error
         } else {
