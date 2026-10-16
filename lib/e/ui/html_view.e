@@ -30,7 +30,8 @@ use e.ui.widget
 type Images = struct {
     ctx: *void,
     intrinsic: fn(*void, html.NodeId) -> layout.Intrinsic,
-    image: fn(*void, html.NodeId) -> css_paint.ImageRef
+    image: fn(*void, html.NodeId) -> css_paint.ImageRef,
+    url_image: fn(*void, str) -> css_paint.ImageRef
 }
 
 type View = struct {
@@ -48,8 +49,10 @@ fn none_intrinsic(ctx: *void, node: html.NodeId) -> layout.Intrinsic { ret zero 
 fn none_image(ctx: *void, node: html.NodeId) -> css_paint.ImageRef { ret zero }
 
 // No pictures: replaced elements get the 300x150 default and paint nothing.
+fn none_url_image(ctx: *void, url: str) -> css_paint.ImageRef { ret zero }
+
 fn no_images() -> Images {
-    ret Images { ctx: zero, intrinsic: none_intrinsic, image: none_image }
+    ret Images { ctx: zero, intrinsic: none_intrinsic, image: none_image, url_image: none_url_image }
 }
 
 fn parse_options() -> html.Options {
@@ -100,7 +103,7 @@ fn open(a: *mem.Arena, source: str, sheets: []const str, fonts: *fontset.Set, im
     v.source = source
     v.sheets = sheets
     v.tree = tree
-    v.host = measure.Host { fonts: fonts, arena: a, ctx: images.ctx, intrinsic: images.intrinsic, image: images.image }
+    v.host = measure.Host { fonts: fonts, arena: a, ctx: images.ctx, intrinsic: images.intrinsic, image: images.image, url_image: images.url_image }
     v.scroll_x = 0.0
     v.scroll_y = 0.0
     v.revision = 1u64

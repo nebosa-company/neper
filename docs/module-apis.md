@@ -25058,6 +25058,7 @@ fn region_rrect(s: *const style.Style, x: f64, y: f64, w: f64, h: f64, in_t: f64
 fn maxf32(x: f32, y: f32) -> f32
 fn first_token(a: *mem.Arena, s: *const style.Style, name: str) -> str
 fn paint_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
+fn paint_background_color(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
 fn side_color(s: *const style.Style, side: usize) -> u32
 fn dashed_run(p: *Painter, x: f64, y: f64, len: f64, t: f64, horizontal: bool, dot: bool, c: u32)
 fn paint_border_side(p: *Painter, s: *const style.Style, side: usize, x: f64, y: f64, w: f64, h: f64, bt: f64, br: f64, bbm: f64, bl: f64, trapezoid: bool)
@@ -25091,6 +25092,27 @@ fn paint_entry(p: *Painter, en: Entry, root: u32, rx: f64, ry: f64)
 fn paint_context(p: *Painter, root: u32, x: f64, y: f64)
 fn paint_canvas(p: *Painter)
 fn paint(a: *mem.Arena, l: *const layout.Layout, env: PaintEnv, b: *scene.Builder, view: geo.Rect, scroll_x: f64, scroll_y: f64) -> err
+type Stp = struct { off: f64, color: u32, has: bool }
+fn lerpf(a: f64, b: f64, t: f64) -> f64
+fn absf(x: f64) -> f64
+fn mix_argb(c0: u32, c1: u32, t: f64) -> u32
+fn clamp255(v: f64) -> u32
+fn is_len_text(t: str) -> bool
+fn parse_color_text(p: *Painter, tok: str, current: u32) -> (u32, bool)
+fn parse_stops(p: *Painter, s: *const style.Style, args: []const str, from: usize, line: f64) -> ([]Stp, usize)
+fn color_at(stops: []const Stp, t: f64) -> u32
+fn brush_stops(p: *Painter, stops: []const Stp, repeating: bool) -> []const pt.Stop
+fn fill_linear(p: *Painter, s: *const style.Style, args: []const str, repeating: bool, x: f64, y: f64, w: f64, h: f64)
+fn is_angle_text(t: str) -> bool
+fn angle_arg(p: *Painter, t: str) -> (f64, bool)
+fn fill_radial(p: *Painter, s: *const style.Style, args: []const str, repeating: bool, x: f64, y: f64, w: f64, h: f64)
+type LayerImage = struct { kind: u8, repeating: bool, body: str }
+fn parse_layer_image(p: *Painter, text: str) -> LayerImage
+fn layer_value(p: *Painter, s: *const style.Style, name: str, i: usize, fallback: str) -> str
+fn bg_pos_component(p: *Painter, s: *const style.Style, tok: str, free: f64, horizontal: bool) -> f64
+fn is_edge_word(t: str) -> bool
+fn bg_position(p: *Painter, s: *const style.Style, text: str, free_w: f64, free_h: f64) -> (f64, f64)
+fn paint_layers(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
 ```
 
 ### `e.text.fontset`

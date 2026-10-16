@@ -139,12 +139,14 @@ fn env_text(ctx: *void, s: *const style.Style, t: str) -> *const tl.Layout {
 
 fn env_image(ctx: *void, n: html.NodeId) -> cpaint.ImageRef { ret zero }
 
+fn env_url_image(ctx: *void, url: str) -> cpaint.ImageRef { ret zero }
+
 // Paints the page into a fresh builder and returns the commands.
 fn paint_page(a: *mem.Arena, pg: *Page, counter: *Counter, view: geo.Rect) -> ([]const scene.Command, bool) {
     let (bv, be) = scene.builder(a, 4096usize)
     if be != ok { ret (zero, false) }
     var b = bv
-    let env = cpaint.PaintEnv { ctx: mem.cast[*void](counter), text: env_text, image: env_image }
+    let env = cpaint.PaintEnv { ctx: mem.cast[*void](counter), text: env_text, image: env_image, url_image: env_url_image }
     if cpaint.paint(a, &pg.lay, env, &b, view, 0.0f64, 0.0f64) != ok { ret (zero, false) }
     let dl = scene.finish(&b)
     ret (dl.commands, true)
@@ -218,6 +220,45 @@ fn count_clip(cmds: []const scene.Command) -> usize {
     ret n
 }
 
+// The first FillRect whose brush is a linear gradient: its start x, end x and stop count.
+fn first_linear(cmds: []const scene.Command) -> (f32, f32, usize, bool) {
+    var i = 0usize
+    while i < cmds.len {
+        switch cmds[i] {
+        case .FillRect as f:
+            switch f.brush {
+            case .Linear as g:
+                ret (g.start.x, g.end.x, g.stops.len, true)
+            default:
+                i += 0usize
+            }
+        default:
+            i += 0usize
+        }
+        i += 1usize
+    }
+    ret (0.0, 0.0, 0usize, false)
+}
+
+fn has_radial(cmds: []const scene.Command) -> bool {
+    var i = 0usize
+    while i < cmds.len {
+        switch cmds[i] {
+        case .FillRect as f:
+            switch f.brush {
+            case .Radial as g:
+                ret true
+            default:
+                i += 0usize
+            }
+        default:
+            i += 0usize
+        }
+        i += 1usize
+    }
+    ret false
+}
+
 fn rect_is(r: geo.Rect, x: f32, y: f32, w: f32, h: f32) -> bool {
     ret near(f64(r.x), f64(x)) && near(f64(r.y), f64(y)) && near(f64(r.width), f64(w)) && near(f64(r.height), f64(h))
 }
@@ -286,5 +327,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (c10, pc10) = paint_page(a, p10, &counter, view)
     let (r10, _a10, g10, f10) = nth_fill(c10, 0usize)
     if !pc10 || !f10 || !rect_is(r10, 0.0, 0.0, 800.0, 600.0) || g10 < 0.99 { os.exit(25) }
+    // 9. A linear gradient is one fill with a Linear brush along the gradient line; a radial one a Radial brush; a
+    // background-size tiles the layer.
+    let (p11, ok11) = build(a, "<div style=\"width:100px;height:50px;background:linear-gradient(to right, #f00, #00f)\"></div>", "")
+    if !ok11 { os.exit(26) }
+    let (c11, pc11) = paint_page(a, p11, &counter, view)
+    let (gs, ge, gn, gf) = first_linear(c11)
+    if !pc11 || !gf || !near(f64(gs), 0.0f64) || !near(f64(ge), 100.0f64) || gn < 2usize { os.exit(27) }
+    let (p12, ok12) = build(a, "<div style=\"width:100px;height:50px;background:radial-gradient(circle at center, #fff, #000)\"></div>", "")
+    if !ok12 { os.exit(28) }
+    let (c12, pc12) = paint_page(a, p12, &counter, view)
+    if !pc12 || !has_radial(c12) { os.exit(29) }
+    let (p13, ok13) = build(a, "<div style=\"width:100px;height:50px;background:linear-gradient(#f00, #00f) 0 0 / 10px 10px\"></div>", "")
+    if !ok13 { os.exit(30) }
+    let (c13, pc13) = paint_page(a, p13, &counter, view)
+    if !pc13 || fill_count(c13) != 50usize { os.exit(31) }
     ret ok
 }

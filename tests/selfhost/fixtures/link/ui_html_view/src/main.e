@@ -76,5 +76,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if pixels[25usize * SIDE + 10usize] != BLUE { os.exit(23i32) }
     if pixels[25usize * SIDE + 100usize] != BLUE { os.exit(24i32) }
     if pixels[60usize * SIDE + 10usize] != WHITE { os.exit(25i32) }
+    // A gradient background renders from red on the left to blue on the right.
+    let (backing2, backing2_error) = mem.alloc[u8](a, 33554432usize)
+    if backing2_error != ok { os.exit(30i32) }
+    var view_arena2 = mem.arena_from(backing2)
+    let page2 = "<html><body style=\"margin:0\"><div style=\"height:20px;background:linear-gradient(to right,#f00,#00f)\"></div></body></html>"
+    let (v2, open2_error) = view.open(&view_arena2, page2, no_sheets, &fonts_value, view.no_images(), 128.0, 128.0)
+    if open2_error != ok { os.exit(31i32) }
+    let (bv2, be2) = scene.builder(a, 4096usize)
+    if be2 != ok { os.exit(32i32) }
+    var b2 = bv2
+    let custom2 = view.custom(v2)
+    if custom2.paint(custom2.ctx, &b2, geo.rect(0.0, 0.0, 128.0, 128.0)) != ok { os.exit(33i32) }
+    let (id2, compile2_error) = scene.compile(&renderer, scene.finish(&b2))
+    if compile2_error != ok { os.exit(34i32) }
+    if scene.render(&renderer, id2, canvas, geo.Size { width: 128.0, height: 128.0 }) != ok { os.exit(35i32) }
+    let (image2, presented2_error) = gpu.presented(frames)
+    if presented2_error != ok { os.exit(36i32) }
+    let (pixels2, pixels2_error) = mem.alloc[u32](a, SIDE * SIDE)
+    if pixels2_error != ok { os.exit(37i32) }
+    if gpu.read_image(q, image2, pixels2) != ok { os.exit(38i32) }
+    let left = pixels2[10usize * SIDE + 2usize]
+    let right = pixels2[10usize * SIDE + 125usize]
+    if ((left >> 16u32) & 255u32) < 200u32 || (left & 255u32) > 60u32 { os.exit(40i32) }
+    if (right & 255u32) < 200u32 || ((right >> 16u32) & 255u32) > 60u32 { os.exit(41i32) }
     ret ok
 }

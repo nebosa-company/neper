@@ -18,7 +18,8 @@ use e.text.layout as tl
 type Host = struct {
     fonts: *fontset.Set, arena: *mem.Arena, ctx: *void,
     intrinsic: fn(*void, html.NodeId) -> layout.Intrinsic,
-    image: fn(*void, html.NodeId) -> paint.ImageRef
+    image: fn(*void, html.NodeId) -> paint.ImageRef,
+    url_image: fn(*void, str) -> paint.ImageRef
 }
 
 fn is_italic(s: *const style.Style) -> bool { ret s.font_style != .Normal }
@@ -56,7 +57,12 @@ fn paint_image(ctx: *void, node: html.NodeId) -> paint.ImageRef {
     ret h.image(h.ctx, node)
 }
 
+fn paint_url_image(ctx: *void, url: str) -> paint.ImageRef {
+    let h = mem.cast[*Host](ctx)
+    ret h.url_image(h.ctx, url)
+}
+
 // The `PaintEnv` for `paint.paint`; `h` must outlive the painting (and the scene compile that copies the layouts).
 fn paint_env_of(h: *Host) -> paint.PaintEnv {
-    ret paint.PaintEnv { ctx: mem.cast[*void](h), text: paint_text, image: paint_image }
+    ret paint.PaintEnv { ctx: mem.cast[*void](h), text: paint_text, image: paint_image, url_image: paint_url_image }
 }

@@ -21,6 +21,7 @@ use e.gfx.cssvalue as cv
 use e.gfx.geometry as geo
 use e.gfx.paint as pt
 use e.gfx.scene as scene
+use e.math
 use e.mem
 use e.str
 use e.text.layout as tl
@@ -32,7 +33,8 @@ type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, heig
 type PaintEnv = struct {
     ctx: *void,
     text: fn(*void, *const style.Style, str) -> *const tl.Layout,
-    image: fn(*void, html.NodeId) -> ImageRef
+    image: fn(*void, html.NodeId) -> ImageRef,
+    url_image: fn(*void, str) -> ImageRef
 }
 
 type Entry = struct { box: u32, z: i64, real: bool }
@@ -204,6 +206,11 @@ fn first_token(a: *mem.Arena, s: *const style.Style, name: str) -> str {
 }
 
 fn paint_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64) {
+    paint_background_color(p, b, s, x, y, w, h)
+    paint_layers(p, b, s, x, y, w, h)
+}
+
+fn paint_background_color(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64) {
     if alpha_of(s.background_color) == 0u32 { ret }
     let bb = &p.l.boxes.items[usize(b)]
     var in_t = 0.0f64
@@ -1059,4 +1066,747 @@ fn paint(a: *mem.Arena, l: *const layout.Layout, env: PaintEnv, b: *scene.Builde
     paint_context(&p, l.root, 0.0f64, 0.0f64)
     restore(&p)
     ret p.status
+}
+
+// --- Background layers: gradients and images with position, size, repeat, origin and clip (CSS Backgrounds 3).
+
+type Stp = struct { off: f64, color: u32, has: bool }
+
+fn lerpf(a: f64, b: f64, t: f64) -> f64 { ret a + (b - a) * t }
+
+fn absf(x: f64) -> f64 {
+    if x < 0.0f64 { ret -x }
+    ret x
+}
+
+// Premultiplied interpolation of two ARGB colours in sRGB space.
+fn mix_argb(c0: u32, c1: u32, t: f64) -> u32 {
+    let a0 = f64((c0 >> 24u32) & 255u32) / 255.0f64
+    let a1 = f64((c1 >> 24u32) & 255u32) / 255.0f64
+    let a = lerpf(a0, a1, t)
+    if a <= 0.0f64 { ret 0u32 }
+    let r = lerpf(f64((c0 >> 16u32) & 255u32) * a0, f64((c1 >> 16u32) & 255u32) * a1, t) / a
+    let g = lerpf(f64((c0 >> 8u32) & 255u32) * a0, f64((c1 >> 8u32) & 255u32) * a1, t) / a
+    let b = lerpf(f64(c0 & 255u32) * a0, f64(c1 & 255u32) * a1, t) / a
+    ret (u32(a * 255.0f64 + 0.5f64) << 24u32) | (clamp255(r) << 16u32) | (clamp255(g) << 8u32) | clamp255(b)
+}
+
+fn clamp255(v: f64) -> u32 {
+    if v <= 0.0f64 { ret 0u32 }
+    if v >= 255.0f64 { ret 255u32 }
+    ret u32(v + 0.5f64)
+}
+
+fn is_len_text(t: str) -> bool {
+    if t.len == 0usize { ret false }
+    let c = t[0usize]
+    ret (c >= 48u8 && c <= 57u8) || c == 46u8 || c == 43u8 || c == 45u8 || str.starts_with(t, "calc(") || str.starts_with(t, "min(") || str.starts_with(t, "max(") || str.starts_with(t, "clamp(")
+}
+
+fn parse_color_text(p: *Painter, tok: str, current: u32) -> (u32, bool) {
+    let low = cv.lower(p.a, cv.trim_ws(tok))
+    if str.eq(low, "currentcolor") { ret (current, true) }
+    if str.eq(low, "transparent") { ret (0u32, true) }
+    let (col, good) = cv.parse_color(p.a, tok)
+    ret (col, good)
+}
+
+// The stops in `args[from..]` ("<color> [<position>{1,2}]" and bare hints), positions as fractions of `line` pixels.
+fn parse_stops(p: *Painter, s: *const style.Style, args: []const str, from: usize, line: f64) -> ([]Stp, usize) {
+    let (made, e) = list.init[Stp](p.a, args.len * 2usize + 4usize)
+    if e != ok { ret (zero, 0usize) }
+    var out = made
+    let ctx = style.new_context(p.a, p.l.viewport_width, p.l.viewport_height)
+    var i = from
+    while i < args.len {
+        let toks = cv.split_top_level_spaces(p.a, args[i])
+        i += 1usize
+        if toks.len == 0usize { continue }
+        if toks.len == 1usize && is_len_text(toks[0usize]) { continue }
+        var color = s.color
+        var good = false
+        var positions: [2]f64 = zero
+        var np = 0usize
+        var k = 0usize
+        while k < toks.len {
+            let t = toks[k]
+            k += 1usize
+            if is_len_text(t) && !str.starts_with(cv.lower(p.a, t), "rgb") {
+                let (len, lg) = style.parse_len(&ctx, t, s.font_size, style.A_PERCENT | style.A_NEGATIVE)
+                if lg && np < 2usize && line > 0.0f64 {
+                    positions[np] = (len.px + len.pct * line) / line
+                    np += 1usize
+                }
+            } else {
+                let (c, cg) = parse_color_text(p, t, s.color)
+                if cg {
+                    color = c
+                    good = true
+                }
+            }
+        }
+        if !good { continue }
+        let pushed = list.push[Stp](&out, Stp { off: positions[0usize], color: color, has: np > 0usize })
+        if np > 1usize {
+            let pushed2 = list.push[Stp](&out, Stp { off: positions[1usize], color: color, has: true })
+        }
+    }
+    let n = out.len
+    if n == 0usize { ret (out.items[0usize..0usize], 0usize) }
+    // Defaults: the first at 0, the last at 1; the others spread between their defined neighbours.
+    if !out.items[0usize].has {
+        out.items[0usize].off = 0.0f64
+        out.items[0usize].has = true
+    }
+    if !out.items[n - 1usize].has {
+        out.items[n - 1usize].off = 1.0f64
+        out.items[n - 1usize].has = true
+    }
+    var j = 1usize
+    while j < n {
+        if !out.items[j].has {
+            var nxt = j
+            while nxt < n && !out.items[nxt].has { nxt += 1usize }
+            let lo = out.items[j - 1usize].off
+            let hi = out.items[nxt].off
+            var q = j
+            while q < nxt {
+                out.items[q].off = lerpf(lo, hi, f64(q - j + 1usize) / f64(nxt - j + 1usize))
+                q += 1usize
+            }
+            j = nxt
+        } else {
+            j += 1usize
+        }
+    }
+    // Positions never decrease.
+    j = 1usize
+    while j < n {
+        if out.items[j].off < out.items[j - 1usize].off { out.items[j].off = out.items[j - 1usize].off }
+        j += 1usize
+    }
+    ret (out.items[0usize..n], n)
+}
+
+// The colour of the stop list at `t`, interpolated in sRGB (hard edges resolved to the later stop).
+fn color_at(stops: []const Stp, t: f64) -> u32 {
+    let n = stops.len
+    if t <= stops[0usize].off { ret stops[0usize].color }
+    var i = 1usize
+    while i < n {
+        if t < stops[i].off {
+            let span = stops[i].off - stops[i - 1usize].off
+            if span <= 0.0f64 { ret stops[i].color }
+            ret mix_argb(stops[i - 1usize].color, stops[i].color, (t - stops[i - 1usize].off) / span)
+        }
+        i += 1usize
+    }
+    ret stops[n - 1usize].color
+}
+
+// Brush stops for a gradient: sub-divided so the renderer's linear-light interpolation looks like CSS's sRGB one, cut to
+// 0..1, and tiled for the repeating forms.
+fn brush_stops(p: *Painter, stops: []const Stp, repeating: bool) -> []const pt.Stop {
+    let n = stops.len
+    if n == 0usize { ret zero }
+    let (ext, ee) = list.init[Stp](p.a, n * 8usize + 8usize)
+    if ee != ok { ret zero }
+    var e = ext
+    var first = stops[0usize].off
+    var last = stops[n - 1usize].off
+    if repeating && last - first > 0.0001f64 {
+        let period = last - first
+        var cycle = 0i64
+        let lo_cycle = i64((0.0f64 - last) / period) - 1i64
+        let hi_cycle = i64((1.0f64 - first) / period) + 1i64
+        cycle = lo_cycle
+        var count = 0usize
+        while cycle <= hi_cycle && count < 64usize {
+            var q = 0usize
+            while q < n {
+                let pushed = list.push[Stp](&e, Stp { off: stops[q].off + f64(cycle) * period, color: stops[q].color, has: true })
+                q += 1usize
+            }
+            cycle += 1i64
+            count += 1usize
+        }
+    } else {
+        var q = 0usize
+        while q < n {
+            let pushed = list.push[Stp](&e, stops[q])
+            q += 1usize
+        }
+    }
+    let m = e.len
+    let (outm, oe) = list.init[pt.Stop](p.a, m * 8usize + 8usize)
+    if oe != ok { ret zero }
+    var out = outm
+    let c0 = color_at(e.items[0usize..m], 0.0f64)
+    let pushed0 = list.push[pt.Stop](&out, pt.Stop { offset: 0.0f32, color: color_of(c0) })
+    var i = 0usize
+    while i < m {
+        let off = e.items[i].off
+        if off > 0.0f64 && off < 1.0f64 {
+            let pushed = list.push[pt.Stop](&out, pt.Stop { offset: f32(off), color: color_of(e.items[i].color) })
+        }
+        if i + 1usize < m {
+            let nxt = e.items[i + 1usize].off
+            if nxt > off + 0.0001f64 {
+                var step = 1usize
+                while step < 8usize {
+                    let t = off + (nxt - off) * f64(step) / 8.0f64
+                    if t > 0.0f64 && t < 1.0f64 {
+                        let col = mix_argb(e.items[i].color, e.items[i + 1usize].color, f64(step) / 8.0f64)
+                        let pushed = list.push[pt.Stop](&out, pt.Stop { offset: f32(t), color: color_of(col) })
+                    }
+                    step += 1usize
+                }
+            }
+        }
+        i += 1usize
+    }
+    let c1 = color_at(e.items[0usize..m], 1.0f64)
+    let pushed1 = list.push[pt.Stop](&out, pt.Stop { offset: 1.0f32, color: color_of(c1) })
+    ret list.slice_const[pt.Stop](&out)
+}
+
+// A linear gradient over the tile rectangle: fills it.
+fn fill_linear(p: *Painter, s: *const style.Style, args: []const str, repeating: bool, x: f64, y: f64, w: f64, h: f64) {
+    if args.len < 2usize || w <= 0.0f64 || h <= 0.0f64 { ret }
+    var dx = 0.0f64
+    var dy = 1.0f64
+    var from = 0usize
+    let first = cv.lower(p.a, cv.trim_ws(args[0usize]))
+    if str.starts_with(first, "to ") {
+        var sx = 0.0f64
+        var sy = 0.0f64
+        let words = cv.split_top_level_spaces(p.a, first)
+        var wi = 1usize
+        while wi < words.len {
+            if str.eq(words[wi], "left") { sx = -1.0f64 }
+            if str.eq(words[wi], "right") { sx = 1.0f64 }
+            if str.eq(words[wi], "top") { sy = -1.0f64 }
+            if str.eq(words[wi], "bottom") { sy = 1.0f64 }
+            wi += 1usize
+        }
+        if sx != 0.0f64 && sy != 0.0f64 {
+            let vx = sx * h
+            let vy = sy * w
+            let norm = math.sqrt[f64](vx * vx + vy * vy)
+            dx = vx / norm
+            dy = vy / norm
+        } else {
+            dx = sx
+            dy = sy
+        }
+        from = 1usize
+    } else if is_angle_text(first) {
+        let (ang, okang) = angle_arg(p, first)
+        if okang {
+            dx = math.sin[f64](ang)
+            dy = -math.cos[f64](ang)
+            from = 1usize
+        }
+    }
+    let len = absf(w * dx) + absf(h * dy)
+    if len <= 0.0f64 { ret }
+    let (stps, count) = parse_stops(p, s, args, from, len)
+    if count == 0usize { ret }
+    let cx = x + w / 2.0f64
+    let cy = y + h / 2.0f64
+    let bs = brush_stops(p, stps, repeating)
+    if bs.len == 0usize { ret }
+    let lg = pt.LinearGradient { start: geo.Point { x: f32(cx - dx * len / 2.0f64), y: f32(cy - dy * len / 2.0f64) }, end: geo.Point { x: f32(cx + dx * len / 2.0f64), y: f32(cy + dy * len / 2.0f64) }, stops: bs }
+    emit(p, scene.Command { FillRect: scene.FillRect { rect: grect(x, y, w, h), brush: pt.Brush { Linear: lg } } })
+}
+
+fn is_angle_text(t: str) -> bool {
+    if t.len == 0usize { ret false }
+    let c = t[0usize]
+    if !((c >= 48u8 && c <= 57u8) || c == 46u8 || c == 43u8 || c == 45u8) { ret false }
+    ret str.ends_with(t, "deg") || str.ends_with(t, "rad") || str.ends_with(t, "turn") || str.ends_with(t, "grad")
+}
+
+fn angle_arg(p: *Painter, t: str) -> (f64, bool) {
+    let deg = cv.angle_of(p.a, t)
+    ret (deg * 3.141592653589793f64 / 180.0f64, true)
+}
+
+// A radial gradient over the tile rectangle: circle or ellipse, sized by keyword or lengths, positioned by `at`.
+fn fill_radial(p: *Painter, s: *const style.Style, args: []const str, repeating: bool, x: f64, y: f64, w: f64, h: f64) {
+    if args.len < 2usize || w <= 0.0f64 || h <= 0.0f64 { ret }
+    var circle = false
+    var size_kw = "farthest-corner"
+    var cx = x + w / 2.0f64
+    var cy = y + h / 2.0f64
+    var rx = 0.0f64
+    var ry = 0.0f64
+    var explicit = false
+    var from = 0usize
+    let ctx = style.new_context(p.a, p.l.viewport_width, p.l.viewport_height)
+    let first = cv.lower(p.a, cv.trim_ws(args[0usize]))
+    let first_toks = cv.split_top_level_spaces(p.a, first)
+    var is_prelude = false
+    var ti = 0usize
+    var lens: [2]f64 = zero
+    var nl = 0usize
+    var at_seen = false
+    var pos_toks: [4]str = zero
+    var np = 0usize
+    while ti < first_toks.len {
+        let t = first_toks[ti]
+        ti += 1usize
+        if str.eq(t, "circle") {
+            circle = true
+            is_prelude = true
+        } else if str.eq(t, "ellipse") {
+            is_prelude = true
+        } else if str.eq(t, "closest-side") || str.eq(t, "farthest-side") || str.eq(t, "closest-corner") || str.eq(t, "farthest-corner") {
+            size_kw = t
+            is_prelude = true
+        } else if str.eq(t, "at") {
+            at_seen = true
+            is_prelude = true
+        } else if at_seen {
+            if np < 4usize {
+                pos_toks[np] = t
+                np += 1usize
+            }
+        } else if is_len_text(t) {
+            let (len, lg) = style.parse_len(&ctx, t, s.font_size, style.A_PERCENT)
+            if lg && nl < 2usize {
+                lens[nl] = len.px + len.pct * w
+                if len.pct != 0.0f64 && nl == 1usize { lens[nl] = len.px + len.pct * h }
+                nl += 1usize
+                is_prelude = true
+            }
+        }
+    }
+    if is_prelude { from = 1usize }
+    if np > 0usize {
+        var px = 0.5f64
+        var py = 0.5f64
+        var seen_x = false
+        var k = 0usize
+        while k < np {
+            let t = pos_toks[k]
+            k += 1usize
+            if str.eq(t, "left") {
+                px = 0.0f64
+                seen_x = true
+            } else if str.eq(t, "right") {
+                px = 1.0f64
+                seen_x = true
+            } else if str.eq(t, "top") {
+                py = 0.0f64
+            } else if str.eq(t, "bottom") {
+                py = 1.0f64
+            } else if str.eq(t, "center") {
+                if !seen_x { seen_x = true } else { py = 0.5f64 }
+            } else {
+                let (len, lg) = style.parse_len(&ctx, t, s.font_size, style.A_PERCENT | style.A_NEGATIVE)
+                if lg {
+                    if !seen_x {
+                        px = (len.px + len.pct * w) / w
+                        seen_x = true
+                    } else {
+                        py = (len.px + len.pct * h) / h
+                    }
+                }
+            }
+        }
+        cx = x + px * w
+        cy = y + py * h
+    }
+    if nl == 1usize {
+        rx = lens[0usize]
+        ry = lens[0usize]
+        circle = true
+        explicit = true
+    } else if nl == 2usize {
+        rx = lens[0usize]
+        ry = lens[1usize]
+        explicit = true
+    }
+    if !explicit {
+        let left = cx - x
+        let right = x + w - cx
+        let top = cy - y
+        let bottom = y + h - cy
+        if str.eq(size_kw, "closest-side") {
+            rx = minf(left, right)
+            ry = minf(top, bottom)
+            if circle {
+                rx = minf(rx, ry)
+                ry = rx
+            }
+        } else if str.eq(size_kw, "farthest-side") {
+            rx = maxf(left, right)
+            ry = maxf(top, bottom)
+            if circle {
+                rx = maxf(rx, ry)
+                ry = rx
+            }
+        } else if str.eq(size_kw, "closest-corner") || str.eq(size_kw, "farthest-corner") {
+            let far = str.eq(size_kw, "farthest-corner")
+            var ax = minf(left, right)
+            var ay = minf(top, bottom)
+            if far {
+                ax = maxf(left, right)
+                ay = maxf(top, bottom)
+            }
+            if circle {
+                rx = math.sqrt[f64](ax * ax + ay * ay)
+                ry = rx
+            } else {
+                // The ellipse through the corner with the side ratios.
+                if ax <= 0.0f64 || ay <= 0.0f64 {
+                    rx = ax
+                    ry = ay
+                } else {
+                    rx = ax * 1.4142135623730951f64
+                    ry = ay * 1.4142135623730951f64
+                }
+            }
+        }
+    }
+    if rx <= 0.0f64 || ry <= 0.0f64 { ret }
+    let (stps, count) = parse_stops(p, s, args, from, rx)
+    if count == 0usize { ret }
+    let bs = brush_stops(p, stps, repeating)
+    if bs.len == 0usize { ret }
+    let rg = pt.RadialGradient { center: geo.Point { x: 0.0f32, y: 0.0f32 }, radius: 1.0f32, stops: bs }
+    // Unit-circle space: the rectangle is mapped by the inverse of the ellipse's scale and offset.
+    save(p)
+    emit(p, scene.Command { Transform: geo.Transform { m00: f32(rx), m01: 0.0f32, m02: f32(cx), m10: 0.0f32, m11: f32(ry), m12: f32(cy) } })
+    emit(p, scene.Command { FillRect: scene.FillRect { rect: grect((x - cx) / rx, (y - cy) / ry, w / rx, h / ry), brush: pt.Brush { Radial: rg } } })
+    restore(p)
+}
+
+// One image layer value: "none", a gradient function or url(). Kinds: 0 none, 1 linear, 2 radial, 3 conic, 4 url.
+type LayerImage = struct { kind: u8, repeating: bool, body: str }
+
+fn parse_layer_image(p: *Painter, text: str) -> LayerImage {
+    let t = cv.trim_ws(text)
+    let low = cv.lower(p.a, t)
+    var out = LayerImage { kind: 0u8, repeating: false, body: "" }
+    if str.starts_with(low, "url(") {
+        out.kind = 4u8
+        var body = t[4usize..]
+        if body.len > 0usize && body[body.len - 1usize] == 41u8 { body = body[0usize..body.len - 1usize] }
+        body = cv.trim_ws(body)
+        if body.len >= 2usize && (body[0usize] == 34u8 || body[0usize] == 39u8) { body = body[1usize..body.len - 1usize] }
+        out.body = body
+        ret out
+    }
+    var name_len = 0usize
+    if str.starts_with(low, "linear-gradient(") {
+        out.kind = 1u8
+        name_len = 16usize
+    } else if str.starts_with(low, "repeating-linear-gradient(") {
+        out.kind = 1u8
+        out.repeating = true
+        name_len = 26usize
+    } else if str.starts_with(low, "radial-gradient(") {
+        out.kind = 2u8
+        name_len = 16usize
+    } else if str.starts_with(low, "repeating-radial-gradient(") {
+        out.kind = 2u8
+        out.repeating = true
+        name_len = 26usize
+    } else if str.starts_with(low, "conic-gradient(") || str.starts_with(low, "repeating-conic-gradient(") {
+        out.kind = 3u8
+        ret out
+    } else {
+        ret out
+    }
+    var body = t[name_len..]
+    if body.len > 0usize && body[body.len - 1usize] == 41u8 { body = body[0usize..body.len - 1usize] }
+    out.body = body
+    ret out
+}
+
+// The i-th comma-separated value of a layered property (cycling), or `fallback`.
+fn layer_value(p: *Painter, s: *const style.Style, name: str, i: usize, fallback: str) -> str {
+    let (raw, has) = geom.extra_of(s, name)
+    if !has { ret fallback }
+    let parts = cv.split_top_level_commas(p.a, raw)
+    if parts.len == 0usize { ret fallback }
+    ret cv.trim_ws(parts[i % parts.len])
+}
+
+// A position component to pixels: keyword or length/percentage of the free space.
+fn bg_pos_component(p: *Painter, s: *const style.Style, tok: str, free: f64, horizontal: bool) -> f64 {
+    let low = cv.lower(p.a, tok)
+    if str.eq(low, "left") || str.eq(low, "top") { ret 0.0f64 }
+    if str.eq(low, "right") || str.eq(low, "bottom") { ret free }
+    if str.eq(low, "center") { ret free / 2.0f64 }
+    let ctx = style.new_context(p.a, p.l.viewport_width, p.l.viewport_height)
+    let (len, lg) = style.parse_len(&ctx, low, s.font_size, style.A_PERCENT | style.A_NEGATIVE)
+    if !lg { ret 0.0f64 }
+    ret len.px + len.pct * free
+}
+
+fn is_edge_word(t: str) -> bool { ret str.eq(t, "left") || str.eq(t, "right") || str.eq(t, "top") || str.eq(t, "bottom") || str.eq(t, "center") }
+
+// The tile's offset from the origin box: "x y", keywords, and the four-value "right 10px bottom 5px" form.
+fn bg_position(p: *Painter, s: *const style.Style, text: str, free_w: f64, free_h: f64) -> (f64, f64) {
+    let toks = cv.split_top_level_spaces(p.a, cv.lower(p.a, text))
+    var px = 0.0f64
+    var py = 0.0f64
+    if toks.len == 0usize { ret (0.0f64, 0.0f64) }
+    if toks.len == 1usize {
+        let t = toks[0usize]
+        if str.eq(t, "top") || str.eq(t, "bottom") {
+            px = free_w / 2.0f64
+            py = bg_pos_component(p, s, t, free_h, false)
+        } else {
+            px = bg_pos_component(p, s, t, free_w, true)
+            py = free_h / 2.0f64
+        }
+        ret (px, py)
+    }
+    if toks.len == 2usize {
+        var a = toks[0usize]
+        var b = toks[1usize]
+        // "top left" order: a vertical keyword first swaps the pair.
+        if (str.eq(a, "top") || str.eq(a, "bottom")) && !(str.eq(b, "top") || str.eq(b, "bottom")) {
+            let tmp = a
+            a = b
+            b = tmp
+        }
+        ret (bg_pos_component(p, s, a, free_w, true), bg_pos_component(p, s, b, free_h, false))
+    }
+    // Three or four values: edge keywords each followed by an optional offset.
+    var i = 0usize
+    while i < toks.len {
+        let k = toks[i]
+        i += 1usize
+        if !is_edge_word(k) { continue }
+        var off = 0.0f64
+        if i < toks.len && !is_edge_word(toks[i]) {
+            let ctx = style.new_context(p.a, p.l.viewport_width, p.l.viewport_height)
+            let (len, lg) = style.parse_len(&ctx, toks[i], s.font_size, style.A_PERCENT | style.A_NEGATIVE)
+            i += 1usize
+            if lg { off = len.px }
+        }
+        if str.eq(k, "left") { px = off }
+        if str.eq(k, "right") { px = free_w - off }
+        if str.eq(k, "top") { py = off }
+        if str.eq(k, "bottom") { py = free_h - off }
+        if str.eq(k, "center") {
+            if px == 0.0f64 { px = free_w / 2.0f64 } else { py = free_h / 2.0f64 }
+        }
+    }
+    ret (px, py)
+}
+
+fn paint_layers(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64) {
+    let (img_raw, has_img) = geom.extra_of(s, "background-image")
+    if !has_img { ret }
+    let low = cv.lower(p.a, cv.trim_ws(img_raw))
+    if str.eq(low, "none") || low.len == 0usize { ret }
+    let images = cv.split_top_level_commas(p.a, img_raw)
+    let bb = &p.l.boxes.items[usize(b)]
+    let bt = bb.border[0usize]
+    let br = bb.border[1usize]
+    let bbm = bb.border[2usize]
+    let bl = bb.border[3usize]
+    let pt_ = bb.padding[0usize]
+    let pr = bb.padding[1usize]
+    let pbm = bb.padding[2usize]
+    let pl = bb.padding[3usize]
+    // Layers paint from the last (bottom) to the first (top).
+    var li = images.len
+    while li > 0usize {
+        li -= 1usize
+        let layer = parse_layer_image(p, images[li])
+        if layer.kind == 0u8 || layer.kind == 3u8 { continue }
+        // Painting area (clip) and positioning area (origin).
+        var in_t = 0.0f64
+        var in_r = 0.0f64
+        var in_b = 0.0f64
+        var in_l = 0.0f64
+        let clip_kw = layer_value(p, s, "background-clip", li, "border-box")
+        if str.eq(clip_kw, "padding-box") {
+            in_t = bt
+            in_r = br
+            in_b = bbm
+            in_l = bl
+        } else if str.eq(clip_kw, "content-box") {
+            in_t = bt + pt_
+            in_r = br + pr
+            in_b = bbm + pbm
+            in_l = bl + pl
+        }
+        var o_t = bt
+        var o_r = br
+        var o_b = bbm
+        var o_l = bl
+        let origin_kw = layer_value(p, s, "background-origin", li, "padding-box")
+        if str.eq(origin_kw, "border-box") {
+            o_t = 0.0f64
+            o_r = 0.0f64
+            o_b = 0.0f64
+            o_l = 0.0f64
+        } else if str.eq(origin_kw, "content-box") {
+            o_t = bt + pt_
+            o_r = br + pr
+            o_b = bbm + pbm
+            o_l = bl + pl
+        }
+        var ox = x + o_l
+        var oy = y + o_t
+        var ow = w - o_l - o_r
+        var oh = h - o_t - o_b
+        let attachment = layer_value(p, s, "background-attachment", li, "scroll")
+        if str.eq(attachment, "fixed") && p.moved == 0usize {
+            ox = p.vx
+            oy = p.vy
+            ow = p.vw
+            oh = p.vh
+        }
+        if ow <= 0.0f64 || oh <= 0.0f64 { continue }
+        // Tile size.
+        var iw = 0.0f64
+        var ih = 0.0f64
+        var tex = ImageRef { found: false, texture: zero, width: 0.0f32, height: 0.0f32 }
+        var natural = false
+        if layer.kind == 4u8 {
+            let env = p.env
+            tex = env.url_image(env.ctx, layer.body)
+            if !tex.found || tex.width <= 0.0f32 || tex.height <= 0.0f32 { continue }
+            iw = f64(tex.width)
+            ih = f64(tex.height)
+            natural = true
+        }
+        let size_text = cv.lower(p.a, layer_value(p, s, "background-size", li, "auto"))
+        var tw = ow
+        var th = oh
+        if natural {
+            tw = iw
+            th = ih
+        }
+        let sz = cv.split_top_level_spaces(p.a, size_text)
+        let ctx = style.new_context(p.a, p.l.viewport_width, p.l.viewport_height)
+        if str.eq(size_text, "cover") && natural {
+            let k = maxf(ow / iw, oh / ih)
+            tw = iw * k
+            th = ih * k
+        } else if str.eq(size_text, "contain") && natural {
+            let k2 = minf(ow / iw, oh / ih)
+            tw = iw * k2
+            th = ih * k2
+        } else if sz.len >= 1usize && !str.eq(size_text, "auto") && !str.eq(size_text, "cover") && !str.eq(size_text, "contain") {
+            var wv = -1.0f64
+            var hv = -1.0f64
+            if !str.eq(sz[0usize], "auto") {
+                let (lw, gw) = style.parse_len(&ctx, sz[0usize], s.font_size, style.A_PERCENT)
+                if gw { wv = lw.px + lw.pct * ow }
+            }
+            if sz.len >= 2usize && !str.eq(sz[1usize], "auto") {
+                let (lh, gh) = style.parse_len(&ctx, sz[1usize], s.font_size, style.A_PERCENT)
+                if gh { hv = lh.px + lh.pct * oh }
+            }
+            if natural {
+                if wv >= 0.0f64 && hv < 0.0f64 { hv = ih * wv / iw }
+                if hv >= 0.0f64 && wv < 0.0f64 { wv = iw * hv / ih }
+            }
+            if wv >= 0.0f64 { tw = wv }
+            if hv >= 0.0f64 { th = hv }
+        }
+        if tw <= 0.0f64 || th <= 0.0f64 { continue }
+        // Repeat.
+        let rep = cv.split_top_level_spaces(p.a, cv.lower(p.a, layer_value(p, s, "background-repeat", li, "repeat")))
+        var rx = true
+        var ry = true
+        var round_x = false
+        var round_y = false
+        var space_x = false
+        var space_y = false
+        if rep.len >= 1usize {
+            if str.eq(rep[0usize], "repeat-x") {
+                ry = false
+            } else if str.eq(rep[0usize], "repeat-y") {
+                rx = false
+            } else if str.eq(rep[0usize], "no-repeat") {
+                rx = false
+                ry = false
+            } else {
+                var vy = rep[0usize]
+                if rep.len >= 2usize { vy = rep[1usize] }
+                if str.eq(rep[0usize], "no-repeat") { rx = false }
+                if str.eq(vy, "no-repeat") { ry = false }
+                if str.eq(rep[0usize], "round") { round_x = true }
+                if str.eq(vy, "round") { round_y = true }
+                if str.eq(rep[0usize], "space") { space_x = true }
+                if str.eq(vy, "space") { space_y = true }
+            }
+        }
+        if round_x && ow > 0.0f64 { tw = ow / maxf(1.0f64, f64(i64(ow / tw + 0.5f64))) }
+        if round_y && oh > 0.0f64 { th = oh / maxf(1.0f64, f64(i64(oh / th + 0.5f64))) }
+        var gap_x = 0.0f64
+        var gap_y = 0.0f64
+        if space_x && tw < ow {
+            let n = i64(ow / tw)
+            if n >= 2i64 { gap_x = (ow - f64(n) * tw) / f64(n - 1i64) } else {
+                space_x = false
+                rx = false
+            }
+        }
+        if space_y && th < oh {
+            let n2 = i64(oh / th)
+            if n2 >= 2i64 { gap_y = (oh - f64(n2) * th) / f64(n2 - 1i64) } else {
+                space_y = false
+                ry = false
+            }
+        }
+        let (offx, offy) = bg_position(p, s, layer_value(p, s, "background-position", li, "0% 0%"), ow - tw, oh - th)
+        var sx = ox + offx
+        var sy = oy + offy
+        if space_x { sx = ox }
+        if space_y { sy = oy }
+        // The painting area, clipped (rounded with the border radius).
+        let cx = x + in_l
+        let cy = y + in_t
+        let cw = w - in_l - in_r
+        let ch = h - in_t - in_b
+        if cw <= 0.0f64 || ch <= 0.0f64 { continue }
+        save(p)
+        if has_radius(s) {
+            emit(p, scene.Command { Clip: scene.Clip { Rounded: region_rrect(s, x, y, w, h, in_t, in_r, in_b, in_l) } })
+        } else {
+            emit(p, scene.Command { Clip: scene.Clip { Rect: grect(cx, cy, cw, ch) } })
+        }
+        // First tile column and row that touch the painting area.
+        let step_x = tw + gap_x
+        let step_y = th + gap_y
+        var x0 = sx
+        var y0 = sy
+        if rx { x0 = sx - f64(i64((sx - cx) / step_x + 1.0f64)) * step_x }
+        if ry { y0 = sy - f64(i64((sy - cy) / step_y + 1.0f64)) * step_y }
+        var count = 0usize
+        var ty = y0
+        while count < 4000usize {
+            var tx = x0
+            while count < 4000usize {
+                if tx + tw > cx && tx < cx + cw && ty + th > cy && ty < cy + ch {
+                    if layer.kind == 4u8 {
+                        emit(p, scene.Command { Image: scene.DrawImage { texture: tex.texture, source: geo.rect(0.0f32, 0.0f32, tex.width, tex.height), destination: grect(tx, ty, tw, th), opacity: 1.0f32 } })
+                    } else {
+                        let parts = cv.split_top_level_commas(p.a, layer.body)
+                        if layer.kind == 1u8 { fill_linear(p, s, parts, layer.repeating, tx, ty, tw, th) } else { fill_radial(p, s, parts, layer.repeating, tx, ty, tw, th) }
+                    }
+                    count += 1usize
+                }
+                if !rx { break }
+                tx += step_x
+                if tx >= cx + cw { break }
+            }
+            if !ry { break }
+            ty += step_y
+            if ty >= cy + ch { break }
+        }
+        restore(p)
+    }
 }
