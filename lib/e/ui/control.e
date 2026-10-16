@@ -4475,6 +4475,9 @@ fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     caption.wrap = .None
     var ink = style.hex_raw(0xFFFFFFu32)
     if !enabled { ink = style.hex_raw(0xCCCCCCu32) }
+    // round 13: the native dark radio's enabled caption is BLACK on the #202020 page (radio-*-rest, -pressed, -focus: the gallery's
+    // WM_CTLCOLORSTATIC colouring does not reach a radio's text); copied as captured
+    if round && enabled { ink = style.hex_raw(0x000000u32) }
     let (words, words_error) = colored_text(a, 0u64, shown, &ft, caption, ink)
     if words_error != ok { ret (zero, words_error) }
     let (advance, fit, base, metrics_error) = run_metrics_faced(a, &ft, caption, shown)
@@ -6329,7 +6332,9 @@ fn windows_edit_theme(a: *mem.Arena, t: *const Theme, line_height: f32) -> (Them
         swapped[1usize] = t.fonts[0usize]
         fonts = swapped
     }
-    ret (Theme { tokens: &copies[0usize], fonts: fonts, language: t.language, runtime: t.runtime }, ok)
+    var language = t.language
+    if dark_native { language = "kern" }
+    ret (Theme { tokens: &copies[0usize], fonts: fonts, language: language, runtime: t.runtime }, ok)
 }
 
 // The native Windows 11 edit as v3 draws it (NativeStyle): a white face, a 1 px border so light
@@ -6385,11 +6390,18 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var highlight = win_rgb(0u32, 120u32, 215u32)
     var highlighted = win_rgb(255u32, 255u32, 255u32)
     // looks9: the dark map would turn the selected text dark; it stays white.
-    if t.tokens.palette == .Dark { highlighted = style.hex_raw(0xFFFFFFu32) }
+    // round 13: the native dark selection is the system #0078D7 exactly (the colour map lifted it to #008CFB).
+    if t.tokens.palette == .Dark {
+        highlighted = style.hex_raw(0xFFFFFFu32)
+        highlight = style.hex_raw(0x0078D7u32)
+    }
     // round 12: the native dark password edit shows U+25CF bullets (7 px apart); the engine masks with one asterisk per byte, so the edit's
     // own text is made transparent (caret and selection stay) and the bullets are laid over it.
     let bullets = secret && win_dark(t) && len > 0usize
     var edit_ink = ink
+    // round 13: the native dark edit's GDI caret and selection (widget.native_caret)
+    var edit_caret: paint.Color = zero
+    if win_dark(t) { edit_caret = widget.native_caret(face) }
     if bullets { edit_ink = with_alpha(ink, 0.0) }
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -6406,7 +6418,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: f32(options.rows) * line }
-    let edit_node = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: edit_ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let edit_node = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: edit_ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: edit_caret, untabbed: false, ringed: false }, editor_style)
     var (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, edit_node)
     if named_error != ok { ret (zero, named_error) }
     // looks11: a disabled single-line edit takes no input, so its text is laid out at GDI's whole-pixel Tahoma advances (v3's
@@ -6481,7 +6493,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         scrolled_style.width = style.Length { Px: inner }
         let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
         if scrolled_error != ok { ret (zero, TooLarge) }
-        let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: zero, untabbed: false, ringed: false }, scrolled_style))
+        let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: edit_caret, untabbed: false, ringed: false }, scrolled_style))
         if scrolled_named_error != ok { ret (zero, scrolled_named_error) }
         scrolled[0usize] = scrolled_named
         var viewport = style.defaults()
@@ -15903,10 +15915,12 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     if dark { pick_color = style.hex_raw(0x0078D7u32) }
     // looks11: while the text has no selection it is drawn as v3's GDI sets it (whole-pixel Tahoma advances, ink boxes within 1 px of
     // the live captures) over the edit, whose own text is then transparent; a selection brings the edit's own text back.
+    var combo_caret = win4_caret(options.read_only, c.face)
+    if dark && !options.read_only { combo_caret = widget.native_caret(c.face) }
     var gdi_text = !dark && len > 0usize && win_edit_unselected(t, key)
     var edit_ink = c.ink
     if gdi_text { edit_ink = with_alpha(c.ink, 0.0) }
-    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: edit_ink, selection: pick_color, change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: win4_caret(options.read_only, c.face), untabbed: false, ringed: false }, editor_style))
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: edit_ink, selection: pick_color, change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: combo_caret, untabbed: false, ringed: false }, editor_style))
     if named_error != ok { ret (zero, named_error) }
     stack_parts[at] = named
     at += 1usize
@@ -15979,7 +15993,9 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     var text_x: f32 = 3.0
     var text_y: f32 = 0.0
     if dark {
-        text_x = 7.0
+        // round 13: the native editable combo's text origin is (6, 2) of its 23 high rect (selection fill x 6, rows 3 to 17)
+        text_x = 6.0
+        text_y = 0.0 - 0.5
         if options.read_only { text_x = 4.0 }
         if options.read_only { text_y = 1.0 }
     }
@@ -17055,16 +17071,17 @@ fn win4_xor_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     while i < w {
         if (i & 1u32) == 1u32 {
             try win3_rect(b, area.x + f32(i), area.y, 1.0, 1.0, dot)
-            if (h & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h), 1.0, 1.0, dot) }
         }
+        if ((i + h) & 1u32) == 1u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h), 1.0, 1.0, dot) }
         i += 1u32
     }
     var j = 1u32
     while j < h {
         if (j & 1u32) == 1u32 {
             try win3_rect(b, area.x, area.y + f32(j), 1.0, 1.0, dot)
-            try win3_rect(b, area.x + f32(w), area.y + f32(j), 1.0, 1.0, dot)
         }
+        // round 13: the XOR dot is on where x + y is odd, so the right edge is one row off the left edge when the rectangle is an odd number of px wide
+        if ((j + w) & 1u32) == 1u32 { try win3_rect(b, area.x + f32(w), area.y + f32(j), 1.0, 1.0, dot) }
         j += 1u32
     }
     ret ok

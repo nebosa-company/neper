@@ -81,10 +81,15 @@ fn edit_cell(a: *mem.Arena, t: *const control.Theme, i: usize) -> (widget.Node, 
     let key = u64(i + 1usize)
     if i == 6usize {
         let (word, word_error) = control.password_field(a, key, t, "Edit", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, widget.Submit { ctx: zero, invoke: noop_submit }, options)
-        ret (word, word_error)
+        if word_error != ok { ret (zero, word_error) }
+        let (whole_word, whole_word_error) = placed(a, word, 25.0, 38.0)
+        ret (whole_word, whole_word_error)
     }
     let (field, field_error) = control.text_field(a, key, t, "Edit", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, widget.Submit { ctx: zero, invoke: noop_submit }, options)
-    ret (field, field_error)
+    if field_error != ok { ret (zero, field_error) }
+    // round 13: on a whole pixel, as the control sits in the capture (149 wide centred in 200 would land on x + 0.5)
+    let (whole_field, whole_field_error) = placed(a, field, 25.0, 38.0)
+    ret (whole_field, whole_field_error)
 }
 
 fn spin_cell(a: *mem.Arena, t: *const control.Theme, i: usize) -> (widget.Node, err) {
@@ -130,7 +135,11 @@ fn combo_cell(a: *mem.Arena, t: *const control.Theme, kind: usize, i: usize) -> 
     let choices = [5]str{ "Alpha", "Bravo", "Charlie", "Delta", "Echo" }
     let (buffer, buffer_error) = mem.alloc[u8](a, 64usize)
     if buffer_error != ok { ret (zero, buffer_error) }
-    let n = control.copy_text(buffer, "Bravo")
+    // round 13: the native capture of the editable combo with the pointer on its arrow (combo-edit-hover-arrow) shows the edit EMPTY
+    // (its window text is Bravo, the child edit paints nothing), so that cell is set empty too.
+    var shown = "Bravo"
+    if kind == 0usize && i == 2usize { shown = "" }
+    let n = control.copy_text(buffer, shown)
     let (picks, picks_error) = pick_actions(a, 5usize)
     if picks_error != ok { ret (zero, picks_error) }
     let (toggle, toggle_error) = pick_actions(a, 1usize)
@@ -146,7 +155,9 @@ fn combo_cell(a: *mem.Arena, t: *const control.Theme, kind: usize, i: usize) -> 
         let (moved, moved_error) = aimed(a, combo, 150.0, 23.0, 140.0, 11.0)
         ret (moved, moved_error)
     }
-    ret (combo, ok)
+    // on a whole pixel, as the control sits in the capture (a 149 wide control centred in a 200 wide cell would land on x + 0.5)
+    let (whole, whole_error) = placed(a, combo, 25.0, 38.0)
+    ret (whole, whole_error)
 }
 
 // Cells, row by row: 7 edits, 7 spins, 6 + 6 combos (rest, hover, hover arrow, focus, open is not here, disabled).

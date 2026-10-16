@@ -33,7 +33,8 @@ type Font = struct { id: FontId, data: []const u8, face_index: u32 }
 type Feature = struct { tag: u32, value: u32, start: usize, end: usize }
 type Glyph = struct { id: u32, cluster: usize, advance_x: f32, advance_y: f32, offset_x: f32, offset_y: f32 }
 type Run = struct { font: FontId, direction: Direction, script: u32, language: str, glyphs: []const Glyph }
-type Options = struct { direction: Direction, script: u32, language: str, features: []const Feature }
+// `ppem` above 0 sets the run on whole pixel (GDI) advances for that pixel size: the font's `hdmx` widths plus the kerning rounded to whole pixels.
+type Options = struct { direction: Direction, script: u32, language: str, features: []const Feature, ppem: u32 }
 error InvalidFont
 error InvalidText
 error Unsupported
@@ -587,6 +588,52 @@ fn buffer(a: *mem.Arena, capacity: usize) -> (Buffer, err) {
     ret (Buffer { gid: gid, cluster: cluster, adv_x: adv_x, adv_y: adv_y, off_x: off_x, off_y: off_y, count: 0usize }, ok)
 }
 
+// round 13: GDI sets a glyph on the hinted whole pixel advance of its `hdmx` record and a kern pair on whole pixels (Segoe UI 12 px,
+// "Text value": 6 + 6 + 5 + 4 and the Te pair of 1.17 px as 1, 52 px, as the native Windows 11 edit draws it). A glyph or size the table
+// lacks takes the linear advance rounded.
+fn gdi_advances(font: Font, ppem: u32, b: *Buffer) {
+    let d = font.data
+    let (head, has_head) = find_table(font, TAG_HEAD)
+    let (hhea, has_hhea) = find_table(font, TAG_HHEA)
+    let (hmtx, has_hmtx) = find_table(font, TAG_HMTX)
+    if !has_head || !has_hhea || !has_hmtx { ret }
+    let em = i32(u16_at(d, head.at + 18usize))
+    let metrics = usize(u16_at(d, hhea.at + 34usize))
+    if em <= 0i32 || metrics == 0usize { ret }
+    let px = i32(ppem)
+    let (hdmx, has_hdmx) = find_table(font, 1751412088u32)
+    var record = 0usize
+    var has_record = false
+    if has_hdmx && hdmx.len >= 8usize {
+        let records = usize(u16_at(d, hdmx.at + 2usize))
+        let size = usize(u32_at(d, hdmx.at + 4usize))
+        var r = 0usize
+        while r < records {
+            let at = hdmx.at + 8usize + size * r
+            if at < d.len && u32(d[at]) == ppem {
+                record = at
+                has_record = true
+                break
+            }
+            r += 1usize
+        }
+    }
+    var i = 0usize
+    while i < b.count {
+        var row = usize(b.gid[i])
+        if row >= metrics { row = metrics - 1usize }
+        let base = i32(u16_at(d, hmtx.at + 4usize * row))
+        let kern = b.adv_x[i] - base
+        var step = (base * px + em / 2i32) / em
+        if has_record && record + 2usize + usize(b.gid[i]) < d.len { step = i32(d[record + 2usize + usize(b.gid[i])]) }
+        var kern_px = 0i32
+        if kern > 0i32 { kern_px = (kern * px + em / 2i32) / em }
+        if kern < 0i32 { kern_px = 0i32 - ((0i32 - kern) * px + em / 2i32) / em }
+        if base > 0i32 { b.adv_x[i] = (step + kern_px) * em / px }
+        i += 1usize
+    }
+}
+
 fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err) {
     let font_error = validate_font(font)
     if font_error != ok { ret (zero, font_error) }
@@ -636,6 +683,7 @@ fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err)
         let (kern, has_kern) = find_table(font, TAG_KERN)
         if has_kern { legacy_kern(d, kern, &b) }
     }
+    if options.ppem != 0u32 { gdi_advances(font, options.ppem, &b) }
     let (glyphs, glyphs_error) = mem.alloc[Glyph](a, b.count)
     if glyphs_error != ok { ret (zero, glyphs_error) }
     let em = f32(i32(u16_at(d, head.at + 18usize)))

@@ -2089,6 +2089,21 @@ fn push_rect(b: *scene.Builder, r: geometry.Rect, origin: geometry.Point, color:
     ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: origin.x + r.x, y: origin.y + r.y, width: r.width, height: r.height }, brush: paint.Brush { Solid: color } } })
 }
 
+fn floor_f(v: f32) -> f32 {
+    var n = i64(v)
+    if f32(n) > v { n -= 1 }
+    ret f32(n)
+}
+
+// round 13: `Edit.caret` with alpha 0.002 marks the native Windows 11 (GDI) edit: its rgb is the face colour, see place_edit.
+fn native_caret(face: paint.Color) -> paint.Color {
+    ret paint.rgba(face.red, face.green, face.blue, 0.002)
+}
+
+fn native_caret_face(c: paint.Color) -> bool {
+    ret c.alpha > 0.0015 && c.alpha < 0.0025
+}
+
 // An editor paints its selection under the text, then the text, then -- focused --
 // an underline beneath the composition and a one-pixel caret.
 fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometry.Rect, b: *scene.Builder) -> err {
@@ -2117,7 +2132,14 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             if rects_error != ok { ret InvalidTree }
             var i = 0usize
             while i < rects.len {
-                try push_rect(b, rects[i], origin, ed.selection)
+                var sel = rects[i]
+                if native_caret_face(ed.caret) {
+                    // round 13 (native Windows 11 edit, GDI): whole pixel edges, and the fill runs one pixel past the last glyph (under the caret)
+                    let left = floor_f(origin.x + sel.x + 0.5)
+                    let right = floor_f(origin.x + sel.x + sel.width + 0.5) + 1.0
+                    sel = geometry.Rect { x: left - origin.x, y: sel.y, width: right - left, height: sel.height }
+                }
+                try push_rect(b, sel, origin, ed.selection)
                 i += 1usize
             }
         }
@@ -2159,6 +2181,23 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
         if ed.caret.alpha > 0.0 {
             caret_color = ed.caret
             caret_width = 2.0
+        }
+        if native_caret_face(ed.caret) {
+            // round 13: the native edit's caret inverts what is under it, one whole pixel column at the glyph run's end: the face
+            // colour (the sentinel carries it) or, inside the selection, the selection colour
+            let col = floor_f(origin.x + c.x + 0.5)
+            var under = paint.rgba(ed.caret.red, ed.caret.green, ed.caret.blue, 1.0)
+            let (lo, hi) = selection_of(e)
+            if lo < hi {
+                let (rects, rects_error) = layout.selection(a, &copies[0usize], lo, hi)
+                if rects_error != ok { ret InvalidTree }
+                if rects.len > 0usize {
+                    let right = floor_f(origin.x + rects[rects.len - 1usize].x + rects[rects.len - 1usize].width + 0.5) + 1.0
+                    if col < right { under = paint.rgba(ed.selection.red, ed.selection.green, ed.selection.blue, 1.0) }
+                }
+            }
+            try push_rect(b, geometry.Rect { x: col - origin.x, y: c.y, width: 1.0, height: c.height }, origin, paint.rgba(1.0 - under.red, 1.0 - under.green, 1.0 - under.blue, 1.0))
+            ret ok
         }
         try push_rect(b, geometry.Rect { x: c.x, y: c.y, width: caret_width, height: c.height }, origin, caret_color)
     }

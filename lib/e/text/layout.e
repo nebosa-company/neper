@@ -111,10 +111,17 @@ fn metrics_of(choice: FontChoice) -> Metrics {
     ret Metrics { ascent: f32(ascent) * choice.size / f32(em), descent: f32(down) * choice.size / f32(em) }
 }
 
-fn shape_options(rtl: bool, language: str) -> shape.Options {
+fn shape_options(rtl: bool, language: str, size: f32) -> shape.Options {
     var o: shape.Options = zero
     if rtl { o.direction = .RightToLeft }
     o.language = language
+    // round 13: the pseudo-language "kern" asks for Latin shaping with the font's kern feature: Segoe UI has no DFLT script in its GPOS, so
+    // an unset script finds no features at all, while the native Windows 11 edit controls kern ("Te" is 1.17 px tighter at 12 px).
+    if language.len == 4usize && language[0usize] == 107u8 && language[1usize] == 101u8 && language[2usize] == 114u8 && language[3usize] == 110u8 {
+        o.script = 1818326126u32
+        o.language = ""
+        o.ppem = u32(size + 0.5)
+    }
     ret o
 }
 
@@ -134,7 +141,7 @@ fn font_for(a: *mem.Arena, style: Style, scalar: u32) -> (usize, err) {
     let width = unicode.write_utf8(scalar, buffer[0..], 0usize)
     var i = 0usize
     while i < style.fonts.len {
-        let (run, shape_error) = shape.shape(a, style.fonts[i].font, buffer[..width], shape_options(false, style.language))
+        let (run, shape_error) = shape.shape(a, style.fonts[i].font, buffer[..width], shape_options(false, style.language, style.fonts[i].size))
         if shape_error != ok { ret (NONE, shape_error) }
         if run.glyphs.len > 0usize && run.glyphs[0].id != 0u32 { ret (i, ok) }
         i += 1usize
@@ -143,7 +150,7 @@ fn font_for(a: *mem.Arena, style: Style, scalar: u32) -> (usize, err) {
 }
 
 fn shape_span(a: *mem.Arena, style: Style, source: str, start: usize, end: usize, font: usize, rtl: bool) -> (Item, err) {
-    let (run, shape_error) = shape.shape(a, style.fonts[font].font, source[start..end], shape_options(rtl, style.language))
+    let (run, shape_error) = shape.shape(a, style.fonts[font].font, source[start..end], shape_options(rtl, style.language, style.fonts[font].size))
     if shape_error != ok { ret (zero, shape_error) }
     // Clusters are relative to the span; make them source offsets.
     let (glyphs, glyphs_error) = mem.alloc[shape.Glyph](a, run.glyphs.len)
@@ -454,7 +461,7 @@ fn content_end(source: str, start: usize, end: usize) -> usize {
 fn ellipsis_run(a: *mem.Arena, style: Style, text: str, at: usize, rtl: bool) -> (GlyphRun, err) {
     var f = 0usize
     while f < style.fonts.len {
-        let (run, shape_error) = shape.shape(a, style.fonts[f].font, text, shape_options(rtl, style.language))
+        let (run, shape_error) = shape.shape(a, style.fonts[f].font, text, shape_options(rtl, style.language, style.fonts[f].size))
         if shape_error != ok { ret (zero, shape_error) }
         var complete = true
         var g = 0usize
