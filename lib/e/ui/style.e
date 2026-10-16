@@ -715,6 +715,82 @@ fn windows_accent(t: *const ThemeTokens) -> paint.Color {
     if windows_contrast(t) { ret color(t, .Primary) }
     ret hex(0x298DD9u32)
 }
+// ---- round 7: the Windows dark chrome maps ----------------------------------------------------
+// The Windows bars, grids and menus draw from the greys measured on v3's light screen (bare literals
+// in navigation.e, gridlook.e, datagrid.e). Under the Windows Dark palette these maps turn a measured
+// light literal into its Windows 11 dark counterpart, so one drawing serves both looks and the light
+// pixels stay untouched (the maps are the identity while the flag is off). The flag is set from the
+// theme at the entry of each control (`windows_dark_enter`); nothing in the light look reads it.
+// Ramp (light grey -> dark grey): white and near-white surfaces #2B2B2B, the face #F0F0F0 the caller's
+// `face` (#2B2B2B on bars and menus, #202020 under a grid), the zebra #EFEFEF #262626, hairlines and
+// frames #3D3D3D .. #5A5A5A, mid greys #787878 and, for inks, black becomes white.
+var windows_dark_flag: bool = false
+
+fn windows_dark_enter(t: *const ThemeTokens) {
+    windows_dark_flag = t.profile == .Windows && t.palette == .Dark
+}
+
+fn windows_dark_on() -> bool { ret windows_dark_flag }
+
+fn windows_dark_grey(g: u32, face: u32) -> u32 {
+    if g >= 250u32 { ret 43u32 }
+    if g > 240u32 { ret face + (g - 240u32) * (43u32 - face) / 10u32 }
+    if g == 240u32 { ret face }
+    if g >= 224u32 { ret 38u32 + (239u32 - g) * 23u32 / 15u32 }
+    if g >= 160u32 { ret 61u32 + (224u32 - g) * 29u32 / 64u32 }
+    if g >= 128u32 { ret 90u32 + (160u32 - g) * 30u32 / 32u32 }
+    ret 255u32 - g
+}
+
+// Non-grey chrome: the v3 accents of selection and hover (light blues), as dark counterparts.
+fn windows_dark_tint(c: u32) -> u32 {
+    if c == 0x0078D7u32 { ret 0x264F78u32 }
+    if c == 0xA6D2FFu32 { ret 0x264F78u32 }
+    if c == 0xD9EBF9u32 { ret 0x3A3A3Au32 }
+    if c == 0x99D1FFu32 { ret 0x1F4668u32 }
+    if c == 0xCCE8FFu32 { ret 0x2A3F55u32 }
+    if c == 0x298DD9u32 { ret 0x4CC2FFu32 }
+    ret c
+}
+
+// A fill, line or frame literal of the bars and menus (face #F0F0F0 -> #2B2B2B).
+fn wdk(c: u32) -> u32 {
+    if !windows_dark_flag { ret c }
+    let r = (c >> 16u32) & 255u32
+    let g = (c >> 8u32) & 255u32
+    let b = c & 255u32
+    if r != g || g != b { ret windows_dark_tint(c) }
+    ret windows_dark_grey(g, 43u32) * 65793u32
+}
+
+// The same under a grid: the face #F0F0F0 sits below the #2B2B2B rows, at #202020.
+fn wdk_grid(c: u32) -> u32 {
+    if !windows_dark_flag { ret c }
+    let r = (c >> 16u32) & 255u32
+    let g = (c >> 8u32) & 255u32
+    let b = c & 255u32
+    if r != g || g != b { ret windows_dark_tint(c) }
+    ret windows_dark_grey(g, 32u32) * 65793u32
+}
+
+// An ink literal (text, glyph strokes, mnemonic rules): black -> white, #6D6D6D -> #9D9D9D, the disabled
+// #A0A0A0 -> #787878; white (text on a selected row) stays white.
+fn wink(c: u32) -> u32 {
+    if !windows_dark_flag { ret c }
+    let r = (c >> 16u32) & 255u32
+    let g = (c >> 8u32) & 255u32
+    let b = c & 255u32
+    if r != g || g != b { ret c }
+    var d = 255u32
+    if g <= 109u32 {
+        d = 255u32 - g * 98u32 / 109u32
+    } else if g <= 160u32 {
+        d = 157u32 - (g - 109u32) * 37u32 / 51u32
+    } else {
+        d = 120u32 + (g - 160u32) * 135u32 / 95u32
+    }
+    ret d * 65793u32
+}
 // ---- end looks-polish palettes -----------------------------------------------------------------
 
 // ---- the Cupertino look (profile CupertinoLike, docs/ui/looks/cupertino) -----------------------

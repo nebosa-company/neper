@@ -8769,8 +8769,35 @@ fn windows_flat_sized(w: f32, h: f32, color: paint.Color) -> style.Style {
 
 fn windows_flat(color: u32) -> style.Style {
     var s = style.defaults()
+    s.background = paint.Brush { Solid: style.hex(style.wdk(color)) }
+    ret s
+}
+
+// (round 7) The same with a colour that is already final (a Windows dark value: the maps would change it again).
+fn windows_flat_raw(color: u32) -> style.Style {
+    var s = style.defaults()
     s.background = paint.Brush { Solid: style.hex(color) }
     ret s
+}
+
+fn windows_rect_raw(x: f32, y: f32, w: f32, h: f32, color: u32) -> widget.Node {
+    var s = windows_flat_raw(color)
+    s.width = style.Length { Px: w }
+    s.height = style.Length { Px: h }
+    ret widget.positioned(0u64, x, y, s, zero)
+}
+
+fn windows_rule_raw(w: f32, h: f32, color: u32) -> widget.Node {
+    var s = windows_flat_raw(color)
+    if w > 0.0 { s.width = style.Length { Px: w } }
+    if h > 0.0 { s.height = style.Length { Px: h } }
+    ret widget.box(0u64, s, zero)
+}
+
+// (round 7) The face of a popup menu: #F0F0F0, or #2C2C2C under the Windows dark palette.
+fn windows_menu_flat() -> style.Style {
+    if style.windows_dark_on() { ret windows_flat_raw(0x2C2C2Cu32) }
+    ret windows_flat(15790320u32)
 }
 
 // A plain rectangle of `color`; a zero width or height is left to the parent.
@@ -8930,6 +8957,10 @@ fn windows_toolbar_edges(parts: []widget.Node, at: usize, k: usize, width: f32, 
 // its grip runs through the bottom lines and those begin right of it. The items start 11 in.
 // `width` 0 fills the parent.
 fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, grip: bool, width: f32, menu: bool, lead: u32, closed: bool) -> (widget.Node, err) {
+    if style.windows_dark_on() {
+        let (flat, flat_error) = windows_bar_strip_dark(a, nodes, height, grip, width, menu, lead, closed)
+        ret (flat, flat_error)
+    }
     let leaf_style = windows_flat(15790320u32)
     var fill = leaf_style
     fill.width = style.Length { Percent: 100.0 }
@@ -9044,9 +9075,73 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
     ret (widget.stack(0u64, outer, parts[0usize..n]), ok)
 }
 
+// (round 7) The dxBar strip under the Windows dark palette: a flat #2B2B2B toolbar (#202020 for the main menu, which sits
+// on the window face) with a #3D3D3D line below, a grip of two doubled columns (#5A5A5A beside #3D3D3D) from x 5, the
+// closed bar's #3D3D3D right edge and, beside another bar, a #3D3D3D line at its left. The items start 11 in, as in
+// the light strip.
+fn windows_bar_strip_dark(a: *mem.Arena, nodes: []const widget.Node, height: f32, grip: bool, width: f32, menu: bool, lead: u32, closed: bool) -> (widget.Node, err) {
+    var face = 0x2B2B2Bu32
+    if menu { face = 0x202020u32 }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 16usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var fill = windows_flat_raw(face)
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    parts[n] = widget.box(0u64, fill, zero)
+    n += 1usize
+    parts[n] = windows_rect_raw(0.0, height - 1.0, 4096.0, 1.0, 0x3D3D3Du32)
+    n += 1usize
+    if lead != 16777215u32 {
+        parts[n] = windows_rect_raw(0.0, 0.0, 1.0, height - 1.0, 0x3D3D3Du32)
+        n += 1usize
+    }
+    if grip {
+        var top: f32 = 3.0
+        if menu { top = 2.0 }
+        let rows = height - top - 3.0
+        parts[n] = windows_rect_raw(4.0, top, 1.0, rows, 0x5A5A5Au32)
+        parts[n + 1usize] = windows_rect_raw(5.0, top, 1.0, rows, 0x3D3D3Du32)
+        parts[n + 2usize] = windows_rect_raw(7.0, top, 1.0, rows, 0x5A5A5Au32)
+        parts[n + 3usize] = windows_rect_raw(8.0, top, 1.0, rows, 0x3D3D3Du32)
+        n += 4usize
+    }
+    if closed && width > 0.0 {
+        parts[n] = windows_rect_raw(width - 1.0, 0.0, 1.0, height - 1.0, 0x3D3D3Du32)
+        n += 1usize
+    }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    var row_style = style.defaults()
+    row_style.height = style.Length { Percent: 100.0 }
+    row_style.width = style.Length { Percent: 100.0 }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, row_style, nodes)
+    var inset = style.defaults()
+    inset.height = style.Length { Percent: 100.0 }
+    inset.width = style.Length { Percent: 100.0 }
+    parts[n] = widget.padded(0u64, 11.0, 2.0, 0.0, 2.0, inset, row[0usize..1usize])
+    n += 1usize
+    var outer = style.defaults()
+    outer.height = style.Length { Px: height }
+    if width > 0.0 { outer.width = style.Length { Px: width } } else { outer.width = style.Length { Percent: 100.0 } }
+    outer.overflow = .Clip
+    ret (widget.stack(0u64, outer, parts[0usize..n]), ok)
+}
+
 // A bar separator: a vertical #A3A3A3 line with a #FCFCFC one beside it, `height` tall, 2 px of
 // air at each side (so 6 wide).
 fn windows_bar_separator(a: *mem.Arena, height: f32) -> (widget.Node, err) {
+    if style.windows_dark_on() {
+        // (round 7) one #5A5A5A line, #3D3D3D beside it
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = windows_rule_raw(1.0, height, 0x5A5A5Au32)
+        pair[1usize] = windows_rule_raw(1.0, height, 0x3D3D3Du32)
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+        ret (widget.padded(0u64, 2.0, 0.0, 2.0, 0.0, style.defaults(), held[0usize..1usize]), ok)
+    }
     let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
     if pair_error != ok { ret (zero, TooLarge) }
     pair[0usize] = windows_rule(1.0, height, 10724259u32)
@@ -9148,7 +9243,7 @@ fn windows_title(a: *mem.Arena, t: *const control.Theme, label: str, caption: co
     rule.background = paint.Brush { Solid: ink }
     pair[1usize] = widget.positioned(0u64, 0.0, baseline + 1.0, rule, zero)
     var soft = control.sized_style(fit, 1.0)
-    soft.background = paint.Brush { Solid: style.mix(ink, style.hex(15790320u32), 0.65) }
+    soft.background = paint.Brush { Solid: style.mix(ink, style.hex(style.wdk(15790320u32)), 0.65) }
     pair[2usize] = widget.positioned(0u64, 0.0, baseline + 2.0, soft, zero)
     parts[n] = widget.stack(0u64, control.sized_style(advance, text_look.line_height), pair[0usize..3usize])
     n += 1usize
@@ -9179,7 +9274,8 @@ fn windows_menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if bt_error != ok { ret (zero, bt_error) }
     let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len)
     if heads_error != ok { ret (zero, TooLarge) }
-    let ink = style.hex(0u32)
+    style.windows_dark_enter(t.tokens)
+    let ink = style.hex(style.wink(0u32))
     var bar_x: f32 = 0.0
     var i = 0usize
     while i < menus.len {
@@ -9220,6 +9316,13 @@ fn windows_menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         }
         if sunk {
             p = windows_title_box_open(parts, bw, title_x)
+        }
+        if style.windows_dark_on() && (lit || sunk) {
+            // (round 7) a flat wash: #3C3C3C under the pointer, #454545 with the menu open (no bevel box)
+            var wash = 0x3C3C3Cu32
+            if sunk { wash = 0x454545u32 }
+            parts[0usize] = windows_rect_raw(0.0, 0.0, bw, 21.0, wash)
+            p = 1usize
         }
         held[0usize] = text_node
         parts[p] = widget.positioned(0u64, 6.0 + shift, 2.0 + shift, style.defaults(), held[0usize..1usize])
@@ -9319,7 +9422,7 @@ fn windows_word(a: *mem.Arena, t: *const control.Theme, word: str, caption: cont
     rule.background = paint.Brush { Solid: ink }
     pair[1usize] = widget.positioned(0u64, 0.0, baseline + 1.0, rule, zero)
     var soft = control.sized_style(fit, 1.0)
-    soft.background = paint.Brush { Solid: style.mix(ink, style.hex(15790320u32), 0.65) }
+    soft.background = paint.Brush { Solid: style.mix(ink, style.hex(style.wdk(15790320u32)), 0.65) }
     pair[2usize] = widget.positioned(0u64, 0.0, baseline + 2.0, soft, zero)
     parts[n] = widget.stack(0u64, control.sized_style(advance, text_look.line_height), pair[0usize..3usize])
     n += 1usize
@@ -9398,7 +9501,7 @@ fn windows_menu_check(a: *mem.Arena, ink: paint.Color) -> (widget.Node, err) {
     if codes_error != ok { ret (zero, TooLarge) }
     let (colors, colors_error) = mem.alloc[paint.Color](a, 23usize)
     if colors_error != ok { ret (zero, TooLarge) }
-    let soft = style.mix(ink, style.hex(15790320u32), 0.8)
+    let soft = style.mix(ink, style.hex(style.wdk(15790320u32)), 0.8)
     var i = 0usize
     while i < 23usize {
         if i < 14usize {
@@ -9477,6 +9580,8 @@ fn windows_menu_rule(a: *mem.Arena) -> (widget.Node, err) {
 // lines 2 in from the sides), group headers (bold, on the full-width two-line rule), and, past
 // `max_height` (0: none), a clipped column over a bottom scroll arrow.
 fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8, max_height: f32) -> (widget.Node, err) {
+    style.windows_dark_enter(t.tokens)
+    let dark = style.windows_dark_on()
     let (bt, bt_error) = control.windows_bar_theme(a, t)
     if bt_error != ok { ret (zero, bt_error) }
     let (bold_theme, bold_error) = control.windows_bar_theme_bold(a, t)
@@ -9518,7 +9623,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             head_caption.role = .BodyMedium
             head_caption.wrap = .None
             head_caption.weight = 700u32
-            let (head_text, _, _, head_error) = windows_gdi_run(a, &bold_theme, head_caption, c.label, style.hex(0u32), 1u8, windows_menu_under(), false)
+            let (head_text, _, _, head_error) = windows_gdi_run(a, &bold_theme, head_caption, c.label, style.hex(style.wink(0u32)), 1u8, windows_menu_under(), false)
             if head_error != ok { ret (zero, head_error) }
             let (head_held, head_held_error) = mem.alloc[widget.Node](a, 1usize)
             if head_held_error != ok { ret (zero, TooLarge) }
@@ -9561,13 +9666,13 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         let highlighted = c.selected || c.submenu_open || state.hovered
         let slotted = c.pictured || c.checked
         // Pictures and checks keep their own ink on a highlighted row (the face shows round them).
-        var picture_ink = style.hex(0u32)
-        if !c.enabled { picture_ink = style.hex(10526880u32) }
-        var ink = style.hex(0u32)
-        if !c.enabled { ink = style.hex(10526880u32) }
+        var picture_ink = style.hex(style.wink(0u32))
+        if !c.enabled { picture_ink = style.hex(style.wink(10526880u32)) }
+        var ink = style.hex(style.wink(0u32))
+        if !c.enabled { ink = style.hex(style.wink(10526880u32)) }
         if highlighted {
             ink = style.hex(16777215u32)
-            if !c.enabled { ink = style.hex(7171437u32) }
+            if !c.enabled { ink = style.hex(style.wink(7171437u32)) }
         }
         var look = control.windows_bar_look(state, ink)
         look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -9588,7 +9693,12 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             var blue_w = widest - from
             // A highlighted drop-down row keeps its button as a sunken 16 x 20 box on the face.
             if c.split { blue_w = widest - 16.0 - from }
-            parts[p] = windows_rect(from, 0.0, blue_w, 20.0, 30935u32)
+            if dark {
+                // (round 7) Windows 11 dark: a neutral #3D3D3D row, the slot included
+                parts[p] = windows_rect_raw(0.0, 0.0, widest, 20.0, 0x3D3D3Du32)
+            } else {
+                parts[p] = windows_rect(from, 0.0, blue_w, 20.0, 30935u32)
+            }
             p += 1usize
         }
         // The picture slot: a drawn glyph (v3 draws bitmaps), a check or a radio dot; a checked
@@ -9614,17 +9724,27 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             if slot_error != ok { ret (zero, TooLarge) }
             slot_held[0usize] = picture
             var slot = widget.padded(0u64, 2.0, 2.0, 0.0, 0.0, control.sized_style(20.0, 20.0), slot_held[0usize..1usize])
-            if c.checked {
+            if c.checked && dark {
+                // (round 7) the check slot: a #383838 square framed #5A5A5A (no dither, no bevel)
+                var boxed = windows_flat_raw(0x383838u32)
+                boxed.width = style.Length { Px: 20.0 }
+                boxed.height = style.Length { Px: 20.0 }
+                boxed.border = style.Border { width: 1.0, color: style.hex(0x5A5A5Au32) }
+                let (boxed_held, boxed_held_error) = mem.alloc[widget.Node](a, 1usize)
+                if boxed_held_error != ok { ret (zero, TooLarge) }
+                boxed_held[0usize] = picture
+                slot = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, boxed, boxed_held[0usize..1usize])
+            } else if c.checked {
                 let (inner, inner_error) = windows_menu_checked_ground(a, picture, c.dither_flip, !c.enabled || highlighted)
                 if inner_error != ok { ret (zero, inner_error) }
                 let (framed_slot, framed_slot_error) = windows_bevel(a, 10526880u32, 16777215u32, inner, 20.0, 20.0)
                 if framed_slot_error != ok { ret (zero, framed_slot_error) }
                 slot = framed_slot
-            } else if highlighted {
+            } else if highlighted && !dark {
                 let (lifted_held, lifted_held_error) = mem.alloc[widget.Node](a, 1usize)
                 if lifted_held_error != ok { ret (zero, TooLarge) }
                 lifted_held[0usize] = picture
-                var ground = windows_flat(15790320u32)
+                var ground = windows_menu_flat()
                 ground.width = style.Length { Px: 18.0 }
                 ground.height = style.Length { Px: 18.0 }
                 let (raised_inner, raised_inner_error) = mem.alloc[widget.Node](a, 1usize)
@@ -9644,7 +9764,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         let (said, plain_label, said_width, said_error) = windows_gdi_run(a, &bt, caption, c.label, ink, 0u8, windows_menu_under(), false)
         if said_error != ok { ret (zero, said_error) }
         var said_node = said
-        if !c.enabled && !highlighted {
+        if !c.enabled && !highlighted && !dark {
             let (white_label, _, _, white_error) = windows_gdi_run(a, &bt, caption, c.label, style.hex(16777215u32), 0u8, windows_menu_under(), false)
             if white_error != ok { ret (zero, white_error) }
             let (lifted_label, lifted_error) = windows_embossed(a, said, white_label, said_width)
@@ -9658,7 +9778,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             let (keys_node, _, keys_width, keys_error) = windows_gdi_run(a, &bt, caption, c.shortcut, ink, 0u8, 0.0, false)
             if keys_error != ok { ret (zero, keys_error) }
             var keys_held = keys_node
-            if !c.enabled && !highlighted {
+            if !c.enabled && !highlighted && !dark {
                 let (white_keys, _, _, white_keys_error) = windows_gdi_run(a, &bt, caption, c.shortcut, style.hex(16777215u32), 0u8, 0.0, false)
                 if white_keys_error != ok { ret (zero, white_keys_error) }
                 let (lifted_keys, lifted_keys_error) = windows_embossed(a, keys_node, white_keys, keys_width)
@@ -9677,7 +9797,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             p += 1usize
         }
         if c.split && highlighted {
-            var face = windows_flat(15790320u32)
+            var face = windows_menu_flat()
             face.width = style.Length { Px: 14.0 }
             face.height = style.Length { Px: 18.0 }
             let (face_held, face_held_error) = mem.alloc[widget.Node](a, 1usize)
@@ -9691,10 +9811,10 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         }
         if has_submenu || c.split {
             var arrow_ink = ink
-            if c.split && highlighted { arrow_ink = style.hex(0u32) }
+            if c.split && highlighted { arrow_ink = style.hex(style.wink(0u32)) }
             let (arrow, arrow_error) = windows_menu_arrow_right(a, arrow_ink)
             if arrow_error != ok { ret (zero, arrow_error) }
-            if !c.enabled && !highlighted {
+            if !c.enabled && !highlighted && !dark {
                 // A disabled arrow, like disabled text, has a white copy 1 px right and below.
                 let (white_arrow, white_arrow_error) = windows_menu_arrow_right(a, style.hex(16777215u32))
                 if white_arrow_error != ok { ret (zero, white_arrow_error) }
@@ -9736,7 +9856,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         i += 1usize
     }
     widest = f32(usize(widest + 0.5))
-    var column_style = windows_flat(15790320u32)
+    var column_style = windows_menu_flat()
     column_style.width = style.Length { Px: widest }
     column_style.height = style.Length { Px: content_height }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
@@ -9746,16 +9866,16 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let tail: f32 = 1.0
     if max_height > 0.0 && content_height > max_height - 26.0 {
         // Clipped to the room the screen leaves, over the scroll arrow strip (20 tall, centred).
-        var view = windows_flat(15790320u32)
+        var view = windows_menu_flat()
         view.width = style.Length { Px: widest }
         view.height = style.Length { Px: max_height - 26.0 }
         view.overflow = .Clip
-        let (arrow_down, arrow_down_error) = windows_menu_arrow_down(a, style.hex(0u32))
+        let (arrow_down, arrow_down_error) = windows_menu_arrow_down(a, style.hex(style.wink(0u32)))
         if arrow_down_error != ok { ret (zero, arrow_down_error) }
         let (strip_held, strip_held_error) = mem.alloc[widget.Node](a, 1usize)
         if strip_held_error != ok { ret (zero, TooLarge) }
         strip_held[0usize] = arrow_down
-        var strip_style = windows_flat(15790320u32)
+        var strip_style = windows_menu_flat()
         strip_style.width = style.Length { Px: widest }
         strip_style.height = style.Length { Px: 20.0 }
         let (viewport, viewport_error) = mem.alloc[widget.Node](a, 2usize)
@@ -9764,14 +9884,14 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         viewport[0usize] = widget.scroll(0u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: hidden_thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, column[0usize..1usize])
         // Left of the arrow: the middle of the strip, down to a whole pixel.
         viewport[1usize] = widget.padded(0u64, f32(usize((widest - 9.0) * 0.5)), 0.0, 0.0, 0.0, strip_style, strip_held[0usize..1usize])
-        body = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, windows_flat(15790320u32), viewport[0usize..2usize])
+        body = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, windows_menu_flat(), viewport[0usize..2usize])
     }
     let (padded_column, padded_error) = mem.alloc[widget.Node](a, 1usize)
     if padded_error != ok { ret (zero, TooLarge) }
     let (body_held, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body_held[0usize] = body
-    padded_column[0usize] = widget.padded(0u64, 1.0, 1.0, 1.0, tail, windows_flat(15790320u32), body_held[0usize..1usize])
+    padded_column[0usize] = widget.padded(0u64, 1.0, 1.0, 1.0, tail, windows_menu_flat(), body_held[0usize..1usize])
     let (inner_ring, inner_ring_error) = windows_bevel(a, 16777215u32, 10526880u32, padded_column[0usize], 0.0, 0.0)
     if inner_ring_error != ok { ret (zero, inner_ring_error) }
     let (framed, framed_error) = windows_bevel(a, 15790320u32, 6908265u32, inner_ring, 0.0, 0.0)
@@ -10156,7 +10276,7 @@ fn windows_gdi_run(a: *mem.Arena, t: *const control.Theme, caption: control.Text
             if soft {
                 // The bar's titles carry a second, fainter row (35 % ink).
                 var faint = control.sized_style(advance, 1.0)
-                faint.background = paint.Brush { Solid: style.mix(ink, style.hex(15790320u32), 0.65) }
+                faint.background = paint.Brush { Solid: style.mix(ink, style.hex(style.wdk(15790320u32)), 0.65) }
                 parts[n] = widget.positioned(0u64, x, baseline + under + 1.0, faint, zero)
                 n += 1usize
             }
@@ -10310,6 +10430,10 @@ fn windows_title_box_open(parts: []widget.Node, bw: f32, along: f32) -> usize {
 // column, 2 air), 21 full rows and a faded last one; the greys drift lighter / darker along the
 // window (#A3 / #FC at the left to #B2 / #EA at x 372, measured), so the caller names them.
 fn windows_bar_separator_tone(a: *mem.Arena, dark: u32, light: u32) -> (widget.Node, err) {
+    if style.windows_dark_on() {
+        let (flat, flat_error) = windows_bar_separator(a, 21.0)
+        ret (flat, flat_error)
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, TooLarge) }
     let fade_dark = u32(i64(dark) + (240i64 - i64(dark)) * 5i64 / 8i64)

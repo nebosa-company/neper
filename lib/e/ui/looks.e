@@ -159,6 +159,7 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
 
 fn set_look(rig: *Rig, look: Look) {
     rig.tokens = theme_for(look)
+    style.windows_dark_enter(&rig.tokens)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
 }
