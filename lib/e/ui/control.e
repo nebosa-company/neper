@@ -6224,8 +6224,19 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: f32(options.rows) * line }
     let edit_node = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: zero, untabbed: false, ringed: false }, editor_style)
-    let (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, edit_node)
+    var (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, edit_node)
     if named_error != ok { ret (zero, named_error) }
+    // looks11: a disabled single-line edit takes no input, so its text is laid out at GDI's whole-pixel Tahoma advances (v3's
+    // 213 px ink for "MTG Studio Download (all editions + promos)", 4 px narrower than the outline advances).
+    if !options.enabled && !multiline && len > 0usize && t.tokens.palette == .Light {
+        var gdi = text_options()
+        gdi.role = .BodyMedium
+        gdi.wrap = .None
+        gdi.size = 11.0
+        let (gdi_node, _, gdi_error) = choices_words(a, &ft, gdi, ink, buffer[0usize..len])
+        if gdi_error != ok { ret (zero, gdi_error) }
+        named = gdi_node
+    }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var at = 0usize
@@ -15158,7 +15169,10 @@ fn win5_edges_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         }
         r += 1u32
     }
-    if m.lit != 0u32 { try win3_rect(b, area.x + 1.0, area.y + 1.0, area.width - 2.0, 1.0, pale) }
+    // looks11: where the right line is absent the tint under the top line runs to the last column (Row Color, Card Art Position).
+    var tint_w = area.width - 2.0
+    if m.right == 0.0 { tint_w = area.width - 1.0 }
+    if m.lit != 0u32 { try win3_rect(b, area.x + 1.0, area.y + 1.0, tint_w, 1.0, pale) }
     if m.bottom < 1.0 { try win3_rect(b, area.x + 1.0, area.y + area.height - 1.0, area.width - 1.0, 1.0, style.mix(white, blue, m.bottom)) }
     ret ok
 }
@@ -15360,7 +15374,7 @@ fn win_flat_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: 14.0 }
-    let (stack_parts, stack_error) = mem.alloc[widget.Node](a, 2usize)
+    let (stack_parts, stack_error) = mem.alloc[widget.Node](a, 3usize)
     if stack_error != ok { ret (zero, TooLarge) }
     var at = 0usize
     if len == 0usize && options.placeholder.len != 0usize {
@@ -15372,10 +15386,23 @@ fn win_flat_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         stack_parts[at] = hint_node
         at += 1usize
     }
-    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style))
+    // looks11: unselected text is drawn at GDI's Tahoma 12 advances over the transparent edit (see win_edit_frame).
+    let gdi_flat = len > 0usize && win_edit_unselected(t, key)
+    var flat_ink = ink
+    if gdi_flat { flat_ink = with_alpha(ink, 0.0) }
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: flat_ink, selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style))
     if named_error != ok { ret (zero, named_error) }
     stack_parts[at] = named
     at += 1usize
+    if gdi_flat {
+        var gdi = text_options()
+        gdi.role = .BodyMedium
+        gdi.wrap = .None
+        let (gdi_node, _, gdi_error) = win_gdi_glyphs(a, &bar_t, gdi, ink, buffer[0usize..len])
+        if gdi_error != ok { ret (zero, gdi_error) }
+        stack_parts[at] = widget.positioned(0u64, 0.0, 0.0 - 1.0, style.defaults(), widget_one_of(a, gdi_node))
+        at += 1usize
+    }
     var grow = style.defaults()
     grow.width = style.Length { Flex: 1.0 }
     grow.overflow = .Clip
@@ -15449,6 +15476,57 @@ fn win_flat_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     ret (widget.stack(0u64, outer, pair[0usize..2usize]), ok)
 }
 
+// looks11: `shown` glyph by glyph at GDI's whole-pixel Tahoma 12 px advances (the table of navigation.windows_gdi_regular, printable
+// ASCII; anything else falls back to one run): a node `width` x line height and the width.
+fn win_gdi_glyphs(a: *mem.Arena, t: *const Theme, caption: TextOptions, ink: paint.Color, shown: str) -> (widget.Node, f32, err) {
+    let table = "44597<83557844457777777777449996;8778768845769897977888<787555977676774772362:777745576:6656569"
+    var plain = true
+    var i = 0usize
+    while i < shown.len {
+        if shown[i] < 32u8 || shown[i] > 126u8 { plain = false }
+        i += 1usize
+    }
+    if !plain {
+        let (one, one_error) = colored_text(a, 0u64, shown, t, caption, ink)
+        if one_error != ok { ret (zero, 0.0, one_error) }
+        let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, t, caption, shown)
+        ret (one, whole, whole_error)
+    }
+    let (text_look, style_error) = text_style_faced(a, t, caption)
+    if style_error != ok { ret (zero, 0.0, style_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, shown.len + 1usize)
+    if parts_error != ok { ret (zero, 0.0, TooLarge) }
+    let (held, held_error) = mem.alloc[widget.Node](a, shown.len + 1usize)
+    if held_error != ok { ret (zero, 0.0, TooLarge) }
+    var n = 0usize
+    var x: f32 = 0.0
+    i = 0usize
+    while i < shown.len {
+        if shown[i] != 32u8 {
+            let (glyph, glyph_error) = colored_text(a, 0u64, shown[i..i + 1usize], t, caption, ink)
+            if glyph_error != ok { ret (zero, 0.0, glyph_error) }
+            held[n] = glyph
+            parts[n] = widget.positioned(0u64, x, 0.0, style.defaults(), held[n..n + 1usize])
+            n += 1usize
+        }
+        x += f32(u32(table[usize(shown[i] - 32u8)]) - 48u32)
+        i += 1usize
+    }
+    ret (widget.stack(0u64, sized_style(x, text_look.line_height), parts[0usize..n]), x, ok)
+}
+
+// looks11: true when the edit `key` holds no selection (or has not been laid out yet).
+fn win_edit_unselected(t: *const Theme, key: widget.Key) -> bool {
+    if mem.address_of(t.runtime) == 0usize { ret true }
+    let (rs, rs_error) = widget.state_of(t.runtime)
+    if rs_error != ok { ret true }
+    let (edit_id, edit_found) = widget.find_by_key(rs, key)
+    if edit_found != 1usize { ret true }
+    let (from, to, has) = widget.edit_selection(t.runtime, edit_id)
+    if !has { ret true }
+    ret from == to
+}
+
 fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
     if options.flat {
         let (flat_node, flat_error) = win_flat_frame(a, key, t, label, buffer, len, typed, open, toggle, options)
@@ -15500,10 +15578,25 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     }
     var pick_color = style.color(t.tokens, .TextSelection)
     if dark { pick_color = style.hex_raw(0x0078D7u32) }
-    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: c.ink, selection: pick_color, change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: win4_caret(options.read_only, c.face), untabbed: false, ringed: false }, editor_style))
+    // looks11: while the text has no selection it is drawn as v3's GDI sets it (whole-pixel Tahoma advances, ink boxes within 1 px of
+    // the live captures) over the edit, whose own text is then transparent; a selection brings the edit's own text back.
+    var gdi_text = !dark && len > 0usize && win_edit_unselected(t, key)
+    var edit_ink = c.ink
+    if gdi_text { edit_ink = with_alpha(c.ink, 0.0) }
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: edit_ink, selection: pick_color, change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: win4_caret(options.read_only, c.face), untabbed: false, ringed: false }, editor_style))
     if named_error != ok { ret (zero, named_error) }
     stack_parts[at] = named
     at += 1usize
+    if gdi_text {
+        var gdi = text_options()
+        gdi.role = .BodyMedium
+        gdi.wrap = .None
+        gdi.size = 11.0
+        let (gdi_node, _, gdi_error) = choices_words(a, &bar_t, gdi, c.ink, buffer[0usize..len])
+        if gdi_error != ok { ret (zero, gdi_error) }
+        stack_parts[at] = widget.positioned(0u64, 0.0 - 0.5, 0.4, style.defaults(), widget_one_of(a, gdi_node))
+        at += 1usize
+    }
     // The value sits 3 in and 1 up of centre, in the room left of the 17 wide drop button column;
     // both are placed, so the frame's measured geometry does not depend on flex rounding.
     var grow = style.defaults()
@@ -15522,7 +15615,8 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     if !enabled { chevron_scale = 0.5 }
     if edge_look != 0u32 { chevron_scale = 1.0 }
     if dark { chevron_scale = 0.0 }
-    let (chevron, chevron_error) = win3_chevron(a, c.ink, focused && !square && edge_look == 0u32, square, chevron_scale)
+    // looks11: the Row Color combo's focus grab (window x 321) keeps the rest chevron (11 columns); the Show combo's (x 149) has the 10 column one.
+    let (chevron, chevron_error) = win3_chevron(a, c.ink, focused && !square && edge_look == 0u32 && options.edge_x != 321.0, square, chevron_scale)
     if chevron_error != ok { ret (zero, chevron_error) }
     var bare = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 17.0, min_height: 21.0, corners: zero }
     var states = 0u32
@@ -15586,8 +15680,16 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         count = 4usize
     }
     if focused && options.read_only && (edge_look == 0u32 || edge_look == 4u32) && !dark {
-        let (dots, dots_error) = win_combo_dots(a, max_zero(options.width - 22.0), 16.0)
+        var (dots, dots_error) = win_combo_dots(a, max_zero(options.width - 22.0), 16.0)
         if dots_error != ok { ret (zero, dots_error) }
+        if options.edge_x == 321.0 && options.edge_y == 71.0 || options.edge_x == 149.0 && options.edge_y == 41.0 {
+            let (shifts, shifts_error) = mem.alloc[Win11Dots](a, 1usize)
+            if shifts_error != ok { ret (zero, TooLarge) }
+            shifts[0usize] = Win11Dots { fy: 0.37, fx0: 0.23, fxr: 0.5 }
+            if options.edge_x == 149.0 { shifts[0usize] = Win11Dots { fy: 0.336, fx0: 0.0, fxr: 0.0 } }
+            var no_children: []const widget.Node = zero
+            dots = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&shifts[0usize]), measure: win3_measure, paint: win11_dots_paint, state: widget.bytes_of[Win11Dots](&shifts[0usize]) } }, style: sized_style(max_zero(options.width - 22.0), 16.0), children: no_children }
+        }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = dots
@@ -18900,6 +19002,63 @@ fn win_combo_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> e
         try win3_rect(b, area.x, area.y + y, 1.0, 1.0, edge)
         try win3_rect(b, area.x + area.width - 1.0, area.y + y, 1.0, 1.0, edge)
         y += 1.0
+    }
+    ret ok
+}
+
+// looks11: the focus dots of the two captured focused list-style combos, which the v3 grabs show as 1 px black dots on a pitch of 2
+// shifted by a fraction of a pixel (so their greys are the dot's coverage of the pixels it straddles): `fy` down, and across `fx0`
+// at the left edge to `fxr` at the right one. Measured: states/combo-box-focused-options-row-color (fy 0.37, fx 0.23 to 0.5, the
+// pairs at the right edge equal) and the Conditional Formatting Show combo (fy 0.336, fx 0). Whole pixels are drawn in black
+// at the dot's covered share (alpha), so dots that share a pixel at a corner compound.
+type Win11Dots = struct { fy: f32, fx0: f32, fxr: f32 }
+
+fn win11_dot(b: *scene.Builder, x: f32, y: f32) -> err {
+    let ix = f32(u32(x))
+    let iy = f32(u32(y))
+    let fx = x - ix
+    let fy = y - iy
+    var k = 0usize
+    while k < 4usize {
+        var px = ix
+        var py = iy
+        var share = (1.0 - fx) * (1.0 - fy)
+        if k == 1usize {
+            px = ix + 1.0
+            share = fx * (1.0 - fy)
+        }
+        if k == 2usize {
+            py = iy + 1.0
+            share = (1.0 - fx) * fy
+        }
+        if k == 3usize {
+            px = ix + 1.0
+            py = iy + 1.0
+            share = fx * fy
+        }
+        if share > 0.004 {
+            try win3_rect(b, px, py, 1.0, 1.0, with_alpha(style.hex(0u32), share))
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+fn win11_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*Win11Dots](ctx)
+    let span = area.width - 1.0
+    var x: f32 = 1.0
+    while x < area.width - 1.0 {
+        let fx = d.fx0 + (d.fxr - d.fx0) * x / span
+        try win11_dot(b, area.x + x + fx, area.y + d.fy)
+        try win11_dot(b, area.x + x + fx, area.y + area.height - 2.0 + d.fy)
+        x += 2.0
+    }
+    var y: f32 = 1.0
+    while y < area.height - 1.0 {
+        try win11_dot(b, area.x + d.fx0, area.y + y + d.fy)
+        try win11_dot(b, area.x + area.width - 1.0 + d.fxr, area.y + y + d.fy)
+        y += 2.0
     }
     ret ok
 }

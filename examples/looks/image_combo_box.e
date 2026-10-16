@@ -284,6 +284,10 @@ fn listed_spec(n: usize) -> Listed {
     if n == 4usize { ret Listed { name: "image_combo_box_list_art2", width: 151.0, high: 47.0, active: 2usize, set: 1usize } }
     if n == 5usize { ret Listed { name: "image_combo_box_list_condition", width: 335.0, high: 227.0, active: 0usize, set: 2usize } }
     if n == 6usize { ret Listed { name: "image_combo_box_list_condition2", width: 335.0, high: 227.0, active: 3usize, set: 2usize } }
+    // looks11: the other highlighted rows of the hover grabs (states/hover-combo-list-*-row2, -row3): `image_combo_box.exe L8` .. `L10`
+    if n == 8usize { ret Listed { name: "image_combo_box_list_art3", width: 151.0, high: 47.0, active: 1usize, set: 1usize } }
+    if n == 9usize { ret Listed { name: "image_combo_box_list_condition3", width: 335.0, high: 227.0, active: 7usize, set: 2usize } }
+    if n == 10usize { ret Listed { name: "image_combo_box_list_condition4", width: 335.0, high: 227.0, active: 14usize, set: 2usize } }
     ret Listed { name: "image_combo_box_list_sort", width: 153.0, high: 56.0, active: 0usize, set: 3usize }
 }
 
@@ -347,8 +351,23 @@ fn build_l7(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.C
     ret (m, e)
 }
 
+type ListedPick = struct { n: usize }
+
+fn build_lx(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let pick = mem.cast[*ListedPick](ctx)
+    let (m, e) = build_listed_n(a, t, cells, pick.n)
+    ret (m, e)
+}
+
 fn run_listed(a: *mem.Arena, n: usize) -> err {
     let o = listed_spec(n)
+    if n >= 8usize {
+        let (picked, picked_error) = mem.alloc[ListedPick](a, 1usize)
+        if picked_error != ok { ret picked_error }
+        picked[0usize] = ListedPick { n: n }
+        let extra = looks.Sheet { name: o.name, cells: 1usize, columns: 1usize, cell_w: o.width, cell_h: o.high, ctx: mem.cast[*void](&picked[0usize]), build: build_lx }
+        ret looks.run_all(a, &extra)
+    }
     var maker: looks.Build = build_l1
     if n == 2usize { maker = build_l2 }
     if n == 3usize { maker = build_l3 }
@@ -490,6 +509,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if args.len == 2usize && args[1usize][0usize] == 69u8 { ret run_head(a, usize(args[1usize][1usize]) - 48usize) }
     if args.len == 2usize && args[1usize][0usize] == 76u8 { ret run_listed(a, usize(args[1usize][1usize]) - 48usize) }
+    if args.len == 2usize && args[1usize][0usize] == 78u8 { ret run_listed(a, usize(args[1usize][1usize]) - 48usize + 9usize) }
     if args.len == 2usize {
         let dialog = looks.Sheet { name: "image_combo_box_dialog", cells: 3usize, columns: 1usize, cell_w: 343.0, cell_h: 29.0, ctx: zero, build: build_dialog }
         ret looks.run_all(a, &dialog)
