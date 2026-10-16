@@ -7,7 +7,7 @@
 #include <string.h>
 
 /* shared block, all int32: x, y (screen), enabled, lbtn, then counters the harness reads to prove the hooks are hit */
-typedef struct { volatile LONG x, y, enabled, lbtn, nCursor, nPatched, nWfp, nKey, ready, nExe, nGpa, lastWfp, lastPtX, lastPtY, nTme; } SH;
+typedef struct { volatile LONG x, y, enabled, lbtn, nCursor, nPatched, nWfp, nKey, ready, nExe, nGpa, lastWfp, lastPtX, lastPtY, nTme, tmeAll; } SH;   /* tmeAll (set by scripts\winnative\gallery.exe) swallows TrackMouseEvent for every class */
 static SH *sh;
 static BOOL (WINAPI *pGetCursorPos)(LPPOINT);
 static DWORD (WINAPI *pGetMessagePos)(void);
@@ -40,7 +40,7 @@ static SHORT WINAPI hGetAsyncKeyState(int vk) { return hkey(vk, pGetAsyncKeyStat
    un-hots it. Swallow those requests (only for Button / TcxButton / TButton windows: dxBar and cx controls work without); the harness posts WM_MOUSELEAVE itself. */
 static BOOL WINAPI hTrackMouseEvent(LPTRACKMOUSEEVENT t) {
   char cls[32];
-  if (on() && t && !(t->dwFlags & TME_QUERY) && GetClassNameA(t->hwndTrack, cls, sizeof cls) && (!lstrcmpiA(cls, "Button") || !strncmp(cls, "TcxButton", 9) || !strncmp(cls, "TButton", 7))) {
+  if (on() && t && !(t->dwFlags & TME_QUERY) && (sh->tmeAll || (GetClassNameA(t->hwndTrack, cls, sizeof cls) && (!lstrcmpiA(cls, "Button") || !strncmp(cls, "TcxButton", 9) || !strncmp(cls, "TButton", 7))))) {
     if (sh) InterlockedIncrement(&sh->nTme); return TRUE;
   }
   return pTrackMouseEvent(t);

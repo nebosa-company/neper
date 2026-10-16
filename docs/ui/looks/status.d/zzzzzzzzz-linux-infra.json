@@ -1,0 +1,29 @@
+{
+ "button": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/button.png",
+    "notes": "Linux infrastructure pilot: 8 kinds x 5 states (default, suggested, destructive, flat, circular, icon, flat icon, icon + label; rest, hover, pressed, focus, disabled) beside the real GTK 4.14 / libadwaita 1.5 crops (linux/button-vs-ref.png, reference left). Measured on the 35 cells that have a crop: 47838 flat reference pixels (face, ring interior, page, outside the box; the label and icon boxes grown by 3 px left out), 0 differ by more than 2 levels, worst 1. Face colours, hover and pressed washes, disabled 50 %, the 82 x 34 and 34 x 34 boxes, 6 px corners (arc corners, edge pixels within 2 levels at rest), the 1.86 px focus ring and Cantarell Bold 14.67 px (GTK's label width, 48 px for 'Button') match.",
+    "gaps": [
+     "Not within tolerance: antialiased edge pixels of the focus ring (up to 31 levels) and of the coloured buttons' four corners (up to 17); label glyph pixels (GTK hints Cantarell, Neper does not: ink 45 px wide against 46, 2 percent less ink)",
+     "Icon artwork is Neper's own glyphs (Add, Maximize), not Adwaita's symbolic icons (list-add, edit-copy); icon boxes and button boxes match, the pictures are masked",
+     "Label width is the sum of per-letter advances rounded to whole pixels, which stands for Pango's hinted metrics (kerning ignored); a long caption can drift a pixel or two from GTK",
+     "Not built: pill, linked, toggle (checked) buttons, the default-response ring on dialog buttons, osd and opaque styles; hover, pressed and focus are the library with state flags forced, not a real pointer",
+     "Not verified at 150 %: the library was rendered at 1x and 2x only (the 1.5x sheet is rendered, not compared); the 2x crops are not compared either",
+     "ControlVariant mapping is a choice: Tonal, Outlined, Elevated and Container are the default button, Filled and Default are suggested-action, Danger is destructive-action, Plain is flat",
+     "Cantarell is a TrueType conversion (scripts/linux/otf2ttf.py) of the OFL OpenType files, because the text engine reads glyf outlines only; Adwaita Sans (libadwaita 1.7) is not used"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/button.png",
+    "notes": "Same sheet in the Adwaita dark palette (window #242424, button face white 9.6 %, accent_bg #3584e4, destructive #c01c28, ring #78aeed at 50 %) beside the real library's dark crops (linux-dark/button-vs-ref.png). 47440 flat reference pixels, 0 differ by more than 2 levels, worst 1 (a 1-level rounding of the face).",
+    "gaps": [
+     "Not within tolerance: ring and corner edge pixels (ring up to 26 levels, coloured corners up to 21) and label glyph pixels, as in Light",
+     "Same gaps as Light: symbolic icon artwork, pill, linked and toggle buttons, 150 %, caption width rounding"
+    ]
+   }
+  }
+ }
+}

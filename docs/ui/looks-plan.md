@@ -10,13 +10,14 @@ Decided 2026-10-15 with the maintainer; decisions D5108 to D5113. Progress is tr
 |---|---|---|
 | Neper | `Neper` | the existing default; every control is the baseline |
 | Windows | `Windows` | the MTG Studio v3 look: DevExpress VCL controls on a flat, native-style Windows face. Replaces the working name MtgStudioV3 |
+| Linux | `Linux` | GNOME as libadwaita 1.5 / GTK 4.14 draws it (`style.adwaita`), measured on the real library rendered headlessly in WSL (`docs/ui/looks/ref/linux`); sheets `linux_*`; started: the button |
 | macOS / iOS | `CupertinoLike` | Apple HIG look (`style.cupertino`), sheets `cup_*`; started |
 | Android | `MaterialLike` | Material 3 look (`style.material`), sheets `material_*`; started |
 
 Every flavor has a Light and a Dark look (`looks.Look`: Neper, Windows, Cupertino, Material, WindowsDark, CupertinoDark,
-MaterialDark, NeperDark), so the matrix has eight look columns, shown as four flavor columns with Light and Dark side by
-side (`docs/ui/looks-progress.html`). Dark has no live reference (v3 has no dark mode; Apple and Android are not captured):
-it is derived from the platform's published dark palette and stays `started` (rendered, unverified against a real screen).
+MaterialDark, NeperDark, Linux, LinuxDark), so the matrix has ten look columns, shown as five flavor columns with Light and
+Dark side by side (`docs/ui/looks-progress.html`), in the maintainer's priority order: **Windows, Linux, Neper, macOS / iOS,
+Android**. Windows (Light and Dark) comes first, Linux second, the other flavors last. Dark has no live reference for Windows (v3 has no dark mode) or for Apple and Android (not captured): it is derived from the platform's published dark palette and stays `started` (rendered, unverified against a real screen). Linux has one, the real libadwaita library in both schemes, so its Dark can reach `matched`.
 Controls the platforms have and Delphi does not (switch, slider, stepper, segmented control, chip, fab, snackbar, app bar,
 date picker, navigation bar) are extra rows below the 30 Delphi-equivalent controls. How: `docs/ui/looks-howto.md`.
 
@@ -40,6 +41,18 @@ is captured live from a launched copy of v3 by posted window messages (`scripts/
 `docs/ui/looks/ref/windows/`, about 250 captures); hover cannot be captured. How-to and safety rules:
 `docs/ui/looks-howto.md`.
 
+## The Linux look
+
+Reference: `docs/ui/looks/ref/linux/{light,dark}/<control>-<state>@{1x,2x}.png`, crops of real GTK 4.14 / libadwaita 1.5
+widgets drawn headlessly (`scripts/linux`, Xvfb and the Cairo renderer in WSL; `manifest.csv` maps the crops to Neper control ids,
+`adwaita-tokens.md` has the measured colours and metrics with their confidence). `style.adwaita(palette)` is the token set
+(window #fafafa / #242424, accent_bg #3584e4, destructive #e01b24 / #c01c28, text black 80 % / white, radius 6, 34 high
+controls) and `style.adwaita_resolve` the button's faces, the Windows resolver's counterpart (Filled is suggested-action, Tonal the
+default button, Danger destructive-action, Plain flat). Font: Cantarell, regular and bold (OFL), kept as TrueType in
+`docs/ui/looks/ref/linux/fonts` (the text engine reads glyf outlines only, so `scripts/linux/otf2ttf.py` converted the distro's
+OpenType files); the harness registers it for the Linux rigs only. Libadwaita draws button labels bold, 14.67 px.
+The pilot is the button (`examples/looks/linux_button.e`, sheet `button`); per-control work follows control by control, as for Windows.
+
 ## Control matrix (Delphi / DevExpress -> Neper)
 
 label (TcxLabel), button (TcxButton), checkbox (TcxCheckBox), radio (TcxRadioButton), radio group,
@@ -60,4 +73,5 @@ control yet (embedded browser, chart, tray icon, native file dialogs) are listed
    The independent audit (`docs/ui/looks/audit.md`) decides: today 0 matched, 0 ready, 25 review, 5 started.
 5. In flight: hover captures and round 5 matching. Known weaknesses: baked ring and edit tiles dotted at
    1.5x, open-list sheets, data grid, 81 of 200 captured states without a sheet cell. Cupertino and Material
-   stay planned.
+   stay planned. Linux infrastructure and the button pilot are in (branch `looks9-linfra`); per-control Linux work is next,
+   after Windows.
