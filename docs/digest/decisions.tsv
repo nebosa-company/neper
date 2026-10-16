@@ -2776,4 +2776,5 @@ D5140	800	fetch is a library client with browser semantics; the page loader sits
 D5141	1491	A page load assembles the document, its style sheets and its images for an html_view (browser 1.14, M2)
 D5142	1062	The WPT reftests run through the real stack from disk (browser 0.6, 9.2)
 D5143	621	Web fonts are fetched at page load and registered with the font set and renderer (browser 3.15)
-D5144	657	SVG images are vector image refs painted by e.gfx.svg (browser 3.13)
+D5144	658	SVG images are vector image refs painted by e.gfx.svg (browser 3.13)
+D5145	630	GitHub's home page loaded once the render tool's arenas were big enough; style memory is the gap (browser 1.13h)

@@ -702,7 +702,7 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     if ie != ok { ret (zero, ie) }
     p.images = imgs
     let (resp, fe) = fetch.fetch(client, get_request(address, "", fetch.Credentials.Include))
-    if fe != ok { ret (zero, LoadFailed) }
+    if fe != ok { ret (zero, fe) }
     p.url = resp.url
     p.status = resp.status
     p.mime = fetch.mime_type(a, &resp)

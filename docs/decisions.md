@@ -41711,3 +41711,7 @@ The painter reads `background-image`, `-position`, `-size`, `-repeat`, `-origin`
 ## D5144 — SVG images are vector image refs painted by e.gfx.svg (browser 3.13)
 
 `e.fmt.css.paint.ImageRef` gains `svg` text; when set, `<img>`, object-fit sizing and CSS `url()` background tiling draw it with `e.gfx.svg.draw` into the page scene at the destination rectangle (currentColor is black) instead of sampling a texture, so SVGs stay sharp at any size and need no raster upload. `e.web.page` recognises an SVG body by an `<svg` in its first kilobyte, takes its intrinsic size from the viewBox (300x150 otherwise) and resolves relative `url()` of inline style attributes against the page base. Reftests svg-img-001 and svg-bg-001 pin both paths.
+
+## D5145 — GitHub's home page loaded once the render tool's arenas were big enough; style memory is the gap (browser 1.13h)
+
+The earlier `load failed` on github.com was not the network: fetch, TLS and gzip worked. Forty-two stylesheets (7 MB, duplicates across colour themes) exhausted the 256 MB view arena inside style/layout, and `page.load` now returns the real fetch error while `render.e` names it. With a 3 GB view arena the page renders in ~15 s. That footprint is far above Chrome's and is recorded as tracker row 1.13h: index rules by rightmost key, share computed styles between nodes, and free per-sheet parse data.
