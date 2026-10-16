@@ -192,7 +192,7 @@ fn sig_digits(it: *js.Interp, x: f64, sig: usize) -> (str, i64) {
     var out = b
     var e10 = 0i64
     if ax < 1e21f64 {
-        let pe = str.push_f64_fixed(&out, ax, 120u8)
+        let pe = str.push_f64_fixed(&out, ax, 99u8)
     } else {
         let pe2 = str.push_f64(&out, ax)
     }
@@ -319,7 +319,7 @@ fn sig_digits_fixed(it: *js.Interp, x: f64, frac: usize) -> (str, i64) {
     let (b, be) = str.builder(it.a, 300usize)
     if be != ok { ret ("", 0i64) }
     var out = b
-    let pe = str.push_f64_fixed(&out, ax, 120u8)
+    let pe = str.push_f64_fixed(&out, ax, 99u8)
     let text = str.done(&out)
     var point = 0usize
     while point < text.len && text[point] != 46u8 { point += 1usize }
@@ -985,12 +985,12 @@ fn math_min(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
 fn math_random(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     // xorshift64* seeded from the interpreter's step counter and symbol counter; not cryptographic.
     var x = it.rng_state
-    if x == 0u64 { x = 88172645463325252u64 + u64(it.next_symbol) }
+    if x == 0u64 { x = 88172645463325252u64 +% u64(it.next_symbol) }
     x = x ^ (x >> 12u64)
     x = x ^ (x << 25u64)
     x = x ^ (x >> 27u64)
     it.rng_state = x
-    let r = (x * 2685821657736338717u64) >> 11u64
+    let r = (x *% 2685821657736338717u64) >> 11u64
     ret (js.num_value(f64(r) / 9007199254740992.0f64), ok)
 }
 

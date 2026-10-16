@@ -177,6 +177,7 @@ fn array_shift(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
     if fe != ok { ret (js.undefv(), fe) }
     var k = 1.0f64
     while k < len {
+        try js.tick(it)
         let from_key = js.key_of(js.number_to_string(it.a, k))
         let to_key = js.key_of(js.number_to_string(it.a, k - 1.0f64))
         if js.has_property(it, o, from_key) {
@@ -204,6 +205,7 @@ fn array_unshift(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     if count > 0.0f64 {
         var k = len
         while k > 0.0f64 {
+            try js.tick(it)
             let from_key = js.key_of(js.number_to_string(it.a, k - 1.0f64))
             if js.has_property(it, o, from_key) {
                 let (v, ve) = js.get_index(it, o, k - 1.0f64)
@@ -240,6 +242,7 @@ fn array_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
     var k = start
     var n = 0.0f64
     while k < end {
+        try js.tick(it)
         if js.has_property(it, o, js.key_of(js.number_to_string(it.a, k))) {
             let (v, ve) = js.get_index(it, o, k)
             if ve != ok { ret (js.undefv(), ve) }
@@ -276,6 +279,7 @@ fn array_splice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     let removed = js.new_array(it)
     var k = 0.0f64
     while k < delete_count {
+        try js.tick(it)
         let fk = js.key_of(js.number_to_string(it.a, start + k))
         if js.has_property(it, o, fk) {
             let (v, ve) = js.get_index(it, o, start + k)
@@ -291,6 +295,7 @@ fn array_splice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     if item_count < delete_count {
         var k2 = start
         while k2 < len - delete_count {
+            try js.tick(it)
             let from = k2 + delete_count
             let to = k2 + item_count
             if js.has_property(it, o, js.key_of(js.number_to_string(it.a, from))) {
@@ -305,12 +310,14 @@ fn array_splice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
         }
         var k3 = len
         while k3 > len - delete_count + item_count {
+            try js.tick(it)
             if !js.delete_prop(it, o, js.key_of(js.number_to_string(it.a, k3 - 1.0f64))) { ret (js.undefv(), js.throw_type(it, "Cannot delete property")) }
             k3 -= 1.0f64
         }
     } else if item_count > delete_count {
         var k4 = len - delete_count
         while k4 > start {
+            try js.tick(it)
             let from2 = k4 + delete_count - 1.0f64
             let to2 = k4 + item_count - 1.0f64
             if js.has_property(it, o, js.key_of(js.number_to_string(it.a, from2))) {
@@ -361,6 +368,7 @@ fn array_concat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
             if le != ok { ret (js.undefv(), le) }
             var k = 0.0f64
             while k < len {
+                try js.tick(it)
                 if js.has_property(it, ito, js.key_of(js.number_to_string(it.a, k))) {
                     let (v, ve) = js.get_index(it, ito, k)
                     if ve != ok { ret (js.undefv(), ve) }
@@ -398,6 +406,7 @@ fn array_join(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     var k = 0.0f64
     var total = 0usize
     while k < len {
+        try js.tick(it)
         let (v, ve) = js.get_index(it, o, k)
         if ve != ok { ret (js.undefv(), ve) }
         var piece = ""
@@ -445,6 +454,7 @@ fn array_reverse(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     let middle = js.floor(len / 2.0f64)
     var lower = 0.0f64
     while lower != middle {
+        try js.tick(it)
         let upper = len - lower - 1.0f64
         let lk = js.key_of(js.number_to_string(it.a, lower))
         let uk = js.key_of(js.number_to_string(it.a, upper))
@@ -501,6 +511,7 @@ fn array_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     }
     let target_value = arg(args, 0usize)
     while k < len {
+        try js.tick(it)
         if js.has_property(it, o, js.key_of(js.number_to_string(it.a, k))) {
             let (v, ve) = js.get_index(it, o, k)
             if ve != ok { ret (js.undefv(), ve) }
@@ -531,6 +542,7 @@ fn array_last_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Valu
     }
     let target_value = arg(args, 0usize)
     while k >= 0.0f64 {
+        try js.tick(it)
         if js.has_property(it, o, js.key_of(js.number_to_string(it.a, k))) {
             let (v, ve) = js.get_index(it, o, k)
             if ve != ok { ret (js.undefv(), ve) }
@@ -560,6 +572,7 @@ fn array_includes(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     }
     let target_value = arg(args, 0usize)
     while k < len {
+        try js.tick(it)
         let (v, ve) = js.get_index(it, o, k)
         if ve != ok { ret (js.undefv(), ve) }
         if js.same_value_zero(v, target_value) { ret (js.bool_value(true), ok) }
@@ -585,6 +598,7 @@ fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind
     var k = 0.0f64
     if reverse { k = len - 1.0f64 }
     while (!reverse && k < len) || (reverse && k >= 0.0f64) {
+        try js.tick(it)
         let key = js.key_of(js.number_to_string(it.a, k))
         let present = js.has_property(it, o, key)
         if present || kind >= 5u8 {
@@ -714,6 +728,7 @@ fn array_fill(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     if ee != ok { ret (js.undefv(), ee) }
     var k = start
     while k < end {
+        try js.tick(it)
         let pe = js.set_index(it, o, k, arg(args, 0usize))
         if pe != ok { ret (js.undefv(), pe) }
         k += 1.0f64
@@ -757,6 +772,7 @@ fn array_copy_within(it: *js.Interp, this_val: js.Value, args: []const js.Value)
         t2 = to + count - 1.0f64
     }
     while count > 0.0f64 {
+        try js.tick(it)
         if js.has_property(it, o, js.key_of(js.number_to_string(it.a, f2))) {
             let (v, ve) = js.get_index(it, o, f2)
             if ve != ok { ret (js.undefv(), ve) }
@@ -846,6 +862,7 @@ fn array_sort(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     var k = 0.0f64
     var holes = 0.0f64
     while k < len {
+        try js.tick(it)
         if js.has_property(it, o, js.key_of(js.number_to_string(it.a, k))) {
             let (v, ve) = js.get_index(it, o, k)
             if ve != ok { ret (js.undefv(), ve) }
@@ -881,6 +898,7 @@ fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, m
     var n = start
     var k = 0.0f64
     while k < len {
+        try js.tick(it)
         if js.has_property(it, src, js.key_of(js.number_to_string(it.a, k))) {
             let (v0, ve) = js.get_index(it, src, k)
             if ve != ok { ret (0.0f64, ve) }

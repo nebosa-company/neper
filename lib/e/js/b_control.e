@@ -46,6 +46,15 @@ fn generator_return(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 fn generator_throw(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = generator_resume(it, this_val, args, js.RM_THROW)
     ret (r, e) }
 
+fn async_gen_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = js.ag_enqueue(it, this_val, js.RM_NEXT, arg(args, 0usize))
+    ret (r, e) }
+fn async_gen_return(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = js.ag_enqueue(it, this_val, js.RM_RETURN, arg(args, 0usize))
+    ret (r, e) }
+fn async_gen_throw(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = js.ag_enqueue(it, this_val, js.RM_THROW, arg(args, 0usize))
+    ret (r, e) }
+
+fn this_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (this_val, ok) }
+
 fn generator_function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     ret (js.undefv(), js.throw_syntax(it, "GeneratorFunction constructor is not supported yet"))
 }
@@ -61,6 +70,19 @@ fn install_generators(it: *js.Interp) {
     js.add_method(it, it.protos.generator, "next", 1u32, generator_next)
     js.add_method(it, it.protos.generator, "return", 1u32, generator_return)
     js.add_method(it, it.protos.generator, "throw", 1u32, generator_throw)
+    // Async generators: %AsyncIteratorPrototype%, %AsyncGeneratorPrototype% and %AsyncGeneratorFunction.prototype%.
+    let async_iter = js.new_obj(it, js.C_OBJECT, it.protos.object)
+    let ai = js.make_native(it, "[Symbol.asyncIterator]", 0u32, this_self)
+    let ea = js.define_data(it, async_iter, js.key_of_symbol(it.sym_async_iterator), js.obj_value(ai), js.P_HIDDEN)
+    it.protos.async_generator = js.new_obj(it, js.C_OBJECT, async_iter)
+    it.protos.async_gen_function = js.new_obj(it, js.C_OBJECT, it.protos.function)
+    let eb = js.define_data(it, it.protos.async_gen_function, js.key_of("prototype"), js.obj_value(it.protos.async_generator), js.P_CONFIGURABLE)
+    let ec = js.define_data(it, it.protos.async_generator, js.key_of("constructor"), js.obj_value(it.protos.async_gen_function), js.P_CONFIGURABLE)
+    let ed = js.define_data(it, it.protos.async_generator, js.key_of_symbol(it.sym_to_string_tag), js.str_value("AsyncGenerator"), js.P_CONFIGURABLE)
+    let ee = js.define_data(it, it.protos.async_gen_function, js.key_of_symbol(it.sym_to_string_tag), js.str_value("AsyncGeneratorFunction"), js.P_CONFIGURABLE)
+    js.add_method(it, it.protos.async_generator, "next", 1u32, async_gen_next)
+    js.add_method(it, it.protos.async_generator, "return", 1u32, async_gen_return)
+    js.add_method(it, it.protos.async_generator, "throw", 1u32, async_gen_throw)
     it.protos.async_function = js.new_obj(it, js.C_OBJECT, it.protos.function)
     let e5 = js.define_data(it, it.protos.async_function, js.key_of_symbol(it.sym_to_string_tag), js.str_value("AsyncFunction"), js.P_CONFIGURABLE)
 }

@@ -8,10 +8,14 @@ use e.data.list as list
 use e.io
 use e.js.ast as ast
 use e.js.b_array as b_array
+use e.js.b_collections as b_collections
 use e.js.b_control as b_control
+use e.js.b_date as b_date
 use e.js.b_json as b_json
 use e.js.b_number as b_number
+use e.js.b_regexp as b_regexp
 use e.js.b_string as b_string
+use e.js.b_typed as b_typed
 use e.js.interp as js
 use e.js.parser as jsparse
 use e.math
@@ -1072,7 +1076,14 @@ fn new_realm(a: *mem.Arena) -> (*js.Interp, err) {
     b_control.install_generators(it)
     b_control.install_promise(it)
     b_control.install_reflect(it)
+    b_collections.install_map(it)
+    b_collections.install_set(it)
+    b_collections.install_weak(it)
+    b_date.install_date(it)
+    b_regexp.install_regexp(it)
     install_host(it)
+    b_typed.install_array_buffer(it)
+    b_typed.install_typed_arrays(it)
     js.add_method(it, it.global, "print", 1u32, global_print)
     let ev = js.make_native(it, "eval", 1u32, global_eval)
     it.eval_fn = ev

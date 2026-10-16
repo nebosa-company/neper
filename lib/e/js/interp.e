@@ -87,7 +87,7 @@ type Obj = struct {
     prog: *const ast.Program, node: u32, env: *Env, native: NativeFn, has_native: bool, ctor_kind: u8, home: *Obj, has_home: bool,
     fields: *Obj, has_fields: bool, this_val: Value, bound_target: *Obj, bound_this: Value, bound_args: []const Value,
     // primitive wrappers, dates, internal slots
-    prim: Value, data: *void, num: f64, text: str, aux: *Obj
+    prim: Value, data: *void, num: f64, text: str, aux: *Obj, id: u64
 }
 
 // Constructor kinds of a function object.
@@ -99,7 +99,7 @@ type Protos = struct {
     object: *Obj, function: *Obj, array: *Obj, string: *Obj, number: *Obj, boolean: *Obj, symbol: *Obj, error_proto: *Obj,
     type_error: *Obj, range_error: *Obj, syntax_error: *Obj, reference_error: *Obj, eval_error: *Obj, uri_error: *Obj,
     iterator: *Obj, array_iterator: *Obj, generator: *Obj, promise: *Obj, regexp: *Obj, date: *Obj, map: *Obj, set: *Obj,
-    bigint: *Obj, arguments: *Obj, gen_function: *Obj, async_function: *Obj
+    bigint: *Obj, arguments: *Obj, gen_function: *Obj, async_function: *Obj, async_generator: *Obj, async_gen_function: *Obj, map_iterator: *Obj, set_iterator: *Obj, weakmap: *Obj, weakset: *Obj, regexp_string_iterator: *Obj, array_buffer: *Obj, typed_array: *Obj
 }
 
 type Interp = struct {
@@ -107,7 +107,7 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, jobs: list.List[Job], promise_ctor: *Obj, last_print: str, quiet: bool
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool
 }
 
 fn null_interp() -> *Interp {
@@ -517,6 +517,20 @@ fn string_to_number(a: *mem.Arena, input: str) -> f64 {
         if le2 == ok { text = left2 }
     }
     if text.len > 0usize && text[text.len - 1usize] == 46u8 { text = text[0usize..text.len - 1usize] }
+    // `parse_f64` spells the exponent marker with a lowercase `e` only.
+    let (upper_e, has_upper_e) = str.find(text, "E")
+    if has_upper_e {
+        let (lb, lbe) = str.builder(a, text.len + 1usize)
+        if lbe == ok {
+            var lo = lb
+            var li = 0usize
+            while li < text.len {
+                if text[li] == 69u8 { let pl = str.push_byte(&lo, 101u8) } else { let pl2 = str.push_byte(&lo, text[li]) }
+                li += 1usize
+            }
+            text = str.done(&lo)
+        }
+    }
     var (v2, pe) = str.parse_f64(text)
     if pe != ok {
         let (epos, has_e) = str.find(text, "e")
@@ -832,6 +846,8 @@ fn new_obj(it: *Interp, class: u8, proto: *Obj) -> *Obj {
     let o = &cell[0usize]
     o.class = class
     o.proto = proto
+    it.next_object += 1u64
+    o.id = it.next_object
     let z = null_obj()
     o.has_proto = proto != z
     o.extensible = true
@@ -1035,6 +1051,13 @@ fn get_own(it: *Interp, o: *Obj, key: Key) -> (Prop, bool) {
             ret (Prop { key: key, value: num_value(array_length(o)), getter: z, setter: z, flags: lf }, true)
         }
     }
+    if o.class == C_TYPEDARRAY && !is_symbol_key(key) {
+        let (is_num, nv) = numeric_index(it, key.name)
+        if is_num {
+            if ta_valid_index(o, nv) { ret (Prop { key: key, value: ta_get_index(it, o, usize(nv)), getter: z, setter: z, flags: P_DEFAULT }, true) }
+            ret (zero, false)
+        }
+    }
     if o.class == C_STRING && !is_symbol_key(key) {
         let s = prim_string(o)
         if key.idx >= 0i64 {
@@ -1071,6 +1094,8 @@ fn proto_of(o: *const Obj) -> (*Obj, bool) {
 
 // [[Get]]: walks the prototype chain; accessors run with `receiver` as `this`.
 fn get_prop(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err) {
+    it.steps += 1u64
+    if it.step_limit != 0u64 && it.steps > it.step_limit { ret (undefv(), throw_range(it, "execution step limit exceeded")) }
     var cur = o
     var guard = 0u32
     while guard < 100000u32 {
@@ -1088,6 +1113,10 @@ fn get_prop(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err) {
         if cur.class == C_PROXY {
             let (pr, pe) = proxy_get(it, cur, key, receiver)
             ret (pr, pe)
+        }
+        if cur.class == C_TYPEDARRAY && !is_symbol_key(key) {
+            let (is_num, nv) = numeric_index(it, key.name)
+            if is_num { ret (undefv(), ok) }
         }
         if !cur.has_proto { ret (undefv(), ok) }
         cur = cur.proto
@@ -1201,6 +1230,15 @@ fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (boo
     }
     switch receiver {
     case .Obj as ro:
+        if ro.class == C_TYPEDARRAY && !is_symbol_key(key) {
+            let (is_num2, nv2) = numeric_index(it, key.name)
+            if is_num2 {
+                let (nn, ne) = to_number(it, val)
+                if ne != ok { ret (false, ne) }
+                if ta_valid_index(ro, nv2) { ta_set_raw(it, ro, usize(nv2), value_to_raw(ta_of(ro).kind, nn)) }
+                ret (true, ok)
+            }
+        }
         let (existing, has) = get_own(it, ro, key)
         if has {
             if (existing.flags & P_ACCESSOR) != 0u8 { ret (false, ok) }
@@ -1319,6 +1357,10 @@ fn has_property(it: *Interp, o: *Obj, key: Key) -> bool {
         guard += 1u32
         let (p, found) = get_own(it, cur, key)
         if found { ret true }
+        if cur.class == C_TYPEDARRAY && !is_symbol_key(key) {
+            let (is_num, nv) = numeric_index(it, key.name)
+            if is_num { ret false }
+        }
         if !cur.has_proto { ret false }
         cur = cur.proto
     }
@@ -1326,6 +1368,10 @@ fn has_property(it: *Interp, o: *Obj, key: Key) -> bool {
 }
 
 fn delete_prop(it: *Interp, o: *Obj, key: Key) -> bool {
+    if o.class == C_TYPEDARRAY && !is_symbol_key(key) {
+        let (is_num, nv) = numeric_index(it, key.name)
+        if is_num { ret !ta_valid_index(o, nv) }
+    }
     if o.class == C_ARRAY || o.class == C_ARGUMENTS {
         if key.idx >= 0i64 && key.idx < i64(o.elems.len) {
             if o.class == C_ARRAY && o.text.len == 1usize { ret false }
@@ -1398,6 +1444,22 @@ fn prop_to_desc(p: Prop) -> Desc {
 // ValidateAndApplyPropertyDescriptor over an ordinary or array object. Answers false when the change is not allowed.
 fn define_own(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err) {
     let z = null_obj()
+    if o.class == C_TYPEDARRAY && !is_symbol_key(key) {
+        let (is_num, nv) = numeric_index(it, key.name)
+        if is_num {
+            if !ta_valid_index(o, nv) { ret (false, ok) }
+            if d.has_configurable && !d.configurable { ret (false, ok) }
+            if d.has_enumerable && !d.enumerable { ret (false, ok) }
+            if d.has_get || d.has_set { ret (false, ok) }
+            if d.has_writable && !d.writable { ret (false, ok) }
+            if d.has_value {
+                let (nn, ne) = to_number(it, d.value)
+                if ne != ok { ret (false, ne) }
+                if ta_valid_index(o, nv) { ta_set_raw(it, o, usize(nv), value_to_raw(ta_of(o).kind, nn)) }
+            }
+            ret (true, ok)
+        }
+    }
     // Array exotics: `length` and index growth.
     if o.class == C_ARRAY && !is_symbol_key(key) && str.eq(key.name, "length") {
         if d.has_get || d.has_set { ret (false, ok) }
@@ -2011,6 +2073,7 @@ fn make_function(it: *Interp, f: *Frame, fid: u32) -> (*Obj, err) {
     var fproto = it.protos.function
     if (n.flags & ast.F_GENERATOR) != 0u16 && it.protos.gen_function != null_obj() { fproto = it.protos.gen_function }
     if (n.flags & ast.F_GENERATOR) == 0u16 && (n.flags & ast.F_ASYNC) != 0u16 && it.protos.async_function != null_obj() { fproto = it.protos.async_function }
+    if (n.flags & ast.F_GENERATOR) != 0u16 && (n.flags & ast.F_ASYNC) != 0u16 && it.protos.async_gen_function != null_obj() { fproto = it.protos.async_gen_function }
     let fo = new_obj(it, C_FUNCTION, fproto)
     fo.prog = f.prog
     fo.node = fid
@@ -2035,7 +2098,9 @@ fn make_function(it: *Interp, f: *Frame, fid: u32) -> (*Obj, err) {
         try define_data(it, proto, key_of("constructor"), obj_value(fo), P_HIDDEN)
         try define_data(it, fo, key_of("prototype"), obj_value(proto), P_WRITABLE)
     } else if is_gen {
-        let gproto = new_obj(it, C_OBJECT, it.protos.generator)
+        var gp_parent = it.protos.generator
+        if is_async { gp_parent = it.protos.async_generator }
+        let gproto = new_obj(it, C_OBJECT, gp_parent)
         try define_data(it, fo, key_of("prototype"), obj_value(gproto), P_WRITABLE)
     }
     ret (fo, ok)
@@ -2550,7 +2615,7 @@ fn set_function_name(it: *Interp, v: Value, name: str) {
 
 // --- iteration
 
-type Iter = struct { obj: Value, next: Value, array: *Obj, is_array: bool, pos: usize }
+type Iter = struct { obj: Value, next: Value, array: *Obj, is_array: bool, pos: usize, sync_wrapped: bool }
 
 // GetIterator: arrays take a fast path while their `Symbol.iterator` is the original `values`.
 fn get_iterator(it: *Interp, v: Value) -> (Iter, err) {
@@ -2613,6 +2678,14 @@ fn own_keys(it: *Interp, o: *Obj) -> ([]const Key, err) {
     let (l, le) = list.init[Key](it.a, o.props.len + o.elems.len + 4usize)
     var out = l
     if le != ok { ret (zero, le) }
+    if o.class == C_TYPEDARRAY {
+        let tn = ta_length(o)
+        var t = 0usize
+        while t < tn {
+            try list.push[Key](&out, key_of(index_string(it, t)))
+            t += 1usize
+        }
+    }
     if o.class == C_STRING {
         let n = units(prim_string(o))
         var s = 0usize
@@ -3254,6 +3327,10 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
             yv = ev
         }
         if (n.flags & ast.F_DELEGATE) != 0u16 {
+            if f.has_gen && gen_state_of(f).kind == 2u8 {
+                let (ar, are) = gen_yield_star_async(it, f, yv)
+                ret (ar, are)
+            }
             let (dr, de) = gen_yield_star(it, f, yv)
             ret (dr, de)
         }
@@ -4423,6 +4500,31 @@ fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
         res.value = last
         ret (res, ok)
     }
+    if (n.flags & ast.F_ASYNC) != 0u16 {
+        let (aiter, aie) = get_async_iterator(it, coll)
+        if aie != ok { ret (normal(), aie) }
+        while true {
+            let (av, adone, ase) = async_iterator_step(it, f, aiter)
+            if ase != ok { ret (normal(), ase) }
+            if adone { break }
+            let (abc, abe) = for_body(it, f, n, target_id, av, decl_mode, lexical, flags, saved)
+            if abe != ok {
+                let acl = async_iterator_close(it, f, aiter)
+                ret (normal(), abe)
+            }
+            if !is_undefined(abc.value) { last = abc.value }
+            if abc.kind != CK_NORMAL {
+                let (aleave, aprop) = loop_exit(abc, labels)
+                let acl2 = async_iterator_close(it, f, aiter)
+                if acl2 != ok { ret (normal(), acl2) }
+                if aprop { ret (abc, ok) }
+                if aleave { break }
+            }
+        }
+        var ares = normal()
+        ares.value = last
+        ret (ares, ok)
+    }
     // for-of
     let (iter, ie) = get_iterator(it, coll)
     if ie != ok { ret (normal(), ie) }
@@ -4754,7 +4856,7 @@ type GenState = struct {
     it: *Interp, frame: Frame, body: u32, expr_body: bool, kind: u8,
     state: u8, mode: u8, send: Value, out: Value, out_raw: bool, out_err: err, ret_val: Value,
     gen_ev: sync.Event, caller_ev: sync.Event, started: bool, saved_depth: u32,
-    promise: *Obj, awaiting: bool, owner: *Obj
+    promise: *Obj, awaiting: bool, owner: *Obj, queue: list.List[AgRequest], busy: bool
 }
 
 // Generator states.
@@ -4859,10 +4961,22 @@ fn gen_suspend(it: *Interp, gs: *GenState, v: Value, raw: bool) -> (u8, Value) {
 fn gen_yield(it: *Interp, f: *Frame, v: Value) -> (Value, err) {
     if !f.has_gen { ret (undefv(), throw_syntax(it, "yield outside a generator")) }
     let gs = gen_state_of(f)
-    let (mode, sent) = gen_suspend(it, gs, v, false)
+    var yielded = v
+    if gs.kind == 2u8 {
+        let (av, ae) = await_value(it, f, v)
+        if ae != ok { ret (undefv(), ae) }
+        yielded = av
+    }
+    let (mode, sent) = gen_suspend(it, gs, yielded, false)
     if mode == RM_NEXT { ret (sent, ok) }
     if mode == RM_THROW { ret (undefv(), throw_value(it, sent)) }
-    gs.ret_val = sent
+    var rv = sent
+    if gs.kind == 2u8 {
+        let (rav, rae) = await_value(it, f, sent)
+        if rae != ok { ret (undefv(), rae) }
+        rv = rav
+    }
+    gs.ret_val = rv
     ret (undefv(), GenReturn)
 }
 
@@ -4932,7 +5046,6 @@ fn gen_yield_star(it: *Interp, f: *Frame, iterable: Value) -> (Value, err) {
 fn make_suspendable(it: *Interp, fo: *Obj, f: Frame, n: ast.Node) -> (Value, err) {
     let is_gen = (n.flags & ast.F_GENERATOR) != 0u16
     let is_async = (n.flags & ast.F_ASYNC) != 0u16
-    if is_gen && is_async { ret (undefv(), throw_syntax(it, "async generators are not supported yet")) }
     let (cell, ce) = mem.alloc[GenState](it.a, 1usize)
     if ce != ok { ret (undefv(), throw_range(it, "out of memory")) }
     var blank: GenState = zero
@@ -4950,6 +5063,19 @@ fn make_suspendable(it: *Interp, fo: *Obj, f: Frame, n: ast.Node) -> (Value, err
     gs.ret_val = undefv()
     gs.frame.gen = mem.cast[*void](gs)
     gs.frame.has_gen = true
+    if is_gen && is_async {
+        gs.kind = 2u8
+        let (ql, qle) = list.init[AgRequest](it.a, 2usize)
+        gs.queue = ql
+        var aproto = it.protos.async_generator
+        let (apv, ape) = get_prop(it, fo, key_of("prototype"), obj_value(fo))
+        if ape != ok { ret (undefv(), ape) }
+        if is_object(apv) { aproto = as_object(apv) }
+        let ag = new_obj(it, C_GENERATOR, aproto)
+        ag.data = mem.cast[*void](gs)
+        gs.owner = ag
+        ret (obj_value(ag), ok)
+    }
     if is_gen {
         gs.kind = 0u8
         var proto = it.protos.generator
@@ -5291,4 +5417,405 @@ fn run_jobs(it: *Interp) -> err {
     }
     it.jobs.len = 0usize
     ret ok
+}
+
+// --- async iteration and async generators
+
+fn get_async_iterator(it: *Interp, v: Value) -> (Iter, err) {
+    let (m, me) = get_value(it, v, key_of_symbol(it.sym_async_iterator))
+    if me != ok { ret (zero, me) }
+    var iter: Iter = zero
+    if is_nullish(m) {
+        // Falls back to the sync iterator; its values are awaited as they come.
+        let (si, se) = get_iterator(it, v)
+        if se != ok { ret (zero, se) }
+        iter = si
+        iter.sync_wrapped = true
+        ret (iter, ok)
+    }
+    if !is_callable(m) { ret (zero, throw_type(it, "object is not async iterable")) }
+    let (io2, ie) = call_function(it, m, v, zero_args())
+    if ie != ok { ret (zero, ie) }
+    if !is_object(io2) { ret (zero, throw_type(it, "Result of the Symbol.asyncIterator method is not an object")) }
+    let (nx, ne) = get_value(it, io2, key_of("next"))
+    if ne != ok { ret (zero, ne) }
+    iter.obj = io2
+    iter.next = nx
+    ret (iter, ok)
+}
+
+// One step of `for await`: (value, done, error); the frame supplies `await`.
+fn async_iterator_step(it: *Interp, f: *Frame, iter: Iter) -> (Value, bool, err) {
+    let (r, re) = call_function(it, iter.next, iter.obj, zero_args())
+    if re != ok { ret (undefv(), true, re) }
+    var result = r
+    if !iter.sync_wrapped {
+        let (aw, awe) = await_value(it, f, r)
+        if awe != ok { ret (undefv(), true, awe) }
+        result = aw
+    }
+    if !is_object(result) { ret (undefv(), true, throw_type(it, "Iterator result is not an object")) }
+    let ro = as_object(result)
+    let (dv, de) = get_prop(it, ro, key_of("done"), result)
+    if de != ok { ret (undefv(), true, de) }
+    if to_boolean(dv) { ret (undefv(), true, ok) }
+    let (vv, ve) = get_prop(it, ro, key_of("value"), result)
+    if ve != ok { ret (undefv(), true, ve) }
+    if iter.sync_wrapped {
+        let (aw2, awe2) = await_value(it, f, vv)
+        if awe2 != ok { ret (undefv(), true, awe2) }
+        ret (aw2, false, ok)
+    }
+    ret (vv, false, ok)
+}
+
+fn async_iterator_close(it: *Interp, f: *Frame, iter: Iter) -> err {
+    let (rm, rme) = get_value(it, iter.obj, key_of("return"))
+    if rme != ok { ret rme }
+    if is_nullish(rm) { ret ok }
+    let (r, re) = call_function(it, rm, iter.obj, zero_args())
+    if re != ok { ret re }
+    if iter.sync_wrapped { ret ok }
+    let (aw, awe) = await_value(it, f, r)
+    if awe != ok { ret awe }
+    if !is_object(aw) { ret throw_type(it, "iterator.return() did not return an object") }
+    ret ok
+}
+
+type AgRequest = struct { mode: u8, val: Value, cap: Capability }
+
+fn ag_iter_result(it: *Interp, v: Value, done: bool) -> Value {
+    let r = new_plain(it)
+    let e1 = set_named(it, r, "value", v)
+    let e2 = set_named(it, r, "done", bool_value(done))
+    ret obj_value(r)
+}
+
+// Pops the front request after settling it.
+fn ag_settle(it: *Interp, gs: *GenState, ok_value: bool, v: Value, done: bool) {
+    if gs.queue.len == 0usize { ret }
+    let req = gs.queue.items[0usize]
+    var i = 0usize
+    while i + 1usize < gs.queue.len {
+        gs.queue.items[i] = gs.queue.items[i + 1usize]
+        i += 1usize
+    }
+    gs.queue.len -= 1usize
+    if ok_value {
+        let (r, re) = call_function(it, req.cap.resolve, undefv(), one_arg(it, ag_iter_result(it, v, done)))
+    } else {
+        let (r2, re2) = call_function(it, req.cap.reject, undefv(), one_arg(it, v))
+    }
+}
+
+fn ag_continue(it: *Interp, gs: *GenState, mode: u8, val: Value) {
+    gs.busy = false
+    ag_resume(it, gs, mode, val)
+    ag_drain(it, gs)
+}
+
+fn ag_await_fulfilled(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let gs = mem.cast[*GenState](it.callee.data)
+    var v = undefv()
+    if args.len > 0usize { v = args[0usize] }
+    ag_continue(it, gs, RM_NEXT, v)
+    ret (undefv(), ok)
+}
+
+fn ag_await_rejected(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let gs = mem.cast[*GenState](it.callee.data)
+    var v = undefv()
+    if args.len > 0usize { v = args[0usize] }
+    ag_continue(it, gs, RM_THROW, v)
+    ret (undefv(), ok)
+}
+
+// A return request on a finished generator: the value is awaited, then the request resolves.
+fn ag_return_fulfilled(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let gs = mem.cast[*GenState](it.callee.data)
+    var v = undefv()
+    if args.len > 0usize { v = args[0usize] }
+    gs.busy = false
+    ag_settle(it, gs, true, v, true)
+    ag_drain(it, gs)
+    ret (undefv(), ok)
+}
+
+fn ag_return_rejected(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let gs = mem.cast[*GenState](it.callee.data)
+    var v = undefv()
+    if args.len > 0usize { v = args[0usize] }
+    gs.busy = false
+    ag_settle(it, gs, false, v, true)
+    ag_drain(it, gs)
+    ret (undefv(), ok)
+}
+
+// Resumes the body for the front request and handles how it comes back.
+fn ag_resume(it: *Interp, gs: *GenState, mode: u8, val: Value) {
+    let (r, done, e) = gen_resume(it, gs, mode, val)
+    if e != ok {
+        var reason = it.thrown
+        if e != Throw { reason = make_error(it, it.protos.error_proto, "internal error") }
+        ag_settle(it, gs, false, reason, true)
+        ret
+    }
+    if done {
+        ag_settle(it, gs, true, r, true)
+        ret
+    }
+    if gs.awaiting {
+        gs.busy = true
+        let (pr, pe) = promise_resolve_value(it, r)
+        if pe != ok {
+            gs.busy = false
+            ag_resume(it, gs, RM_THROW, it.thrown)
+            ret
+        }
+        let onf = make_native(it, "", 1u32, ag_await_fulfilled)
+        onf.data = mem.cast[*void](gs)
+        let onr = make_native(it, "", 1u32, ag_await_rejected)
+        onr.data = mem.cast[*void](gs)
+        let te = promise_then_raw(it, pr, obj_value(onf), obj_value(onr))
+        ret
+    }
+    ag_settle(it, gs, true, r, false)
+}
+
+fn ag_drain(it: *Interp, gs: *GenState) {
+    while gs.queue.len > 0usize && !gs.busy && gs.state != GS_RUNNING && !gs.awaiting {
+        let req = gs.queue.items[0usize]
+        if gs.state == GS_DONE || (gs.state == GS_START && req.mode != RM_NEXT) {
+            gs.state = GS_DONE
+            if req.mode == RM_NEXT {
+                ag_settle(it, gs, true, undefv(), true)
+            } else if req.mode == RM_THROW {
+                ag_settle(it, gs, false, req.val, true)
+            } else {
+                gs.busy = true
+                let (pr, pe) = promise_resolve_value(it, req.val)
+                if pe != ok {
+                    gs.busy = false
+                    ag_settle(it, gs, false, it.thrown, true)
+                } else {
+                    let onf = make_native(it, "", 1u32, ag_return_fulfilled)
+                    onf.data = mem.cast[*void](gs)
+                    let onr = make_native(it, "", 1u32, ag_return_rejected)
+                    onr.data = mem.cast[*void](gs)
+                    let te = promise_then_raw(it, pr, obj_value(onf), obj_value(onr))
+                }
+            }
+        } else {
+            ag_resume(it, gs, req.mode, req.val)
+        }
+    }
+}
+
+// AsyncGenerator.prototype.next/return/throw: queue the request and run the generator when idle.
+fn ag_enqueue(it: *Interp, this_val: Value, mode: u8, val: Value) -> (Value, err) {
+    let (cap, cape) = new_promise_capability(it, obj_value(it.promise_ctor))
+    if cape != ok { ret (undefv(), cape) }
+    if !is_object(this_val) || as_object(this_val).class != C_GENERATOR || mem.cast[*GenState](as_object(this_val).data).kind != 2u8 {
+        let (r, re) = call_function(it, cap.reject, undefv(), one_arg(it, make_error(it, it.protos.type_error, "not an async generator")))
+        ret (cap.promise, re)
+    }
+    let gs = mem.cast[*GenState](as_object(this_val).data)
+    let pe = list.push[AgRequest](&gs.queue, AgRequest { mode: mode, val: val, cap: cap })
+    ag_drain(it, gs)
+    ret (cap.promise, ok)
+}
+
+// `yield*` inside an async generator: delegates through the async iterator protocol, awaiting each inner result.
+fn gen_yield_star_async(it: *Interp, f: *Frame, iterable: Value) -> (Value, err) {
+    let gs = gen_state_of(f)
+    let (iter, ie) = get_async_iterator(it, iterable)
+    if ie != ok { ret (undefv(), ie) }
+    var mode = RM_NEXT
+    var received = undefv()
+    while true {
+        var inner = undefv()
+        if mode == RM_NEXT {
+            let (rv, re) = call_function(it, iter.next, iter.obj, one_arg(it, received))
+            if re != ok { ret (undefv(), re) }
+            inner = rv
+        } else if mode == RM_THROW {
+            let (tm, tme) = get_value(it, iter.obj, key_of("throw"))
+            if tme != ok { ret (undefv(), tme) }
+            if is_nullish(tm) {
+                let ce = async_iterator_close(it, f, iter)
+                if ce != ok { ret (undefv(), ce) }
+                ret (undefv(), throw_type(it, "The iterator does not provide a 'throw' method"))
+            }
+            let (rv2, re2) = call_function(it, tm, iter.obj, one_arg(it, received))
+            if re2 != ok { ret (undefv(), re2) }
+            inner = rv2
+        } else {
+            let (rm, rme) = get_value(it, iter.obj, key_of("return"))
+            if rme != ok { ret (undefv(), rme) }
+            if is_nullish(rm) {
+                let (aw, awe) = await_value(it, f, received)
+                if awe != ok { ret (undefv(), awe) }
+                gs.ret_val = aw
+                ret (undefv(), GenReturn)
+            }
+            let (rv3, re3) = call_function(it, rm, iter.obj, one_arg(it, received))
+            if re3 != ok { ret (undefv(), re3) }
+            inner = rv3
+        }
+        // Await the inner result (a sync iterator's result is not a promise).
+        if !iter.sync_wrapped {
+            let (aw2, awe2) = await_value(it, f, inner)
+            if awe2 != ok { ret (undefv(), awe2) }
+            inner = aw2
+        }
+        if !is_object(inner) { ret (undefv(), throw_type(it, "iterator result is not an object")) }
+        let (dn, dne) = get_value(it, inner, key_of("done"))
+        if dne != ok { ret (undefv(), dne) }
+        var value = undefv()
+        let (vv, ve) = get_value(it, inner, key_of("value"))
+        if ve != ok { ret (undefv(), ve) }
+        value = vv
+        if iter.sync_wrapped {
+            let (aw3, awe3) = await_value(it, f, value)
+            if awe3 != ok { ret (undefv(), awe3) }
+            value = aw3
+        }
+        if to_boolean(dn) {
+            if mode == RM_RETURN {
+                gs.ret_val = value
+                ret (undefv(), GenReturn)
+            }
+            ret (value, ok)
+        }
+        let (m2, s2) = gen_suspend(it, gs, value, false)
+        mode = m2
+        received = s2
+        if mode == RM_RETURN {
+            // The resumption value of a return request is awaited before it reaches the inner iterator.
+            let (aw4, awe4) = await_value(it, f, received)
+            if awe4 != ok { ret (undefv(), awe4) }
+            received = aw4
+        }
+    }
+    ret (undefv(), ok)
+}
+
+// --- typed arrays (the integer-indexed exotic object) and their buffers
+
+type Buf = struct { bytes: []u8, detached: bool }
+
+type TArr = struct { buffer: *Obj, offset: usize, length: usize, kind: u8, tracking: bool }
+
+fn buf_of(o: *Obj) -> *Buf { ret mem.cast[*Buf](o.data) }
+fn ta_of(o: *Obj) -> *TArr { ret mem.cast[*TArr](o.data) }
+
+fn ta_elem_size(kind: u8) -> usize {
+    if kind == 1u8 || kind == 2u8 || kind == 3u8 { ret 1usize }
+    if kind == 4u8 || kind == 5u8 { ret 2usize }
+    if kind == 6u8 || kind == 7u8 || kind == 8u8 { ret 4usize }
+    ret 8usize
+}
+
+// The current element count (a length-tracking view follows its buffer; a detached one is zero).
+fn ta_length(o: *Obj) -> usize {
+    let t = ta_of(o)
+    let b = buf_of(t.buffer)
+    if b.detached { ret 0usize }
+    if t.tracking {
+        if t.offset > b.bytes.len { ret 0usize }
+        ret (b.bytes.len - t.offset) / ta_elem_size(t.kind)
+    }
+    if t.offset + t.length * ta_elem_size(t.kind) > b.bytes.len { ret 0usize }
+    ret t.length
+}
+
+fn read_unit(bytes: []const u8, at: usize, size: usize) -> u64 {
+    var v = 0u64
+    var i = 0usize
+    while i < size {
+        v = v | (u64(bytes[at + i]) << u64(8usize * i))
+        i += 1usize
+    }
+    ret v
+}
+
+fn raw_to_value(kind: u8, raw: u64) -> Value {
+    if kind == 2u8 || kind == 3u8 { ret num_value(f64(raw & 255u64)) }
+    if kind == 1u8 {
+        var v = i64(raw & 255u64)
+        if v >= 128i64 { v = v - 256i64 }
+        ret num_value(f64(v))
+    }
+    if kind == 5u8 { ret num_value(f64(raw & 65535u64)) }
+    if kind == 4u8 {
+        var v2 = i64(raw & 65535u64)
+        if v2 >= 32768i64 { v2 = v2 - 65536i64 }
+        ret num_value(f64(v2))
+    }
+    if kind == 7u8 { ret num_value(f64(raw & 4294967295u64)) }
+    if kind == 6u8 {
+        var v3 = i64(raw & 4294967295u64)
+        if v3 >= 2147483648i64 { v3 = v3 - 4294967296i64 }
+        ret num_value(f64(v3))
+    }
+    if kind == 8u8 { ret num_value(f64(mem.bitcast[f32](u32(raw & 4294967295u64)))) }
+    ret num_value(mem.bitcast[f64](raw))
+}
+
+fn value_to_raw(kind: u8, n: f64) -> u64 {
+    if kind == 9u8 { ret mem.bitcast[u64](n) }
+    if kind == 8u8 { ret u64(mem.bitcast[u32](f32(n))) }
+    if kind == 3u8 {
+        if js_is_nan_value(n) { ret 0u64 }
+        if n <= 0.0f64 { ret 0u64 }
+        if n >= 255.0f64 { ret 255u64 }
+        // Round half to even.
+        let f = floor(n)
+        let diff = n - f
+        var r = f
+        if diff > 0.5f64 || (diff == 0.5f64 && fmod_js(f, 2.0f64) != 0.0f64) { r = f + 1.0f64 }
+        ret u64(i64(r))
+    }
+    let u = to_uint32_bits(n)
+    if kind == 1u8 || kind == 2u8 { ret u64(u & 255u32) }
+    if kind == 4u8 || kind == 5u8 { ret u64(u & 65535u32) }
+    ret u64(u)
+}
+
+fn js_is_nan_value(n: f64) -> bool { ret n != n }
+
+fn ta_get_index(it: *Interp, o: *Obj, idx: usize) -> Value {
+    let t = ta_of(o)
+    let b = buf_of(t.buffer)
+    let size = ta_elem_size(t.kind)
+    ret raw_to_value(t.kind, read_unit(b.bytes, t.offset + idx * size, size))
+}
+
+fn ta_set_raw(it: *Interp, o: *Obj, idx: usize, raw: u64) {
+    let t = ta_of(o)
+    let b = buf_of(t.buffer)
+    let size = ta_elem_size(t.kind)
+    var i = 0usize
+    while i < size {
+        b.bytes[t.offset + idx * size + i] = u8((raw >> u64(8usize * i)) & 255u64)
+        i += 1usize
+    }
+}
+
+// CanonicalNumericIndexString: (is numeric, value).
+fn numeric_index(it: *Interp, name: str) -> (bool, f64) {
+    if name.len == 0usize { ret (false, 0.0f64) }
+    if str.eq(name, "-0") { ret (true, -0.0f64) }
+    let c = name[0usize]
+    if !(c == 45u8 || (c >= 48u8 && c <= 57u8) || c == 73u8 || c == 78u8) { ret (false, 0.0f64) }
+    let n = string_to_number(it.a, name)
+    if str.eq(number_to_string(it.a, n), name) { ret (true, n) }
+    ret (false, 0.0f64)
+}
+
+fn ta_valid_index(o: *Obj, n: f64) -> bool {
+    if n != to_integer(n) { ret false }
+    if is_neg_zero(n) { ret false }
+    if n < 0.0f64 || n >= f64(ta_length(o)) { ret false }
+    ret true
 }

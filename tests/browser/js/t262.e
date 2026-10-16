@@ -193,7 +193,10 @@ fn run_all(ctx: *Ctx) {
             if pe != ok { pass = true } else { why = "expected an early error" }
         } else {
             let (it, re) = realm.new_realm(a)
-            if re == ok { it.quiet = true }
+            if re == ok {
+                it.quiet = true
+                it.step_limit = 40000000u64
+            }
             if re != ok {
                 why = "realm"
             } else {
