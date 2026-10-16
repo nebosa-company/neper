@@ -103,7 +103,7 @@ def audit(name, look="windows", verbose=False, refname=None):
         a = ref[y0:y1, x0:x1]
         o = ours[y0:y1, x0:x1]
         d = np.abs(a.astype(int) - o.astype(int)).max(axis=2)
-        sm = smask[y0:y1, x0:x1] & omask[y0:y1, x0:x1]
+        sm = smask[y0:y1, x0:x1]  # strict (round 12): the reference mask alone; ANDing it with ours hid reference-flat pixels where ours is not flat
         sm_ref_only = int((smask[y0:y1, x0:x1] & ~omask[y0:y1, x0:x1] & (np.abs(a.astype(int) - o.astype(int)).max(axis=2) > 2)).sum())
         e = np.where(sm, d, 0)
         bad = int(((d > 2) & sm).sum())

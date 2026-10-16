@@ -170,7 +170,7 @@ fn build_hot(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
         cells[i] = looks.Cell { caption: names[i], node: shown, drive: drive }
         i += 1usize
     }
-    ret (10usize, ok)
+    ret (9usize, ok)
 }
 
 // The whole toolbar row of the main window: Standard and Cards (disabled as captured), Search and Help (enabled).
