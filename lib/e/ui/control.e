@@ -14226,6 +14226,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     if state.pressed { w = 6.0 }
     if state.pressed && !vertical { w = 12.0 }
     let room = length - 32.0
+    var dark_track = style.hex_raw(0x171717u32)
     var thick = style.defaults()
     var track = sized_style(16.0, length)
     if scroll_bar_crisp { track = sized_style(17.0, length) }
@@ -14233,10 +14234,13 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     track.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     if style.windows_dark_on() {
         // (round 7) Windows 11 dark: #2B2B2B track, #8A8A8A thumb (#A0A0A0 hot, #B8B8B8 held), no light rim
-        track.background = paint.Brush { Solid: style.hex_raw(0x2B2B2Bu32) }
-        ink = style.hex_raw(0x8A8A8Au32)
-        if state.hovered { ink = style.hex_raw(0xA0A0A0u32) }
-        if state.pressed { ink = style.hex_raw(0xB8B8B8u32) }
+        // (round 10) native Windows 11 dark (ref/windows-native/dark/vscroll-*): track #171717 with no lighter edge line,
+        // thumb #858585 (rest; hot and held captures are pixel-identical to rest, so the colour stays), track #1E1E1E while
+        // the bar is expanded under the pointer (vscroll-pressed-arrow)
+        dark_track = style.hex_raw(0x171717u32)
+        if state.hovered || state.pressed { dark_track = style.hex_raw(0x1E1E1Eu32) }
+        track.background = paint.Brush { Solid: dark_track }
+        ink = style.hex_raw(0x858585u32)
     }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
@@ -14246,7 +14250,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     if !vertical { edge = sized_style(length, 1.0) }
     edge.background = paint.Brush { Solid: style.hex(16250871u32) }
     if scroll_bar_crisp { edge.background = paint.Brush { Solid: style.hex(16777215u32) } }
-    if style.windows_dark_on() { edge.background = paint.Brush { Solid: style.hex_raw(0x2B2B2Bu32) } }
+    if style.windows_dark_on() { edge.background = paint.Brush { Solid: dark_track } }
     layers[count] = widget.box(0u64, edge, zero)
     count += 1usize
     if content > view && room > 0.0 {
@@ -14277,7 +14281,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             thick = sized_style(thumb_len, w + 2.0)
             thick.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: side }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
             thick.border = style.Border { width: 1.0, color: style.hex(12237498u32) }
-            if style.windows_dark_on() { thick.border = style.Border { width: 1.0, color: style.hex_raw(0x2B2B2Bu32) } }
+            if style.windows_dark_on() { thick.border = style.Border { width: 1.0, color: dark_track } }
             thick.radius = 0.0
             if state.pressed { thick.radius = 4.0 }
         }
@@ -14315,7 +14319,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         let (arrows, arrows_error) = mem.alloc[ScrollArrows](a, 1usize)
         if arrows_error != ok { ret (zero, TooLarge) }
         arrows[0usize] = ScrollArrows { vertical: vertical, ink: style.hex(6316128u32) }
-        if style.windows_dark_on() { arrows[0usize].ink = style.hex_raw(0xB0B0B0u32) }
+        if style.windows_dark_on() { arrows[0usize].ink = style.hex_raw(0xAFAFAFu32) }
         var none: []const widget.Node = zero
         var fill = sized_style(16.0, length)
         if !vertical { fill = sized_style(length, 16.0) }

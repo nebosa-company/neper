@@ -184,20 +184,29 @@ fn neper_dark_of(current: Look, base: Look) -> Look {
 // group rows #2F2F2F, a footer of dark panels, the scroll bar's #2B2B2B track with a #8A8A8A thumb.
 fn v3_dark() -> Look {
     var look = v3()
-    look.header = raw(0x333333u32)
-    look.header_hover = raw(0x3D3D3Du32)
-    look.header_line = raw(0x454545u32)
-    look.even = raw(0x2B2B2Bu32)
-    look.odd = raw(0x262626u32)
-    look.selected = raw(0x264F78u32)
-    look.selected_line = raw(0x4C8EC4u32)
-    look.line = raw(0x3A3A3Au32)
+    // (round 10) the native Windows 11 dark list view (ref/windows-native/dark/listview-*): header #191919 with a #636363
+    // separator, frame #828790, selected focused row #1A364D under a #0078D4 dotted edge, unfocused selection #1B1B1B
+    // (edge #131313), body column lines #414141, track #171717 with a #858585 thumb. Rows: the gallery's list is #202020
+    // and its alternating notify-customdraw rows #2B2B2B (app-chosen colours, not the theme's), which v3's stripes take.
+    // Hover over a header is pixel-identical to rest in the capture, so header_hover is a guess; the pressed header
+    // (#838383) is drawn in collection.e.
+    look.header = raw(0x191919u32)
+    look.header_hover = raw(0x2B2B2Bu32)
+    look.header_line = raw(0x636363u32)
+    look.even = raw(0x202020u32)
+    look.odd = raw(0x2B2B2Bu32)
+    look.selected = raw(0x1A364Du32)
+    look.selected_line = raw(0x0078D4u32)
+    look.line = raw(0x414141u32)
     look.group_row = raw(0x2F2F2Fu32)
     look.footer_band = raw(0x2F2F2Fu32)
     look.footer_cell = raw(0x383838u32)
-    look.frame = raw(0x5A5A5Au32)
-    look.track = raw(0x2B2B2Bu32)
-    look.thumb = raw(0x8A8A8Au32)
+    look.frame = raw(0x828790u32)
+    look.track = raw(0x171717u32)
+    look.thumb = raw(0x858585u32)
+    look.idle_fill = raw(0x1B1B1Bu32)
+    look.idle_edge = raw(0x131313u32)
+    look.idle_top = raw(0x1B1B1Bu32)
     ret look
 }
 

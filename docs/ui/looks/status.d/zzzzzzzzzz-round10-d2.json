@@ -1,0 +1,110 @@
+{
+ "scroll_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/scroll_bar.png",
+    "notes": "Round 10: compared with the native Windows 11 dark captures (docs/ui/looks/ref/windows-native/dark). Track #171717 with no lighter edge line, thumb #858585 and the expanded track #1E1E1E (vscroll-rest, -pressed-arrow) now equal the native values (flat pixels exact in the vertical rest and hover cells).",
+    "gaps": [
+     "Native hover and pressed-thumb captures are pixel-identical to rest (the fake pointer did not engage): hover pill width and hover colour unverified",
+     "Native arrow buttons (glyph #AFAFAF, 17 px bar) and the disabled bar (arrows #505050, no thumb) are not drawn as cells; the v3 geometry (16 px track, pill thumb) is kept",
+     "Horizontal bar compared by colours only"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/popup_menu.png",
+    "notes": "Round 10: compared with the native Windows 11 dark captures (docs/ui/looks/ref/windows-native/dark). Frame #808080, body #2C2C2C and the single #3E3E3E separator now equal menu-popup-rest (flat pixels exact).",
+    "gaps": [
+     "Native selection is a white outline cue with no fill (keyboard); v3's filled hot row kept, mouse-hover fill of native not captured",
+     "Check glyph and submenu chevron are v3 pictures, not compared",
+     "No drop shadow; native 2 px #2B2B2B inner rim not reproduced (1 level)"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/tree_list_expanded.png",
+    "notes": "Round 10: compared with the native Windows 11 dark captures (docs/ui/looks/ref/windows-native/dark). Selected focused row #626262, unfocused / hot row #333333, rows #202020 (stripe #2B2B2B), column lines #414141, header line #636363 taken from tree-selected-focused, -unfocused, -collapsed; the sheets for the expanded, focus, check and hover states were stale (light) and are re-rendered dark.",
+    "gaps": [
+     "v3 +/- boxes and check boxes are the light tiles mapped to dark; native uses chevrons and a #60CDFF focus ring, not reproduced",
+     "Native tree-disabled and classic-lines not in the sheet"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/data_grid_main.png",
+    "notes": "Round 10: compared with the native Windows 11 dark captures (docs/ui/looks/ref/windows-native/dark). gridlook.v3_dark now uses the native list view values: header #191919, header separator #636363, frame #828790, focused selection #1A364D under #0078D4, unfocused selection #1B1B1B (edge #131313), column lines #414141, track #171717 and thumb #858585, pressed header #838383.",
+    "gaps": [
+     "Native header text is near-black in the capture (not a usable reference): header text colour kept light",
+     "Native header hot is identical to rest in the capture: header_hover #2B2B2B is a guess",
+     "Native gridlines are #F0F0F0 white in dark (system colour quirk): not copied",
+     "Rows #202020 and stripe #2B2B2B are the gallery's app-chosen colours",
+     "Group rows, footer, navigator keep the round 7 map (no native equivalent)",
+     "Sub-sheets (data_grid_*) re-rendered; no per-cell numeric diff against the native crop"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/vertical_grid_states.png",
+    "notes": "Round 10: compared with the native Windows 11 dark captures (docs/ui/looks/ref/windows-native/dark). No native property grid exists. Re-rendered every sheet (author, shut, hover, states were stale) and fixed the invisible selected text of the Name cell (white mapped to dark).",
+    "gaps": [
+     "Selection #264F78 and the band gradient are guesses (native list view selection is #1A364D)",
+     "Colour cells and bars keep the map"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/toolbar_button.png",
+    "notes": "Round 10: compared with the native Windows 11 dark captures (docs/ui/looks/ref/windows-native/dark). Native dark toolbar is the light toolbar on #202020: hot #E5F3FF, pressed/checked #CCE8FF with #99D1FF, text near-black (comctl32 has no dark toolbar theme), so it is no reference for a dark look; background #202020 matches. Light checked already equals #CCE8FF / #99D1FF.",
+    "gaps": [
+     "Hot, pressed, checked, disabled washes are guesses from the Windows 11 ramp",
+     "No native dark theme: cannot be matched"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/menu_bar.png",
+    "notes": "Round 10: compared with the native Windows 11 dark captures (docs/ui/looks/ref/windows-native/dark). The native menu bar stays white under DarkMode (menubar-*): no native dark reference; the previous guessed dark look is kept.",
+    "gaps": [
+     "Hot/open washes are guesses; title paddings are v3's"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/status_bar.png",
+    "notes": "Round 10: compared with the native Windows 11 dark captures (docs/ui/looks/ref/windows-native/dark). The native status bar stays light under DarkMode (statusbar-*): no native dark reference; the previous guessed dark look is kept.",
+    "gaps": [
+     "Panel hover is none (as v3); progress fill is a guess"
+    ]
+   }
+  }
+ }
+}
