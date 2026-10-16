@@ -10,6 +10,7 @@ use e.data.tablegroup as grp
 use e.data.tableview as view
 use e.gfx.paint
 use e.mem
+use e.str
 use e.ui.control
 use e.ui.datagrid as dg
 use e.ui.gridlook as gl
@@ -26,6 +27,8 @@ const C_COLOR: usize = 2usize
 const C_TYPE: usize = 3usize
 const C_RARITY: usize = 4usize
 const C_FAV: usize = 5usize
+// hidden: the groups' order (round 12: v3 lists the capture's last seven editions as MSH, HOC, HOB, SLZ, FRC, FRA, MBC)
+const C_RANK: usize = 6usize
 
 type App = struct {
     a: *mem.Arena,
@@ -94,17 +97,48 @@ fn ed_of(row: usize) -> str {
     ret "Z1"
 }
 
+// round 12: about 690 other editions (Z000 ...) precede the seven, so the grouped list is long (its thumb at the minimum)
+fn filler_names(a: *mem.Arena) -> ([]str, err) {
+    let (names, names_error) = mem.alloc[str](a, 690usize)
+    if names_error != ok { ret (zero, names_error) }
+    var i = 0usize
+    while i < 690usize {
+        let (b, b_error) = str.builder(a, 4usize)
+        if b_error != ok { ret (zero, b_error) }
+        var sb = b
+        if str.push(&sb, "Z") != ok { ret (zero, control.TooLarge) }
+        if str.push_usize(&sb, 1000usize + i) != ok { ret (zero, control.TooLarge) }
+        names[i] = str.done(&sb)
+        i += 1usize
+    }
+    ret (names, ok)
+}
+
+fn rank_of(row: usize) -> i32 {
+    if row >= 2173usize { ret 0i32 }
+    if row < 80usize { ret 7i32 }
+    if row < 626usize { ret 1i32 }
+    if row < 784usize { ret 2i32 }
+    if row < 1120usize { ret 3i32 }
+    if row < 1483usize { ret 4i32 }
+    if row < 1603usize { ret 5i32 }
+    ret 6i32
+}
+
 // cells 25 and 27 to 30 show the grid grouped by Edition
 fn grouped(k: usize) -> bool { ret k >= 25usize && k != 26usize && k < 31usize }
 
 fn load(a: *mem.Arena, app: *App) -> err {
-    var spec: [6]table.Spec = zero
+    var spec: [7]table.Spec = zero
     spec[C_FAV] = table.Spec { name: "Fav", kind: table.Kind.Bool, heap_bytes: 0usize, dict_cap: 0usize }
     spec[C_NAME] = table.Spec { name: "Name", kind: table.Kind.Dict, heap_bytes: 1024usize, dict_cap: 16usize }
-    spec[C_ED] = table.Spec { name: "Edition", kind: table.Kind.Dict, heap_bytes: 256usize, dict_cap: 16usize }
+    spec[C_ED] = table.Spec { name: "Edition", kind: table.Kind.Dict, heap_bytes: 8192usize, dict_cap: 1024usize }
+    spec[C_RANK] = table.Spec { name: "Rank", kind: table.Kind.I32, heap_bytes: 0usize, dict_cap: 0usize }
     spec[C_COLOR] = table.Spec { name: "Color", kind: table.Kind.Dict, heap_bytes: 64usize, dict_cap: 4usize }
     spec[C_TYPE] = table.Spec { name: "Type", kind: table.Kind.Dict, heap_bytes: 256usize, dict_cap: 8usize }
     spec[C_RARITY] = table.Spec { name: "Rarity", kind: table.Kind.Dict, heap_bytes: 64usize, dict_cap: 4usize }
+    let (fillers, fillers_error) = filler_names(a)
+    if fillers_error != ok { ret fillers_error }
     let (made, made_error) = table.create(a, spec[0..], ROWS)
     if made_error != ok { ret made_error }
     app.tbl = made
@@ -114,7 +148,12 @@ fn load(a: *mem.Arena, app: *App) -> err {
         let (got, append_error) = table.append_row(&app.tbl)
         if append_error != ok { ret append_error }
         try table.set_str(&app.tbl, C_NAME, got, name_of(row))
-        try table.set_str(&app.tbl, C_ED, got, ed_of(row))
+        if row >= 2173usize && app.windows {
+            try table.set_str(&app.tbl, C_ED, got, fillers[((row - 2173usize) / 171usize) % 690usize])
+        } else {
+            try table.set_str(&app.tbl, C_ED, got, ed_of(row))
+        }
+        table.set_i32(&app.tbl, C_RANK, got, rank_of(row))
         try table.set_str(&app.tbl, C_COLOR, got, color_of(row))
         try table.set_str(&app.tbl, C_TYPE, got, type_of(row))
         try table.set_str(&app.tbl, C_RARITY, got, rarity_of(row))
@@ -143,12 +182,12 @@ fn ink(ctx: *void, row: usize) -> (paint.Color, bool) {
     ret (grey, has_grey)
 }
 
-fn specs_of(a: *mem.Arena) -> ([]dg.ColumnSpec, err) {
+fn specs_of(a: *mem.Arena, indent: f32) -> ([]dg.ColumnSpec, err) {
     let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 10usize)
     if specs_error != ok { ret (zero, specs_error) }
     let sk = grp.SummaryKind.Rows
     specs[0usize] = dg.ColumnSpec { title: "", width: 12.0, column: C_NAME, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    specs[1usize] = dg.ColumnSpec { title: "Favorite", width: 23.0, column: C_FAV, kind: dg.CellKind.Star, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[1usize] = dg.ColumnSpec { title: "Favorite", width: 23.0 + indent, column: C_FAV, kind: dg.CellKind.Star, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[2usize] = dg.ColumnSpec { title: "", width: 21.0, column: C_NAME, kind: dg.CellKind.Picture, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[3usize] = dg.ColumnSpec { title: "Name", width: 150.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[4usize] = dg.ColumnSpec { title: "Edition", width: 70.0, column: C_ED, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
@@ -175,7 +214,7 @@ fn setup(app: *App) -> err {
         let (v, v_error) = view.create(a, &app.tbl)
         if v_error != ok { ret v_error }
         app.views[k] = v
-        let (g, g_error) = grp.create(a, &app.views[k], 16usize)
+        let (g, g_error) = grp.create(a, &app.views[k], 1024usize)
         if g_error != ok { ret g_error }
         app.groups[k] = g
         // the rows stay in load order: no key
@@ -183,10 +222,20 @@ fn setup(app: *App) -> err {
         levels[0usize] = grp.GroupLevel { column: C_ED, descending: false, fold: true }
         if grouped(k) {
             try grp.group_by(&app.groups[k], levels[0usize..1usize], order[0usize..1usize], &app.scratch)
+            // round 12: the groups in the capture's order (the hidden rank), the last seven in view
+            if app.windows {
+                var rank_spec: [1]grp.SummarySpec = zero
+                rank_spec[0usize] = grp.SummarySpec { column: C_RANK }
+                try grp.apply_summaries(&app.groups[k], rank_spec[0usize..1usize], a)
+                try grp.sort_groups_by_summary(&app.groups[k], 0usize, 0usize, grp.SummaryKind.Min, false, &app.scratch)
+            }
         } else {
             try grp.group_by(&app.groups[k], none[0usize..0usize], order[0usize..0usize], &app.scratch)
         }
-        let (specs, specs_error) = specs_of(a)
+        // round 12: a grouped grid's first column takes the 15 px group indent
+        var indent: f32 = 0.0
+        if grouped(k) && app.windows { indent = 15.0 }
+        let (specs, specs_error) = specs_of(a, indent)
         if specs_error != ok { ret specs_error }
         let (made, made_error) = dg.create(a, &app.tbl, &app.groups[k], specs, dg.no_events(), u64(1000000 + k * 1000000))
         if made_error != ok { ret made_error }
@@ -214,6 +263,8 @@ fn setup(app: *App) -> err {
         }
         // the View > Group by captures: group rows carry their counts, the group box is shown
         if k >= 25usize && k < 31usize { look.group_counts = true }
+        // round 12: the pointer states (hover and pressed grabs) show the solid focus rectangle on the current group row; the first two cells are at rest
+        if k == 27usize || k == 28usize || k == 30usize { look.group_solid = true }
         dg.set_look(&app.grids[k], look)
         if k >= 25usize && k < 31usize { dg.show_group_box(&app.grids[k], true) }
         dg.set_row_ink(&app.grids[k], zero, ink)
@@ -237,10 +288,21 @@ fn setup(app: *App) -> err {
             // grouped: the current entry is the seventh group row, no card is selected
             app.grids[k].position = 6usize
             app.grids[k].has_selection = false
+            if app.windows {
+                app.grids[k].position = grp.visible_len(&app.groups[k]) - 1usize
+                dg.set_tail_gap(&app.grids[k], 4.0)
+                app.grids[k].offset = dg.entry_top(&app.grids[k], grp.visible_len(&app.groups[k]) - 7usize) + 2.0
+            }
         }
         // focused: the cells 0 to 5 (the capture's grid had the focus: dotted row rectangle); the last one is not
         dg.set_forced_focus(&app.grids[k], k != 6usize)
-        if grouped(k) { dg.show_sort(&app.grids[k], 4usize, false) } else { dg.show_sort(&app.grids[k], 3usize, false) }
+        // round 12: the live header marks the picture column (outlined down triangle) and, grouped, the Edition column; Name is not marked
+        if grouped(k) { dg.show_sort(&app.grids[k], 4usize, false) } else if app.windows { dg.show_sort(&app.grids[k], 10usize, false) } else { dg.show_sort(&app.grids[k], 3usize, false) }
+        if app.windows {
+            app.grids[k].extra_sort[0usize] = 2usize
+            app.grids[k].extra_desc[0usize] = true
+            app.grids[k].extra_count = 1usize
+        }
         // the lower arrow held down scrolls the rows (the capture shows two rows gone)
         if k == 9usize { app.grids[k].offset = 38.0 }
         k += 1usize
