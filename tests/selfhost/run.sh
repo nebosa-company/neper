@@ -2298,6 +2298,11 @@ chmod +x "$test_build/css-ua-selfhost"
 css_layout_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_layout/src/main.e" "$repo" x64 linux "$test_build/css-layout-selfhost")
 [ "$css_layout_written" = 'executable written' ]
 chmod +x "$test_build/css-layout-selfhost"
+# `e.fmt.css.geom`: 2D transforms (translate, scale, rotate, origin, composition down the tree), bounding rectangles, offset/client/scroll measures, scroll containers, sticky offsets, stacking contexts and hit testing (tracker 2.11, 2.12, 2.15).
+css_geom_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_geom/src/main.e" "$repo" x64 linux "$test_build/css-geom-selfhost")
+[ "$css_geom_written" = 'executable written' ]
+chmod +x "$test_build/css-geom-selfhost"
+"$test_build/css-geom-selfhost"
 "$test_build/css-layout-selfhost"
 "$test_build/css-ua-selfhost"
 "$test_build/css-sheet-selfhost"

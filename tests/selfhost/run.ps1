@@ -2608,6 +2608,12 @@ $cssLayoutWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $cssLayoutWritten -ne 'executable written') { throw 'css_layout emission failed' }
 & $cssLayoutPath
 if ($LASTEXITCODE -ne 0) { throw "a css_layout check failed: exit $LASTEXITCODE" }
+# `e.fmt.css.geom`: 2D transforms (translate, scale, rotate, origin, composition down the tree), bounding rectangles, offset/client/scroll measures, scroll containers, sticky offsets, stacking contexts and hit testing (tracker 2.11, 2.12, 2.15).
+$cssGeomPath = Join-Path $testBuild 'css-geom-selfhost.exe'
+$cssGeomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\css_geom\src\main.e') $repo 'x64' 'windows' $cssGeomPath
+if ($LASTEXITCODE -ne 0 -or $cssGeomWritten -ne 'executable written') { throw 'css_geom emission failed' }
+& $cssGeomPath
+if ($LASTEXITCODE -ne 0) { throw "a css_geom check failed: exit $LASTEXITCODE" }
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 $distConsensusPath = Join-Path $testBuild 'dist-consensus-selfhost.exe'
 $distConsensusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_consensus\src\main.e') $repo 'x64' 'windows' $distConsensusPath

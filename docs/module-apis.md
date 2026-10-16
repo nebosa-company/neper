@@ -24995,6 +24995,32 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
 error TooBig
 ```
 
+### `e.fmt.css.geom`
+
+```neper
+type Rect = struct { x: f64, y: f64, w: f64, h: f64 }
+type Point = struct { x: f64, y: f64 }
+fn apply(m: [6]f64, x: f64, y: f64) -> Point
+fn invert(m: [6]f64) -> ([6]f64, bool)
+fn bounds_of(m: [6]f64, w: f64, h: f64) -> Rect
+fn extra_of(s: *const style.Style, name: str) -> (str, bool)
+fn box_transform(a: *mem.Arena, l: *const layout.Layout, b: u32) -> ([6]f64, bool)
+fn to_document(a: *mem.Arena, l: *const layout.Layout, b: u32) -> [6]f64
+fn layout_rect(l: *const layout.Layout, b: u32) -> Rect
+fn bounding_rect(a: *mem.Arena, l: *const layout.Layout, b: u32) -> Rect
+fn is_positioned(l: *const layout.Layout, b: u32) -> bool
+fn offset_parent(l: *const layout.Layout, b: u32) -> u32
+fn offset_pos(l: *const layout.Layout, b: u32) -> Point
+fn client_size(l: *const layout.Layout, b: u32) -> Point
+fn is_scroll_container(l: *const layout.Layout, b: u32) -> bool
+fn union_descendants(l: *const layout.Layout, b: u32, ox: f64, oy: f64, out: *Rect)
+fn scroll_size(l: *const layout.Layout, b: u32) -> Point
+fn sticky_shift(l: *const layout.Layout, b: u32, port: Rect, cb: Rect) -> Point
+fn is_stacking_context(a: *mem.Arena, l: *const layout.Layout, b: u32) -> bool
+fn contains_point(r: Rect, x: f64, y: f64) -> bool
+fn hit_test(a: *mem.Arena, l: *const layout.Layout, b: u32, x: f64, y: f64) -> u32
+```
+
 ### `e.fmt.html.template`
 
 ```neper
