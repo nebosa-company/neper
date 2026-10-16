@@ -102,7 +102,7 @@ fn coll_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spe
     ret ok
 }
 
-fn coll_specs(a: *mem.Arena) -> ([]dg.ColumnSpec, err) {
+fn coll_specs(a: *mem.Arena, windows: bool) -> ([]dg.ColumnSpec, err) {
     let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 10usize)
     if specs_error != ok { ret (zero, specs_error) }
     let sk = grp.SummaryKind.Rows
@@ -116,6 +116,9 @@ fn coll_specs(a: *mem.Arena) -> ([]dg.ColumnSpec, err) {
     specs[7usize] = dg.ColumnSpec { title: "Sell at", width: 65.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: 2, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     specs[8usize] = dg.ColumnSpec { title: "Sell At Value", width: 80.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: 2, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     specs[9usize] = dg.ColumnSpec { title: "Price", width: 1595.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    // the live footer has a sum under the Price column too (its cell is scrolled off, only its left edge shows)
+    if windows { specs[9usize].summary = 2
+        specs[9usize].summary_kind = grp.SummaryKind.Sum }
     ret (specs, ok)
 }
 
@@ -145,7 +148,7 @@ fn setup(m: *Bottom) -> err {
     sums[1usize] = grp.SummarySpec { column: CC_USED }
     sums[2usize] = grp.SummarySpec { column: CC_BUY }
     try grp.apply_summaries(&m.groups[k], sums[0usize..3usize], &m.store)
-    let (cs, cs_error) = coll_specs(a)
+    let (cs, cs_error) = coll_specs(a, m.windows)
     if cs_error != ok { ret cs_error }
     var events = dg.no_events()
     events.custom_cell = coll_cell
@@ -154,6 +157,12 @@ fn setup(m: *Bottom) -> err {
     m.grids[k] = g2
     var look = gl.v3()
     look.footer_band = gl.rgb(0xC0DCC0u32)
+    look.footer_edges = true
+    look.plain_col = 4usize
+    look.ring_marks = "0 1 79 868a92;0 80 1 8a8f96;0 81 161 90949c;1 2 192 eff0f1;1 194 1 ecedf0;1 195 21 e6e9ee;1 216 1 d2d4d8;1 217 1 c1c1c2;1 218 23 e2e3e4"
+    look.soft_a0 = 0.75
+    look.soft_x0 = 183.0
+    look.soft_slope = 0.0 - 0.0005
     look.ring_top_o = gl.rgb(0xBABDC1u32)
     look.ring_top_i = gl.rgb(0xBFC2C6u32)
     look.ring_left_o = gl.rgb(0x878B93u32)
@@ -183,6 +192,12 @@ fn setup(m: *Bottom) -> err {
     ret ok
 }
 
+// the Windows look's body is one pixel taller than the Neper one (live capture: the navigator's bottom line is the cell's last row)
+fn grid_height(t: *const control.Theme) -> f32 {
+    if t.tokens.profile == .Windows { ret 268.0 }
+    ret 267.0
+}
+
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let m = mem.cast[*Bottom](ctx)
     if m.ready && m.windows != (t.tokens.profile == .Windows) { m.ready = false }
@@ -194,7 +209,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let captions = [5]str{ "Tangle selected, grid focused", "At rest (0 of 8)", "Hover: Name header", "Hover: next button", "Hover: funnel" }
     var k = m.first
     while k < m.first + m.count {
-        let (body, body_error) = dg.build(a, &m.grids[k], t, 267.0)
+        let (body, body_error) = dg.build(a, &m.grids[k], t, grid_height(t))
         if body_error != ok { ret (0usize, body_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (0usize, held_error) }

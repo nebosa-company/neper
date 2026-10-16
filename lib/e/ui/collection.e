@@ -2185,6 +2185,19 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if look.dialog_lines { first_line.background = paint.Brush { Solid: dk(t, 0xFFFFFFu32) } }
             var second_line = control.sized_style(1.0, inner)
             second_line.background = paint.Brush { Solid: dk(t, 0xFAFAFAu32) }
+            // looks9-w1: the live header's two line pixels drift together along the row (#E8 #FC at the first line to #F1 #F3 at x = 563)
+            if look.soft_a0 > 0.0 && !look.dialog_lines && t.tokens.profile == .Windows {
+                var line_sum: f32 = 0.0
+                var upto = 0usize
+                while upto <= i {
+                    line_sum += columns[upto].width
+                    upto += 1usize
+                }
+                var drift = (line_sum - 12.0) * 0.01633
+                if drift < 0.0 { drift = 0.0 }
+                first_line.background = paint.Brush { Solid: dk(t, 0xE8E8E8u32 + u32(drift + 0.5) * 65793u32) }
+                second_line.background = paint.Brush { Solid: dk(t, 0xFCFCFCu32 - u32(drift + 0.5) * 65793u32) }
+            }
             let (two_lines, two_lines_error) = mem.alloc[widget.Node](a, 2usize)
             if two_lines_error != ok { ret (zero, TooLarge) }
             two_lines[0usize] = widget.box(0u64, first_line, zero)
@@ -2463,9 +2476,17 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if look.on && look.cell_select != 0usize && selected && c == look.cell_select - 1usize {
             cell_style.background = paint.Brush { Solid: look.selected }
         }
+        // looks9-w1: a column the selection leaves alone shows the row's zebra colour
+        if look.on && t.tokens.profile == .Windows && look.plain_col != 0usize && selected && c == look.plain_col - 1usize {
+            var plain = look.even
+            if index % 2usize == 1usize { plain = look.odd }
+            cell_style.background = paint.Brush { Solid: plain }
+        }
         // looks4-e: the row indicator's cells are white whatever the row's fill
         if look.on && look.soft_lines && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, c) == 3u8 {
             cell_style.background = paint.Brush { Solid: dk(t, 0xFFFFFFu32) }
+            // looks9-w1: under the Windows dark map the indicator's cells are the dark rows' colour, not white
+            if t.tokens.profile == .Windows { cell_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
         }
         let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
         if framed_error != ok { ret (zero, TooLarge) }
@@ -2486,6 +2507,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             // looks5-e: the main window's column lines grow lighter to the right (live capture: #E3E3E3 and #F8F8F8 at x 36 to
             // #ECECEC and #EFEFEF at x 486), a linear ramp over the row
             var ramp: f32 = 0.0
+            var soft_cover: f32 = 0.0
             if look.on && look.soft_lines && !look.dialog_lines {
                 var line_x: f32 = 0.0
                 var before = 0usize
@@ -2503,6 +2525,17 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                     ramp = 0.0 - 2.0 / 9.0
                 }
                 line.background = paint.Brush { Solid: paint.rgba(first_level, first_level, first_level, 1.0) }
+                if c == 0usize && t.tokens.profile == .Windows && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 {
+                    line.background = paint.Brush { Solid: gl.rgb(0xEAEAEAu32) }
+                }
+                // looks9-w1: the live collection grid's lines are alpha blends of one #DCDCDC pixel straddling two pixels
+                if look.soft_a0 > 0.0 && t.tokens.profile == .Windows && !(c == 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8) {
+                    var cover = look.soft_a0 + (line_x - look.soft_x0) * look.soft_slope
+                    if cover < 0.05 { cover = 0.05 }
+                    if cover > 0.95 { cover = 0.95 }
+                    soft_cover = 1.0 - cover
+                    line.background = paint.Brush { Solid: paint.rgba(soft_base(t), soft_base(t), soft_base(t), cover) }
+                }
             }
             boxed[n] = widget.box(0u64, line, zero)
             n += 1usize
@@ -2512,6 +2545,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                 if !(t.tokens.profile == .Neper && t.tokens.palette == .Dark) {
                     let second_level = (248.0 - ramp * 9.0) / 255.0
                     soft.background = paint.Brush { Solid: paint.rgba(second_level, second_level, second_level, 1.0) }
+                    if c == 0usize && t.tokens.profile == .Windows && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { soft.background = paint.Brush { Solid: gl.rgb(0xFAFAFAu32) } }
+                    if soft_cover > 0.0 { soft.background = paint.Brush { Solid: paint.rgba(soft_base(t), soft_base(t), soft_base(t), soft_cover) } }
                 }
                 boxed[n] = widget.box(0u64, soft, zero)
                 n += 1usize
@@ -2808,6 +2843,12 @@ type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const ov
 
 // Neper dark: the v3 table's light pixel-lines (white and light greys, the pressed header's blue) as dark ones;
 // under every other look and palette the colour is the plain one.
+// looks9-w1: the grey of the live column lines (#DCDCDC; the Windows dark grid's line #3A3A3A)
+fn soft_base(t: *const control.Theme) -> f32 {
+    if t.tokens.palette == .Dark { ret 0.2275 }
+    ret 0.8627
+}
+
 fn dk(t: *const control.Theme, value: u32) -> paint.Color {
     if t.tokens.profile == .Neper && t.tokens.palette == .Dark {
         if value == 0xFFFFFFu32 { ret gl.rgb(0x12131Au32) }
@@ -2872,7 +2913,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32 }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4582,6 +4623,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     view_style.height = style.Length { Px: body_height }
     view_style.overflow = .Clip
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    // looks9-w1: below the last row the live grids show the grid's own white (the collection grid's backdrop picture lies over it)
+    if selection.look.on && selection.look.soft_lines && t.tokens.profile == .Windows { view_style.background = paint.Brush { Solid: selection.look.odd } }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var p = 0usize

@@ -390,7 +390,11 @@ fn setup_main(m: *Main) -> err {
     let (g1, g1_error) = dg.create(a, &m.pool, &m.pool_group, ps, dg.no_events(), 100u64)
     if g1_error != ok { ret g1_error }
     m.pool_grid = g1
-    dg.set_look(&m.pool_grid, gl.v3())
+    var pool_look = gl.v3()
+    // looks9-w1 (Windows only, in the grid): the live footer cells' edge pixels and the frame ring's colours along the left side
+    pool_look.footer_edges = true
+    pool_look.ring_marks = "0 1 1 999ca0;0 2 161 9599a0;0 163 1 8e9299;0 164 49 878b93;1 1 1 8d9096;1 2 1 bbbdc1;1 3 34 dddedf;1 37 1 e5e5e7;1 38 128 eaeaec;1 166 1 e5e7eb;1 167 21 e0e4e9;1 188 1 c5c8cb;1 189 1 c5c5c7;1 190 23 dddedf"
+    dg.set_look(&m.pool_grid, pool_look)
     dg.show_filter_row(&m.pool_grid, true)
     dg.show_group_box(&m.pool_grid, true)
     dg.show_navigator(&m.pool_grid, true)
@@ -416,6 +420,11 @@ fn setup_main(m: *Main) -> err {
     look.ring_left_o = gl.rgb(0x878B93u32)
     look.ring_left_i = gl.rgb(0xEAEAECu32)
     look.ring_bottom = gl.rgb(0xCACCCFu32)
+    look.footer_edges = true
+    look.soft_a0 = 0.75
+    look.soft_x0 = 183.0
+    look.soft_slope = 0.0 - 0.0005
+    look.ring_marks = "0 1 79 878b93;0 80 1 8d9199;0 81 160 9599a0;1 1 1 b5b8bd;1 2 192 eaeaec;1 194 1 e6e8eb;1 195 21 e0e4e9;1 216 1 cdd0d4;1 217 1 bdbec0;1 218 23 dddedf"
     dg.set_look(&m.coll_grid, look)
     dg.set_row_ink(&m.coll_grid, mem.cast[*void](m), coll_ink)
     dg.set_footer_label(&m.coll_grid, "Rows")
@@ -526,7 +535,7 @@ fn states_ink(ctx: *void, row: usize) -> (paint.Color, bool) {
     ret (ink, has_ink)
 }
 
-fn setup_states(s: *States) -> err {
+fn setup_states(s: *States, windows: bool) -> err {
     let a = s.a
     var spec: [6]table.Spec = zero
     spec[SC_FAV] = table.Spec { name: "Fav", kind: table.Kind.Bool, heap_bytes: 0usize, dict_cap: 0usize }
@@ -585,7 +594,20 @@ fn setup_states(s: *States) -> err {
     look.ring_top_i = gl.rgb(0xD0D2D5u32)
     look.ring_left_o = gl.rgb(0x90949Cu32)
     look.ring_left_i = gl.rgb(0xEFF0F1u32)
+    if windows {
+        // looks9-w1: the live top grid's foot pixels and column lines (states/grid-row-selected-focused-main)
+        look.foot_set = true
+        look.foot_drift = 1.0
+        look.foot_g1 = gl.rgb(0xE3E3E3u32)
+        look.foot_g2 = gl.rgb(0xF2F2F2u32)
+        look.foot_w1 = gl.rgb(0xE9E9E9u32)
+        look.foot_w2 = gl.rgb(0xE8E8E8u32)
+        look.soft_a0 = 0.75
+        look.soft_x0 = 206.0
+        look.soft_slope = 0.0 - 0.00055
+    }
     dg.set_look(&s.grid, look)
+    if windows { dg.set_grid_lines(&s.grid, dg.GridLines.Both) }
     dg.set_row_ink(&s.grid, mem.cast[*void](s), state_ink)
     s.grid.aligns[4usize] = 2u8
     s.grid.aligns[5usize] = 2u8
@@ -593,15 +615,22 @@ fn setup_states(s: *States) -> err {
     ret ok
 }
 
+// looks9-w1: the Windows grid's frame ring is 3 px (2 on top, 1 under): a grid asked for the cell's whole height would be squeezed by
+// that much, header and rows alike (a flex shrinks its children), so the body is asked for the rest
+fn ring_free(t: *const control.Theme, height: f32) -> f32 {
+    if t.tokens.profile == .Windows { ret height - 3.0 }
+    ret height
+}
+
 fn build_states(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let s = mem.cast[*States](ctx)
     if s.ready && s.windows != (t.tokens.profile == .Windows) { s.ready = false }
     if !s.ready {
-        try setup_states(s)
+        try setup_states(s, t.tokens.profile == .Windows)
         s.ready = true
         s.windows = t.tokens.profile == .Windows
     }
-    let (body, body_error) = dg.build(a, &s.grid, t, 179.0)
+    let (body, body_error) = dg.build(a, &s.grid, t, ring_free(t, 179.0))
     if body_error != ok { ret (0usize, body_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (0usize, held_error) }
@@ -617,11 +646,11 @@ fn build_states_pressed(ctx: *void, a: *mem.Arena, t: *const control.Theme, cell
     let s = mem.cast[*States](ctx)
     if s.ready && s.windows != (t.tokens.profile == .Windows) { s.ready = false }
     if !s.ready {
-        try setup_states(s)
+        try setup_states(s, t.tokens.profile == .Windows)
         s.ready = true
         s.windows = t.tokens.profile == .Windows
     }
-    let (body, body_error) = dg.build(a, &s.grid, t, 101.0)
+    let (body, body_error) = dg.build(a, &s.grid, t, ring_free(t, 101.0))
     if body_error != ok { ret (0usize, body_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (0usize, held_error) }

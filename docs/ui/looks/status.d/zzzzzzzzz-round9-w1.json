@@ -1,0 +1,16 @@
+{
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_top.png",
+    "notes": "Round 9 (worker w1), own struct metric (flat runs, 2 levels, whole sheet incl. both cells, artwork not excluded): data_grid_bottom 17061 -> 1355, bottom2 16563 -> 1740, bottom3 7567 -> 532, data_grid_states 8750 -> 819, data_grid_main 8198 -> 2789, top 6328 -> 5554, hover 5001 -> 4931, group 8688 -> 8470; dialog sheets (sort, shortcuts, missing) and states_pressed unchanged. Causes fixed: the sheet grid was squeezed by its own 3 px frame ring (header 21.6 px, rows blurred), the footer cells' edge pixels and band rows, column lines as alpha blends of #DCDCDC, the header line drift, the left frame ring colours along its length, the Edition cell the selection leaves alone, white backdrop under the rows, navigator button bitmaps and positions, the horizontal thumb, the navigator top row. Card pictures, icons and the backdrop are artwork and not compared. Windows-profile only; Neper PNGs untouched.",
+    "gaps": [
+     "Not matched: top, hover, group and dialog grid sheets still 800 to 10000 px off (top grid foot pixels/lines not yet fitted with the alpha model, group rows, hover headers)",
+     "data_grid_bottom remaining ~680 px per cell: top frame segment from the card picture panel above (context), artwork edges, footer cell edge ramp, header hover face width",
+     "Unverified: 150 %, edit mode, disabled, sort and filter popups; windows dark re-rendered (grays mapped, light ring marks and footer palette tints are approximations, no native dark capture had landed)"
+    ]
+   }
+  }
+ }
+}
