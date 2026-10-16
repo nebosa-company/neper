@@ -117,6 +117,8 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 16384usize, max_states: 1024usize, state_bytes: 65536usize, state_classes: 8u16, max_depth: 48u16, max_commands: 49152usize })
     if runtime_error != ok { ret (rig, runtime_error) }
     rig.runtime = rt
+    // the window's device pixel, as the real app sets it (app.e): pixel-exact painters align to it
+    widget.set_snap(&rig.runtime, 1.0 / scale)
     let physical_w = u32(width * scale + 0.5)
     let physical_h = u32(height * scale + 0.5)
     let (h, harness_error) = testing.harness(a, &rig.runtime, physical_w, physical_h, scale)

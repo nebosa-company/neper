@@ -24,6 +24,7 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 use e.ui.winbutton
+use e.ui.winhint
 use e.ui.winedit
 use e.ui.winmark
 
@@ -2470,6 +2471,12 @@ fn windows_dots(a: *mem.Arena, color: paint.Color, width: f32, height: f32) -> (
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: windows_dots_measure, paint: windows_dots_paint, state: widget.bytes_of[WindowsDots](&dots[0usize]) } }, style: s, children: none }, ok)
 }
 
+// The logical size of a device pixel the window set (looks5), zero when the theme has no runtime.
+fn device_snap(t: *const Theme) -> f32 {
+    if mem.address_of(t.runtime) == 0usize { ret 0.0 }
+    ret widget.snap_of(t.runtime)
+}
+
 // The button's box content: `row` centred in the room the look leaves inside its border and padding,
 // with the dotted focus rectangle laid over it while the keyboard has the focus. `ring` below 3 is the
 // pixel-exact native ring (e.ui.winbutton) drawn under everything in the whole box, and the focus rectangle
@@ -2493,7 +2500,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     if layers_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     if ringed {
-        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height)
+        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, device_snap(t))
         if face_error != ok { ret (zero, face_error) }
         layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, face_node))
         n += 1usize
@@ -2502,7 +2509,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     n += 1usize
     if focus {
         if ringed {
-            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height)
+            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, device_snap(t))
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
         }
@@ -2705,14 +2712,16 @@ fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Glyp
 // and `underline` (fsUnderline: the hot-link style) underlines the whole run. One line unless `width` is above 0,
 // which wraps the words in that width (Properties.WordWrap).
 fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32) -> (widget.Node, err) {
-    let (node, node_error) = windows_label_faced(a, t, value, size, weight, ink, underline, width, 8u32)
+    let (node, node_error) = windows_label_faced(a, t, value, size, weight, ink, underline, width, 8u32, 0.0)
     ret (node, node_error)
 }
 
 // looks4: the same label in another face. A TcxLabel with ParentFont = False and no Style.Font of its own (v3's Deck
 // Properties file name, Missing Set Cards description) draws DevExpress's default font, Segoe UI 9 pt = 12 px (face 7);
 // the ones that inherit the form font or set Style.Font are Tahoma (face 8).
-fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32, face: u32) -> (widget.Node, err) {
+// `box_w` above 0 centres the one-line label in a box of that width on a whole pixel (GDI's DT_CENTER halves with an integer
+// division), the hinted advances being whole pixels.
+fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32, face: u32, box_w: f32) -> (widget.Node, err) {
     var options = text_options()
     options.face = face
     options.size = size
@@ -2721,10 +2730,33 @@ fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, we
     if width > 0.0 { options.wrap = .Word }
     let (shown, mark_at, mark_error) = winbutton.mnemonic(a, value)
     if mark_error != ok { ret (zero, mark_error) }
-    let (words, words_error) = colored_text(a, 0u64, shown, t, options, ink)
-    if words_error != ok { ret (zero, words_error) }
+    // looks5: one line in a font with an hdmx record for the size is set glyph by glyph on v3's whole pixel advances.
+    var hinted: widget.Node = zero
+    var has_hinted = false
+    var hinted_w: f32 = 0.0
+    var mark_x: f32 = 0.0
+    var mark_w: f32 = 0.0
+    if width <= 0.0 {
+        let (row, row_w, before_w, at_w, row_ok, row_error) = windows_hinted_row(a, t, options, shown, mark_at, ink)
+        if row_error != ok { ret (zero, row_error) }
+        hinted = row
+        has_hinted = row_ok
+        hinted_w = row_w
+        mark_x = before_w
+        mark_w = at_w
+    }
+    var words: widget.Node = hinted
+    if !has_hinted {
+        let (plain_words, words_error) = colored_text(a, 0u64, shown, t, options, ink)
+        if words_error != ok { ret (zero, words_error) }
+        words = plain_words
+    }
     var plain = style.defaults()
-    plain.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    // Segoe UI (face 7) labels sit one pixel further right than Tahoma's: the hinted C and S of the captures start there
+    var inset: f32 = 1.0
+    if face == 7u32 { inset = 2.0 }
+    if has_hinted && box_w > hinted_w { inset = math.floor[f32]((box_w - hinted_w) * 0.5) }
+    plain.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     if mark_at >= shown.len && !underline {
         ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, words)), ok)
     }
@@ -2742,13 +2774,69 @@ fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, we
         line_x = 0.0
         line_w = whole
     }
+    if has_hinted {
+        line_x = mark_x
+        line_w = mark_w
+        if underline {
+            line_x = 0.0
+            line_w = hinted_w
+        }
+    }
     var line = sized_style(line_w, 1.0)
     line.background = paint.Brush { Solid: ink }
     let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
     if pair_error != ok { ret (zero, TooLarge) }
     pair[0usize] = words
-    pair[1usize] = widget.positioned(0u64, line_x, whole_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+    pair[1usize] = widget.positioned(0u64, line_x, math.ceil[f32](whole_base + 1.0), style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, widget.stack(0u64, style.defaults(), pair[0usize..2usize]))), ok)
+}
+
+// looks5: `shown` as one text node per glyph, each at the running sum of the font's hdmx advances (v3's GDI pixel widths:
+// winhint.e). Answers the row, its width, the x of the byte `mark_at` (the mnemonic) and that glyph's width, and
+// whether it could (an ASCII run in a font with an hdmx record for the size; otherwise the caller keeps the shaped run).
+fn windows_hinted_row(a: *mem.Arena, t: *const Theme, options: TextOptions, shown: str, mark_at: usize, ink: paint.Color) -> (widget.Node, f32, f32, f32, bool, err) {
+    if t.fonts.len == 0usize || shown.len == 0usize { ret (zero, 0.0, 0.0, 0.0, false, ok) }
+    let (look, look_error) = text_style_faced(a, t, options)
+    if look_error != ok { ret (zero, 0.0, 0.0, 0.0, false, look_error) }
+    if look.fonts.len == 0usize { ret (zero, 0.0, 0.0, 0.0, false, ok) }
+    let font = look.fonts[0usize].font
+    let ppem = u32(look.fonts[0usize].size + 0.5)
+    let (widths, widths_error) = mem.alloc[f32](a, shown.len)
+    if widths_error != ok { ret (zero, 0.0, 0.0, 0.0, false, TooLarge) }
+    var x: f32 = 0.0
+    var mark_x: f32 = 0.0
+    var mark_w: f32 = 0.0
+    var i = 0usize
+    while i < shown.len {
+        if shown[i] >= 128u8 { ret (zero, 0.0, 0.0, 0.0, false, ok) }
+        let (step, has_step) = winhint.advance(font, ppem, u32(shown[i]))
+        if !has_step { ret (zero, 0.0, 0.0, 0.0, false, ok) }
+        widths[i] = f32(step)
+        if i == mark_at {
+            mark_x = x
+            mark_w = f32(step)
+        }
+        x += f32(step)
+        i += 1usize
+    }
+    let (laid, laid_error) = layout.layout(a, "Ag", look, layout.Options { width: 0.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
+    if laid_error != ok { ret (zero, 0.0, 0.0, 0.0, false, laid_error) }
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, shown.len)
+    if nodes_error != ok { ret (zero, 0.0, 0.0, 0.0, false, TooLarge) }
+    var count = 0usize
+    var at: f32 = 0.0
+    i = 0usize
+    while i < shown.len {
+        if shown[i] != 32u8 {
+            let (glyph, glyph_error) = colored_text(a, 0u64, shown[i..i + 1usize], t, options, ink)
+            if glyph_error != ok { ret (zero, 0.0, 0.0, 0.0, false, glyph_error) }
+            nodes[count] = widget.positioned(0u64, at, 0.0, style.defaults(), mem_one_node(a, glyph))
+            count += 1usize
+        }
+        at += widths[i]
+        i += 1usize
+    }
+    ret (widget.stack(0u64, sized_style(x, laid.bounds.height), nodes[0usize..count]), x, mark_x, mark_w, true, ok)
 }
 // ---- end looks-polish: the Windows button family ----------------------------------------------
 

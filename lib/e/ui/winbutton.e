@@ -10,6 +10,7 @@
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
+use e.math
 use e.mem
 use e.str as strs
 use e.ui.layout as ui_layout
@@ -19,13 +20,13 @@ use e.ui.widget
 // Generated from the v3 captures in docs/ui/looks/ref/windows/dialogs (the crisp 96 DPI buttons of Search for Card,
 // Filter Card Pool and Conditional Formatting); see winbutton.e. A value of 0 is the dialog face (not painted).
 fn ring_normal_face() -> u32 { ret 0xFFFDFDFDu32 }
-fn ring_normal_corners() -> [144]u32 { ret [144]u32{ 0u32, 0xFFEDEDEDu32, 0xFFE0E0E0u32, 0xFFDCDCDCu32, 0xFFDBDBDBu32, 0xFFDBDBDBu32, 0xFFEDEDEDu32, 0xFFDBDBDBu32, 0xFFE2E2E2u32, 0xFFEDEDEDu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFE0E0E0u32, 0xFFE2E2E2u32, 0xFFF6F6F6u32, 0xFFFCFCFCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD3D3D3u32, 0xFFF5F5F5u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32, 0xFFFCFCFCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFDBDBDBu32, 0xFFDBDBDBu32, 0xFFDBDBDBu32, 0xFFE1E1E1u32, 0xFFEDEDEDu32, 0u32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFEDEDEDu32, 0xFFE4E4E4u32, 0xFFDBDBDBu32, 0xFFEDEDEDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFCFCFCu32, 0xFFF6F6F6u32, 0xFFDFDFDFu32, 0xFFDFDFDFu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF3F3F3u32, 0xFFD4D4D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFCFCFCu32, 0xFFD1D1D1u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD1D1D1u32, 0xFFFBFBFBu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD6D6D6u32, 0xFFEDEDEDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFE5E5E5u32, 0xFFD9D9D9u32, 0u32, 0xFFFBFBFBu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFEFEFEFu32, 0xFFE3E3E3u32, 0xFFD6D6D6u32, 0xFFD0D0D0u32, 0xFFD0D0D0u32, 0xFFD0D0D0u32, 0u32, 0xFFEFEFEFu32, 0xFFE4E4E4u32, 0xFFDEDEDEu32, 0xFFDEDEDEu32, 0xFFDEDEDEu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFBFBFBu32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFEFEFEFu32, 0xFFD7D7D7u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFBFBFBu32, 0xFFEEEEEEu32, 0xFFDADADAu32, 0xFFE6E6E6u32, 0xFFD0D0D0u32, 0xFFD0D0D0u32, 0xFFD1D1D1u32, 0xFFD5D5D5u32, 0xFFE3E3E3u32, 0xFFEFEFEFu32, 0xFFDEDEDEu32, 0xFFDEDEDEu32, 0xFFDFDFDFu32, 0xFFE4E4E4u32, 0xFFEFEFEFu32, 0u32 } }
+fn ring_normal_corners() -> [144]u32 { ret [144]u32{ 0u32, 0x18D0D0D0u32, 0x8DD3D3D3u32, 0x8ECCCCCCu32, 0xA8D0D0D0u32, 0xA8D0D0D0u32, 0x18D0D0D0u32, 0xA8D0D0D0u32, 0xE0E0E0E0u32, 0x18D0D0D0u32, 0x10D0D0D0u32, 0x10D0D0D0u32, 0x74CDCDCDu32, 0xFFE2E2E2u32, 0xFFF6F6F6u32, 0xFFFCFCFCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xE0CFCFCFu32, 0xFFF5F5F5u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32, 0xFFFCFCFCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xA8D0D0D0u32, 0xA8D0D0D0u32, 0xA8D0D0D0u32, 0x6ECDCDCDu32, 0x18D0D0D0u32, 0u32, 0x10D0D0D0u32, 0x10D0D0D0u32, 0x18D0D0D0u32, 0xE8E3E3E3u32, 0xA8D0D0D0u32, 0x18D0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFCFCFCu32, 0xFFF6F6F6u32, 0xE4DDDDDDu32, 0x8CD1D1D1u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF3F3F3u32, 0xE6D1D1D1u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFCFCFCu32, 0xFFD1D1D1u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xE2CDCDCDu32, 0xFFFBFBFBu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xC3CECECEu32, 0x18D0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0x55CFCFCFu32, 0xFFD9D9D9u32, 0u32, 0xFFFBFBFBu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0x08D0D0D0u32, 0x55C9C9C9u32, 0xC3CECECEu32, 0xFFD0D0D0u32, 0xFFD0D0D0u32, 0xFFD0D0D0u32, 0u32, 0x08D0D0D0u32, 0x36B7B7B7u32, 0x55BABABAu32, 0x55BABABAu32, 0x55BABABAu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFBFBFBu32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0x08D0D0D0u32, 0xC7D0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFBFBFBu32, 0xFFEEEEEEu32, 0xFFDADADAu32, 0x55D2D2D2u32, 0xFFD0D0D0u32, 0xFFD0D0D0u32, 0xE2CDCDCDu32, 0xE5D2D2D2u32, 0x55C9C9C9u32, 0x08D0D0D0u32, 0x55BABABAu32, 0x55BABABAu32, 0x55BDBDBDu32, 0x36B7B7B7u32, 0x08D0D0D0u32, 0u32 } }
 // top0 top1 bottom1 bottom0 left0 left1 right1 right0
-fn ring_normal_edges() -> [8]u32 { ret [8]u32{ 0xFFDBDBDBu32, 0xFFEEEEEEu32, 0xFFD0D0D0u32, 0xFFDEDEDEu32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32 } }
+fn ring_normal_edges() -> [8]u32 { ret [8]u32{ 0xAAD0D0D0u32, 0xFFEEEEEEu32, 0xFFD0D0D0u32, 0x55BABABAu32, 0xFFD0D0D0u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFD0D0D0u32 } }
 fn ring_default_face() -> u32 { ret 0xFFFDFDFDu32 }
-fn ring_default_corners() -> [144]u32 { ret [144]u32{ 0u32, 0xFFDCE6EEu32, 0xFF78B4E2u32, 0xFF5AA5DFu32, 0xFF50A0DDu32, 0xFF50A0DDu32, 0xFFDCE6EEu32, 0xFF50A0DEu32, 0xFF69AFE4u32, 0xFFA3CEEFu32, 0xFFA9D1EFu32, 0xFFA9D1EFu32, 0xFF78B4E2u32, 0xFF64ADE5u32, 0xFFD3E7F6u32, 0xFFF8FAFCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF1985D7u32, 0xFFCEE4F6u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32, 0xFFF8FAFCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF50A0DDu32, 0xFF50A0DDu32, 0xFF50A0DDu32, 0xFF82B9E3u32, 0xFFDCE6EEu32, 0u32, 0xFFA9D1EFu32, 0xFFA9D1EFu32, 0xFF9ECBEEu32, 0xFF78B6E6u32, 0xFF50A0DEu32, 0xFFDCE6EEu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF8FAFCu32, 0xFFD8EAF7u32, 0xFF59A6E2u32, 0xFF6EAFE1u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFC8E1F4u32, 0xFF1E87D8u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF8FAFCu32, 0xFF057AD5u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0A7DD5u32, 0xFFF2F8FCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF2D8FD9u32, 0xFFA3CEEFu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFA0C8E6u32, 0xFF3493DCu32, 0xFFB3D6F1u32, 0xFFF2F8FCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFE6EBEFu32, 0xFF91C1E5u32, 0xFF61A5D9u32, 0xFF4F99D3u32, 0xFF549BD3u32, 0xFF549BD3u32, 0u32, 0xFFE6EBEFu32, 0xFFB9D2E5u32, 0xFFA0C4E0u32, 0xFFA0C4DFu32, 0xFFA0C4DFu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF2F8FBu32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFAED3F0u32, 0xFF3291DAu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF2F8FCu32, 0xFFA8D0EFu32, 0xFF3996DDu32, 0xFFA5CAE7u32, 0xFF549BD3u32, 0xFF549BD3u32, 0xFF599ED4u32, 0xFF529DD7u32, 0xFF91C1E5u32, 0xFFE6EBEFu32, 0xFFA0C4DFu32, 0xFFA0C4DFu32, 0xFFA5C6E0u32, 0xFFB4D0E5u32, 0xFFE6EBEFu32, 0u32 } }
+fn ring_default_corners() -> [144]u32 { ret [144]u32{ 0u32, 0x1C3A95DEu32, 0x8F1A85D7u32, 0xA3057BD5u32, 0xAD047AD4u32, 0xAD047AD4u32, 0x1C3A95DEu32, 0xAA0078D5u32, 0xFF69AFE4u32, 0xFFA3CEEFu32, 0xFFA9D1EFu32, 0xFFA9D1EFu32, 0x84087CD5u32, 0xFF64ADE5u32, 0xFFD3E7F6u32, 0xFFF8FAFCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xEB077CD5u32, 0xFFCEE4F6u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32, 0xFFF8FAFCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xAD047AD4u32, 0xAD047AD4u32, 0xAD047AD4u32, 0x750078D4u32, 0x1C3A95DEu32, 0u32, 0xFFA9D1EFu32, 0xFFA9D1EFu32, 0xFF9ECBEEu32, 0xE66BB0E5u32, 0xAA0078D5u32, 0x1C3A95DEu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF8FAFCu32, 0xFFD8EAF7u32, 0xFF59A6E2u32, 0x8F087CD5u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFC8E1F4u32, 0xE3047AD5u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF8FAFCu32, 0xFF057AD5u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xF40078D4u32, 0xFFF2F8FCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xD00179D4u32, 0xFFA3CEEFu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0x550078D2u32, 0xDE1885D9u32, 0xFFB3D6F1u32, 0xFFF2F8FCu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0x0B087CD9u32, 0x701885D7u32, 0xC3358ED2u32, 0xFF4F99D3u32, 0xFF549BD3u32, 0xFF549BD3u32, 0u32, 0x0B087CD9u32, 0x3D0A73C2u32, 0x55006CC0u32, 0x55006CBDu32, 0x55006CBDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF2F8FBu32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFAED3F0u32, 0xCD047AD5u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFFF2F8FCu32, 0xFFA8D0EFu32, 0xE7268DDBu32, 0x500177D3u32, 0xFF549BD3u32, 0xFF549BD3u32, 0xEB4C97D2u32, 0xCD2B89D1u32, 0x701885D7u32, 0x0B087CD9u32, 0x55006CBDu32, 0x55006CBDu32, 0x50016ABDu32, 0x410572C5u32, 0x0B087CD9u32, 0u32 } }
 // top0 top1 bottom1 bottom0 left0 left1 right1 right0
-fn ring_default_edges() -> [8]u32 { ret [8]u32{ 0xFF50A0DDu32, 0xFFA9D1EFu32, 0xFF549BD3u32, 0xFFA0C4DFu32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32 } }
+fn ring_default_edges() -> [8]u32 { ret [8]u32{ 0xAA0078D4u32, 0xFFA9D1EFu32, 0xFF549BD3u32, 0x55006CBDu32, 0xFF0078D4u32, 0xFFFDFDFDu32, 0xFFFDFDFDu32, 0xFF0078D4u32 } }
 fn ring_disabled_face() -> u32 { ret 0xFFF9F9F9u32 }
 fn ring_disabled_corners() -> [144]u32 { ret [144]u32{ 0u32, 0xFFEFEFEFu32, 0xFFEDEDEDu32, 0xFFECECECu32, 0xFFEBEBEBu32, 0xFFEBEBEBu32, 0xFFEFEFEFu32, 0xFFECECECu32, 0xFFEFEFEFu32, 0xFFF3F3F3u32, 0xFFF4F4F4u32, 0xFFF4F4F4u32, 0xFFECECECu32, 0xFFEFEFEFu32, 0xFFF6F6F6u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFEAEAEAu32, 0xFFF6F6F6u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFE9E9E9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFE9E9E9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFEBEBEBu32, 0xFFEBEBEBu32, 0xFFEBEBEBu32, 0xFFEDEDEDu32, 0xFFEFEFEFu32, 0u32, 0xFFF4F4F4u32, 0xFFF4F4F4u32, 0xFFF3F3F3u32, 0u32, 0xFFEBEBEBu32, 0xFFEFEFEFu32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF7F7F7u32, 0xFFEEEEEEu32, 0xFFECECECu32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF6F6F6u32, 0xFFE9E9E9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFE9E9E9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFE9E9E9u32, 0xFFE9E9E9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFEAEAEAu32, 0xFFF8F8F8u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFEBEBEBu32, 0xFFF3F3F3u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFEEEEEEu32, 0xFFECECECu32, 0xFFF4F4F4u32, 0xFFF8F8F8u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFEDEDEDu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0u32, 0u32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFE9E9E9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF8F8F8u32, 0xFFE9E9E9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF4F4F4u32, 0xFFEAEAEAu32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF8F8F8u32, 0xFFF4F4F4u32, 0xFFEDEDEDu32, 0xFFEDEDEDu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFEFEFEFu32, 0xFFECECECu32, 0xFFEDEDEDu32, 0u32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0u32, 0u32 } }
 // top0 top1 bottom1 bottom0 left0 left1 right1 right0
@@ -35,14 +36,33 @@ fn ring_disabled_edges() -> [8]u32 { ret [8]u32{ 0xFFEBEBEBu32, 0xFFF4F4F4u32, 0
 // (Sort OK pressed, a 73 x 22 box; Clear, Cancel and OK show the same ring and face: a pressed default and a pressed plain
 // button are alike). The dotted focus rectangle the press also shows is taken out of the corner cells.
 fn ring_pressed_face() -> u32 { ret 0xFFCCE4F7u32 }
-fn ring_pressed_corners() -> [144]u32 { ret [144]u32{ 0u32, 0xFFDCE3E9u32, 0xFF78A2C5u32, 0xFF5A8EB9u32, 0xFF5088B6u32, 0xFF5088B6u32, 0xFFDCE3E9u32, 0xFF5088B6u32, 0xFF5891C0u32, 0xFF85B1D5u32, 0xFF88B4D8u32, 0xFF88B4D8u32, 0xFF78A2C4u32, 0xFF528DBEu32, 0xFFAACCE7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF1964A2u32, 0xFFA6C9E5u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFFC8E1F5u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF5088B6u32, 0xFF5088B6u32, 0xFF5088B6u32, 0xFF82A9C8u32, 0xFFDCE3E9u32, 0u32, 0xFF88B4D8u32, 0xFF88B4D8u32, 0xFF80AED4u32, 0xFF669AC5u32, 0xFF5088B6u32, 0xFFDCE3E9u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFAECFE9u32, 0xFF4987BAu32, 0xFF6E9BC1u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFA1C6E3u32, 0xFF1E68A4u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFC8E1F5u32, 0xFF05579Bu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF0A5B9Cu32, 0xFFC3DEF3u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF2D71A9u32, 0xFF84B1D6u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFA0BCD3u32, 0xFF2C73ACu32, 0xFF91BADBu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFE6EAECu32, 0xFF91B3CDu32, 0xFF5890BCu32, 0xFF3F81B6u32, 0xFF4484B8u32, 0xFF4484B8u32, 0u32, 0xFFE6EAECu32, 0xFFB9CCDCu32, 0xFFA0BCD3u32, 0xFFA0BCD3u32, 0xFFA0BCD3u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFC3DEF3u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF8CB7D9u32, 0xFF3275AAu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF88B4D7u32, 0xFF3076AEu32, 0xFFA5BFD4u32, 0xFF4484B8u32, 0xFF4484B8u32, 0xFF4987BAu32, 0xFF4A86B6u32, 0xFF91B2CDu32, 0xFFE6E9ECu32, 0xFFA0BCD3u32, 0xFFA0BCD3u32, 0xFFA5C0D5u32, 0xFFB4C9DAu32, 0xFFE6E9ECu32, 0u32 } }
-fn ring_pressed_edges() -> [8]u32 { ret [8]u32{ 0xFF5088B6u32, 0xFF88B4D8u32, 0xFF4484B8u32, 0xFFA0BCD3u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32 } }
+fn ring_pressed_corners() -> [144]u32 { ret [144]u32{ 0u32, 0x1C3A7AB0u32, 0x8D1763A2u32, 0xA1025599u32, 0xAA005499u32, 0xAA005499u32, 0x1C3A7AB0u32, 0xAA005499u32, 0xE44686BAu32, 0xEC7CACD3u32, 0xFF88B4D8u32, 0xFF88B4D8u32, 0x870D5D9Du32, 0xFF528DBEu32, 0xFFAACCE7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xEC08599Cu32, 0xFFA6C9E5u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFFC8E1F5u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xAA005499u32, 0xAA005499u32, 0xAA005499u32, 0x75005599u32, 0x1B3375AEu32, 0u32, 0xFF88B4D8u32, 0xFF88B4D8u32, 0xFF80AED4u32, 0xE0538EBFu32, 0xAA005499u32, 0x1B3375AEu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFAECFE9u32, 0xFF4987BAu32, 0x8D05569Bu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFA1C6E3u32, 0xE405589Bu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFC8E1F5u32, 0xFF05579Bu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xF5015599u32, 0xFFC3DEF3u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xCF005499u32, 0xFF84B1D6u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0x55005499u32, 0xE41564A4u32, 0xFF91BADBu32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0x0B086593u32, 0x65005698u32, 0xCC3278AFu32, 0xFF3F81B6u32, 0xFF4484B8u32, 0xFF4484B8u32, 0u32, 0x0B086593u32, 0x3C06579Bu32, 0x55005499u32, 0x55005499u32, 0x55005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFC3DEF3u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF8CB7D9u32, 0xCD045799u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF88B4D7u32, 0xFF3076AEu32, 0x4F005296u32, 0xFF4484B8u32, 0xFF4484B8u32, 0xEB3B7EB5u32, 0xD52971ABu32, 0x65005398u32, 0x0B084E93u32, 0x55005499u32, 0x55005499u32, 0x550F609Fu32, 0x4105579Au32, 0x0B084E93u32, 0u32 } }
+fn ring_pressed_edges() -> [8]u32 { ret [8]u32{ 0xAA005499u32, 0xFF88B4D8u32, 0xFF4484B8u32, 0x55005499u32, 0xFF005499u32, 0xFFCCE4F7u32, 0xFFCCE4F7u32, 0xFF005499u32 } }
 
 // Which ring: 0 rest, 1 default (accent), 2 disabled, 3 pressed.
-type Ring = struct { kind: u32, face: u32, tint: u32 }
+type Ring = struct { kind: u32, face: u32, tint: u32, snap: f32 }
 
-fn ring_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: style.hex(value & 0xFFFFFFu32) } } })
+// `value` is 0xAARRGGBB; an alpha byte of 0 (a plain 0xRRGGBB) is opaque. looks5: the outer rows and corner cells of a
+// ring carry the share of ring over the dialog face they sit on (v3's Filter dialog is #F9F9F9, the others #F0F0F0).
+// `snap` is the logical size of a device pixel (zero or one: a whole pixel): the rectangle's edges move to the device
+// grid, so at a fractional scale a one pixel line is one or two device pixels wide and never a blurred half.
+fn ring_rect(b: *scene.Builder, snap: f32, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
+    var color = style.hex(value & 0xFFFFFFu32)
+    let alpha = value / 16777216u32
+    if alpha != 0u32 && alpha < 255u32 { color.alpha = f32(alpha) / 255.0 }
+    var left = x
+    var top = y
+    var right = x + w
+    var bottom = y + h
+    if snap > 0.0 && snap != 1.0 {
+        left = math.round[f32](x / snap) * snap
+        top = math.round[f32](y / snap) * snap
+        right = math.round[f32]((x + w) / snap) * snap
+        bottom = math.round[f32]((y + h) / snap) * snap
+        if right <= left { right = left + snap }
+        if bottom <= top { bottom = top + snap }
+    }
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: left, y: top, width: right - left, height: bottom - top }, brush: paint.Brush { Solid: color } } })
 }
 
 // One channel of a corner cell for another face: the cell is a blend of the ring colour `edge` and the captured face
@@ -77,7 +97,9 @@ fn ring_pick(value: u32, baked: u32, edge: u32, face: u32) -> u32 {
     let er = (edge / 65536u32) % 256u32
     let fr = (face / 65536u32) % 256u32
     let red = ring_channel(vr, br, er, fr)
-    ret 4278190080u32 + red * 65536u32 + green * 256u32 + blue
+    var alpha = value / 16777216u32
+    if alpha == 0u32 { alpha = 255u32 }
+    ret alpha * 16777216u32 + red * 65536u32 + green * 256u32 + blue
 }
 
 fn ring_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
@@ -139,16 +161,16 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let h = f32(u32(area.height + 0.5))
     let x0 = area.x
     let y0 = area.y
-    try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, h - 2.0, d.face)
-    try ring_rect(b, x0 + 1.0, y0 + 6.0, 5.0, h - 12.0, d.face)
-    try ring_rect(b, x0 + w - 6.0, y0 + 6.0, 5.0, h - 12.0, d.face)
-    try ring_rect(b, x0 + 6.0, y0, w - 12.0, 1.0, ring_edge(d.kind, 0usize))
-    try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, 1.0, ring_edge(d.kind, 1usize))
+    try ring_rect(b, d.snap, x0 + 6.0, y0 + 1.0, w - 12.0, h - 2.0, d.face)
+    try ring_rect(b, d.snap, x0 + 1.0, y0 + 6.0, 5.0, h - 12.0, d.face)
+    try ring_rect(b, d.snap, x0 + w - 6.0, y0 + 6.0, 5.0, h - 12.0, d.face)
+    try ring_rect(b, d.snap, x0 + 6.0, y0, w - 12.0, 1.0, ring_edge(d.kind, 0usize))
+    try ring_rect(b, d.snap, x0 + 6.0, y0 + 1.0, w - 12.0, 1.0, ring_edge(d.kind, 1usize))
     // bottom: edge 2 is the row h - 2, edge 3 the row h - 1
-    try ring_rect(b, x0 + 6.0, y0 + h - 2.0, w - 12.0, 1.0, ring_edge(d.kind, 2usize))
-    try ring_rect(b, x0 + 6.0, y0 + h - 1.0, w - 12.0, 1.0, ring_edge(d.kind, 3usize))
-    try ring_rect(b, x0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 4usize))
-    try ring_rect(b, x0 + w - 1.0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 7usize))
+    try ring_rect(b, d.snap, x0 + 6.0, y0 + h - 2.0, w - 12.0, 1.0, ring_edge(d.kind, 2usize))
+    try ring_rect(b, d.snap, x0 + 6.0, y0 + h - 1.0, w - 12.0, 1.0, ring_edge(d.kind, 3usize))
+    try ring_rect(b, d.snap, x0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 4usize))
+    try ring_rect(b, d.snap, x0 + w - 1.0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 7usize))
     let baked = ring_baked(d.kind)
     let line = ring_line(d.kind)
     var c = 0usize
@@ -161,7 +183,7 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         while k < 36usize {
             let cell = ring_cell(d.kind, c * 36usize + k)
             if cell != 0u32 {
-                try ring_rect(b, x0 + ox + f32(k % 6usize), y0 + oy + f32(k / 6usize), 1.0, 1.0, ring_pick(cell, baked, line, d.face))
+                try ring_rect(b, d.snap, x0 + ox + f32(k % 6usize), y0 + oy + f32(k / 6usize), 1.0, 1.0, ring_pick(cell, baked, line, d.face))
             }
             k += 1usize
         }
@@ -171,10 +193,10 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 // The ring, `width` x `height` (the visible box), over a face 0xRRGGBB; `kind` as in `Ring`. A node to put under a button's label.
-fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32) -> (widget.Node, err) {
+fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32, snap: f32) -> (widget.Node, err) {
     let (rings, rings_error) = mem.alloc[Ring](a, 1usize)
     if rings_error != ok { ret (zero, rings_error) }
-    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32 }
+    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32, snap: snap }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: height }
@@ -203,15 +225,15 @@ fn mnemonic(a: *mem.Arena, label: str) -> (str, usize, err) {
 // and 4 (and h - 4 and h - 3) of dots every 2 px from x = 6 to w - 7, two columns at x = 3 and w - 4 that alternate
 // per row, and four corner cells that are blends. The dot colours depend on the face: grey #555555 / #AAAAAA on the
 // #FDFDFD face, #665E57 / #99A1A8 on the pressed face.
-type FocusDots = struct { pressed: bool }
+type FocusDots = struct { pressed: bool, snap: f32 }
 
 fn focus_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
 }
 
 // One pixel at rect coordinates (rx, ry).
-fn focus_px(b: *scene.Builder, area: geometry.Rect, rx: f32, ry: f32, value: u32) -> err {
-    ret ring_rect(b, area.x + rx - 1.0, area.y + ry - 1.0, 1.0, 1.0, value)
+fn focus_px(b: *scene.Builder, snap: f32, area: geometry.Rect, rx: f32, ry: f32, value: u32) -> err {
+    ret ring_rect(b, snap, area.x + rx - 1.0, area.y + ry - 1.0, 1.0, 1.0, value)
 }
 
 fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
@@ -229,23 +251,23 @@ fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         light_corner = 0x919BA4u32
     }
     // the top rows: x = 4 and w - 5 are the corner cells
-    try focus_px(b, area, 4.0, 3.0, dark_corner)
-    try focus_px(b, area, w - 5.0, 3.0, dark_corner)
-    try focus_px(b, area, 3.0, 4.0, dark)
-    try focus_px(b, area, 4.0, 4.0, light)
-    try focus_px(b, area, w - 5.0, 4.0, light)
-    try focus_px(b, area, w - 4.0, 4.0, dark)
+    try focus_px(b, d.snap, area, 4.0, 3.0, dark_corner)
+    try focus_px(b, d.snap, area, w - 5.0, 3.0, dark_corner)
+    try focus_px(b, d.snap, area, 3.0, 4.0, dark)
+    try focus_px(b, d.snap, area, 4.0, 4.0, light)
+    try focus_px(b, d.snap, area, w - 5.0, 4.0, light)
+    try focus_px(b, d.snap, area, w - 4.0, 4.0, dark)
     // the bottom rows
-    try focus_px(b, area, 4.0, h - 4.0, dark)
-    try focus_px(b, area, w - 5.0, h - 4.0, dark)
-    try focus_px(b, area, 4.0, h - 3.0, light_corner)
-    try focus_px(b, area, w - 5.0, h - 3.0, light_corner)
+    try focus_px(b, d.snap, area, 4.0, h - 4.0, dark)
+    try focus_px(b, d.snap, area, w - 5.0, h - 4.0, dark)
+    try focus_px(b, d.snap, area, 4.0, h - 3.0, light_corner)
+    try focus_px(b, d.snap, area, w - 5.0, h - 3.0, light_corner)
     var x: f32 = 6.0
     while x <= w - 7.0 {
-        try focus_px(b, area, x, 3.0, dark)
-        try focus_px(b, area, x, 4.0, light)
-        try focus_px(b, area, x, h - 4.0, dark)
-        try focus_px(b, area, x, h - 3.0, light)
+        try focus_px(b, d.snap, area, x, 3.0, dark)
+        try focus_px(b, d.snap, area, x, 4.0, light)
+        try focus_px(b, d.snap, area, x, h - 4.0, dark)
+        try focus_px(b, d.snap, area, x, h - 3.0, light)
         x += 2.0
     }
     // the side columns alternate per row: dark on even rows, light on odd ones
@@ -253,18 +275,18 @@ fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     while y <= h - 4.0 {
         var v = light
         if (u32(y) % 2u32) == 0u32 { v = dark }
-        try focus_px(b, area, 3.0, y, v)
-        try focus_px(b, area, w - 4.0, y, v)
+        try focus_px(b, d.snap, area, 3.0, y, v)
+        try focus_px(b, d.snap, area, w - 4.0, y, v)
         y += 1.0
     }
     ret ok
 }
 
 // The focus rectangle over a ring box of `width` x `height` (the visible box); `pressed` for the pressed face.
-fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32) -> (widget.Node, err) {
+fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32, snap: f32) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[FocusDots](a, 1usize)
     if dots_error != ok { ret (zero, dots_error) }
-    dots[0usize] = FocusDots { pressed: pressed }
+    dots[0usize] = FocusDots { pressed: pressed, snap: snap }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: height }

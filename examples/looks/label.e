@@ -6,6 +6,7 @@
 // reference crop (docs/ui/looks/ref/windows/label.png) are 0 to 9; 10 and 11 are states no capture shows.
 
 use e.gfx.paint
+use e.math
 use e.mem
 use e.ui.control
 use e.ui.layout as ui_layout
@@ -42,8 +43,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         let s = spec(i)
         var node: widget.Node = zero
         var node_error: err = ok
+        var centre_w: f32 = 0.0
+        if s.centred { centre_w = s.box_w }
         if t.tokens.profile == .Windows {
-            let (word, word_error) = control.windows_label_faced(a, t, s.text, s.size, s.weight, style.hex(s.ink), s.underline, s.width, s.face)
+            let (word, word_error) = control.windows_label_faced(a, t, s.text, s.size, s.weight, style.hex(s.ink), s.underline, s.width, s.face, centre_w)
             node = word
             node_error = word_error
         } else {
@@ -65,11 +68,21 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var holder = control.sized_style(s.box_w, s.box_h)
         holder.overflow = .Clip
         var along: ui_layout.MainAlign = .Start
-        if s.centred { along = .Center }
+        // the Windows label centres itself on whole pixels (box_w), the Neper text is centred by the box
+        if s.centred && t.tokens.profile != .Windows { along = .Center }
         let box = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: along, cross: .Start, gap: 0.0 }, holder, parts[0usize..1usize])
+        // looks5: the box sits on whole pixels in its cell (the capture crops are placed at floor((cell - box) / 2)), so a
+        // text is not blurred across two rows by a half pixel offset
+        var cell = box
+        if t.tokens.profile != .Neper {
+            let (placed, placed_error) = mem.alloc[widget.Node](a, 1usize)
+            if placed_error != ok { ret (0usize, placed_error) }
+            placed[0usize] = widget.positioned(0u64, math.floor[f32]((300.0 - s.box_w) * 0.5), math.floor[f32]((34.0 - s.box_h) * 0.5), style.defaults(), control.mem_one_node(a, box))
+            cell = widget.stack(0u64, control.sized_style(300.0, 34.0), placed[0usize..1usize])
+        }
         var drive: looks.Drive = .None
         if i == 12usize { drive = .Press }
-        cells[i] = looks.Cell { caption: names(i), node: box, drive: drive }
+        cells[i] = looks.Cell { caption: names(i), node: cell, drive: drive }
         i += 1usize
     }
     ret (13usize, ok)

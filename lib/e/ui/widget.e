@@ -344,6 +344,14 @@ fn set_snap(widget_runtime: *Runtime, snap: f32) {
     s.snap = snap
 }
 
+// The snap `set_snap` set (the logical size of a device pixel), zero when none was (looks5: a pixel-exact painter
+// aligns its rectangles to the device grid at a fractional scale).
+fn snap_of(widget_runtime: *Runtime) -> f32 {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize { ret 0.0 }
+    ret s.snap
+}
+
 // A measure remembered for the frame: the node (by its address in the frame's
 // tree), the constraints it was measured under and the answer (D914). A parent
 // measures its children to place them and every ancestor measured them before

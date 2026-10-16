@@ -1,6 +1,7 @@
 // The button in every state under every look: docs/ui/looks/<look>/button.png.
 // Run from the repository root; see docs/ui/looks-howto.md.
 
+use e.gfx.paint
 use e.mem
 use e.ui.control
 use e.ui.layout as ui_layout
@@ -46,7 +47,17 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 4usize { drive = .Hover }
         if i == 5usize || i == 10usize || i == 11usize { drive = .Press }
         if i == 6usize || i == 7usize { drive = .Focus }
-        cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
+        var shown = node
+        if i == 6usize && t.tokens.profile == .Windows {
+            // Filter Card Pool's face is #F9F9F9: 5 px of it around the box, an odd wide, even tall holder
+            var holder = control.sized_style(83.0, 32.0)
+            holder.background = paint.Brush { Solid: style.hex(0xF9F9F9u32) }
+            let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+            if inner_error != ok { ret (0usize, inner_error) }
+            inner[0usize] = widget.positioned(0u64, 5.0, 5.0, style.defaults(), control.mem_one_node(a, node))
+            shown = widget.stack(0u64, holder, inner[0usize..1usize])
+        }
+        cells[i] = looks.Cell { caption: captions[i], node: shown, drive: drive }
         i += 1usize
     }
     ret (12usize, ok)
