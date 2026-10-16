@@ -36,14 +36,52 @@ fn bar(a: *mem.Arena, t: *const control.Theme, key: u64, title: str, y: f32) -> 
     ret (placed, placed_error)
 }
 
+fn noop_submit(ctx: *void) -> err { ret ok }
+
+// The twelve format buttons of the live Deck Legality dialog (75 x 23 at its client positions, the form's DPI phase of examples/looks/dialog.e),
+// placed relative to the group at (26, 39): round 12 builds them so the cell compares with the untouched capture, not a blanked one.
+fn format_buttons(a: *mem.Arena, t: *const control.Theme, out: []widget.Node) -> (usize, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
+    if actions_error != ok { ret (0usize, actions_error) }
+    actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    let names = [12]str{ "&Standard", "&Pioneer", "&Legacy", "&Vintage", "&All", "&Modern", "&Pauper", "&2HG", "&Commander", "Comm &1v1", "&Brawl", "P&easant" }
+    let xs = [12]f32{ 41.0, 203.0, 284.0, 365.0, 446.0, 122.0, 41.0, 122.0, 203.0, 284.0, 365.0, 446.0 }
+    let ys = [12]f32{ 66.0, 66.0, 66.0, 66.0, 66.0, 66.0, 95.0, 95.0, 95.0, 95.0, 95.0, 95.0 }
+    var i = 0usize
+    while i < 12usize {
+        var bo = control.button_options()
+        bo.width = 75.0
+        bo.height = 23.0
+        bo.shift_x = 0.01 + xs[i] * 0.000769
+        bo.shift_y = ys[i] * 0.001099
+        bo.ring_x = 0.0 - 0.0027 + xs[i] * 0.000745
+        bo.ring_y = 0.0 - 0.0221 + ys[i] * 0.000748
+        let (b, b_error) = control.button(a, 20u64 + u64(i), t, names[i], &actions[0usize], bo)
+        if b_error != ok { ret (0usize, b_error) }
+        let (placed, placed_error) = at(a, b, xs[i] - 26.0 + 1.0, ys[i] - 39.0 + 1.0)
+        if placed_error != ok { ret (0usize, placed_error) }
+        out[i] = placed
+        i += 1usize
+    }
+    ret (12usize, ok)
+}
+
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
     if parts_error != ok { ret (0usize, parts_error) }
+    let (fmt, fmt_error) = mem.alloc[widget.Node](a, 12usize)
+    if fmt_error != ok { ret (0usize, fmt_error) }
+    var shown_buttons = 0usize
+    if t.tokens.profile == .Windows {
+        let (made_buttons, buttons_error) = format_buttons(a, t, fmt)
+        if buttons_error != ok { ret (0usize, buttons_error) }
+        shown_buttons = made_buttons
+    }
     // Deck Legality: crop (20,30)-(545,138); the group at (26,39), 513 x 93, so at (6, 9); its right line sits 0.4 past
     // the 513 (the capture splits it over two columns, 530.4 to 531.4).
     var group: widget.Node = zero
     if t.tokens.profile == .Windows {
-        let (framed, framed_error) = control.windows_group_exact(a, 1u64, t, "Select Format ", true, 513.0, 93.0, 0.0, 6.35, 513.4, 92.35, parts[0usize..0usize])
+        let (framed, framed_error) = control.windows_group_exact(a, 1u64, t, "Select Format ", true, 513.0, 93.0, 0.0, 6.35, 513.4, 92.35, fmt[0usize..shown_buttons])
         if framed_error != ok { ret (0usize, framed_error) }
         group = framed
     } else {

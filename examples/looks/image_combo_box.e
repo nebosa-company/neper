@@ -222,7 +222,7 @@ fn build_open_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n: 
     let (toggle, toggle_error) = pick_actions(a, 1usize)
     if toggle_error != ok { ret (0usize, toggle_error) }
     var none: []const widget.Node = zero
-    let (combo, combo_error) = control.image_select_at(a, 100u64, t, "Image", names, none, o.active, true, true, &toggle[0usize], picks, o.width, o.edge_y, o.edge_x)
+    let (combo, combo_error) = control.image_select_pending(a, 100u64, t, "Image", names, none, o.active, 0usize, true, true, &toggle[0usize], picks, o.width, o.edge_y, o.edge_x)
     if combo_error != ok { ret (0usize, combo_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (0usize, parts_error) }
@@ -309,7 +309,8 @@ fn build_listed_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n
     if o.set == 3usize {
         let (made, made_error) = mem.alloc[widget.Node](a, 3usize)
         if made_error != ok { ret (0usize, made_error) }
-        made[0usize] = widget.box(0u64, looks.size_style(0.0, 16.0), zero)
+        let nopic = looks.size_style(0.0, 16.0)
+        made[0usize] = widget.box(7u64, nopic, zero)
         let (one, one_error) = picture(a, t, 3usize)
         if one_error != ok { ret (0usize, one_error) }
         made[1usize] = one

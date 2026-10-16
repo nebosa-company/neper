@@ -242,7 +242,7 @@ fn build_flat_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, var
     var count = 6usize
     if variant < 2usize {
         // the toolbar's separator right of the Mode combo
-        parts[6usize] = grip(187.0, 6.0, 17.0, 12961221u32)
+        parts[6usize] = grip(187.0, 0.0, 26.0, 12961221u32) // looks12: the live crop's separator runs the whole bar (rows 0 to 25), not 17 rows
         count = 7usize
         if t.tokens.profile == .Windows {
             // looks11: the toolbar's "Mode:" caption (a bar item, Tahoma 12 at GDI's advances) left of the combo; the live crop has it
@@ -254,7 +254,8 @@ fn build_flat_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, var
             let (mode, _, mode_error) = control.win_gdi_glyphs(a, &bar_t, caption, style.hex(0u32), "Mode:")
             if mode_error != ok { ret (0usize, mode_error) }
             parts[7usize] = widget.positioned(0u64, 19.5, 6.0, style.defaults(), widget_one(a, mode))
-            count = 8usize
+            parts[8usize] = grip(187.0, 26.0, 1.0, 11447982u32) // the separator's foot pixel (174)
+            count = 9usize
         }
     } else {
         // the toolbar's grip at the left of the card name combo and the foot row of that bar

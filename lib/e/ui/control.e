@@ -15023,8 +15023,15 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
     words.wrap = .None
     let (dialog_t, dialog_error) = win3_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (label_node, label_error) = colored_text(a, 0u64, label, &dialog_t, words, ink)
+    let (plain_node, label_error) = colored_text(a, 0u64, label, &dialog_t, words, ink)
     if label_error != ok { ret (zero, label_error) }
+    var label_node = plain_node
+    if pic.len == 1usize {
+        // looks12: the Sort list (the only list with pictures) is Tahoma 12 px at GDI's whole-pixel advances: "Ascending" is 56 wide, the outline text 50
+        let (gdi_node, _, gdi_error) = win_gdi_glyphs(a, &dialog_t, words, ink, label)
+        if gdi_error != ok { ret (zero, gdi_error) }
+        label_node = gdi_node
+    }
     let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
     if bits_error != ok { ret (zero, TooLarge) }
     var used = 1usize
@@ -15047,7 +15054,11 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
     line_style.padding = style.EdgeLengths { left: style.Length { Px: pad_left }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: pad_under } }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, line_style, bits[0usize..used])
+    // looks12: the picture sits 2 px before the text in the captured Sort list (16 px picture, text ink at +18.7), not 4
+    var row_gap: f32 = 4.0
+    if pic.len == 1usize { row_gap = 2.0 }
+    if pic.len == 1usize && pic[0usize].key == 7u64 { row_gap = 0.0 } // a row with no picture inside a list of picture rows (key 7: the Sort list's "None")
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: row_gap }, line_style, bits[0usize..used])
     if lit {
         // looks4 group d: the lit row carries v3's XOR focus rectangle (orange on the blue).
         let (dots, dots_error) = win4_xor_dots(a)
@@ -15189,7 +15200,9 @@ fn win5_flat_ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> e
     try win3_rect(b, x, y + 1.0, 1.0, h - 1.0, side_left)
     try win3_rect(b, x + w - 13.0, y + 1.0, 1.0, 1.0, style.hex(16448250u32))
     try win3_rect(b, x + w - 13.0, y + 2.0, 1.0, h - 3.0, side_right)
-    try win3_rect(b, x + w - 13.0, y + h - 1.0, 1.0, 1.0, style.hex(16579836u32))
+    var corner_low = style.hex(16579836u32)
+    if w != 127.0 { corner_low = style.hex(16777215u32) } // looks12: the card combo's button corner is white in the capture (255), the Mode combo's #FCFCFC
+    try win3_rect(b, x + w - 13.0, y + h - 1.0, 1.0, 1.0, corner_low)
     try win3_rect(b, x + w - 12.0, y + 1.0, 10.0, 1.0, style.hex(16119285u32))
     try win3_rect(b, x + w - 12.0, y + 2.0, 10.0, h - 3.0, style.hex(15790320u32))
     try win3_rect(b, x + w - 12.0, y + h - 1.0, 10.0, 1.0, style.hex(16448250u32))
@@ -15341,12 +15354,24 @@ fn image_select_at(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
 }
 
 fn win_image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit, width: f32, edge_y: f32, edge_x: f32) -> (widget.Node, err) {
+    let (made, made_error) = win_image_select_head(a, key, t, label, options, icons, selected, selected, open, enabled, toggle, picks, width, edge_y, edge_x)
+    ret (made, made_error)
+}
+
+// looks12: an open list whose highlight has moved (keyboard) while the head still shows the committed item: the captured
+// Authentication, Card Art Position and Condition lists with a lit row 2 show the first value in the head.
+fn image_select_pending(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, lit: usize, committed: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit, width: f32, edge_y: f32, edge_x: f32) -> (widget.Node, err) {
+    let (made, made_error) = win_image_select_head(a, key, t, label, options, icons, lit, committed, open, enabled, toggle, picks, width, edge_y, edge_x)
+    ret (made, made_error)
+}
+
+fn win_image_select_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, head_index: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit, width: f32, edge_y: f32, edge_x: f32) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
-    let chosen = selected < options.len
+    let chosen = head_index < options.len
     var shown = label
-    if chosen { shown = options[selected] }
+    if chosen { shown = options[head_index] }
     var lead: []const widget.Node = zero
-    if chosen && icons.len == options.len { lead = icons[selected..selected + 1usize] }
+    if chosen && icons.len == options.len { lead = icons[head_index..head_index + 1usize] }
     let (head, head_error) = win_head(a, key, t, label, shown, chosen, open, toggle, enabled, lead, width, edge_y, edge_x)
     if head_error != ok { ret (zero, head_error) }
     var count = 1usize
@@ -16898,7 +16923,9 @@ fn win4_hot_corner(f: *const Win3Frame, b: *scene.Builder, face: paint.Color, st
         var i = 0usize
         while i < 5usize {
             let v = win3_byte(table, j * 5usize + i)
-            if v < 256u32 {
+            // looks12: a plain face pixel of the tile (v 253) inside the rectangle painted above is skipped: at alpha 0.92 (the first
+            // frame after a click) the second coat made it #CCE4F7 where the capture has #D0E6F7.
+            if v < 256u32 && !(v >= 253u32 && i >= 2usize && j >= 2usize) {
                 var px = x + f32(i)
                 var py = y + f32(j)
                 if flip_x { px = x + f32(4usize - i) }
