@@ -17,7 +17,7 @@ use e.text.layout as tl
 
 type Host = struct {
     fonts: *fontset.Set, arena: *mem.Arena, ctx: *void,
-    intrinsic: fn(*void, html.NodeId) -> layout.Intrinsic,
+    intrinsic: fn(*void, html.NodeId, *const style.Style) -> layout.Intrinsic,
     image: fn(*void, html.NodeId) -> paint.ImageRef,
     url_image: fn(*void, str) -> paint.ImageRef
 }
@@ -35,9 +35,9 @@ fn font_metrics(ctx: *void, s: *const style.Style) -> layout.FontMetrics {
     ret layout.FontMetrics { ascent: m.ascent, descent: m.descent, line_gap: m.line_gap, x_height: m.x_height }
 }
 
-fn intrinsic_of(ctx: *void, node: html.NodeId) -> layout.Intrinsic {
+fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic {
     let h = mem.cast[*Host](ctx)
-    ret h.intrinsic(h.ctx, node)
+    ret h.intrinsic(h.ctx, node, s)
 }
 
 // The `Measure` for `layout.layout_document`; `h` must outlive the layout.

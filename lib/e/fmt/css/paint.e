@@ -49,8 +49,10 @@ fn emit(p: *Painter, c: scene.Command) {
     if p.status == ok { p.status = scene.push(p.b, c) }
 }
 
+// The scene renderer blends the colour values it is given as they are (display-referred, like a browser's default
+// compositing), so an sRGB byte is simply scaled to 0..1; `pt.srgb8` would linearise it and darken every midtone.
 fn color_of(c: u32) -> pt.Color {
-    ret pt.srgb8(u8((c >> 16u32) & 255u32), u8((c >> 8u32) & 255u32), u8(c & 255u32), u8((c >> 24u32) & 255u32))
+    ret pt.rgba(f32((c >> 16u32) & 255u32) / 255.0f32, f32((c >> 8u32) & 255u32) / 255.0f32, f32(c & 255u32) / 255.0f32, f32((c >> 24u32) & 255u32) / 255.0f32)
 }
 
 fn alpha_of(c: u32) -> u32 { ret (c >> 24u32) & 255u32 }
@@ -1050,6 +1052,8 @@ fn paint_canvas(p: *Painter) {
             kid = kb.next
         }
     }
+    // Nothing specified: the page sits on white.
+    if alpha_of(c) == 0u32 { c = 4294967295u32 }
     fill(p, p.vx, p.vy, p.vw, p.vh, c)
 }
 

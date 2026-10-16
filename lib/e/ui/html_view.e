@@ -29,14 +29,14 @@ use e.ui.widget
 // Host callbacks for replaced content; `intrinsic` sizes an element (layout), `image` supplies its texture (paint).
 type Images = struct {
     ctx: *void,
-    intrinsic: fn(*void, html.NodeId) -> layout.Intrinsic,
+    intrinsic: fn(*void, html.NodeId, *const style.Style) -> layout.Intrinsic,
     image: fn(*void, html.NodeId) -> css_paint.ImageRef,
     url_image: fn(*void, str) -> css_paint.ImageRef
 }
 
 type View = struct {
     arena: *mem.Arena, fonts: *fontset.Set, source: str, sheets: []const str,
-    tree: dom.Dom, styles: []style.Style, lay: layout.Layout, host: measure.Host,
+    complete_sheets: bool, tree: dom.Dom, styles: []style.Style, lay: layout.Layout, host: measure.Host,
     width: f32, height: f32, scroll_x: f32, scroll_y: f32, origin_x: f32, origin_y: f32,
     revision: u64, layout_mark: usize, frame_mark: usize,
     activated: str, has_activated: bool, hover_link: str, has_hover: bool, opened: bool
@@ -44,7 +44,7 @@ type View = struct {
 
 error EmptyFontSet
 
-fn none_intrinsic(ctx: *void, node: html.NodeId) -> layout.Intrinsic { ret zero }
+fn none_intrinsic(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic { ret zero }
 
 fn none_image(ctx: *void, node: html.NodeId) -> css_paint.ImageRef { ret zero }
 
@@ -65,7 +65,7 @@ fn do_layout(v: *View, width: f32, height: f32) -> err {
     let (styles, se) = mem.alloc[style.Style](v.arena, v.tree.used)
     if se != ok { ret se }
     v.styles = styles
-    try style.compute_document(&ctx, &v.tree, v.sheets, v.styles)
+    if v.complete_sheets { try style.compute_document_sheets(&ctx, &v.tree, v.sheets, v.styles) } else { try style.compute_document(&ctx, &v.tree, v.sheets, v.styles) }
     let m = measure.measure_of(&v.host)
     let (lay, le) = layout.layout_document(v.arena, &v.tree, v.styles, m, f64(width), f64(height))
     if le != ok { ret le }
@@ -92,12 +92,20 @@ fn clamp_scroll(v: *View) {
 // Parses `source`, styles and lays it out for a `width` x `height` viewport. `sheets` are author style sheets as text
 // in cascade order (fetched `<link>`s); `fonts` must hold at least one face and outlive the view.
 fn open(a: *mem.Arena, source: str, sheets: []const str, fonts: *fontset.Set, images: Images, width: f32, height: f32) -> (*View, err) {
+    let (tree, pe) = dom.parse(a, source, parse_options(), 1024usize)
+    if pe != ok { ret (zero, pe) }
+    let (v, e) = open_tree(a, tree, source, sheets, false, fonts, images, width, height)
+    ret (v, e)
+}
+
+// As `open`, for a document already parsed. With `complete_sheets` the `sheets` hold every style sheet in document order
+// (the `<style>` elements are not read again).
+fn open_tree(a: *mem.Arena, tree: dom.Dom, source: str, sheets: []const str, complete: bool, fonts: *fontset.Set, images: Images, width: f32, height: f32) -> (*View, err) {
     if fonts.faces.len == 0usize { ret (zero, EmptyFontSet) }
     let (cell, ce) = mem.alloc[View](a, 1usize)
     if ce != ok { ret (zero, ce) }
     let v = &cell[0usize]
-    let (tree, pe) = dom.parse(a, source, parse_options(), 1024usize)
-    if pe != ok { ret (zero, pe) }
+    v.complete_sheets = complete
     v.arena = a
     v.fonts = fonts
     v.source = source

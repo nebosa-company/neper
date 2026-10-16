@@ -1,0 +1,7 @@
+/* Rules that apply only in quirks mode, after the Quirks Mode Standard and the engines' quirks sheets.
+   Edit this file, then run: python scripts/gen_css_ua.py (it writes them into lib/e/fmt/css/ua.e). */
+
+/* A table does not inherit the font and text properties of its container (the table-cell font quirk). */
+table { font-weight: initial; font-style: initial; font-variant: initial; font-size: initial; line-height: initial; white-space: initial; text-align: initial; }
+/* The old default form spacing. */
+form { margin-bottom: 1em; }

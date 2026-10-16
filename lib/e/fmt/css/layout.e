@@ -37,7 +37,7 @@ type Measure = struct {
     ctx: *void,
     width: fn(*void, *const style.Style, str) -> f64,
     metrics: fn(*void, *const style.Style) -> FontMetrics,
-    intrinsic: fn(*void, html.NodeId) -> Intrinsic
+    intrinsic: fn(*void, html.NodeId, *const style.Style) -> Intrinsic
 }
 
 type Inner = enum u8 { Flow, FlowRoot, Flex, Grid, Table, Replaced, Text, Break, Marker, RowGroup, Row, Cell, Caption, ColumnGroup, Column }
@@ -1958,7 +1958,7 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
 // --- Intrinsic widths.
 
 fn replaced_intrinsic(l: *Layout, b: u32) -> Intrinsic {
-    ret l.measure.intrinsic(l.measure.ctx, l.boxes.items[usize(b)].node)
+    ret l.measure.intrinsic(l.measure.ctx, l.boxes.items[usize(b)].node, st(l, l.boxes.items[usize(b)].style))
 }
 
 // The default object size of replaced content with no size of its own.

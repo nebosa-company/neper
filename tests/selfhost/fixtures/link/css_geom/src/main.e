@@ -27,7 +27,7 @@ fn ahem_metrics(ctx: *void, s: *const style.Style) -> layout.FontMetrics {
     ret layout.FontMetrics { ascent: 0.8f64 * s.font_size, descent: 0.2f64 * s.font_size, line_gap: 0.0f64, x_height: 0.5f64 * s.font_size }
 }
 
-fn ahem_intrinsic(ctx: *void, node: html.NodeId) -> layout.Intrinsic {
+fn ahem_intrinsic(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic {
     let d = mem.cast[*const dom.Dom](ctx)
     var out = layout.Intrinsic { kind: 1u8, has_width: false, width: 0.0f64, has_height: false, height: 0.0f64, ratio: 0.0f64 }
     let (w, has_w) = dom.get_attribute(d, node, "width")

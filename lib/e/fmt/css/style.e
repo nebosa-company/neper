@@ -1534,15 +1534,26 @@ fn load_style_elements(l: *sheet.Loader, d: *const dom.Dom) -> err {
 // Every element's computed style with the user agent sheet, the document's `<style>` elements and `sheets` (author
 // style sheets the caller fetched, as text, in cascade order: `<link>`s and `@import`s are the caller's to place).
 fn compute_document(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err {
+    ret compute_document_with(c, d, sheets, true, out)
+}
+
+// As `compute_document`, but the caller has placed every style sheet, `<style>` elements included, in `sheets`, in
+// document order (a page loader that fetched the `<link>`s interleaves them).
+fn compute_document_sheets(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err {
+    ret compute_document_with(c, d, sheets, false, out)
+}
+
+fn compute_document_with(c: *Context, d: *const dom.Dom, sheets: []const str, style_elements: bool, out: []Style) -> err {
     let env = media_env_of(c)
-    let ua_loaded = try uacss.rules(c.a, env)
+    // Quirks mode (`Document.quirks` 2) adds the quirks-only user agent rules.
+    let ua_loaded = try uacss.rules_for(c.a, env, d.quirks == 2u8)
     var l = sheet.new_loader(c.a, env)
     var i = 0usize
     while i < sheets.len {
         try sheet.load(&l, sheets[i])
         i += 1usize
     }
-    try load_style_elements(&l, d)
+    if style_elements { try load_style_elements(&l, d) }
     let author_loaded = sheet.finish(&l)
     ret compute_tree(c, d, ua_loaded.rules, author_loaded.rules, out)
 }

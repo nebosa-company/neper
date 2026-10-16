@@ -30,7 +30,7 @@ fn ahem_metrics(ctx: *void, s: *const style.Style) -> layout.FontMetrics {
     ret layout.FontMetrics { ascent: 0.8f64 * s.font_size, descent: 0.2f64 * s.font_size, line_gap: 0.0f64, x_height: 0.5f64 * s.font_size }
 }
 
-fn ahem_intrinsic(ctx: *void, node: html.NodeId) -> layout.Intrinsic {
+fn ahem_intrinsic(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic {
     let d = mem.cast[*const dom.Dom](ctx)
     var out = layout.Intrinsic { kind: 1u8, has_width: false, width: 0.0f64, has_height: false, height: 0.0f64, ratio: 0.0f64 }
     let (w, has_w) = dom.get_attribute(d, node, "width")
@@ -152,6 +152,7 @@ fn paint_page(a: *mem.Arena, pg: *Page, counter: *Counter, view: geo.Rect) -> ([
     ret (dl.commands, true)
 }
 
+// The canvas background is always the first FillRect; `fill_count` and `nth_fill` leave it out, `raw_fill` keeps it.
 fn fill_count(cmds: []const scene.Command) -> usize {
     var n = 0usize
     var i = 0usize
@@ -159,11 +160,17 @@ fn fill_count(cmds: []const scene.Command) -> usize {
         if cmds[i].tag == .FillRect { n += 1usize }
         i += 1usize
     }
-    ret n
+    if n > 0usize { ret n - 1usize }
+    ret 0usize
 }
 
-// The n-th FillRect (0-based), as a rectangle and a red channel.
 fn nth_fill(cmds: []const scene.Command, n: usize) -> (geo.Rect, f32, f32, bool) {
+    let (r, red, green, found) = raw_fill(cmds, n + 1usize)
+    ret (r, red, green, found)
+}
+
+// The n-th FillRect (0-based) including the canvas fill, as a rectangle and its red and green channels.
+fn raw_fill(cmds: []const scene.Command, n: usize) -> (geo.Rect, f32, f32, bool) {
     var seen = 0usize
     var i = 0usize
     while i < cmds.len {
@@ -325,7 +332,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (p10, ok10) = build(a, "<div style=\"height:10px\"></div>", "body { background: #0f0; }")
     if !ok10 { os.exit(24) }
     let (c10, pc10) = paint_page(a, p10, &counter, view)
-    let (r10, _a10, g10, f10) = nth_fill(c10, 0usize)
+    let (r10, _a10, g10, f10) = raw_fill(c10, 0usize)
     if !pc10 || !f10 || !rect_is(r10, 0.0, 0.0, 800.0, 600.0) || g10 < 0.99 { os.exit(25) }
     // 9. A linear gradient is one fill with a Linear brush along the gradient line; a radial one a Radial brush; a
     // background-size tiles the layer.

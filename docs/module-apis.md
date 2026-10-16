@@ -24695,6 +24695,8 @@ fn compute_tree(c: *Context, d: *const dom.Dom, ua: []const cascade.Rule, author
 fn media_env_of(c: *const Context) -> sheet.MediaEnv
 fn load_style_elements(l: *sheet.Loader, d: *const dom.Dom) -> err
 fn compute_document(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err
+fn compute_document_sheets(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err
+fn compute_document_with(c: *Context, d: *const dom.Dom, sheets: []const str, style_elements: bool, out: []Style) -> err
 ```
 
 ### `e.fmt.css.sheet`
@@ -24782,6 +24784,8 @@ fn parse_sheet(a: *mem.Arena, env: MediaEnv, source: str) -> (Loaded, err)
 ```neper
 fn source(a: *mem.Arena) -> (str, err)
 fn rules(a: *mem.Arena, env: sheet.MediaEnv) -> (sheet.Loaded, err)
+fn quirks_source(a: *mem.Arena) -> (str, err)
+fn rules_for(a: *mem.Arena, env: sheet.MediaEnv, quirks: bool) -> (sheet.Loaded, err)
 ```
 
 ### `e.fmt.css.layout`
@@ -25147,10 +25151,11 @@ type Host = struct
 fn is_italic(s: *const style.Style) -> bool
 fn text_width(ctx: *void, s: *const style.Style, text: str) -> f64
 fn font_metrics(ctx: *void, s: *const style.Style) -> layout.FontMetrics
-fn intrinsic_of(ctx: *void, node: html.NodeId) -> layout.Intrinsic
+fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic
 fn measure_of(h: *Host) -> layout.Measure
 fn paint_text(ctx: *void, s: *const style.Style, text: str) -> *const tl.Layout
 fn paint_image(ctx: *void, node: html.NodeId) -> paint.ImageRef
+fn paint_url_image(ctx: *void, url: str) -> paint.ImageRef
 fn paint_env_of(h: *Host) -> paint.PaintEnv
 ```
 
@@ -25160,14 +25165,16 @@ fn paint_env_of(h: *Host) -> paint.PaintEnv
 type Images = struct
 type View = struct
 error EmptyFontSet
-fn none_intrinsic(ctx: *void, node: html.NodeId) -> layout.Intrinsic
+fn none_intrinsic(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic
 fn none_image(ctx: *void, node: html.NodeId) -> css_paint.ImageRef
+fn none_url_image(ctx: *void, url: str) -> css_paint.ImageRef
 fn no_images() -> Images
 fn parse_options() -> html.Options
 fn do_layout(v: *View, width: f32, height: f32) -> err
 fn document_height(v: *const View) -> f32
 fn clamp_scroll(v: *View)
 fn open(a: *mem.Arena, source: str, sheets: []const str, fonts: *fontset.Set, images: Images, width: f32, height: f32) -> (*View, err)
+fn open_tree(a: *mem.Arena, tree: dom.Dom, source: str, sheets: []const str, complete: bool, fonts: *fontset.Set, images: Images, width: f32, height: f32) -> (*View, err)
 fn resize(v: *View, width: f32, height: f32) -> err
 fn scroll_to(v: *View, x: f32, y: f32)
 fn scroll_by(v: *View, dx: f32, dy: f32)
@@ -25404,6 +25411,92 @@ fn str_of(b: []const u8, lo: usize, hi: usize) -> str
 fn prescan(b_all: []const u8) -> str
 fn determine(bytes: []const u8, transport_label: str) -> str
 fn decode_document(a: *mem.Arena, bytes: []const u8, transport_label: str) -> (str, str, err)
+```
+
+### `e.net.fetch`
+
+```neper
+error BadUrl
+error BlockedPort
+error UnsupportedScheme
+error TooManyRedirects
+error RedirectRefused
+error NoAddress
+error NetworkError
+error BadEncoding
+error TooLarge
+type Credentials = enum u8 { Omit, SameOrigin, Include }
+type Redirect = enum u8 { Follow, Error, Manual }
+type Request = struct
+type Response = struct
+type Config = struct
+type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar }
+fn default_config(roots: []const u8) -> Config
+fn client(a: *mem.Arena, cfg: Config, max_cookies: usize) -> (Client, err)
+fn unix_seconds() -> i64
+fn lower_byte(c: u8) -> u8
+fn eq_fold(x: str, y: str) -> bool
+fn header_value(headers: []const http.Header, name: str) -> (str, bool)
+fn bad_port(port: i32) -> bool
+fn hex_val(c: u8) -> u32
+fn pct_decode(a: *mem.Arena, s: str) -> []u8
+fn b64_val(c: u8) -> u32
+fn b64_decode(a: *mem.Arena, s: []const u8) -> ([]u8, bool)
+fn data_response(c: *Client, u: *const url.Url, full: str) -> (Response, err)
+fn grow_copy(a: *mem.Arena, old: []u8, used: usize, want: usize) -> []u8
+fn inflate_with(a: *mem.Arena, body: []const u8, limit: usize, kind: u8) -> ([]const u8, err)
+fn brotli_decode(a: *mem.Arena, body: []const u8, limit: usize) -> ([]const u8, err)
+fn decode_content(a: *mem.Arena, encodings: str, body_in: []const u8, limit: usize) -> ([]const u8, err)
+fn is_redirect_status(s: u16) -> bool
+fn host_header(a: *mem.Arena, u: *const url.Url) -> str
+fn path_and_query(a: *mem.Arena, u: *const url.Url) -> str
+fn same_origin(a: *mem.Arena, x: *const url.Url, y: *const url.Url) -> bool
+fn exchange(c: *Client, u: *const url.Url, method: http.Method, headers: []const http.Header, body: []const u8) -> (http.Response, err)
+fn method_after_redirect(status: u16, method: http.Method) -> http.Method
+fn fetch(c: *Client, req: Request) -> (Response, err)
+fn list_of_headers(a: *mem.Arena, cap: usize) -> (HeaderList, err)
+type HeaderList = struct { items: []http.Header, len: usize }
+fn push_header(l: *HeaderList, name: str, value: str)
+fn decimal(a: *mem.Arena, n: usize) -> str
+fn mime_type(a: *mem.Arena, r: *const Response) -> str
+fn charset_param(r: *const Response) -> str
+```
+
+### `e.web.page`
+
+```neper
+error NotRenderable
+error LoadFailed
+type ImageEntry = struct
+type Page = struct
+fn lower_byte(c: u8) -> u8
+fn eq_fold(x: str, y: str) -> bool
+fn starts_fold(s: str, prefix: str) -> bool
+fn has_token(list_text: str, want: str) -> bool
+fn resolve_against(a: *mem.Arena, base: *const url.Url, ref_text: str) -> (str, bool)
+fn get_request(u: str, referrer: str, creds: fetch.Credentials) -> fetch.Request
+fn css_text(a: *mem.Arena, r: *const fetch.Response) -> str
+fn sniff_label(label: str) -> (str, bool)
+fn absolutize_css(a: *mem.Arena, text: str, base: *const url.Url) -> str
+fn is_ident_byte(c: u8) -> bool
+fn imports_of(a: *mem.Arena, text: str) -> []const str
+fn push_sheet(p: *Page, out: *list.List[str], text_in: str, base: *const url.Url, depth: usize)
+fn collect_sheets(p: *Page) -> []const str
+fn image_entry(p: *Page, abs: str) -> *ImageEntry
+fn img_source(p: *Page, node: html.NodeId) -> (str, bool)
+fn attr_number(p: *Page, node: html.NodeId, name: str, fallback: f64) -> f64
+fn known(w: f64, h: f64, ratio: f64) -> layout.Intrinsic
+fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic
+fn cv_numbers(a: *mem.Arena, text: str) -> []const f64
+fn parse_float(s: str) -> (f64, bool)
+fn upload(p: *Page, e: *ImageEntry) -> cpaint.ImageRef
+fn paint_image_of(ctx: *void, node: html.NodeId) -> cpaint.ImageRef
+fn paint_url_image_of(ctx: *void, u: str) -> cpaint.ImageRef
+fn html_wrapper(a: *mem.Arena, kind: u8, body: str, address: str) -> str
+fn find_title(p: *Page) -> str
+fn collapse_space(a: *mem.Arena, s: str) -> str
+fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str, width: f32, height: f32, view_bytes: usize) -> (*Page, err)
+fn attach_renderer(p: *Page, r: *scene.Renderer)
 ```
 
 ### `e.fmt.html.template`
