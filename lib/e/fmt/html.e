@@ -510,7 +510,9 @@ fn parse_into(b: *Builder, source: str) -> err {
             let (close, has_close) = str.find_from(source, ">", at)
             var stop = source.len
             if has_close { stop = close + 1usize }
-            let body = source[at + 2usize..stop - 1usize]
+            var body_end = source.len
+            if has_close { body_end = close }
+            let body = source[at + 2usize..body_end]
             if body.len >= 7usize && str.compare_ascii_fold(body[..7usize], "doctype") == 0 {
                 try flush_text(b)
                 let (name, lower_error) = lower(b.a, str.trim(body[7usize..]))
@@ -966,7 +968,9 @@ fn tokenize(a: *mem.Arena, source: str, out: []Token) -> (usize, err) {
             let (close, has_close) = str.find_from(source, ">", at)
             var stop = source.len
             if has_close { stop = close + 1usize }
-            let body = source[at + 2usize..stop - 1usize]
+            var body_end = source.len
+            if has_close { body_end = close }
+            let body = source[at + 2usize..body_end]
             if body.len >= 7usize && str.compare_ascii_fold(body[..7usize], "doctype") == 0 {
                 let (name, lower_error) = lower(a, str.trim(body[7usize..]))
                 if lower_error != ok { ret (t.count, lower_error) }

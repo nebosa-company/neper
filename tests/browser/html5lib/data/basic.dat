@@ -1,0 +1,85 @@
+#data
+<p>Hello</p>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <p>
+|       "Hello"
+
+#data
+<div><span>text</span></div>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <div>
+|       <span>
+|         "text"
+
+#data
+<p>One<p>Two
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <p>
+|       "One"
+|     <p>
+|       "Two"
+
+#data
+<ul><li>a</li><li>b</li></ul>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <ul>
+|       <li>
+|         "a"
+|       <li>
+|         "b"
+
+#data
+<br>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <br>
+
+#data
+<img src="x">
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <img src="x">
+
+#data
+<style>body{color:red}</style>
+#errors
+#document
+| <html>
+|   <head>
+|     <style>
+|       "body{color:red}"
+|   <body>
+
+#data
+<h1>Title</h1><p>Body</p>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <h1>
+|       "Title"
+|     <p>
+|       "Body"
