@@ -1937,11 +1937,15 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     case .Radial as radial:
         paint_background = true
     }
-    if paint_background { try fill_corners(a, b, bounds, corner, background) }
+    // (Windows pixel-exact mode) the shape is drawn on whole device pixels; `bounds` itself stays the layout's.
+    let drawn = snapped(b, bounds)
+    if paint_background { try fill_corners(a, b, drawn, corner, background) }
     // The border is stroked inside the bounds, on the rounded shape when there is one.
-    if node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
+    if !shaped && scene.pixel_exact_on() && (scene.builder_scale(b) != 1.0 || scene.pixel_exact_at_one_on()) && node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
+        try snapped_border(b, bounds, node.style.border.width, node.style.border.color)
+    } else if node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
         let half = node.style.border.width * 0.5
-        let inset = geometry.Rect { x: bounds.x + half, y: bounds.y + half, width: max_f(bounds.width - node.style.border.width, 0.0), height: max_f(bounds.height - node.style.border.width, 0.0) }
+        let inset = geometry.Rect { x: drawn.x + half, y: drawn.y + half, width: max_f(drawn.width - node.style.border.width, 0.0), height: max_f(drawn.height - node.style.border.width, 0.0) }
         let (outline, outline_error) = shape_path(a, shape_of(inset, corner, 0.0 - half))
         if outline_error != ok { ret TooLarge }
         try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: outline, brush: paint.Brush { Solid: node.style.border.color }, stroke: paint.Stroke { width: node.style.border.width, cap: .Butt, join: .Miter, miter_limit: 4.0 } } })
@@ -2502,9 +2506,33 @@ fn shape_path(a: *mem.Arena, rr: geometry.RRect) -> (geometry.Path, err) {
     ret (geometry.finish(&builder), ok)
 }
 
+// `r` with each edge on a whole device pixel (at least one device pixel across) when the Windows look's pixel-exact mode
+// is on and the builder's scale is not 1; otherwise `r` itself.
+fn snapped(b: *scene.Builder, r: geometry.Rect) -> geometry.Rect {
+    let scale = scene.builder_scale(b)
+    if !scene.pixel_exact_on() || (scale == 1.0 && !scene.pixel_exact_at_one_on()) || !(r.width > 0.0) || !(r.height > 0.0) { ret r }
+    let x0 = math.floor[f32](r.x * scale + 0.5) / scale
+    let y0 = math.floor[f32](r.y * scale + 0.5) / scale
+    var x1 = math.floor[f32]((r.x + r.width) * scale + 0.5) / scale
+    var y1 = math.floor[f32]((r.y + r.height) * scale + 0.5) / scale
+    if x1 <= x0 { x1 = x0 + 1.0 / scale }
+    if y1 <= y0 { y1 = y0 + 1.0 / scale }
+    ret geometry.Rect { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+}
+
+// A plain border of `width` inside `r` as four snapped rectangles (the stroke would be smeared over device pixels).
+fn snapped_border(b: *scene.Builder, r: geometry.Rect, width: f32, color: paint.Color) -> err {
+    let brush = paint.Brush { Solid: color }
+    let side = geometry.Rect { x: r.x, y: r.y + width, width: width, height: max_f(r.height - 2.0 * width, 0.0) }
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: snapped(b, geometry.Rect { x: r.x, y: r.y, width: r.width, height: width }), brush: brush } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: snapped(b, geometry.Rect { x: r.x, y: r.y + r.height - width, width: r.width, height: width }), brush: brush } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: snapped(b, side), brush: brush } })
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: snapped(b, geometry.Rect { x: r.x + r.width - width, y: side.y, width: width, height: side.height }), brush: brush } })
+}
+
 // A rectangle filled on its shape: a plain rectangle when no corner is rounded.
 fn fill_corners(a: *mem.Arena, b: *scene.Builder, r: geometry.Rect, c: style.Corners, brush: paint.Brush) -> err {
-    if !(c.top_left > 0.0) && !(c.top_right > 0.0) && !(c.bottom_right > 0.0) && !(c.bottom_left > 0.0) { ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: r, brush: brush } }) }
+    if !(c.top_left > 0.0) && !(c.top_right > 0.0) && !(c.bottom_right > 0.0) && !(c.bottom_left > 0.0) { ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: snapped(b, r), brush: brush } }) }
     let (outline, outline_error) = shape_path(a, shape_of(r, c, 0.0))
     if outline_error != ok { ret TooLarge }
     ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: outline, brush: brush } })
@@ -2512,7 +2540,7 @@ fn fill_corners(a: *mem.Arena, b: *scene.Builder, r: geometry.Rect, c: style.Cor
 
 // A rectangle filled, rounded when it has a radius.
 fn fill_shape(a: *mem.Arena, b: *scene.Builder, r: geometry.Rect, radius: f32, brush: paint.Brush) -> err {
-    if radius <= 0.0 { ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: r, brush: brush } }) }
+    if radius <= 0.0 { ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: snapped(b, r), brush: brush } }) }
     let (outline, outline_error) = rounded_path(a, r, radius)
     if outline_error != ok { ret TooLarge }
     ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: outline, brush: brush } })

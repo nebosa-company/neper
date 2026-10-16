@@ -1,0 +1,1257 @@
+{
+"button": [
+"99.7",
+"99.9",
+"99.7"
+],
+"button_edit": [
+"96.4",
+"98.0",
+"96.7"
+],
+"button_hover": [
+"99.0",
+"99.3",
+"98.2"
+],
+"button_kinds": [
+"96.8",
+"97.0",
+"96.1"
+],
+"button_shift": [
+"100.0",
+"100.0",
+"100.0"
+],
+"button_states": [
+"99.4",
+"99.7",
+"98.1"
+],
+"check_list_box": [
+"62.8",
+"87.3",
+"76.0"
+],
+"check_list_box_dialog": [
+"91.6",
+"76.3",
+"75.5"
+],
+"check_list_box_hover": [
+"99.5",
+"64.8",
+"63.7"
+],
+"check_list_box_states": [
+"79.3",
+"74.2",
+"62.7"
+],
+"checkbox": [
+"90.1",
+"89.5",
+"96.9"
+],
+"checkbox_dialog": [
+"100.0",
+"100.0",
+"100.0"
+],
+"checkbox_hover": [
+"100.0",
+"100.0",
+"100.0"
+],
+"checkbox_states": [
+"100.0",
+"100.0",
+"100.0"
+],
+"choices_filter": [
+"99.8",
+"99.9",
+"99.6"
+],
+"combo_box": [
+"99.9",
+"100.0",
+"100.0"
+],
+"combo_box_dialog": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_edit": [
+"99.3",
+"100.0",
+"100.0"
+],
+"combo_box_flat": [
+"99.3",
+"100.0",
+"100.0"
+],
+"combo_box_flat_card": [
+"98.8",
+"100.0",
+"100.0"
+],
+"combo_box_flat_card_hover": [
+"98.2",
+"100.0",
+"100.0"
+],
+"combo_box_flat_hover": [
+"98.7",
+"100.0",
+"100.0"
+],
+"combo_box_flat_states": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_focus": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_held": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_list_color": [
+"96.5",
+"99.6",
+"100.0"
+],
+"combo_box_list_color2": [
+"71.7",
+"99.4",
+"100.0"
+],
+"combo_box_list_show": [
+"97.9",
+"99.0",
+"100.0"
+],
+"combo_box_list_show2": [
+"75.3",
+"65.6",
+"5.6"
+],
+"combo_box_list_size": [
+"98.9",
+"99.6",
+"100.0"
+],
+"combo_box_list_size2": [
+"75.4",
+"76.2",
+"100.0"
+],
+"combo_box_lists": [
+"76.7",
+"80.6",
+"70.1"
+],
+"combo_box_open_color": [
+"97.7",
+"99.7",
+"100.0"
+],
+"combo_box_open_color2": [
+"81.3",
+"83.9",
+"100.0"
+],
+"combo_box_open_color2_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_open_color_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_open_show": [
+"98.3",
+"99.2",
+"100.0"
+],
+"combo_box_open_show2": [
+"81.1",
+"62.7",
+"29.7"
+],
+"combo_box_open_show2_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_open_show_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_open_size": [
+"99.1",
+"99.7",
+"100.0"
+],
+"combo_box_open_size2": [
+"83.5",
+"99.6",
+"100.0"
+],
+"combo_box_open_size2_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_open_size_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_pick": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_box_search_held": [
+"100.0",
+"100.0",
+"100.0"
+],
+"combo_hover": [
+"85.4",
+"99.9",
+"99.9"
+],
+"data_grid": [
+"99.8",
+"99.9",
+"99.6"
+],
+"data_grid_bottom": [
+"98.6",
+"99.4",
+"99.8"
+],
+"data_grid_bottom2": [
+"98.8",
+"99.5",
+"99.8"
+],
+"data_grid_bottom3": [
+"99.3",
+"99.5",
+"99.8"
+],
+"data_grid_dialogs": [
+"99.3",
+"99.6",
+"100.0"
+],
+"data_grid_dialogs_sort": [
+"99.9",
+"99.5",
+"100.0"
+],
+"data_grid_group": [
+"89.2",
+"99.6",
+"99.8"
+],
+"data_grid_group2": [
+"98.8",
+"99.6",
+"99.7"
+],
+"data_grid_group3": [
+"99.0",
+"99.8",
+"99.8"
+],
+"data_grid_hover": [
+"99.5",
+"99.9",
+"99.9"
+],
+"data_grid_hover2": [
+"99.5",
+"99.9",
+"99.9"
+],
+"data_grid_hover3": [
+"99.4",
+"99.9",
+"99.9"
+],
+"data_grid_hover4": [
+"99.5",
+"99.9",
+"99.9"
+],
+"data_grid_hover5": [
+"99.4",
+"99.9",
+"99.9"
+],
+"data_grid_hover6": [
+"99.5",
+"99.9",
+"99.9"
+],
+"data_grid_hover7": [
+"99.4",
+"99.9",
+"99.9"
+],
+"data_grid_hover8": [
+"99.0",
+"99.8",
+"99.8"
+],
+"data_grid_main": [
+"98.8",
+"99.5",
+"99.8"
+],
+"data_grid_shortcuts_hover": [
+"99.8",
+"99.9",
+"100.0"
+],
+"data_grid_shortcuts_hover2": [
+"99.8",
+"99.9",
+"100.0"
+],
+"data_grid_shortcuts_hover3": [
+"99.8",
+"99.9",
+"100.0"
+],
+"data_grid_shortcuts_hover4": [
+"99.7",
+"99.9",
+"100.0"
+],
+"data_grid_shortcuts_states": [
+"99.8",
+"99.9",
+"99.9"
+],
+"data_grid_shortcuts_states2": [
+"99.7",
+"99.9",
+"99.9"
+],
+"data_grid_shortcuts_states3": [
+"99.7",
+"100.0",
+"100.0"
+],
+"data_grid_sort_hover": [
+"99.2",
+"99.5",
+"100.0"
+],
+"data_grid_sort_states": [
+"99.2",
+"99.6",
+"100.0"
+],
+"data_grid_states": [
+"99.2",
+"99.8",
+"99.4"
+],
+"data_grid_states_pressed": [
+"99.7",
+"99.9",
+"99.8"
+],
+"data_grid_top": [
+"99.0",
+"99.6",
+"99.9"
+],
+"data_grid_top2": [
+"99.0",
+"99.6",
+"99.9"
+],
+"data_grid_top3": [
+"99.0",
+"99.6",
+"99.9"
+],
+"data_grid_top4": [
+"99.0",
+"99.6",
+"99.9"
+],
+"data_grid_top5": [
+"98.6",
+"99.6",
+"99.9"
+],
+"date_edit": [
+"98.0",
+"98.4",
+"98.0"
+],
+"dialog": [
+"99.8",
+"100.0",
+"100.0"
+],
+"dialog_message": [
+"99.2",
+"99.4",
+"98.8"
+],
+"dialog_more": [
+"99.7",
+"99.7",
+"99.5"
+],
+"dialog_more2": [
+"99.2",
+"99.6",
+"98.8"
+],
+"dialog_more3": [
+"94.1",
+"100.0",
+"100.0"
+],
+"dialog_wide": [
+"99.6",
+"99.8",
+"99.4"
+],
+"edits_dialog": [
+"100.0",
+"100.0",
+"100.0"
+],
+"edits_hover": [
+"99.8",
+"99.9",
+"100.0"
+],
+"edits_states": [
+"98.5",
+"99.3",
+"87.7"
+],
+"group_box": [
+"93.2",
+"95.4",
+"87.9"
+],
+"group_box_dialog": [
+"98.5",
+"97.9",
+"97.8"
+],
+"hint": [
+"97.0",
+"97.3",
+"97.4"
+],
+"hint_grid_header_name": [
+"96.6",
+"96.6",
+"96.6"
+],
+"hint_toolbar_cards_expand": [
+"100.0",
+"100.0",
+"100.0"
+],
+"hint_toolbar_cards_f": [
+"100.0",
+"100.0",
+"100.0"
+],
+"hint_toolbar_help_home": [
+"100.0",
+"100.0",
+"100.0"
+],
+"hint_toolbar_search_binoculars": [
+"100.0",
+"100.0",
+"100.0"
+],
+"hint_toolbar_search_filter": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box": [
+"93.5",
+"95.2",
+"94.9"
+],
+"image_combo_box_cell": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_cell_held": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_dialog": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_hover_drop": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_hover_edit": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_list_art": [
+"68.4",
+"76.8",
+"100.0"
+],
+"image_combo_box_list_art2": [
+"68.4",
+"98.3",
+"100.0"
+],
+"image_combo_box_list_auth": [
+"74.5",
+"75.7",
+"100.0"
+],
+"image_combo_box_list_auth2": [
+"74.5",
+"75.7",
+"100.0"
+],
+"image_combo_box_list_condition": [
+"88.9",
+"88.8",
+"100.0"
+],
+"image_combo_box_list_condition2": [
+"99.6",
+"99.6",
+"100.0"
+],
+"image_combo_box_list_sort": [
+"74.4",
+"75.9",
+"100.0"
+],
+"image_combo_box_open_art": [
+"78.3",
+"98.8",
+"100.0"
+],
+"image_combo_box_open_art2": [
+"78.9",
+"84.7",
+"100.0"
+],
+"image_combo_box_open_art2_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_open_art_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_open_auth": [
+"83.4",
+"99.0",
+"100.0"
+],
+"image_combo_box_open_auth2": [
+"68.5",
+"99.0",
+"100.0"
+],
+"image_combo_box_open_auth2_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_open_auth_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_open_condition": [
+"91.1",
+"99.7",
+"100.0"
+],
+"image_combo_box_open_condition2": [
+"80.0",
+"21.1",
+"35.1"
+],
+"image_combo_box_open_condition2_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"image_combo_box_open_condition_head": [
+"100.0",
+"100.0",
+"100.0"
+],
+"label": [
+"100.0",
+"100.0",
+"100.0"
+],
+"list_box": [
+"99.9",
+"100.0",
+"100.0"
+],
+"list_box_blur": [
+"100.0",
+"100.0",
+"100.0"
+],
+"list_box_dialog": [
+"99.8",
+"100.0",
+"100.0"
+],
+"list_box_focus": [
+"100.0",
+"100.0",
+"100.0"
+],
+"mask_edit": [
+"98.4",
+"92.7",
+"92.0"
+],
+"memo": [
+"99.3",
+"98.4",
+"98.2"
+],
+"menu_bar": [
+"70.2",
+"97.9",
+"100.0"
+],
+"menu_bar-open": [
+"69.2",
+"96.2",
+"100.0"
+],
+"menu_bar_hot": [
+"57.1",
+"97.6",
+"100.0"
+],
+"menu_bar_hot_view": [
+"47.6",
+"100.0",
+"100.0"
+],
+"menu_bar_open_admin": [
+"61.3",
+"100.0",
+"100.0"
+],
+"menu_bar_open_cardart": [
+"67.7",
+"100.0",
+"100.0"
+],
+"menu_bar_open_cards": [
+"60.0",
+"96.7",
+"100.0"
+],
+"menu_bar_open_file": [
+"60.0",
+"100.0",
+"100.0"
+],
+"menu_bar_open_help": [
+"68.8",
+"100.0",
+"100.0"
+],
+"menu_bar_open_online": [
+"64.5",
+"100.0",
+"100.0"
+],
+"menu_bar_open_reports": [
+"61.3",
+"100.0",
+"100.0"
+],
+"menu_bar_open_search": [
+"64.5",
+"100.0",
+"100.0"
+],
+"menu_bar_open_tools": [
+"64.5",
+"100.0",
+"100.0"
+],
+"menu_bar_open_view": [
+"64.5",
+"100.0",
+"100.0"
+],
+"page_control": [
+"17.5",
+"17.8",
+"16.5"
+],
+"page_control_about": [
+"100.0",
+"100.0",
+"100.0"
+],
+"page_control_bottom": [
+"96.1",
+"97.5",
+"97.9"
+],
+"page_control_bottom2": [
+"94.8",
+"96.2",
+"97.6"
+],
+"page_control_bottom_hover2": [
+"90.4",
+"93.9",
+"94.7"
+],
+"page_control_bottom_states": [
+"94.8",
+"12.6",
+"11.4"
+],
+"page_control_custom": [
+"100.0",
+"100.0",
+"100.0"
+],
+"page_control_filter": [
+"100.0",
+"100.0",
+"100.0"
+],
+"page_control_stats": [
+"92.2",
+"89.2",
+"89.2"
+],
+"page_control_stats_1": [
+"94.2",
+"93.1",
+"93.1"
+],
+"page_control_stats_10": [
+"94.2",
+"93.0",
+"92.8"
+],
+"page_control_stats_11": [
+"94.0",
+"93.2",
+"92.9"
+],
+"page_control_stats_2": [
+"94.0",
+"93.2",
+"92.9"
+],
+"page_control_stats_3": [
+"94.2",
+"93.1",
+"92.8"
+],
+"page_control_stats_4": [
+"94.3",
+"93.1",
+"92.9"
+],
+"page_control_stats_5": [
+"94.1",
+"92.9",
+"92.6"
+],
+"page_control_stats_6": [
+"94.1",
+"93.0",
+"92.7"
+],
+"page_control_stats_7": [
+"94.0",
+"92.9",
+"92.6"
+],
+"page_control_stats_8": [
+"93.9",
+"93.1",
+"92.8"
+],
+"page_control_stats_9": [
+"93.9",
+"93.0",
+"92.8"
+],
+"popup_menu": [
+"40.6",
+"100.0",
+"100.0"
+],
+"popup_menu-hover": [
+"96.5",
+"100.0",
+"100.0"
+],
+"popup_menu_admin": [
+"66.7",
+"100.0",
+"100.0"
+],
+"popup_menu_cardart": [
+"57.1",
+"100.0",
+"100.0"
+],
+"popup_menu_cards": [
+"50.0",
+"100.0",
+"100.0"
+],
+"popup_menu_dialog": [
+"53.2",
+"100.0",
+"100.0"
+],
+"popup_menu_file": [
+"41.7",
+"100.0",
+"100.0"
+],
+"popup_menu_help": [
+"25.0",
+"100.0",
+"100.0"
+],
+"popup_menu_online": [
+"66.7",
+"100.0",
+"100.0"
+],
+"popup_menu_reports": [
+"60.0",
+"100.0",
+"100.0"
+],
+"popup_menu_reports_deck_mode": [
+"60.0",
+"100.0",
+"100.0"
+],
+"popup_menu_search": [
+"41.7",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_cardart_1": [
+"93.9",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_cardart_3": [
+"93.0",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_cards_1": [
+"95.7",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_cards_4": [
+"95.7",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_file_1": [
+"94.1",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_file_24": [
+"94.1",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_help_1": [
+"95.9",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_help_4": [
+"95.9",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_online_1": [
+"97.0",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_reports_1": [
+"97.5",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_reports_4": [
+"97.4",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_search_1": [
+"93.5",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_search_5": [
+"92.7",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_tools_1": [
+"98.2",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_tools_3": [
+"98.2",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_view_1": [
+"94.7",
+"100.0",
+"100.0"
+],
+"popup_menu_sel_view_5": [
+"95.4",
+"100.0",
+"100.0"
+],
+"popup_menu_sub_cards_export_child": [
+"96.2",
+"100.0",
+"100.0"
+],
+"popup_menu_sub_cards_export_parent": [
+"96.7",
+"100.0",
+"100.0"
+],
+"popup_menu_sub_cards_print_child": [
+"98.2",
+"100.0",
+"100.0"
+],
+"popup_menu_sub_cards_print_parent": [
+"96.7",
+"100.0",
+"100.0"
+],
+"popup_menu_sub_view_show_grid_lines_child": [
+"97.2",
+"100.0",
+"100.0"
+],
+"popup_menu_sub_view_show_grid_lines_parent": [
+"94.4",
+"100.0",
+"100.0"
+],
+"popup_menu_sub_view_toolbars_child": [
+"90.8",
+"100.0",
+"100.0"
+],
+"popup_menu_sub_view_toolbars_parent": [
+"94.6",
+"100.0",
+"100.0"
+],
+"popup_menu_tools": [
+"50.0",
+"100.0",
+"100.0"
+],
+"popup_menu_view": [
+"76.1",
+"100.0",
+"100.0"
+],
+"progress_bar": [
+"95.2",
+"65.1",
+"63.2"
+],
+"radio": [
+"100.0",
+"97.9",
+"100.0"
+],
+"radio_dialog": [
+"100.0",
+"100.0",
+"100.0"
+],
+"radio_group": [
+"97.1",
+"98.5",
+"58.8"
+],
+"radio_group_dialog": [
+"100.0",
+"100.0",
+"73.9"
+],
+"radio_group_states": [
+"100.0",
+"100.0",
+"100.0"
+],
+"radio_hover": [
+"100.0",
+"100.0",
+"100.0"
+],
+"radio_states": [
+"100.0",
+"100.0",
+"100.0"
+],
+"scroll_bar": [
+"99.0",
+"98.8",
+"99.1"
+],
+"scroll_bar_live": [
+"98.8",
+"99.5",
+"99.5"
+],
+"scroll_bar_states": [
+"85.1",
+"97.0",
+"97.0"
+],
+"spin_edit": [
+"97.1",
+"97.6",
+"94.7"
+],
+"splitter": [
+"98.6",
+"99.1",
+"99.1"
+],
+"splitter_dialog": [
+"96.8",
+"96.8",
+"100.0"
+],
+"splitter_dialog_held": [
+"96.8",
+"96.8",
+"100.0"
+],
+"splitter_live": [
+"50.0",
+"50.0",
+"100.0"
+],
+"splitter_live_across": [
+"50.0",
+"50.0",
+"100.0"
+],
+"splitter_live_across_held": [
+"50.0",
+"66.7",
+"100.0"
+],
+"splitter_live_across_hover": [
+"50.0",
+"66.7",
+"100.0"
+],
+"splitter_live_held": [
+"50.0",
+"50.0",
+"100.0"
+],
+"splitter_live_hover": [
+"50.0",
+"50.0",
+"100.0"
+],
+"status_bar": [
+"89.6",
+"95.2",
+"95.6"
+],
+"status_bar_hover": [
+"77.4",
+"100.0",
+"100.0"
+],
+"status_bar_report": [
+"100.0",
+"100.0",
+"100.0"
+],
+"status_bar_report_11": [
+"100.0",
+"100.0",
+"100.0"
+],
+"status_bar_report_167": [
+"100.0",
+"100.0",
+"100.0"
+],
+"text_edit": [
+"94.5",
+"94.4",
+"93.2"
+],
+"title_bar": [
+"99.6",
+"100.0",
+"99.8"
+],
+"title_bar_hover": [
+"99.7",
+"100.0",
+"100.0"
+],
+"token_edit": [
+"93.9",
+"99.0",
+"98.3"
+],
+"token_edit_dialog": [
+"100.0",
+"100.0",
+"100.0"
+],
+"toolbar_button": [
+"83.2",
+"89.7",
+"91.0"
+],
+"toolbar_button_hot": [
+"68.2",
+"82.3",
+"83.3"
+],
+"toolbar_button_row": [
+"70.3",
+"81.2",
+"81.2"
+],
+"tree_list": [
+"99.8",
+"100.0",
+"100.0"
+],
+"tree_list_check": [
+"98.8",
+"99.4",
+"99.2"
+],
+"tree_list_expanded": [
+"99.9",
+"100.0",
+"100.0"
+],
+"tree_list_focus": [
+"98.8",
+"99.4",
+"99.2"
+],
+"tree_list_hover": [
+"99.8",
+"100.0",
+"100.0"
+],
+"tree_list_hover2": [
+"99.8",
+"100.0",
+"100.0"
+],
+"tree_list_rules": [
+"99.8",
+"99.9",
+"100.0"
+],
+"vertical_grid": [
+"85.8",
+"99.1",
+"99.8"
+],
+"vertical_grid_author": [
+"87.4",
+"98.6",
+"99.7"
+],
+"vertical_grid_hover": [
+"97.5",
+"98.4",
+"99.7"
+],
+"vertical_grid_shut": [
+"86.8",
+"98.6",
+"99.7"
+],
+"vertical_grid_states": [
+"96.7",
+"98.3",
+"99.2"
+]
+}

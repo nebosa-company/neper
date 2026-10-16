@@ -272,6 +272,9 @@ fn set_look(rig: *Rig, look: Look) {
     // The Windows dark look maps the light literals of its tile painters (style.hex) to dark; nothing else does.
     style.set_windark(look == .WindowsDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
+    scene.set_pixel_exact(rig.tokens.profile == .Windows)
+    let (exact_text, exact_error) = os.env(rig.a, "NEPER_LOOKS_EXACT")
+    scene.set_pixel_exact_at_one(exact_error == ok && exact_text.len > 0usize)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
     if (look == .Linux || look == .LinuxDark) && rig.linux_fonts.len > 0usize { rig.fonts = rig.linux_fonts }
 }
@@ -378,10 +381,20 @@ fn instant(step: i64) -> time.Instant {
     ret time.Instant { nanos: 1000000000i64 + step * 100000000i64 }
 }
 
+// Where the last frame's pixels start in the rig arena: a sheet takes one frame per driven cell, and the sheet's
+// size at 2.0 times a hundred cells is more than the arena, so a frame's pixels are dropped (`drop_shot`) once the
+// cell has been cropped out of them.
+var shot_from: usize = 0
+
+fn drop_shot(rig: *Rig) {
+    mem.reset(rig.a, shot_from)
+}
+
 // One frame of `root` and its pixels.
 fn shoot(rig: *Rig, root: widget.Node, step: i64) -> (image.Image, err) {
     let pumped = testing.pump(&rig.harness, root, instant(step))
     if pumped != ok { ret (zero, pumped) }
+    shot_from = rig.a.off
     let (shot, shot_error) = testing.snapshot(&rig.harness, rig.a)
     ret (shot, shot_error)
 }
@@ -508,6 +521,7 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
             // (pickers) A hover that opens something lands on the element the first frame
             // built: the pointer moves again over that layout, and the frame is taken again.
             if drive == .Hover || drive == .FocusHover {
+                drop_shot(rig)
                 try testing.hover(&rig.harness, cx, cy)
                 step += 1i64
                 let pass_two = begin(rig)
@@ -526,6 +540,7 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
             let from = y0 * shot.stride + x0 * 4usize
             let crop = image.ConstImage { pixels: shot.pixels[from..shot.pixels.len], width: w, height: h, stride: shot.stride, format: shot.format, alpha: shot.alpha }
             try image.copy(base, crop, geometry.Point { x: f32(x0), y: f32(y0) })
+            drop_shot(rig)
             try rest(rig)
         }
         i += 1usize
@@ -598,6 +613,9 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
     let only_scale = env_scale(a)
     let (no_text, no_text_error) = os.env(a, "NEPER_LOOKS_NOTEXT")
     scene.set_text_hidden(no_text_error == ok && no_text.len > 0usize)
+    // NEPER_LOOKS_ONLY=windows renders the Windows look alone (the scale check needs nothing else).
+    let (only_look, only_look_error) = os.env(a, "NEPER_LOOKS_ONLY")
+    let windows_only = only_look_error == ok && strs.eq(only_look, "windows")
     var scale_index = 0usize
     while scale_index < 2usize {
         var scale: f32 = 1.0
@@ -608,6 +626,10 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
         }
         var look_index = 0usize
         while look_index < 4usize {
+            if windows_only && look_index != 1usize {
+                look_index += 1usize
+                continue
+            }
             var look: Look = .Neper
             if look_index == 1usize { look = .Windows }
             if look_index == 2usize { look = .WindowsDark }

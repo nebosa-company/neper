@@ -206,8 +206,8 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     }
     let w = f32(u32(area.width + 0.5))
     let h = f32(u32(area.height + 0.5))
-    let x0 = area.x
-    let y0 = area.y
+    let x0 = winpx.origin(b, area.x)
+    let y0 = winpx.origin(b, area.y)
     try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, h - 2.0, d.face)
     try ring_rect(b, x0 + 1.0, y0 + 6.0, 5.0, h - 12.0, d.face)
     try ring_rect(b, x0 + w - 6.0, y0 + 6.0, 5.0, h - 12.0, d.face)
@@ -605,7 +605,7 @@ fn focus_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
 
 // One pixel at rect coordinates (rx, ry).
 fn focus_px(b: *scene.Builder, area: geometry.Rect, rx: f32, ry: f32, value: u32) -> err {
-    ret ring_rect(b, area.x + rx - 1.0, area.y + ry - 1.0, 1.0, 1.0, value)
+    ret ring_rect(b, winpx.origin(b, area.x) + rx - 1.0, winpx.origin(b, area.y) + ry - 1.0, 1.0, 1.0, value)
 }
 
 fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {

@@ -17,11 +17,20 @@ fn edge(v: f32, scale: f32) -> f32 {
     ret math.floor[f32](v * scale + 0.5) / scale
 }
 
+// The origin of a tile at logical `v`, moved to a whole device pixel (at scale 1 itself, unless the scale check forces it):
+// a tile painted from its own snapped origin is the nearest-neighbour scaling of the 1.0 tile wherever the layout put it, so
+// its 1 px lines (a button's ring, the focus dots) have the same device thickness on all four sides.
+fn origin(b: *scene.Builder, v: f32) -> f32 {
+    let scale = scene.builder_scale(b)
+    if scale == 1.0 && !scene.pixel_exact_at_one_on() { ret v }
+    ret edge(v, scale)
+}
+
 // A solid rectangle in logical px, its edges moved to whole device pixels (at least one device pixel wide and high).
 fn fill(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, color: paint.Color) -> err {
     let scale = scene.builder_scale(b)
     var rect = geometry.Rect { x: x, y: y, width: w, height: h }
-    if scale != 1.0 {
+    if scale != 1.0 || scene.pixel_exact_at_one_on() {
         let x0 = edge(x, scale)
         let y0 = edge(y, scale)
         var x1 = edge(x + w, scale)
