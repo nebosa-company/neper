@@ -31,7 +31,7 @@ use e.ui.widget
 
 // The four looks. Cupertino and Material have no tokens of their own yet: `theme_for` answers
 // the Neper tokens carrying their profile, and `run_all` does not render them.
-type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, MaterialDark }
+type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, MaterialDark, CupertinoDark }
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
@@ -67,8 +67,9 @@ fn theme_for(look: Look) -> style.ThemeTokens {
     if look == .WindowsDark { ret style.windows(.Dark) }
     if look == .Material { ret style.material(.Light) }
     if look == .MaterialDark { ret style.material(.Dark) }
+    if look == .Cupertino { ret style.cupertino(.Light) }
+    if look == .CupertinoDark { ret style.cupertino(.Dark) }
     var t = style.reference(.Light)
-    if look == .Cupertino { t.profile = .CupertinoLike }
     ret t
 }
 
@@ -76,6 +77,7 @@ fn look_dir(look: Look) -> str {
     if look == .Windows { ret "windows" }
     if look == .WindowsDark { ret "windows-dark" }
     if look == .Cupertino { ret "cupertino" }
+    if look == .CupertinoDark { ret "cupertino-dark" }
     if look == .Material { ret "material" }
     if look == .MaterialDark { ret "material-dark" }
     ret "neper"
@@ -483,6 +485,33 @@ fn run_material(a: *mem.Arena, s: *const Sheet) -> err {
         while look_index < 2usize {
             var look: Look = .Material
             if look_index == 1usize { look = .MaterialDark }
+            let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
+            if open_error != ok { ret open_error }
+            set_look(rig, look)
+            let (folder, folder_error) = path_of(a, look_dir(look), "", "", 1.0, "")
+            if folder_error != ok { ret folder_error }
+            try fs.make_dirs(a, folder)
+            let (path, path_error) = path_of(a, look_dir(look), s.name, "", scale, ".png")
+            if path_error != ok { ret path_error }
+            let (ours, render_error) = render_sheet(rig, s, path)
+            if render_error != ok { ret render_error }
+            look_index += 1usize
+        }
+        scale_index += 1usize
+    }
+    ret ok
+}
+
+// The Cupertino looks, Light and Dark, at 100 % and 150 %: docs/ui/looks/cupertino and cupertino-dark.
+fn run_cupertino(a: *mem.Arena, s: *const Sheet) -> err {
+    var scale_index = 0usize
+    while scale_index < 2usize {
+        var scale: f32 = 1.0
+        if scale_index == 1usize { scale = 1.5 }
+        var look_index = 0usize
+        while look_index < 2usize {
+            var look: Look = .Cupertino
+            if look_index == 1usize { look = .CupertinoDark }
             let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
             if open_error != ok { ret open_error }
             set_look(rig, look)

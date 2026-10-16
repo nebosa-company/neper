@@ -2763,6 +2763,10 @@ fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *
         let (win, win_error) = windows_button(a, key, t, label, widget.spacer(0u64, 0.0), false, true, false, zero, action, options)
         ret (win, win_error)
     }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_button(a, key, t, label, widget.spacer(0u64, 0.0), false, action, options)
+        ret (cup, cup_error)
+    }
     let state = control_state(t, key, options.enabled, false)
     var look = button_look(t, style.resolve(t.tokens, options.variant, state), options.enabled)
     var caption = text_options()
@@ -3655,6 +3659,10 @@ fn choosable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: s
         let (soft, soft_error) = material_choice(a, key, t, role, label, chosen, mixed, round, action, enabled, false)
         ret (soft, soft_error)
     }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_choice(a, key, t, role, label, chosen, mixed, round, action, enabled)
+        ret (cup, cup_error)
+    }
     let state = control_state(t, key, enabled, false)
     let h = t.tokens.metrics.control_height
     let touch = h > t.tokens.sizes.control_sm
@@ -4213,6 +4221,10 @@ fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, o
         let (soft, soft_error) = material_switch(a, key, t, label, on, false, action, enabled)
         ret (soft, soft_error)
     }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_switch(a, key, t, label, on, action, enabled)
+        ret (cup, cup_error)
+    }
     let state = control_state(t, key, enabled, false)
     let ink = style.color(t.tokens, .OnSurface)
     let (mark, mark_error) = switch_mark_keyed(a, key, t, state, on, enabled)
@@ -4260,6 +4272,10 @@ fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, o
 // `on-surface` at 38%, the edge, dividers and selected fill at 12%.
 fn segmented_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err) {
     if actions.len != labels.len || labels.len == 0usize { ret (zero, TooLarge) }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_segmented(a, key, t, label, labels, selected, actions, enabled)
+        ret (cup, cup_error)
+    }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var height = t.tokens.sizes.control_sm
     var outer = t.tokens.radii.sm
@@ -4397,6 +4413,10 @@ fn value_pill(a: *mem.Arena, t: *const Theme, value: f32) -> (widget.Node, err) 
 }
 
 fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, range: bool, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    if t.tokens.profile == .CupertinoLike && !range {
+        let (cup, cup_error) = cupertino_slider(a, key, t, label, first, low, high, step, change, enabled)
+        ret (cup, cup_error)
+    }
     // v2 (D956, docs/ux/components/Slider): 44 deep for its handle, the active part
     // and the handles `primary`, the rest `secondary-container`; disabled, those are
     // `on-surface` at 38% and 12%.
@@ -4901,6 +4921,10 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         let (native, native_error) = progress_bar_windows(a, key, t, label, value, indeterminate, width, options)
         ret (native, native_error)
     }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_progress_bar(a, key, t, label, value, indeterminate, width, options)
+        ret (cup, cup_error)
+    }
     let aimed = clamp_share(value)
     // (D1279) A determinate bar eases to each new value, never backwards.
     var share = aimed
@@ -5163,6 +5187,10 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
         let (held, held_error) = busy_held(a, key, inner, visible)
         ret (held, held_error)
     }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_ring(a, key, t, label, value, indeterminate, size, options)
+        ret (cup, cup_error)
+    }
     var share = clamp_share(value)
     if share > 0.0 && share < 0.04 { share = 0.04 }
     var stroke = size / 12.0
@@ -5260,6 +5288,10 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     if t.tokens.profile == .Windows {
         let (win, win_error) = windows_field(a, key, t, label, buffer, len, change, submit, options, secret)
         ret (win, win_error)
+    }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_field(a, key, t, label, buffer, len, change, submit, options, secret)
+        ret (cup, cup_error)
     }
     let state = control_state(t, key, options.enabled, false)
     let focused = state.focused && options.enabled
@@ -6110,6 +6142,10 @@ fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
 // button (keyed `key + 1`, the caller's `clear` action) beside it while it holds
 // anything, and "Search" for a placeholder when none is given.
 fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, clear: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_search(a, key, t, buffer, len, change, submit, clear, options)
+        ret (cup, cup_error)
+    }
     // v2 (D952, docs/ux/components/SearchBar): a `surface-container-high` pill,
     // 40 tall with a pointer and 56 on touch, with a trailing clear button.
     // The query is body-medium (body-large on touch) over its variant placeholder.
@@ -6254,6 +6290,10 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         let (flat, flat_error) = win_head(a, key, t, label, shown, chosen, open, toggle, true, lead, 0.0, 0.0, 0.0)
         ret (flat, flat_error)
     }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_popup_head(a, key, t, label, shown, chosen, open, toggle, lead)
+        ret (cup, cup_error)
+    }
     let state = control_state(t, key, true, false)
     let dense = h <= t.tokens.sizes.control_md
     let pad_x: f32 = if_else(dense, 12.0, 16.0)
@@ -6384,6 +6424,10 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         sheet_style.padding.top = style.Length { Px: 8.0 }
         sheet_style.padding.bottom = style.Length { Px: 8.0 }
         sheet_style.min_width = style.Length { Px: 112.0 }
+        if t.tokens.profile == .CupertinoLike {
+            sheet_style = cupertino_menu_sheet_style(t, 4.0)
+            sheet_style.min_width = style.Length { Px: 112.0 }
+        }
         let (menu, menu_error) = mem.alloc[widget.Node](a, 1usize)
         if menu_error != ok { ret (zero, TooLarge) }
         menu[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..options.len])
@@ -6423,6 +6467,12 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
 // label in `on-secondary-container` after a 24 check (18 dense), the others
 // indented by the check and its 12 so the labels align.
 fn menu_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chosen: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    if t.tokens.profile == .CupertinoLike {
+        let (cup_look, cup_content, cup_error) = cupertino_menu_row_parts(a, t, key, label, "", chosen, false, true, false, false, false, true)
+        if cup_error != ok { ret (zero, cup_error) }
+        let (cup_row, cup_row_error) = pressable(a, key, t, 3u8, label, cup_look, true, false, action, cup_content)
+        ret (cup_row, cup_row_error)
+    }
     let state = control_state(t, key, true, false)
     var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
     var words = style.color(t.tokens, .OnSurface)
@@ -6534,7 +6584,9 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var chosen_goal: f32 = 0.0
         if chosen[i] { chosen_goal = 1.0 }
         let picked_share = eased_on(t, row_key, row_key + 1048599u64, chosen_goal, false, t.tokens.durations.short2)
-        let selection_fill = style.color(t.tokens, .SecondaryContainer)
+        var selection_fill = style.color(t.tokens, .SecondaryContainer)
+        // Inset grouped lists mark the choice with a trailing check, not a fill.
+        if t.tokens.profile == .CupertinoLike { selection_fill.alpha = 0.0 }
         let fill = with_alpha(selection_fill, selection_fill.alpha * picked_share)
         let words = style.mix(style.color(t.tokens, .OnSurface), style.color(t.tokens, .OnSecondaryContainer), picked_share)
         var row_style = style.defaults()
@@ -6562,7 +6614,9 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
             gap = 8.0
         } else {
             if chosen[i] {
-                let (check, check_error) = mark_glyph(a, words, .Check, check_size)
+                var check_ink = words
+                if t.tokens.profile == .CupertinoLike { check_ink = style.color(t.tokens, .Primary) }
+                let (check, check_error) = mem_check_glyph(a, check_ink, check_size, t.tokens.profile == .CupertinoLike)
                 if check_error != ok { ret (zero, check_error) }
                 bits[1usize] = widget.spacer(0u64, 1.0)
                 bits[2usize] = check
@@ -6576,6 +6630,16 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, line_style, bits[0usize..used])
+        if t.tokens.profile == .CupertinoLike && i + 1usize < options.len {
+            // The separator: a hairline from the text's inset to the row's end.
+            var hair = sized_style(max_zero(row_width - lead), 0.5)
+            hair.background = paint.Brush { Solid: style.cupertino_separator(t.tokens) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = body[0usize]
+            pair[1usize] = widget.positioned(0u64, lead, row_height - 0.5, style.defaults(), widget_one_of(a, widget.box(0u64, hair, zero)))
+            body[0usize] = widget.stack(0u64, sized_style(row_width, row_height), pair[0usize..2usize])
+        }
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
         region[0usize] = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, body[0usize..1usize])
@@ -6595,8 +6659,17 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     view_style.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
     view_style.radius = t.tokens.radii.sm
     if multi { view_style.radius = t.tokens.radii.md }
-    let one = style.Length { Px: 1.0 }
-    let four = style.Length { Px: 4.0 }
+    var one = style.Length { Px: 1.0 }
+    var four = style.Length { Px: 4.0 }
+    if t.tokens.profile == .CupertinoLike {
+        // Inset grouped: the cell colour, 10 round, no edge, rows flush to the frame.
+        view_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+        view_style.border = style.Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+        view_style.radius = 10.0
+        view_style.height = style.Length { Px: f32(rows) * row_height }
+        one = style.Length { Px: 0.0 }
+        four = style.Length { Px: 0.0 }
+    }
     view_style.padding = style.EdgeLengths { left: one, top: four, right: one, bottom: four }
     if !framed {
         view_style.width = style.Length { Px: row_width }
@@ -7517,6 +7590,10 @@ fn tabs_options() -> TabsOptions {
 // (D1375) Beside each chevron the clipped edge fades into the bar.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_tabs(a, key, t, labels, selected, picks, options)
+        ret (cup, cup_error)
+    }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var h = t.tokens.sizes.control_md
     if touch { h = t.tokens.sizes.control_lg }
@@ -8631,6 +8708,16 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
     look.padding_y = (side - glyph_size) * 0.5
     look.min_width = side
     look.min_height = side
+    if t.tokens.profile == .CupertinoLike {
+        // Toolbar glyphs: accent, a rounded-rect hover layer, a tint when on.
+        muted = style.color(t.tokens, .Primary)
+        look.foreground = muted
+        look.radius = 8.0
+        look.background = style.cup_alpha(style.color(t.tokens, .Text), 0.0)
+        if state.hovered && !state.pressed { look.background = style.cup_fill(t.tokens, 0.7) }
+        if state.pressed { look.background = style.cup_fill(t.tokens, 1.6) }
+        if selected { look.background = style.cup_alpha(muted, 0.15) }
+    }
     // (D1532) Selected, the glyph is its filled "on" form (docs/ux/components/IconButton).
     let (mark, mark_error) = icon_square_of(a, muted, kind, glyph_size, selected, style.color(t.tokens, .SecondaryContainer))
     if mark_error != ok { ret (zero, mark_error) }
@@ -9262,6 +9349,10 @@ fn stepped(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i
 // `step` within `low..high`; Up and Down from either do the same. A slider in the
 // tree named `label` with the value as digits.
 fn stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64]) -> (widget.Node, err) {
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_stepper(a, key, t, label, value, low, high, step, change)
+        ret (cup, cup_error)
+    }
     let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
     if pair_error != ok { ret (zero, pair_error) }
     let (digits, digits_error) = mem.alloc[u8](a, 21usize)
@@ -9301,6 +9392,10 @@ fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     if t.tokens.profile == .Windows {
         let (win, win_error) = windows_spin(a, key, t, label, buffer, value, low, high, step, change, typed, width)
         ret (win, win_error)
+    }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_spin_box(a, key, t, label, buffer, value, low, high, step, change, typed, width)
+        ret (cup, cup_error)
     }
     let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
     if pair_error != ok { ret (zero, pair_error) }
@@ -13162,6 +13257,8 @@ fn widget_region_of(a: *mem.Arena, key: widget.Key, look: style.Style, children:
 fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis, width: f32, height: f32, offset: f32, content: f32, children: []const widget.Node) -> (widget.Node, err) {
     let vertical = axis == .Vertical
     var thumb = with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
+    // The Cupertino indicator: the label colour at 35 %, a thin pill that needs no track (iOS; macOS overlay scrollers).
+    if t.tokens.profile == .CupertinoLike { thumb = with_alpha(style.color(t.tokens, .Text), 0.35) }
     var view = sized_style(width, height)
     view.overflow = .Clip
     var along = height
@@ -15306,3 +15403,1336 @@ fn material_app_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str,
 }
 
 // ---- end Android look block ---------------------------------------------------------------------------
+
+// ---- the Cupertino look (profile CupertinoLike, docs/ui/looks/cupertino) -------------------------------
+// Controls drawn the Apple way: marks painted as paths (check, chevrons, magnifier, spinner ticks, the
+// switch thumb with its soft shadow) and faces from style.cupertino_resolve. A geometry value marked HIG is
+// a published Apple value; the rest is approximated (see the notes in docs/ui/looks/status.d/zzzz-cupertino.json).
+
+type CupMark = struct { kind: u32, color: paint.Color, other: paint.Color, a: f32, b: f32, c: f32, arena: *mem.Arena }
+
+fn cup_mark_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn cup_pt(x: f32, y: f32) -> geometry.Point {
+    ret geometry.Point { x: x, y: y }
+}
+
+fn cup_stroke(b: *scene.Builder, path: geometry.Path, color: paint.Color, width: f32) -> err {
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: path, brush: paint.Brush { Solid: color }, stroke: paint.Stroke { width: width, cap: .Round, join: .Round, miter_limit: 4.0 } } })
+}
+
+fn cup_line(m: *CupMark, b: *scene.Builder, x0: f32, y0: f32, x1: f32, y1: f32, color: paint.Color, width: f32) -> err {
+    let (pb, pb_error) = geometry.path_builder(m.arena, 2usize, 2usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try geometry.move_to(&builder, cup_pt(x0, y0))
+    try geometry.line_to(&builder, cup_pt(x1, y1))
+    ret cup_stroke(b, geometry.finish(&builder), color, width)
+}
+
+fn cup_poly(m: *CupMark, b: *scene.Builder, x0: f32, y0: f32, x1: f32, y1: f32, x2: f32, y2: f32, color: paint.Color, width: f32) -> err {
+    let (pb, pb_error) = geometry.path_builder(m.arena, 3usize, 3usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try geometry.move_to(&builder, cup_pt(x0, y0))
+    try geometry.line_to(&builder, cup_pt(x1, y1))
+    try geometry.line_to(&builder, cup_pt(x2, y2))
+    ret cup_stroke(b, geometry.finish(&builder), color, width)
+}
+
+fn cup_circle_path(builder: *geometry.PathBuilder, cx: f32, cy: f32, r: f32) -> err {
+    let k = r * 0.5523
+    try geometry.move_to(builder, cup_pt(cx + r, cy))
+    try geometry.cubic_to(builder, cup_pt(cx + r, cy + k), cup_pt(cx + k, cy + r), cup_pt(cx, cy + r))
+    try geometry.cubic_to(builder, cup_pt(cx - k, cy + r), cup_pt(cx - r, cy + k), cup_pt(cx - r, cy))
+    try geometry.cubic_to(builder, cup_pt(cx - r, cy - k), cup_pt(cx - k, cy - r), cup_pt(cx, cy - r))
+    try geometry.cubic_to(builder, cup_pt(cx + k, cy - r), cup_pt(cx + r, cy - k), cup_pt(cx + r, cy))
+    ret geometry.close_path(builder)
+}
+
+fn cup_disc(m: *CupMark, b: *scene.Builder, cx: f32, cy: f32, r: f32, color: paint.Color) -> err {
+    let (pb, pb_error) = geometry.path_builder(m.arena, 6usize, 13usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try cup_circle_path(&builder, cx, cy, r)
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: color } } })
+}
+
+fn cup_ring(m: *CupMark, b: *scene.Builder, cx: f32, cy: f32, r: f32, color: paint.Color, width: f32) -> err {
+    let (pb, pb_error) = geometry.path_builder(m.arena, 6usize, 13usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try cup_circle_path(&builder, cx, cy, r)
+    ret cup_stroke(b, geometry.finish(&builder), color, width)
+}
+
+fn cup_tick_alpha(i: usize, head: usize, count: usize) -> f32 {
+    var age = head + count - i
+    if age >= count { age -= count }
+    ret 1.0 - 0.85 * f32(age) / f32(count)
+}
+
+// kind: 1 check, 2 dash, 3 chevron down, 4 chevron up, 5 chevron right, 6 chevron left, 7 up/down chevrons,
+// 8 magnifier, 9 clear (disc `color`, cross `other`), 10 spinner (a stroke, b turn 0..1), 11 thumb (a radius,
+// `other` the shadow ink), 12 plus, 13 minus, 14 disc, 15 ring (a stroke), 16 filled up triangle, 17 filled down triangle.
+fn cup_mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*CupMark](ctx)
+    let w = area.width
+    let h = area.height
+    let x = area.x
+    let y = area.y
+    let cx = x + w * 0.5
+    let cy = y + h * 0.5
+    if m.kind == 1u32 { ret cup_poly(m, b, x + w * 0.2, y + h * 0.54, x + w * 0.41, y + h * 0.76, x + w * 0.8, y + h * 0.26, m.color, m.a) }
+    if m.kind == 2u32 { ret cup_line(m, b, x + w * 0.22, cy, x + w * 0.78, cy, m.color, m.a) }
+    if m.kind == 3u32 { ret cup_poly(m, b, x + w * 0.18, y + h * 0.36, cx, y + h * 0.64, x + w * 0.82, y + h * 0.36, m.color, m.a) }
+    if m.kind == 4u32 { ret cup_poly(m, b, x + w * 0.18, y + h * 0.64, cx, y + h * 0.36, x + w * 0.82, y + h * 0.64, m.color, m.a) }
+    if m.kind == 5u32 { ret cup_poly(m, b, x + w * 0.36, y + h * 0.18, x + w * 0.64, cy, x + w * 0.36, y + h * 0.82, m.color, m.a) }
+    if m.kind == 6u32 { ret cup_poly(m, b, x + w * 0.64, y + h * 0.18, x + w * 0.36, cy, x + w * 0.64, y + h * 0.82, m.color, m.a) }
+    if m.kind == 7u32 {
+        try cup_poly(m, b, x + w * 0.24, y + h * 0.42, cx, y + h * 0.18, x + w * 0.76, y + h * 0.42, m.color, m.a)
+        ret cup_poly(m, b, x + w * 0.24, y + h * 0.58, cx, y + h * 0.82, x + w * 0.76, y + h * 0.58, m.color, m.a)
+    }
+    if m.kind == 8u32 {
+        try cup_ring(m, b, x + w * 0.42, y + h * 0.42, w * 0.3, m.color, m.a)
+        ret cup_line(m, b, x + w * 0.64, y + h * 0.64, x + w * 0.88, y + h * 0.88, m.color, m.a)
+    }
+    if m.kind == 9u32 {
+        var r = w * 0.5
+        if h < w { r = h * 0.5 }
+        try cup_disc(m, b, cx, cy, r, m.color)
+        try cup_line(m, b, cx - r * 0.34, cy - r * 0.34, cx + r * 0.34, cy + r * 0.34, m.other, m.a)
+        ret cup_line(m, b, cx + r * 0.34, cy - r * 0.34, cx - r * 0.34, cy + r * 0.34, m.other, m.a)
+    }
+    if m.kind == 10u32 {
+        var r = w * 0.5
+        if h < w { r = h * 0.5 }
+        let count = 12usize
+        let head = usize(m.b * 12.0) % count
+        var i = 0usize
+        while i < count {
+            let angle = 6.2831853 * f32(i) / 12.0
+            let dx = math.sin[f32](angle)
+            let dy = 0.0 - math.cos[f32](angle)
+            var color = m.color
+            color.alpha = m.color.alpha * cup_tick_alpha(i, head, count)
+            try cup_line(m, b, cx + dx * r * 0.52, cy + dy * r * 0.52, cx + dx * r * 0.96, cy + dy * r * 0.96, color, m.a)
+            i += 1usize
+        }
+        ret ok
+    }
+    if m.kind == 11u32 {
+        // The soft drop shadow of a raised thumb, built of stacked low-alpha discs (no blur primitive).
+        let r = m.a
+        var shade = m.other
+        shade.alpha = m.other.alpha * 0.05
+        try cup_disc(m, b, cx, cy + 2.4, r + 3.0, shade)
+        try cup_disc(m, b, cx, cy + 2.2, r + 2.0, shade)
+        try cup_disc(m, b, cx, cy + 1.8, r + 1.0, shade)
+        shade.alpha = m.other.alpha * 0.10
+        try cup_disc(m, b, cx, cy + 1.2, r + 0.5, shade)
+        shade.alpha = m.other.alpha * 0.22
+        try cup_disc(m, b, cx, cy + 0.5, r + 0.25, shade)
+        ret cup_disc(m, b, cx, cy, r, m.color)
+    }
+    if m.kind == 12u32 {
+        try cup_line(m, b, x + w * 0.2, cy, x + w * 0.8, cy, m.color, m.a)
+        ret cup_line(m, b, cx, y + h * 0.2, cx, y + h * 0.8, m.color, m.a)
+    }
+    if m.kind == 13u32 { ret cup_line(m, b, x + w * 0.2, cy, x + w * 0.8, cy, m.color, m.a) }
+    if m.kind == 14u32 {
+        var r = w * 0.5
+        if h < w { r = h * 0.5 }
+        ret cup_disc(m, b, cx, cy, r, m.color)
+    }
+    if m.kind == 15u32 {
+        var r = w * 0.5
+        if h < w { r = h * 0.5 }
+        ret cup_ring(m, b, cx, cy, r - m.a * 0.5, m.color, m.a)
+    }
+    if m.kind == 16u32 || m.kind == 17u32 {
+        let (pb, pb_error) = geometry.path_builder(m.arena, 4usize, 4usize)
+        if pb_error != ok { ret TooLarge }
+        var builder = pb
+        if m.kind == 16u32 {
+            try geometry.move_to(&builder, cup_pt(x, y + h))
+            try geometry.line_to(&builder, cup_pt(cx, y))
+            try geometry.line_to(&builder, cup_pt(x + w, y + h))
+        }
+        if m.kind == 17u32 {
+            try geometry.move_to(&builder, cup_pt(x, y))
+            try geometry.line_to(&builder, cup_pt(cx, y + h))
+            try geometry.line_to(&builder, cup_pt(x + w, y))
+        }
+        try geometry.close_path(&builder)
+        ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: m.color } } })
+    }
+    ret ok
+}
+
+// A drawn mark `width` x `height`. `stroke` is its line width (or the thumb's radius).
+fn cup_mark(a: *mem.Arena, kind: u32, color: paint.Color, other: paint.Color, stroke: f32, turn: f32, width: f32, height: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[CupMark](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    marks[0usize] = CupMark { kind: kind, color: color, other: other, a: stroke, b: turn, c: 0.0, arena: a }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: cup_mark_measure, paint: cup_mark_paint, state: widget.bytes_of[CupMark](&marks[0usize]) } }, style: sized_style(width, height), children: none }, ok)
+}
+
+// A label in a Cupertino size and weight.
+fn cup_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, color: paint.Color) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    caption.size = size
+    caption.weight = weight
+    let (node, node_error) = colored_text(a, 0u64, value, t, caption, color)
+    ret (node, node_error)
+}
+
+// The label size and weight of a button by its height and variant: iOS 15 / 15 / 17 semibold for small /
+// medium / large; the macOS bezel 13 regular at 22 tall and 15 above.
+fn cup_button_size(height: f32, variant: style.ControlVariant) -> f32 {
+    if variant == .Outlined {
+        if height <= 24.0 { ret 13.0 }
+        ret 15.0
+    }
+    if height >= 40.0 { ret 17.0 }
+    ret 15.0
+}
+
+fn cup_button_weight(variant: style.ControlVariant) -> u32 {
+    if variant == .Outlined || variant == .Plain { ret 400u32 }
+    ret 600u32
+}
+
+// The Cupertino button: iOS configuration sizes 28 / 34 / 44 (options.height; 0 is 34, or 22 for the macOS
+// bezel `Outlined`), `picture` before the caption when `has_icon`, a spinner over the hidden caption when loading.
+fn cupertino_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    var height = options.height
+    if !(height > 0.0) {
+        height = 34.0
+        if options.variant == .Outlined { height = 22.0 }
+    }
+    var look = style.cupertino_resolve(t.tokens, options.variant, state, height)
+    if options.width > 0.0 { look.min_width = options.width }
+    let size = cup_button_size(height, options.variant)
+    var ink = look.foreground
+    if options.loading { ink.alpha = 0.0 }
+    let (word, word_error) = cup_label(a, t, label, size, cup_button_weight(options.variant), ink)
+    if word_error != ok { ret (zero, word_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    if has_icon && !options.loading {
+        parts[count] = picture
+        count += 1usize
+    }
+    if label.len > 0usize {
+        parts[count] = word
+        count += 1usize
+    }
+    var row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), parts[0usize..count])
+    var states = 0u32
+    if options.loading {
+        let (ring, ring_error) = cup_mark(a, 10u32, look.foreground, look.foreground, 1.8, progress_turn(t, 0.0 - 1.0, time.seconds(1i64)), 17.0, 17.0)
+        if ring_error != ok { ret (zero, ring_error) }
+        var caption = text_options()
+        caption.role = .Label
+        caption.wrap = .None
+        caption.size = size
+        caption.weight = cup_button_weight(options.variant)
+        let (advance, fit, baseline, metrics_error) = run_metrics_faced(a, t, caption, label)
+        if metrics_error != ok { ret (zero, metrics_error) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = row
+        layers[1usize] = widget.aligned(0u64, .Center, .Center, sized_style(max_of(fit, 17.0), 20.0), widget_one_of(a, ring))
+        row = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
+        states = accessibility.STATE_BUSY
+    }
+    var fill = style.defaults()
+    fill.min_width = style.Length { Px: max_zero(look.min_width - look.padding * 2.0 - look.border_width * 2.0) }
+    fill.min_height = style.Length { Px: max_zero(look.min_height - look.border_width * 2.0) }
+    let content = widget.aligned(0u64, .Center, .Center, fill, widget_one_of(a, row))
+    let (node, node_error) = pressable_states(a, key, t, 3u8, label, look, options.enabled, false, states, 0u32, 0u64, action, content)
+    ret (node, node_error)
+}
+// ---- end the Cupertino look (block 1) ---------------------------------------------------------------
+
+// ---- the Cupertino look, block 2: checkbox, radio, switch, segmented control, slider ------------------
+
+fn cup_rrect_path(builder: *geometry.PathBuilder, x: f32, y: f32, w: f32, h: f32, radius: f32) -> err {
+    var r = radius
+    if r > w * 0.5 { r = w * 0.5 }
+    if r > h * 0.5 { r = h * 0.5 }
+    let k = r * 0.4477
+    try geometry.move_to(builder, cup_pt(x + r, y))
+    try geometry.line_to(builder, cup_pt(x + w - r, y))
+    try geometry.cubic_to(builder, cup_pt(x + w - k, y), cup_pt(x + w, y + k), cup_pt(x + w, y + r))
+    try geometry.line_to(builder, cup_pt(x + w, y + h - r))
+    try geometry.cubic_to(builder, cup_pt(x + w, y + h - k), cup_pt(x + w - k, y + h), cup_pt(x + w - r, y + h))
+    try geometry.line_to(builder, cup_pt(x + r, y + h))
+    try geometry.cubic_to(builder, cup_pt(x + k, y + h), cup_pt(x, y + h - k), cup_pt(x, y + h - r))
+    try geometry.line_to(builder, cup_pt(x, y + r))
+    try geometry.cubic_to(builder, cup_pt(x, y + k), cup_pt(x + k, y), cup_pt(x + r, y))
+    ret geometry.close_path(builder)
+}
+
+fn cup_rrect(m: *CupMark, b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, radius: f32, color: paint.Color) -> err {
+    let (pb, pb_error) = geometry.path_builder(m.arena, 12usize, 24usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try cup_rrect_path(&builder, x, y, w, h, radius)
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: color } } })
+}
+
+// A raised pill: the stacked-alpha drop shadow of iOS's switch thumb and segmented selection (no blur
+// primitive: five widening low-alpha pills approximate `0 3 8 rgba(0,0,0,.15), 0 1 1 rgba(0,0,0,.16)`), then the fill.
+fn cup_pill_paint(m: *CupMark, b: *scene.Builder, area: geometry.Rect) -> err {
+    let r = m.a
+    var shade = m.other
+    let s = m.c
+    shade.alpha = m.other.alpha * 0.035 * s
+    try cup_rrect(m, b, area.x - 3.0, area.y - 1.0, area.width + 6.0, area.height + 6.0, r + 3.0, shade)
+    shade.alpha = m.other.alpha * 0.04 * s
+    try cup_rrect(m, b, area.x - 2.0, area.y, area.width + 4.0, area.height + 4.0, r + 2.0, shade)
+    shade.alpha = m.other.alpha * 0.05 * s
+    try cup_rrect(m, b, area.x - 1.0, area.y + 0.5, area.width + 2.0, area.height + 3.0, r + 1.0, shade)
+    shade.alpha = m.other.alpha * 0.10 * s
+    try cup_rrect(m, b, area.x - 0.4, area.y + 0.5, area.width + 0.8, area.height + 1.6, r + 0.4, shade)
+    shade.alpha = m.other.alpha * 0.16 * s
+    try cup_rrect(m, b, area.x, area.y + 0.4, area.width, area.height + 0.8, r, shade)
+    ret cup_rrect(m, b, area.x, area.y, area.width, area.height, r, m.color)
+}
+
+fn cup_pill_node(a: *mem.Arena, color: paint.Color, shadow: paint.Color, radius: f32, strength: f32, width: f32, height: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[CupMark](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    marks[0usize] = CupMark { kind: 18u32, color: color, other: shadow, a: radius, b: 0.0, c: strength, arena: a }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: cup_mark_measure, paint: cup_pill_dispatch, state: widget.bytes_of[CupMark](&marks[0usize]) } }, style: sized_style(width, height), children: none }, ok)
+}
+
+fn cup_pill_dispatch(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    ret cup_pill_paint(mem.cast[*CupMark](ctx), b, area)
+}
+
+fn cup_clear() -> paint.Color {
+    ret paint.rgba(0.0, 0.0, 0.0, 0.0)
+}
+
+// A macOS check box or radio button (14 x 14, HIG): white face and 1 px edge unchecked, the accent filled with a
+// white tick, dash or 6 px dot when chosen; the label 13 regular, 6 px after the box.
+fn cupertino_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    let dark = t.tokens.palette == .Dark
+    let accent = style.color(t.tokens, .Primary)
+    let filled = chosen || mixed
+    var face = style.hexa(0xFFFFFFu32, 1.0)
+    var edge = style.hexa(0x000000u32, 0.30)
+    if dark {
+        face = style.hexa(0xFFFFFFu32, 0.10)
+        edge = style.hexa(0xFFFFFFu32, 0.30)
+    }
+    if state.pressed && !filled {
+        face = style.hex(0xE2E2E2u32)
+        if dark { face = style.hexa(0xFFFFFFu32, 0.24) }
+    }
+    var edge_w: f32 = 1.0
+    if filled {
+        face = accent
+        edge = cup_clear()
+        edge_w = 0.0
+        if state.pressed { face = style.mix(accent, style.hex(0x000000u32), 0.22) }
+    }
+    var mark_ink = style.hex(0xFFFFFFu32)
+    var words = style.color(t.tokens, .Text)
+    var veil: f32 = 1.0
+    if !enabled {
+        veil = 0.4
+        words = style.cup_alpha(words, 0.3)
+        if filled { face = style.cup_alpha(accent, 0.8) }
+    }
+    var box = sized_style(14.0, 14.0)
+    box.background = paint.Brush { Solid: face }
+    box.border = style.Border { width: edge_w, color: edge }
+    box.radius = 3.5
+    if round { box.radius = 7.0 }
+    box.opacity = veil
+    let (mark_parts, mark_error) = mem.alloc[widget.Node](a, 1usize)
+    if mark_error != ok { ret (zero, TooLarge) }
+    var drawn = 0usize
+    if filled && round {
+        var dot = sized_style(6.0, 6.0)
+        dot.background = paint.Brush { Solid: mark_ink }
+        dot.radius = 3.0
+        mark_parts[0usize] = widget.box(0u64, dot, zero)
+        drawn = 1usize
+    }
+    if filled && !round {
+        var kind = 1u32
+        if mixed && !chosen { kind = 2u32 }
+        if mixed { kind = 2u32 }
+        let (tick, tick_error) = cup_mark(a, kind, mark_ink, mark_ink, 1.9, 0.0, 10.0, 10.0)
+        if tick_error != ok { ret (zero, tick_error) }
+        mark_parts[0usize] = tick
+        drawn = 1usize
+    }
+    var mark = widget.aligned(0u64, .Center, .Center, box, mark_parts[0usize..drawn])
+    if round {
+        // Painted circles: the box radius of the style path reads as a rounded square at 14.
+        let (disc, disc_error) = cup_mark(a, 14u32, face, face, 0.0, 0.0, 14.0, 14.0)
+        if disc_error != ok { ret (zero, disc_error) }
+        let (rim, rim_error) = cup_mark(a, 15u32, edge, edge, edge_w, 0.0, 14.0, 14.0)
+        if rim_error != ok { ret (zero, rim_error) }
+        let (dot_mark, dot_error) = cup_mark(a, 14u32, mark_ink, mark_ink, 0.0, 0.0, 6.0, 6.0)
+        if dot_error != ok { ret (zero, dot_error) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = disc
+        var used = 1usize
+        if !filled {
+            layers[used] = rim
+            used += 1usize
+        }
+        if filled {
+            layers[used] = widget.positioned(0u64, 4.0, 4.0, style.defaults(), widget_one_of(a, dot_mark))
+            used += 1usize
+        }
+        var ground = sized_style(14.0, 14.0)
+        ground.opacity = veil
+        mark = widget.stack(0u64, ground, layers[0usize..used])
+    }
+    let (word, word_error) = cup_label(a, t, label, 13.0, 400u32, words)
+    if word_error != ok { ret (zero, word_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = mark
+    parts[1usize] = word
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), parts[0usize..2usize])
+    var target_style = style.defaults()
+    target_style.min_height = style.Length { Px: 20.0 }
+    target_style.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+    let centred = widget.aligned(0u64, .Start, .Center, target_style, widget_one_of(a, row))
+    var region_style = style.defaults()
+    region_style.radius = 4.0
+    let inner = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, region_style, widget_one_of(a, centred))
+    var sem: widget.Semantics = zero
+    sem.role = role
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if chosen { sem.states = accessibility.STATE_CHECKED }
+    if mixed { sem.states = sem.states | accessibility.STATE_MIXED }
+    if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, inner)), ok)
+}
+
+// The iOS switch (HIG 51 x 31): a green track when on, tertiary fill when off, a 27 white thumb with a soft
+// shadow, 2 in; the thumb stretches by 6 under the finger. The label (17) leads, 12 before the track.
+fn cupertino_switch(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, on: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    let dark = t.tokens.palette == .Dark
+    var goal: f32 = 0.0
+    if on { goal = 1.0 }
+    let share = eased_on(t, key, key + 1048592u64, goal, false, 220u32)
+    var off_fill = style.hexa(0x787880u32, 0.16)
+    if dark { off_fill = style.hexa(0x787880u32, 0.32) }
+    let on_fill = style.color(t.tokens, .Success)
+    var track = sized_style(51.0, 31.0)
+    track.radius = 15.5
+    track.background = paint.Brush { Solid: style.mix(off_fill, on_fill, share) }
+    var thumb_w: f32 = 27.0
+    if state.pressed && enabled { thumb_w = 33.0 }
+    let left = 2.0 + share * (51.0 - 4.0 - thumb_w)
+    let (thumb, thumb_error) = cup_pill_node(a, style.hex(0xFFFFFFu32), style.hex(0x000000u32), 13.5, 1.0, thumb_w, 27.0)
+    if thumb_error != ok { ret (zero, thumb_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.box(0u64, track, zero)
+    layers[1usize] = widget.positioned(0u64, left, 2.0, style.defaults(), widget_one_of(a, thumb))
+    var mark_style = sized_style(51.0, 31.0)
+    if !enabled { mark_style.opacity = 0.5 }
+    let mark = widget.stack(0u64, mark_style, layers[0usize..2usize])
+    var words = style.color(t.tokens, .Text)
+    if !enabled { words = style.cup_alpha(words, 0.3) }
+    let (word, word_error) = cup_label(a, t, label, 17.0, 400u32, words)
+    if word_error != ok { ret (zero, word_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = word
+    parts[1usize] = mark
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), parts[0usize..2usize])
+    var target_style = style.defaults()
+    target_style.min_height = style.Length { Px: 44.0 }
+    let centred = widget.aligned(0u64, .Start, .Center, target_style, widget_one_of(a, row))
+    var region_style = style.defaults()
+    region_style.radius = 8.0
+    let inner = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, region_style, widget_one_of(a, centred))
+    var sem: widget.Semantics = zero
+    sem.role = 18u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if on { sem.states = accessibility.STATE_CHECKED }
+    if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, inner)), ok)
+}
+
+// The iOS segmented control (HIG 32 tall): a tertiary-fill track, the selected segment a raised white (dark
+// #636366) pill 2 in with a soft shadow, hairline dividers between segments that touch neither the pill nor
+// the ends, labels 13 (semibold when selected). Segments are equal, as wide as the longest label plus 28.
+// `height` and `font` size it (a tab strip: 24 and 13); `item_role` is the segments' tree role; `off` marks
+// disabled segments by index.
+fn cup_segments(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, height: f32, font: f32, item_role: u8, group_role: u8, off: []const bool) -> (widget.Node, err) {
+    if actions.len != labels.len || labels.len == 0usize { ret (zero, TooLarge) }
+    let dark = t.tokens.palette == .Dark
+    var probe = text_options()
+    probe.role = .Label
+    probe.wrap = .None
+    probe.size = font
+    probe.weight = 600u32
+    var widest: f32 = 0.0
+    var n = 0usize
+    while n < labels.len {
+        let (advance, fit, baseline, metrics_error) = run_metrics_faced(a, t, probe, labels[n])
+        if metrics_error != ok { ret (zero, metrics_error) }
+        if fit > widest { widest = fit }
+        n += 1usize
+    }
+    let seg = widest + 28.0
+    let total = seg * f32(labels.len) + 4.0
+    let inner_h = height - 4.0
+    var track = sized_style(total, height)
+    track.radius = height * 0.28
+    track.background = paint.Brush { Solid: style.cup_fill(t.tokens, 1.0) }
+    var raised = style.hex(0xFFFFFFu32)
+    if dark { raised = style.hex(0x636366u32) }
+    let rule_ink = style.hexa(0x3C3C43u32, 0.29)
+    let rule_dark = style.hexa(0x98989Fu32, 0.5)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, labels.len * 2usize + 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    layers[used] = widget.box(0u64, track, zero)
+    used += 1usize
+    let (pill, pill_error) = cup_pill_node(a, raised, style.hex(0x000000u32), inner_h * 0.25, 1.0, seg, inner_h)
+    if pill_error != ok { ret (zero, pill_error) }
+    layers[used] = widget.positioned(0u64, 2.0 + f32(selected) * seg, 2.0, style.defaults(), widget_one_of(a, pill))
+    used += 1usize
+    var i = 1usize
+    while i < labels.len {
+        if i != selected && i - 1usize != selected {
+            var rule = sized_style(1.0, height * 0.44)
+            rule.background = paint.Brush { Solid: rule_ink }
+            if dark { rule.background = paint.Brush { Solid: rule_dark } }
+            layers[used] = widget.positioned(0u64, 2.0 + f32(i) * seg - 0.5, height * 0.28, style.defaults(), widget_one_of(a, widget.box(0u64, rule, zero)))
+            used += 1usize
+        }
+        i += 1usize
+    }
+    let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var k = 0usize
+    while k < labels.len {
+        let item_key = key + 1u64 + u64(k)
+        let chosen = k == selected
+        let live = enabled && !(k < off.len && off[k])
+        let state = control_state(t, item_key, live, chosen)
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = cup_clear()
+        if state.pressed && !chosen { look.background = style.cup_fill(t.tokens, 1.2) }
+        look.border_width = 0.0
+        look.border = cup_clear()
+        look.opacity = 1.0
+        look.elevation = 0u8
+        look.radius = inner_h * 0.25
+        look.corners = style.Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 }
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.padding_start = 0.0
+        look.min_width = seg
+        look.min_height = inner_h
+        var words = style.color(t.tokens, .Text)
+        if !live { words = style.cup_alpha(words, 0.3) }
+        var weight = 400u32
+        if chosen { weight = 600u32 }
+        let (word, word_error) = cup_label(a, t, labels[k], font, weight, words)
+        if word_error != ok { ret (zero, word_error) }
+        let content = widget.aligned(0u64, .Center, .Center, sized_style(seg, inner_h), widget_one_of(a, word))
+        let (item, item_error) = pressable(a, item_key, t, item_role, labels[k], look, live, chosen, &actions[k], content)
+        if item_error != ok { ret (zero, item_error) }
+        items[k] = item
+        k += 1usize
+    }
+    layers[used] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len])))
+    used += 1usize
+    let frame = widget.stack(0u64, sized_style(total, height), layers[0usize..used])
+    var sem: widget.Semantics = zero
+    sem.role = group_role
+    sem.label = label
+    if group_role == 20u8 { sem.column_count = u32(labels.len) }
+    ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, frame)), ok)
+}
+
+fn cupertino_segmented(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let (made, made_error) = cup_segments(a, key, t, label, labels, selected, actions, enabled, 32.0, 13.0, 3u8, 2u8, zero)
+    ret (made, made_error)
+}
+
+// The iOS slider: a 4 px track in the fill colour, the accent (minimum track) up to a 28 white thumb with a soft
+// shadow. The runtime's slider element, drawn in no colour, sits over it for the pointer, keys and the tree; its
+// geometry (the thumb centre 8 in, 8 out, from slider_at) is the one painted here.
+fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let width: f32 = 200.0
+    var share: f32 = 0.0
+    if high > low { share = (value - low) / (high - low) }
+    if share < 0.0 { share = 0.0 }
+    if share > 1.0 { share = 1.0 }
+    let centre = 8.0 + share * (width - 16.0)
+    var rest = style.hexa(0x787880u32, 0.16)
+    if dark { rest = style.hexa(0x787880u32, 0.32) }
+    let accent = style.color(t.tokens, .Primary)
+    var track = sized_style(width - 16.0, 4.0)
+    track.radius = 2.0
+    track.background = paint.Brush { Solid: rest }
+    var lit = sized_style(max_zero(centre - 8.0), 4.0)
+    lit.radius = 2.0
+    lit.background = paint.Brush { Solid: accent }
+    let state = control_state(t, key, enabled, false)
+    let (thumb, thumb_error) = cup_pill_node(a, style.hex(0xFFFFFFu32), style.hex(0x000000u32), 14.0, 1.0, 28.0, 28.0)
+    if thumb_error != ok { ret (zero, thumb_error) }
+    let clear = cup_clear()
+    let hidden = widget.Slider { value: value, second: value, range: false, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: zero, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.positioned(0u64, 8.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, track, zero)))
+    layers[1usize] = widget.positioned(0u64, 8.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, lit, zero)))
+    layers[2usize] = widget.positioned(0u64, centre - 14.0, 0.0, style.defaults(), widget_one_of(a, thumb))
+    layers[3usize] = widget.slider(key, hidden, sized_style(width, 28.0))
+    var frame_style = sized_style(width, 28.0)
+    if !enabled { frame_style.opacity = 0.4 }
+    let frame = widget.stack(0u64, frame_style, layers[0usize..4usize])
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    let (said, said_error) = mem.alloc[u8](a, 21usize)
+    if said_error != ok { ret (zero, TooLarge) }
+    var rounded = value + 0.5
+    if value < 0.0 { rounded = value - 0.5 }
+    let said_len = write_i64(said, i64(rounded))
+    sem.value = said[0usize..said_len]
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    // The thumb overhangs the element by 6 at either end.
+    var margin = style.defaults()
+    margin.padding = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.semantics(0u64, sem, margin, widget_one_of(a, frame)), ok)
+}
+// ---- end the Cupertino look (block 2) ---------------------------------------------------------------
+
+// ---- the Cupertino look, block 3: progress, spinner, text field, search field, stepper -----------------
+
+fn cup_arc_mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*CupMark](ctx)
+    var r = area.width * 0.5
+    if area.height < area.width { r = area.height * 0.5 }
+    r = r - m.a * 0.5
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    try cup_ring(m, b, cx, cy, r, m.other, m.a)
+    if m.b > 0.0 {
+        let (arc, arc_error) = arc_path(m.arena, cx, cy, r, m.b)
+        if arc_error != ok { ret TooLarge }
+        ret cup_stroke(b, arc, m.color, m.a)
+    }
+    ret ok
+}
+
+// A determinate ring: `other` the track, `color` the arc from 12 o'clock through `share` of the turn.
+fn cup_arc_node(a: *mem.Arena, color: paint.Color, track: paint.Color, stroke: f32, share: f32, side: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[CupMark](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    marks[0usize] = CupMark { kind: 19u32, color: color, other: track, a: stroke, b: share, c: 0.0, arena: a }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: cup_mark_measure, paint: cup_arc_mark_paint, state: widget.bytes_of[CupMark](&marks[0usize]) } }, style: sized_style(side, side), children: none }, ok)
+}
+
+// The iOS progress view (HIG: a 4 pt track, 6 thick): the systemFill track, the accent fill rounded at both
+// ends; error and paused tones take red and orange. Indeterminate (macOS draws stripes, iOS has none): a 35 %
+// capsule travelling the track.
+fn cupertino_progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let aimed = clamp_share(value)
+    var share = aimed
+    if !indeterminate { share = eased_share(t, key, aimed, true) }
+    var h: f32 = 4.0
+    if options.thick { h = 6.0 }
+    var ink = style.color(t.tokens, .Primary)
+    if options.tone == .Error { ink = style.color(t.tokens, .Error) }
+    if options.tone == .Paused { ink = style.color(t.tokens, .Warning) }
+    var ground = style.hexa(0x787880u32, 0.2)
+    if dark { ground = style.hexa(0x787880u32, 0.36) }
+    var track = sized_style(width, h)
+    track.radius = h * 0.5
+    track.background = paint.Brush { Solid: ground }
+    track.overflow = .Clip
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    if indeterminate {
+        let seg = width * 0.35
+        let turn = progress_turn(t, options.phase, time.seconds(2i64))
+        let left = (width + seg) * turn - seg
+        parts[0usize] = widget.positioned(0u64, left, 0.0, style.defaults(), widget_one_of(a, bar_piece(key + 1u64, seg, h, ink, h * 0.5)))
+        used = 1usize
+    }
+    if !indeterminate && share > 0.0 {
+        var done = width * share
+        if done < h { done = h }
+        parts[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, bar_piece(key + 1u64, done, h, ink, h * 0.5)))
+        used = 1usize
+    }
+    let bar = widget.stack(0u64, track, parts[0usize..used])
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    if indeterminate {
+        sem.states = accessibility.STATE_BUSY
+    } else {
+        let (shown, shown_error) = percent_text(a, aimed)
+        if shown_error != ok { ret (zero, shown_error) }
+        sem.value = shown
+    }
+    ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, bar)), ok)
+}
+
+// The activity indicator (twelve ticks fading round, grey; HIG medium 20, large 37) when indeterminate, a ring
+// with the accent arc from the top when determinate.
+fn cupertino_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32, options: ProgressOptions) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    var ink = style.color(t.tokens, .TextMuted)
+    if options.content.alpha > 0.0 { ink = options.content }
+    var node: widget.Node = zero
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    if indeterminate {
+        let turn = progress_turn(t, options.phase, time.seconds(1i64))
+        let (made, made_error) = cup_mark(a, 10u32, ink, ink, size * 0.1, turn, size, size)
+        if made_error != ok { ret (zero, made_error) }
+        node = made
+        sem.states = accessibility.STATE_BUSY
+    }
+    if !indeterminate {
+        var ground = style.hexa(0x787880u32, 0.2)
+        if dark { ground = style.hexa(0x787880u32, 0.36) }
+        var arc = style.color(t.tokens, .Primary)
+        if options.content.alpha > 0.0 { arc = options.content }
+        let (made, made_error) = cup_arc_node(a, arc, ground, size * 0.12, clamp_share(value), size)
+        if made_error != ok { ret (zero, made_error) }
+        node = made
+        let (shown, shown_error) = percent_text(a, clamp_share(value))
+        if shown_error != ok { ret (zero, shown_error) }
+        sem.value = shown
+    }
+    ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, node)), ok)
+}
+
+// A clear button's action: tells the field's owner the text is now empty.
+type CupClear = struct { change: widget.Change[str] }
+
+fn cup_clear_fire(ctx: *void) -> err {
+    let c = mem.cast[*const CupClear](ctx)
+    ret widget.fire_change[str](c.change, "")
+}
+
+// The system fill colours the fields use.
+fn cup_field_face(t: *const Theme) -> paint.Color {
+    ret style.color(t.tokens, .Surface)
+}
+
+fn cup_field_edge(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.hexa(0x545458u32, 0.65) }
+    ret style.hexa(0x3C3C43u32, 0.18)
+}
+
+fn cup_placeholder(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.hexa(0xEBEBF5u32, 0.3) }
+    ret style.hexa(0x3C3C43u32, 0.3)
+}
+
+// The clear control of a field: a 17 grey disc with a white cross (iOS clearButtonMode), pressing it tells `owner`
+// the text is empty (or fires `submit` for a search field).
+fn cup_clear_button(a: *mem.Arena, key: widget.Key, t: *const Theme, submit: *const widget.Submit) -> (widget.Node, err) {
+    var disc = style.hexa(0x3C3C43u32, 0.6)
+    var cross = style.color(t.tokens, .Surface)
+    if t.tokens.palette == .Dark {
+        disc = style.hexa(0xEBEBF5u32, 0.6)
+        cross = style.hex(0x1C1C1Eu32)
+    }
+    let (mark, mark_error) = cup_mark(a, 9u32, disc, cross, 1.5, 0.0, 17.0, 17.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    var hit = style.defaults()
+    hit.radius = 9.0
+    let region = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](submit), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, hit, widget_one_of(a, mark))
+    var sem: widget.Semantics = zero
+    sem.role = 3u8
+    sem.label = "Clear text"
+    sem.actions = accessibility.ACTION_PRESS
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, region)), ok)
+}
+
+// The focus ring a macOS field wears: a 3 px accent halo outside the frame, always laid out (clear when the field
+// is not focused) so the frame does not move.
+fn cup_ring_holder(a: *mem.Arena, t: *const Theme, frame: widget.Node, radius: f32, ringed: bool) -> widget.Node {
+    var holder = style.defaults()
+    holder.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 3.0 }, bottom: style.Length { Px: 3.0 } }
+    holder.radius = radius + 3.0
+    if ringed { holder.background = paint.Brush { Solid: style.color(t.tokens, .FocusRing) } }
+    ret widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, holder, widget_one_of(a, frame))
+}
+
+// The iOS rounded-rect text field: 34 tall (options.height), 8 round, the grouped-cell face with a hairline, the value
+// in 17 label, the placeholder at 30 % label, a clear button once focused and holding text; a macOS-style 3 px accent
+// halo shows the focus, an invalid field takes a red edge.
+fn cupertino_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, secret: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    let focused = state.focused && options.enabled
+    var h = options.height
+    if !(h > 0.0) { h = 34.0 }
+    let line: f32 = 22.0
+    let multiline = options.rows > 1u32
+    if multiline { h = max_of(h, f32(options.rows) * line + 12.0) }
+    var face = cup_field_face(t)
+    var edge = cup_field_edge(t)
+    var ink = style.color(t.tokens, .Text)
+    if state.hovered && options.enabled { edge = style.cup_alpha(edge, edge.alpha * 1.8) }
+    if focused { edge = style.color(t.tokens, .Primary) }
+    if options.invalid { edge = style.color(t.tokens, .Error) }
+    if options.read_only { face = cup_clear() }
+    if !options.enabled {
+        face = style.cup_fill(t.tokens, 0.6)
+        ink = style.cup_alpha(ink, 0.3)
+    }
+    var value_options = text_options()
+    value_options.role = .Body
+    value_options.mono = options.mono
+    let (text_look, style_error) = text_style_faced(a, t, value_options)
+    if style_error != ok { ret (zero, style_error) }
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: f32(options.rows) * line }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    var prompt = options.placeholder
+    if prompt.len == 0usize { prompt = label }
+    if len == 0usize && prompt.len != 0usize {
+        let (hint, hint_error) = cup_label(a, t, prompt, 17.0, 400u32, cup_placeholder(t))
+        if hint_error != ok { ret (zero, hint_error) }
+        layers[at] = hint
+        at += 1usize
+    }
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style))
+    if named_error != ok { ret (zero, named_error) }
+    layers[at] = named
+    at += 1usize
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    let value_stack = widget.stack(0u64, grow, layers[0usize..at])
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    if options.prefix.len != 0usize {
+        let (pre, pre_error) = cup_label(a, t, options.prefix, 17.0, 400u32, style.color(t.tokens, .TextMuted))
+        if pre_error != ok { ret (zero, pre_error) }
+        parts[used] = pre
+        used += 1usize
+    }
+    parts[used] = value_stack
+    used += 1usize
+    if options.suffix.len != 0usize {
+        let (post, post_error) = cup_label(a, t, options.suffix, 17.0, 400u32, style.color(t.tokens, .TextMuted))
+        if post_error != ok { ret (zero, post_error) }
+        parts[used] = post
+        used += 1usize
+    }
+    if focused && len != 0usize && !options.read_only {
+        let (clears, clears_error) = mem.alloc[CupClear](a, 1usize)
+        if clears_error != ok { ret (zero, TooLarge) }
+        clears[0usize] = CupClear { change: change }
+        let (pressed, pressed_error) = mem.alloc[widget.Submit](a, 1usize)
+        if pressed_error != ok { ret (zero, TooLarge) }
+        pressed[0usize] = widget.Submit { ctx: mem.cast[*void](&clears[0usize]), invoke: cup_clear_fire }
+        let (clear_node, clear_node_error) = cup_clear_button(a, key + 1u64, t, &pressed[0usize])
+        if clear_node_error != ok { ret (zero, clear_node_error) }
+        parts[used] = clear_node
+        used += 1usize
+    }
+    var frame = style.defaults()
+    frame.width = style.Length { Px: options.width }
+    frame.min_height = style.Length { Px: h }
+    frame.background = paint.Brush { Solid: face }
+    frame.border = style.Border { width: 1.0, color: edge }
+    frame.radius = 8.0
+    var pad_y: f32 = 0.0
+    if multiline { pad_y = 6.0 }
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 10.0 + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: 10.0 + options.end_space }, bottom: style.Length { Px: pad_y } }
+    let boxed = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, frame, parts[0usize..used])
+    let holder = cup_ring_holder(a, t, boxed, 8.0, focused && !options.invalid)
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, holder)), ok)
+}
+
+// The iOS search field (UISearchBar): a 36 tall, 10 round tertiary-fill pill, a 15 magnifier and "Search" at
+// secondary label, the clear button while it holds text.
+fn cupertino_search(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, clear: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    let focused = state.focused && options.enabled
+    var prompt = options.placeholder
+    if prompt.len == 0usize { prompt = "Search" }
+    var words = style.color(t.tokens, .Text)
+    var muted = style.color(t.tokens, .TextMuted)
+    // The fill is the tertiary fill flattened on the ground, opaque so the focus halo behind it does not tint it.
+    let ground = style.color(t.tokens, .Background)
+    var fill = style.layer(ground, style.hex(0x767680u32), 0.12)
+    if t.tokens.palette == .Dark { fill = style.layer(ground, style.hex(0x767680u32), 0.24) }
+    if state.hovered && options.enabled { fill = style.layer(ground, style.hex(0x767680u32), 0.17) }
+    if !options.enabled {
+        words = style.cup_alpha(words, 0.3)
+        muted = style.cup_alpha(muted, 0.5)
+    }
+    var value_options = text_options()
+    value_options.role = .Body
+    let (text_look, style_error) = text_style_faced(a, t, value_options)
+    if style_error != ok { ret (zero, style_error) }
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: 22.0 }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    if len == 0usize {
+        let (hint, hint_error) = cup_label(a, t, prompt, 17.0, 400u32, muted)
+        if hint_error != ok { ret (zero, hint_error) }
+        layers[at] = hint
+        at += 1usize
+    }
+    let (named, named_error) = named_editor(a, key, "", prompt, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: words, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style))
+    if named_error != ok { ret (zero, named_error) }
+    layers[at] = named
+    at += 1usize
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (glass, glass_error) = cup_mark(a, 8u32, muted, muted, 1.8, 0.0, 15.0, 15.0)
+    if glass_error != ok { ret (zero, glass_error) }
+    parts[0usize] = glass
+    parts[1usize] = widget.stack(0u64, grow, layers[0usize..at])
+    var used = 2usize
+    if len != 0usize && options.enabled {
+        let (clear_node, clear_node_error) = cup_clear_button(a, key + 1u64, t, clear)
+        if clear_node_error != ok { ret (zero, clear_node_error) }
+        parts[2usize] = clear_node
+        used = 3usize
+    }
+    var frame = style.defaults()
+    frame.width = style.Length { Px: options.width }
+    frame.min_height = style.Length { Px: 36.0 }
+    frame.background = paint.Brush { Solid: fill }
+    frame.radius = 10.0
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+    let boxed = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, frame, parts[0usize..used])
+    let holder = cup_ring_holder(a, t, boxed, 10.0, focused)
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, holder)), ok)
+}
+
+// A stepper half: a pressable `half_w` x 32 with a plus or minus mark in the accent (30 % at a bound), pressed it
+// takes the fill darker, rounded on its outer side only.
+fn cup_step_half(a: *mem.Arena, key: widget.Key, t: *const Theme, glyph: u32, left_side: bool, action: *const widget.Submit, enabled: bool, half_w: f32) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = cup_clear()
+    if state.pressed { look.background = style.cup_fill(t.tokens, 1.6) }
+    if state.hovered && !state.pressed { look.background = style.cup_fill(t.tokens, 0.7) }
+    look.border_width = 0.0
+    look.border = cup_clear()
+    look.opacity = 1.0
+    look.elevation = 0u8
+    var flat: f32 = 0.0
+    if left_side { look.corners = style.Corners { top_left: 8.0, top_right: flat, bottom_right: flat, bottom_left: 8.0 } }
+    if !left_side { look.corners = style.Corners { top_left: flat, top_right: 8.0, bottom_right: 8.0, bottom_left: flat } }
+    look.custom_padding = true
+    look.padding = 0.0
+    look.padding_y = 0.0
+    look.padding_start = 0.0
+    look.min_width = half_w
+    look.min_height = 32.0
+    var ink = style.color(t.tokens, .Primary)
+    if !enabled { ink = style.cup_alpha(style.color(t.tokens, .Text), 0.3) }
+    let (mark, mark_error) = cup_mark(a, glyph, ink, ink, 2.0, 0.0, 14.0, 14.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    var name = "Decrease"
+    if glyph == 12u32 { name = "Increase" }
+    let content = widget.aligned(0u64, .Center, .Center, sized_style(half_w, 32.0), widget_one_of(a, mark))
+    let (node, node_error) = pressable(a, key, t, 3u8, name, look, enabled, false, action, content)
+    ret (node, node_error)
+}
+
+// The two halves of a stepper in one 94 x 32 tertiary-fill pill with a divider, keys `less` and `more`.
+fn cup_step_pill(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.Key, minus: *const widget.Submit, plus: *const widget.Submit, can_less: bool, can_more: bool) -> (widget.Node, err) {
+    var track = sized_style(94.0, 32.0)
+    track.radius = 8.0
+    track.background = paint.Brush { Solid: style.cup_fill(t.tokens, 1.0) }
+    let (left, left_error) = cup_step_half(a, less, t, 13u32, true, minus, can_less, 47.0)
+    if left_error != ok { ret (zero, left_error) }
+    let (right, right_error) = cup_step_half(a, more, t, 12u32, false, plus, can_more, 47.0)
+    if right_error != ok { ret (zero, right_error) }
+    var rule_ink = style.hexa(0x3C3C43u32, 0.29)
+    if t.tokens.palette == .Dark { rule_ink = style.hexa(0x98989Fu32, 0.5) }
+    var rule = sized_style(1.0, 16.0)
+    rule.background = paint.Brush { Solid: rule_ink }
+    let (halves, halves_error) = mem.alloc[widget.Node](a, 2usize)
+    if halves_error != ok { ret (zero, TooLarge) }
+    halves[0usize] = left
+    halves[1usize] = right
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.box(0u64, track, zero)
+    layers[1usize] = widget.positioned(0u64, 46.5, 8.0, style.defaults(), widget_one_of(a, widget.box(0u64, rule, zero)))
+    layers[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, sized_style(94.0, 32.0), halves[0usize..2usize])
+    ret (widget.stack(0u64, sized_style(94.0, 32.0), layers[0usize..3usize]), ok)
+}
+
+// The iOS stepper (UIStepper, HIG 94 x 32): minus and plus in one pill, no value (the app shows it beside).
+fn cupertino_stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64]) -> (widget.Node, err) {
+    let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
+    if pair_error != ok { ret (zero, pair_error) }
+    let (pill, pill_error) = cup_step_pill(a, t, key + 1u64, key + 2u64, &shortcuts[0usize].action, &shortcuts[1usize].action, value > low, value < high)
+    if pill_error != ok { ret (zero, pill_error) }
+    var none: []widget.Node = zero
+    let (made, made_error) = stepped(a, key, t, label, value, pill, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
+    ret (made, made_error)
+}
+
+// The spin box in the Cupertino idiom: the rounded text field and the stepper pill beside it.
+fn cupertino_spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
+    let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
+    if pair_error != ok { ret (zero, pair_error) }
+    let len = write_i64(buffer, value)
+    var options = field_options()
+    options.width = width
+    let (editor, editor_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
+    if editor_error != ok { ret (zero, editor_error) }
+    let (pill, pill_error) = cup_step_pill(a, t, key + 1u64, key + 2u64, &shortcuts[0usize].action, &shortcuts[1usize].action, value > low, value < high)
+    if pill_error != ok { ret (zero, pill_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = editor
+    parts[1usize] = pill
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), parts[0usize..2usize])
+    var none: []widget.Node = zero
+    let (made, made_error) = stepped(a, key + 3u64, t, label, value, row, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
+    ret (made, made_error)
+}
+// ---- end the Cupertino look (block 3) ---------------------------------------------------------------
+
+// ---- the Cupertino look, block 4: tabs, tab bar, popup button, scroll indicator -----------------------
+
+// The iOS tab bar (UITabBar, 49 tall): the chrome face over a hairline, each tab an icon over a 10 pt label,
+// the chosen one in the accent and the rest in systemGray; tabs are as wide as the bar shares (options.width, or 80
+// each). A tab list in the tree, Left and Right moving the choice.
+fn cupertino_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    var each: f32 = 80.0
+    if options.width > 0.0 { each = options.width / f32(labels.len) }
+    var face = style.hex(0xF9F9F9u32)
+    var quiet = style.hex(0x8E8E93u32)
+    var hair = style.hexa(0x000000u32, 0.30)
+    if dark {
+        face = style.hex(0x1D1D1Du32)
+        quiet = style.hex(0x98989Du32)
+        hair = style.hexa(0x545458u32, 0.65)
+    }
+    let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < labels.len {
+        let chosen = i == selected
+        let tab_key = key + 1u64 + u64(i)
+        let live = tab_enabled(&options, i)
+        let state = control_state(t, tab_key, live, chosen)
+        var ink = quiet
+        if chosen { ink = style.color(t.tokens, .Primary) }
+        if !live { ink = style.cup_alpha(quiet, 0.4) }
+        if state.pressed { ink = style.cup_alpha(ink, 0.5) }
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = cup_clear()
+        look.foreground = ink
+        look.border_width = 0.0
+        look.border = cup_clear()
+        look.radius = 0.0
+        look.opacity = 1.0
+        look.elevation = 0u8
+        look.corners = style.Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 }
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.padding_start = 0.0
+        look.min_width = each
+        look.min_height = 49.0
+        let (word, word_error) = cup_label(a, t, labels[i], 10.0, 400u32, ink)
+        if word_error != ok { ret (zero, word_error) }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        var used = 0usize
+        if i < options.icons.len {
+            let (glyph, glyph_error) = icon_square_of(a, ink, options.icons[i], 25.0, chosen, face)
+            if glyph_error != ok { ret (zero, glyph_error) }
+            parts[used] = glyph
+            used += 1usize
+        }
+        parts[used] = word
+        used += 1usize
+        let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 2.0 }, sized_style(each, 49.0), parts[0usize..used])
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, live, chosen, 0u32, 0u32, 0u64, &picks[i], column)
+        if tab_error != ok { ret (zero, tab_error) }
+        items[i] = tab
+        i += 1usize
+    }
+    var line = style.defaults()
+    line.height = style.Length { Px: 0.5 }
+    line.width = style.Length { Percent: 100.0 }
+    line.background = paint.Brush { Solid: hair }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize)
+    if rows_error != ok { ret (zero, TooLarge) }
+    rows[0usize] = widget.box(0u64, line, zero)
+    rows[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len])
+    var bar = style.defaults()
+    bar.background = paint.Brush { Solid: face }
+    bar.width = style.Length { Px: each * f32(labels.len) }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, bar, rows[0usize..2usize])
+    ret (column, ok)
+}
+
+// The keyboard of a tab list: Left and Right pick the neighbours, Home and End the ends (enabled ones).
+fn cup_tab_scope(a: *mem.Arena, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions, inner: widget.Node) -> (widget.Node, err) {
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var back = 37u32
+    var forward = 39u32
+    if t.tokens.direction == .RightToLeft {
+        back = 39u32
+        forward = 37u32
+    }
+    var before = labels.len
+    var first = labels.len
+    var after = labels.len
+    var last = labels.len
+    var k = 0usize
+    while k < labels.len {
+        if tab_enabled(&options, k) {
+            if k < selected {
+                before = k
+                if first == labels.len { first = k }
+            }
+            if k > selected {
+                if after == labels.len { after = k }
+                last = k
+            }
+        }
+        k += 1usize
+    }
+    var bound = 0usize
+    if before < labels.len && selected < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: back, modifiers: zero, action: picks[before] }
+        shortcuts[bound + 1usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: picks[first] }
+        bound += 2usize
+    }
+    if after < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: forward, modifiers: zero, action: picks[after] }
+        shortcuts[bound + 1usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: picks[last] }
+        bound += 2usize
+    }
+    ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), widget_one_of(a, inner)), ok)
+}
+
+// A Cupertino tab list: a text-only strip is the macOS tab view's segmented control (24 tall, 13 pt); a bar with
+// icons, or `bottom`, is the iOS tab bar.
+fn cupertino_tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
+    if picks.len != labels.len || labels.len == 0usize { ret (zero, TooLarge) }
+    if options.icons.len > 0usize || options.bottom {
+        let (bar, bar_error) = cupertino_tab_bar(a, key, t, labels, selected, picks, options)
+        if bar_error != ok { ret (zero, bar_error) }
+        let (scoped, scoped_error) = cup_tab_scope(a, t, labels, selected, picks, options, bar)
+        if scoped_error != ok { ret (zero, scoped_error) }
+        var sem: widget.Semantics = zero
+        sem.role = 20u8
+        sem.column_count = u32(labels.len)
+        ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, scoped)), ok)
+    }
+    let (strip, strip_error) = cup_segments(a, key, t, "", labels, selected, picks, true, 24.0, 13.0, 19u8, 20u8, options.disabled)
+    if strip_error != ok { ret (zero, strip_error) }
+    let (scoped, scoped_error) = cup_tab_scope(a, t, labels, selected, picks, options, strip)
+    ret (scoped, scoped_error)
+}
+
+// A macOS pop-up button (22 tall, the push button's bezel): the value at 13, an accent square with up and down
+// chevrons at the trailing end; open, the bezel is held pressed. `lead` (one node at most) goes before the value.
+fn cupertino_popup_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, lead: []const widget.Node) -> (widget.Node, err) {
+    var state = control_state(t, key, true, false)
+    if open { state.pressed = true }
+    var look = style.cupertino_resolve(t.tokens, .Outlined, state, 22.0)
+    look.min_width = 112.0
+    look.padding_start = 8.0
+    look.padding = 2.0
+    let accent = style.color(t.tokens, .Primary)
+    var ink = look.foreground
+    if !chosen { ink = style.color(t.tokens, .TextMuted) }
+    let (word, word_error) = cup_label(a, t, shown, 13.0, 400u32, ink)
+    if word_error != ok { ret (zero, word_error) }
+    let (arrows, arrows_error) = cup_mark(a, 7u32, style.hex(0xFFFFFFu32), style.hex(0xFFFFFFu32), 1.5, 0.0, 10.0, 14.0)
+    if arrows_error != ok { ret (zero, arrows_error) }
+    var square = sized_style(16.0, 18.0)
+    square.background = paint.Brush { Solid: accent }
+    square.radius = 4.0
+    let arrow_chip = widget.aligned(0u64, .Center, .Center, square, widget_one_of(a, arrows))
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 3usize)
+    if bits_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    if lead.len == 1usize {
+        bits[0usize] = lead[0usize]
+        bits[1usize] = word
+        used = 2usize
+    }
+    var value_part = word
+    if used == 2usize { value_part = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), bits[0usize..2usize]) }
+    bits[0usize] = value_part
+    bits[1usize] = arrow_chip
+    var spread = style.defaults()
+    spread.min_width = style.Length { Px: 112.0 - 10.0 }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, spread, bits[0usize..2usize])
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (head, head_error) = pressable_states(a, key, t, 3u8, shown, look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, content)
+    ret (head, head_error)
+}
+// ---- end the Cupertino look (block 4) ---------------------------------------------------------------
+
+// A list row's check: the bold tick (Cupertino) or the theme's mark.
+fn mem_check_glyph(a: *mem.Arena, color: paint.Color, size: f32, cupertino: bool) -> (widget.Node, err) {
+    if cupertino {
+        let (node, node_error) = cup_mark(a, 1u32, color, color, 2.2, 0.0, size, size)
+        ret (node, node_error)
+    }
+    let (node, node_error) = mark_glyph(a, color, .Check, size)
+    ret (node, node_error)
+}
+
+// ---- the Cupertino look, block 5: menus ---------------------------------------------------------------
+
+// The panel of a macOS menu: a flat light (dark) face with a hairline edge, 10 round, 5 in on every side, a soft low
+// shadow (one hard 2 px step: there is no blur primitive). `rim` is the room above and below the rows.
+fn cupertino_menu_sheet_style(t: *const Theme, rim: f32) -> style.Style {
+    var s = style.defaults()
+    if t.tokens.palette == .Dark {
+        s.background = paint.Brush { Solid: style.hex(0x2C2C2Eu32) }
+        s.border = style.Border { width: 1.0, color: style.hexa(0xFFFFFFu32, 0.14) }
+    }
+    if t.tokens.palette != .Dark {
+        s.background = paint.Brush { Solid: style.hex(0xF6F6F6u32) }
+        s.border = style.Border { width: 1.0, color: style.hexa(0x000000u32, 0.13) }
+    }
+    s.radius = 10.0
+    s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 1.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.10) }
+    let side = style.Length { Px: 5.0 }
+    s.padding = style.EdgeLengths { left: side, top: style.Length { Px: rim + 1.0 }, right: side, bottom: style.Length { Px: rim + 1.0 } }
+    ret s
+}
+
+// A macOS menu row (22 tall, 13 pt): a 16 slot for the check or dot, the label, the shortcut and a submenu chevron in
+// the secondary colour; hovered (or its submenu open) the row fills with the accent and everything on it goes white,
+// 5 round; disabled is the label at 25 %. Returns the look and the row's content for `pressable_states`.
+fn cupertino_menu_row_parts(a: *mem.Arena, t: *const Theme, key: widget.Key, label: str, shortcut: str, checked: bool, radio_mark: bool, enabled: bool, destructive: bool, has_submenu: bool, opened: bool, slotted: bool) -> (style.ResolvedControl, widget.Node, err) {
+    var state = control_state(t, key, enabled, false)
+    if opened { state.hovered = true }
+    let hot = enabled && (state.hovered || state.pressed)
+    var face = cup_clear()
+    var ink = style.cup_alpha(style.color(t.tokens, .Text), 0.85)
+    var muted = style.color(t.tokens, .TextMuted)
+    if destructive { ink = style.color(t.tokens, .Error) }
+    if !enabled {
+        ink = style.cup_alpha(style.color(t.tokens, .Text), 0.25)
+        muted = ink
+    }
+    if hot {
+        face = style.color(t.tokens, .Primary)
+        if state.pressed { face = style.mix(face, style.hex(0x000000u32), 0.15) }
+        ink = style.hex(0xFFFFFFu32)
+        muted = style.hexa(0xFFFFFFu32, 0.8)
+    }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = face
+    look.foreground = ink
+    look.border_width = 0.0
+    look.border = cup_clear()
+    look.opacity = 1.0
+    look.elevation = 0u8
+    look.radius = 5.0
+    look.corners = style.Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 }
+    look.custom_padding = true
+    look.padding = 8.0
+    look.padding_start = 4.0
+    look.padding_y = 0.0
+    look.min_height = 22.0
+    look.min_width = 24.0
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    if parts_error != ok { ret (look, zero, TooLarge) }
+    var n = 0usize
+    if slotted {
+        var slot_nodes: []const widget.Node = zero
+        if checked && radio_mark {
+            let (dot, dot_error) = cup_mark(a, 14u32, ink, ink, 0.0, 0.0, 5.0, 5.0)
+            if dot_error != ok { ret (look, zero, dot_error) }
+            slot_nodes = widget_one_of(a, dot)
+        }
+        if checked && !radio_mark {
+            let (tick, tick_error) = cup_mark(a, 1u32, ink, ink, 1.8, 0.0, 11.0, 11.0)
+            if tick_error != ok { ret (look, zero, tick_error) }
+            slot_nodes = widget_one_of(a, tick)
+        }
+        parts[n] = widget.aligned(0u64, .Center, .Center, sized_style(16.0, 16.0), slot_nodes)
+        n += 1usize
+    }
+    let (word, word_error) = cup_label(a, t, label, 13.0, 400u32, ink)
+    if word_error != ok { ret (look, zero, word_error) }
+    parts[n] = word
+    n += 1usize
+    parts[n] = widget.spacer(0u64, 1.0)
+    n += 1usize
+    if shortcut.len > 0usize && !has_submenu {
+        let (keys, keys_error) = cup_label(a, t, shortcut, 13.0, 400u32, muted)
+        if keys_error != ok { ret (look, zero, keys_error) }
+        parts[n] = widget.padded(0u64, 16.0, 0.0, 0.0, 0.0, style.defaults(), widget_one_of(a, keys))
+        n += 1usize
+    }
+    if has_submenu {
+        let (arrow, arrow_error) = cup_mark(a, 5u32, muted, muted, 1.6, 0.0, 9.0, 11.0)
+        if arrow_error != ok { ret (look, zero, arrow_error) }
+        parts[n] = arrow
+        n += 1usize
+    }
+    var line_style = style.defaults()
+    line_style.width = style.Length { Percent: 100.0 }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, line_style, parts[0usize..n])
+    ret (look, content, ok)
+}
+// ---- end the Cupertino look (block 5) ---------------------------------------------------------------

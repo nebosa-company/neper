@@ -101,3 +101,11 @@ throwaway; never point a script at the repo or installed exe.
   Segoe UI as 7 and Tahoma as 8; Segoe leads the theme's fallback chain).
 - `testing.pump` renders at the harness scale since D5108; before that a scale of 1.5 drew at 1.
 - Windows palette is Light only; Dark and HighContrast keep Neper colours with Windows metrics.
+
+## Cupertino sheets
+
+`style.cupertino(palette)` (profile `CupertinoLike`) is `looks.Look.Cupertino` / `CupertinoDark`. The sheets are
+`examples/looks/cup_<control>.e`; they call `looks.run_cupertino`, which writes `docs/ui/looks/cupertino[-dark]/<name>[@1.5x].png`.
+`scripts/cup_run.sh [name[:arg] ...]` compiles and runs them one at a time (a modal overlay renders one per process:
+`popup:open`, `menu:hover`, `alert:open`). Controls branch on `t.tokens.profile == .CupertinoLike`; the drawing helpers
+(`cup_*`, `cupertino_*`) are appended at the end of `lib/e/ui/control.e`, a few in `overlay.e` and `navigation.e`.
