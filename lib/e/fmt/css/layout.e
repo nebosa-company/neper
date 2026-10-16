@@ -66,7 +66,7 @@ type Layout = struct {
     a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure,
     boxes: list.List[Box], lines: list.List[Line], frags: list.List[Frag], anon: list.List[style.Style],
     root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64,
-    floats: list.List[FloatRec]
+    floats: list.List[FloatRec], tables: list.List[TableData]
 }
 
 // A float placed in a block formatting context, in the coordinates of the context's root content box.
@@ -285,7 +285,11 @@ fn is_block_container(l: *const Layout, b: u32) -> bool {
 // inline-level children keeps them (one inline formatting context). White-space-only text between blocks goes.
 fn fix_anonymous(l: *Layout, b: u32) {
     let inner = l.boxes.items[usize(b)].inner
-    if inner == .Table || inner == .RowGroup || inner == .Row || inner == .ColumnGroup { ret }
+    if inner == .Table || inner == .RowGroup || inner == .Row {
+        fix_table_like(l, b)
+        ret
+    }
+    if inner == .ColumnGroup { ret }
     if inner == .Flex || inner == .Grid {
         wrap_flex_items(l, b)
         ret
@@ -1937,7 +1941,7 @@ fn layout_in_new_bfc(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     var h = 0.0f64
     let inner = l.boxes.items[usize(b)].inner
     if inner == .Table {
-        h = layout_table(l, b, cw)
+        h = layout_table(l, b, cw, ch)
     } else if inner == .Flex {
         h = layout_flex(l, b, cw, ch)
     } else if inner == .Grid {
@@ -2300,11 +2304,6 @@ fn block_widths(l: *Layout, b: u32) -> (f64, f64) {
     ret (mn, mx)
 }
 
-fn table_widths(l: *Layout, b: u32) -> (f64, f64) {
-    let (mn, mx) = block_widths(l, b)
-    ret (mn, mx)
-}
-
 fn flex_widths(l: *Layout, b: u32) -> (f64, f64) {
     let (mn, mx) = block_widths(l, b)
     ret (mn, mx)
@@ -2315,15 +2314,679 @@ fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
     ret (mn, mx)
 }
 
-fn table_min_width(l: *Layout, b: u32) -> f64 {
-    let (mn, _mx) = content_widths(l, b)
+// --- Tables (CSS 2.1 17): anonymous boxes, the cell grid, column widths, row heights, vertical alignment.
+// Captions live inside the table box (no wrapper). `border-collapse: collapse` drops the spacing but keeps each cell's own
+// borders; conflict resolution between neighbouring borders is not done.
+
+type CellInfo = struct { box: u32, row: usize, col: usize, rs: usize, cs: usize, min: f64, max: f64, spec: f64, pct: f64 }
+
+type TableData = struct {
+    cols: usize, rows: usize, cells: list.List[CellInfo],
+    col_min: []f64, col_max: []f64, col_w: []f64, col_pct: []f64, col_spec: []f64,
+    row_h: []f64, row_y: []f64, row_box: []u32, row_above: []f64, row_below: []f64,
+    sh: f64, sv: f64, sum_min: f64, sum_max: f64
+}
+
+fn is_ws_text(l: *const Layout, k: u32) -> bool {
+    let kb = &l.boxes.items[usize(k)]
+    ret kb.inner == .Text && is_ws_only(kb.text) && collapses(l, k)
+}
+
+// Wraps the siblings first..last into one anonymous box (white-space-only runs just go).
+fn wrap_table_run(l: *Layout, parent: u32, first: u32, last: u32, inner: Inner, display: style.Display) {
+    if first == NONE { ret }
+    var all_ws = true
+    var k = first
+    while true {
+        if !is_ws_text(l, k) { all_ws = false }
+        if k == last { break }
+        k = l.boxes.items[usize(k)].next
+    }
+    if all_ws {
+        k = first
+        while true {
+            let nxt = l.boxes.items[usize(k)].next
+            detach(l, k)
+            if k == last { break }
+            k = nxt
+        }
+        ret
+    }
+    let anon = new_box(l, inner, false, true, NONE, anon_style(l, l.boxes.items[usize(parent)].style, display))
+    let prev = l.boxes.items[usize(first)].prev
+    l.boxes.items[usize(anon)].parent = parent
+    l.boxes.items[usize(anon)].prev = prev
+    l.boxes.items[usize(anon)].next = first
+    if prev == NONE { l.boxes.items[usize(parent)].first = anon } else { l.boxes.items[usize(prev)].next = anon }
+    l.boxes.items[usize(first)].prev = anon
+    k = first
+    while true {
+        let nxt = l.boxes.items[usize(k)].next
+        detach(l, k)
+        append(l, anon, k)
+        if k == last { break }
+        k = nxt
+    }
+    fix_anonymous(l, anon)
+}
+
+// A table, row group or row keeps only the children the table model allows; runs of the rest go into anonymous rows
+// (in tables and groups) or cells (in rows).
+fn fix_table_like(l: *Layout, b: u32) {
+    let inner = l.boxes.items[usize(b)].inner
+    var wrap_kind = Inner.Row
+    var wrap_display = style.Display.TableRow
+    if inner == .Row {
+        wrap_kind = .Cell
+        wrap_display = .TableCell
+    }
+    var run_first = NONE
+    var run_last = NONE
+    var kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        let nxt = kb.next
+        var allowed = false
+        if inner == .Row {
+            allowed = kb.inner == .Cell
+        } else if inner == .RowGroup {
+            allowed = kb.inner == .Row
+        } else {
+            allowed = kb.inner == .RowGroup || kb.inner == .Row || kb.inner == .Caption || kb.inner == .ColumnGroup || kb.inner == .Column
+        }
+        if !allowed && !kb.inline_level && is_out_of_flow(st(l, kb.style)) { allowed = true }
+        if allowed {
+            wrap_table_run(l, b, run_first, run_last, wrap_kind, wrap_display)
+            run_first = NONE
+            run_last = NONE
+        } else {
+            if run_first == NONE { run_first = kid }
+            run_last = kid
+        }
+        kid = nxt
+    }
+    wrap_table_run(l, b, run_first, run_last, wrap_kind, wrap_display)
+}
+
+fn span_attr(l: *const Layout, node: u32, name: str) -> usize {
+    if node == NONE { ret 1usize }
+    let (v, has) = dom.get_attribute(l.d, node, name)
+    if !has { ret 1usize }
+    let (n, good) = str.parse_i64(v)
+    if good != ok || n < 1i64 { ret 1usize }
+    if n > 1000i64 { ret 1000usize }
+    ret usize(n)
+}
+
+// Header groups first, then the other groups and loose rows in order, footer groups last.
+fn row_order(l: *const Layout, table: u32, out: *list.List[u32]) {
+    var pass = 0usize
+    while pass < 3usize {
+        var kid = l.boxes.items[usize(table)].first
+        while kid != NONE {
+            let kb = &l.boxes.items[usize(kid)]
+            if kb.inner == .Row && pass == 1usize {
+                let pushed = list.push[u32](out, kid)
+            } else if kb.inner == .RowGroup {
+                let ks = st(l, kb.style)
+                var which = 1usize
+                if ks.display == .TableHeaderGroup { which = 0usize }
+                if ks.display == .TableFooterGroup { which = 2usize }
+                if which == pass {
+                    var r = kb.first
+                    while r != NONE {
+                        if l.boxes.items[usize(r)].inner == .Row {
+                            let pushed = list.push[u32](out, r)
+                        }
+                        r = l.boxes.items[usize(r)].next
+                    }
+                }
+            }
+            kid = kb.next
+        }
+        pass += 1usize
+    }
+}
+
+fn is_pct_width(len: style.Len) -> bool { ret len.kind == .Px && len.pct > 0.0f64 && len.px == 0.0f64 }
+
+// The cell grid and the per-column minimum and maximum widths of table box `t` (cached in `aux2`).
+fn build_table(l: *Layout, t: u32) -> u32 {
+    if l.boxes.items[usize(t)].aux2 != 0u32 { ret l.boxes.items[usize(t)].aux2 - 1u32 }
+    let ts = bstyle(l, t)
+    let (rows_made, re) = list.init[u32](l.a, 16usize)
+    let (cells_made, ce) = list.init[CellInfo](l.a, 32usize)
+    if re != ok || ce != ok { ret 0u32 }
+    var rows = rows_made
+    var cells = cells_made
+    row_order(l, t, &rows)
+    let nrows = rows.len
+    let wcap = 128usize
+    let (occ, oe) = mem.alloc[bool](l.a, nrows * wcap + 1usize)
+    if oe != ok { ret 0u32 }
+    var z = 0usize
+    while z < nrows * wcap + 1usize {
+        occ[z] = false
+        z += 1usize
+    }
+    var ncols = 0usize
+    var r = 0usize
+    while r < nrows {
+        var col = 0usize
+        var c = l.boxes.items[usize(rows.items[r])].first
+        while c != NONE {
+            if l.boxes.items[usize(c)].inner == .Cell {
+                while col < wcap && occ[r * wcap + col] { col += 1usize }
+                if col >= wcap { break }
+                let node = l.boxes.items[usize(c)].node
+                var cs = span_attr(l, node, "colspan")
+                var rs = span_attr(l, node, "rowspan")
+                if col + cs > wcap { cs = wcap - col }
+                if r + rs > nrows { rs = nrows - r }
+                var rr = 0usize
+                while rr < rs {
+                    var cc = 0usize
+                    while cc < cs {
+                        occ[(r + rr) * wcap + col + cc] = true
+                        cc += 1usize
+                    }
+                    rr += 1usize
+                }
+                let pushed = list.push[CellInfo](&cells, CellInfo { box: c, row: r, col: col, rs: rs, cs: cs, min: 0.0f64, max: 0.0f64, spec: -1.0f64, pct: -1.0f64 })
+                if col + cs > ncols { ncols = col + cs }
+                col += cs
+            }
+            c = l.boxes.items[usize(c)].next
+        }
+        r += 1usize
+    }
+    // Columns declared by <col> and <colgroup> may add empty columns.
+    var dcol = 0usize
+    var kid = l.boxes.items[usize(t)].first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        if kb.inner == .Column {
+            dcol += span_attr(l, kb.node, "span")
+        } else if kb.inner == .ColumnGroup {
+            var inner_cols = 0usize
+            var cc = kb.first
+            while cc != NONE {
+                if l.boxes.items[usize(cc)].inner == .Column { inner_cols += span_attr(l, l.boxes.items[usize(cc)].node, "span") }
+                cc = l.boxes.items[usize(cc)].next
+            }
+            if inner_cols == 0usize { dcol += span_attr(l, kb.node, "span") } else { dcol += inner_cols }
+        }
+        kid = kb.next
+    }
+    if dcol > ncols && dcol <= wcap { ncols = dcol }
+    let (cmin, e1) = mem.alloc[f64](l.a, ncols + 1usize)
+    let (cmax, e2) = mem.alloc[f64](l.a, ncols + 1usize)
+    let (cw, e3) = mem.alloc[f64](l.a, ncols + 1usize)
+    let (cpct, e4) = mem.alloc[f64](l.a, ncols + 1usize)
+    let (cspec, e5) = mem.alloc[f64](l.a, ncols + 1usize)
+    let (rh, e6) = mem.alloc[f64](l.a, nrows + 1usize)
+    let (ry, e7) = mem.alloc[f64](l.a, nrows + 1usize)
+    let (rb, e8) = mem.alloc[u32](l.a, nrows + 1usize)
+    let (rab, e9) = mem.alloc[f64](l.a, nrows + 1usize)
+    let (rbe, e10) = mem.alloc[f64](l.a, nrows + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret 0u32 }
+    var k = 0usize
+    while k < ncols + 1usize {
+        cmin[k] = 0.0f64
+        cmax[k] = 0.0f64
+        cw[k] = 0.0f64
+        cpct[k] = -1.0f64
+        cspec[k] = -1.0f64
+        k += 1usize
+    }
+    k = 0usize
+    while k < nrows + 1usize {
+        rh[k] = 0.0f64
+        ry[k] = 0.0f64
+        rab[k] = 0.0f64
+        rbe[k] = 0.0f64
+        if k < nrows { rb[k] = rows.items[k] } else { rb[k] = NONE }
+        k += 1usize
+    }
+    var sh = ts.border_spacing_h
+    var sv = ts.border_spacing_v
+    if ts.border_collapse == .Collapse {
+        sh = 0.0f64
+        sv = 0.0f64
+    }
+    // Per-cell content widths.
+    var ci = 0usize
+    while ci < cells.len {
+        let c = cells.items[ci].box
+        let cs = bstyle(l, c)
+        resolve_edges(l, c, 0.0f64)
+        let extras = horizontal_extras(&l.boxes.items[usize(c)])
+        let (mn, mx) = content_widths(l, c)
+        var min_w = mn + extras
+        var max_w = mx + extras
+        let (wv, has_w) = resolve_len(cs.width, -1.0f64)
+        if cs.width.kind == .Px && has_w {
+            let spec = to_content_w(l, c, wv) + extras
+            cells.items[ci].spec = spec
+            max_w = maxf(min_w, spec)
+        } else if is_pct_width(cs.width) {
+            cells.items[ci].pct = cs.width.pct
+        }
+        cells.items[ci].min = min_w
+        cells.items[ci].max = max_w
+        ci += 1usize
+    }
+    // <col width> hints.
+    var cursor = 0usize
+    kid = l.boxes.items[usize(t)].first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        if kb.inner == .Column {
+            let span = span_attr(l, kb.node, "span")
+            let ws = st(l, kb.style)
+            let (wv, has_w) = resolve_len(ws.width, -1.0f64)
+            var q = 0usize
+            while q < span && cursor + q < ncols {
+                if ws.width.kind == .Px && has_w { cspec[cursor + q] = wv }
+                q += 1usize
+            }
+            cursor += span
+        }
+        kid = kb.next
+    }
+    // Single-column cells first, then the spanning ones top up what the columns lack.
+    var pass = 0usize
+    while pass < 2usize {
+        ci = 0usize
+        while ci < cells.len {
+            let info = cells.items[ci]
+            ci += 1usize
+            if (pass == 0usize) != (info.cs == 1usize) { continue }
+            if info.cs == 1usize {
+                cmin[info.col] = maxf(cmin[info.col], info.min)
+                cmax[info.col] = maxf(cmax[info.col], info.max)
+                if info.spec >= 0.0f64 { cspec[info.col] = maxf(cspec[info.col], info.spec) }
+                if info.pct >= 0.0f64 { cpct[info.col] = maxf(cpct[info.col], info.pct) }
+            } else {
+                var smin = sh * f64(info.cs - 1usize)
+                var smax = smin
+                var q = 0usize
+                while q < info.cs {
+                    smin += cmin[info.col + q]
+                    smax += cmax[info.col + q]
+                    q += 1usize
+                }
+                if info.min > smin {
+                    let add = (info.min - smin) / f64(info.cs)
+                    q = 0usize
+                    while q < info.cs {
+                        cmin[info.col + q] += add
+                        q += 1usize
+                    }
+                }
+                if info.max > smax {
+                    let add = (info.max - smax) / f64(info.cs)
+                    q = 0usize
+                    while q < info.cs {
+                        cmax[info.col + q] += add
+                        q += 1usize
+                    }
+                }
+            }
+        }
+        pass += 1usize
+    }
+    var sum_min = 0.0f64
+    var sum_max = 0.0f64
+    k = 0usize
+    while k < ncols {
+        if cspec[k] >= 0.0f64 { cmax[k] = maxf(cmax[k], cspec[k]) }
+        cmax[k] = maxf(cmax[k], cmin[k])
+        sum_min += cmin[k]
+        sum_max += cmax[k]
+        k += 1usize
+    }
+    let td = TableData { cols: ncols, rows: nrows, cells: cells, col_min: cmin, col_max: cmax, col_w: cw, col_pct: cpct, col_spec: cspec, row_h: rh, row_y: ry, row_box: rb, row_above: rab, row_below: rbe, sh: sh, sv: sv, sum_min: sum_min, sum_max: sum_max }
+    let pushed = list.push[TableData](&l.tables, td)
+    let index = u32(l.tables.len) - 1u32
+    l.boxes.items[usize(t)].aux2 = index + 1u32
+    ret index
+}
+
+// The min and max content widths of a table box's content: the columns plus the spacing.
+fn table_widths(l: *Layout, t: u32) -> (f64, f64) {
+    let ti = build_table(l, t)
+    let td = l.tables.items[usize(ti)]
+    let gaps = td.sh * f64(td.cols + 1usize)
+    ret (td.sum_min + gaps, td.sum_max + gaps)
+}
+
+fn table_min_width(l: *Layout, t: u32) -> f64 {
+    let (mn, _mx) = table_widths(l, t)
     ret mn
 }
 
-fn layout_table(l: *Layout, b: u32, cw: f64) -> f64 {
-    var fc = Flow { base: l.floats.len, ox: 0.0f64, oy: 0.0f64 }
-    let (h, _m) = layout_children(l, b, cw, -1.0f64, &fc, false)
-    ret h
+// Column widths for a table content width `tw` (spacing included).
+fn distribute_columns(l: *Layout, ti: u32, tw: f64, fixed_layout: bool) {
+    let td = l.tables.items[usize(ti)]
+    if td.cols == 0usize { ret }
+    let avail = maxf(0.0f64, tw - td.sh * f64(td.cols + 1usize))
+    var k = 0usize
+    if fixed_layout {
+        var used = 0.0f64
+        var autos = 0usize
+        while k < td.cols {
+            if td.col_spec[k] >= 0.0f64 {
+                td.col_w[k] = td.col_spec[k]
+                used += td.col_spec[k]
+            } else {
+                td.col_w[k] = -1.0f64
+                autos += 1usize
+            }
+            k += 1usize
+        }
+        k = 0usize
+        while k < td.cols {
+            if td.col_w[k] < 0.0f64 {
+                if autos > 0usize { td.col_w[k] = maxf(0.0f64, (avail - used) / f64(autos)) } else { td.col_w[k] = 0.0f64 }
+            }
+            k += 1usize
+        }
+        ret
+    }
+    // Percentage columns take their share, the rest share what is left.
+    var pct_sum = 0.0f64
+    var pct_w = 0.0f64
+    while k < td.cols {
+        td.col_w[k] = -1.0f64
+        if td.col_pct[k] >= 0.0f64 && pct_sum + td.col_pct[k] <= 1.0001f64 {
+            let w = maxf(td.col_min[k], td.col_pct[k] * avail)
+            td.col_w[k] = w
+            pct_sum += td.col_pct[k]
+            pct_w += w
+        }
+        k += 1usize
+    }
+    var rem_min = 0.0f64
+    var rem_max = 0.0f64
+    var auto_max = 0.0f64
+    var auto_n = 0usize
+    var rem_n = 0usize
+    k = 0usize
+    while k < td.cols {
+        if td.col_w[k] < 0.0f64 {
+            rem_min += td.col_min[k]
+            rem_max += td.col_max[k]
+            rem_n += 1usize
+            if td.col_spec[k] < 0.0f64 {
+                auto_max += td.col_max[k]
+                auto_n += 1usize
+            }
+        }
+        k += 1usize
+    }
+    let room = avail - pct_w
+    k = 0usize
+    while k < td.cols {
+        if td.col_w[k] < 0.0f64 {
+            var w = td.col_min[k]
+            if room >= rem_max {
+                // Extra width goes to the columns without a specified width, in proportion to their widths.
+                let extra = room - rem_max
+                w = td.col_max[k]
+                if auto_n > 0usize {
+                    if td.col_spec[k] < 0.0f64 {
+                        if auto_max > 0.0f64 { w += extra * td.col_max[k] / auto_max } else { w += extra / f64(auto_n) }
+                    }
+                } else if rem_max > 0.0f64 {
+                    w += extra * td.col_max[k] / rem_max
+                } else {
+                    w += extra / f64(rem_n)
+                }
+            } else if room > rem_min && rem_max > rem_min {
+                w = td.col_min[k] + (td.col_max[k] - td.col_min[k]) * (room - rem_min) / (rem_max - rem_min)
+            }
+            td.col_w[k] = w
+        }
+        k += 1usize
+    }
+}
+
+fn is_baseline_valign(v: style.VAlign) -> bool {
+    ret v != .Top && v != .Middle && v != .Bottom
+}
+
+// Lays out table box `t` with content width `cw` (`ch`: the specified content height or negative); returns the content
+// height: top captions, the row grid, bottom captions.
+fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
+    let ti = build_table(l, t)
+    let ts = bstyle(l, t)
+    distribute_columns(l, ti, cw, ts.table_layout == .Fixed && ts.width.kind == .Px)
+    let td = l.tables.items[usize(ti)]
+    let sh = td.sh
+    let sv = td.sv
+    let (cx, e1) = mem.alloc[f64](l.a, td.cols + 1usize)
+    let (cell_h, e2) = mem.alloc[f64](l.a, td.cells.len + 1usize)
+    let (cell_up, e3) = mem.alloc[f64](l.a, td.cells.len + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 }
+    var x = sh
+    var k = 0usize
+    while k < td.cols {
+        cx[k] = x
+        x += td.col_w[k] + sh
+        k += 1usize
+    }
+    let grid_w = x
+    // Rows start at their specified heights.
+    var r = 0usize
+    while r < td.rows {
+        td.row_h[r] = 0.0f64
+        td.row_above[r] = 0.0f64
+        td.row_below[r] = 0.0f64
+        let rs = st(l, l.boxes.items[usize(td.row_box[r])].style)
+        let (rv, has_rv) = resolve_len(rs.height, -1.0f64)
+        if rs.height.kind == .Px && has_rv { td.row_h[r] = rv }
+        r += 1usize
+    }
+    // Lay out the cells at their column widths; remember the heights and baselines.
+    var ci = 0usize
+    while ci < td.cells.len {
+        let info = td.cells.items[ci]
+        let c = info.box
+        let cs = bstyle(l, c)
+        var w = sh * f64(info.cs - 1usize)
+        var q = 0usize
+        while q < info.cs {
+            w += td.col_w[info.col + q]
+            q += 1usize
+        }
+        resolve_edges(l, c, cw)
+        let cb = bx(l, c)
+        cb.margin[0usize] = 0.0f64
+        cb.margin[1usize] = 0.0f64
+        cb.margin[2usize] = 0.0f64
+        cb.margin[3usize] = 0.0f64
+        cb.w = w
+        let content_w = maxf(0.0f64, w - horizontal_extras(cb))
+        let auto_h = layout_in_new_bfc(l, c, content_w, -1.0f64)
+        var content_h = auto_h
+        let (hv, has_h) = resolve_len(cs.height, -1.0f64)
+        if cs.height.kind == .Px && has_h { content_h = maxf(content_h, to_content_h(l, c, hv)) }
+        let cb2 = bx(l, c)
+        cell_h[ci] = content_h + vertical_extras(cb2)
+        cell_up[ci] = -1.0f64
+        if info.rs == 1usize {
+            if is_baseline_valign(cs.vertical_align) {
+                let (found, by) = first_baseline(l, c)
+                var up = cb2.border[0usize] + cb2.padding[0usize]
+                if found { up = by }
+                cell_up[ci] = up
+                td.row_above[info.row] = maxf(td.row_above[info.row], up)
+                td.row_below[info.row] = maxf(td.row_below[info.row], cell_h[ci] - up)
+            } else {
+                td.row_h[info.row] = maxf(td.row_h[info.row], cell_h[ci])
+            }
+        }
+        ci += 1usize
+    }
+    r = 0usize
+    while r < td.rows {
+        td.row_h[r] = maxf(td.row_h[r], td.row_above[r] + td.row_below[r])
+        r += 1usize
+    }
+    // Spanning cells add what the rows they cover lack, to the last of them.
+    ci = 0usize
+    while ci < td.cells.len {
+        let info = td.cells.items[ci]
+        if info.rs > 1usize {
+            var have = sv * f64(info.rs - 1usize)
+            var q = 0usize
+            while q < info.rs {
+                have += td.row_h[info.row + q]
+                q += 1usize
+            }
+            if cell_h[ci] > have { td.row_h[info.row + info.rs - 1usize] += cell_h[ci] - have }
+        }
+        ci += 1usize
+    }
+    // A specified table height spreads its surplus over the rows.
+    var rows_h = sv
+    r = 0usize
+    while r < td.rows {
+        rows_h += td.row_h[r] + sv
+        r += 1usize
+    }
+    if ch >= 0.0f64 && td.rows > 0usize && ch > rows_h {
+        let extra = (ch - rows_h) / f64(td.rows)
+        r = 0usize
+        while r < td.rows {
+            td.row_h[r] += extra
+            r += 1usize
+        }
+        rows_h = ch
+    }
+    // Captions: laid out at the table's content width, above or below the grid.
+    var cap_top = 0.0f64
+    var cap_bottom = 0.0f64
+    var kid = bx(l, t).first
+    while kid != NONE {
+        if l.boxes.items[usize(kid)].inner == .Caption {
+            let cs = bstyle(l, kid)
+            resolve_edges(l, kid, cw)
+            resolve_margins_fixed(l, kid, cw)
+            let cap = bx(l, kid)
+            cap.w = maxf(0.0f64, cw - cap.margin[1usize] - cap.margin[3usize])
+            let content_w = maxf(0.0f64, cap.w - horizontal_extras(cap))
+            let h = layout_in_new_bfc(l, kid, content_w, -1.0f64)
+            let cap2 = bx(l, kid)
+            cap2.h = h + vertical_extras(cap2)
+            let outer = cap2.h + cap2.margin[0usize] + cap2.margin[2usize]
+            if cs.caption_side == .Bottom { cap_bottom += outer } else { cap_top += outer }
+        }
+        kid = l.boxes.items[usize(kid)].next
+    }
+    // Positions in the table's border-box coordinates.
+    let tb = bx(l, t)
+    let gx = tb.border[3usize] + tb.padding[3usize]
+    let gy = tb.border[0usize] + tb.padding[0usize] + cap_top
+    var y = sv
+    r = 0usize
+    while r < td.rows {
+        td.row_y[r] = y
+        y += td.row_h[r] + sv
+        r += 1usize
+    }
+    var grid_h = y
+    if td.rows == 0usize { grid_h = 0.0f64 }
+    var group = NONE
+    var group_top = 0.0f64
+    r = 0usize
+    while r < td.rows {
+        let rbx = td.row_box[r]
+        let parent = l.boxes.items[usize(rbx)].parent
+        let rb = bx(l, rbx)
+        rb.w = grid_w
+        rb.h = td.row_h[r]
+        if parent != t {
+            if parent != group {
+                group = parent
+                group_top = td.row_y[r]
+                let gb = bx(l, group)
+                gb.x = gx
+                gb.y = gy + group_top
+                gb.w = grid_w
+            }
+            let gb2 = bx(l, group)
+            gb2.h = td.row_y[r] + td.row_h[r] - group_top
+            let rb2 = bx(l, rbx)
+            rb2.x = 0.0f64
+            rb2.y = td.row_y[r] - group_top
+        } else {
+            group = NONE
+            rb.x = gx
+            rb.y = gy + td.row_y[r]
+        }
+        r += 1usize
+    }
+    // Cells: the border box fills the spanned rows; the content moves down for middle/bottom/baseline alignment.
+    ci = 0usize
+    while ci < td.cells.len {
+        let info = td.cells.items[ci]
+        let c = info.box
+        let cs = bstyle(l, c)
+        var span_h = sv * f64(info.rs - 1usize)
+        var q = 0usize
+        while q < info.rs {
+            span_h += td.row_h[info.row + q]
+            q += 1usize
+        }
+        var dy = 0.0f64
+        if info.rs == 1usize && cell_up[ci] >= 0.0f64 {
+            dy = td.row_above[info.row] - cell_up[ci]
+        } else if cs.vertical_align == .Middle {
+            dy = (span_h - cell_h[ci]) / 2.0f64
+        } else if cs.vertical_align == .Bottom {
+            dy = span_h - cell_h[ci]
+        }
+        let cb = bx(l, c)
+        cb.x = cx[info.col]
+        cb.y = 0.0f64
+        cb.h = span_h
+        if dy > 0.5f64 {
+            // Re-lay the contents with the alignment offset added to the top padding; the used padding keeps it, which
+            // is where the content starts.
+            cb.padding[0usize] += dy
+            let content_w = maxf(0.0f64, cb.w - horizontal_extras(cb))
+            let discard = layout_in_new_bfc(l, c, content_w, -1.0f64)
+            let cb3 = bx(l, c)
+            cb3.h = span_h
+        }
+        set_baseline(l, c)
+        ci += 1usize
+    }
+    // Captions go above and below the grid.
+    let tb2 = bx(l, t)
+    var cur_top = tb2.border[0usize] + tb2.padding[0usize]
+    var cur_bottom = cur_top + cap_top + grid_h
+    kid = tb2.first
+    while kid != NONE {
+        if l.boxes.items[usize(kid)].inner == .Caption {
+            let cs = bstyle(l, kid)
+            let cap = bx(l, kid)
+            cap.x = gx + cap.margin[3usize]
+            if cs.caption_side == .Bottom {
+                cap.y = cur_bottom + cap.margin[0usize]
+                cur_bottom += cap.h + cap.margin[0usize] + cap.margin[2usize]
+            } else {
+                cap.y = cur_top + cap.margin[0usize]
+                cur_top += cap.h + cap.margin[0usize] + cap.margin[2usize]
+            }
+        }
+        kid = l.boxes.items[usize(kid)].next
+    }
+    let tb3 = bx(l, t)
+    tb3.overflow_w = maxf(tb3.overflow_w, grid_w)
+    ret cap_top + grid_h + cap_bottom
 }
 
 fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
@@ -2532,8 +3195,9 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (frags, e3) = list.init[Frag](a, 256usize)
     let (anon, e4) = list.init[style.Style](a, 64usize)
     let (floats, e5) = list.init[FloatRec](a, 16usize)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats }
+    let (tables, e6) = list.init[TableData](a, 8usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (zero, TooBig) }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))

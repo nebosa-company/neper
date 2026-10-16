@@ -24916,11 +24916,22 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
 fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64)
 fn apply_relative(l: *Layout, c: u32, cbw: f64, cbh: f64)
 fn block_widths(l: *Layout, b: u32) -> (f64, f64)
-fn table_widths(l: *Layout, b: u32) -> (f64, f64)
 fn flex_widths(l: *Layout, b: u32) -> (f64, f64)
 fn grid_widths(l: *Layout, b: u32) -> (f64, f64)
-fn table_min_width(l: *Layout, b: u32) -> f64
-fn layout_table(l: *Layout, b: u32, cw: f64) -> f64
+type CellInfo = struct { box: u32, row: usize, col: usize, rs: usize, cs: usize, min: f64, max: f64, spec: f64, pct: f64 }
+type TableData = struct
+fn is_ws_text(l: *const Layout, k: u32) -> bool
+fn wrap_table_run(l: *Layout, parent: u32, first: u32, last: u32, inner: Inner, display: style.Display)
+fn fix_table_like(l: *Layout, b: u32)
+fn span_attr(l: *const Layout, node: u32, name: str) -> usize
+fn row_order(l: *const Layout, table: u32, out: *list.List[u32])
+fn is_pct_width(len: style.Len) -> bool
+fn build_table(l: *Layout, t: u32) -> u32
+fn table_widths(l: *Layout, t: u32) -> (f64, f64)
+fn table_min_width(l: *Layout, t: u32) -> f64
+fn distribute_columns(l: *Layout, ti: u32, tw: f64, fixed_layout: bool)
+fn is_baseline_valign(v: style.VAlign) -> bool
+fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64
 fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
 fn abs_origin(l: *const Layout, b: u32) -> (f64, f64)

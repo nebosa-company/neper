@@ -2760,4 +2760,5 @@ D5124	1873	`e.fmt.html` is the WHATWG tokenizer and tree builder; the current sp
 D5125	1235	`e.fmt.dom` is a mutable index table over the `e.fmt.html` node table (browser 1.7)
 D5126	1669	The style resolver: expand before ranking, typed fields for layout, text for the rest (browser 1.13)
 D5127	1485	Style sheets are loaded once against a media environment; the user agent sheet is a CSS file (browser 1.13e, 1.13f)
-D5128	1378	CSS layout is one module over styled DOM, with the font and image knowledge injected (browser 2.1 to 2.5)
+D5128	1379	CSS layout is one module over styled DOM, with the font and image knowledge injected (browser 2.1 to 2.5)
+D5129	1478	Tables are laid out inside the box tree, captions included (browser 2.6)

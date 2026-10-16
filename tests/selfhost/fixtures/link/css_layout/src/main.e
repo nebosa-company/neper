@@ -108,6 +108,18 @@ fn rect_of(pg: *const Page, id: str) -> Rect {
     ret none
 }
 
+// The index of the (non-anonymous) box of the element with this id, or the box count when there is none.
+fn box_of(pg: *const Page, id: str) -> u32 {
+    let node = dom.get_element_by_id(&pg.tree, pg.tree.root, id)
+    var i = 0usize
+    while i < pg.lay.boxes.len {
+        let b = &pg.lay.boxes.items[i]
+        if b.node == node && !b.anonymous && b.inner != layout.Inner.Text { ret u32(i) }
+        i += 1usize
+    }
+    ret u32(pg.lay.boxes.len)
+}
+
 fn is_rect(r: Rect, x: f64, y: f64, w: f64, h: f64) -> bool {
     ret r.found && near(r.x, x) && near(r.y, y) && near(r.w, w) && near(r.h, h)
 }
@@ -188,5 +200,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 17. A block inside an inline splits the line.
     let (p17, ok17) = build(a, "<span id=s>a<div id=d style=\"height:10px\"></div>b</span>", "")
     if !ok17 || !rect_of(p17, "d").found { os.exit(35) }
+    let tcss = "table { border-spacing: 0; font-size: 10px; } td, th { padding: 0; }"
+    // 18. Table columns take their content widths.
+    let (p18, ok18) = build(a, "<table id=t><tr><td id=a>aaaa</td><td id=b>bb</td></tr></table>", tcss)
+    if !ok18 { os.exit(36) }
+    if !is_rect(rect_of(p18, "t"), 0.0f64, 0.0f64, 60.0f64, 10.0f64) { os.exit(37) }
+    if !is_rect(rect_of(p18, "a"), 0.0f64, 0.0f64, 40.0f64, 10.0f64) || !is_rect(rect_of(p18, "b"), 40.0f64, 0.0f64, 20.0f64, 10.0f64) { os.exit(38) }
+    // 19. Cell spacing surrounds the cells.
+    let (p19, ok19) = build(a, "<table id=t style=\"border-spacing:5px\"><tr><td id=a>aaaa</td><td id=b>bb</td></tr></table>", tcss)
+    if !ok19 || !is_rect(rect_of(p19, "t"), 0.0f64, 0.0f64, 75.0f64, 20.0f64) { os.exit(39) }
+    if !is_rect(rect_of(p19, "a"), 5.0f64, 5.0f64, 40.0f64, 10.0f64) || !is_rect(rect_of(p19, "b"), 50.0f64, 5.0f64, 20.0f64, 10.0f64) { os.exit(40) }
+    // 20. A spanning cell widens the columns it covers.
+    let (p20, ok20) = build(a, "<table id=t><tr><td id=a colspan=2>aaaaaaaaaa</td></tr><tr><td id=b>aa</td><td id=c>aa</td></tr></table>", tcss)
+    if !ok20 || !is_rect(rect_of(p20, "a"), 0.0f64, 0.0f64, 100.0f64, 10.0f64) { os.exit(41) }
+    if !is_rect(rect_of(p20, "b"), 0.0f64, 10.0f64, 50.0f64, 10.0f64) || !is_rect(rect_of(p20, "c"), 50.0f64, 10.0f64, 50.0f64, 10.0f64) { os.exit(42) }
+    // 21. A row-spanning cell stretches the last row it covers.
+    let (p21, ok21) = build(a, "<table id=t><tr><td id=a rowspan=2 style=\"height:30px\">x</td><td id=b>y</td></tr><tr><td id=c>z</td></tr></table>", tcss)
+    if !ok21 || !is_rect(rect_of(p21, "a"), 0.0f64, 0.0f64, 10.0f64, 30.0f64) { os.exit(43) }
+    if !is_rect(rect_of(p21, "b"), 10.0f64, 0.0f64, 10.0f64, 10.0f64) || !is_rect(rect_of(p21, "c"), 10.0f64, 10.0f64, 10.0f64, 20.0f64) { os.exit(44) }
+    // 22. Middle alignment moves the content down.
+    let (p22, ok22) = build(a, "<table><tr><td id=a style=\"vertical-align:middle\">aa</td><td id=b style=\"height:30px\">b</td></tr></table>", tcss)
+    if !ok22 { os.exit(45) }
+    let (found22, base22) = layout.first_baseline(&p22.lay, box_of(p22, "a"))
+    if !found22 { os.exit(60) }
+    if !near(base22, 18.0f64) { os.exit(45) }
+    // 23. Display values alone make a table, with anonymous boxes filled in where parts are missing.
+    let (p23, ok23) = build(a, "<div id=t style=\"display:table;font-size:10px\"><div id=a style=\"display:table-cell\">aaaa</div></div>", "")
+    if !ok23 || !is_rect(rect_of(p23, "t"), 0.0f64, 0.0f64, 40.0f64, 10.0f64) || !is_rect(rect_of(p23, "a"), 0.0f64, 0.0f64, 40.0f64, 10.0f64) { os.exit(46) }
+    // 24. Fixed layout: specified column widths, the rest shared.
+    let (p24, ok24) = build(a, "<table id=t style=\"table-layout:fixed;width:200px\"><tr><td id=a style=\"width:50px\">a</td><td id=b>b</td></tr></table>", tcss)
+    if !ok24 || !is_rect(rect_of(p24, "a"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) || !is_rect(rect_of(p24, "b"), 50.0f64, 0.0f64, 150.0f64, 10.0f64) { os.exit(47) }
+    // 25. A wider table hands the surplus to the columns in proportion to their widths.
+    let (p25, ok25) = build(a, "<table id=t style=\"width:200px\"><tr><td id=a>aa</td><td id=b>aaaa</td></tr></table>", tcss)
+    if !ok25 || !is_rect(rect_of(p25, "a"), 0.0f64, 0.0f64, 66.67f64, 10.0f64) || !is_rect(rect_of(p25, "b"), 66.67f64, 0.0f64, 133.33f64, 10.0f64) { os.exit(48) }
+    // 26. A caption sits above the rows.
+    let (p26, ok26) = build(a, "<table id=t><caption id=c>cc</caption><tr><td id=a>aaaa</td></tr></table>", tcss)
+    if !ok26 || !is_rect(rect_of(p26, "c"), 0.0f64, 0.0f64, 40.0f64, 10.0f64) || !is_rect(rect_of(p26, "a"), 0.0f64, 10.0f64, 40.0f64, 10.0f64) { os.exit(49) }
     ret ok
 }
