@@ -14,18 +14,18 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let (buttons, buttons_error) = mem.alloc[overlay.DialogButton](a, 2usize)
     if buttons_error != ok { ret (0usize, buttons_error) }
     let none = widget.Submit { ctx: zero, invoke: noop_submit }
-    buttons[0usize] = overlay.DialogButton { label: "Yes", action: none, kind: .Default }
-    buttons[1usize] = overlay.DialogButton { label: "No", action: none, kind: .Cancel }
+    buttons[0usize] = overlay.DialogButton { label: "OK", action: none, kind: .Default }
+    buttons[1usize] = overlay.DialogButton { label: "Cancel", action: none, kind: .Cancel }
     var words = control.text_options()
-    let (body, body_error) = control.text(a, 102u64, "Delete the deck Mono Red Burn?", t, words)
+    let (body, body_error) = control.text(a, 102u64, "Do you want to save changes to the document?", t, words)
     if body_error != ok { ret (0usize, body_error) }
-    let (dialog, dialog_error) = overlay.dialog_with_icon(a, 100u64, t, "Confirm", body, buttons[0usize..2usize], .Warning, false, true, true)
+    let (dialog, dialog_error) = overlay.dialog_with_icon(a, 100u64, t, "Confirm", body, buttons[0usize..2usize], .Info, false, true, true)
     if dialog_error != ok { ret (0usize, dialog_error) }
     cells[0usize] = looks.Cell { caption: "Message box", node: dialog, drive: .None }
     ret (1usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "dialog_message", cells: 1usize, columns: 1usize, cell_w: 480.0, cell_h: 280.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "dialog_message", cells: 1usize, columns: 1usize, cell_w: 480.0, cell_h: 281.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
