@@ -262,6 +262,16 @@ fn setup(app: *App) -> err {
             look.soft_slope = 0.0 - 0.00055
             look.header_line = gl.rgb(0xF5F5F5u32)
             look.nav_rule = true
+            // round 13: the grouped sheets' thumb is the 17 px minimum at the top of the track (live captures)
+            if k >= 25usize && k < 31usize {
+                look.thumb_len = 17.0
+                look.thumb_top = 0.0
+                look.bar_up = 34.0
+                // the scrolled-to-the-end captures (View > Group by with the last group current) have the thumb at the foot of the track
+                if k >= 27usize { look.thumb_top = 136.0 }
+                look.bar_marks = "558 2 34 f8f8f8;559 2 34 f7f7f7"
+                if k < 27usize { look.bar_marks = "558 2 34 f8f8f8;559 2 34 f7f7f7;566 18 1 d1d1d1;566 19 1 b9b9b9;566 20 13 b6b6b6;566 33 1 bbbbbb;566 34 1 dcdcdc;567 18 1 b7b7b7;567 19 1 8a8a8a;567 20 13 858585;567 33 1 8d8d8d;567 34 1 cbcbcb;568 18 1 d6d6d6;568 19 1 c1c1c1;568 20 13 bfbfbf;568 33 1 c3c3c3;568 34 1 dfdfdf" }
+            }
             look.ring_marks = ring_marks_of(k)
         }
         // the View > Group by captures: group rows carry their counts, the group box is shown

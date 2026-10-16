@@ -65,6 +65,16 @@ type Look = struct {
     group_rect: bool,
     // round 12: the current group row's focus rectangle is the solid one of the pointer states (hover grabs), not the dotted one
     group_solid: bool,
+    // round 13: the vertical bar's track starts this far above the header (the main window's pool grid: over its group box) and its thumb is this long (0 = from the rows)
+    bar_up: f32,
+    thumb_len: f32,
+    thumb_top: f32,
+    // round 13: more one pixel marks (as `ring_marks`) stamped over the grid: the bar's part over the group box
+    bar_marks: str,
+    // round 13: the navigator row's horizontal thumb: its width and its start differ from the computed ones by these (px)
+    hthumb_adj: f32,
+    hthumb_dx: f32,
+    hthumb_flat: bool,
     idle_on: bool,
     idle_fill: paint.Color,
     idle_edge: paint.Color,
@@ -152,6 +162,13 @@ fn v3() -> Look {
         group_counts: false,
         group_rect: false,
         group_solid: false,
+        bar_up: 0.0,
+        thumb_len: 0.0,
+        thumb_top: 0.0 - 1.0,
+        bar_marks: "",
+        hthumb_adj: 0.0,
+        hthumb_dx: 0.0,
+        hthumb_flat: false,
         idle_on: false,
         idle_fill: rgb(0xD5E4EEu32),
         idle_edge: rgb(0xD9DFE3u32),
