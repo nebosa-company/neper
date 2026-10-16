@@ -2524,6 +2524,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     if look.on && look.soft_lines && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8 {
         soft_group = true
         row_style.height = style.Length { Px: extent - 1.0 }
+        // looks5-e: directly under the header (no filter row) the first group row has no two-pixel top and is 16 tall (live capture)
+        if index == 0usize && !look.has_head_extra { row_style.height = style.Length { Px: extent - 3.0 } }
     }
     row_style.background = paint.Brush { Solid: fill }
     let tree_selected = look.on && selected && look.tree_dots
@@ -2537,7 +2539,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     var lined_row = selected
     if look.focus_on { lined_row = row_key == look.focus_key }
     let dotted_row = look.on && lined_row && look.soft_lines && look.dotted_focus
-    if look.on && lined_row && !dotted_row { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
+    // looks5-e: the idle selected row has no frame: its top edge is the line above it and its foot pair the edge colour and #F1F1F1
+    if look.on && lined_row && !dotted_row && !look.top_edge_on { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
     if lined_error != ok { ret (zero, TooLarge) }
     var content_look = style.defaults()
@@ -2564,7 +2567,10 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                 second_px = gl.rgb(0xE5E5E5u32)
             }
             // looks5-e: a grid with its own row-foot pixels (measured: the Sort and Missing Set Cards dialogs, the Options grids)
-            if look.foot_set {
+            if look.top_edge_on && selected {
+                first_px = look.selected_line
+                second_px = gl.rgb(0xF1F1F1u32)
+            } else if look.foot_set {
                 first_px = look.foot_g1
                 second_px = look.foot_g2
                 if fill_is_light(look, index) {
@@ -2599,6 +2605,16 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         with_foot[0usize] = lined[0usize]
         with_foot[1usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, foot_box, zero)))
         lined[0usize] = widget.stack(0u64, style.defaults(), with_foot[0usize..2usize])
+    }
+    if look.on && selected && look.top_edge_on {
+        // looks5-e: the idle selected row's top edge lies one pixel above its row, over the foot of the one before (live capture)
+        var edge_box = control.sized_style(4000.0, 1.0)
+        edge_box.background = paint.Brush { Solid: look.top_edge }
+        let (with_edge, with_edge_error) = mem.alloc[widget.Node](a, 2usize)
+        if with_edge_error != ok { ret (zero, TooLarge) }
+        with_edge[0usize] = lined[0usize]
+        with_edge[1usize] = widget.positioned(0u64, 0.0, 0.0 - 1.0, style.defaults(), one_node(a, widget.box(0u64, edge_box, zero)))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_edge[0usize..2usize])
     }
     if look.on && selected && look.tree_dots {
         // looks4-e: the tree list's selected row has a dotted rectangle from x = 32 (measured, tree_list.png)
@@ -2644,7 +2660,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         with_dots[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one_node(a, dotted))
         lined[0usize] = widget.stack(0u64, style.defaults(), with_dots[0usize..2usize])
     }
-    if soft_group {
+    if soft_group && !(index == 0usize && !look.has_head_extra) {
         // two pixels at the top of a group row (measured: #E5E5E5 then #E7E7E7), the cells below them
         let (with_top, with_top_error) = mem.alloc[widget.Node](a, 3usize)
         if with_top_error != ok { ret (zero, TooLarge) }
@@ -2767,7 +2783,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }

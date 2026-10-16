@@ -254,6 +254,7 @@ fn arrange(app: *App, k: usize) {
         look.foot_w2 = gl.rgb(0xE7E7E7u32)
         look.header_line = gl.rgb(0xFFFFFFu32)
         look.idle_on = true
+        look.idle_top = gl.rgb(0xE5EEF4u32)
         look.ring_top_o = gl.rgb(0xAAADB3u32)
         look.ring_top_i = gl.rgb(0xD2D3D7u32)
         look.ring_left_o = gl.rgb(0x93979Fu32)
@@ -272,7 +273,7 @@ fn arrange(app: *App, k: usize) {
     }
     dg.set_look(&app.grids[k], look)
     dg.show_indicator(&app.grids[k], false)
-    if app.family == 1usize { dg.set_grid_lines(&app.grids[k], dg.GridLines.Horizontal) } else { dg.set_grid_lines(&app.grids[k], dg.GridLines.Both) }
+    dg.set_grid_lines(&app.grids[k], dg.GridLines.Both)
     if app.family == 0usize { dg.set_cell_select(&app.grids[k], 1usize) }
     if app.family == 2usize { dg.set_row_ink(&app.grids[k], zero, miss_ink) }
     // the state: cell 0 rest (the row held: Edition list's first row, the Options grid's first row), 2 and 3 select
@@ -308,7 +309,7 @@ fn cell_of(a: *mem.Arena, t: *const control.Theme, app: *App, k: usize, w: f32, 
     }
     arrange(app, k)
     var body_h = h - 3.0
-    if app.family == 1usize { body_h = 333.0 }
+    if app.family == 1usize { body_h = h - 3.0 }
     let (body, body_error) = dg.build(a, &app.grids[k], use_theme, body_h)
     if body_error != ok { ret (zero, body_error) }
     if app.family == 1usize || t.tokens.profile != .Windows {
@@ -388,6 +389,18 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
                     hx = 321.5
                     hy = 88.0
                 }
+                // v3 shows no hover look on a row or a cell: the pointer over a row, over a Sort Order cell
+                if k == 3usize {
+                    hx = 80.0
+                    hy = 100.0
+                }
+                if k == 4usize {
+                    hx = 235.0
+                    hy = 100.0
+                }
+            } else if app.family == 2usize {
+                hx = 100.0
+                hy = 80.0
             } else {
                 // part 0: Command, Shortcut, a row, the thumb; part 1: the arrows and the track
                 let which = app.first + k
@@ -453,6 +466,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
             w = 496.0
             h = 334.0
             cols = 2usize
+        } else if args[1usize][0usize] == 109u8 && args[1usize].len > 1usize && args[1usize][1usize] == 104u8 {
+            // `mh`: the Missing Set Cards list under the pointer (v3 shows no hover look on a row)
+            name = "data_grid_missing_hover"
+            seed.family = 2usize
+            seed.hover = true
+            seed.cells = 1usize
+            w = 234.0
+            h = 256.0
+            cols = 1usize
         } else if args[1usize][0usize] == 109u8 {
             name = "data_grid_missing_states"
             seed.family = 2usize
@@ -466,7 +488,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             name = "data_grid_sort_hover"
             seed.family = 0usize
             seed.hover = true
-            seed.cells = 3usize
+            seed.cells = 5usize
             w = 331.0
             h = 259.0
             cols = 3usize
