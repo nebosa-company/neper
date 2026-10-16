@@ -2766,4 +2766,5 @@ D5130	1150	Flex layout follows the spec's algorithm in logical axes (browser 2.7
 D5131	1419	Grid layout reads templates from the style's declared text and sizes tracks by the spec's phases (browser 2.8)
 D5132	1125	Multi-column layout moves finished lines and blocks rather than fragmenting boxes (browser 2.9)
 D5133	1239	Geometry, transforms and hit testing are a separate module over a finished layout (browser 2.11, 2.12, 2.15)
-D5134	1525	The painter writes scene commands directly and takes text and images from an environment (browser 3.1, 3.4, 3.6)
+D5134	1526	The painter writes scene commands directly and takes text and images from an environment (browser 3.1, 3.4, 3.6)
+D5135	1266	A font set, a CSS measure adapter and a static HTML view complete the first end-to-end path (browser 3.16, M1)

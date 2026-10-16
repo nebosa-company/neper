@@ -2306,6 +2306,11 @@ chmod +x "$test_build/css-geom-selfhost"
 css_paint_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_paint/src/main.e" "$repo" x64 linux "$test_build/css-paint-selfhost")
 [ "$css_paint_written" = 'executable written' ]
 chmod +x "$test_build/css-paint-selfhost"
+# `e.ui.html_view` end to end: HTML and CSS parsed, styled, laid out against an Ahem-like font (`tests/browser/assets/ahem.ttf`), painted by the view's canvas into a scene and rendered by the CPU renderer; glyph-square, block and background pixels, link lookup under a point (M1).
+ui_html_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_html_view/src/main.e" "$repo" x64 linux "$test_build/ui-html-view-selfhost")
+[ "$ui_html_view_written" = 'executable written' ]
+chmod +x "$test_build/ui-html-view-selfhost"
+"$test_build/ui-html-view-selfhost"
 "$test_build/css-paint-selfhost"
 "$test_build/css-geom-selfhost"
 "$test_build/css-layout-selfhost"

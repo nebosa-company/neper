@@ -372,6 +372,27 @@ fn hit_test(a: *mem.Arena, l: *const layout.Layout, b: u32, x: f64, y: f64) -> u
         pass += 1usize
     }
     if best != layout.NONE { ret best }
+    // Text and inline boxes live in the lines of the container: the text run under the point, else the inline box.
+    if inside && bb.line_count > 0u32 {
+        let cx = px - bb.border[3usize] - bb.padding[3usize]
+        let cy = py - bb.border[0usize] - bb.padding[0usize]
+        var seg = layout.NONE
+        var li = 0usize
+        while li < usize(bb.line_count) {
+            let ln = l.lines.items[usize(bb.line_first) + li]
+            var fi = 0usize
+            while fi < usize(ln.frag_count) {
+                let fr = l.frags.items[usize(ln.frag_first) + fi]
+                if cx >= fr.x && cx < fr.x + fr.w && cy >= fr.y && cy < fr.y + fr.h {
+                    if fr.kind == .Text || fr.kind == .Marker { ret fr.box }
+                    if fr.kind == .Segment { seg = fr.box }
+                }
+                fi += 1usize
+            }
+            li += 1usize
+        }
+        if seg != layout.NONE { ret seg }
+    }
     if inside && s.visibility == .Visible { ret b }
     ret layout.NONE
 }

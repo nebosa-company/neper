@@ -25085,6 +25085,72 @@ fn paint_canvas(p: *Painter)
 fn paint(a: *mem.Arena, l: *const layout.Layout, env: PaintEnv, b: *scene.Builder, view: geo.Rect, scroll_x: f64, scroll_y: f64) -> err
 ```
 
+### `e.text.fontset`
+
+```neper
+type Face = struct
+type Generics = struct { serif: str, sans: str, mono: str, cursive: str, fantasy: str, ui: str }
+type Set = struct { a: *mem.Arena, faces: list.List[Face], generics: Generics }
+type Metrics = struct { ascent: f64, descent: f64, line_gap: f64, x_height: f64 }
+error NoFace
+const TAG_HEAD: u32 = 1751474532u32
+const TAG_HHEA: u32 = 1751672161u32
+const TAG_OS2: u32 = 1330851634u32
+fn new(a: *mem.Arena) -> (Set, err)
+fn add(s: *Set, family: str, weight: u32, italic: bool, data: []const u8, face_index: u32) -> err
+fn set_generic(s: *Set, generic: str, family: str)
+fn unquote(a: *mem.Arena, name: str) -> str
+fn generic_family(s: *const Set, name: str) -> str
+fn best_of(s: *const Set, family: str, weight: f64, italic: bool) -> usize
+fn pick(s: *Set, families: str, weight: f64, italic: bool) -> (usize, err)
+fn metrics(s: *Set, families: str, weight: f64, italic: bool, size: f64) -> Metrics
+fn choices(s: *Set, a: *mem.Arena, primary: usize, size: f64) -> ([]tl.FontChoice, err)
+fn opts(limit: f32) -> tl.Options
+fn width(s: *Set, families: str, weight: f64, italic: bool, size: f64, text: str) -> f64
+fn layout_run(s: *Set, a: *mem.Arena, families: str, weight: f64, italic: bool, size: f64, text: str) -> (*const tl.Layout, err)
+```
+
+### `e.fmt.css.measure`
+
+```neper
+type Host = struct
+fn is_italic(s: *const style.Style) -> bool
+fn text_width(ctx: *void, s: *const style.Style, text: str) -> f64
+fn font_metrics(ctx: *void, s: *const style.Style) -> layout.FontMetrics
+fn intrinsic_of(ctx: *void, node: html.NodeId) -> layout.Intrinsic
+fn measure_of(h: *Host) -> layout.Measure
+fn paint_text(ctx: *void, s: *const style.Style, text: str) -> *const tl.Layout
+fn paint_image(ctx: *void, node: html.NodeId) -> paint.ImageRef
+fn paint_env_of(h: *Host) -> paint.PaintEnv
+```
+
+### `e.ui.html_view`
+
+```neper
+type Images = struct
+type View = struct
+error EmptyFontSet
+fn none_intrinsic(ctx: *void, node: html.NodeId) -> layout.Intrinsic
+fn none_image(ctx: *void, node: html.NodeId) -> css_paint.ImageRef
+fn no_images() -> Images
+fn parse_options() -> html.Options
+fn do_layout(v: *View, width: f32, height: f32) -> err
+fn document_height(v: *const View) -> f32
+fn clamp_scroll(v: *View)
+fn open(a: *mem.Arena, source: str, sheets: []const str, fonts: *fontset.Set, images: Images, width: f32, height: f32) -> (*View, err)
+fn resize(v: *View, width: f32, height: f32) -> err
+fn scroll_to(v: *View, x: f32, y: f32)
+fn scroll_by(v: *View, dx: f32, dy: f32)
+fn link_at(v: *View, x: f32, y: f32) -> (str, bool)
+fn measure_view(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size
+fn paint_view(ctx: *void, builder: *scene.Builder, area: geometry.Rect) -> err
+fn custom(v: *View) -> widget.Custom
+fn wheel_step() -> f32
+fn gesture_view(ctx: *void, g: widget.Gesture) -> err
+fn region(v: *View) -> widget.Region
+fn take_activated(v: *View) -> (str, bool)
+```
+
 ### `e.fmt.html.template`
 
 ```neper

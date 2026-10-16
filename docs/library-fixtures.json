@@ -439,7 +439,8 @@
     "fmt_html",
     "html_accessible",
     "text_css_cascade",
-    "text_css_match"
+    "text_css_match",
+    "ui_html_view"
    ]
   },
   {

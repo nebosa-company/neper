@@ -2620,6 +2620,12 @@ $cssPaintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $cssPaintWritten -ne 'executable written') { throw 'css_paint emission failed' }
 & $cssPaintPath
 if ($LASTEXITCODE -ne 0) { throw "a css_paint check failed: exit $LASTEXITCODE" }
+# `e.ui.html_view` end to end: HTML and CSS parsed, styled, laid out against an Ahem-like font (`tests/browser/assets/ahem.ttf`), painted by the view's canvas into a scene and rendered by the CPU renderer; glyph-square, block and background pixels, link lookup under a point (M1).
+$uiHtmlViewPath = Join-Path $testBuild 'ui-html-view-selfhost.exe'
+$uiHtmlViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_html_view\src\main.e') $repo 'x64' 'windows' $uiHtmlViewPath
+if ($LASTEXITCODE -ne 0 -or $uiHtmlViewWritten -ne 'executable written') { throw 'ui_html_view emission failed' }
+& $uiHtmlViewPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_html_view check failed: exit $LASTEXITCODE" }
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 $distConsensusPath = Join-Path $testBuild 'dist-consensus-selfhost.exe'
 $distConsensusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_consensus\src\main.e') $repo 'x64' 'windows' $distConsensusPath
