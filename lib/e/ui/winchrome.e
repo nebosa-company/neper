@@ -9,6 +9,7 @@ use e.gfx.scene
 use e.mem
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 
 fn icon_pixels() -> [256]u32 { ret [256]u32{ 0u32, 0u32, 0u32, 0u32, 0xFF54432Fu32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF8B7A5Fu32, 0xFF212120u32, 0u32, 0xFF524938u32, 0xFF202122u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF806F4Fu32, 0xFF402911u32, 0u32, 0xFF6A5D36u32, 0xFF312C1Du32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF222121u32, 0u32, 0u32, 0xFF846E41u32, 0xFF663B10u32, 0u32, 0xFF7C6C35u32, 0xFF523811u32, 0xFF202122u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF202123u32, 0xFF4C3D29u32, 0u32, 0u32, 0xFF5E5031u32, 0xFF936326u32, 0xFF221F1Eu32, 0xFF6C6134u32, 0xFF754C12u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF222323u32, 0xFF735A25u32, 0xFF202121u32, 0u32, 0xFF2E2B25u32, 0xFFA1762Du32, 0xFF312210u32, 0xFF554D2Eu32, 0xFF94621Fu32, 0xFF222220u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF202122u32, 0xFFA58238u32, 0xFF2B1D0Fu32, 0xFF4A2F1Fu32, 0xFF391B17u32, 0xFFA67C2Bu32, 0xFF51310Au32, 0xFF51482Bu32, 0xFF8E5F1Cu32, 0xFF27261Fu32, 0u32, 0u32, 0xFF232221u32, 0xFF2E2C29u32, 0u32, 0u32, 0u32, 0xFF6F6131u32, 0xFF663E15u32, 0xFF5F2E18u32, 0xFF633613u32, 0xFFD9B640u32, 0xFF8A6910u32, 0xFF887136u32, 0xFF7B5114u32, 0xFF2C291Fu32, 0u32, 0xFF68562Du32, 0xFF4E3113u32, 0xFF272525u32, 0u32, 0u32, 0u32, 0xFF2F2F24u32, 0xFFAE7E3Au32, 0xFF502909u32, 0xFF996529u32, 0xFF8D7122u32, 0xFFAA822Fu32, 0xFF75591Du32, 0xFF764A14u32, 0xFF35321Eu32, 0xFF212222u32, 0xFF8D6722u32, 0xFF3B230Au32, 0u32, 0u32, 0u32, 0u32, 0xFF202021u32, 0xFFAE8B44u32, 0xFF7E571Bu32, 0xFFB17F39u32, 0xFF724F12u32, 0xFFAB7D36u32, 0xFF624511u32, 0xFF895B1Fu32, 0xFF5D4616u32, 0xFF775528u32, 0xFF7A5314u32, 0xFF241E18u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF5E512Du32, 0xFFBD9541u32, 0xFF935322u32, 0xFF875D1Cu32, 0xFFA4772Du32, 0xFF55390Du32, 0xFF8D5D1Du32, 0xFF755013u32, 0xFF936623u32, 0xFF49350Cu32, 0xFF202122u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF292722u32, 0xFFDBB15Au32, 0xFF824C16u32, 0xFFA47838u32, 0xFFA0792Cu32, 0xFF4C320Cu32, 0xFF9E6A1Eu32, 0xFF63450Eu32, 0xFF654514u32, 0xFF282418u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF99803Au32, 0xFFAC7F35u32, 0xFFAC7D40u32, 0xFF8B681Fu32, 0xFF55370Eu32, 0xFF855618u32, 0xFF573C0Du32, 0xFF3D2C12u32, 0xFF202021u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF3D3724u32, 0xFFD3A24Eu32, 0xFF96642Fu32, 0xFF88631Au32, 0xFF644010u32, 0xFF744813u32, 0xFF533A0Du32, 0xFF26231Du32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF202122u32, 0xFF715D32u32, 0xFFA97A3Fu32, 0xFF9A7126u32, 0xFF724812u32, 0xFF724910u32, 0xFF4F370Bu32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFF34311Eu32, 0xFFC99752u32, 0xFF9C702Au32, 0xFF744813u32, 0xFF59380Cu32, 0xFF3F2C08u32, 0xFF1F1F21u32, 0u32, 0u32, 0u32, 0u32, 0u32 } }
@@ -22,7 +23,7 @@ fn icon_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     var i = 0usize
     while i < 256usize {
         if pixels[i] != 0u32 {
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + f32(i % 16usize), y: area.y + f32(i / 16usize), width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: style.hex(pixels[i] & 0xFFFFFFu32) } } })
+            try winpx.fill(b, area.x + f32(i % 16usize), area.y + f32(i / 16usize), 1.0, 1.0, style.hex(pixels[i] & 0xFFFFFFu32))
         }
         i += 1usize
     }
@@ -47,7 +48,7 @@ type Glyph = struct { kind: u32, ink: u32, alpha: f32, width: f32 }
 fn glyph_rect(b: *scene.Builder, area: geometry.Rect, x: f32, y: f32, w: f32, h: f32, ink: u32, alpha: f32) -> err {
     var c = style.hex(ink)
     c.alpha = alpha
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + x, y: area.y + y, width: w, height: h }, brush: paint.Brush { Solid: c } } })
+    ret winpx.fill(b, area.x + x, area.y + y, w, h, c)
 }
 
 // The close X: 10 columns by 11 rows of coverage (0 to 255) at (18, 10) of the 46 x 31 button, from the capture.

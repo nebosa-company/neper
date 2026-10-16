@@ -70,10 +70,13 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     if !shown && !(leaving > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     var ink = style.color(t.tokens, .InverseOnSurface)
     if windows { ink = style.color(t.tokens, .Text) }
+    let cupertino = t.tokens.profile == .CupertinoLike
+    if cupertino { ink = style.color(t.tokens, .Text) }
     var caption = control.text_options()
     caption.role = .BodySmall
     caption.wrap = .Word
     caption.max_lines = 2u32
+    if cupertino { caption.size = 11.0 }
     if windows {
         caption.role = .Body
         // v3's hint does not wrap by itself: its text carries its own line breaks.
@@ -117,6 +120,25 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
         plate.padding = style.EdgeLengths { left: pad_x, top: pad_y, right: pad_x, bottom: pad_y }
         placement = .BelowCenter
         gap_y = 4.0
+    }
+    if cupertino {
+        // macOS help tag: a light (dark) rounded face with a hairline and a low shadow, below the pointer.
+        if t.tokens.palette == .Dark {
+            plate.background = paint.Brush { Solid: style.hex(0x3A3A3Cu32) }
+            plate.border = style.Border { width: 1.0, color: style.hexa(0xFFFFFFu32, 0.14) }
+        }
+        if t.tokens.palette != .Dark {
+            plate.background = paint.Brush { Solid: style.hex(0xF6F6F6u32) }
+            plate.border = style.Border { width: 1.0, color: style.hexa(0x000000u32, 0.16) }
+        }
+        plate.radius = 4.0
+        plate.min_height = style.Length { Px: 0.0 }
+        plate.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 1.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.12) }
+        let cup_x = style.Length { Px: 6.0 }
+        let cup_y = style.Length { Px: 3.0 }
+        plate.padding = style.EdgeLengths { left: cup_x, top: cup_y, right: cup_x, bottom: cup_y }
+        placement = .BelowCenter
+        gap_y = 6.0
     }
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
@@ -564,6 +586,10 @@ fn context_menu_touch_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
 
 // One command of a v2 menu (D975), keyed `item_key`, as `menu_panel` draws it.
 fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_menu_row(a, item_key, submenu_key, t, c, slotted)
+        ret (cup, cup_error)
+    }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var row_height = control.if_else(touch, 48.0, 32.0)
     if c.supporting.len > 0usize { row_height = control.if_else(touch, 56.0, 48.0) }
@@ -849,6 +875,11 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     sheet_style.padding.bottom = style.Length { Px: rim }
     sheet_style.min_width = style.Length { Px: control.if_else(touch, 112.0, 200.0) }
     sheet_style.max_width = style.Length { Px: control.if_else(touch, 280.0, 320.0) }
+    if t.tokens.profile == .CupertinoLike {
+        sheet_style = control.cupertino_menu_sheet_style(t, rim)
+        sheet_style.min_width = style.Length { Px: 190.0 }
+        sheet_style.max_width = style.Length { Px: 320.0 }
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..n])
@@ -901,6 +932,12 @@ fn alert_dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     words.role = .BodyMedium
     var message_ink = style.color(t.tokens, .OnSurfaceVariant)
     if t.tokens.profile == .Windows { message_ink = style.color(t.tokens, .Text) }
+    if t.tokens.profile == .CupertinoLike {
+        // The alert's message: 13 pt, centred, in the label colour.
+        message_ink = style.color(t.tokens, .Text)
+        words.size = 13.0
+        words.align = .Center
+    }
     let (message_node, message_error) = control.colored_text(a, key + 2u64, message, t, words, message_ink)
     if message_error != ok { ret (zero, message_error) }
     let (made, made_error) = dialog_as(a, key, t, title, message_node, buttons, open, true, accessibility.ROLE_ALERT_DIALOG)
@@ -1044,6 +1081,10 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
         let (windowed, windowed_error) = dialog_windows(a, key, t, title, content, buttons, open, described, semantic_role, busy, fallback, has_icon, icon)
         ret (windowed, windowed_error)
     }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = dialog_cupertino(a, key, t, title, content, buttons, open, described, semantic_role, busy, fallback)
+        ret (cup, cup_error)
+    }
     let entering = opening_share_over(t, key, open, t.tokens.durations.medium4)
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     var submit: widget.Submit = zero
@@ -1067,6 +1108,8 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
             options.loading = busy
             if !busy { submit = buttons[i].action }
         }
+        // M3 dialog actions are all text buttons.
+        if t.tokens.profile == .MaterialLike && buttons[i].kind != .Destructive { options.variant = .Plain }
         if buttons[i].kind == .Destructive { options.variant = .Danger }
         if buttons[i].kind == .Cancel && !busy { cancel = buttons[i].action }
         if busy && buttons[i].kind != .Default { options.enabled = false }
@@ -1082,6 +1125,8 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     if parts_error != ok { ret (zero, TooLarge) }
     var heading = control.text_options()
     heading.role = title_role
+    // M3: the dialog headline is `headline-small` (md.comp.dialog.headline).
+    if t.tokens.profile == .MaterialLike && title_role == .TitleLarge { heading.role = .HeadlineSmall }
     if has_icon { heading.align = .Center }
     let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, title_ink))
     if title_error != ok { ret (zero, title_error) }
@@ -7984,4 +8029,168 @@ fn dialog_windows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     if placed_error != ok { ret (zero, TooLarge) }
     placed[0usize] = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize])
     ret (widget.box(key + 8192u64, style.defaults(), placed[0usize..1usize]), ok)
+}
+
+// ---- the Cupertino look: menu row, alert, tooltip (docs/ui/looks/cupertino) -------------------------------
+
+// A command row of a macOS menu (see control.cupertino_menu_row_parts), with the tree's role for it.
+fn cupertino_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
+    let has_submenu = c.submenu.len != 0usize
+    let (look, content, parts_error) = control.cupertino_menu_row_parts(a, t, item_key, c.label, c.shortcut, c.checked, c.radio, c.enabled, c.destructive, has_submenu, c.submenu_open, slotted)
+    if parts_error != ok { ret (zero, parts_error) }
+    var sem_states = 0u32
+    if c.checked { sem_states = accessibility.STATE_CHECKED }
+    var semantic_role = 22u8
+    if c.checkable || c.checked { semantic_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
+    if c.radio { semantic_role = accessibility.ROLE_MENU_ITEM_RADIO }
+    var sem_actions = 0u32
+    var controls = 0u64
+    var chosen = &c.action
+    if has_submenu {
+        sem_actions = accessibility.ACTION_SHOW_MENU
+        controls = submenu_key
+        chosen = &c.submenu_toggle
+        if c.submenu_open { sem_states = sem_states | accessibility.STATE_EXPANDED }
+    }
+    let (made, made_error) = control.pressable_states(a, item_key, t, semantic_role, c.label, look, c.enabled, false, sem_states, sem_actions, controls, chosen, content)
+    ret (made, made_error)
+}
+
+// The iOS alert card (UIAlertController, HIG 270 wide, 14 round): the title (17 semibold) and message centred over a
+// hairline, then the buttons 44 tall -- two sit side by side, more stack -- in the accent (the default one semibold,
+// a destructive one red), pressed they take a grey fill. The card is a flat, near-opaque face (iOS blurs what is
+// behind it).
+fn cupertino_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let sideways = buttons.len == 2usize
+    var each: f32 = 270.0
+    if sideways { each = 135.0 }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, buttons.len * 2usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    let rule_ink = style.cupertino_separator(t.tokens)
+    var i = 0usize
+    while i < buttons.len {
+        let button_key = key + 3u64 + u64(i)
+        let state = control.control_state(t, button_key, true, false)
+        var look = style.cupertino_resolve(t.tokens, .Plain, state, 44.0)
+        look.background = control.with_alpha(style.color(t.tokens, .Text), 0.0)
+        if state.hovered && !state.pressed { look.background = style.cup_fill(t.tokens, 0.8) }
+        if state.pressed { look.background = style.cup_fill(t.tokens, 2.2) }
+        look.foreground = style.color(t.tokens, .Primary)
+        if buttons[i].kind == .Destructive { look.foreground = style.color(t.tokens, .Error) }
+        look.radius = 0.0
+        look.corners = style.Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 }
+        look.elevation = 0u8
+        look.min_width = each
+        look.min_height = 44.0
+        look.padding = 0.0
+        var weight = 400u32
+        if buttons[i].kind == .Default { weight = 600u32 }
+        let (word, word_error) = control.cup_label(a, t, buttons[i].label, 17.0, weight, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+        if one_error != ok { ret (zero, TooLarge) }
+        one[0usize] = word
+        let content = widget.aligned(0u64, .Center, .Center, control.sized_style(each, 44.0), one[0usize..1usize])
+        let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, buttons[i].label, look, true, false, &buttons[i].action, content)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        cells[used] = pressed
+        used += 1usize
+        if i + 1usize < buttons.len {
+            var rule = control.sized_style(0.5, 44.0)
+            if !sideways { rule = control.sized_style(270.0, 0.5) }
+            rule.background = paint.Brush { Solid: rule_ink }
+            cells[used] = widget.box(0u64, rule, zero)
+            used += 1usize
+        }
+        i += 1usize
+    }
+    var axis: ui_layout.Axis = .Vertical
+    if sideways { axis = .Horizontal }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var heading = control.text_options()
+    heading.role = .Heading
+    heading.align = .Center
+    heading.size = 17.0
+    heading.weight = 600u32
+    let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, .Text))
+    if title_error != ok { ret (zero, title_error) }
+    let (titled, titled_error) = mem.alloc[widget.Node](a, 1usize)
+    if titled_error != ok { ret (zero, TooLarge) }
+    titled[0usize] = title_node
+    var title_sem: widget.Semantics = zero
+    title_sem.role = 25u8
+    title_sem.label = title
+    title_sem.level = 2u8
+    var texts = style.defaults()
+    texts.width = style.Length { Px: 270.0 }
+    texts.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 20.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 20.0 } }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = widget.semantics(0u64, title_sem, style.defaults(), titled[0usize..1usize])
+    pair[1usize] = message
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 6.0 }, texts, pair[0usize..2usize])
+    var line = control.sized_style(270.0, 0.5)
+    line.background = paint.Brush { Solid: rule_ink }
+    parts[1usize] = widget.box(0u64, line, zero)
+    parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..used])
+    var card = style.defaults()
+    card.width = style.Length { Px: 270.0 }
+    card.radius = 14.0
+    card.overflow = .Clip
+    if dark {
+        card.background = paint.Brush { Solid: style.hex(0x2C2C2Eu32) }
+    }
+    if !dark {
+        card.background = paint.Brush { Solid: style.hex(0xF4F4F6u32) }
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, card, parts[0usize..3usize]), ok)
+}
+
+// The Cupertino dialog: the alert card over the scrim, centred. Enter is the default button, Escape the cancel one
+// (an alert dialog ignores a press outside, as on iOS).
+fn dialog_cupertino(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit) -> (widget.Node, err) {
+    let entering = opening_share_over(t, key, open, t.tokens.durations.medium4)
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
+    var submit: widget.Submit = zero
+    var cancel: widget.Submit = zero
+    var i = 0usize
+    while i < buttons.len {
+        if buttons[i].kind == .Default && !busy { submit = buttons[i].action }
+        if buttons[i].kind == .Cancel && !busy { cancel = buttons[i].action }
+        i += 1usize
+    }
+    if !busy && !widget.submit_set(cancel.invoke) && widget.submit_set(fallback.invoke) { cancel = fallback }
+    let (card, card_error) = cupertino_alert_card(a, key, t, title, content, buttons)
+    if card_error != ok { ret (zero, card_error) }
+    var none: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = card
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), held[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = semantic_role
+    sem.label = title
+    sem.states = accessibility.STATE_MODAL
+    if busy { sem.states = sem.states | accessibility.STATE_BUSY }
+    sem.labelled_by = key + 1u64
+    if described { sem.described_by = key + 2u64 }
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    var outside = cancel
+    if semantic_role == accessibility.ROLE_ALERT_DIALOG { outside = widget.Submit { ctx: zero, invoke: zero } }
+    let (scaled, scaled_error) = scaled_in(a, t, framed[0usize], entering, 0.9)
+    if scaled_error != ok { ret (zero, scaled_error) }
+    framed[0usize] = scaled
+    let (made, made_error) = with_scrim_share(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]), entering)
+    if made_error != ok { ret (zero, made_error) }
+    let (dialog_held, dialog_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if dialog_held_error != ok { ret (zero, TooLarge) }
+    dialog_held[0usize] = made
+    ret (widget.box(key + 8192u64, style.defaults(), dialog_held[0usize..1usize]), ok)
 }

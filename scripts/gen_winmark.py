@@ -117,6 +117,7 @@ use e.gfx.scene
 use e.mem
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 """
 
@@ -168,6 +169,7 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if w > 1.7 { w = 1.7 }
     }
     let across = 14usize
+    let legacy = scene.builder_scale(b) == 1.0
     // On whole pixels: a mark centred in a cell would otherwise straddle two rows and columns.
     let ox = f32(i32(area.x + 0.5))
     let oy = f32(i32(area.y + 0.5))
@@ -189,11 +191,12 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             // An opaque pixel reaches 0.5 under its opaque right and lower neighbours so that a scaled render shows no seams.
             var wide: f32 = 1.0
             var high: f32 = 1.0
-            if alpha > 0.996 {
+            // At any other scale `winpx.fill` puts every pixel on whole device pixels, so no overlap is needed.
+            if legacy && alpha > 0.996 {
                 if i % across + 1usize < across && mark_alpha(ta, tb, w, i + 1usize) > 0.996 { wide = 1.5 }
                 if i + across < 196usize && mark_alpha(ta, tb, w, i + across) > 0.996 { high = 1.5 }
             }
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: ox + f32(i % across), y: oy + f32(i / across), width: wide, height: high }, brush: paint.Brush { Solid: c } } })
+            try winpx.fill(b, ox + f32(i % across), oy + f32(i / across), wide, high, c)
         }
         i += 1usize
     }

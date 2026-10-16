@@ -135,6 +135,26 @@ fn build_state(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
     ret (1usize, ok)
 }
 
+// The ten hot titles of the live grabs (ref/windows/states/hover-menubar-title-*): the bar strip, one cell per grab, shifted so
+// that the title under v3's pointer sits at the cell's centre (where the harness's pointer goes).
+fn build_hot(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (action, action_error) = actions_of(a)
+    if action_error != ok { ret (0usize, action_error) }
+    let names = [10]str{ "File hot", "Cards hot", "Search hot", "View hot", "Card Art hot", "Online hot", "Reports hot", "Tools hot", "Admin hot", "Help hot" }
+    // each title's centre in the strip (box left and right edges measured on the grabs)
+    let centres = [10]f32{ 25.0, 60.0, 105.0, 149.0, 197.0, 249.0, 299.0, 346.0, 389.0, 430.0 }
+    var i = 0usize
+    while i < 10usize {
+        let (menu_bar, bar_error) = bar(a, t, *action, 10000u64 * u64(i + 1usize), 99usize, false)
+        if bar_error != ok { ret (0usize, bar_error) }
+        let (shifted, shifted_error) = placed(a, menu_bar, 782.0 - centres[i], 0.0, 1564.0, 26.0)
+        if shifted_error != ok { ret (0usize, shifted_error) }
+        cells[i] = looks.Cell { caption: names[i], node: shifted, drive: .Hover }
+        i += 1usize
+    }
+    ret (10usize, ok)
+}
+
 fn run_state(a: *mem.Arena, name: str, open: usize, hot: bool) -> err {
     let (state, state_error) = mem.alloc[State](a, 1usize)
     if state_error != ok { ret state_error }
@@ -162,6 +182,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             k += 1usize
         }
         if strs.eq(only, "menu_bar_hot_view") { ret run_state(a, only, 99usize, true) }
+        if strs.eq(only, "menu_bar_hot") {
+            let hot = looks.Sheet { name: "menu_bar_hot", cells: 10usize, columns: 1usize, cell_w: 1564.0, cell_h: 26.0, ctx: zero, build: build_hot }
+            ret looks.run_all(a, &hot)
+        }
     }
     let sheet = looks.Sheet { name: "menu_bar", cells: 3usize, columns: 1usize, cell_w: 782.0, cell_h: 26.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)

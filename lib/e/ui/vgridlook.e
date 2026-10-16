@@ -23,6 +23,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 
 // What to paint: band tops, whether each is the first band and open; row content tops, whether
@@ -34,7 +35,7 @@ fn measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
 }
 
 fn fill(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: style.hex(value) } } })
+    ret winpx.fill(b, x, y, w, h, style.hex(value))
 }
 
 // A rectangle filled with a left-to-right gradient of `stops` (offsets 0..1 across x .. x + span).
@@ -70,7 +71,7 @@ fn chevron(b: *scene.Builder, x: f32, y: f32, down: bool) -> err {
             let i = (at * 11usize + column) * 2usize
             let v = hexval(alpha[i]) * 16u32 + hexval(alpha[i + 1usize])
             if v > 0u32 {
-                try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x + f32(column), y: y + f32(row), width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: paint.rgba(0.4627, 0.4627, 0.4627, f32(v) / 255.0) } } })
+                try winpx.fill(b, x + f32(column), y + f32(row), 1.0, 1.0, paint.rgba(0.4627, 0.4627, 0.4627, f32(v) / 255.0))
             }
             column += 1usize
         }

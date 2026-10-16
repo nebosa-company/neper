@@ -4,9 +4,16 @@ One self-contained page (inline CSS and JS, no external assets; thumbnails are t
 PNGs under docs/ui/looks/): a controls x looks matrix of status chips and thumbnails, a status
 filter, counts per look, and the gap list. Never hand-edited. `python scripts/render_looks.py`.
 """
+import base64
+import io
 import json
 from html import escape
 from pathlib import Path
+
+try:
+    from PIL import Image
+except ImportError:  # without PIL the page falls back to the relative link
+    Image = None
 
 ROOT = Path(__file__).resolve().parents[1]
 STATUS = ROOT / "docs/ui/looks/status.json"
@@ -49,6 +56,20 @@ document.querySelectorAll('.filter button').forEach(b=>b.addEventListener('click
 """
 
 
+def thumb(path):
+    """A 150 px high inline PNG of `path`, so the page shows its screenshots wherever it is opened (a viewer
+    that does not resolve relative image paths, a copy emailed on its own); '' without PIL."""
+    if Image is None:
+        return ""
+    im = Image.open(path).convert("RGB")
+    h = 150
+    if im.height > h:
+        im = im.resize((max(1, round(im.width * h / im.height)), h), Image.LANCZOS)
+    out = io.BytesIO()
+    im.save(out, "PNG", optimize=True)
+    return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+
+
 def cell(control, look, shots):
     info = (control.get("looks") or {}).get(look["id"], {})
     status = info.get("status", "planned")
@@ -57,8 +78,9 @@ def cell(control, look, shots):
     shot = info.get("screenshot") or ""
     if shot and (shots / shot).exists():
         href = "looks/" + shot
-        out.append('<a class="thumb" href="%s"><img loading="lazy" alt="%s %s" src="%s"></a>'
-                   % (escape(href), escape(look["label"]), escape(control["name"]), escape(href)))
+        src = thumb(shots / shot) or href
+        out.append('<a class="thumb" href="%s"><img alt="%s %s" src="%s"></a>'
+                   % (escape(href), escape(look["label"]), escape(control["name"]), escape(src, quote=True)))
     elif shot:
         out.append('<div class="note">screenshot missing: %s</div>' % escape(shot))
     if info.get("notes"):
