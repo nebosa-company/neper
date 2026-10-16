@@ -8783,12 +8783,22 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
         if kind == Nav.NextPage { slot = 4usize }
         if kind == Nav.Last { slot = 5usize }
         live_w = gl.gx_nav_w(slot, enabled)
+        if win_look(grid) { live_w = gl.gx_nav_win_w(slot, enabled) }
         // looks5-e: under the pointer v3 draws the button on a blue frame over #E0EEF9 (live hover captures)
         var live_pix = gl.gx_nav(slot, enabled)
-        if enabled && (slot == 3usize || slot == 4usize) && mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, key, true, false).hovered { live_pix = gl.gx_nav_hot(slot) }
-        let (live_mark, live_error) = gl.pixels(a, live_pix, live_w, gl.gx_nav_h())
+        if win_look(grid) { live_pix = gl.gx_nav_win(slot, enabled) }
+        var live_hot = false
+        if enabled && (slot == 3usize || slot == 4usize) && mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, key, true, false).hovered {
+            live_pix = gl.gx_nav_hot(slot)
+            live_hot = true
+        }
+                // (the hover bitmaps were cut one column further left than the rest ones: their first column is left out, the node keeps its width)
+        var live_skip = 0usize
+        if live_hot && win_look(grid) { live_skip = 1usize }
+        let (live_mark, live_error) = gl.pixels_skip(a, live_pix, live_w, gl.gx_nav_h(), live_skip)
         if live_error != ok { ret (zero, live_error) }
         mark = live_mark
+        if live_hot && win_look(grid) { mark = widget.box(0u64, control.sized_style(live_w, gl.gx_nav_h()), one(a, live_mark)) }
         live_nav = true
     } else if grid.has_nav_icons {
         var picture_at = 0usize
@@ -8832,6 +8842,8 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
     let (node, node_error) = control.pressable_states(a, key, grid.theme, 3u8, label, look, enabled, false, 0u32, 0u32, 0u64, action, mark)
     if live_nav && node_error == ok {
         // buttons stand 22 apart (the first three, 19 wide, with 3 between; Previous 1 short of the position box)
+        // looks9-w1: the Windows bitmaps run edge to edge (they carry the gap between two buttons themselves)
+        if win_look(grid) { ret (node, node_error) }
         var after = 22.0 - live_w
         if kind == Nav.Prev { after = 20.0 - live_w }
         if after < 0.0 { after = 0.0 }
@@ -8902,8 +8914,9 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var funnel_mark: widget.Node = zero
     if live_row {
         var funnel_pix = gl.gx_nav(7usize, true)
+        if win_look(grid) { funnel_pix = gl.gx_nav_win(7usize, true) }
         if mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, funnel_key, true, false).hovered { funnel_pix = gl.gx_nav_hot(7usize) }
-        let (live_funnel, live_funnel_error) = gl.pixels(a, funnel_pix, gl.gx_nav_w(7usize, true), gl.gx_nav_h())
+        let (live_funnel, live_funnel_error) = gl.pixels(a, funnel_pix, gl.gx_nav_win_w_if(win_look(grid), 7usize), gl.gx_nav_h())
         if live_funnel_error != ok { ret (zero, live_funnel_error) }
         funnel_mark = live_funnel
     } else if grid.has_nav_icons {
@@ -8934,7 +8947,7 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         funnel_look.padding = 0.0
         funnel_look.padding_y = 0.0
         funnel_look.radius = 0.0
-        funnel_look.min_width = gl.gx_nav_w(7usize, true)
+        funnel_look.min_width = gl.gx_nav_win_w_if(win_look(grid), 7usize)
         funnel_look.min_height = gl.gx_nav_h()
     }
     let (funnel, funnel_node_error) = control.pressable_states(a, funnel_key, grid.theme, 3u8, "Filter", funnel_look, grid.has_filter_action, false, 0u32, 0u32, 0u64, &grid.filter_action, funnel_mark)
@@ -8970,8 +8983,15 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var thumb_top: f32 = 0.0
         if live_row { thumb_top = 1.0 }
         if live_row { thumb_start = 17.5 }
+        var thumb_kids: []const widget.Node = zero
+        if live_row && footer_edged_on(grid) && !hot_thumb_now(grid) {
+            // looks9-w1: the thumb's soft ends reach two pixels further out than the bar's own width
+            thumb = control.sized_style(hthumb_width(grid) + 4.0, 10.0)
+            thumb_start = 15.5
+            thumb_kids = one(a, nav_thumb(a, hthumb_width(grid) + 4.0))
+        }
         thumb.margin = style.EdgeLengths { left: style.Length { Px: thumb_start + left }, top: style.Length { Px: thumb_top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-        cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 39u8, enabled: true, focusable: false }, thumb, zero)
+        cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 39u8, enabled: true, focusable: false }, thumb, thumb_kids)
         shown = 9usize
     }
     if live_row {
@@ -8985,7 +9005,9 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             var out_at = 0usize
             while copy_at < shown {
                 if copy_at == 7usize {
-                    let (undo_pic, undo_error) = gl.pixels(a, gl.gx_nav(6usize, true), gl.gx_nav_w(6usize, true), gl.gx_nav_h())
+                    var undo_pix = gl.gx_nav(6usize, true)
+                    if win_look(grid) { undo_pix = gl.gx_nav_win(6usize, true) }
+                    let (undo_pic, undo_error) = gl.pixels(a, undo_pix, gl.gx_nav_win_w_if(win_look(grid), 6usize), gl.gx_nav_h())
                     if undo_error != ok { ret (zero, undo_error) }
                     with_undo[out_at] = undo_pic
                     out_at += 1usize
@@ -8995,12 +9017,16 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
                 copy_at += 1usize
             }
             var undo_style = style.defaults()
-            undo_style.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-            ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, undo_style, with_undo[0usize..shown + 1usize]), ok)
+            undo_style.padding = style.EdgeLengths { left: style.Length { Px: nav_left(grid) }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            let undone = widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, undo_style, with_undo[0usize..shown + 1usize])
+            if footer_edged_on(grid) { ret (nav_line_under(a, undone, grid.look.footer_band.red < grid.look.footer_band.green - 0.05), ok) }
+            ret (undone, ok)
         }
         var live_style = style.defaults()
-        live_style.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-        ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: live_gap }, live_style, cells[0usize..shown]), ok)
+        live_style.padding = style.EdgeLengths { left: style.Length { Px: nav_left(grid) }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        let live_flex = widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: live_gap }, live_style, cells[0usize..shown])
+        if footer_edged_on(grid) { ret (nav_line_under(a, live_flex, grid.look.footer_band.red < grid.look.footer_band.green - 0.05), ok) }
+        ret (live_flex, ok)
     }
     ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), cells[0usize..shown]), ok)
 }
@@ -9321,6 +9347,109 @@ fn filter_panel_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, bar, cells[0usize..4usize]), ok)
 }
 
+// looks9-w1: the Windows look's measured grid details (live 100 % captures of the main window) apply to the Windows profile only
+fn win_look(grid: *const Grid) -> bool { ret grid.look.on && grid.theme.tokens.profile == .Windows }
+
+fn footer_edged_on(grid: *const Grid) -> bool { ret grid.look.footer_edges && win_look(grid) }
+
+fn nav_left(grid: *const Grid) -> f32 {
+    if win_look(grid) { ret 0.0 }
+    ret 1.0
+}
+
+// looks9-w1: one pixel box at (x, y) of a stack
+fn footer_px(a: *mem.Arena, x: f32, y: f32, w: f32, h: f32, value: u32) -> widget.Node {
+    var s = control.sized_style(w, h)
+    s.background = paint.Brush { Solid: gl.rgb(value) }
+    ret widget.positioned(0u64, x, y, style.defaults(), one(a, widget.box(0u64, s, zero)))
+}
+
+// looks9-w1: v3's footer cell (live captures) is 20 tall with its own edge pixels. `pal` holds, in order: the band row on top (left px, middle,
+// right px), the edge row under it (left px, second px, middle, second last, right px), the body rows' (left, second, second last, right),
+// the edge row above the foot (same five) and the band row at the foot (left, middle, right). The body (#E7EAEA) is `cell`, 18 tall,
+// standing one row down.
+fn footer_edged(a: *mem.Arena, cell: widget.Node, w: f32, pal: [20]u32) -> widget.Node {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 24usize)
+    if parts_error != ok { ret cell }
+    parts[0usize] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), one(a, cell))
+    var n = 1usize
+    // rows 0, 19: left px, middle, right px
+    parts[n] = footer_px(a, 0.0, 0.0, 1.0, 1.0, pal[0usize])
+    parts[n + 1usize] = footer_px(a, 1.0, 0.0, w - 2.0, 1.0, pal[1usize])
+    parts[n + 2usize] = footer_px(a, w - 1.0, 0.0, 1.0, 1.0, pal[2usize])
+    parts[n + 3usize] = footer_px(a, 0.0, 19.0, 1.0, 1.0, pal[17usize])
+    parts[n + 4usize] = footer_px(a, 1.0, 19.0, w - 2.0, 1.0, pal[18usize])
+    parts[n + 5usize] = footer_px(a, w - 1.0, 19.0, 1.0, 1.0, pal[19usize])
+    n += 6usize
+    // rows 1 and 18
+    parts[n] = footer_px(a, 0.0, 1.0, 1.0, 1.0, pal[3usize])
+    parts[n + 1usize] = footer_px(a, 1.0, 1.0, 1.0, 1.0, pal[4usize])
+    parts[n + 2usize] = footer_px(a, 2.0, 1.0, w - 4.0, 1.0, pal[5usize])
+    parts[n + 3usize] = footer_px(a, w - 2.0, 1.0, 1.0, 1.0, pal[6usize])
+    parts[n + 4usize] = footer_px(a, w - 1.0, 1.0, 1.0, 1.0, pal[7usize])
+    parts[n + 5usize] = footer_px(a, 0.0, 18.0, 1.0, 1.0, pal[12usize])
+    parts[n + 6usize] = footer_px(a, 1.0, 18.0, 1.0, 1.0, pal[13usize])
+    parts[n + 7usize] = footer_px(a, 2.0, 18.0, w - 4.0, 1.0, pal[14usize])
+    parts[n + 8usize] = footer_px(a, w - 2.0, 18.0, 1.0, 1.0, pal[15usize])
+    parts[n + 9usize] = footer_px(a, w - 1.0, 18.0, 1.0, 1.0, pal[16usize])
+    n += 10usize
+    // body rows 2 to 17
+    parts[n] = footer_px(a, 0.0, 2.0, 1.0, 16.0, pal[8usize])
+    parts[n + 1usize] = footer_px(a, 1.0, 2.0, 1.0, 16.0, pal[9usize])
+    parts[n + 2usize] = footer_px(a, w - 2.0, 2.0, 1.0, 16.0, pal[10usize])
+    parts[n + 3usize] = footer_px(a, w - 1.0, 2.0, 1.0, 16.0, pal[11usize])
+    n += 4usize
+    ret widget.stack(0u64, control.sized_style(w, 20.0), parts[0usize..n])
+}
+
+// the two palettes of `footer_edged`: the collection grid's green band, the pool grid's yellow one
+fn footer_palette(green: bool) -> [20]u32 {
+    if green {
+        ret [20]u32{ 0xC8DAC8u32, 0xC8DAC8u32, 0xC8DAC8u32, 0xD0D8D0u32, 0xDCDDDDu32, 0xDCDDDDu32, 0xDCDDDDu32, 0xC7DAC7u32, 0xD0D8D0u32, 0xE2E5E5u32, 0xDBDCDCu32, 0xC7DAC7u32, 0xD0D8D0u32, 0xE1E3E3u32, 0xE1E3E3u32, 0xE1E3E3u32, 0xC7DAC7u32, 0xCED8CEu32, 0xCED8CEu32, 0xCED8CEu32 }
+    }
+    ret [20]u32{ 0xEFEFDAu32, 0xEAEAD9u32, 0xF8F8DCu32, 0xE1E1D8u32, 0xDDDDDEu32, 0xDFE0E0u32, 0xD9DADAu32, 0xF1F1DBu32, 0xE1E1D8u32, 0xE3E5E5u32, 0xDCDDDDu32, 0xF1F1DBu32, 0xE1E1D8u32, 0xDCDDDDu32, 0xDEE0E0u32, 0xD9D9D9u32, 0xF1F1DBu32, 0xF0F0DAu32, 0xEBEBDAu32, 0xF8F8DCu32 }
+}
+
+fn hot_thumb_now(grid: *const Grid) -> bool {
+    if mem.address_of(grid.theme) == 0usize || mem.address_of(grid.theme.runtime) == 0usize { ret false }
+    let hot_state = control.control_state(grid.theme, navigator_key(grid) + 9u64, true, false)
+    ret hot_state.hovered || hot_state.pressed
+}
+
+// looks9-w1: v3's navigator has a #FAFAFA row on top (the buttons stand over it)
+fn nav_line_under(a: *mem.Arena, row: widget.Node, green: bool) -> widget.Node {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret row }
+    var line_value = 0xF7F7F7u32
+    if green { line_value = 0xFAFAFAu32 }
+    parts[0usize] = footer_px(a, 0.0, 0.0, 4000.0, 1.0, line_value)
+    parts[1usize] = row
+    ret widget.stack(0u64, style.defaults(), parts[0usize..2usize])
+}
+
+// looks9-w1: the navigator's horizontal thumb as v3 draws it (live capture): `w` wide, 10 tall, a #CACACA top row, an #AAAAAA bottom
+// row, a soft two-pixel end each side
+fn nav_thumb(a: *mem.Arena, w: f32) -> widget.Node {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 14usize)
+    if parts_error != ok { ret widget.spacer(0u64, 0.0) }
+    parts[0usize] = footer_px(a, 0.0, 0.0, w, 10.0, 0x858585u32)
+    parts[1usize] = footer_px(a, 2.0, 0.0, w - 4.0, 1.0, 0xCACACAu32)
+    parts[2usize] = footer_px(a, 2.0, 9.0, w - 4.0, 1.0, 0xAAAAAAu32)
+    parts[3usize] = footer_px(a, 0.0, 1.0, 1.0, 8.0, 0xABABABu32)
+    parts[4usize] = footer_px(a, 1.0, 1.0, 1.0, 8.0, 0x888888u32)
+    parts[5usize] = footer_px(a, w - 2.0, 1.0, 1.0, 8.0, 0x8F8F8Fu32)
+    parts[6usize] = footer_px(a, w - 1.0, 1.0, 1.0, 8.0, 0xD3D3D3u32)
+    parts[7usize] = footer_px(a, 0.0, 0.0, 1.0, 1.0, 0xD7D7D7u32)
+    parts[8usize] = footer_px(a, 1.0, 0.0, 1.0, 1.0, 0xCBCBCBu32)
+    parts[9usize] = footer_px(a, w - 2.0, 0.0, 1.0, 1.0, 0xCDCDCDu32)
+    parts[10usize] = footer_px(a, w - 1.0, 0.0, 1.0, 1.0, 0xE6E6E6u32)
+    parts[11usize] = footer_px(a, 0.0, 9.0, 1.0, 1.0, 0xC3C3C3u32)
+    parts[12usize] = footer_px(a, 1.0, 9.0, 1.0, 1.0, 0xACACACu32)
+    parts[13usize] = footer_px(a, w - 2.0, 9.0, 1.0, 1.0, 0xB0B0B0u32)
+    var s = control.sized_style(w, 10.0)
+    ret widget.stack(0u64, s, parts[0usize..14usize])
+}
+
 // A row of the footer: the column summaries under their columns.
 fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, grid.specs.len)
@@ -9364,6 +9493,8 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         cell_style.width = style.Length { Px: grid.columns[at].width }
         if grid.look.on && text.len != 0usize { cell_style.background = paint.Brush { Solid: grid.look.footer_cell } }
         if live_footer && s.kind == CellKind.Indicator { cell_style.background = paint.Brush { Solid: skin(grid, 0xF0F0F0u32) } }
+        // looks9-w1: the indicator's footer cell is 11 wide in the live capture (its last column a #BCBCBC line)
+        if live_footer && footer_edged_on(grid) && s.kind == CellKind.Indicator { cell_style.width = style.Length { Px: grid.columns[at].width - 1.0 } }
         if grid.look.on && text.len != 0usize {
             // v3 (FR-footer recording): the count sits at the left of its cell, a whole number is
             // centred, an amount stands at the right
@@ -9381,6 +9512,23 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             }
         } else {
             cells[at] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
+        }
+        // looks9-w1: the live footer's cell is an 18 px box with its own edge pixels, a 2 px band gap between two cells
+        if live_footer && footer_edged_on(grid) && text.len != 0usize { cells[at] = footer_edged(a, cells[at], grid.columns[at].width, footer_palette(grid.look.footer_band.red < grid.look.footer_band.green - 0.05)) }
+        if live_footer && footer_edged_on(grid) && text.len == 0usize && s.kind == CellKind.Indicator {
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, control.TooLarge) }
+            pair[0usize] = cells[at]
+            pair[1usize] = footer_px(a, grid.columns[at].width - 2.0, 0.0, 1.0, 20.0, 0xBCBCBCu32)
+            cells[at] = widget.stack(0u64, control.sized_style(grid.columns[at].width - 1.0, 20.0), pair[0usize..2usize])
+        }
+        if live_footer && footer_edged_on(grid) && text.len == 0usize && s.kind == CellKind.Picture {
+            let (trio, trio_error) = mem.alloc[widget.Node](a, 3usize)
+            if trio_error != ok { ret (zero, control.TooLarge) }
+            trio[0usize] = cells[at]
+            trio[1usize] = footer_px(a, 0.0, 0.0, 1.0, 20.0, 0xEBEEF2u32)
+            trio[2usize] = footer_px(a, 1.0, 0.0, 1.0, 20.0, 0xC7E0C8u32)
+            cells[at] = widget.stack(0u64, control.sized_style(grid.columns[at].width, 20.0), trio[0usize..3usize])
         }
         at += 1usize
     }
@@ -9400,6 +9548,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             top_two = gl.rgb(0xE1EDE6u32)
             bottom_one = gl.rgb(0xBCCEBCu32)
             bottom_two = gl.rgb(0xCACACAu32)
+            if footer_edged_on(grid) { bottom_two = gl.rgb(0xCFCFCFu32) }
         }
         let (rows, rows_error) = mem.alloc[widget.Node](a, 5usize)
         if rows_error != ok { ret (zero, control.TooLarge) }
@@ -10018,7 +10167,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             if made_filter_error != ok { ret (zero, made_filter_error) }
             v3_filter = made_filter
         }
-        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select, dialog_lines: grid.look.dialog_lines, foot_set: grid.look.foot_set, foot_drift: grid.look.foot_drift, foot_g1: grid.look.foot_g1, foot_g2: grid.look.foot_g2, foot_w1: grid.look.foot_w1, foot_w2: grid.look.foot_w2, top_edge_on: !dotted_focus && grid.look.idle_on, top_edge: lk.idle_top }
+        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select, dialog_lines: grid.look.dialog_lines, foot_set: grid.look.foot_set, foot_drift: grid.look.foot_drift, foot_g1: grid.look.foot_g1, foot_g2: grid.look.foot_g2, foot_w1: grid.look.foot_w1, foot_w2: grid.look.foot_w2, top_edge_on: !dotted_focus && grid.look.idle_on, top_edge: lk.idle_top, plain_col: grid.look.plain_col, soft_a0: grid.look.soft_a0, soft_x0: grid.look.soft_x0, soft_slope: grid.look.soft_slope }
     }
     // group footers are taller: the list of the entries that are
     if has_extras(grid) && grid.look.on {
@@ -10159,6 +10308,11 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         let (ringed, ring_error) = ring_wrap(a, grid, stacked)
         if ring_error != ok { ret (zero, ring_error) }
         stacked = ringed
+        if grid.look.ring_marks.len != 0usize && win_look(grid) {
+            let (marked, marked_error) = ring_marks_over(a, grid, stacked)
+            if marked_error != ok { ret (zero, marked_error) }
+            stacked = marked
+        }
     } else if grid.look.on && !grid.look.frame_none { stacked = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, frame, one(a, stacked)) }
     let (keyed, keyed_error) = with_keys(a, grid, stacked)
     ret (keyed, keyed_error)
@@ -10180,6 +10334,42 @@ fn ring_wrap(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (widget.No
     node = ring_side(a, lk.ring_left_o, 1.0, 0.0, 0.0, 0.0, node)
     node = ring_side(a, lk.ring_top_o, 0.0, 1.0, 0.0, 0.0, node)
     ret (node, ok)
+}
+
+// looks9-w1: the ring's one-pixel marks, from `Look.ring_marks`: "x y h rrggbb;..." (x and y from the grid's top-left, decimal)
+fn ring_marks_over(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (widget.Node, err) {
+    let text = grid.look.ring_marks
+    var count = 1usize
+    var at = 0usize
+    while at < text.len {
+        if text[at] == 59u8 { count += 1usize }
+        at += 1usize
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count + 1usize)
+    if parts_error != ok { ret (zero, parts_error) }
+    parts[0usize] = inner
+    var made = 1usize
+    at = 0usize
+    while at < text.len && made <= count {
+        var field: [4]u32 = zero
+        var hex: u32 = 0u32
+        var k = 0usize
+        while k < 4usize && at < text.len {
+            var value: u32 = 0u32
+            while at < text.len && text[at] != 32u8 && text[at] != 59u8 {
+                if k == 3usize { value = value * 16u32 + gl.hex_digit(text[at]) } else { value = value * 10u32 + (u32(text[at]) - 48u32) }
+                at += 1usize
+            }
+            field[k] = value
+            k += 1usize
+            if at < text.len && text[at] == 32u8 { at += 1usize }
+        }
+        hex = field[3usize]
+        parts[made] = footer_px(a, f32(field[0usize]), f32(field[1usize]), 1.0, f32(field[2usize]), hex)
+        made += 1usize
+        if at < text.len && text[at] == 59u8 { at += 1usize }
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..made]), ok)
 }
 
 // looks4-e: the live capture's vertical bar starts at the grid's top, above the group box
