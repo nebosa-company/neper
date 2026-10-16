@@ -342,6 +342,7 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
         plate.min_height = style.Length { Px: 0.0 }
         plate.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
         plate.border = style.Border { width: 1.0, color: style.hex(7763574u32) }
+        if t.tokens.palette == .Dark { plate.border = style.Border { width: 1.0, color: style.hex_raw(0x5A5A5Au32) } }
     }
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
@@ -7858,7 +7859,7 @@ fn windows_close_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     var ink = style.windows_caption_ink(true)
     if state.hovered || state.pressed {
         fill = style.windows_caption_close(state.pressed)
-        ink = style.hex(16777215u32)
+        ink = style.hex_raw(16777215u32)
     }
     // looks3: the X is the capture's own pixels (e.ui.winchrome), 33 wide on a dialog's lone close button.
     let (glyph, glyph_error) = winchrome.glyph_node(a, 2u32, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), 1.0, 33.0)
@@ -7975,6 +7976,13 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     // The capture is square-cornered (PrintWindow omits the DWM rounding Windows 11 adds on screen).
     face.radius = 0.0
     face.overflow = .Clip
+    // Windows 11 dark: the window keeps a thin #484848 edge so it stands off the #202020 ground (the caption is #1F2022 either way).
+    if t.tokens.palette == .Dark {
+        face.border = style.Border { width: 1.0, color: style.hex_raw(0x484848u32) }
+        let edge_px = style.Length { Px: 1.0 }
+        face.padding = style.EdgeLengths { left: edge_px, top: edge_px, right: edge_px, bottom: edge_px }
+        face.width = style.Length { Px: width + 2.0 }
+    }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, parts[0usize..3usize]), ok)
 }
 

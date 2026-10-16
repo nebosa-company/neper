@@ -158,8 +158,10 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
 }
 
 fn set_look(rig: *Rig, look: Look) {
+    style.set_windark(false)
     rig.tokens = theme_for(look)
-    style.windows_dark_enter(&rig.tokens)
+    // The Windows dark look maps the light literals of its tile painters (style.hex) to dark; nothing else does.
+    style.set_windark(look == .WindowsDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
 }
@@ -482,10 +484,11 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
             scale = only_scale
         }
         var look_index = 0usize
-        while look_index < 3usize {
+        while look_index < 4usize {
             var look: Look = .Neper
             if look_index == 1usize { look = .Windows }
             if look_index == 2usize { look = .WindowsDark }
+            if look_index == 3usize { look = .NeperDark }
             let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
             if open_error != ok { ret open_error }
             set_look(rig, look)

@@ -8689,7 +8689,7 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
             // looks5: v3's hovered minimise and maximise buttons wash #2C2D2F over the dark caption (states/hover-caption-*)
             if windows && slot.kind != .Close && !options.light && !options.tool {
                 fill = style.windows_caption_hot()
-                if state.pressed { fill = style.mix(fill, style.hex(16777215u32), 0.06) }
+                if state.pressed { fill = style.mix(fill, style.hex_raw(16777215u32), 0.06) }
             }
         }
         let (face, face_error) = caption_face(a, t, slot, options.platform, glyph_ink, options.active, state.hovered)
@@ -8746,6 +8746,8 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     if !options.active { bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) } }
     if windows { bar.background = paint.Brush { Solid: style.windows_caption_face(options.active) } }
     if windows && (options.light || options.tool) { bar.background = paint.Brush { Solid: style.windows_caption_light_face() } }
+    // Windows 11 dark: a thin #484848 edge keeps the #1F2022 caption apart from the #202020 window ground.
+    if windows && t.tokens.palette == .Dark { bar.border = style.Border { width: 1.0, color: style.hex_raw(0x484848u32) } }
     let (bar_cell, bar_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if bar_cell_error != ok { ret (zero, TooLarge) }
     bar_cell[0usize] = widget.stack(0u64, bar, parts[0usize..n])
@@ -8769,14 +8771,14 @@ fn windows_flat_sized(w: f32, h: f32, color: paint.Color) -> style.Style {
 
 fn windows_flat(color: u32) -> style.Style {
     var s = style.defaults()
-    s.background = paint.Brush { Solid: style.hex(style.wdk(color)) }
+    s.background = paint.Brush { Solid: style.hex(color) }
     ret s
 }
 
 // (round 7) The same with a colour that is already final (a Windows dark value: the maps would change it again).
 fn windows_flat_raw(color: u32) -> style.Style {
     var s = style.defaults()
-    s.background = paint.Brush { Solid: style.hex(color) }
+    s.background = paint.Brush { Solid: style.hex_raw(color) }
     ret s
 }
 
@@ -9243,7 +9245,7 @@ fn windows_title(a: *mem.Arena, t: *const control.Theme, label: str, caption: co
     rule.background = paint.Brush { Solid: ink }
     pair[1usize] = widget.positioned(0u64, 0.0, baseline + 1.0, rule, zero)
     var soft = control.sized_style(fit, 1.0)
-    soft.background = paint.Brush { Solid: style.mix(ink, style.hex(style.wdk(15790320u32)), 0.65) }
+    soft.background = paint.Brush { Solid: style.mix(ink, style.hex(15790320u32), 0.65) }
     pair[2usize] = widget.positioned(0u64, 0.0, baseline + 2.0, soft, zero)
     parts[n] = widget.stack(0u64, control.sized_style(advance, text_look.line_height), pair[0usize..3usize])
     n += 1usize
@@ -9275,7 +9277,7 @@ fn windows_menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len)
     if heads_error != ok { ret (zero, TooLarge) }
     style.windows_dark_enter(t.tokens)
-    let ink = style.hex(style.wink(0u32))
+    let ink = style.hex(0u32)
     var bar_x: f32 = 0.0
     var i = 0usize
     while i < menus.len {
@@ -9422,7 +9424,7 @@ fn windows_word(a: *mem.Arena, t: *const control.Theme, word: str, caption: cont
     rule.background = paint.Brush { Solid: ink }
     pair[1usize] = widget.positioned(0u64, 0.0, baseline + 1.0, rule, zero)
     var soft = control.sized_style(fit, 1.0)
-    soft.background = paint.Brush { Solid: style.mix(ink, style.hex(style.wdk(15790320u32)), 0.65) }
+    soft.background = paint.Brush { Solid: style.mix(ink, style.hex(15790320u32), 0.65) }
     pair[2usize] = widget.positioned(0u64, 0.0, baseline + 2.0, soft, zero)
     parts[n] = widget.stack(0u64, control.sized_style(advance, text_look.line_height), pair[0usize..3usize])
     n += 1usize
@@ -9501,7 +9503,7 @@ fn windows_menu_check(a: *mem.Arena, ink: paint.Color) -> (widget.Node, err) {
     if codes_error != ok { ret (zero, TooLarge) }
     let (colors, colors_error) = mem.alloc[paint.Color](a, 23usize)
     if colors_error != ok { ret (zero, TooLarge) }
-    let soft = style.mix(ink, style.hex(style.wdk(15790320u32)), 0.8)
+    let soft = style.mix(ink, style.hex(15790320u32), 0.8)
     var i = 0usize
     while i < 23usize {
         if i < 14usize {
@@ -9623,7 +9625,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             head_caption.role = .BodyMedium
             head_caption.wrap = .None
             head_caption.weight = 700u32
-            let (head_text, _, _, head_error) = windows_gdi_run(a, &bold_theme, head_caption, c.label, style.hex(style.wink(0u32)), 1u8, windows_menu_under(), false)
+            let (head_text, _, _, head_error) = windows_gdi_run(a, &bold_theme, head_caption, c.label, style.hex(0u32), 1u8, windows_menu_under(), false)
             if head_error != ok { ret (zero, head_error) }
             let (head_held, head_held_error) = mem.alloc[widget.Node](a, 1usize)
             if head_held_error != ok { ret (zero, TooLarge) }
@@ -9666,13 +9668,13 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         let highlighted = c.selected || c.submenu_open || state.hovered
         let slotted = c.pictured || c.checked
         // Pictures and checks keep their own ink on a highlighted row (the face shows round them).
-        var picture_ink = style.hex(style.wink(0u32))
-        if !c.enabled { picture_ink = style.hex(style.wink(10526880u32)) }
-        var ink = style.hex(style.wink(0u32))
-        if !c.enabled { ink = style.hex(style.wink(10526880u32)) }
+        var picture_ink = style.hex(0u32)
+        if !c.enabled { picture_ink = style.hex(10526880u32) }
+        var ink = style.hex(0u32)
+        if !c.enabled { ink = style.hex(10526880u32) }
         if highlighted {
-            ink = style.hex(16777215u32)
-            if !c.enabled { ink = style.hex(style.wink(7171437u32)) }
+            ink = style.hex_raw(16777215u32)
+            if !c.enabled { ink = style.hex(7171437u32) }
         }
         var look = control.windows_bar_look(state, ink)
         look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -9729,7 +9731,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
                 var boxed = windows_flat_raw(0x383838u32)
                 boxed.width = style.Length { Px: 20.0 }
                 boxed.height = style.Length { Px: 20.0 }
-                boxed.border = style.Border { width: 1.0, color: style.hex(0x5A5A5Au32) }
+                boxed.border = style.Border { width: 1.0, color: style.hex_raw(0x5A5A5Au32) }
                 let (boxed_held, boxed_held_error) = mem.alloc[widget.Node](a, 1usize)
                 if boxed_held_error != ok { ret (zero, TooLarge) }
                 boxed_held[0usize] = picture
@@ -9811,7 +9813,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         }
         if has_submenu || c.split {
             var arrow_ink = ink
-            if c.split && highlighted { arrow_ink = style.hex(style.wink(0u32)) }
+            if c.split && highlighted { arrow_ink = style.hex(0u32) }
             let (arrow, arrow_error) = windows_menu_arrow_right(a, arrow_ink)
             if arrow_error != ok { ret (zero, arrow_error) }
             if !c.enabled && !highlighted && !dark {
@@ -9870,7 +9872,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         view.width = style.Length { Px: widest }
         view.height = style.Length { Px: max_height - 26.0 }
         view.overflow = .Clip
-        let (arrow_down, arrow_down_error) = windows_menu_arrow_down(a, style.hex(style.wink(0u32)))
+        let (arrow_down, arrow_down_error) = windows_menu_arrow_down(a, style.hex(0u32))
         if arrow_down_error != ok { ret (zero, arrow_down_error) }
         let (strip_held, strip_held_error) = mem.alloc[widget.Node](a, 1usize)
         if strip_held_error != ok { ret (zero, TooLarge) }
@@ -10276,7 +10278,7 @@ fn windows_gdi_run(a: *mem.Arena, t: *const control.Theme, caption: control.Text
             if soft {
                 // The bar's titles carry a second, fainter row (35 % ink).
                 var faint = control.sized_style(advance, 1.0)
-                faint.background = paint.Brush { Solid: style.mix(ink, style.hex(style.wdk(15790320u32)), 0.65) }
+                faint.background = paint.Brush { Solid: style.mix(ink, style.hex(15790320u32), 0.65) }
                 parts[n] = widget.positioned(0u64, x, baseline + under + 1.0, faint, zero)
                 n += 1usize
             }
