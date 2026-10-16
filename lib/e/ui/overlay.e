@@ -7883,16 +7883,17 @@ fn interactive_canvas(a: *mem.Arena, key: widget.Key, t: *const control.Theme, c
 // corner radius (Windows 11 rounding), the message icon and every state but rest.
 fn windows_dialog_width() -> f32 { ret 420.0 }
 
-fn windows_close_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, action: *const widget.Submit) -> (widget.Node, err) {
+fn windows_close_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, action: *const widget.Submit, light: bool, button_w: f32) -> (widget.Node, err) {
     let state = control.control_state(t, key, true, false)
     var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
     var ink = style.windows_caption_ink(true)
+    if light { ink = style.windows_caption_light_ink() }
     if state.hovered || state.pressed {
         fill = style.windows_caption_close(state.pressed)
         ink = style.hex_raw(16777215u32)
     }
     // looks3: the X is the capture's own pixels (e.ui.winchrome), 33 wide on a dialog's lone close button.
-    let (glyph, glyph_error) = winchrome.glyph_node(a, 2u32, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), 1.0, 33.0)
+    let (glyph, glyph_error) = winchrome.glyph_node(a, 2u32, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), 1.0, button_w)
     if glyph_error != ok { ret (zero, glyph_error) }
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = fill
@@ -7902,35 +7903,47 @@ fn windows_close_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     look.custom_padding = true
     look.padding = 0.0
     look.padding_y = 0.0
-    look.min_width = 33.0
+    look.min_width = button_w
     look.min_height = style.windows_caption_height()
     let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
     if centred_error != ok { ret (zero, TooLarge) }
     centred[0usize] = glyph
-    let cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(33.0, style.windows_caption_height()), centred[0usize..1usize])
+    let cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(button_w, style.windows_caption_height()), centred[0usize..1usize])
     let (pressed, pressed_error) = control.pressable(a, key, t, 3u8, "Close", look, true, false, action, cell)
     ret (pressed, pressed_error)
 }
 
 // The window visual: caption, body, button row. `close` is what the X does.
 fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, busy: bool, message_box: bool, has_icon: bool, icon: control.GlyphKind, close: widget.Submit) -> (widget.Node, err) {
-    let width = windows_dialog_width()
+    var width = windows_dialog_width()
+    // round 10: the system message box (native capture ref/windows-native/light/messagebox-active) is 338 wide with a light caption in the light look
+    var close_w: f32 = 33.0
+    var title_x: f32 = 30.0
+    if message_box {
+        width = 338.0
+        // the system message box caption has no icon, a title at 9 and a 46 wide close button
+        close_w = 46.0
+        title_x = 9.0
+    }
+    let light_caption = message_box && t.tokens.palette != .Dark
     let bar_h = style.windows_caption_height()
     // the caption
     var words = control.text_options()
     words.wrap = .None
     words.size = 12.0
     words.weight = 400u32
-    let (word, word_error) = control.colored_text(a, key + 1u64, title, t, words, style.windows_caption_ink(true))
+    var caption_ink = style.windows_caption_ink(true)
+    if light_caption { caption_ink = style.windows_caption_light_ink() }
+    let (word, word_error) = control.colored_text(a, key + 1u64, title, t, words, caption_ink)
     if word_error != ok { ret (zero, word_error) }
     let (title_cell, title_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if title_cell_error != ok { ret (zero, TooLarge) }
     title_cell[0usize] = word
-    let titled = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width - 33.0 - 30.0, bar_h), title_cell[0usize..1usize])
+    let titled = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width - close_w - title_x, bar_h), title_cell[0usize..1usize])
     let (closes, closes_error) = mem.alloc[widget.Submit](a, 1usize)
     if closes_error != ok { ret (zero, TooLarge) }
     closes[0usize] = close
-    let (x_button, x_error) = windows_close_button(a, key + 2u64, t, &closes[0usize])
+    let (x_button, x_error) = windows_close_button(a, key + 2u64, t, &closes[0usize], light_caption, close_w)
     if x_error != ok { ret (zero, x_error) }
     let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 3usize)
     if bar_parts_error != ok { ret (zero, TooLarge) }
@@ -7940,15 +7953,21 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let (x_held, x_held_error) = mem.alloc[widget.Node](a, 1usize)
     if x_held_error != ok { ret (zero, TooLarge) }
     x_held[0usize] = x_button
-    bar_parts[0usize] = widget.positioned(0u64, 30.0, 0.0, style.defaults(), title_held[0usize..1usize])
-    bar_parts[1usize] = widget.positioned(0u64, width - 33.0, 0.0, style.defaults(), x_held[0usize..1usize])
+    bar_parts[0usize] = widget.positioned(0u64, title_x, 0.0, style.defaults(), title_held[0usize..1usize])
+    var close_x = width - close_w
+    // (the native caption is 354 wide over a 338 wide body: its close button hangs 7 px past the body's right edge, clipped here)
+    if message_box { close_x = width - 39.0 }
+    bar_parts[1usize] = widget.positioned(0u64, close_x, 0.0, style.defaults(), x_held[0usize..1usize])
     let (icon_held, icon_held_error) = mem.alloc[widget.Node](a, 1usize)
     if icon_held_error != ok { ret (zero, TooLarge) }
     icon_held[0usize] = winchrome.icon_node()
     bar_parts[2usize] = widget.positioned(0u64, 10.0, 7.0, style.defaults(), icon_held[0usize..1usize])
+    var bar_count = 3usize
+    if message_box { bar_count = 2usize }
     var bar = control.sized_style(width, bar_h)
     bar.background = paint.Brush { Solid: style.windows_caption_face(true) }
-    let caption = widget.stack(0u64, bar, bar_parts[0usize..3usize])
+    if light_caption { bar.background = paint.Brush { Solid: style.windows_caption_light_face() } }
+    let caption = widget.stack(0u64, bar, bar_parts[0usize..bar_count])
     // the body
     var body_style = style.defaults()
     body_style.width = style.Length { Px: width }
@@ -7958,9 +7977,13 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = content
     var held_count = 1usize
+    var body_gap: f32 = 16.0
+    var body_top: f32 = 12.0
     if message_box {
         body_ground = .Surface
-        pad = 20.0
+        pad = 21.0
+        body_top = 23.0
+        body_gap = 9.0
         if has_icon {
             let (mark, mark_error) = control.icon_square(a, style.color(t.tokens, .Primary), icon, 32.0)
             if mark_error != ok { ret (zero, mark_error) }
@@ -7970,10 +7993,15 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         }
     }
     body_style.background = paint.Brush { Solid: style.color(t.tokens, body_ground) }
+    if light_caption { body_style.background = paint.Brush { Solid: style.hex_raw(0xFFFFFFu32) } }
     let side = style.Length { Px: pad }
-    body_style.padding = style.EdgeLengths { left: side, top: side, right: side, bottom: side }
+    body_style.padding = style.EdgeLengths { left: side, top: style.Length { Px: body_top }, right: side, bottom: side }
     body_style.min_height = style.Length { Px: 48.0 }
-    let body = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 16.0 }, body_style, held[0usize..held_count])
+    // the native message box: the body is 78 tall, the icon 32 wide at (21, 23) and the text 9 after it, centred on it
+    if message_box { body_style.min_height = style.Length { Px: 78.0 } }
+    var body_cross: ui_layout.CrossAlign = .Start
+    if message_box && has_icon { body_cross = .Center }
+    let body = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: body_cross, gap: body_gap }, body_style, held[0usize..held_count])
     // the button row
     let (row, row_error) = mem.alloc[widget.Node](a, buttons.len)
     if row_error != ok { ret (zero, TooLarge) }
@@ -7991,13 +8019,28 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     var strip = style.defaults()
     strip.width = style.Length { Px: width }
     strip.padding = style.EdgeLengths { left: style.Length { Px: 9.0 }, top: style.Length { Px: 10.0 }, right: style.Length { Px: 9.0 }, bottom: style.Length { Px: 7.0 } }
-    let actions = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 9.0 }, strip, row[0usize..buttons.len])
+    var strip_gap: f32 = 9.0
+    if message_box {
+        // the native message box footer: 41 tall, the buttons 10 below its top, 16 from the right edge and 11 apart
+        strip.padding = style.EdgeLengths { left: style.Length { Px: 9.0 }, top: style.Length { Px: 10.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 9.0 } }
+        strip_gap = 11.0
+    }
+    let actions = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: strip_gap }, strip, row[0usize..buttons.len])
     // the window
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = caption
     parts[1usize] = body
+    var window_parts = 3usize
     parts[2usize] = actions
+    if message_box && !(t.tokens.palette == .Dark) {
+        // the #F5F5F5 row between the white body and the grey footer
+        var edge = control.sized_style(width, 1.0)
+        edge.background = paint.Brush { Solid: style.hex_raw(0xF5F5F5u32) }
+        parts[2usize] = widget.box(0u64, edge, zero)
+        parts[3usize] = actions
+        window_parts = 4usize
+    }
     var face = control.surface_style(t, control.surface_options(t))
     face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let none_px = style.Length { Px: 0.0 }
@@ -8013,7 +8056,7 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         face.padding = style.EdgeLengths { left: edge_px, top: edge_px, right: edge_px, bottom: edge_px }
         face.width = style.Length { Px: width + 2.0 }
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, parts[0usize..3usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, parts[0usize..window_parts]), ok)
 }
 
 // looks3: a v3 form window of `width` x `height` (the visible window of the capture): the #F0F0F0 face with `children`

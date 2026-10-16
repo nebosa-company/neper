@@ -1777,3 +1777,15 @@ fn windows_caption_hot() -> paint.Color {
     if windark_on { ret hex_raw(0x3C3C3Cu32) }
     ret hex_raw(0x2C2D2Fu32)
 }
+
+// ---- round 10 (group d): the light caption of an inactive window, from the native Windows 11 capture
+// (ref/windows-native/light/window-inactive: face #F3F3F3, title and glyphs about #939393; derived from the darkest ink pixels). v3
+// showed no inactive light caption.
+fn windows_caption_light_face_inactive() -> paint.Color {
+    if windark_on { ret hex_raw(0x202020u32) }
+    ret hex_raw(0xF3F3F3u32)
+}
+fn windows_caption_light_ink_inactive() -> paint.Color {
+    if windark_on { ret hex_raw(0x787878u32) }
+    ret hex_raw(0x939393u32)
+}

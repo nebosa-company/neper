@@ -5292,7 +5292,7 @@ fn mem_one_node(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
 }
 
 // The Windows look's progress bar (docs/ui/looks, v3's TcxProgressBar with NativeStyle, so the
-// OS theme draws it): 21 tall, a 1 px #BCBCBC frame round a #E6E6E6 track, the fill #06B025
+// OS theme draws it): 21 tall, a 1 px #BCBCBC frame round a #E6E6E6 track, the fill #0F7B0F (native capture)
 // flat and square inside the frame, and with `options.text` the percent centred, black on the
 // track and white over the fill. Indeterminate (v3 Marquee) is one segment, a fifth of the
 // width, travelling the track. Every colour is the Windows 10/11 comctl theme from memory, not
@@ -5304,7 +5304,9 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     if !indeterminate { share = eased_share(t, key, aimed, true) }
     let inner_w = width - 2.0
     let inner_h = h - 2.0
-    var fill_color = style.hex(438309u32)
+    var fill_color = style.hex_raw(0x0F7B0Fu32)
+    if options.tone == .Paused { fill_color = style.hex_raw(0x9D5D00u32) }
+    if options.tone == .Error { fill_color = style.hex_raw(0xC42B1Cu32) }
     var track_color = style.hex(15132390u32)
     var rim_color = style.hex(12369084u32)
     var ink_track = style.hex(0u32)
@@ -5312,6 +5314,8 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     // The Windows 11 dark bar: a #3A3A3A track in a #5A5A5A rim, the accent #60CDFF fill, white on the track and black over the fill.
     if t.tokens.palette == .Dark {
         fill_color = style.hex_raw(0x60CDFFu32)
+        if options.tone == .Paused { fill_color = style.hex_raw(0xFCE100u32) }
+        if options.tone == .Error { fill_color = style.hex_raw(0xFF99A4u32) }
         track_color = style.hex_raw(0x3A3A3Au32)
         rim_color = style.hex_raw(0x5A5A5Au32)
         ink_track = style.hex_raw(0xFFFFFFu32)
@@ -5328,7 +5332,7 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     words.wrap = .None
     if indeterminate {
         let turn = progress_turn(t, options.phase, time.seconds(2i64))
-        let seg = inner_w * 0.2
+        let seg = inner_w * 0.6
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = bar_piece(key + 1u64, seg, inner_h, fill_color, 0.0)
@@ -9066,8 +9070,8 @@ fn win5_hint_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         ret win3_rect(b, x + 1.0, y + h - 1.0, 1.0, 1.0, style.hex(9671571u32))
     }
     if style.windark_active() {
-        // The Windows 11 dark tooltip: a #2B2B2B face in a 1 px #5A5A5A frame, white text.
-        try win3_rect(b, x, y, w, h, style.hex_raw(0x5A5A5Au32))
+        // The Windows 11 dark tooltip (native capture ref/windows-native/dark/tooltip-rest): a #2B2B2B face in a 1 px #767676 frame, white text.
+        try win3_rect(b, x, y, w, h, style.hex_raw(0x767676u32))
         ret win3_rect(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, style.hex_raw(0x2B2B2Bu32))
     }
     try win3_rect(b, x, y, w, h, style.hex(16777185u32))
@@ -9081,8 +9085,12 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
     // The toolbar's hint is Tahoma 12 (measured by ink width on the captures), the grid's Tahoma 11.
     var hint_px: f32 = 12.3
     if grid { hint_px = 11.1 }
-    let (dialog_t, dialog_error) = windows_tahoma_theme(a, t, hint_px)
+    if style.windark_active() && !grid { hint_px = 12.0 }
+    let (tahoma_t, dialog_error) = windows_tahoma_theme(a, t, hint_px)
     if dialog_error != ok { ret (zero, dialog_error) }
+    // The native dark tooltip is Segoe UI 12 px (the faces stay in the theme's order).
+    var dialog_t = tahoma_t
+    if style.windark_active() && !grid { dialog_t.fonts = t.fonts }
     var words = text_options()
     words.role = .BodyMedium
     words.wrap = .None
@@ -9098,6 +9106,11 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
     var tall: f32 = 20.0
     var left: f32 = 3.0
     var drop: f32 = 3.0
+    if style.windark_active() && !grid {
+        over = 12.0
+        left = 5.0
+        drop = 2.0
+    }
     if grid {
         over = 10.0
         tall = 25.0

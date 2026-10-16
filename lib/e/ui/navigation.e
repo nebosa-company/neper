@@ -8679,7 +8679,10 @@ fn windows_caption_v3(c: win.Caption, width: f32) -> win.Caption {
             out.slots[i].rect = geometry.rect(0.0, 0.0, 0.0, 0.0)
         }
     }
-    out.drag = geometry.rect(30.0, 0.0, right - 30.0, h)
+    // v3's captions carry the program icon and start the title at 30; a caption with no icon (the native Windows 11 dialog) starts it at 16
+    var title_x: f32 = 30.0
+    if out.icon.width == 0.0 { title_x = 16.0 }
+    out.drag = geometry.rect(title_x, 0.0, right - title_x, h)
     out.title = out.drag
     if out.icon.width > 0.0 { out.icon = geometry.rect(10.0, 7.0, 16.0, 16.0) }
     ret out
@@ -8700,6 +8703,7 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     if windows {
         ink = style.windows_caption_ink(options.active)
         if options.light || options.tool { ink = style.windows_caption_light_ink() }
+        if options.light && !options.tool && !options.active { ink = style.windows_caption_light_ink_inactive() }
         // 12 px Segoe UI, 0.4% smaller: the captions' ink is up to 2 px narrower than the shaped run over a long title
         words.size = 11.95
         words.weight = 400u32
@@ -8849,8 +8853,9 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     if !options.active { bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) } }
     if windows { bar.background = paint.Brush { Solid: style.windows_caption_face(options.active) } }
     if windows && (options.light || options.tool) { bar.background = paint.Brush { Solid: style.windows_caption_light_face() } }
+    if windows && options.light && !options.tool && !options.active { bar.background = paint.Brush { Solid: style.windows_caption_light_face_inactive() } }
     // Windows 11 dark: a thin #484848 edge keeps the #1F2022 caption apart from the #202020 window ground.
-    if windows && t.tokens.palette == .Dark { bar.border = style.Border { width: 1.0, color: style.hex_raw(0x484848u32) } }
+    // (round 10: removed. The native dark window and dialog captions, ref/windows-native/dark/window-active, are #1F2022 straight against the #202020 ground, no edge.)
     let (bar_cell, bar_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if bar_cell_error != ok { ret (zero, TooLarge) }
     bar_cell[0usize] = widget.stack(0u64, bar, parts[0usize..n])
