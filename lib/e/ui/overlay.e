@@ -19,6 +19,8 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 use e.ui.winchrome
+use e.ui.winmsgicon
+use e.ui.wintile
 
 error TooLarge
 
@@ -7988,6 +7990,14 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             let (mark, mark_error) = control.icon_square(a, style.color(t.tokens, .Primary), icon, 32.0)
             if mark_error != ok { ret (zero, mark_error) }
             held[0usize] = mark
+            // round 11: the light message box draws the native question bitmap (ref/windows-native/light/messagebox-active, the only
+            // message box icon captured; Info stands for it: no other kind has a bitmap)
+            if light_caption && icon == .Info {
+                let question = winmsgicon.question_px()
+                let (native, native_error) = wintile.tile_node(a, winmsgicon.question_w(), winmsgicon.question_h(), question[0usize..1056usize])
+                if native_error != ok { ret (zero, native_error) }
+                held[0usize] = native
+            }
             held[1usize] = content
             held_count = 2usize
         }
@@ -7995,7 +8005,10 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     body_style.background = paint.Brush { Solid: style.color(t.tokens, body_ground) }
     if light_caption { body_style.background = paint.Brush { Solid: style.hex_raw(0xFFFFFFu32) } }
     let side = style.Length { Px: pad }
-    body_style.padding = style.EdgeLengths { left: side, top: style.Length { Px: body_top }, right: side, bottom: side }
+    // (the native question bitmap is 33 tall: a 22 px bottom edge centres it on the row at the capture's y 23)
+    var bottom_side = side
+    if light_caption && message_box && has_icon && icon == .Info { bottom_side = style.Length { Px: 22.0 } }
+    body_style.padding = style.EdgeLengths { left: side, top: style.Length { Px: body_top }, right: side, bottom: bottom_side }
     body_style.min_height = style.Length { Px: 48.0 }
     // the native message box: the body is 78 tall, the icon 32 wide at (21, 23) and the text 9 after it, centred on it
     if message_box { body_style.min_height = style.Length { Px: 78.0 } }

@@ -17,6 +17,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     buttons[0usize] = overlay.DialogButton { label: "OK", action: none, kind: .Default }
     buttons[1usize] = overlay.DialogButton { label: "Cancel", action: none, kind: .Cancel }
     var words = control.text_options()
+    // the system message box text is Segoe UI 9 pt (12 px, GDI-hinted advances) in the native capture; 11.7 px unhinted puts every word within 1 px of it (12.0 is 6 px too wide over the line), 11.2 is the v3 body size
+    if t.tokens.profile == .Windows { words.size = 11.7 }
     let (body, body_error) = control.text(a, 102u64, "Do you want to save changes to the document?", t, words)
     if body_error != ok { ret (0usize, body_error) }
     let (dialog, dialog_error) = overlay.dialog_with_icon(a, 100u64, t, "Confirm", body, buttons[0usize..2usize], .Info, false, true, true)
