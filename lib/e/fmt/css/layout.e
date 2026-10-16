@@ -2304,11 +2304,6 @@ fn block_widths(l: *Layout, b: u32) -> (f64, f64) {
     ret (mn, mx)
 }
 
-fn flex_widths(l: *Layout, b: u32) -> (f64, f64) {
-    let (mn, mx) = block_widths(l, b)
-    ret (mn, mx)
-}
-
 fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
     let (mn, mx) = block_widths(l, b)
     ret (mn, mx)
@@ -2989,10 +2984,596 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
     ret cap_top + grid_h + cap_bottom
 }
 
+// --- Flex layout (CSS Flexbox 9): items, flex lines, flexing lengths, cross sizing, alignment.
+// Logical order is main-start to main-end with the start margins being left/top; reversed directions and wrap-reverse
+// mirror the finished positions.
+
+type FlexItem = struct {
+    box: u32, order: i64, grow: f64, shrink: f64,
+    basis: f64, hyp: f64, target: f64, min_main: f64, max_main: f64, frozen: bool,
+    ms: f64, me: f64, cs: f64, ce: f64, ams: bool, ame: bool, acs: bool, ace: bool,
+    main_ex: f64, cross_ex: f64, cross: f64, up: f64, align: style.Align,
+    pos_main: f64, pos_cross: f64
+}
+
+fn flex_is_row(s: *const style.Style) -> bool { ret s.flex_direction == .Row || s.flex_direction == .RowReverse }
+
+fn flex_gap(len: style.Len, basis: f64) -> f64 { ret maxf(0.0f64, resolve_or(len, basis, 0.0f64)) }
+
+fn flex_item_align(cs: *const style.Style, is: *const style.Style) -> style.Align {
+    var a = is.align_self
+    if a == .Auto { a = cs.align_items }
+    if a == .Normal { a = .Stretch }
+    ret a
+}
+
+fn flex_in(l: *const Layout, kid: u32) -> bool {
+    let kb = &l.boxes.items[usize(kid)]
+    ret kb.inner != .Marker && !is_out_of_flow(st(l, kb.style))
+}
+
+fn flex_widths(l: *Layout, b: u32) -> (f64, f64) {
+    let cs = bstyle(l, b)
+    let row = flex_is_row(cs)
+    let wrap = cs.flex_wrap != .Nowrap
+    var mn = 0.0f64
+    var mx = 0.0f64
+    var n = 0usize
+    var kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        if flex_in(l, kid) {
+            let (kmn, kmx) = outer_content_widths(l, kid)
+            if row {
+                mx += kmx
+                if wrap { mn = maxf(mn, kmn) } else { mn += kmn }
+            } else {
+                mx = maxf(mx, kmx)
+                mn = maxf(mn, kmn)
+            }
+            n += 1usize
+        }
+        kid = l.boxes.items[usize(kid)].next
+    }
+    if row && n > 1usize {
+        let gap = flex_gap(cs.column_gap, 0.0f64)
+        mx += gap * f64(n - 1usize)
+        if !wrap { mn += gap * f64(n - 1usize) }
+    }
+    ret (mn, mx)
+}
+
+// The content width a column-flex item (or any item whose width is the cross size) gets.
+fn flex_cross_width(l: *Layout, id: u32, cw: f64, stretch: bool) -> f64 {
+    let s = bstyle(l, id)
+    let bb = bx(l, id)
+    let extras = horizontal_extras(bb)
+    let avail = cw - bb.margin[3usize] - bb.margin[1usize] - extras
+    let (wv, has_w) = resolve_len(s.width, cw)
+    if s.width.kind == .Px && has_w { ret maxf(0.0f64, clamp_width(l, id, to_content_w(l, id, wv), cw)) }
+    if stretch && s.margin[3usize].kind != .Auto && s.margin[1usize].kind != .Auto { ret maxf(0.0f64, clamp_width(l, id, avail, cw)) }
+    if bb.inner == .Replaced {
+        let (rw, _rh) = used_replaced_size(l, id, cw, -1.0f64)
+        ret rw
+    }
+    let (mn, mx) = content_widths(l, id)
+    ret maxf(0.0f64, clamp_width(l, id, minf(maxf(mn, avail), mx), cw))
+}
+
+// Lays item `id` out at content width `w` and content height `hspec` (negative: from its content).
+fn flex_place_item(l: *Layout, id: u32, w: f64, hspec: f64) {
+    let bb = bx(l, id)
+    let ex_h = horizontal_extras(bb)
+    let ex_v = vertical_extras(bb)
+    if bb.inner == .Replaced {
+        let (rw, rh) = used_replaced_size(l, id, w, -1.0f64)
+        var h = hspec
+        if h < 0.0f64 {
+            if rw > 0.0f64 { h = rh * w / rw } else { h = rh }
+        }
+        let rb = bx(l, id)
+        rb.w = w + ex_h
+        rb.h = h + ex_v
+        rb.has_baseline = false
+        ret
+    }
+    bb.w = w + ex_h
+    let auto_h = layout_in_new_bfc(l, id, w, hspec)
+    var h = auto_h
+    if hspec >= 0.0f64 { h = hspec }
+    h = maxf(0.0f64, clamp_height(l, id, h, -1.0f64))
+    let nb = bx(l, id)
+    nb.overflow_w = maxf(nb.overflow_w, w)
+    nb.overflow_h = maxf(nb.overflow_h, auto_h)
+    nb.h = h + ex_v
+    set_baseline(l, id)
+}
+
 fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
-    var fc = Flow { base: l.floats.len, ox: 0.0f64, oy: 0.0f64 }
-    let (h, _m) = layout_children(l, b, cw, ch, &fc, false)
-    ret h
+    let cs = bstyle(l, b)
+    let row = flex_is_row(cs)
+    var rev = cs.flex_direction == .RowReverse || cs.flex_direction == .ColumnReverse
+    if row && cs.direction == .Rtl { rev = !rev }
+    let wrap = cs.flex_wrap != .Nowrap
+    let wrap_rev = cs.flex_wrap == .WrapReverse
+    var main_def = ch
+    var cross_def = cw
+    if row {
+        main_def = cw
+        cross_def = ch
+    }
+    var gap_main = flex_gap(cs.row_gap, maxf(ch, 0.0f64))
+    var gap_cross = flex_gap(cs.column_gap, cw)
+    if row {
+        gap_main = flex_gap(cs.column_gap, cw)
+        gap_cross = flex_gap(cs.row_gap, maxf(ch, 0.0f64))
+    }
+    let bb0 = bx(l, b)
+    let ox0 = bb0.border[3usize] + bb0.padding[3usize]
+    let oy0 = bb0.border[0usize] + bb0.padding[0usize]
+    // Collect the items in `order` (ties keep document order).
+    var n = 0usize
+    var kid = bb0.first
+    while kid != NONE {
+        if flex_in(l, kid) { n += 1usize }
+        kid = l.boxes.items[usize(kid)].next
+    }
+    if n == 0usize { ret 0.0f64 }
+    let (items, ie) = mem.alloc[FlexItem](l.a, n)
+    if ie != ok { ret 0.0f64 }
+    var count = 0usize
+    kid = bx(l, b).first
+    while kid != NONE {
+        if flex_in(l, kid) {
+            let ks = bstyle(l, kid)
+            var it: FlexItem = zero
+            it.box = kid
+            it.order = ks.order
+            it.grow = ks.flex_grow
+            it.shrink = ks.flex_shrink
+            // Insertion sort by order.
+            var at = count
+            while at > 0usize && items[at - 1usize].order > it.order {
+                items[at] = items[at - 1usize]
+                at -= 1usize
+            }
+            items[at] = it
+            count += 1usize
+        }
+        kid = l.boxes.items[usize(kid)].next
+    }
+    // Margins, edges, flex basis and the hypothetical main size of every item.
+    var i = 0usize
+    while i < n {
+        let id = items[i].box
+        let ks = bstyle(l, id)
+        resolve_edges(l, id, cw)
+        resolve_margins_fixed(l, id, cw)
+        let ib = bx(l, id)
+        if row {
+            items[i].ms = ib.margin[3usize]
+            items[i].me = ib.margin[1usize]
+            items[i].cs = ib.margin[0usize]
+            items[i].ce = ib.margin[2usize]
+            items[i].ams = ks.margin[3usize].kind == .Auto
+            items[i].ame = ks.margin[1usize].kind == .Auto
+            items[i].acs = ks.margin[0usize].kind == .Auto
+            items[i].ace = ks.margin[2usize].kind == .Auto
+            items[i].main_ex = ib.border[1usize] + ib.border[3usize] + ib.padding[1usize] + ib.padding[3usize]
+            items[i].cross_ex = ib.border[0usize] + ib.border[2usize] + ib.padding[0usize] + ib.padding[2usize]
+        } else {
+            items[i].ms = ib.margin[0usize]
+            items[i].me = ib.margin[2usize]
+            items[i].cs = ib.margin[3usize]
+            items[i].ce = ib.margin[1usize]
+            items[i].ams = ks.margin[0usize].kind == .Auto
+            items[i].ame = ks.margin[2usize].kind == .Auto
+            items[i].acs = ks.margin[3usize].kind == .Auto
+            items[i].ace = ks.margin[1usize].kind == .Auto
+            items[i].main_ex = ib.border[0usize] + ib.border[2usize] + ib.padding[0usize] + ib.padding[2usize]
+            items[i].cross_ex = ib.border[1usize] + ib.border[3usize] + ib.padding[1usize] + ib.padding[3usize]
+        }
+        if items[i].ams { items[i].ms = 0.0f64 }
+        if items[i].ame { items[i].me = 0.0f64 }
+        if items[i].acs { items[i].cs = 0.0f64 }
+        if items[i].ace { items[i].ce = 0.0f64 }
+        items[i].align = flex_item_align(cs, ks)
+        // Content-box main size: the flex basis, else the main size property, else the content.
+        var basis = -1.0f64
+        var content_min = 0.0f64
+        let fb = ks.flex_basis
+        let (fv, has_fb) = resolve_len(fb, main_def)
+        var main_len = ks.width
+        if !row { main_len = ks.height }
+        let (mv, has_m) = resolve_len(main_len, main_def)
+        var spec_main = -1.0f64
+        if main_len.kind == .Px && has_m {
+            if row { spec_main = to_content_w(l, id, mv) } else { spec_main = to_content_h(l, id, mv) }
+        }
+        if fb.kind == .Px && has_fb {
+            if row { basis = to_content_w(l, id, fv) } else { basis = to_content_h(l, id, fv) }
+        } else if spec_main >= 0.0f64 {
+            basis = spec_main
+        }
+        if row {
+            if ib.inner == .Replaced {
+                let (rw, _rh) = used_replaced_size(l, id, cw, -1.0f64)
+                content_min = rw
+                if basis < 0.0f64 { basis = rw }
+            } else {
+                let (mn, mx) = content_widths(l, id)
+                content_min = mn
+                if basis < 0.0f64 { basis = mx }
+            }
+        } else {
+            // A column item's content height depends on its width.
+            let stretch = items[i].align == .Stretch
+            let w = flex_cross_width(l, id, cw, stretch)
+            if basis < 0.0f64 || spec_main < 0.0f64 {
+                flex_place_item(l, id, w, -1.0f64)
+                let auto_h = bx(l, id).h - vertical_extras(bx(l, id))
+                content_min = auto_h
+                if basis < 0.0f64 { basis = auto_h }
+            }
+        }
+        // Automatic minimum size: the content, capped by a specified size; not for scroll containers.
+        var min_main = 0.0f64
+        var max_main = 1000000000.0f64
+        var min_len = ks.min_width
+        var max_len = ks.max_width
+        if !row {
+            min_len = ks.min_height
+            max_len = ks.max_height
+        }
+        let (minv, has_min) = resolve_len(min_len, main_def)
+        let (maxv, has_max) = resolve_len(max_len, main_def)
+        if min_len.kind == .Px && has_min {
+            if row { min_main = to_content_w(l, id, minv) } else { min_main = to_content_h(l, id, minv) }
+        } else if min_len.kind == .Auto && ks.overflow_x == .Visible && ks.overflow_y == .Visible {
+            min_main = content_min
+            if spec_main >= 0.0f64 { min_main = minf(min_main, spec_main) }
+        }
+        if max_len.kind == .Px && has_max {
+            if row { max_main = to_content_w(l, id, maxv) } else { max_main = to_content_h(l, id, maxv) }
+        }
+        items[i].basis = maxf(0.0f64, basis)
+        items[i].min_main = min_main
+        items[i].max_main = maxf(max_main, min_main)
+        items[i].hyp = minf(maxf(items[i].basis, min_main), items[i].max_main)
+        i += 1usize
+    }
+    // Flex lines: everything on one line without wrapping, else break when the next item no longer fits.
+    var avail = main_def
+    if avail < 0.0f64 {
+        avail = 0.0f64
+        i = 0usize
+        while i < n {
+            avail += items[i].hyp + items[i].main_ex + items[i].ms + items[i].me
+            i += 1usize
+        }
+        avail += gap_main * f64(n - 1usize)
+    }
+    let (line_start, ls_e) = mem.alloc[usize](l.a, n + 1usize)
+    let (line_cross, lc_e) = mem.alloc[f64](l.a, n + 1usize)
+    let (line_up, lu_e) = mem.alloc[f64](l.a, n + 1usize)
+    let (line_pos, lp_e) = mem.alloc[f64](l.a, n + 1usize)
+    if ls_e != ok || lc_e != ok || lu_e != ok || lp_e != ok { ret 0.0f64 }
+    var nlines = 0usize
+    var used = 0.0f64
+    i = 0usize
+    while i < n {
+        let outer = items[i].hyp + items[i].main_ex + items[i].ms + items[i].me
+        if i == 0usize {
+            line_start[0usize] = 0usize
+            nlines = 1usize
+            used = outer
+        } else if wrap && used + gap_main + outer > avail + 0.001f64 {
+            line_start[nlines] = i
+            nlines += 1usize
+            used = outer
+        } else {
+            used += gap_main + outer
+        }
+        i += 1usize
+    }
+    line_start[nlines] = n
+    // Resolve the flexible lengths of each line.
+    var ln = 0usize
+    while ln < nlines {
+        let lo = line_start[ln]
+        let hi = line_start[ln + 1usize]
+        var sum_hyp = gap_main * f64(hi - lo - 1usize)
+        i = lo
+        while i < hi {
+            sum_hyp += items[i].hyp + items[i].main_ex + items[i].ms + items[i].me
+            i += 1usize
+        }
+        let grow_mode = sum_hyp < avail
+        i = lo
+        while i < hi {
+            items[i].frozen = false
+            items[i].target = items[i].basis
+            let factor = if_factor(grow_mode, items[i].grow, items[i].shrink)
+            if factor == 0.0f64 || (grow_mode && items[i].basis > items[i].hyp) || (!grow_mode && items[i].basis < items[i].hyp) {
+                items[i].frozen = true
+                items[i].target = items[i].hyp
+            }
+            i += 1usize
+        }
+        var init_free = avail - gap_main * f64(hi - lo - 1usize)
+        i = lo
+        while i < hi {
+            var seed = items[i].basis
+            if items[i].frozen { seed = items[i].target }
+            init_free -= seed + items[i].main_ex + items[i].ms + items[i].me
+            i += 1usize
+        }
+        var round = 0usize
+        while round < 32usize {
+            var open_n = 0usize
+            var free = avail - gap_main * f64(hi - lo - 1usize)
+            var sum_factor = 0.0f64
+            i = lo
+            while i < hi {
+                var seed2 = items[i].basis
+                if items[i].frozen { seed2 = items[i].target } else {
+                    open_n += 1usize
+                    if grow_mode { sum_factor += items[i].grow } else { sum_factor += items[i].shrink * items[i].basis }
+                }
+                free -= seed2 + items[i].main_ex + items[i].ms + items[i].me
+                i += 1usize
+            }
+            if open_n == 0usize { break }
+            if grow_mode && sum_factor < 1.0f64 {
+                let scaled = init_free * sum_factor
+                if scaled < free { free = scaled }
+            }
+            i = lo
+            while i < hi {
+                if !items[i].frozen && sum_factor > 0.0f64 && free != 0.0f64 {
+                    if grow_mode {
+                        items[i].target = items[i].basis + free * items[i].grow / sum_factor
+                    } else {
+                        items[i].target = items[i].basis + free * items[i].shrink * items[i].basis / sum_factor
+                    }
+                }
+                i += 1usize
+            }
+            // Clamp to min/max and freeze the violators.
+            var total_violation = 0.0f64
+            i = lo
+            while i < hi {
+                if !items[i].frozen {
+                    let clamped = minf(maxf(items[i].target, items[i].min_main), items[i].max_main)
+                    total_violation += clamped - items[i].target
+                    items[i].target = clamped
+                }
+                i += 1usize
+            }
+            i = lo
+            while i < hi {
+                if !items[i].frozen {
+                    let at_min = items[i].target <= items[i].min_main + 0.0001f64
+                    let at_max = items[i].target >= items[i].max_main - 0.0001f64
+                    if total_violation == 0.0f64 || (total_violation > 0.0f64 && at_min) || (total_violation < 0.0f64 && at_max) { items[i].frozen = true }
+                }
+                i += 1usize
+            }
+            if total_violation == 0.0f64 { break }
+            round += 1usize
+        }
+        ln += 1usize
+    }
+    // Cross sizes: lay every item out at its main size and find the line cross sizes.
+    ln = 0usize
+    while ln < nlines {
+        let from2 = line_start[ln]
+        let to2 = line_start[ln + 1usize]
+        var tallest = 0.0f64
+        var above = 0.0f64
+        var below = 0.0f64
+        i = from2
+        while i < to2 {
+            let id = items[i].box
+            let ks = bstyle(l, id)
+            if row {
+                var hspec = -1.0f64
+                let (hv, has_h) = resolve_len(ks.height, cross_def)
+                if ks.height.kind == .Px && has_h { hspec = to_content_h(l, id, hv) }
+                flex_place_item(l, id, items[i].target, hspec)
+                items[i].cross = bx(l, id).h + items[i].cs + items[i].ce
+            } else {
+                let w = flex_cross_width(l, id, cw, items[i].align == .Stretch)
+                flex_place_item(l, id, w, items[i].target)
+                items[i].cross = bx(l, id).w + items[i].cs + items[i].ce
+            }
+            if row && (items[i].align == .Baseline || items[i].align == .FirstBaseline || items[i].align == .LastBaseline) {
+                let (found, by) = first_baseline(l, id)
+                var up = 0.0f64
+                if found { up = by }
+                items[i].up = items[i].cs + up
+                above = maxf(above, items[i].up)
+                below = maxf(below, items[i].cross - items[i].up)
+            } else {
+                tallest = maxf(tallest, items[i].cross)
+            }
+            i += 1usize
+        }
+        line_cross[ln] = maxf(tallest, above + below)
+        line_up[ln] = above
+        ln += 1usize
+    }
+    if nlines == 1usize && cross_def >= 0.0f64 { line_cross[0usize] = cross_def }
+    var cross_total = gap_cross * f64(nlines - 1usize)
+    ln = 0usize
+    while ln < nlines {
+        cross_total += line_cross[ln]
+        ln += 1usize
+    }
+    // align-content spreads the lines over a definite cross size.
+    var lead = 0.0f64
+    var between = 0.0f64
+    if nlines > 1usize && cross_def > cross_total {
+        let spare = cross_def - cross_total
+        let ac = cs.align_content
+        if ac == .Normal || ac == .Stretch {
+            ln = 0usize
+            while ln < nlines {
+                line_cross[ln] += spare / f64(nlines)
+                ln += 1usize
+            }
+        } else if ac == .FlexEnd || ac == .End {
+            lead = spare
+        } else if ac == .Center {
+            lead = spare / 2.0f64
+        } else if ac == .SpaceBetween {
+            between = spare / f64(nlines - 1usize)
+        } else if ac == .SpaceAround {
+            between = spare / f64(nlines)
+            lead = between / 2.0f64
+        } else if ac == .SpaceEvenly {
+            between = spare / f64(nlines + 1usize)
+            lead = between
+        }
+        cross_total = cross_def
+    }
+    var cross_cursor = lead
+    ln = 0usize
+    while ln < nlines {
+        line_pos[ln] = cross_cursor
+        cross_cursor += line_cross[ln] + gap_cross + between
+        ln += 1usize
+    }
+    if cross_def > cross_total { cross_total = cross_def }
+    // Alignment inside each line, then the main-axis distribution.
+    var main_end = 0.0f64
+    ln = 0usize
+    while ln < nlines {
+        let from3 = line_start[ln]
+        let to3 = line_start[ln + 1usize]
+        i = from3
+        while i < to3 {
+            let id = items[i].box
+            let ks = bstyle(l, id)
+            let room = line_cross[ln] - items[i].cross
+            let auto_cross = (row && ks.height.kind != .Px) || (!row && ks.width.kind != .Px)
+            var off = 0.0f64
+            if items[i].acs || items[i].ace {
+                if room > 0.0f64 {
+                    if items[i].acs && items[i].ace {
+                        items[i].cs += room / 2.0f64
+                        items[i].ce += room / 2.0f64
+                    } else if items[i].acs { items[i].cs += room } else { items[i].ce += room }
+                }
+            } else if items[i].align == .Stretch && auto_cross && room > 0.0f64 {
+                // Stretch the cross size to fill the line and lay the item out again.
+                if row {
+                    let ib = bx(l, id)
+                    let hs = ib.h - vertical_extras(ib) + room
+                    flex_place_item(l, id, items[i].target, hs)
+                } else {
+                    let ib2 = bx(l, id)
+                    let ws = ib2.w - horizontal_extras(ib2) + room
+                    flex_place_item(l, id, ws, items[i].target)
+                }
+                items[i].cross += room
+            } else if items[i].align == .FlexEnd || items[i].align == .End || items[i].align == .SelfEnd {
+                off = room
+            } else if items[i].align == .Center {
+                off = room / 2.0f64
+            } else if row && (items[i].align == .Baseline || items[i].align == .FirstBaseline || items[i].align == .LastBaseline) {
+                off = line_up[ln] - items[i].up
+            }
+            items[i].pos_cross = line_pos[ln] + off
+            i += 1usize
+        }
+        // Main axis: auto margins take the free space, else justify-content.
+        var line_used = gap_main * f64(to3 - from3 - 1usize)
+        var auto_count = 0usize
+        i = from3
+        while i < to3 {
+            line_used += items[i].target + items[i].main_ex + items[i].ms + items[i].me
+            if items[i].ams { auto_count += 1usize }
+            if items[i].ame { auto_count += 1usize }
+            i += 1usize
+        }
+        let free2 = avail - line_used
+        var start_off = 0.0f64
+        var spacing = 0.0f64
+        if auto_count > 0usize && free2 > 0.0f64 {
+            let share = free2 / f64(auto_count)
+            i = from3
+            while i < to3 {
+                if items[i].ams { items[i].ms += share }
+                if items[i].ame { items[i].me += share }
+                i += 1usize
+            }
+        } else {
+            let jc = cs.justify_content
+            let cnt = to3 - from3
+            if jc == .FlexEnd || jc == .End || jc == .Right {
+                start_off = free2
+            } else if jc == .Center {
+                start_off = free2 / 2.0f64
+            } else if free2 > 0.0f64 {
+                if jc == .SpaceBetween && cnt > 1usize {
+                    spacing = free2 / f64(cnt - 1usize)
+                } else if jc == .SpaceAround {
+                    spacing = free2 / f64(cnt)
+                    start_off = spacing / 2.0f64
+                } else if jc == .SpaceEvenly {
+                    spacing = free2 / f64(cnt + 1usize)
+                    start_off = spacing
+                }
+            }
+        }
+        var cursor = start_off
+        i = from3
+        while i < to3 {
+            items[i].pos_main = cursor
+            cursor += items[i].ms + items[i].target + items[i].main_ex + items[i].me + gap_main + spacing
+            i += 1usize
+        }
+        main_end = maxf(main_end, cursor - gap_main - spacing)
+        ln += 1usize
+    }
+    // Final positions, mirrored for reversed directions.
+    i = 0usize
+    while i < n {
+        let id = items[i].box
+        let ib = bx(l, id)
+        let outer_main = items[i].ms + items[i].target + items[i].main_ex + items[i].me
+        var pm = items[i].pos_main
+        var pc = items[i].pos_cross
+        if rev { pm = avail - pm - outer_main }
+        if wrap_rev { pc = cross_total - pc - items[i].cross }
+        if row {
+            ib.x = ox0 + pm + items[i].ms
+            ib.y = oy0 + pc + items[i].cs
+        } else {
+            ib.x = ox0 + pc + items[i].cs
+            ib.y = oy0 + pm + items[i].ms
+        }
+        if row {
+            ib.margin[0usize] = items[i].cs
+            ib.margin[3usize] = items[i].ms
+            ib.margin[1usize] = items[i].me
+            ib.margin[2usize] = items[i].ce
+        } else {
+            ib.margin[2usize] = items[i].me
+            ib.margin[1usize] = items[i].ce
+            ib.margin[0usize] = items[i].ms
+            ib.margin[3usize] = items[i].cs
+        }
+        i += 1usize
+    }
+    if row { ret cross_total }
+    if main_def >= 0.0f64 { ret main_def }
+    ret main_end
+}
+
+fn if_factor(grow_mode: bool, grow: f64, shrink: f64) -> f64 {
+    if grow_mode { ret grow }
+    ret shrink
 }
 
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {

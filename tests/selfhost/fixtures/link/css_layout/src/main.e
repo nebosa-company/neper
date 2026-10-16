@@ -236,5 +236,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 26. A caption sits above the rows.
     let (p26, ok26) = build(a, "<table id=t><caption id=c>cc</caption><tr><td id=a>aaaa</td></tr></table>", tcss)
     if !ok26 || !is_rect(rect_of(p26, "c"), 0.0f64, 0.0f64, 40.0f64, 10.0f64) || !is_rect(rect_of(p26, "a"), 0.0f64, 10.0f64, 40.0f64, 10.0f64) { os.exit(49) }
+    let fcss = "div { font-size: 10px; }"
+    // 27. Flex items share a row by their grow factors, and stretch to a definite height.
+    let (p27, ok27) = build(a, "<div style=\"display:flex;width:200px;height:20px\"><div id=a style=\"flex:1\"></div><div id=b style=\"flex:1\"></div></div>", fcss)
+    if !ok27 || !is_rect(rect_of(p27, "a"), 0.0f64, 0.0f64, 100.0f64, 20.0f64) || !is_rect(rect_of(p27, "b"), 100.0f64, 0.0f64, 100.0f64, 20.0f64) { os.exit(50) }
+    // 28. A basis plus one growing item.
+    let (p28, ok28) = build(a, "<div style=\"display:flex;width:300px\"><div id=a style=\"width:100px;height:10px\"></div><div id=b style=\"flex-grow:1;height:10px\"></div></div>", fcss)
+    if !ok28 || !is_rect(rect_of(p28, "a"), 0.0f64, 0.0f64, 100.0f64, 10.0f64) || !is_rect(rect_of(p28, "b"), 100.0f64, 0.0f64, 200.0f64, 10.0f64) { os.exit(51) }
+    // 29. Items shrink to fit.
+    let (p29, ok29) = build(a, "<div style=\"display:flex;width:100px\"><div id=a style=\"width:80px;height:10px\"></div><div id=b style=\"width:80px;height:10px\"></div></div>", fcss)
+    if !ok29 || !is_rect(rect_of(p29, "a"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) || !is_rect(rect_of(p29, "b"), 50.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(52) }
+    // 30. justify-content: center and space-between.
+    let (p30, ok30) = build(a, "<div style=\"display:flex;width:200px;justify-content:center\"><div id=a style=\"width:50px;height:10px\"></div></div>", fcss)
+    if !ok30 || !is_rect(rect_of(p30, "a"), 75.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(53) }
+    let (p31, ok31) = build(a, "<div style=\"display:flex;width:200px;justify-content:space-between\"><div id=a style=\"width:20px;height:10px\"></div><div id=b style=\"width:20px;height:10px\"></div><div id=c style=\"width:20px;height:10px\"></div></div>", fcss)
+    if !ok31 || !is_rect(rect_of(p31, "b"), 90.0f64, 0.0f64, 20.0f64, 10.0f64) || !is_rect(rect_of(p31, "c"), 180.0f64, 0.0f64, 20.0f64, 10.0f64) { os.exit(54) }
+    // 32. A column container shares its height.
+    let (p32, ok32) = build(a, "<div style=\"display:flex;flex-direction:column;height:100px\"><div id=a style=\"flex:1\"></div><div id=b style=\"height:20px\"></div></div>", fcss)
+    if !ok32 || !is_rect(rect_of(p32, "a"), 0.0f64, 0.0f64, 800.0f64, 80.0f64) || !is_rect(rect_of(p32, "b"), 0.0f64, 80.0f64, 800.0f64, 20.0f64) { os.exit(55) }
+    // 33. Wrapping makes a second line.
+    let (p33, ok33) = build(a, "<div style=\"display:flex;flex-wrap:wrap;width:100px\"><div id=a style=\"width:60px;height:10px\"></div><div id=b style=\"width:60px;height:10px\"></div></div>", fcss)
+    if !ok33 || !is_rect(rect_of(p33, "b"), 0.0f64, 10.0f64, 60.0f64, 10.0f64) { os.exit(56) }
+    // 34. align-items: center, gaps, auto margins.
+    let (p34, ok34) = build(a, "<div style=\"display:flex;height:40px;align-items:center\"><div id=a style=\"width:20px;height:10px\"></div></div>", fcss)
+    if !ok34 || !is_rect(rect_of(p34, "a"), 0.0f64, 15.0f64, 20.0f64, 10.0f64) { os.exit(57) }
+    let (p35, ok35) = build(a, "<div style=\"display:flex;gap:10px\"><div id=a style=\"width:20px;height:10px\"></div><div id=b style=\"width:20px;height:10px\"></div></div>", fcss)
+    if !ok35 || !is_rect(rect_of(p35, "b"), 30.0f64, 0.0f64, 20.0f64, 10.0f64) { os.exit(58) }
+    let (p36, ok36) = build(a, "<div style=\"display:flex;width:200px\"><div id=a style=\"margin-left:auto;width:50px;height:10px\"></div></div>", fcss)
+    if !ok36 || !is_rect(rect_of(p36, "a"), 150.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(59) }
+    // 37. Text items size to their content.
+    let (p37, ok37) = build(a, "<div style=\"display:flex\"><div id=a>aaaa</div><div id=b>bb</div></div>", fcss)
+    if !ok37 || !is_rect(rect_of(p37, "a"), 0.0f64, 0.0f64, 40.0f64, 10.0f64) || !is_rect(rect_of(p37, "b"), 40.0f64, 0.0f64, 20.0f64, 10.0f64) { os.exit(61) }
+    // 38. order and row-reverse.
+    let (p38, ok38) = build(a, "<div style=\"display:flex\"><div id=a style=\"width:20px;height:10px\"></div><div id=b style=\"order:-1;width:20px;height:10px\"></div></div>", fcss)
+    if !ok38 || !is_rect(rect_of(p38, "b"), 0.0f64, 0.0f64, 20.0f64, 10.0f64) || !is_rect(rect_of(p38, "a"), 20.0f64, 0.0f64, 20.0f64, 10.0f64) { os.exit(62) }
+    let (p39, ok39) = build(a, "<div style=\"display:flex;flex-direction:row-reverse;width:200px\"><div id=a style=\"width:20px;height:10px\"></div></div>", fcss)
+    if !ok39 || !is_rect(rect_of(p39, "a"), 180.0f64, 0.0f64, 20.0f64, 10.0f64) { os.exit(63) }
+    // 40. An inline flex container shrinks to its items.
+    let (p40, ok40) = build(a, "<div><div style=\"display:inline-flex\" id=f><div style=\"width:30px;height:10px\"></div><div style=\"width:20px;height:10px\"></div></div></div>", fcss)
+    if !ok40 || !is_rect(rect_of(p40, "f"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(64) }
     ret ok
 }

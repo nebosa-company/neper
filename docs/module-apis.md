@@ -24916,7 +24916,6 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
 fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64)
 fn apply_relative(l: *Layout, c: u32, cbw: f64, cbh: f64)
 fn block_widths(l: *Layout, b: u32) -> (f64, f64)
-fn flex_widths(l: *Layout, b: u32) -> (f64, f64)
 fn grid_widths(l: *Layout, b: u32) -> (f64, f64)
 type CellInfo = struct { box: u32, row: usize, col: usize, rs: usize, cs: usize, min: f64, max: f64, spec: f64, pct: f64 }
 type TableData = struct
@@ -24932,7 +24931,16 @@ fn table_min_width(l: *Layout, t: u32) -> f64
 fn distribute_columns(l: *Layout, ti: u32, tw: f64, fixed_layout: bool)
 fn is_baseline_valign(v: style.VAlign) -> bool
 fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64
+type FlexItem = struct
+fn flex_is_row(s: *const style.Style) -> bool
+fn flex_gap(len: style.Len, basis: f64) -> f64
+fn flex_item_align(cs: *const style.Style, is: *const style.Style) -> style.Align
+fn flex_in(l: *const Layout, kid: u32) -> bool
+fn flex_widths(l: *Layout, b: u32) -> (f64, f64)
+fn flex_cross_width(l: *Layout, id: u32, cw: f64, stretch: bool) -> f64
+fn flex_place_item(l: *Layout, id: u32, w: f64, hspec: f64)
 fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
+fn if_factor(grow_mode: bool, grow: f64, shrink: f64) -> f64
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
 fn abs_origin(l: *const Layout, b: u32) -> (f64, f64)
 fn containing_block_of(l: *const Layout, b: u32, fixed: bool) -> u32
