@@ -42,20 +42,20 @@ fn sized(w: f32, h: f32) -> style.Style {
     ret s
 }
 
-// Ten cells: at rest, hovered over the field, over the up arrow, over the down arrow, the up and
+// Eleven cells (the last, a disabled one, from the native captures only): at rest, hovered over the field, over the up arrow, over the down arrow, the up and
 // down arrows pressed, focused, at its lower bound (down arrow dimmed), at its upper bound, and
 // with its text selected.
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let captions = [10]str{ "Rest", "Hover field", "Hover up", "Hover down", "Press up", "Press down", "Focused", "At minimum", "At maximum", "Selected text" }
+    let captions = [11]str{ "Rest", "Hover field", "Hover up", "Hover down", "Press up", "Press down", "Focused", "At minimum", "At maximum", "Selected text", "Disabled" }
     var i = 0usize
-    while i < 10usize {
+    while i < 11usize {
         let (buffer, buffer_error) = mem.alloc[u8](a, 24usize)
         if buffer_error != ok { ret (0usize, buffer_error) }
         var value = 7i64
         if i == 7usize { value = 1i64 }
         if i == 8usize { value = 99i64 }
         let key = u64(10usize * (i + 1usize))
-        let (spin, spin_error) = control.spin_box_sized(a, key, t, "Quantity", buffer, value, 1i64, 99i64, 1i64, widget.Change[i64] { ctx: zero, invoke: noop_change }, widget.Change[str] { ctx: zero, invoke: noop_typed }, 70.0)
+        let (spin, spin_error) = control.spin_box_full(a, key, t, "Quantity", buffer, value, 1i64, 99i64, 1i64, widget.Change[i64] { ctx: zero, invoke: noop_change }, widget.Change[str] { ctx: zero, invoke: noop_typed }, 70.0, i != 10usize, false)
         if spin_error != ok { ret (0usize, spin_error) }
         var node = spin
         var drive: looks.Drive = .None
@@ -79,10 +79,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
-    ret (10usize, ok)
+    ret (11usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "spin_edit", cells: 10usize, columns: 5usize, cell_w: 130.0, cell_h: 56.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "spin_edit", cells: 11usize, columns: 5usize, cell_w: 130.0, cell_h: 56.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

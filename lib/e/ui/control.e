@@ -29,6 +29,8 @@ use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
 use e.ui.winmark
+use e.ui.winnative
+use e.ui.wintile
 use e.ui.winpx
 
 // What a page is set in: the theme's tokens, the fonts in preference order, the
@@ -4046,6 +4048,34 @@ fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom
 type Phase = struct { context: u32, x: f32, y: f32 }
 
 fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
+    // round 10: the native Windows 11 marks (docs/ui/looks/ref/windows-native, e.ui.winnative). Dark: every state (hover is the rest
+    // look natively). Light: the states v3 never showed, disabled and indeterminate; v3's own captures keep the rest.
+    if t.tokens.palette == .Dark || (t.tokens.palette == .Light && (state.disabled || mixed)) {
+        var id: u32 = 0u32
+        if round {
+            id = 3u32
+            if chosen { id = 4u32 }
+        } else if mixed {
+            id = 2u32
+        } else if chosen {
+            id = 1u32
+        }
+        var st: u32 = 0u32
+        if state.disabled {
+            st = 2u32
+        } else if state.pressed {
+            st = 1u32
+        }
+        var theme_id: u32 = 0u32
+        if t.tokens.palette == .Dark { theme_id = 1u32 }
+        let tile = winnative.nmark(theme_id, id * 3u32 + st)
+        let (native_mark, native_error) = wintile.tile_node(a, 13usize, 13usize, tile[0usize..169usize])
+        if native_error != ok { ret (zero, native_error) }
+        let (native_cell, native_cell_error) = mem.alloc[widget.Node](a, 1usize)
+        if native_cell_error != ok { ret (zero, TooLarge) }
+        native_cell[0usize] = widget.positioned(0u64, 0.0, f32(i32((high - 14.0) * 0.5 + 0.5)), style.defaults(), mem_one_node(a, native_mark))
+        ret (widget.stack(0u64, sized_style(13.0, high), native_cell[0usize..1usize]), ok)
+    }
     // looks4: rest and pressed are painted pixel for pixel from the live captures (e.ui.winmark); hover,
     // disabled and mixed have no capture and keep the drawn mark below.
     if (t.tokens.palette == .Light || t.tokens.palette == .Dark) && !state.disabled && !mixed {
@@ -4201,6 +4231,8 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
     caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if !enabled { ink = style.color(t.tokens, .TextMuted) }
+    // round 10: the native dark disabled check box and radio caption is #CCCCCC (checkbox-*-disabled, radio-*-disabled)
+    if !enabled && t.tokens.palette == .Dark && t.tokens.profile == .Windows { ink = style.hex_raw(0xCCCCCCu32) }
     let (shown, mark_at, mark_error) = winbutton.mnemonic(a, label)
     if mark_error != ok { ret (zero, mark_error) }
     let (words, whole, words_error) = choices_words(a, t, caption, ink, shown)
@@ -5741,10 +5773,10 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // (D1453) `mono` sets the typed text in the theme's fixed-pitch face.
 // (looks) `flat`: under the Windows look, a combo box as a toolbar hosts it (v3's dxBar editors:
 // no rounded native frame, a flat white face and a grey drop button with a black triangle).
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32 }
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32, chrome_press: u32 }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32 }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32, chrome_press: 0u32 }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -6147,10 +6179,21 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         foot = side
         ink = win_rgb(160u32, 160u32, 160u32)
     }
+    // round 10: the native dark edit (docs/ui/looks/ref/windows-native/dark/edit-*): the face is the capture's #202020, the text white
+    // (#6D6D6D disabled) and the selection the system #0078D7. The light read-only edit takes the native light capture's #F0F0F0 face.
+    if t.tokens.palette == .Dark {
+        face = style.hex_raw(0x202020u32)
+        ink = style.hex_raw(0xFFFFFFu32)
+        if !options.enabled { ink = style.hex_raw(0x6D6D6Du32) }
+    }
+    if t.tokens.palette == .Light && options.read_only && options.enabled { face = style.hex_raw(0xF0F0F0u32) }
+    // round 10: v3 never showed a disabled spin edit; the native light capture (spin-disabled) has the dialog face and #838383 text
+    if t.tokens.palette == .Light && !options.enabled && (options.chrome_kind == 1u32 || options.chrome_kind == 2u32) {
+        face = style.hex_raw(0xF0F0F0u32)
+        ink = style.hex_raw(0x838383u32)
+    }
     // v3 selects with the system highlight and white text.
     var highlight = win_rgb(0u32, 120u32, 215u32)
-    // Windows 11 dark: the selection is #264F78 under white text.
-    if t.tokens.palette == .Dark { highlight = style.hex_raw(0x264F78u32) }
     let highlighted = win_rgb(255u32, 255u32, 255u32)
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -6248,7 +6291,19 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     if focused { chrome_state = 1u32 }
     if !options.enabled { chrome_state = 2u32 }
     if options.chrome_pressed && options.enabled { chrome_state = 3u32 }
-    let (rim, rim_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim, t.tokens.palette == .Dark)
+    let dark_edit = t.tokens.palette == .Dark
+    var rim: widget.Node = zero
+    var rim_error: err = ok
+    if dark_edit {
+        // round 10: the native dark chrome (e.ui.winedit native_chrome), hover and press named by the spin or ellipsis button
+        let (made_rim, made_error) = winedit.native_chrome(a, options.chrome_kind, chrome_state, options.chrome_hover, options.chrome_press, options.chrome_dim, w, h)
+        rim = made_rim
+        rim_error = made_error
+    } else {
+        let (made_rim, made_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim, false)
+        rim = made_rim
+        rim_error = made_error
+    }
     if rim_error != ok { ret (zero, rim_error) }
     stacked[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, rim))
     var layers_at = 2usize
@@ -6268,7 +6323,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     }
     // Round 6, hover (states/hover-*): the rim ring 2 levels darker over the whole edit, the button under the pointer blue
     // (`options.chrome_hover`: 1 the edit, 2 + zone of winedit.hover_chrome for a button); the face does not change.
-    if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 {
+    if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 && !dark_edit {
         var zone = 0u32
         if options.chrome_hover > 1u32 { zone = options.chrome_hover - 1u32 }
         let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y, t.tokens.palette == .Dark)
@@ -6416,6 +6471,7 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     frame_style.min_height = style.Length { Px: 22.0 }
     if height > 0.0 { frame_style.height = style.Length { Px: height } }
     frame_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    if t.tokens.palette == .Dark { frame_style.background = paint.Brush { Solid: style.hex_raw(0x202020u32) } }
     frame_style.border = style.Border { width: 1.0, color: win_rgb(237u32, 237u32, 237u32) }
     frame_style.radius = t.tokens.radii.xs
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 1.0 } }
@@ -6477,6 +6533,12 @@ fn win_one(a: *mem.Arena, node: widget.Node) -> []widget.Node {
 // box does; the fast buttons step by ten. e.ui.winedit's chrome draws the buttons (an arrow that cannot step is greyed:
 // a guess); `window_y` is the control's y in the v3 window (negative: where it is laid out).
 fn windows_spin_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, fast: bool, window_y: f32) -> (widget.Node, err) {
+    let (made, made_error) = windows_spin_full(a, key, t, label, buffer, value, low, high, step, change, typed, width, fast, window_y, true, false)
+    ret (made, made_error)
+}
+
+// round 10: the Windows spin edit with the field's disabled and invalid states.
+fn windows_spin_full(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, fast: bool, window_y: f32, enabled: bool, invalid: bool) -> (widget.Node, err) {
     let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
     if pair_error != ok { ret (zero, pair_error) }
     let (big_buttons, big_shortcuts, big_error) = step_pair(a, t, key + 4u64, key + 5u64, value, low, high, step * 10i64, change)
@@ -6484,6 +6546,8 @@ fn windows_spin_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let len = write_i64(buffer, value)
     var options = field_options()
     options.width = width
+    options.enabled = enabled
+    options.invalid = invalid
     var left_x = width - 17.0
     if fast { left_x = width - 47.0 }
     options.end_space = width - 3.0 - left_x
@@ -6493,13 +6557,16 @@ fn windows_spin_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     // A pressed arrow or fast button gives the edit the keyboard focus in v3: the frame shows its focused look (the captures
     // states/spin-edit-arrow-*-pressed-* show the accent foot and the caret, the arrow itself unchanged).
     if control_state(t, key + 1u64, true, false).pressed || control_state(t, key + 2u64, true, false).pressed || control_state(t, key + 4u64, true, false).pressed || control_state(t, key + 5u64, true, false).pressed { options.chrome_pressed = true }
+    // round 10: which button is held (the native dark chrome has a pressed look for the up and the down arrow)
+    if control_state(t, key + 2u64, true, false).pressed { options.chrome_press = 1u32 }
+    if control_state(t, key + 1u64, true, false).pressed { options.chrome_press = 2u32 }
     // Hover (round 6): the arrow or fast button under the pointer is blue, the rim of the edit darker.
     if control_state(t, key + 2u64, true, false).hovered { options.chrome_hover = 2u32 }
     if control_state(t, key + 1u64, true, false).hovered { options.chrome_hover = 3u32 }
     if fast && control_state(t, key + 4u64, true, false).hovered { options.chrome_hover = 4u32 }
     if fast && control_state(t, key + 5u64, true, false).hovered { options.chrome_hover = 5u32 }
-    let can_up = value < high
-    let can_down = value > low
+    let can_up = value < high && enabled
+    let can_down = value > low && enabled
     // The arrows left to right: (left,) up, down, (right).
     if fast {
         if !can_down { options.chrome_dim = options.chrome_dim | 1u32 }
@@ -6544,6 +6611,11 @@ fn windows_spin_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 
 fn windows_spin(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     let (made, made_error) = windows_spin_with(a, key, t, label, buffer, value, low, high, step, change, typed, width, false, -1.0)
+    ret (made, made_error)
+}
+
+fn windows_spin_enabled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, enabled: bool, invalid: bool) -> (widget.Node, err) {
+    let (made, made_error) = windows_spin_full(a, key, t, label, buffer, value, low, high, step, change, typed, width, false, -1.0, enabled, invalid)
     ret (made, made_error)
 }
 
@@ -10305,7 +10377,7 @@ fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
 // The spin box with the field's disabled and invalid states (the Android look draws both; the others ignore them).
 fn spin_box_full(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, enabled: bool, invalid: bool) -> (widget.Node, err) {
     if t.tokens.profile == .Windows {
-        let (win, win_error) = windows_spin(a, key, t, label, buffer, value, low, high, step, change, typed, width)
+        let (win, win_error) = windows_spin_enabled(a, key, t, label, buffer, value, low, high, step, change, typed, width, enabled, invalid)
         ret (win, win_error)
     }
     if t.tokens.profile == .CupertinoLike {
@@ -14691,7 +14763,13 @@ fn win_look(t: *const Theme, hovered: bool, pressed: bool, focused: bool, open: 
 // muted, before a choice) after an optional `lead` pic, the chevron at the end.
 fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, enabled: bool, lead: []const widget.Node, width: f32, edge_y: f32, edge_x: f32) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
-    let c = win_look(t, state.hovered, state.pressed, false, open, enabled, false)
+    var c = win_look(t, state.hovered, state.pressed, false, open, enabled, false)
+    let dark = t.tokens.palette == .Dark
+    // round 10: the native dark list-style combo: white text, #6D6D6D disabled
+    if dark {
+        c.ink = style.hex_raw(0xFFFFFFu32)
+        if !enabled { c.ink = style.hex_raw(0x6D6D6Du32) }
+    }
     // looks3 group d: the frame is the theme's bitmap (win3_frame); the head itself is bare.
     var head_w: f32 = 112.0
     if width > 0.0 { head_w = width }
@@ -14709,6 +14787,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var chevron_scale: f32 = 1.0
     // looks5 group d: no chevron change under the pointer (the captured hovers have the rest chevron).
     if !enabled { chevron_scale = 0.5 }
+    if dark { chevron_scale = 0.0 }
     let focused = state.focused && enabled
     let (chevron, chevron_error) = win3_chevron(a, c.ink, focused, false, chevron_scale)
     if chevron_error != ok { ret (zero, chevron_error) }
@@ -14733,14 +14812,28 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     if state.pressed && enabled { head_look = 2u32 }
     // looks5 group d: only the drop button's pointer shows the hot frame (v3's edit under the pointer is as at rest).
     if enabled && !open && !state.pressed && control_state(t, key + 1048703u64, enabled, false).hovered { head_look = 4u32 }
-    let (frame, frame_error) = win3_frame(a, c.face, style.color(t.tokens, .Background), tone, false, head_w, 21.0, edge_y, edge_x, head_look)
+    var frame: widget.Node = zero
+    var frame_error: err = ok
+    if dark {
+        var native_state = 0u32
+        if focused { native_state = 1u32 }
+        if open || state.pressed { native_state = 3u32 }
+        if !enabled { native_state = 2u32 }
+        let (made_frame, made_error) = winedit.native_combo(a, 1u32, native_state, head_w, 21.0)
+        frame = made_frame
+        frame_error = made_error
+    } else {
+        let (made_frame, made_error) = win3_frame(a, c.face, style.color(t.tokens, .Background), tone, false, head_w, 21.0, edge_y, edge_x, head_look)
+        frame = made_frame
+        frame_error = made_error
+    }
     if frame_error != ok { ret (zero, frame_error) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = frame
     layers[1usize] = row
     var count = 2usize
-    if focused {
+    if focused && !dark {
         // v3 rings a focused list-style combo's text area with its dotted focus rectangle.
         let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(head_w - 22.0), 16.0)
         if dots_error != ok { ret (zero, dots_error) }
@@ -15292,7 +15385,13 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     if enabled && !square && open { edge_look = 1u32 }
     if enabled && !square && state_button.pressed { edge_look = 2u32 }
     if enabled && !square && !open && !state_button.pressed && (state_button.hovered || (options.read_only && state_over.hovered)) { edge_look = 4u32 }
-    let c = win_look(t, state_edit.hovered || state_button.hovered, false, false, false, enabled, options.read_only)
+    var c = win_look(t, state_edit.hovered || state_button.hovered, false, false, false, enabled, options.read_only)
+    let dark = t.tokens.palette == .Dark
+    // round 10: the native dark combo text is white (#6D6D6D disabled), the selection the system #0078D7
+    if dark {
+        c.ink = style.hex_raw(0xFFFFFFu32)
+        if !enabled { c.ink = style.hex_raw(0x6D6D6Du32) }
+    }
     var value_options = text_options()
     value_options.role = .BodyMedium
     // v3's dialogs set Tahoma 11 px (DFM Font.Name = 'Tahoma', Height = -11) on their edits.
@@ -15315,7 +15414,9 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         stack_parts[at] = hint_node
         at += 1usize
     }
-    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: c.ink, selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: win4_caret(options.read_only, c.face), untabbed: false, ringed: false }, editor_style))
+    var pick_color = style.color(t.tokens, .TextSelection)
+    if dark { pick_color = style.hex_raw(0x0078D7u32) }
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, false, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: c.ink, selection: pick_color, change: typed, submit: zero, enabled: enabled, read_only: options.read_only, multiline: false, secret: false, marked: zero, caret: win4_caret(options.read_only, c.face), untabbed: false, ringed: false }, editor_style))
     if named_error != ok { ret (zero, named_error) }
     stack_parts[at] = named
     at += 1usize
@@ -15336,6 +15437,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     // (the chevron keeps its rest strength under the pointer)
     if !enabled { chevron_scale = 0.5 }
     if edge_look != 0u32 { chevron_scale = 1.0 }
+    if dark { chevron_scale = 0.0 }
     let (chevron, chevron_error) = win3_chevron(a, c.ink, focused && !square && edge_look == 0u32, square, chevron_scale)
     if chevron_error != ok { ret (zero, chevron_error) }
     var bare = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 17.0, min_height: 21.0, corners: zero }
@@ -15346,7 +15448,25 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     row_parts[1usize] = opener
     var tone: f32 = 0.0
     if !enabled { tone = 0.5 }
-    let (frame, frame_error) = win3_frame(a, c.face, style.color(t.tokens, .Background), tone, square, options.width, 21.0, options.edge_y, options.edge_x, edge_look)
+    var frame: widget.Node = zero
+    var frame_error: err = ok
+    if dark {
+        // round 10: the native dark combo (e.ui.winedit native_combo): the editable one is the edit frame with a button, the list-style one a
+        // single face with the focus rectangle drawn in it
+        var native_kind = 0u32
+        if options.read_only { native_kind = 1u32 }
+        var native_state = 0u32
+        if focused { native_state = 1u32 }
+        if open || state_button.pressed { native_state = 3u32 }
+        if !enabled { native_state = 2u32 }
+        let (made_frame, made_error) = winedit.native_combo(a, native_kind, native_state, options.width, 21.0)
+        frame = made_frame
+        frame_error = made_error
+    } else {
+        let (made_frame, made_error) = win3_frame(a, c.face, style.color(t.tokens, .Background), tone, square, options.width, 21.0, options.edge_y, options.edge_x, edge_look)
+        frame = made_frame
+        frame_error = made_error
+    }
     if frame_error != ok { ret (zero, frame_error) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
     if layers_error != ok { ret (zero, TooLarge) }
@@ -15357,7 +15477,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     layers[1usize] = widget.positioned(0u64, 3.0, 0.0, style.defaults(), held_text[0usize..1usize])
     layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), row_parts[1usize..2usize])
     var count = 3usize
-    if square && state_button.hovered && !state_button.pressed {
+    if square && state_button.hovered && !state_button.pressed && !dark {
         // Round 6: the drop button of the focused editable combo under the pointer is boxed in pale blue
         // (states/hover-combo-box-drop-search), under the chevron.
         let (box_node, box_error) = win4_held_box(a, 1.0)
@@ -15369,7 +15489,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), box_held[0usize..1usize])
         count = 4usize
     }
-    if square && state_button.pressed {
+    if square && state_button.pressed && !dark {
         // looks4 group d: an editable combo's held drop button is a boxed #CCE4F7 button (measured on
         // ref/windows/states/combo-box-drop-button-pressed-search), under the chevron.
         let (box_node, box_error) = win4_held_box(a, 0.0)
@@ -15381,7 +15501,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), box_held[0usize..1usize])
         count = 4usize
     }
-    if focused && options.read_only && (edge_look == 0u32 || edge_look == 4u32) {
+    if focused && options.read_only && (edge_look == 0u32 || edge_look == 4u32) && !dark {
         let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(options.width - 22.0), 16.0)
         if dots_error != ok { ret (zero, dots_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
