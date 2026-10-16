@@ -1,0 +1,124 @@
+{
+ "combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/combo_box.png",
+    "notes": "The baseline: the v2 outlined combo box in the same cells. Open lists are on neper/combo_box_lists.png (run the app with an argument, `combo_box.exe lists`); the list opens fading, so one frame shows it part way."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/combo_box_open_color.png",
+    "notes": "Round 5. Numbers are scripts/looks_struct_d.py at scale 1.0 (the audit's structural pixels: flat fills and straight runs of 11 or more, a 1 px halo round ink masked, tolerance 2 levels per channel): px more than 2 levels off, and the worst level; what is left is glyph pixels of text (ClearType against grey scale), icon artwork and caret phase. Every captured combo state has a cell: rest (dialog 2 combos 0 px, pick 0, search held 0, held 0, focus 0, edit combo_box_edit 15 px (max 255)), the six open lists as the head + popup composite (combo_box_open_color 4 px (max 4); combo_box_open_color2 1 px (max 3); combo_box_open_size 21 px (max 139); combo_box_open_size2 18 px (max 139); combo_box_open_show 3 px (max 4); combo_box_open_show2 3 px (max 4)), each also as an exact head crop (combo_box_open_color_head 3 px (max 4); combo_box_open_color2_head 0 px (max 0); combo_box_open_size_head 4 px (max 4); combo_box_open_size2_head 0 px (max 0); combo_box_open_show_head 0 px (max 0); combo_box_open_show2_head 0 px (max 0)) and an exact popup crop (combo_box_list_color 1 px (max 3); combo_box_list_color2 1 px (max 3); combo_box_list_size 17 px (max 139); combo_box_list_size2 18 px (max 139); combo_box_list_show 3 px (max 4); combo_box_list_show2 3 px (max 4)), and the toolbar combos (Mode rest 0 px, Mode hover 0, card name rest combo_box_flat_card 7 px (max 85), hover combo_box_flat_card_hover 10 px (max 85); hover of the edit and of the drop button are the same pixels). The open head fades in: the first grab is the rest frame under the settled one at 92 percent (the first grabs: Row Color, Font Size), the popup frame has measured soft bottom and right lines for the sizes captured, and the scroll track is flush with the right frame.",
+    "gaps": [
+     "Unverified (not captured): hover over a list-style or editable combo (the frame takes the image combo capture's hot drop button look: a guess for these), disabled, read-only, the placeholder, the long-text clipping",
+     "The editable combo's caret in combo_box_edit (15 px): the capture shows the blink off phase, ours draws the caret",
+     "The popup frame's soft bottom and right lines, the pale inner row and column and the open head's drift with the window position are measured per captured size and position (3 rows of 13, 3 of 15, 15 of 15; heads at y 41, 71, 99, 159, 278), other sizes get a full 1 px frame",
+     "The toolbar combo's hot ring tables are the captured pixels of the Mode combo and of the card name combo; the hot ring shows while the pointer is over the drop button (the editor takes no pointer here), the capture gives the same pixels for either",
+     "Text: Tahoma is unhinted, ink boxes of the list rows are within 1 px (heads 1 px low on some rows), glyph pixels differ from ClearType",
+     "Baked frame tiles hold at 1.5x since winpx.fill places every pixel on whole device pixels (checked by eye; scripts/looks_scale_check.py does not list this control)"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/image_combo_box.png",
+    "notes": "The baseline: control.select (no pictures: control.image_select falls back to it under the other looks)."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/image_combo_box_open_condition.png",
+    "notes": "Round 5. Numbers are scripts/looks_struct_d.py at scale 1.0 (the audit's structural pixels: flat fills and straight runs of 11 or more, a 1 px halo round ink masked, tolerance 2 levels per channel): px more than 2 levels off, and the worst level; what is left is glyph pixels of text (ClearType against grey scale), icon artwork and caret phase. Every captured image combo state has a cell: the three dialog combos at rest (0 px), the six open lists as the head + popup composite (image_combo_box_open_art 4 px (max 4); art2 and auth2 stand in for the lit row: their head shows the lit row's text where the capture keeps the old value, 197 and 59 px of text; image_combo_box_open_condition 4 px (max 4); image_combo_box_open_condition2 1 px (max 196)), each as an exact head crop (image_combo_box_open_auth_head 0 px (max 0); image_combo_box_open_auth2_head 0 px (max 0); image_combo_box_open_art_head 4 px (max 4); image_combo_box_open_art2_head 0 px (max 0); image_combo_box_open_condition_head 4 px (max 4); image_combo_box_open_condition2_head 0 px (max 0)) and an exact popup crop (image_combo_box_list_auth 0 px (max 0); image_combo_box_list_auth2 0 px (max 0); image_combo_box_list_art 0 px (max 0); image_combo_box_list_art2 1 px (max 3); image_combo_box_list_condition 0 px (max 0); image_combo_box_list_condition2 0 px (max 0)), the Sort window's Sort Order list (image_combo_box_list_sort 11 px (max 129): the list takes the grid's #EFEFEF), the in-place cell editor at rest and with its list open (image_combo_box_cell 0 px (max 0); image_combo_box_cell_held 0 px (max 0): the capture's own button pixels), and the Internet Authentication combo with the pointer on its drop button (image_combo_box_hover_drop 0 px (max 0)) and on its text (image_combo_box_hover_edit 0 px (max 0), as at rest). The hover-combo-list captures are pixel for pixel the open and row 2 captures.",
+    "gaps": [
+     "Unverified (not captured): disabled, the picture of a chosen row in a head (the dialog combos have none), pictures are v3 bitmaps (drawn glyph stand-ins, artwork excluded)",
+     "The in-place editor is image_select_cell (a fixed 155 x 21 look from the Sort window), not yet a general grid cell editor; the cell's value text sits 23 in",
+     "The Sort list's picture-less first row starts its text 2 px right of the capture",
+     "The hot drop button frame is the open head's with #E0EEF9 and #0078D7 (measured on one capture)",
+     "Text: Tahoma is unhinted; glyph pixels differ from ClearType"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/list_box.png",
+    "notes": "The baseline: the v2 list box (rounded frame, check on the chosen row)."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/list_box_focus-vs-ref.png",
+    "notes": "Round 5. Numbers are scripts/looks_struct_d.py at scale 1.0 (the audit's structural pixels: flat fills and straight runs of 11 or more, a 1 px halo round ink masked, tolerance 2 levels per channel): px more than 2 levels off, and the worst level; what is left is glyph pixels of text (ClearType against grey scale), icon artwork and caret phase. All three captured states have a cell and reproduce: the Customization column list at rest (list_box_dialog 0 px (max 0)), with a row chosen and the list focused (list_box_focus 0 px (max 0)) and unfocused (list_box_blur 0 px (max 0)). The frame has a second line under the top edge (#DCDCDC, covered by a chosen first row).",
+    "gaps": [
+     "Unverified (not captured): hover, disabled, multi-select, a list with a scroll bar",
+     "The focus rectangle's dots and the text are not structural pixels: the dots are ours at the captured phase, ink boxes are within 1 px"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/page_control.png",
+    "notes": "The baseline: v2 tabs (primary indicator) and the tab view."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control_stats_1-vs-ref.png",
+    "notes": "Round 5. Numbers are scripts/looks_struct_d.py at scale 1.0 (the audit's structural pixels: flat fills and straight runs of 11 or more, a 1 px halo round ink masked, tolerance 2 levels per channel): px more than 2 levels off, and the worst level; what is left is glyph pixels of text (ClearType against grey scale), icon artwork and caret phase. Every captured tab state has a cell: the Statistics tabs with each of the 11 chosen (off px: 1:14, 2:13, 3:14, 4:14, 5:14, 6:14, 7:13, 8:14, 9:13, 10:6, 11:13), the About tabs (page_control_about 0 px (max 0)), the Filter tabs with Blocks, Cards and Options chosen (page_control_filter 28 px (max 231); page_control_cards 52 px (max 247); page_control_options 70 px (max 248)), the Customization tabs with Bands held and Columns chosen (page_control_held 2 px (max 7); page_control_custom 17 px (max 247)), the card strip of the main window at rest, with the second tab chosen and with the pointer on it (page_control_bottom 0 px (max 0); page_control_bottom2 0 px (max 0); page_control_bottom_hover2 0 px (max 0)). Tab widths are whole pixels: the Statistics labels take measured widths and the Filter and Customization strips the measured box of every tab per chosen tab (v3 uses hinted advances); hover over a tab is as at rest (hover-tab-left-first and -second are the rest pixels, the first through page_control_bottom).",
+    "gaps": [
+     "Mismatch: the Filter and Customization tab labels are unhinted Tahoma: \"Blocks / Formats / Editions\" ends 4 px wide of the capture, other labels are within 1 to 3 px",
+     "Mismatch: the tab pictures are drawn stand-ins (v3 bitmaps, artwork excluded) and the mnemonic underlines of the captions are not drawn",
+     "Mismatch: the Statistics sheet page_control_stats (two tabs) lacks the hairline after Rarity (12 px); page_control_stats_1 covers it",
+     "The Statistics, Filter and Customization tab boxes are measured per captured strip and chosen tab (win5_tab_text, win5_native_box): other labels or strips use the unhinted width",
+     "Unverified (not captured): the first tab's hover as its own sheet (pixel for pixel the rest strip, compared through page_control_bottom), disabled tab, scroll buttons, close buttons",
+     "The pointer is not on the tab in ours (hover), a tab under the pointer is drawn as at rest for every strip: the capture covers the card strip only"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/splitter.png",
+    "notes": "The baseline: the v2 sash (1 px line, grip on hover, primary line while dragged)."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/splitter_live-vs-ref.png",
+    "notes": "Round 5. Numbers are scripts/looks_struct_d.py at scale 1.0 (the audit's structural pixels: flat fills and straight runs of 11 or more, a 1 px halo round ink masked, tolerance 2 levels per channel): px more than 2 levels off, and the worst level; what is left is glyph pixels of text (ClearType against grey scale), icon artwork and caret phase. Every captured splitter state has a cell: the Filter window's strip at rest (splitter_dialog 0 px (max 0)) and held (splitter_dialog_held 0 px (max 0), the same pixels), the main window's upright strip at rest (splitter_live 0 px (max 0)), held (splitter_live_held 0 px (max 0)) and with the pointer on it (splitter_live_hover 0 px (max 0)), the lying one at rest (splitter_live_across 0 px (max 0)), held (splitter_live_across_held 7 px (max 3)) and under the pointer (splitter_live_across_hover 7 px (max 3)). The held and hover captures are pixel for pixel the rest strips of their layout (hover-splitter-horizontal says so, held and hover of the upright one agree), so there is no hover or held tint. The main window's two splitters sit between pixels and are the captured pixels (hot zones 140 and 151 and, in the Statistics layout of the state grabs, 174 long); the dialog's strip is the sharp one.",
+    "gaps": [
+     "Unverified (not captured): dragging, the dialog strip at 150 percent, other strip lengths (only 387, 463, 497 and 574 are captured: other lengths use the generic zone with the dialog's sharp pixels)",
+     "The hot zone of the main window comes in two window layouts (main window and the state grabs' layout); the layout that matches is chosen by the held or hover state (the pixels of both are the rest strips of their layout)",
+     "The 7 px of the lying held and hover sheets are the neighbouring grid's edge column (not drawn)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/hint.png",
+    "notes": "The baseline: the dark plain tooltip and the raised rich tooltip."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/hint_toolbar_cards_f-vs-ref.png",
+    "notes": "Round 5. Numbers are scripts/looks_struct_d.py at scale 1.0 (the audit's structural pixels: flat fills and straight runs of 11 or more, a 1 px halo round ink masked, tolerance 2 levels per channel): px more than 2 levels off, and the worst level; what is left is glyph pixels of text (ClearType against grey scale), icon artwork and caret phase. The six captured hint windows have a cell each: the toolbar hints (TdxBarHintWindow: #FFFFE1 with a bevel, Tahoma 12.3 px; hint_toolbar_cards_expand 26 px (max 209); hint_toolbar_cards_f 0 px (max 0); hint_toolbar_help_home 0 px (max 0); hint_toolbar_search_binoculars 0 px (max 0); hint_toolbar_search_filter 11 px (max 136)) and the grid header's (TcxHintWindow: #F9F9F9 face, #646464 line, Tahoma 11.1 px, grey text; hint_grid_header_name 14 px (max 141)). The Windows tooltip of the library is now the toolbar hint (text plus the shortcut in parentheses, sized by its text).",
+    "gaps": [
+     "Mismatch: the text of two toolbar hints and the grid hint is 1 px off in glyph pixels (unhinted Tahoma at a fractional size)",
+     "Not compared: the hint in its place (the -context captures of the owner window: where the hint stands relative to the button or header, the delay, the grid hint's missing right frame line), the rich hint with a subhead and the wrapped multi-line hint (guessed: 15 px per line, no capture)",
+     "The grid hint is a function parameter of control.win5_hint, not selected by the owner: the library tooltip uses the toolbar one",
+     "The grid hint's text colour is a guess (#666E7C, the ClearType average)"
+    ]
+   }
+  }
+ }
+}

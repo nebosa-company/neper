@@ -1133,7 +1133,8 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
         }
         if !contrast { face = mix(color(t, .SurfaceContainerLowest), accent, 0.2) }
     }
-    var hover = hex(0xF6F6F6u32)
+    // looks5: the hover face measured on v3's hovered Options buttons (states/hover-button-options-*): #E0EEF9 inside the accent ring.
+    var hover = hex(0xE0EEF9u32)
     // looks4: the pressed face measured on v3's pressed buttons (docs/ui/looks/ref/windows/states/button-pressed-*): #CCE4F7.
     var press = hex(0xCCE4F7u32)
     if t.palette == .Dark {
@@ -1145,7 +1146,10 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
             face = color(t, .Primary)
             ink = color(t, .OnPrimary)
         }
-        if !contrast && !plain && !state.selected { face = hover }
+        if !contrast && !plain && !state.selected {
+            face = hover
+            if t.palette == .Light { edge = accent }
+        }
         if !contrast && (plain || state.selected) { face = layer(face, ink, 0.04) }
     }
     if state.pressed {
@@ -1290,6 +1294,11 @@ fn windows_caption_close(pressed: bool) -> paint.Color {
 // looks3: the live 96 DPI captures put the dark caption at 31 rows (y 0 to 30).
 fn windows_caption_height() -> f32 { ret 31.0 }
 
+// looks5: the light caption of v3's DevExpress dialogs (Advanced Filter, Conditional Formatting Rules Manager, the Customization
+// tool window): #F0F4F8 with black text and glyphs, as the live captures show (the capture varies by one level, a Mica wash).
+fn windows_caption_light_face() -> paint.Color { ret hex(0xF0F4F8u32) }
+fn windows_caption_light_ink() -> paint.Color { ret hex(0u32) }
+
 // ---- Android look (docs/ui/looks, profile MaterialLike) ---------------------------------------
 // Material Design 3 as Android ships it. The Neper default already is M3 in structure (shape
 // scale 4/8/12/16/28, state layers 8/10/10/16 %, the fifteen type styles, elevation 0 to 5), so
@@ -1399,3 +1408,5 @@ fn material(palette: Palette) -> ThemeTokens {
     ret t
 }
 // ---- end Android look ---------------------------------------------------------------------------
+// looks5: the hovered minimise or maximise button's wash over the dark caption (states/hover-caption-minimize-main, -maximize-main).
+fn windows_caption_hot() -> paint.Color { ret hex(0x2C2D2Fu32) }

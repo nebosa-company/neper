@@ -39,12 +39,40 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if layer_error != ok { ret (0usize, layer_error) }
     layer[0usize] = placed
     cells[0usize] = looks.Cell { caption: "Options, Rules page (first row current)", node: widget.stack(0u64, looks.size_style(500.0, 348.0), layer[0usize..1usize]), drive: .None }
-    ret (1usize, ok)
+    // Prices page: the list at (215,94), 495 x 343 (crop (213,92)-(713,440)); five rows, the first current.
+    let prices = [5]str{ "TCG Player (Aggregated)", "TCG Player", "Magic Traders", "Find Magic Cards", "Wizards Cupboard" }
+    let (prices_list, prices_error) = windows_or_other(a, t, prices[0usize..5usize], picked[0usize..5usize], toggles[0usize..5usize])
+    if prices_error != ok { ret (0usize, prices_error) }
+    let (prices_placed, prices_placed_error) = at(a, prices_list, 2.0, 2.0)
+    if prices_placed_error != ok { ret (0usize, prices_placed_error) }
+    let (layer_two, layer_two_error) = mem.alloc[widget.Node](a, 1usize)
+    if layer_two_error != ok { ret (0usize, layer_two_error) }
+    layer_two[0usize] = prices_placed
+    cells[1usize] = looks.Cell { caption: "Options, Prices page (first row current)", node: widget.stack(0u64, looks.size_style(500.0, 348.0), layer_two[0usize..1usize]), drive: .None }
+    // Card Art page: the list at (215,71), 464 x 308 with a 16 px image before each of its two rows (crop (213,69)-(681,381)).
+    let art = [2]str{ "C:\\Users\\gaddl\\AppData\\Roaming\\MTG Studio\\Card Art", "MTG Studio Download (all editions + promos)" }
+    var art_list: widget.Node = zero
+    if t.tokens.profile == .Windows {
+        let (drawn, drawn_error) = control.windows_check_list_art(a, 2u64, t, "Card Art", art[0usize..2usize], picked[0usize..2usize], toggles[0usize..2usize], 464.0, 308.0, 0usize, 215.0, 71.0)
+        if drawn_error != ok { ret (0usize, drawn_error) }
+        art_list = drawn
+    } else {
+        let (drawn, drawn_error) = control.multi_select_list(a, 2u64, t, "Card Art", art[0usize..2usize], picked[0usize..2usize], toggles[0usize..2usize], 2u32, 464.0)
+        if drawn_error != ok { ret (0usize, drawn_error) }
+        art_list = drawn
+    }
+    let (art_placed, art_placed_error) = at(a, art_list, 2.0, 2.0)
+    if art_placed_error != ok { ret (0usize, art_placed_error) }
+    let (layer_three, layer_three_error) = mem.alloc[widget.Node](a, 1usize)
+    if layer_three_error != ok { ret (0usize, layer_three_error) }
+    layer_three[0usize] = art_placed
+    cells[2usize] = looks.Cell { caption: "Options, Card Art page (first row current)", node: widget.stack(0u64, looks.size_style(500.0, 348.0), layer_three[0usize..1usize]), drive: .None }
+    ret (3usize, ok)
 }
 
 fn windows_or_other(a: *mem.Arena, t: *const control.Theme, labels: []const str, picked: []const bool, toggles: []const widget.Submit) -> (widget.Node, err) {
     if t.tokens.profile == .Windows {
-        let (list, list_error) = control.windows_check_list_sized(a, 1u64, t, "Card details", labels, picked, toggles, 495.0, 343.0, 0usize)
+        let (list, list_error) = control.windows_check_list_at(a, 1u64, t, "Card details", labels, picked, toggles, 495.0, 343.0, 0usize, 215.0, 94.0)
         ret (list, list_error)
     }
     let (list, list_error) = control.multi_select_list(a, 1u64, t, "Card details", labels, picked, toggles, 18u32, 495.0)
@@ -52,6 +80,6 @@ fn windows_or_other(a: *mem.Arena, t: *const control.Theme, labels: []const str,
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "check_list_box_dialog", cells: 1usize, columns: 1usize, cell_w: 500.0, cell_h: 348.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "check_list_box_dialog", cells: 3usize, columns: 1usize, cell_w: 500.0, cell_h: 348.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

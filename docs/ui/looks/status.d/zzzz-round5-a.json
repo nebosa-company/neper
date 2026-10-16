@@ -1,0 +1,63 @@
+{
+ "button": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/button.png",
+    "notes": "The baseline: the existing v2 pill button, unchanged. The new button_states sheet (neper/button_states.png) holds the same 42 cells under Neper."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_states.png",
+    "notes": "Round 5 (scripts/looks_ref_a/btn5.py states|hover, btn4.py; scale 1.0, max per-channel error outside the caption, tolerance 2). button_states.png has a cell for all 31 live button grabs (states/button-*: pressed, focused and disabled, 75x23, 85x25 and 125x25) and the 2 hover-and-pressed ones; button_hover.png has a cell for all 26 hover grabs (states/hover-button-*: every dialog's buttons). Each is the grab cropped with 5 px of its own dialog around it, on that dialog's face. Crisp-ring dialogs (Search, Sort, Missing Set Cards, Filter, Advanced Filter, Conditional Formatting, Statistics): rest, default, pressed (default and plain), focused (default and plain, 75x23 and 85x25), hover (default and plain, enabled and disabled) all within 1 level (pressed) and 2 levels (hover) with 0 px over tolerance: Search rest 0, pressed OK and Cancel 1, hover OK and Cancel 2, pressed and hovered OK 1, Sort, Filter, Missing, Advanced, Conditional Formatting, Statistics pressed 1 and hover 2 (Filter All and Invert 3 at one corner pixel outside the page face), focused Invert 1 (was 3 and 6 levels over 127 px: the outer ring rows and corner cells now carry their share over the dialog face, solved from the same ring on the #F0F0F0 and #F9F9F9 faces), focused OK 0, hovered disabled Apply and Edit Rule 0 (a disabled button has no hover look); the button.png, button_kinds.png and button_shift.png cells 0 to 1 outside the picture. Hover (measured, was a #F6F6F6 guess): face #E0EEF9 inside the accent ring #0078D4, applied in style.windows_resolve and the ring kind; the inner ring rows are re-faced like the corner cells (winbutton.ring_edge_faced). The four DPI-scaled forms (Options, About, Deck Properties, Deck Legality) draw every button as the crisp one moved by a sub-pixel offset that grows with its position (bilinear: the horizontal profile fits to 0.2 level), so the ring, the focus rectangle and the caption blur: modelled by ButtonOptions.shift_x and shift_y (fitted per capture, fitshift.py) and a pixel mixer in winbutton.ring_paint_shifted. Max error now: pressed About OK 37, Options OK, Cancel and Apply 39, focused Cancel and Apply 43, Change pressed 21 and focused 24, Set 35, Reset 37, Validate 35, Deck Properties OK 39, Deck Legality Close 39, Standard 11, Modern 11; hover OK, Cancel and Apply 39, Change 22, Set and Reset 35, Validate 36, About OK 40, Deck Properties OK 39, Deck Legality Close 40, Standard 11, Modern 9 (64 to 167 before the shift). Also: the ring tile renders whole at 75x32 and 125x40 (cells with no capture), 1.5x draws the ring and dots on whole device pixels (winpx.fill, merged from master), the default button gives up its accent to a focused button (button_shift).",
+    "gaps": [
+     "Mismatch (DPI-scaled forms Options, About, Deck Properties, Deck Legality): 15 pressed or focused cells and 11 hover cells differ from the capture by 9 to 43 levels at the ring top and bottom rows and the blurred dots (the vertical profile is not a plain translation of the crisp ring: the second ring row is darker and the bottom row is clipped), and the ClearType caption is blurred differently",
+     "Unverified: toggle on, split, loading, plain (no capture); the picture-only up and down arrow buttons of Options > Card Art (states/button-image-pressed-*, hover-button-image-*: the arrow bitmap is artwork and the captures show no pressed or hover face)",
+     "Pictures are drawn glyphs: the picture of the New Rule and Edit Rule buttons differs from v3's bitmaps (artwork, 10 to 14 px)",
+     "Text is grayscale; the capture is ClearType (excluded from the numbers)",
+     "Dark and high-contrast palettes keep the old look with Windows metrics (no capture)"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/label.png",
+    "notes": "The baseline: control.text in the Neper type scale, same strings as the Windows sheet; the Neper pixels are unchanged."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/label.png",
+    "notes": "Round 5 (scripts/looks_ref_a/lbl4.py; ink box = the pixels more than 60 or 150 levels from the background, scale 1.0; both thresholds agree within 1 px). label.png has 11 cells: the ten captured labels (Row Color, Card, MTG Studio 13 bold, path, gray text, MTG Studio 21 bold, version, the two hot-links, the wrapped text) and the pressed link (identical to its rest crop). v3 draws with GDI, whose glyph advances are the fonts' hdmx widths, so a label is now set glyph by glyph on those (winhint.advance, control.windows_hinted_row): ink boxes agree with the captures within 1 px in x and y on all 11 cells (x min and max, ours against capture: Row Color 2-52 vs 2-53, Card 1-26 vs 2-26, MTG Studio 2-71 vs 3-72, path 2-214 vs 3-214, gray 2-160 vs 2-160, 21 px title 41-159 vs 42-160, version 51-150 vs 51-150, hot-links 50-154 vs 50-154 and 57-144 vs 57-144, wrapped 2-230 vs 2-230); before they were up to 4 px off (the path was 195 against 214 px wide). The underlines of the About hot-links and the Row Color mnemonic are two rows of the ink (62 and 38 percent in Options, 41 and 59 in About, 39 and 61 on the URL: those forms are DPI-scaled) and reproduce the capture's rows within 1 level (A3BAE1 and 80A2DB against A2BAE1 and 81A2DB). Centred labels sit on whole pixels by floor((box - text) / 2); the sheet puts every box on whole pixels so a half pixel offset no longer blurs the text and the underline. The flat background is exact.",
+    "gaps": [
+     "Not compared (antialiasing): the text is grayscale and the captures are ClearType, so a glyph pixel is not within 2 levels; hinted glyphs are one row taller in the capture (ink boxes within 1 px)",
+     "Unverified: hover (not capturable for a label), disabled (#6D6D6D guess), rotated labels, other backgrounds, non-ASCII text (falls back to the shaped run)",
+     "The Options page title bars (bold white on grey gradient) are a panel, not a TcxLabel"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/dialog.png",
+    "notes": "The baseline: the v2 card over a scrim (dialog.png, dialog_wide.png), the alert with icon (dialog_message.png) and the frameless title bar (title_bar.png). The Neper pixels of the earlier sheets are unchanged; the new sheets (dialog_more*, title_bar_hover) draw the one Neper card or bar."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog.png",
+    "notes": "Round 5 (scripts/looks_ref_a/tb5.py, tbh.py, dg5.py; scale 1.0, tolerance 2 outside the title text). title_bar.png has a cell for every captured window caption: Search, About (inactive and active), Deck Legality, Options (inactive and active), Filter Card Pool (min, max, close), Statistics, Deck Properties, Sort, Missing Set Cards, the two LIGHT captions of the DevExpress dialogs (Advanced Filter, Conditional Formatting Rules Manager: #F0F4F8, black text and X; new), the Customization tool window (title at 8, red close box; new) and the main window active and inactive. Each: the bar left and right of the title, rows 24 to 30 and the icon within 2 levels (the light captions 8 at 6 antialiased icon pixels: artwork), title ink boxes within 1 px (the 12 px caption text is set at 11.95 px: the capture is up to 2 px narrower over a long title). Fixed: the close X of an active caption on an odd pixel (About, Options, Deck Properties, Missing Set Cards) was 5 off over 17 px (it has its own coverage table: the inactive one is not linear in the ink). title_bar_hover.png: the six hover grabs (states/hover-caption-*: main close, maximise and minimise hot; main and Options inactive with the close left hot; Options close hot) reproduce within 3 levels on the washes (#C42B1C close, #2C2D2F minimise and maximise, 29 rows from y = 1, the dialog X's first column three quarters blended) and 7 on the white X (antialiased). dialog.png, dialog_wide.png, dialog_more.png, dialog_more2.png and dialog_more3.png compose all 12 captured windows as chrome, face (#F5F5F5 row under the caption and, on five forms, at the bottom: the window is one row taller), buttons and labels: chrome max 2 (light captions 8 at the icon), the face outside every child window 0 px off on all windows except the Deck Properties program icon (artwork), buttons of the crisp forms 0 to 1 (Search, Sort, Missing, Advanced Filter, Statistics; Filter 9 at one blended corner outside its page), Deck Legality's 12 buttons at y 66 and 95 within 3 (the form's phase is tiny there). The caption chrome, icon and glyph pixels are drawn on whole device pixels at 1.5x (winpx.fill from master).",
+    "gaps": [
+     "Mismatch: the buttons of Options, About, Deck Properties and Deck Legality's bottom row are the DPI-scaled ring (see button): 41 to 43 levels, Deck Legality Help and Close 11",
+     "Dialog content (combo, radio group, grid, page control, vertical grid, group box...) is masked in the compare: those are other controls' sheets; labels are drawn in their default style (the captures' label styles are in label.png)",
+     "Unverified: caption button pressed (WM_NCLBUTTONDOWN enters the system's modal loop), resize, disabled glyph dim level, maximised restore glyph, the light caption hover and the tool window's close hover, the message box (no capture)",
+     "Title text is grayscale and unhinted; the capture is DirectWrite ClearType (ink boxes within 1 px)",
+     "The capture is square cornered without DWM border or shadow; overlay.dialog still centres a fixed 420 px card (guess)"
+    ]
+   }
+  }
+ }
+}

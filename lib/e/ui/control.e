@@ -11,6 +11,7 @@
 
 use e.math
 use e.mem
+use e.str as strs
 use e.time
 use e.gfx.geometry
 use e.gfx.paint
@@ -24,6 +25,7 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 use e.ui.winbutton
+use e.ui.winhint
 use e.ui.winedit
 use e.ui.winmark
 use e.ui.winpx
@@ -35,7 +37,10 @@ use e.ui.winpx
 type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str, runtime: *widget.Runtime }
 // A button's look: its fill, whether it takes presses, and whether it is busy with
 // what it started (the label hidden in place under a progress ring, D942).
-type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32 }
+// looks5 (Windows look): `shift_x`, `shift_y` the sub-pixel offset v3's DPI-scaled forms (Options, Deck Properties, Deck Legality, About) draw
+// their buttons at (see e.ui.winbutton); zero for the crisp dialogs. `focused` draws the keyboard focus on it without the keyboard (a
+// window that has just opened has its default button focused: v3's About), for the looks sheets.
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool }
 // (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
 // theme's fonts that match best lead the fallback chain (`text_style_faced`).
 // (D1458) `size`, when above 0, sets the text's size in place of its role's,
@@ -2306,7 +2311,7 @@ fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
 // ------------------------------------------------------- the button family (D818, P1-06)
 
 fn button_options() -> ButtonOptions {
-    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0 }
+    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false }
 }
 
 // The control state of a keyed element under the page's runtime, with what the
@@ -2425,6 +2430,11 @@ fn max_of(a: f32, b: f32) -> f32 {
     ret b
 }
 
+fn min_of(a: f32, b: f32) -> f32 {
+    if a < b { ret a }
+    ret b
+}
+
 fn max_zero(v: f32) -> f32 {
     if v < 0.0 { ret 0.0 }
     ret v
@@ -2479,7 +2489,7 @@ fn windows_dots(a: *mem.Arena, color: paint.Color, width: f32, height: f32) -> (
 // with the dotted focus rectangle laid over it while the keyboard has the focus. `ring` below 3 is the
 // pixel-exact native ring (e.ui.winbutton) drawn under everything in the whole box, and the focus rectangle
 // is then v3's: the control rect (the box plus 1 above and left) less 3 on every side.
-fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32) -> (widget.Node, err) {
+fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32, shift_x: f32, shift_y: f32) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     inner[0usize] = row
@@ -2489,7 +2499,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     fill.min_height = style.Length { Px: max_zero(look.min_height - (look.border_width + look.padding_y) * 2.0) }
     let ringed = ring < 4u32
     // v3's caption sits 1 px left of and above the centre of the box (measured on Cancel and Apply).
-    if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
+    if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: shift_x }, top: style.Length { Px: shift_y }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
     let centred = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
     // A pressed button is focused too: v3 shows the dotted rectangle on it (states/button-pressed-*).
     let focus = (state.focus_visible || state.focused || state.pressed) && enabled
@@ -2498,7 +2508,13 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     if layers_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     if ringed {
-        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height)
+        // a button of a DPI-scaled form draws its focus rectangle with the ring, shifted with it
+        var dots_kind = 0u32
+        if focus && (shift_x != 0.0 || shift_y != 0.0) {
+            dots_kind = 1u32
+            if state.pressed { dots_kind = 2u32 }
+        }
+        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, shift_x, shift_y, dots_kind)
         if face_error != ok { ret (zero, face_error) }
         layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, face_node))
         n += 1usize
@@ -2506,17 +2522,18 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     layers[n] = centred
     n += 1usize
     if focus {
-        if ringed {
+        if ringed && shift_x == 0.0 && shift_y == 0.0 {
             let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height)
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
+            n += 1usize
         }
         if !ringed {
             let (dots, dots_error) = windows_dots(a, style.color(t.tokens, .Text), max_of(max_zero(look.min_width - edge * 2.0), content_w), max_zero(look.min_height - (look.border_width + look.padding_y) * 2.0))
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = dots
+            n += 1usize
         }
-        n += 1usize
     }
     ret (widget.stack(0u64, style.defaults(), layers[0usize..n]), ok)
 }
@@ -2529,7 +2546,8 @@ fn windows_rgb(c: paint.Color) -> u32 {
 // A Windows button: `picture` (when `has_icon`) then the caption (when `show_label`; `label` still
 // names it in the tree), `selected` the toggled-on face, `corners` nonzero for a split's head.
 fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, show_label: bool, selected: bool, corners: style.Corners, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
-    let state = control_state(t, key, options.enabled, selected)
+    var state = control_state(t, key, options.enabled, selected)
+    if options.focused && options.enabled { state.focus_visible = true }
     // v3's default button gives its accent ring to whichever other button holds the focus (states/button-focused-options-*).
     var variant = options.variant
     if variant == .Default && mem.address_of(t.runtime) != 0usize {
@@ -2544,7 +2562,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     var face: u32 = 0u32
     if corners.top_left == 0.0 && corners.top_right == 0.0 && options.variant != .Plain && t.tokens.palette == .Light {
         rk = 0u32
-        if variant == .Default || state.focus_visible || state.focused || selected { rk = 1u32 }
+        if variant == .Default || state.focus_visible || state.focused || selected || (state.hovered && !state.pressed && options.enabled) { rk = 1u32 }
         if state.pressed && !state.disabled && !selected { rk = 3u32 }
         if state.disabled { rk = 2u32 }
         face = windows_rgb(look.background)
@@ -2628,7 +2646,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         row = widget.stack(0u64, style.defaults(), layers[1usize..3usize])
         states = accessibility.STATE_BUSY
     }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face)
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, options.shift_x, options.shift_y)
     if shown_error != ok { ret (zero, shown_error) }
     let (node, node_error) = pressable_states(a, key, t, 3u8, label, look, options.enabled, selected, states, 0u32, 0u64, action, shown)
     ret (node, node_error)
@@ -2650,7 +2668,7 @@ fn windows_split(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ac
     look.padding = 3.0
     let (chevron, chevron_error) = icon_square(a, look.foreground, .ChevronDown, 12.0)
     if chevron_error != ok { ret (zero, chevron_error) }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32)
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32, 0.0, 0.0)
     if shown_error != ok { ret (zero, shown_error) }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
@@ -2710,14 +2728,17 @@ fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Glyp
 // and `underline` (fsUnderline: the hot-link style) underlines the whole run. One line unless `width` is above 0,
 // which wraps the words in that width (Properties.WordWrap).
 fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32) -> (widget.Node, err) {
-    let (node, node_error) = windows_label_faced(a, t, value, size, weight, ink, underline, width, 8u32)
+    let (node, node_error) = windows_label_faced(a, t, value, size, weight, ink, underline, width, 8u32, 0.0, 0.0)
     ret (node, node_error)
 }
 
 // looks4: the same label in another face. A TcxLabel with ParentFont = False and no Style.Font of its own (v3's Deck
 // Properties file name, Missing Set Cards description) draws DevExpress's default font, Segoe UI 9 pt = 12 px (face 7);
 // the ones that inherit the form font or set Style.Font are Tahoma (face 8).
-fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32, face: u32) -> (widget.Node, err) {
+// `box_w` above 0 centres the one-line label in a box of that width on a whole pixel (GDI's DT_CENTER halves with an integer
+// division), the hinted advances being whole pixels. `phase` (0 to 1) is the fraction of a pixel the underline sits below its row, for the
+// labels of v3's DPI-scaled forms (Options, About), whose captures draw it as two rows of 1 - phase and phase of the ink.
+fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32, face: u32, box_w: f32, phase: f32) -> (widget.Node, err) {
     var options = text_options()
     options.face = face
     options.size = size
@@ -2726,10 +2747,33 @@ fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, we
     if width > 0.0 { options.wrap = .Word }
     let (shown, mark_at, mark_error) = winbutton.mnemonic(a, value)
     if mark_error != ok { ret (zero, mark_error) }
-    let (words, words_error) = colored_text(a, 0u64, shown, t, options, ink)
-    if words_error != ok { ret (zero, words_error) }
+    // looks5: one line in a font with an hdmx record for the size is set glyph by glyph on v3's whole pixel advances.
+    var hinted: widget.Node = zero
+    var has_hinted = false
+    var hinted_w: f32 = 0.0
+    var mark_x: f32 = 0.0
+    var mark_w: f32 = 0.0
+    if width <= 0.0 {
+        let (row, row_w, before_w, at_w, row_ok, row_error) = windows_hinted_row(a, t, options, shown, mark_at, ink)
+        if row_error != ok { ret (zero, row_error) }
+        hinted = row
+        has_hinted = row_ok
+        hinted_w = row_w
+        mark_x = before_w
+        mark_w = at_w
+    }
+    var words: widget.Node = hinted
+    if !has_hinted {
+        let (plain_words, words_error) = colored_text(a, 0u64, shown, t, options, ink)
+        if words_error != ok { ret (zero, words_error) }
+        words = plain_words
+    }
     var plain = style.defaults()
-    plain.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    // Segoe UI (face 7) labels sit one pixel further right than Tahoma's: the hinted C and S of the captures start there
+    var inset: f32 = 1.0
+    if face == 7u32 { inset = 2.0 }
+    if has_hinted && box_w > hinted_w { inset = math.floor[f32]((box_w - hinted_w) * 0.5) }
+    plain.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     if mark_at >= shown.len && !underline {
         ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, words)), ok)
     }
@@ -2747,13 +2791,78 @@ fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, we
         line_x = 0.0
         line_w = whole
     }
+    if has_hinted {
+        line_x = mark_x
+        line_w = mark_w
+        if underline {
+            line_x = 0.0
+            line_w = hinted_w
+        }
+    }
     var line = sized_style(line_w, 1.0)
     line.background = paint.Brush { Solid: ink }
-    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 3usize)
     if pair_error != ok { ret (zero, TooLarge) }
     pair[0usize] = words
-    pair[1usize] = widget.positioned(0u64, line_x, whole_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, widget.stack(0u64, style.defaults(), pair[0usize..2usize]))), ok)
+    let line_y = math.ceil[f32](whole_base + 1.0)
+    if phase > 0.0 {
+        line.background = paint.Brush { Solid: with_alpha(ink, 1.0 - phase) }
+        var second = sized_style(line_w, 1.0)
+        second.background = paint.Brush { Solid: with_alpha(ink, phase) }
+        pair[2usize] = widget.positioned(0u64, line_x, line_y + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, second, zero)))
+    }
+    pair[1usize] = widget.positioned(0u64, line_x, line_y, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+    var layers = 2usize
+    if phase > 0.0 { layers = 3usize }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, widget.stack(0u64, style.defaults(), pair[0usize..layers]))), ok)
+}
+
+// looks5: `shown` as one text node per glyph, each at the running sum of the font's hdmx advances (v3's GDI pixel widths:
+// winhint.e). Answers the row, its width, the x of the byte `mark_at` (the mnemonic) and that glyph's width, and
+// whether it could (an ASCII run in a font with an hdmx record for the size; otherwise the caller keeps the shaped run).
+fn windows_hinted_row(a: *mem.Arena, t: *const Theme, options: TextOptions, shown: str, mark_at: usize, ink: paint.Color) -> (widget.Node, f32, f32, f32, bool, err) {
+    if t.fonts.len == 0usize || shown.len == 0usize { ret (zero, 0.0, 0.0, 0.0, false, ok) }
+    let (look, look_error) = text_style_faced(a, t, options)
+    if look_error != ok { ret (zero, 0.0, 0.0, 0.0, false, look_error) }
+    if look.fonts.len == 0usize { ret (zero, 0.0, 0.0, 0.0, false, ok) }
+    let font = look.fonts[0usize].font
+    let ppem = u32(look.fonts[0usize].size + 0.5)
+    let (widths, widths_error) = mem.alloc[f32](a, shown.len)
+    if widths_error != ok { ret (zero, 0.0, 0.0, 0.0, false, TooLarge) }
+    var x: f32 = 0.0
+    var mark_x: f32 = 0.0
+    var mark_w: f32 = 0.0
+    var i = 0usize
+    while i < shown.len {
+        if shown[i] >= 128u8 { ret (zero, 0.0, 0.0, 0.0, false, ok) }
+        let (step, has_step) = winhint.advance(font, ppem, u32(shown[i]))
+        if !has_step { ret (zero, 0.0, 0.0, 0.0, false, ok) }
+        widths[i] = f32(step)
+        if i == mark_at {
+            mark_x = x
+            mark_w = f32(step)
+        }
+        x += f32(step)
+        i += 1usize
+    }
+    let (laid, laid_error) = layout.layout(a, "Ag", look, layout.Options { width: 0.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
+    if laid_error != ok { ret (zero, 0.0, 0.0, 0.0, false, laid_error) }
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, shown.len)
+    if nodes_error != ok { ret (zero, 0.0, 0.0, 0.0, false, TooLarge) }
+    var count = 0usize
+    var at: f32 = 0.0
+    i = 0usize
+    while i < shown.len {
+        if shown[i] != 32u8 {
+            let (glyph, glyph_error) = colored_text(a, 0u64, shown[i..i + 1usize], t, options, ink)
+            if glyph_error != ok { ret (zero, 0.0, 0.0, 0.0, false, glyph_error) }
+            nodes[count] = widget.positioned(0u64, at, 0.0, style.defaults(), mem_one_node(a, glyph))
+            count += 1usize
+        }
+        at += widths[i]
+        i += 1usize
+    }
+    ret (widget.stack(0u64, sized_style(x, laid.bounds.height), nodes[0usize..count]), x, mark_x, mark_w, true, ok)
 }
 // ---- end looks-polish: the Windows button family ----------------------------------------------
 
@@ -3761,79 +3870,148 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
 // v3's check box, radio button and radio group (DevExpress with NativeStyle: the Windows 11 theme
 // draws the mark). See `style.windows_choice_resolve` for the colours.
 
-// A dotted rectangle, 1 unit dots every 2 units round the area: the focus rectangle DevExpress
-// draws round a focused caption. looks4: the live 100 % captures show it as a resampled bitmap (grey
-// dots and gaps, soft on the outside), measured pixel by pixel on the Options check box grabs: a line
-// is two pixels wide, a dot pixel 44 % black, the pixel between the dots 33 %, their outer
-// neighbours 10 % and 8 %. The top and bottom lines run on odd columns, the left line on odd rows
-// and the right one on even rows; the area is the rectangle plus the outer column and row.
-type Dotted = struct { color: paint.Color, dot: f32, gap: f32, dot_spill: f32, gap_spill: f32 }
+// A dotted rectangle, 1 unit dots every 2 units round the area: the focus rectangle DevExpress draws round a
+// focused caption. looks5: the live 100 % captures fit one analytic model to within a level. A black dot (alpha
+// 225/240 over the face) of 1 x 1 units, 1 on and 1 off along each side, on lines 0.31 (Options pages) or 0.33
+// below a whole row: the top line's dots at u = 1, 3, ... from the left line's column, the bottom line 14 rows
+// lower, the left line's dots from 1 + the line offset, the right line's from the line offset plus 1 when the
+// span (right column minus left column) is even (the dash pattern runs on round the corners), a vertical dot only
+// between row 1 and row 13.5. The Options pages' window is drawn 1.0007 times its size (so is the mark's bitmap):
+// every position is `scaled = (window + at) * (1 + s)`, which is why a long rectangle's dots drift across the
+// pixels (121 to 135 levels over 130 px) and why the offset depends on where the control stands. The other
+// windows' rectangles are drawn without the scale (crisp dots of 90 and 165 levels).
+// `lw`, `tw`: the window coordinates of the rectangle's left column and top row (negative: unknown, no scale).
+type Dotted = struct { color: paint.Color, s: f32, line: f32, lw: f32, tw: f32, span: f32 }
+// The dots are the inverse of the face (DrawFocusRect's XOR): a dot over a face of 240 is 15, over 249 it is 6.
 
-fn dotted_pixel(b: *scene.Builder, color: paint.Color, x: f32, y: f32, alpha: f32) -> err {
-    ret winpx.fill(b, x, y, 1.0, 1.0, with_alpha(color, alpha))
-}
-
-fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    let d = mem.cast[*Dotted](ctx)
-    var y: f32 = 0.0
-    while y < area.height - 1.0 {
-        var left_dot = d.gap
-        var left_spill = d.gap_spill
-        var right_dot = d.gap
-        var right_spill = d.gap_spill
-        let odd = (i32(y) % 2) == 1
-        if odd {
-            left_dot = d.dot
-            left_spill = d.dot_spill
-        } else {
-            right_dot = d.dot
-            right_spill = d.dot_spill
+// A rectangle `w` x `h` at (x, y) as the pixels it covers, each filled with its share of the colour's alpha (the
+// edges are exact whatever the renderer's own edge treatment).
+fn aa_rect(b: *scene.Builder, color: paint.Color, x: f32, y: f32, w: f32, h: f32) -> err {
+    let x_first = i32(x)
+    let y_first = i32(y)
+    var cy = y_first
+    while f32(cy) < y + h {
+        let over_y = min_of(f32(cy) + 1.0, y + h) - max_of(f32(cy), y)
+        if over_y > 0.002 {
+            // The whole columns of a row are one piece (a scaled render shows no seams between neighbours); the two
+            // end columns, which a fractional edge covers in part, are pieces of their own.
+            var cx = x_first
+            while f32(cx) < x + w {
+                let over_x = min_of(f32(cx) + 1.0, x + w) - max_of(f32(cx), x)
+                if over_x > 0.002 {
+                    var run: f32 = 1.0
+                    if over_x > 0.998 {
+                        while f32(cx) + run < x + w - 0.998 { run += 1.0 }
+                    }
+                    var wide: f32 = 1.0
+                    if over_x > 0.998 { wide = run }
+                    try winpx.fill(b, f32(cx), f32(cy), wide, 1.0, with_alpha(color, color.alpha * over_x * over_y))
+                    cx += i32(run)
+                } else {
+                    cx += 1
+                }
+            }
         }
-        try dotted_pixel(b, d.color, area.x, area.y + y, left_dot)
-        try dotted_pixel(b, d.color, area.x + 1.0, area.y + y, left_spill)
-        try dotted_pixel(b, d.color, area.x + area.width - 2.0, area.y + y, right_dot)
-        try dotted_pixel(b, d.color, area.x + area.width - 1.0, area.y + y, right_spill)
-        y += 1.0
-    }
-    var x: f32 = 0.0
-    while x < area.width {
-        let odd = (i32(x) % 2) == 1
-        var dot = d.dot_spill
-        var gap = d.gap_spill
-        if odd {
-            dot = d.dot
-            gap = d.gap
-        }
-        try dotted_pixel(b, d.color, area.x + x, area.y, dot)
-        try dotted_pixel(b, d.color, area.x + x, area.y + 1.0, gap)
-        try dotted_pixel(b, d.color, area.x + x, area.y + area.height - 2.0, dot)
-        try dotted_pixel(b, d.color, area.x + x, area.y + area.height - 1.0, gap)
-        x += 1.0
+        cy += 1
     }
     ret ok
 }
 
-// The dotted focus rectangle as a node `width` x `height`.
-fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, crisp: bool) -> (widget.Node, err) {
+fn dotted_dot(b: *scene.Builder, color: paint.Color, x: f32, y: f32, size: f32) -> err {
+    ret aa_rect(b, color, x, y, size, size)
+}
+
+// The mnemonic's underline: `w` wide and 1 tall at (`fx`, `fy`) from the node's top left, times the window's scale `k`.
+type Under = struct { color: paint.Color, w: f32, fx: f32, fy: f32, k: f32 }
+
+fn under_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let u = mem.cast[*Under](ctx)
+    ret aa_rect(b, u.color, f32(i32(area.x + 0.01)) + u.fx, f32(i32(area.y + 0.01)) + u.fy, u.w * u.k, u.k)
+}
+
+fn under_node(a: *mem.Arena, color: paint.Color, w: f32, fx: f32, fy: f32, k: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[Under](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    marks[0usize] = Under { color: color, w: w, fx: fx, fy: fy, k: k }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: under_paint, state: widget.bytes_of[Under](&marks[0usize]) } }, style: sized_style(1.0, 1.0), children: none }, ok)
+}
+
+fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*Dotted](ctx)
+    let x0 = f32(i32(area.x + 0.01))
+    let y0 = f32(i32(area.y + 0.01))
+    var lw = d.lw
+    var tw = d.tw
+    var s = d.s
+    if lw < 0.0 || tw < 0.0 {
+        lw = 0.0
+        tw = 0.0
+        s = 0.0
+    }
+    let k = 1.0 + s
+    let size = k
+    let left_x = x0 + lw * k - lw
+    let right_x = x0 + (lw + d.span) * k - lw
+    var u: f32 = 1.0
+    while u <= d.span + 0.5 {
+        let x = x0 + (lw + u) * k - lw
+        try dotted_dot(b, d.color, x, y0 + (tw + d.line) * k - tw, size)
+        try dotted_dot(b, d.color, x, y0 + (tw + 14.0 + d.line) * k - tw, size)
+        u += 2.0
+    }
+    var v = 1.0 + d.line
+    while v <= 13.5 {
+        try dotted_dot(b, d.color, left_x, y0 + (tw + v) * k - tw, size)
+        v += 2.0
+    }
+    v = d.line + f32((i32(d.span) + 1) % 2)
+    while v < 1.0 { v += 2.0 }
+    while v <= 13.5 {
+        try dotted_dot(b, d.color, right_x, y0 + (tw + v) * k - tw, size)
+        v += 2.0
+    }
+    ret ok
+}
+
+// Where a rectangle stands: the window coordinates of its left column and top row (negative: unknown), the window's
+// scale and its line offset (see `Dotted`).
+type DotGeom = struct { s: f32, line: f32, lw: f32, tw: f32, face: f32 }
+
+// The dotted focus rectangle as a node `width` x `height` (the rectangle is `width` wide: its right line sits 2 in).
+fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom: DotGeom) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[Dotted](a, 1usize)
     if dots_error != ok { ret (zero, TooLarge) }
-    // The check boxes' grabs show the rectangle soft (44 %, 33 %, 10 % and 8 % black), the radios' crisp (62 % and 31 %).
-    dots[0usize] = Dotted { color: color, dot: 0.44, gap: 0.33, dot_spill: 0.10, gap_spill: 0.08 }
-    if crisp { dots[0usize] = Dotted { color: color, dot: 0.625, gap: 0.31, dot_spill: 0.0, gap_spill: 0.0 } }
+    let ink = (255.0 - geom.face) / 255.0
+    dots[0usize] = Dotted { color: paint.rgba(ink, ink, ink, 1.0), s: geom.s, line: geom.line, lw: geom.lw, tw: geom.tw, span: width - 2.0 }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: mark_measure, paint: dotted_paint, state: widget.bytes_of[Dotted](&dots[0usize]) } }, style: sized_style(width, height), children: none }, ok)
 }
 
 // The 13 unit mark: a box (round for a radio) with its tick, dash or dot.
-fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, variant: u32) -> (widget.Node, err) {
+// looks5: which window's marks to paint and the control's y in it (negative: unknown, the family's first table):
+// the theme bitmap's sub-pixel phase follows the y of the row (the mark stands (high - 14) / 2 below it; see
+// scripts/gen_winmark.py for the contexts).
+type Phase = struct { context: u32, x: f32, y: f32 }
+
+fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
     // looks4: rest and pressed are painted pixel for pixel from the live captures (e.ui.winmark); hover,
     // disabled and mixed have no capture and keep the drawn mark below.
-    if t.tokens.palette == .Light && !state.disabled && !mixed && (!state.hovered || state.pressed) {
+    if t.tokens.palette == .Light && !state.disabled && !mixed {
         var kind: u32 = 0u32
-        if round { kind = 4u32 + 4u32 * variant }
+        if round { kind = 4u32 }
         if chosen { kind += 2u32 }
-        if state.pressed { kind += 1u32 }
-        let (baked, baked_error) = winmark.mark_node(a, kind)
+        if state.pressed {
+            kind += 1u32
+        } else if state.hovered {
+            // looks5: the hover grabs (a check box's face changes; a radio's look is its rest's).
+            kind = 8u32
+            if round { kind += 2u32 }
+            if chosen { kind += 1u32 }
+        }
+        var at_y = phase.y
+        if at_y >= 0.0 { at_y += f32(i32((high - 14.0) * 0.5 + 0.5)) }
+        let (baked, baked_error) = winmark.mark_node(a, phase.context, kind, at_y)
         if baked_error != ok { ret (zero, baked_error) }
         let (cell, cell_error) = mem.alloc[widget.Node](a, 1usize)
         if cell_error != ok { ret (zero, TooLarge) }
@@ -3893,47 +4071,126 @@ fn edges(left: f32, top: f32, right: f32, bottom: f32) -> style.EdgeLengths {
     ret style.EdgeLengths { left: style.Length { Px: left }, top: style.Length { Px: top }, right: style.Length { Px: right }, bottom: style.Length { Px: bottom } }
 }
 
+// ---- looks5 group b: Tahoma 11 px at GDI's whole-pixel advances ------------------------------------------------
+// v3's captions are drawn by GDI, whose Tahoma 11 px advances are whole pixels (measured: "Hide splash screen on
+// start" is 130 px, the sum of the table below; the outline advances give 128). `choices_words` lays a caption out
+// word by word at those advances, each word scaled to its hinted width, so a word starts where v3's does (ink boxes
+// within 1 px) instead of drifting 2 to 8 px over a long caption. Printable ASCII only; anything else is laid out
+// as before. The table is GDI's GetCharWidth32 for bytes 32 to 126 (script: python -I scripts/looks_refs_b.py gdi).
+fn choices_advances() -> [95]u8 {
+    ret [95]u8{ 3u8, 4u8, 4u8, 8u8, 6u8, 11u8, 7u8, 2u8, 4u8, 4u8, 6u8, 8u8, 4u8, 4u8, 4u8, 4u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 4u8, 4u8, 8u8, 8u8, 8u8, 5u8, 10u8, 7u8, 6u8, 7u8, 7u8, 6u8, 6u8, 7u8, 7u8, 4u8, 5u8, 6u8, 5u8, 8u8, 7u8, 8u8, 6u8, 8u8, 7u8, 6u8, 6u8, 7u8, 6u8, 10u8, 6u8, 6u8, 6u8, 4u8, 4u8, 4u8, 8u8, 6u8, 6u8, 6u8, 6u8, 5u8, 6u8, 6u8, 4u8, 6u8, 6u8, 2u8, 3u8, 5u8, 2u8, 8u8, 6u8, 6u8, 6u8, 6u8, 4u8, 5u8, 4u8, 6u8, 6u8, 8u8, 6u8, 6u8, 5u8, 5u8, 4u8, 5u8, 8u8 }
+}
+
+// The width of `value` in Tahoma 11 px as GDI lays it out; 0 when a byte is not printable ASCII.
+fn choices_hinted_width(value: str) -> f32 {
+    let table = choices_advances()
+    var total: f32 = 0.0
+    var i = 0usize
+    while i < value.len {
+        let c = value[i]
+        if c < 32u8 || c > 126u8 { ret 0.0 }
+        total += f32(table[usize(c - 32u8)])
+        i += 1usize
+    }
+    ret total
+}
+
+// `shown` as words at GDI's advances: a node `width` x 15 (the dialog text's line height) and the width. `options`
+// carry the 11 px size and the face; the caller's own node replaces `colored_text`.
+fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, ink: paint.Color, shown: str) -> (widget.Node, f32, err) {
+    let total = choices_hinted_width(shown)
+    if total == 0.0 {
+        let (one, one_error) = colored_text(a, 0u64, shown, t, options, ink)
+        if one_error != ok { ret (zero, 0.0, one_error) }
+        let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, t, options, shown)
+        if whole_error != ok { ret (zero, 0.0, whole_error) }
+        ret (one, whole, ok)
+    }
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, shown.len + 1usize)
+    if nodes_error != ok { ret (zero, 0.0, TooLarge) }
+    var n = 0usize
+    var i = 0usize
+    while i < shown.len {
+        if shown[i] == 32u8 {
+            i += 1usize
+            continue
+        }
+        var e = i
+        while e < shown.len && shown[e] != 32u8 { e += 1usize }
+        let word = shown[i..e]
+        let hinted = choices_hinted_width(shown[i..e])
+        let (natural, natural_fit, natural_base, natural_error) = run_metrics_faced(a, t, options, word)
+        if natural_error != ok { ret (zero, 0.0, natural_error) }
+        var piece = options
+        var size = options.size
+        if size == 0.0 { size = 11.0 }
+        if natural > 0.0 {
+            size = size * hinted / natural
+            if size < 10.0 { size = 10.0 }
+            if size > 12.0 { size = 12.0 }
+        }
+        piece.size = size
+        let (said, said_error) = colored_text(a, 0u64, word, t, piece, ink)
+        if said_error != ok { ret (zero, 0.0, said_error) }
+        nodes[n] = widget.positioned(0u64, choices_hinted_width(shown[0usize..i]) + 0.3, 0.0, style.defaults(), mem_one_node(a, said))
+        n += 1usize
+        i = e
+    }
+    ret (widget.stack(0u64, sized_style(total, 15.0), nodes[0usize..n]), total, ok)
+}
+
 // A caption in the Windows look: black (muted when disabled) regular text, 2 units either side
 // and 1 above and below; a '&' marks the mnemonic, underlined at the baseline. When `focused` the
 // dotted focus rectangle (looks4: at the text's origin, 1 below the caption's top, the text's
 // rounded advance + 1 wide, 15 tall) lies over it without moving anything.
-fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, enabled: bool, crisp: bool) -> (widget.Node, err) {
+fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, enabled: bool, geom: DotGeom) -> (widget.Node, err) {
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
+    caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if !enabled { ink = style.color(t.tokens, .TextMuted) }
     let (shown, mark_at, mark_error) = winbutton.mnemonic(a, label)
     if mark_error != ok { ret (zero, mark_error) }
-    let (words, words_error) = colored_text(a, 0u64, shown, t, caption, ink)
+    let (words, whole, words_error) = choices_words(a, t, caption, ink, shown)
     if words_error != ok { ret (zero, words_error) }
-    let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, t, caption, shown)
-    if whole_error != ok { ret (zero, whole_error) }
-    var word_node = words
-    if mark_at < shown.len {
-        let (before, before_fit, before_base, before_error) = run_metrics_faced(a, t, caption, shown[0usize..mark_at])
-        if before_error != ok { ret (zero, before_error) }
-        let (mark_adv, mark_fit, mark_base, mark_error_two) = run_metrics_faced(a, t, caption, shown[mark_at..mark_at + 1usize])
-        if mark_error_two != ok { ret (zero, mark_error_two) }
-        var line = sized_style(mark_adv, 1.0)
-        line.background = paint.Brush { Solid: ink }
-        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
-        if pair_error != ok { ret (zero, TooLarge) }
-        pair[0usize] = words
-        pair[1usize] = widget.positioned(0u64, before, whole_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
-        word_node = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
-    }
+    let (metric, metric_fit, whole_base, metric_error) = run_metrics_faced(a, t, caption, shown)
+    if metric_error != ok { ret (zero, metric_error) }
     var pad = style.defaults()
     pad.padding = edges(2.0, 1.0, 2.0, 1.0)
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, pad, mem_one_node(a, word_node))
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, pad, mem_one_node(a, words))
     var n = 1usize
     if focused {
-        let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 2.0, 16.0, crisp)
+        let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 3.0, 16.0, geom)
         if dots_error != ok { ret (zero, dots_error) }
         parts[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), mem_one_node(a, dots))
         n = 2usize
+    }
+    if mark_at < shown.len {
+        // looks5: the underline starts at the text's origin (1 right of the rectangle's left line), runs the character's
+        // advance and lies 13 under the rectangle's top line, `line` (0.31 or 0.33) into its row; it is drawn at the window's scale.
+        let before = choices_hinted_width(shown[0usize..mark_at])
+        var mark_adv = choices_hinted_width(shown[mark_at..mark_at + 1usize])
+        if mark_adv == 0.0 {
+            let (measured, mark_fit, mark_base, mark_error_two) = run_metrics_faced(a, t, caption, shown[mark_at..mark_at + 1usize])
+            if mark_error_two != ok { ret (zero, mark_error_two) }
+            mark_adv = measured
+        }
+        var k: f32 = 1.0 + geom.s
+        var ux: f32 = 3.0 + before
+        var uy: f32 = 14.0 + geom.line
+        if geom.lw >= 0.0 && geom.tw >= 0.0 {
+            ux = 2.0 + (geom.lw + 1.0 + before) * k - geom.lw
+            uy = 1.0 + (geom.tw + 13.0 + geom.line) * k - geom.tw
+        } else {
+            k = 1.0
+        }
+        let (rule, rule_error) = under_node(a, ink, mark_adv, ux - f32(i32(ux)), uy - f32(i32(uy)), k)
+        if rule_error != ok { ret (zero, rule_error) }
+        parts[n] = widget.positioned(0u64, f32(i32(ux)), f32(i32(uy)), style.defaults(), mem_one_node(a, rule))
+        n += 1usize
     }
     ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
 }
@@ -3941,19 +4198,32 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
 // A check box or radio button row: the mark, then the caption, as a tap-and-hover region at
 // least 21 tall (TcxCheckBox's default height). `role` 4 is a checkbox, 5 a radio.
 fn windows_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, role, label, chosen, mixed, round, action, enabled, 21.0, false, 0u32)
+    let (row, row_error) = windows_choice_high(a, key, t, role, label, chosen, mixed, round, action, enabled, 21.0, false, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
     ret (row, row_error)
 }
 
 // `windows_choice` in a row `high` tall (a TcxCheckBox is 21, 17 without its transparent border; a
 // radio group's rows are 42). A check box has 2 units of transparent border at its left, a radio none.
-fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, variant: u32) -> (widget.Node, err) {
+fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, phase: Phase) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, high, variant)
+    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, high, phase)
     if mark_error != ok { ret (zero, mark_error) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (label_node, label_error) = windows_caption(a, &dialog_t, label, (state.focused || state.pressed) && enabled, enabled, round)
+    // looks5: where the focus rectangle stands in its window (the caption is 2 right of the mark's 13, the check box's row
+    // 2 in; the rectangle 1 under the caption's top) and which window's scale it is drawn at.
+    var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0 }
+    if phase.context == 4u32 || phase.context == 5u32 { geom.face = 249.0 }
+    if phase.context == 0u32 { geom.s = 0.0007 }
+    if phase.context == 6u32 { geom.s = 0.00073 }
+    if phase.context == 0u32 || phase.context == 6u32 { geom.line = 0.3125 }
+    if phase.x >= 0.0 && phase.y >= 0.0 {
+        var lead: f32 = 15.0
+        if !round && !flush { lead = 17.0 }
+        geom.lw = phase.x + lead
+        geom.tw = phase.y + f32(i32((high - 17.0) * 0.5 + 1.0 + 0.01))
+    }
+    let (label_node, label_error) = windows_caption(a, &dialog_t, label, (state.focused || state.pressed) && enabled, enabled, geom)
     if label_error != ok { ret (zero, label_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -3984,11 +4254,12 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
+    caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if !enabled { ink = style.color(t.tokens, .TextMuted) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (words, words_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
+    let (words, words_width, words_error) = choices_words(a, &dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
     let (nodes, nodes_error) = mem.alloc[widget.Node](a, 6usize)
     if nodes_error != ok { ret (zero, TooLarge) }
@@ -4033,62 +4304,161 @@ fn windows_check_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
 
 // The list's two unit edge, measured on the 100 % captures: an outer line (top #ACAFB4, left
 // #93979F, right #B7BABE, bottom #AAAEB3) and an inner one (#D0D2D5, #ECEDEE, #C2C5C9, #D1D3D6).
-type ListEdge = struct { unused: u8 }
+type ListEdge = struct { art: bool }
 
 fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let e = mem.cast[*ListEdge](ctx)
     let x = area.x
     let y = area.y
     let w = area.width
     let h = area.height
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, w, 1.0), brush: paint.Brush { Solid: style.hex(11317172u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + h - 1.0, w, 1.0), brush: paint.Brush { Solid: style.hex(11185843u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + 1.0, 1.0, h - 2.0), brush: paint.Brush { Solid: style.hex(9672607u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, y + 1.0, 1.0, h - 2.0), brush: paint.Brush { Solid: style.hex(12040894u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 1.0, w - 2.0, 1.0), brush: paint.Brush { Solid: style.hex(13685461u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + h - 2.0, w - 2.0, 1.0), brush: paint.Brush { Solid: style.hex(13751254u32) } } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 2.0, 1.0, h - 4.0), brush: paint.Brush { Solid: style.hex(15527406u32) } } })
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 2.0, y + 2.0, 1.0, h - 4.0), brush: paint.Brush { Solid: style.hex(12764617u32) } } })
+    // looks5: the Card Art list's frame is the same eight lines measured on its own capture (the theme's bitmap is
+    // resampled at another phase: right and bottom lines 3 to 5 levels off the Rules list's).
+    var top_outer = 11317172u32
+    var bottom_outer = 11185843u32
+    var left_outer = 9672607u32
+    var right_outer = 12040894u32
+    var top_inner = 13685461u32
+    var bottom_inner = 13751254u32
+    var left_inner = 15527406u32
+    var right_inner = 12764617u32
+    var corner_tl = 11975101u32
+    var corner_tl_in = 12895946u32
+    var corner_tr = 13487825u32
+    var corner_tr_in = 11185588u32
+    var corner_bl = 11909309u32
+    var corner_bl_in = 12961740u32
+    var corner_br = 13422289u32
+    var corner_br_in = 11251380u32
+    if e.art {
+        top_outer = 11185587u32
+        bottom_outer = 11514551u32
+        right_outer = 12238017u32
+        top_inner = 13816791u32
+        bottom_inner = 13422289u32
+        right_inner = 12632775u32
+        corner_tl = 11909052u32
+        corner_tl_in = 12961996u32
+        corner_tr = 13553618u32
+        corner_tr_in = 11120051u32
+        corner_bl = 12172224u32
+        corner_bl_in = 12633031u32
+        corner_br = 13685460u32
+        corner_br_in = 10922672u32
+    }
+    try winpx.fill(b, x, y, w, 1.0, style.hex(top_outer))
+    try winpx.fill(b, x, y + h - 1.0, w, 1.0, style.hex(bottom_outer))
+    try winpx.fill(b, x, y + 1.0, 1.0, h - 2.0, style.hex(left_outer))
+    try winpx.fill(b, x + w - 1.0, y + 1.0, 1.0, h - 2.0, style.hex(right_outer))
+    try winpx.fill(b, x + 1.0, y + 1.0, w - 2.0, 1.0, style.hex(top_inner))
+    try winpx.fill(b, x + 1.0, y + h - 2.0, w - 2.0, 1.0, style.hex(bottom_inner))
+    try winpx.fill(b, x + 1.0, y + 2.0, 1.0, h - 4.0, style.hex(left_inner))
+    try winpx.fill(b, x + w - 2.0, y + 2.0, 1.0, h - 4.0, style.hex(right_inner))
+    // looks5: the four corners are blended in the capture (outer and inner pixel of each).
+    try winpx.fill(b, x, y, 1.0, 1.0, style.hex(corner_tl))
+    try winpx.fill(b, x + 1.0, y + 1.0, 1.0, 1.0, style.hex(corner_tl_in))
+    try winpx.fill(b, x + w - 1.0, y, 1.0, 1.0, style.hex(corner_tr))
+    try winpx.fill(b, x + w - 2.0, y + 1.0, 1.0, 1.0, style.hex(corner_tr_in))
+    try winpx.fill(b, x, y + h - 1.0, 1.0, 1.0, style.hex(corner_bl))
+    try winpx.fill(b, x + 1.0, y + h - 2.0, 1.0, 1.0, style.hex(corner_bl_in))
+    try winpx.fill(b, x + w - 1.0, y + h - 1.0, 1.0, 1.0, style.hex(corner_br))
+    ret winpx.fill(b, x + w - 2.0, y + h - 2.0, 1.0, 1.0, style.hex(corner_br_in))
 }
 
 // One row of the check list, `width` wide, 15 tall: the native check box mark 1.15 in, the caption
 // from 17, and, for the current row (the list's item index), the system highlight
 // (#0078D7) behind the caption only, from 16.16, the caption white.
-fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: *const Theme, label: str, chosen: bool, current: bool, below: bool, action: *const widget.Submit, width: f32) -> (widget.Node, err) {
+// looks5: `art` is the Card Art list (item images): rows 18 tall, a 16 px image 3 in, the mark at 19, the
+// highlight from 34.16, 18 tall from 0.4, the caption from 36.
+fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: *const Theme, label: str, chosen: bool, current: bool, below: bool, action: *const widget.Submit, width: f32, art: bool, mark_y: f32, row_x: f32, row_y: f32, last: bool) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0, 0u32)
+    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0, Phase { context: 7u32, x: 0.0 - 1.0, y: mark_y })
     if mark_error != ok { ret (zero, mark_error) }
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
+    caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if current { ink = style.hex(16777215u32) }
-    let (words, words_error) = colored_text(a, 0u64, label, dialog_t, caption, ink)
+    let (words, words_width, words_error) = choices_words(a, dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
-    if current {
-        var bar = sized_style(width - 16.64, 15.0)
+    var row_h: f32 = 15.0
+    // looks5: the highlight is the row's rectangle drawn in the Options window's scale (1.0007, see `Dotted`): its edges are
+    // the whole-pixel ideal (16 or 34 from the row's left, 15 or 18 tall, the row's right edge at its width less 1) moved by
+    // 0.0007 of their window position, which gives the capture's soft 62 % top, 82 % left and 49 % right edges and the
+    // spill of 0.38 at the bottom (0.38 to 0.41 further down the list).
+    let grow: f32 = 0.00073
+    var light_x: f32 = 16.0
+    var light_h: f32 = 15.0
+    if art {
+        light_x = 34.0
+        light_h = 18.0
+    }
+    let light_left = light_x + grow * (row_x + light_x)
+    let light_top = 0.3125 + grow * (row_y + 0.3125)
+    let light_right = (width - 1.0) + grow * (row_x + width - 1.0)
+    let light_w = light_right - light_left
+    let light_tall = light_h * (1.0 + grow)
+    // The last row has no row under it to show the highlight's spill: its own box grows by the line it needs.
+    var extra_high: f32 = 0.0
+    if current && last { extra_high = 1.0 }
+    if art {
+        // The image's placeholder (v3's own bitmaps are artwork: a folder, a hand): a flat tile.
+        row_h = 18.0
+        var tile = sized_style(16.0, 16.0)
+        tile.background = paint.Brush { Solid: style.hex(0xD9C9A0u32) }
+        parts[n] = widget.positioned(0u64, 3.0, 2.0, tile, zero)
+        n += 1usize
+        // The highlight is the row's 18 from 0.4 (the capture's soft edges: 62 % above, 82 % left, 49 % right), 18 further in
+        // than the Rules list's, its last 0.4 spilling into the next row.
+        if current {
+            var bar = sized_style(light_w, light_tall)
+            bar.background = paint.Brush { Solid: style.hex(30935u32) }
+            parts[n] = widget.positioned(0u64, light_left, light_top, bar, zero)
+            n += 1usize
+        }
+        if below {
+            var tail = sized_style(light_w, light_top)
+            tail.background = paint.Brush { Solid: style.hex(30935u32) }
+            parts[n] = widget.positioned(0u64, light_left, 0.0, tail, zero)
+            n += 1usize
+        }
+        let (art_mark, art_mark_error) = windows_mark(a, t, state, chosen, false, false, 18.0, Phase { context: 8u32, x: 0.0 - 1.0, y: mark_y })
+        if art_mark_error != ok { ret (zero, art_mark_error) }
+        parts[n] = widget.positioned(0u64, 19.0, 0.0, style.defaults(), widget_one_of(a, art_mark))
+        n += 1usize
+        var art_line = style.defaults()
+        art_line.height = style.Length { Px: 18.0 }
+        parts[n] = widget.positioned(0u64, 36.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, art_line, widget_one_of(a, words))))
+        n += 1usize
+    }
+    if current && !art {
+        var bar = sized_style(light_w, light_tall)
         bar.background = paint.Brush { Solid: style.hex(30935u32) }
-        parts[n] = widget.positioned(0u64, 16.16, 0.4, bar, zero)
+        parts[n] = widget.positioned(0u64, light_left, light_top, bar, zero)
         n += 1usize
     }
-    if below {
-        // The current row's highlight is 15 tall from 0.4: its last 0.4 spills into this row's first line.
-        var tail = sized_style(width - 16.64, 0.4)
+    if below && !art {
+        // The current row's highlight spills into this row's first line.
+        var tail = sized_style(light_w, light_top)
         tail.background = paint.Brush { Solid: style.hex(30935u32) }
-        parts[n] = widget.positioned(0u64, 16.16, 0.0, tail, zero)
+        parts[n] = widget.positioned(0u64, light_left, 0.0, tail, zero)
         n += 1usize
     }
-    parts[n] = widget.positioned(0u64, 1.15, 0.0, style.defaults(), widget_one_of(a, mark_node))
-    n += 1usize
-    var line = style.defaults()
-    line.height = style.Length { Px: 15.0 }
-    parts[n] = widget.positioned(0u64, 17.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, widget_one_of(a, words))))
-    n += 1usize
+    if !art {
+        parts[n] = widget.positioned(0u64, 1.15, 0.0, style.defaults(), widget_one_of(a, mark_node))
+        n += 1usize
+        var line = style.defaults()
+        line.height = style.Length { Px: 15.0 }
+        parts[n] = widget.positioned(0u64, 17.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, widget_one_of(a, words))))
+        n += 1usize
+    }
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
-    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, 15.0), parts[0usize..n])))
+    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, row_h + extra_high), parts[0usize..n])))
     var sem: widget.Semantics = zero
     sem.role = 4u8
     sem.label = label
@@ -4101,6 +4471,23 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
 // page): a 2 unit edge, a white viewport, 15 unit rows. No item images (the Card Art page's list
 // has them), no column of check marks for a state other than checked and unchecked.
 fn windows_check_list_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rect_width: f32, rect_height: f32, current: usize) -> (widget.Node, err) {
+    let (list, list_error) = windows_check_list_at(a, key, t, label, options, chosen, picks, rect_width, rect_height, current, 0.0 - 1.0, 0.0 - 1.0)
+    ret (list, list_error)
+}
+
+// looks5: the list `window_y` px down its window (the marks' sub-pixel phase follows it, see e.ui.winmark).
+fn windows_check_list_at(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rect_width: f32, rect_height: f32, current: usize, window_x: f32, window_y: f32) -> (widget.Node, err) {
+    let (list, list_error) = windows_check_list_rows(a, key, t, label, options, chosen, picks, rect_width, rect_height, current, false, window_x, window_y)
+    ret (list, list_error)
+}
+
+// looks5: the Card Art page's list, whose items carry a 16 px image (rows 18 tall).
+fn windows_check_list_art(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rect_width: f32, rect_height: f32, current: usize, window_x: f32, window_y: f32) -> (widget.Node, err) {
+    let (list, list_error) = windows_check_list_rows(a, key, t, label, options, chosen, picks, rect_width, rect_height, current, true, window_x, window_y)
+    ret (list, list_error)
+}
+
+fn windows_check_list_rows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rect_width: f32, rect_height: f32, current: usize, art: bool, window_x: f32, window_y: f32) -> (widget.Node, err) {
     // looks4: the native frame bleeds 1 px right and down of the control's rectangle (as the button's does).
     let width = rect_width + 1.0
     let height = rect_height + 1.0
@@ -4111,7 +4498,21 @@ fn windows_check_list_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, lab
     if items_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < options.len {
-        let (row, row_error) = windows_check_row(a, key + 1u64 + u64(i), t, &dialog_t, options[i], chosen[i], i == current, i == current + 1usize, &picks[i], width - 4.0)
+        var list_x: f32 = 215.0
+        var list_y: f32 = 94.0
+        if art { list_y = 71.0 }
+        if window_x >= 0.0 { list_x = window_x }
+        if window_y >= 0.0 { list_y = window_y }
+        var pitch: f32 = 15.0
+        if art { pitch = 18.0 }
+        let row_x = list_x + 2.0
+        let row_y = list_y + 2.0 + pitch * f32(i)
+        var mark_y: f32 = 0.0 - 1.0
+        if window_y >= 0.0 {
+            mark_y = window_y + 2.0 + 15.0 * f32(i)
+            if art { mark_y = window_y + 2.0 + 18.0 * f32(i) }
+        }
+        let (row, row_error) = windows_check_row(a, key + 1u64 + u64(i), t, &dialog_t, options[i], chosen[i], i == current, i == current + 1usize, &picks[i], width - 4.0, art, mark_y, row_x, row_y, i + 1usize == options.len)
         if row_error != ok { ret (zero, row_error) }
         items[i] = row
         i += 1usize
@@ -4123,7 +4524,7 @@ fn windows_check_list_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, lab
     if view_error != ok { ret (zero, TooLarge) }
     let (marks, marks_error) = mem.alloc[ListEdge](a, 1usize)
     if marks_error != ok { ret (zero, TooLarge) }
-    marks[0usize] = ListEdge { unused: 0u8 }
+    marks[0usize] = ListEdge { art: art }
     let (edge, edge_error) = mem.alloc[widget.Node](a, 1usize)
     if edge_error != ok { ret (zero, TooLarge) }
     var fill = style.defaults()
@@ -7643,7 +8044,13 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         let state = control_state(t, tab_key, enabled, chosen)
         if windows && options.native {
             // v3's lfOffice11 page control with NativeStyle: the Windows 11 theme's tabs, no separators.
-            let (native_tab, native_error) = win3_native_tab(a, tab_key, t, labels[i], chosen, i + 1usize == labels.len, enabled, state, &picks[i])
+            // looks5 group d: the captured strips (Filter, Customization) have measured tab boxes per chosen tab.
+            let known = win5_native_box(labels, selected, i)
+            if i == 0usize && known.lead > 0.0 {
+                items[0usize] = widget.box(0u64, sized_style(known.lead, 1.0), zero)
+                windex = 1usize
+            }
+            let (native_tab, native_error) = win3_native_tab(a, tab_key, t, labels[i], chosen, i + 1usize == labels.len, enabled, state, &picks[i], known.width)
             if native_error != ok { ret (zero, native_error) }
             items[windex] = native_tab
             windex += 1usize
@@ -7804,7 +8211,9 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         // The ultra-flat strip: two white rows over the tabs, its two-row bottom line under them.
         var ultra_h: f32 = 23.0
         if options.icons.len > 0usize { ultra_h = 24.0 }
-        let (ultra_lines, ultra_lines_error) = win3_ultra_node(a, 2u32, 0.0, 0.0)
+        var ultra_kind = 2u32
+        if options.icons.len == 0usize { ultra_kind = 4u32 }
+        let (ultra_lines, ultra_lines_error) = win3_ultra_node(a, ultra_kind, 0.0, 0.0)
         if ultra_lines_error != ok { ret (zero, ultra_lines_error) }
         let (ultra_layers, ultra_layers_error) = mem.alloc[widget.Node](a, 2usize)
         if ultra_layers_error != ok { ret (zero, TooLarge) }
@@ -7817,7 +8226,7 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     }
     if windows && options.native {
         // The strip's own line on top and page edge at the foot, under the tabs.
-        let (native_face, native_face_error) = win3_strip_face(a)
+        let (native_face, native_face_error) = win3_strip_face(a, labels.len == 2usize)
         if native_face_error != ok { ret (zero, native_face_error) }
         let (native_layers, native_layers_error) = mem.alloc[widget.Node](a, 2usize)
         if native_layers_error != ok { ret (zero, TooLarge) }
@@ -8153,7 +8562,7 @@ fn resizable_pane(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, a
 // The Windows look (v3's TcxSplitter, simple hot zone): `v3` paints `face` over the strip and
 // a hot zone `hot_len` long, `edge` framed, with a chevron toward the first pane at each end
 // (`ink`) and a dotted line (`dots`) between them.
-type Sash = struct { line: paint.Color, line_width: f32, grip: paint.Color, across: bool, arena: *mem.Arena, v3: bool, face: paint.Color, edge: paint.Color, dots: paint.Color, ink: paint.Color, hot_len: f32, hot_face: paint.Color }
+type Sash = struct { line: paint.Color, line_width: f32, grip: paint.Color, across: bool, arena: *mem.Arena, v3: bool, face: paint.Color, edge: paint.Color, dots: paint.Color, ink: paint.Color, hot_len: f32, hot_face: paint.Color, held: bool }
 
 // ---- looks: Windows (v3) splitter, appended block ----
 
@@ -8216,7 +8625,11 @@ fn sash_paint_v3(s: *Sash, b: *scene.Builder, sized: geometry.Rect) -> err {
     if len < 24.0 { ret ok }
     let ax = area.x
     let ay = area.y
-    let u0 = f32(i64((along - len) * 0.5 + 0.5))
+    let u0 = f32(i64((along - len) * 0.5 + 1.0))
+    if !s.across && len == 140.0 && s.held { ret win5_zone_paint(b, false, ax, ay, u0, 140usize, win5_zone_upright_held()) }
+    if s.across && len == 174.0 && s.held { ret win5_zone_paint(b, true, ax, ay, u0, 174usize, win5_zone_lying_held()) }
+    if !s.across && len == 140.0 { ret win5_zone_paint(b, false, ax, ay, u0, 140usize, win5_zone_upright()) }
+    if s.across && len == 151.0 { ret win5_zone_paint(b, true, ax, ay, u0, 151usize, win5_zone_lying()) }
     let last = thick - 1.0
     let frame = s.edge
     let top_row = style.hex(12303291u32)
@@ -8271,6 +8684,237 @@ fn sash_paint_v3(s: *Sash, b: *scene.Builder, sized: geometry.Rect) -> err {
     }
     ret ok
 }
+
+// ---- looks5 group d: the main window's two splitters, from the captured pixels ------------------
+// The main window's splitters sit between pixels (the dialog's does not): their 8 thick, 140 and 151 long hot
+// zones are the capture's own pixels (rows along the strip, 8 across, "rrggbb" each): the upright one is
+// ref/windows/main-window@1x at x 287 to 294, y 271 to 410, the lying one x 468 to 618, y 322 to 329.
+fn win5_zone_upright() -> str { ret "cdcdcdc6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6adadadc9c9c9d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2a9a9a9adadadefefeff8f8f8f7f7f7f7f7f7f7f7f7f7f7f7afafafadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0888888dbdbdbaeaeaeadadadefefeff3f3f3f0f0f0888888131313c8c8c8aeaeaeadadadefefeff3f3f3888888131313686868ddddddaeaeaeadadadefefef8b8b8b131313686868ddddddf0f0f0aeaeaeadadadefefef939393151515606060dbdbdbf0f0f0aeaeaeadadadefefeff3f3f3909090151515606060dbdbdbaeaeaeadadadefefeff3f3f3f0f0f08f8f8f151515c8c8c8aeaeaeadadadefefeff3f3f3f0f0f0f0f0f08f8f8fdcdcdcaeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68abee6dbe6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08fc0e6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68bbee7dbe6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08ebfe6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68bbee7dbe6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08ebfe6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68cbfe7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08ebfe6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68cbfe7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08ebfe6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68dbfe7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08dbee6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68dbfe7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08dbee6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68dbfe7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08cbee6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68dbfe7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08cbee6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68dbfe7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08bbee6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68ec0e7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08bbee6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68ec0e7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08bbee6dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68fc0e7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08bbde5dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f68fc0e7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08bbde5dce6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f690c1e7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08abde5dbe6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f690c1e7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f08abde5dbe6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f691c1e7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f089bde5dbe6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f691c1e7dce6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f089bde5dbe6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f691c1e7dde6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f088bce5dbe6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f691c1e7dde6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f088bce5dbe6eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f6f6f691c1e7dde6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f087bce5dbe5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f792c2e7dde6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f087bce5dbe5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f792c2e7dde6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f087bbe5dbe5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f793c2e7dde6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f087bbe5dbe5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f793c2e7dde6eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f087bbe5dbe5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f794c3e8dde7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f086bbe5dbe5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f794c3e8dde7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f086bbe5dbe5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f795c3e8dde7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f085bbe5dae5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f795c3e8dde7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f085bbe5dae5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f795c3e8dde7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f084bae5dae5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f795c3e8dde7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f084bae5dae5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f795c3e8dde7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f084bae5dae5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f796c4e8dee7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f084bae5dae5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f796c4e8dee7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f083b9e5dae5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f797c4e8dee7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f083b9e5dae5eef0f0f0aeaeaeadadadefefeff3f3f3f6f6f6f1f1f1f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f7f7f797c4e8dee7eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f083b9e5dae5eef0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0969696dededeaeaeaeadadadefefeff3f3f3f0f0f0969696161616c8c8c8aeaeaeadadadefefeff3f3f3979797161616595959dadadaaeaeaeadadadefefef9a9a9a161616595959dadadaf0f0f0aeaeaeadadadefefef8484841212126f6f6fdededef0f0f0aeaeaeadadadefefeff3f3f38181811212126f6f6fdededeaeaeaeadadadefefeff3f3f3f0f0f0818181121212c8c8c8aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0818181dadadaaeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadefefeff3f3f3f0f0f0f0f0f0f0f0f0f0f0f0aeaeaeadadadcccccccecececdcdcdcdcdcdcdcdcdcdcdcda8a8a8c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3" }
+fn win5_zone_upright_held() -> str { ret "b1b0b0c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c68f8f8fccccccd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2a6a6a68f8f8ff3f3f3f8f8f8f7f7f7f7f7f7f7f7f7f7f7f7ababab8f8f8ff3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f0f0f0f0828282e1e1e1aaaaaa8f8f8ff3f3f3f2f2f2f0f0f08282820e0e0ed3d3d3aaaaaa8f8f8ff3f3f3f2f2f28282820e0e0e6e6e6ee2e2e2aaaaaa8f8f8ff3f3f38484840e0e0e6e6e6ee2e2e2f0f0f0aaaaaa8f8f8ff3f3f38c8c8c0f0f0f656565e1e1e1f0f0f0aaaaaa8f8f8ff3f3f3f2f2f28b8b8b0f0f0f656565e1e1e1aaaaaa8f8f8ff3f3f3f2f2f2f0f0f08a8a8a0f0f0fd3d3d3aaaaaa8f8f8ff3f3f3f2f2f2f0f0f0f0f0f08a8a8ae2e2e2aaaaaa8f8f8ff3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f684bae6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f08abde5e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f685bbe6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f089bce5e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f685bbe6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f089bce5e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f686bbe6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f088bce5e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f686bbe6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f088bce5e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f787bce6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f087bce5e2e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f787bce6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f087bce5e2e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f787bce6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f087bbe5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f787bce6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f087bbe5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f787bce6e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f086bbe5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f788bde6e2e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f086bbe5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f7f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f788bde6e2e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f086bbe5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f789bde6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f085bae5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f789bde6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f085bae5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78abde6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f084bae5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78abde6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f084bae5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78bbee6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f083bae5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78bbee6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f083bae5e1e9eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78cbee6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f082b9e5e1e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78cbee6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f082b9e5e1e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78cbee6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f082b9e4e1e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78cbfe6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f082b9e4e1e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78cbfe6e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f081b8e4e1e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78dbfe7e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f081b8e4e1e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78dbfe7e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f081b8e4e1e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78ec0e7e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f080b8e4e1e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78ec0e7e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f080b8e4e1e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78fc0e7e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f07fb8e4e0e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f78fc0e7e2e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f07fb8e4e0e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f790c0e7e3e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f07eb7e4e0e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f790c0e7e3e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f07eb7e4e0e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f790c0e7e3e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f07db7e4e0e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f791c1e7e3e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f07db7e4e0e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f791c1e7e3e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f07db6e4e0e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f791c1e7e3e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f07db6e4e0e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f6f6f6f1f1f1f0f0f0f0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f7f7f791c1e7e3e9eff0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f07db6e4e0e8eef0f0f0aaaaaa8f8f8ff3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaa9b9b9bf3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaaa9a9a9f3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaaa9a9a9f3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaaa9a9a9f3f3f3f2f2f2f0f0f0f0f0f0919191e3e3e3aaaaaaa5a7a9f3f3f3f2f2f2f0f0f0919191101010d3d3d3aaaaaaa1a5a9f3f3f3f2f2f29292921010105e5e5ee0e0e0aaaaaaa1a5a9f3f3f39494941010105e5e5ee0e0e0f0f0f0aaaaaaa1a5a9f3f3f37d7d7d0d0d0d757575e3e3e3f0f0f0aaaaaaa1a5a9f3f3f3f2f2f27b7b7b0d0d0d757575e3e3e3aaaaaaa1a5a9f3f3f3f2f2f2f0f0f07b7b7b0d0d0dd3d3d3aaaaaaa1a5a9f3f3f3f2f2f2f0f0f0f0f0f07b7b7be0e0e0aaaaaaa1a5a9f3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaaa1a5a9f3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaaa1a5a9f3f3f3f2f2f2f0f0f0f0f0f0f0f0f0f0f0f0aaaaaaa1a5a9cfcfcfcecececdcdcdcdcdcdcdcdcdcdcdcda6a6a6c0c4c9c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3" }
+fn win5_zone_lying_held() -> str { ret "9a9da1b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3919398c3c3c3e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8c5c5c5919398cfcfcff9f9f9f4f4f4f4f4f4f4f4f4f4f4f4cbcbcb919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0979797939393c9c9c9919398cfcfcff8f8f8f0f0f09797971e1e1e757575c9c9c9919398cfcfcff8f8f89797971e1e1e595959d1d1d1c9c9c9919398cfcfcf9f9f9f1e1e1e595959d2d2d2f0f0f0c9c9c9919398cfcfcfdadada5b5b5b1e1e1e959595f0f0f0c9c9c9919398cfcfcff8f8f8d2d2d25b5b5b1e1e1e949494c9c9c9919398cfcfcff8f8f8f0f0f0d2d2d25b5b5b757575c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0d2d2d2d1d1d1c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f6f6f6f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ac6e995c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d2e1edd1e1edf0f0f0c9c9c9919398cfcfcff8f8f8f6f6f6f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ac6e995c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d2e1edd1e1edf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ac6e996c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d2e1edd1e0edf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ac6e996c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d2e1edd1e0edf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29bc6e996c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d1e1edd0e0edf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29bc6e996c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d1e1edd0e0edf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29bc7e996c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d1e0edd0e0edf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29bc7e996c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d1e0edd0e0edf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29cc7e997c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d0e0edcfe0edf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29cc7e997c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d0e0edcfe0edf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29cc7e997c3e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d0e0edcfdfedf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29cc7e997c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0d0e0edcfdfedf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f6f6f6f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29cc7e997c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cfe0edcedfecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29dc7e998c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cfe0edcedfecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29dc7e998c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cfe0edcedfecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29dc8e998c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cfdfedcedfecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29dc8e998c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cfdfedcedfecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cedfeccddfecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cedfeccddfecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cedfeccddeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cedfeccddeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddfecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29fc8ea9ac5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddfecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29fc8ea9ac5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddfecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29fc9ea9ac5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddeecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29fc9ea9ac5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddeecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a0c9ea9bc5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccbdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a0c9ea9bc5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccbdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a0c9ea9bc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccbddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a0c9ea9bc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccbddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccaddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccaddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbdeeccaddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbdeeccaddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbddecc9ddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a2caea9dc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbddecc9ddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a2caea9dc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbddecc9ddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a2caea9dc7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0caddecc9dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a2caea9dc7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0caddecc9dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0caddecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0caddecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c9ddecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c9ddecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c9dcecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a4cbea9fc7e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c9dcecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a4cbea9fc7e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c8dcecc7dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a4cbea9fc8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c8dcecc7dcecf0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0a2a2a29f9f9fc9c9c9919398cfcfcff8f8f8f0f0f0a2a2a2292929757575c9c9c9919398cfcfcff8f8f8a2a2a22929294e4e4ec6c6c6c9c9c9919398cfcfcfaaaaaa2929294e4e4ec7c7c7f0f0f0c9c9c9919398cfcfcfcfcfcf505050292929a0a0a0f0f0f0c9c9c9919398cfcfcff8f8f8c7c7c75050502929299f9f9fc9c9c9919398cfcfcff8f8f8f0f0f0c7c7c7505050757575c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0c7c7c7c6c6c6c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398b0b0b0bebebebcbcbcbcbcbcbcbcbcbcbcbcaeaeaeaaadb2d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4" }
+fn win5_zone_lying() -> str { ret "9c9ea3b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6919398c2c2c2e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5c3c3c3919398cfcfcffafafaf4f4f4f4f4f4f4f4f4f4f4f4cbcbcb919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f09b9b9b979797c9c9c9919398cfcfcff8f8f8f0f0f09b9b9b222222757575c9c9c9919398cfcfcff8f8f89b9b9b222222555555cececec9c9c9919398cfcfcfa3a3a3222222555555cececef0f0f0c9c9c9919398cfcfcfd6d6d6585858212121989898f0f0f0c9c9c9919398cfcfcff8f8f8cfcfcf585858212121989898c9c9c9919398cfcfcff8f8f8f0f0f0cfcfcf585858757575c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0cfcfcfcdcdcdc9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cedfeccddfecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c4e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cedfeccddfecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cedfeccddeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cedfeccddeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29ec8e999c5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddfecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29fc8ea9ac5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddfecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29fc8ea9ac5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddfecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29fc9ea9ac5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddeecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f29fc9ea9ac5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cddeecccdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a0c9ea9bc5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccbdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a0c9ea9bc5e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccbdeecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a0c9ea9bc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccbddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a0c9ea9bc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccbddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccaddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0ccdeeccaddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbdeeccaddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbdeeccaddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a1caea9cc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbddecc9ddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a2caea9dc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbddecc9ddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a2caea9dc6e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0cbddecc9ddecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a2caea9dc7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0caddecc9dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a2caea9dc7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0caddecc9dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0caddecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0caddecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c9ddecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c9ddecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a3cbea9ec7e7f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c9dcecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a4cbea9fc7e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c9dcecc8dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a4cbea9fc7e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c8dcecc7dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a4cbea9fc8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c8dcecc7dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f2f2f2a4cbea9fc8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c8dcecc7dcecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f3f3f3a5cceaa0c8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c8dcecc7dbecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f3f3f3a5cceaa0c8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c8dcecc7dbecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f3f3f3a5cceba0c8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c7dcecc6dbecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f3f3f3a5cceba0c8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c7dcecc6dbecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f3f3f3a6cceba0c8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c7dbecc6dbecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f3f3f3a6cceba0c8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c7dbecc6dbecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f3f3f3a6cceba0c8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c6dbecc5dbecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f3f3f3a6cceba1c8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c6dbecc5dbecf0f0f0c9c9c9919398cfcfcff8f8f8f5f5f5f5f5f5f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f3f3f3a6cceba1c8e8f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0c6dbecc5daebf0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0a4a4a4a1a1a1c9c9c9919398cfcfcff8f8f8f0f0f0a4a4a42b2b2b757575c9c9c9919398cfcfcff8f8f8a4a4a42b2b2b4c4c4cc4c4c4c9c9c9919398cfcfcfacacac2c2c2c4c4c4cc4c4c4f0f0f0c9c9c9919398cfcfcfcdcdcd4e4e4e2a2a2aa2a2a2f0f0f0c9c9c9919398cfcfcff8f8f8c6c6c64e4e4e2a2a2aa1a1a1c9c9c9919398cfcfcff8f8f8f0f0f0c6c6c64e4e4e757575c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0c6c6c6c4c4c4c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398cfcfcff8f8f8f0f0f0f0f0f0f0f0f0f0f0f0c9c9c9919398b1b1b1c0c0c0bdbdbdbdbdbdbdbdbdbdbdbdafafafaaacb1d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3" }
+
+fn win5_hex6(table: str, at: usize) -> u32 {
+    var v = 0u32
+    var k = 0usize
+    while k < 6usize {
+        v = v * 16u32 + win3_nibble(table[at * 6usize + k])
+        k += 1usize
+    }
+    ret v
+}
+
+fn win5_zone_paint(b: *scene.Builder, across: bool, ax: f32, ay: f32, u0: f32, len: usize, table: str) -> err {
+    var u = 0usize
+    while u < len {
+        var v = 0usize
+        while v < 8usize {
+            try v3_zone_px(b, across, ax, ay, u0 + f32(u), f32(v), 1.0, style.hex(win5_hex6(table, u * 8usize + v)))
+            v += 1usize
+        }
+        u += 1usize
+    }
+    ret ok
+}
+// ---- looks5 group d: the image combo box as a grid's in-place editor ---------------------------------------
+// The Sort window's Sort Order cell with its editor active (ref/windows/states/image-combo-box-cell-editor-sort and
+// ...-open-dialog-sort, at 100 percent): a 21 tall #EFEFEF cell with a #E8E8E8 line on top and a #F3F3F3 one under it,
+// the dotted focus rectangle round it (as a list-style combo's), the value 23 in, and a 17 wide drop button
+// 3 down and 18 from the right: #FDFDFD in a #D2D2D2 frame with a grey chevron, or, with its list open, #CCE4F7 in a
+// #005FB7 frame (the button is the capture's own pixels).
+fn win5_cell_button_rest() -> str { ret "dadadaeaeaeaefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefeaeaeadadadad3d3d3fafafafdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfafafad3d3d3d2d2d2fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdfafafae8e8e8fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfde8e8e8fafafafdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdf7f7f7939393dcdcdcfdfdfdfdfdfdfdfdfdfdfdfddcdcdc939393f7f7f7fdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdfbfbfbc6c6c68d8d8ddcdcdcfdfdfdfdfdfddcdcdc8d8d8dc6c6c6fbfbfbfdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdfdfdfdf9f9f9c6c6c68d8d8ddcdcdcdcdcdc8d8d8dc6c6c6f9f9f9fdfdfdfdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdfdfdfdfdfdfdf9f9f9c6c6c68d8d8d8d8d8dc6c6c6f9f9f9fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdf9f9f9c8c8c8c8c8c8f9f9f9fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdd2d2d2d2d2d2fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfafafafafafafdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdd2d2d2d3d3d3f8f8f8fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdf8f8f8d3d3d3dfdfdfd3d3d3d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d3d3d3dfdfdf" }
+fn win5_cell_button_held() -> str { ret "4086c676acdc88b8e288b8e288b8e288b8e288b8e288b8e288b8e288b8e288b8e288b8e288b8e288b8e288b8e276acdc4086c60663b8c0dcf3cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7c0dcf30663b8005fb7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7c9e1f4bdd2e2cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7bdd2e2c9e1f4cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7c8dff17e8891b3c7d7cce4f7cce4f7cce4f7cce4f7b3c7d77e8891c7dff1cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7cbe2f5a3b5c279838bb3c7d7cce4f7cce4f7b3c7d779838ba3b5c2cae2f5cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7cce4f7c9e1f3a3b5c279838bb3c7d7b3c7d779838ba3b5c2c9e1f3cce4f7cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7cce4f7cce4f7c9e1f3a3b5c279838b79838ba3b5c2c9e1f3cce4f7cce4f7cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7cce4f7cce4f7cce4f7c9e1f3a5b6c4a5b6c4c9e1f3cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7005fb7005fb7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cae2f4cae2f4cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7005fb70c66bab4d5f0cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7cce4f7b4d5f00c66ba6fa1d0448bcb448bcc448bcc448bcc448bcc448bcc448bcc448bcc448bcc448bcc448bcc448bcc448bcc448bcc448bcb6fa1d0" }
+
+type Win5Cell = struct { held: bool }
+
+fn win5_cell_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*Win5Cell](ctx)
+    try win3_rect(b, area.x, area.y, area.width, 21.0, style.hex(15724527u32))
+    try win3_rect(b, area.x, area.y, area.width, 1.0, style.hex(15263976u32))
+    try win3_rect(b, area.x, area.y + 20.0, area.width, 1.0, style.hex(15987699u32))
+    var table = win5_cell_button_rest()
+    if m.held { table = win5_cell_button_held() }
+    var j = 0usize
+    while j < 15usize {
+        var i = 0usize
+        while i < 17usize {
+            try win3_rect(b, area.x + area.width - 18.0 + f32(i), area.y + 3.0 + f32(j), 1.0, 1.0, style.hex(win5_hex6(table, j * 17usize + i)))
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+fn image_select_cell(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, width: f32, held: bool) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win5Cell](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win5Cell { held: held }
+    var none: []const widget.Node = zero
+    let face = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win5_cell_paint, state: widget.bytes_of[Win5Cell](&cells[0usize]) } }, style: sized_style(width, 21.0), children: none }
+    let (dialog_t, dialog_error) = win3_dialog_theme(a, t)
+    if dialog_error != ok { ret (zero, dialog_error) }
+    var words = text_options()
+    words.role = .BodyMedium
+    words.wrap = .None
+    let (said, said_error) = colored_text(a, 0u64, label, &dialog_t, words, style.color(t.tokens, .Text))
+    if said_error != ok { ret (zero, said_error) }
+    let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), width + 1.0, 19.0)
+    if dots_error != ok { ret (zero, dots_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    let (held_text, held_text_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_text_error != ok { ret (zero, TooLarge) }
+    held_text[0usize] = said
+    let (held_dots, held_dots_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_dots_error != ok { ret (zero, TooLarge) }
+    held_dots[0usize] = dots
+    layers[0usize] = face
+    // The rectangle's left side is hidden by the column line: the dots start one left of the cell, clipped to it.
+    var clip = sized_style(width, 19.0)
+    clip.overflow = .Clip
+    let (nudged, nudged_error) = mem.alloc[widget.Node](a, 1usize)
+    if nudged_error != ok { ret (zero, TooLarge) }
+    nudged[0usize] = widget.positioned(0u64, 0.0 - 1.0, 0.0, sized_style(width + 1.0, 19.0), held_dots[0usize..1usize])
+    layers[1usize] = widget.positioned(0u64, 0.0, 1.0, clip, nudged[0usize..1usize])
+    var line = style.defaults()
+    line.height = style.Length { Px: 21.0 }
+    line.padding = edges(23.0, 0.0, 0.0, 0.0)
+    layers[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, held_text[0usize..1usize])
+    ret (widget.stack(key, sized_style(width, 21.0), layers[0usize..3usize]), ok)
+}
+// ---- end looks5 group d (cell editor) ------------------------------------------------------------------------
+
+// ---- looks5 group d: the toolbar combo under the pointer ----------------------------------------------------
+// The hot item of a toolbar combo (ref/windows/states/hover-toolbar-combo-*; the edit and the drop button give the
+// same pixels): a 2 px ring round the control (#BCBCBC then #D4D4D4 on top, #FAFAFA then #F5F5F5 under it) and
+// its sides, which take the neighbours' colours. Rows 0 to 20 of the 131 (Mode, 127 wide) or 150 (the card name,
+// 146 wide) columns: the first 3 and last 17 columns are the capture's own pixels, the rows 0, 1, 19 and 20 are flat between.
+fn win5_hot_left_mode() -> str { ret "d0d0d0bcbcbcbcbcbcbfbfbfc0c0c0d4d4d4bfbfbfd1d1d1f6f6f6bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f9f9f9bfbfbfd1d1d1f3f3f3e4e4e4eeeeeefafafaf3f3f3f5f5f5f5f5f5" }
+fn win5_hot_right_mode() -> str { ret "bcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcddddddf5f5f5d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4ebebebf7f7f7f4f4f4f5f5f5fafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafad9d9d9d8d8d8f8f8f8f7f7f7f7f7f7f8f8f8fafafaf5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5c8c8c8cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f09c9c9c555555555555555555555555a9a9a9f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0c2c2c2474747000000000000535353c9c9c9f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0c2c2c2474747535353c9c9c9f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0c2c2c2c9c9c9f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7f8f8f8f7f7f7f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0c5c5c5cbcbcbf8f8f8f7f7f7f7f7f7d7d7d7bfbfbfbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdadadadcbcbcbf8f8f8f7f7f7f2f2f2e0e0e0d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3e3e3e3f8f8f8f7f7f7fafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafcfcfcf7f7f7f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f3f3f3" }
+fn win5_hot_left_card() -> str { ret "bcbcbcbcbcbcbcbcbca1a1a1d3d3d3d4d4d4a1a1a1efefeffafafaa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefefffffffa1a1a1efefeff5f5f5ddddddf9f9f9fafafaf5f5f5f5f5f5f5f5f5" }
+fn win5_hot_right_card() -> str { ret "bcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcf4f4f4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4fbfbfbfafafaf1f1f1f9f9f9fafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafac2c2c2ebebebfefefefffffff1f1f1fefefef6f6f6f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5a8a8a8e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0636363555555555555555555555555e1e1e1f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0a2a2a20e0e0e0000000000008c8c8ce8e8e8f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0a2a2a20e0e0e8d8d8de8e8e8f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0a2a2a2e8e8e8f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1fefefef1f1f1f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0a7a7a7e8e8e8fefefefffffff1f1f1c6c6c6bdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbda3a3a3e8e8e8fefefef5f5f5f0f0f0d6d6d6d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3edededfefefefafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafefefef5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5" }
+
+type Win5Hot = struct { card: bool }
+
+fn win5_hot_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*Win5Hot](ctx)
+    var left = win5_hot_left_mode()
+    var right = win5_hot_right_mode()
+    if m.card {
+        left = win5_hot_left_card()
+        right = win5_hot_right_card()
+    }
+    var r = 0usize
+    while r < 21usize {
+        var i = 0usize
+        while i < 3usize {
+            try win3_rect(b, area.x + f32(i), area.y + f32(r), 1.0, 1.0, style.hex(win5_hex6(left, r * 3usize + i)))
+            i += 1usize
+        }
+        i = 0usize
+        while i < 17usize {
+            try win3_rect(b, area.x + area.width - 17.0 + f32(i), area.y + f32(r), 1.0, 1.0, style.hex(win5_hex6(right, r * 17usize + i)))
+            i += 1usize
+        }
+        var fill: u32 = 0u32
+        if r == 0usize { fill = 12303291u32 }
+        if r == 1usize { fill = 13948116u32 }
+        if r == 19usize { fill = 16448250u32 }
+        if r == 20usize { fill = 16119285u32 }
+        if fill != 0u32 { try win3_rect(b, area.x + 3.0, area.y + f32(r), area.width - 20.0, 1.0, style.hex(fill)) }
+        r += 1usize
+    }
+    ret ok
+}
+// ---- end looks5 group d (hot toolbar combo) ------------------------------------------------------------------
+
+// ---- looks5 group d: v3's hint windows -----------------------------------------------------------------------
+// A toolbar button's hint (TdxBarHintWindow, ref/windows/states/hover-hint-toolbar-*): #FFFFE1 with a 1 px bevel, #E3E3E3 on top
+// and left, #696969 at the bottom and right, Tahoma 11 text 3 in and 2 down. A grid's hint (TcxHintWindow, hover-hint-grid-header-name):
+// a #F9F9F9 face (#F6F6F6 under the top line) in a #646464 line on top and left, #949494 at the foot, the text 7 in and 5 down in grey.
+// `width` and `height` 0: the text's (7 over it and 20 tall; 10 and 25).
+type Win5Hint = struct { grid: bool }
+
+fn win5_hint_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*Win5Hint](ctx)
+    let x = area.x
+    let y = area.y
+    let w = area.width
+    let h = area.height
+    if m.grid {
+        try win3_rect(b, x, y, w, h, style.hex(16382457u32))
+        try win3_rect(b, x, y + 1.0, w, 1.0, style.hex(16119286u32))
+        try win3_rect(b, x + 1.0, y + 1.0, 1.0, h - 2.0, style.hex(16119286u32))
+        try win3_rect(b, x + 1.0, y + 1.0, 1.0, 1.0, style.hex(15987699u32))
+        try win3_rect(b, x, y, w, 1.0, style.hex(6579300u32))
+        try win3_rect(b, x, y, 1.0, h, style.hex(6579300u32))
+        try win3_rect(b, x + 1.0, y + h - 1.0, w - 1.0, 1.0, style.hex(9737364u32))
+        ret win3_rect(b, x + 1.0, y + h - 1.0, 1.0, 1.0, style.hex(9671571u32))
+    }
+    try win3_rect(b, x, y, w, h, style.hex(16777185u32))
+    try win3_rect(b, x, y, w, 1.0, style.hex(14935011u32))
+    try win3_rect(b, x, y, 1.0, h, style.hex(14935011u32))
+    try win3_rect(b, x, y + h - 1.0, w, 1.0, style.hex(6908265u32))
+    ret win3_rect(b, x + w - 1.0, y, 1.0, h, style.hex(6908265u32))
+}
+
+fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, grid: bool, width: f32, height: f32) -> (widget.Node, err) {
+    // The toolbar's hint is Tahoma 12 (measured by ink width on the captures), the grid's Tahoma 11.
+    var hint_px: f32 = 12.3
+    if grid { hint_px = 11.1 }
+    let (dialog_t, dialog_error) = windows_tahoma_theme(a, t, hint_px)
+    if dialog_error != ok { ret (zero, dialog_error) }
+    var words = text_options()
+    words.role = .BodyMedium
+    words.wrap = .None
+    var ink = style.color(t.tokens, .Text)
+    if grid { ink = style.hex(6713980u32) }
+    let (said, said_error) = colored_text(a, 0u64, hint_text, &dialog_t, words, ink)
+    if said_error != ok { ret (zero, said_error) }
+    let (look_style, look_error) = text_style_faced(a, &dialog_t, words)
+    if look_error != ok { ret (zero, look_error) }
+    let (laid, laid_error) = layout.layout(a, hint_text, look_style, layout.Options { width: 100000.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
+    if laid_error != ok { ret (zero, laid_error) }
+    var over: f32 = 7.0
+    var tall: f32 = 20.0
+    var left: f32 = 3.0
+    var drop: f32 = 3.0
+    if grid {
+        over = 10.0
+        tall = 25.0
+        left = 6.0
+        drop = 7.0
+    }
+    var w = width
+    if w == 0.0 { w = f32(u32(laid.bounds.width + 0.5)) + over }
+    var h = height
+    if h == 0.0 {
+        h = tall
+        // (v3's hint carries its own line breaks: each one adds a 15 tall line; a guess for more than one line)
+        var k = 0usize
+        while k < hint_text.len {
+            if hint_text[k] == 10u8 { h += 15.0 }
+            k += 1usize
+        }
+    }
+    let (cells, cells_error) = mem.alloc[Win5Hint](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win5Hint { grid: grid }
+    var none: []const widget.Node = zero
+    let face = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win5_hint_paint, state: widget.bytes_of[Win5Hint](&cells[0usize]) } }, style: sized_style(w, h), children: none }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = said
+    layers[0usize] = face
+    layers[1usize] = widget.positioned(0u64, left, drop, style.defaults(), held[0usize..1usize])
+    ret (widget.stack(key, sized_style(w, h), layers[0usize..2usize]), ok)
+}
+// ---- end looks5 group d (hints) -------------------------------------------------------------------------------
+
+// ---- end looks5 group d (splitters) --------------------------------------------------------------
 
 fn sash_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let s = mem.cast[*Sash](ctx)
@@ -8452,18 +9096,18 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     }
     let (sashes, sashes_error) = mem.alloc[Sash](a, 1usize)
     if sashes_error != ok { ret (zero, TooLarge) }
-    sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: grip_color, across: vertical, arena: a, v3: false, face: sashes_line, edge: sashes_line, dots: sashes_line, ink: sashes_line, hot_len: 0.0, hot_face: sashes_line }
+    sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: grip_color, across: vertical, arena: a, v3: false, face: sashes_line, edge: sashes_line, dots: sashes_line, ink: sashes_line, hot_len: 0.0, hot_face: sashes_line, held: false }
     if t.tokens.profile == .Windows {
         // v3 (ref/windows/dialogs/search-filter-top at 100 %; the 150 % and main-window captures agree
         // with it to a tint): the strip is the dialog face, the hot zone a #A0A0A0 frame with #50A0DF
         // dots whose length follows one rule (see sash_paint_v3). Hover and press tints are guesses.
-        var zone_edge = style.hex(10526880u32)
+        let zone_edge = style.hex(10526880u32)
         let zone_dots = style.hex(5284063u32)
         let zone_len: f32 = 0.0
-        var zone_face = style.color(t.tokens, .Background)
-        if state.hovered { zone_edge = style.hex(8303850u32) }
-        if state.hovered { zone_face = style.hex(15069691u32) }
-        sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: paint.rgba(0.0, 0.0, 0.0, 0.0), across: vertical, arena: a, v3: true, face: style.color(t.tokens, .Background), edge: zone_edge, dots: zone_dots, ink: style.hex(1250067u32), hot_len: zone_len, hot_face: zone_face }
+        let zone_face = style.color(t.tokens, .Background)
+        // looks5 group d: a held strip is as at rest (ref/windows/states/splitter-pressed-filter is the rest crop).
+        // (the strip under the pointer is as at rest too: ref/windows/states/hover-splitter-* are pixel for pixel the held and rest strips)
+        sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: paint.rgba(0.0, 0.0, 0.0, 0.0), across: vertical, arena: a, v3: true, face: style.color(t.tokens, .Background), edge: zone_edge, dots: zone_dots, ink: style.hex(1250067u32), hot_len: zone_len, hot_face: zone_face, held: state.pressed || state.hovered }
     }
     var paint_style = style.defaults()
     paint_style.width = full
@@ -10037,7 +10681,7 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
         if t.tokens.profile == .Windows {
-            let (flat, flat_error) = win_sheet(a, t, key + 1048701u64, items[0usize..suggestions.len], 13.0, win_drop_rows())
+            let (flat, flat_error) = win_sheet(a, t, key + 1048701u64, items[0usize..suggestions.len], 13.0, win_drop_rows(), lit, 0u32)
             if flat_error != ok { ret (zero, flat_error) }
             column[0usize] = flat
         }
@@ -12913,9 +13557,10 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     }
     var caption = text_options()
     caption.wrap = .None
+    caption.size = 11.0
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (heading, heading_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
+    let (heading, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, label)
     if heading_error != ok { ret (zero, heading_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
@@ -13036,7 +13681,10 @@ fn v3_tab_line() -> style.Style {
 
 // One tab and the hairline that follows it (`with_sep`; else a 1 px gap carrying only the
 // strip's bottom line). Both are 22 tall.
-fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, chosen: bool, enabled: bool, state: style.ControlState, action: *const widget.Submit, with_sep: bool, bottom: bool, has_icon: bool, picture_kind: GlyphKind) -> (widget.Node, widget.Node, err) {
+fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, chosen: bool, enabled: bool, raw_state: style.ControlState, action: *const widget.Submit, with_sep: bool, bottom: bool, has_icon: bool, picture_kind: GlyphKind) -> (widget.Node, widget.Node, err) {
+    // looks5 group d: a tab under the pointer is as at rest (ref/windows/states/hover-tab-left-*).
+    var state = raw_state
+    state.hovered = false
     var ink = style.color(t.tokens, .Text)
     if state.hovered && enabled { ink = style.hex(26316u32) }
     if !enabled { ink = style.mix(ink, style.color(t.tokens, .Surface), 0.6) }
@@ -13602,7 +14250,7 @@ fn win_look(t: *const Theme, hovered: bool, pressed: bool, focused: bool, open: 
     var edge = style.color(t.tokens, .Border)
     var chevron = style.hex(7368816u32)
     var edge_width = t.tokens.borders.regular
-    if hovered && !open { face = style.layer(face, ink, 0.03) }
+    // looks5 group d: the edit under the pointer is as at rest (ref/windows/states/hover-combo-box-edit-*), so no hover tint.
     if hovered { chevron = ink }
     if pressed { face = style.layer(face, ink, 0.06) }
     if open || focused {
@@ -13640,8 +14288,8 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     let (value_node, value_error) = colored_text(a, 0u64, shown, &bar_t, words, value_color)
     if value_error != ok { ret (zero, value_error) }
     // The chevron: darker under the pointer (unmeasured), paler disabled; wide table while focused.
-    // Round 6: under the pointer the head is the pale blue frame (look 3) and the chevron stays as at rest (no 1.25 scale).
     var chevron_scale: f32 = 1.0
+    // looks5 group d: no chevron change under the pointer (the captured hovers have the rest chevron).
     if !enabled { chevron_scale = 0.5 }
     let focused = state.focused && enabled
     let (chevron, chevron_error) = win3_chevron(a, c.ink, focused, false, chevron_scale)
@@ -13665,10 +14313,11 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var head_look = 0u32
     if open && enabled { head_look = 1u32 }
     if state.pressed && enabled { head_look = 2u32 }
-    if state.hovered && enabled && head_look == 0u32 { head_look = 3u32 }
+    // looks5 group d: only the drop button's pointer shows the hot frame (v3's edit under the pointer is as at rest).
+    if enabled && !open && !state.pressed && control_state(t, key + 1048703u64, enabled, false).hovered { head_look = 4u32 }
     let (frame, frame_error) = win3_frame(a, c.face, style.color(t.tokens, .Background), tone, false, head_w, 21.0, edge_y, edge_x, head_look)
     if frame_error != ok { ret (zero, frame_error) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = frame
     layers[1usize] = row
@@ -13683,6 +14332,14 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         layers[2usize] = widget.positioned(0u64, 3.0, 3.0, style.defaults(), held[0usize..1usize])
         count = 3usize
     }
+    var zone_style = sized_style(17.0, 21.0)
+    zone_style.overflow = .Visible
+    let (zone_held, zone_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if zone_held_error != ok { ret (zero, TooLarge) }
+    var zone_none: []const widget.Node = zero
+    zone_held[0usize] = widget.region(key + 1048703u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](toggle), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: false }, zone_style, zone_none)
+    layers[count] = widget.positioned(0u64, head_w - 17.0, 0.0, zone_style, zone_held[0usize..1usize])
+    count += 1usize
     let content = widget.stack(0u64, sized_style(head_w, 21.0), layers[0usize..count])
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
@@ -13771,11 +14428,12 @@ fn win_drop_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit
 
 // The drop-down's frame round `items`: white, a 1 px grey edge, square; past
 // `win_drop_rows` rows the rows scroll in a viewport (keyed `scroll_key`).
-fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []const widget.Node, row_h: f32, max_rows: usize) -> (widget.Node, err) {
+fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []const widget.Node, row_h: f32, max_rows: usize, lit: usize, ground: u32) -> (widget.Node, err) {
     // looks4 group d: the popup is a 1 px #0078D7 box (measured on TcxComboBoxPopupWindow grabs), no
     // shadow inside the window rect, and past eight rows a 16 wide #F0F0F0 scroll track with a 2 wide thumb.
     var frame_style = style.defaults()
     frame_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    if ground != 0u32 { frame_style.background = paint.Brush { Solid: style.hex(ground) } }
     frame_style.border = style.Border { width: 1.0, color: style.hex(30935u32) }
     frame_style.padding = edges(1.0, 1.0, 1.0, 1.0)
     frame_style.min_width = style.Length { Px: 40.0 }
@@ -13790,30 +14448,157 @@ fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []co
         if stacked_error != ok { ret (zero, TooLarge) }
         stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items)
         let view = widget.scroll(scroll_key, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view_style, stacked[0usize..1usize])
-        let (track, track_error) = win4_track(a, f32(max_rows) * row_h, items.len)
-        if track_error != ok { ret (zero, track_error) }
+        // looks5 group d: the track is painted at the list's right edge (16 wide, inside the 1 px frame).
+        let (cells, cells_error) = mem.alloc[Win4Track](a, 1usize)
+        if cells_error != ok { ret (zero, TooLarge) }
+        cells[0usize] = Win4Track { rows: u32(items.len) }
+        var none: []const widget.Node = zero
+        var fill = style.defaults()
+        fill.width = style.Length { Percent: 100.0 }
+        fill.height = style.Length { Percent: 100.0 }
+        let track = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win5_track_paint, state: widget.bytes_of[Win4Track](&cells[0usize]) } }, style: fill, children: none }
+        view_style.width = style.Length { Percent: 100.0 }
+        let wide_view = widget.scroll(scroll_key, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view_style, stacked[0usize..1usize])
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
-        pair[0usize] = view
+        pair[0usize] = wide_view
         pair[1usize] = track
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         var across = style.defaults()
         across.width = style.Length { Percent: 100.0 }
-        held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, across, pair[0usize..2usize])
+        across.height = style.Length { Px: f32(max_rows) * row_h }
+        held[0usize] = widget.stack(0u64, across, pair[0usize..2usize])
         shown = held[0usize..1usize]
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, frame_style, shown), ok)
+    let framed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, frame_style, shown)
+    // looks5 group d: v3's popup frames land between pixels for some list sizes (measured per size on the
+    // popup grabs): 3 rows of 13 (Row Color), 3 of 15 (Card Art Position), 15 of 15 (Condition) show a
+    // soft bottom line (67 % blue), and the right line is absent (Row Color, Card Art) or half (Condition).
+    var soft_bottom: f32 = 1.0
+    var soft_right: f32 = 1.0
+    var inner = 16777215u32
+    if items.len == 3usize && row_h == 13.0 {
+        soft_bottom = 0.675
+        soft_right = 0.0
+        inner = 16580095u32
+    }
+    if items.len == 3usize && row_h == 15.0 {
+        soft_bottom = 0.67
+        soft_right = 0.0
+        inner = 16580095u32
+    }
+    if items.len == 15usize && row_h == 15.0 {
+        soft_bottom = 0.667
+        soft_right = 0.5
+        inner = 16711423u32
+    }
+    if lit + 1usize == items.len { soft_bottom = 1.0 }
+    if soft_bottom == 1.0 && soft_right == 1.0 { ret (framed, ok) }
+    let (cells, cells_error) = mem.alloc[Win5Edges](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win5Edges { bottom: soft_bottom, right: soft_right, inner: inner, lit: u32(lit), rows: u32(items.len), row_h: row_h }
+    var none: []const widget.Node = zero
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = framed
+    pair[1usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win5_edges_paint, state: widget.bytes_of[Win5Edges](&cells[0usize]) } }, style: fill, children: none }
+    var across = style.defaults()
+    across.width = style.Length { Percent: 100.0 }
+    across.height = style.Length { Px: f32(items.len) * row_h + 2.0 }
+    ret (widget.stack(0u64, across, pair[0usize..2usize]), ok)
+}
+
+fn win5_track_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    ret win4_track_paint(ctx, b, geometry.Rect { x: area.x + area.width - 16.0, y: area.y, width: 16.0, height: area.height })
+}
+
+fn win5_flat_ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    // The ring and the 12 wide drop button at the right of the 127 wide control (cells measured on the
+    // toolbar of the live main window): x 114 and 125 are the frame's and the button's right lines.
+    let x = area.x
+    let y = area.y
+    let w = area.width
+    let h = area.height
+    try win3_rect(b, x, y, w - 1.0, 1.0, style.hex(16448250u32))
+    try win3_rect(b, x + w - 1.0, y, 1.0, 1.0, style.hex(16119285u32))
+    // (the card name combo's frame sides are white, the Mode combo's #F9F9F9 and #F7F7F7)
+    var side_left = style.hex(16382457u32)
+    var side_right = style.hex(16250871u32)
+    if w != 127.0 {
+        side_left = style.hex(16777215u32)
+        side_right = style.hex(16777215u32)
+    }
+    try win3_rect(b, x, y + 1.0, 1.0, h - 1.0, side_left)
+    try win3_rect(b, x + w - 13.0, y + 1.0, 1.0, 1.0, style.hex(16448250u32))
+    try win3_rect(b, x + w - 13.0, y + 2.0, 1.0, h - 3.0, side_right)
+    try win3_rect(b, x + w - 13.0, y + h - 1.0, 1.0, 1.0, style.hex(16579836u32))
+    try win3_rect(b, x + w - 12.0, y + 1.0, 10.0, 1.0, style.hex(16119285u32))
+    try win3_rect(b, x + w - 12.0, y + 2.0, 10.0, h - 3.0, style.hex(15790320u32))
+    try win3_rect(b, x + w - 12.0, y + h - 1.0, 10.0, 1.0, style.hex(16448250u32))
+    try win3_rect(b, x + w - 2.0, y + 1.0, 1.0, 1.0, style.hex(16448250u32))
+    try win3_rect(b, x + w - 2.0, y + 2.0, 1.0, h - 3.0, style.hex(16316664u32))
+    try win3_rect(b, x + w - 2.0, y + h - 1.0, 1.0, 1.0, style.hex(16579836u32))
+    ret win3_rect(b, x + w - 1.0, y + 1.0, 1.0, h - 1.0, style.hex(16250871u32))
+}
+
+type Win5Edges = struct { bottom: f32, right: f32, inner: u32, lit: u32, rows: u32, row_h: f32 }
+
+fn win5_edges_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*Win5Edges](ctx)
+    let blue = style.hex(30935u32)
+    let white = style.hex(16777215u32)
+    let pale = style.hex(m.inner)
+    var r = 0u32
+    while r < m.rows {
+        let top = area.y + 1.0 + f32(r) * m.row_h
+        if r == m.lit {
+            if m.right < 1.0 { try win3_rect(b, area.x + area.width - 2.0, top, 2.0, m.row_h, blue) }
+        } else {
+            if m.right < 1.0 { try win3_rect(b, area.x + area.width - 1.0, top, 1.0, m.row_h, style.mix(white, blue, m.right)) }
+            try win3_rect(b, area.x + 1.0, top, 1.0, m.row_h, pale)
+        }
+        r += 1u32
+    }
+    if m.lit != 0u32 { try win3_rect(b, area.x + 1.0, area.y + 1.0, area.width - 2.0, 1.0, pale) }
+    if m.bottom < 1.0 { try win3_rect(b, area.x + 1.0, area.y + area.height - 1.0, area.width - 1.0, 1.0, style.mix(white, blue, m.bottom)) }
+    ret ok
 }
 
 // The open list under a head: a modal overlay keyed `overlay_key` of the rows keyed
 // `first + index`, matching the anchor's width; a press outside fires `dismiss`.
 fn win_drop(a: *mem.Arena, overlay_key: widget.Key, anchor: widget.Key, first: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, picks: []const widget.Submit, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (body, body_error) = win_drop_body(a, overlay_key, first, t, label, options, icons, selected, picks, 0.0, 15usize, 0u32)
+    if body_error != ok { ret (zero, body_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = body
+    ret (widget.overlay(overlay_key, widget.Overlay { anchor: anchor, placement: .BelowMatch, offset: geometry.Point { x: 0.0, y: 0.0 }, modal: true, dismiss: *dismiss }, style.defaults(), held[0usize..1usize]), ok)
+}
+
+// looks5 group d: the open list on its own, `width` wide (the popup window of a capture, without its head),
+// rows keyed `key + 1 + index`; `selected` is the lit row. Windows look only.
+fn win_list_standalone(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, picks: []const widget.Submit, width: f32, row_h: f32, max_rows: usize, ground: u32) -> (widget.Node, err) {
+    let (body, body_error) = win_drop_body(a, key, key + 1u64, t, label, options, icons, selected, picks, row_h, max_rows, ground)
+    if body_error != ok { ret (zero, body_error) }
+    var box = style.defaults()
+    box.width = style.Length { Px: width }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = body
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, box, held[0usize..1usize]), ok)
+}
+
+fn win_drop_body(a: *mem.Arena, overlay_key: widget.Key, first: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, picks: []const widget.Submit, row_h: f32, max_rows: usize, ground: u32) -> (widget.Node, err) {
     let (items, items_error) = mem.alloc[widget.Node](a, options.len)
     if items_error != ok { ret (zero, TooLarge) }
     let lit = win_lit_row(t, first, options.len, selected)
     var rowh = win_row_height()
     if icons.len == options.len { rowh = win_icon_row_height() }
+    if row_h > 0.0 { rowh = row_h }
     var i = 0usize
     while i < options.len {
         var pic: []const widget.Node = zero
@@ -13832,17 +14617,16 @@ fn win_drop(a: *mem.Arena, overlay_key: widget.Key, anchor: widget.Key, first: w
         items[i] = widget.semantics(0u64, entry, stretched, wrapped[0usize..1usize])
         i += 1usize
     }
-    let (sheet_node, sheet_error) = win_sheet(a, t, overlay_key + 1048576u64, items[0usize..options.len], rowh, 15usize)
+    let (sheet_node, sheet_error) = win_sheet(a, t, overlay_key + 1048576u64, items[0usize..options.len], rowh, max_rows, lit, ground)
     if sheet_error != ok { ret (zero, sheet_error) }
     var list_sem: widget.Semantics = zero
     list_sem.role = accessibility.ROLE_LISTBOX
     list_sem.label = label
     list_sem.row_count = u32(options.len)
-    let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
-    if held_error != ok { ret (zero, TooLarge) }
-    held[1usize] = sheet_node
-    held[0usize] = widget.semantics(0u64, list_sem, style.defaults(), held[1usize..2usize])
-    ret (widget.overlay(overlay_key, widget.Overlay { anchor: anchor, placement: .BelowMatch, offset: geometry.Point { x: 0.0, y: 0.0 }, modal: true, dismiss: *dismiss }, style.defaults(), held[0usize..1usize]), ok)
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = sheet_node
+    ret (widget.semantics(0u64, list_sem, style.defaults(), inner[0usize..1usize]), ok)
 }
 
 // A select (and so a picker's popup): the head, and open, the drop-down keyed `key + 1`
@@ -13933,16 +14717,23 @@ type WinArrow = struct { color: paint.Color, arena: *mem.Arena }
 
 fn win_arrow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let m = mem.cast[*WinArrow](ctx)
-    let (pb, pb_error) = geometry.path_builder(m.arena, 4usize, 4usize)
-    if pb_error != ok { ret TooLarge }
-    var builder = pb
-    let x0 = area.x + (area.width - 5.0) * 0.5
-    let y0 = area.y + (area.height - 3.0) * 0.5
-    try geometry.move_to(&builder, geometry.Point { x: x0, y: y0 })
-    try geometry.line_to(&builder, geometry.Point { x: x0 + 5.0, y: y0 })
-    try geometry.line_to(&builder, geometry.Point { x: x0 + 2.5, y: y0 + 3.0 })
-    try geometry.close_path(&builder)
-    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: m.color } } })
+    // looks5 group d: the arrow is the capture's pixels (6 wide, 4 tall; grey values over the #F0F0F0 button).
+    let table = "9c55555555a9c247000053c9..c24753c9......c2c9...."
+    let at_x = f32(u32(area.x + 1.5))
+    let at_y = f32(u32(area.y + 5.5))
+    var j = 0usize
+    while j < 4usize {
+        var i = 0usize
+        while i < 6usize {
+            let v = win3_byte(table, j * 6usize + i)
+            if v < 256u32 {
+                try win3_rect(b, at_x + f32(i), at_y + f32(j), 1.0, 1.0, with_alpha(m.color, f32(240u32 - v) / 240.0))
+            }
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
 }
 
 // The toolbar combo (`options.flat`), measured in the live v3 main window at 100 %: a 16 tall white
@@ -13990,19 +14781,35 @@ fn win_flat_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     let arrow = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&arrows[0usize]), measure: mark_measure, paint: win_arrow_paint, state: widget.bytes_of[WinArrow](&arrows[0usize]) } }, style: sized_style(10.0, 14.0), children: none }
     let button_edge = style.hex(16250871u32)
     let button_face = style.color(t.tokens, .Background)
-    let bare = style.ResolvedControl { background: button_face, foreground: ink, border: button_edge, border_width: 1.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 12.0, min_height: 14.0, corners: zero }
+    let bare = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: ink, border: button_edge, border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 12.0, min_height: 14.0, corners: zero }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
     let (opener, opener_error) = pressable_states(a, key + 1u64, t, 3u8, "Choices", bare, enabled && !options.read_only, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, arrow)
     if opener_error != ok { ret (zero, opener_error) }
     row_parts[1usize] = opener
+    // looks5 group d: the frame's ring is painted (top #FAFAFA, left #F9F9F9, right #F7F7F7, the bottom row
+    // stays white: measured on the toolbar of the live main window), not a one colour border.
     var frame_style = style.defaults()
     frame_style.width = style.Length { Px: options.width }
-    frame_style.min_height = style.Length { Px: 16.0 }
+    frame_style.height = style.Length { Px: 16.0 }
     frame_style.background = paint.Brush { Solid: style.hex(16777215u32) }
-    frame_style.border = style.Border { width: 1.0, color: style.hex(16448250u32) }
-    frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    let frame = widget.flex(key + 1048701u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, frame_style, row_parts[0usize..2usize])
+    var inner_style = style.defaults()
+    inner_style.width = style.Length { Percent: 100.0 }
+    inner_style.height = style.Length { Px: 16.0 }
+    inner_style.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 1.0 } }
+    let inner = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, inner_style, row_parts[0usize..2usize])
+    var ring_none: []const widget.Node = zero
+    var ring_fill = style.defaults()
+    ring_fill.width = style.Length { Percent: 100.0 }
+    ring_fill.height = style.Length { Percent: 100.0 }
+    let (ring_cells, ring_error) = mem.alloc[Win3Lines](a, 1usize)
+    if ring_error != ok { ret (zero, TooLarge) }
+    ring_cells[0usize] = Win3Lines { shade: 0.0 }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[1usize] = inner
+    layers[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&ring_cells[0usize]), measure: win3_measure, paint: win5_flat_ring_paint, state: widget.bytes_of[Win3Lines](&ring_cells[0usize]) } }, style: ring_fill, children: ring_none }
+    let frame = widget.stack(key + 1048701u64, frame_style, layers[0usize..2usize])
     var foot = style.defaults()
     foot.height = style.Length { Px: 1.0 }
     foot.background = paint.Brush { Solid: style.hex(16119285u32) }
@@ -14010,7 +14817,28 @@ fn win_flat_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = frame
     column[1usize] = widget.box(0u64, foot, zero)
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), column[0usize..2usize]), ok)
+    let flat_node = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), column[0usize..2usize])
+    // (The editor is not hit by the pointer, so the item is hot while the pointer is over its drop button: the capture's
+    // edit and drop hovers are the same pixels.)
+    if !enabled || !control_state(t, key + 1u64, enabled, false).hovered { ret (flat_node, ok) }
+    // looks5 group d: under the pointer the toolbar item shows its hot ring (2 px round the control).
+    let (hot_cells, hot_error) = mem.alloc[Win5Hot](a, 1usize)
+    if hot_error != ok { ret (zero, TooLarge) }
+    hot_cells[0usize] = Win5Hot { card: options.width != 127.0 }
+    var hot_none: []const widget.Node = zero
+    let ring = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&hot_cells[0usize]), measure: win3_measure, paint: win5_hot_paint, state: widget.bytes_of[Win5Hot](&hot_cells[0usize]) } }, style: sized_style(options.width + 4.0, 21.0), children: hot_none }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[1usize] = ring
+    let (flat_held, flat_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if flat_held_error != ok { ret (zero, TooLarge) }
+    flat_held[0usize] = flat_node
+    pair[0usize] = widget.positioned(0u64, 2.0, 2.0, sized_style(options.width, 17.0), flat_held[0usize..1usize])
+    // The node is 4 larger each way and pulled out by 4 margins, so the item's layout footprint does not change.
+    var outer = sized_style(options.width + 4.0, 21.0)
+    let pull = style.Length { Px: 0.0 - 2.0 }
+    outer.margin = style.EdgeLengths { left: pull, top: pull, right: pull, bottom: pull }
+    ret (widget.stack(0u64, outer, pair[0usize..2usize]), ok)
 }
 
 fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
@@ -14021,9 +14849,6 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     let enabled = options.enabled
     let state_edit = control_state(t, key, enabled, false)
     let state_button = control_state(t, key + 1u64, enabled, false)
-    // Round 6: an edit takes no hover, so a list-style combo has a hover-only region round its frame (`key + 1048650`).
-    let state_over = control_state(t, key + 1048650u64, enabled, false)
-    let hot = enabled && (state_edit.hovered || state_button.hovered || state_over.hovered)
     let focused = enabled && (state_edit.focused || state_button.focused)
     // looks3 group d: an editable combo with the focus (or its list open) is the square frame with
     // the accent line under it; a list-style (read-only) one keeps the rounded frame and shows
@@ -14032,10 +14857,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     var edge_look = 0u32
     if enabled && !square && open { edge_look = 1u32 }
     if enabled && !square && state_button.pressed { edge_look = 2u32 }
-    // The pointer over a list-style combo (anywhere on it) or over the drop button of an unfocused editable one: the pale
-    // blue frame (look 3; states/hover-combo-box-*, the unfocused editable one is a guess); the focused editable combo
-    // (square) keeps its frame and boxes its drop button instead (below).
-    if hot && !square && edge_look == 0u32 && (options.read_only || state_button.hovered) { edge_look = 3u32 }
+    if enabled && !square && !open && !state_button.pressed && state_button.hovered { edge_look = 4u32 }
     let c = win_look(t, state_edit.hovered || state_button.hovered, false, false, false, enabled, options.read_only)
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -14077,7 +14899,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     text_box.padding = edges(0.0, 0.0, 0.0, 2.0)
     let text_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, text_box, row_parts[0usize..1usize])
     var chevron_scale: f32 = 1.0
-    if state_edit.hovered || state_button.hovered { chevron_scale = 1.25 }
+    // (the chevron keeps its rest strength under the pointer)
     if !enabled { chevron_scale = 0.5 }
     if edge_look != 0u32 { chevron_scale = 1.0 }
     let (chevron, chevron_error) = win3_chevron(a, c.ink, focused && !square && edge_look == 0u32, square, chevron_scale)
@@ -14101,22 +14923,10 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     layers[1usize] = widget.positioned(0u64, 3.0, 0.0, style.defaults(), held_text[0usize..1usize])
     layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), row_parts[1usize..2usize])
     var count = 3usize
-    if square && state_button.hovered && !state_button.pressed {
-        // Round 6: the drop button of the focused editable combo under the pointer is boxed in pale blue
-        // (states/hover-combo-box-drop-search), under the chevron.
-        let (box_node, box_error) = win4_held_box(a, 1.0)
-        if box_error != ok { ret (zero, box_error) }
-        let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
-        if box_held_error != ok { ret (zero, TooLarge) }
-        box_held[0usize] = box_node
-        layers[3usize] = layers[2usize]
-        layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), box_held[0usize..1usize])
-        count = 4usize
-    }
     if square && state_button.pressed {
         // looks4 group d: an editable combo's held drop button is a boxed #CCE4F7 button (measured on
         // ref/windows/states/combo-box-drop-button-pressed-search), under the chevron.
-        let (box_node, box_error) = win4_held_box(a, 0.0)
+        let (box_node, box_error) = win4_held_box(a)
         if box_error != ok { ret (zero, box_error) }
         let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
         if box_held_error != ok { ret (zero, TooLarge) }
@@ -14125,7 +14935,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), box_held[0usize..1usize])
         count = 4usize
     }
-    if focused && options.read_only && (edge_look == 0u32 || edge_look == 3u32) {
+    if focused && options.read_only && edge_look == 0u32 {
         let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(options.width - 22.0), 16.0)
         if dots_error != ok { ret (zero, dots_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
@@ -14134,13 +14944,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         layers[count] = widget.positioned(0u64, 3.0, 3.0, style.defaults(), held[0usize..1usize])
         count += 1usize
     }
-    let framed = widget.stack(key + 1048701u64, sized_style(options.width, 21.0), layers[0usize..count])
-    if !options.read_only { ret (framed, ok) }
-    var no_gesture: widget.GestureAction = zero
-    let (over, over_error) = mem.alloc[widget.Node](a, 1usize)
-    if over_error != ok { ret (zero, TooLarge) }
-    over[0usize] = framed
-    ret (widget.region(key + 1048650u64, widget.Region { gesture: no_gesture, gestures: 4u8, enabled: enabled, focusable: false }, sized_style(options.width, 21.0), over[0usize..1usize]), ok)
+    ret (widget.stack(key + 1048701u64, sized_style(options.width, 21.0), layers[0usize..count]), ok)
 }
 // A list box (TcxListBox): v3 has none of its own, so this is the list its customization window
 // shows (TcxCustomGridItemsInnerListBox, measured on ref/windows/dialogs/view-show-columns at
@@ -14157,6 +14961,8 @@ fn win3_lines_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     try win3_rect(b, x, y + 1.0, 1.0, area.height - 1.0, style.hex(10592673u32))
     try win3_rect(b, x + area.width - 2.0, y + 1.0, 1.0, area.height - 2.0, style.hex(15395562u32))
     try win3_rect(b, x + 1.0, y + area.height - 1.0, area.width - 3.0, 1.0, style.hex(16316664u32))
+    // looks5 group d: the second row under the top line is #DCDCDC (a chosen first row covers it), measured on the states grabs.
+    try win3_rect(b, x + 1.0, y + 1.0, area.width - 4.0, 1.0, style.hex(14474460u32))
     // looks4: the column past the right line (#FAFAFA, #F1F1F1 at the top, #F5F5F5 below it), measured on the states grabs.
     try win3_rect(b, x + area.width - 1.0, y + 2.0, 1.0, area.height - 3.0, style.hex(16448250u32))
     try win3_rect(b, x + area.width - 1.0, y, 1.0, 1.0, style.hex(15855857u32))
@@ -14351,7 +15157,8 @@ fn win3_byte(table: str, at: usize) -> u32 {
 }
 
 fn win3_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, color: paint.Color) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: color } } })
+    // looks5 group d: on whole device pixels at every scale (winpx.fill is the plain rectangle at 1.0).
+    ret winpx.fill(b, x, y, w, h, color)
 }
 
 fn win3_gray(f: *const Win3Frame, v: u32) -> paint.Color {
@@ -14410,8 +15217,7 @@ fn win3_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try win3_rect(b, x, y + h - 1.0, w, 1.0, style.mix(style.hex(10535904u32), f.ground, f.tone))
         ret ok
     }
-    if f.look == 3u32 { ret win4_hover_paint(f, b, x, y, w, h) }
-    if f.look > 0u32 { ret win4_hot_paint(f, b, x, y, w, h) }
+    if f.look == 1u32 || f.look == 2u32 || f.look == 4u32 { ret win4_hot_paint(f, b, x, y, w, h, 1.0) }
     try win3_rect(b, x + 2.0, y + 2.0, w - 4.0, h - 4.0, f.face)
     // looks4 group d: v3's theme draws these four rows with a sub-pixel phase that drifts with the
     // control's window y (measured at y 41, 71, 99, 159, 278: linear, 71 is the table below).
@@ -14441,7 +15247,10 @@ fn win3_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     try win3_corner(f, b, win3_corner_tl(), x, y, false, false)
     try win3_corner(f, b, win3_corner_tr(), x + w - 5.0, y, true, false)
     try win3_corner(f, b, win3_corner_bl(), x, y + h - 5.0, false, true)
-    ret win3_corner(f, b, win3_corner_br(), x + w - 5.0, y + h - 5.0, true, true)
+    try win3_corner(f, b, win3_corner_br(), x + w - 5.0, y + h - 5.0, true, true)
+    // looks5 group d: the first frame after a click (look 3) is the settled open frame at 92 % over this one.
+    if f.look == 3u32 { ret win4_hot_paint(f, b, x, y, w, h, 0.92) }
+    ret ok
 }
 
 // A frame node of `w` x `h` (w 0: the width offered): `face` is the rounded frame's fill, `tone`
@@ -14451,7 +15260,14 @@ fn win3_frame(a: *mem.Arena, face: paint.Color, ground: paint.Color, tone: f32, 
     if cells_error != ok { ret (zero, TooLarge) }
     var bleed: f32 = 1.0
     if square { bleed = 0.0 }
-    cells[0usize] = Win3Frame { face: face, ground: ground, tone: tone, square: square, bleed: bleed, edge_y: edge_y, edge_x: edge_x, look: look }
+    // looks5 group d: an `edge_x` of 10000 and up flags the first frame after the click (look 3).
+    var at_x = edge_x
+    var shown_look = look
+    if edge_x >= 10000.0 {
+        at_x = edge_x - 10000.0
+        if look == 1u32 { shown_look = 3u32 }
+    }
+    cells[0usize] = Win3Frame { face: face, ground: ground, tone: tone, square: square, bleed: bleed, edge_y: edge_y, edge_x: at_x, look: shown_look }
     var none: []const widget.Node = zero
     var box = style.defaults()
     if w > 0.0 {
@@ -14582,19 +15398,33 @@ fn widget_one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
 // A check box in a row `high` tall; `flush` drops the 2 unit transparent border at its left
 // (TcxCheckBox with Style.TransparentBorder = False is 17 tall and flush). Windows look only.
 fn windows_checkbox_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, 0u32)
+    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
+    ret (row, row_error)
+}
+
+// looks5: `windows_checkbox_sized` as the window `context` of the live captures draws it, the control `window_y` px down
+// its window (context 0 the Options pages, 1 the Filter window's Cards tab; see scripts/gen_winmark.py).
+fn windows_checkbox_phase(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, context: u32, window_x: f32, window_y: f32) -> (widget.Node, err) {
+    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, Phase { context: context, x: window_x, y: window_y })
     ret (row, row_error)
 }
 
 // A radio button in a row `high` tall (TcxRadioButton is 17, a TcxRadioGroup's rows 42). Windows only.
 fn windows_radio_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, 0u32)
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: 2u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
     ret (row, row_error)
 }
 
 // `windows_radio_sized` for a radio of the Options pages' groups (their discs are resampled, see e.ui.winmark).
 fn windows_radio_options(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, 1u32)
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: 6u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
+    ret (row, row_error)
+}
+
+// looks5: a radio of the window `context` (2 Missing Set Cards, 3 Search for Card, 4 the Filter window's Blocks row,
+// 5 its Match group, 6 the Options pages' groups), `window_y` px down its window.
+fn windows_radio_phase(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32, context: u32, window_x: f32, window_y: f32) -> (widget.Node, err) {
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: context, x: window_x, y: window_y })
     ret (row, row_error)
 }
 
@@ -14631,16 +15461,26 @@ fn group_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
     let y = area.y + g.top
     let w = g.right - g.left
     let h = g.bottom - g.top
+    // looks5: the side lines run from the row under the top line's first row to the bottom line's first row, on whole
+    // rows: the capture's corner pixels are the full line colour (a blend of the sides with the 65 % rows gives 5 to 7 levels).
+    let side_top = f32(i32(y)) + 1.0
+    let side_end = f32(i32(y + h - 1.0)) + 1.0
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, w, 1.0), brush: brush } })
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + h - 1.0, w, 1.0), brush: brush } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + 1.0, 1.0, h - 2.0), brush: brush } })
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, y + 1.0, 1.0, h - 2.0), brush: brush } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, side_top, 1.0, side_end - side_top), brush: brush } })
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, side_top, 1.0, side_end - side_top), brush: brush } })
 }
 
 // `windows_group_sized` with the frame's outer extents given: (`left`, `top`) to (`right`, `bottom`) in
 // the group's units (fractional: the captures place some frames between pixels).
 fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, enabled: bool, width: f32, height: f32, left: f32, top: f32, right: f32, bottom: f32, body: []const widget.Node) -> (widget.Node, err) {
-    let face = style.color(t.tokens, .Background)
+    let (made, made_error) = windows_group_on(a, key, t, label, enabled, width, height, left, top, right, bottom, style.color(t.tokens, .Background), body)
+    ret (made, made_error)
+}
+
+// looks5: `windows_group_exact` on a surface of `face` (the Filter window's tab page is #F9F9F9, not the dialog's
+// #F0F0F0: the caption's cut-out takes its colour).
+fn windows_group_on(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, enabled: bool, width: f32, height: f32, left: f32, top: f32, right: f32, bottom: f32, face: paint.Color, body: []const widget.Node) -> (widget.Node, err) {
     var ink = style.color(t.tokens, .Text)
     if !enabled { ink = style.mix(ink, face, 0.55) }
     let (frames, frames_error) = mem.alloc[GroupFrame](a, 1usize)
@@ -14656,8 +15496,24 @@ fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     var caption = text_options()
     caption.wrap = .None
     caption.role = .BodyMedium
-    let (heading, heading_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
+    caption.size = 11.0
+    // looks5: a '&' in the caption marks its mnemonic (the Filter window's "&Match"), underlined at the baseline.
+    let (shown, mark_at, mark_error) = winbutton.mnemonic(a, label)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (words, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, shown)
     if heading_error != ok { ret (zero, heading_error) }
+    var heading = words
+    if mark_at < shown.len {
+        let (metric, metric_fit, heading_base, metric_error) = run_metrics_faced(a, &dialog_t, caption, shown)
+        if metric_error != ok { ret (zero, metric_error) }
+        let (rule, rule_error) = under_node(a, ink, choices_hinted_width(shown[mark_at..mark_at + 1usize]), 0.0, 0.333, 1.0)
+        if rule_error != ok { ret (zero, rule_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = words
+        pair[1usize] = widget.positioned(0u64, choices_hinted_width(shown[0usize..mark_at]), f32(i32(heading_base + 1.0 + 0.5)), style.defaults(), mem_one_node(a, rule))
+        heading = widget.stack(0u64, sized_style(heading_width, 15.0), pair[0usize..2usize])
+    }
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: face }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize + body.len)
@@ -14671,7 +15527,7 @@ fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     }
     var sem: widget.Semantics = zero
     sem.role = 2u8
-    sem.label = label
+    sem.label = shown
     ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, height), parts[0usize..2usize + body.len]))), ok)
 }
 
@@ -14679,33 +15535,41 @@ fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
 // each 42 tall (v3's items fill the group), the mark flush at the left and the caption centred
 // beside it. `selected` is the chosen index (past the end: none). Windows look only.
 fn windows_radio_group_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32) -> (widget.Node, err) {
-    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, false)
+    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, false, 0.0 - 1.0, 0.0 - 1.0)
     ret (made, made_error)
 }
 
 // A TcxRadioGroup with Style.BorderStyle = ebsFlat (the Search for Card dialog's): the square frame of a
 // TcxGroupBox in place of the Options pages' fractional one.
 fn windows_radio_group_flat(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32) -> (widget.Node, err) {
-    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, true)
+    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, true, 0.0 - 1.0, 0.0 - 1.0)
     ret (made, made_error)
 }
 
-fn windows_radio_group_kind(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool) -> (widget.Node, err) {
+// looks5: either group `window_y` px down its window (the discs' sub-pixel phase follows it).
+fn windows_radio_group_at(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool, window_x: f32, window_y: f32) -> (widget.Node, err) {
+    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, flat, window_x, window_y)
+    ret (made, made_error)
+}
+
+fn windows_radio_group_kind(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool, window_x: f32, window_y: f32) -> (widget.Node, err) {
     if actions.len != labels.len { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
     if items_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < labels.len {
         var item: widget.Node = zero
-        if flat {
-            let (made, made_error) = windows_radio_sized(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, 42.0)
-            if made_error != ok { ret (zero, made_error) }
-            item = made
-        } else {
-            let (made, made_error) = windows_radio_options(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, 42.0)
-            if made_error != ok { ret (zero, made_error) }
-            item = made
+        var item_y: f32 = 0.0 - 1.0
+        var item_x: f32 = 0.0 - 1.0
+        if window_y >= 0.0 && window_x >= 0.0 {
+            item_y = window_y + 18.0 + 42.0 * f32(i)
+            item_x = window_x + 8.0
         }
+        var context = 6u32
+        if flat { context = 3u32 }
+        let (made, made_error) = windows_radio_phase(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, 42.0, context, item_x, item_y)
+        if made_error != ok { ret (zero, made_error) }
+        item = made
         items[i] = widget.positioned(0u64, 8.0, 18.0 + 42.0 * f32(i), style.defaults(), widget_one_of(a, item))
         i += 1usize
     }
@@ -14717,7 +15581,7 @@ fn windows_radio_group_kind(a: *mem.Arena, key: widget.Key, t: *const Theme, lab
 // them that are the page's top edge), the chosen tab 22 tall on the page's #F9F9F9 face with its
 // left edge #E5E5E5, a 1 px #E5E5E5 left edge on every tab (the last also closes on the right).
 // Measured on ref/windows/dialogs/search-filter-top, view-show-columns. Text is Tahoma 11 px.
-type Win3Tab = struct { chosen: bool, closes: bool, ground: paint.Color, lit: bool }
+type Win3Tab = struct { chosen: bool, closes: bool, ground: paint.Color, lit: bool, bare_left: bool }
 
 fn win3_tab_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let f = mem.cast[*Win3Tab](ctx)
@@ -14733,7 +15597,8 @@ fn win3_tab_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if f.lit { top = style.hex(15658734u32) }
         try win3_rect(b, x + 1.0, y, w - 2.0, 1.0, top)
         try win3_rect(b, x + 1.0, y + 1.0, w - 2.0, 1.0, style.hex(15921906u32))
-        try win3_rect(b, x, y + 1.0, 1.0, h - 1.0, edge)
+        // looks5 group d: the Customization strip's chosen first tab has no left edge (ref/windows/states/tab-pressed-customization-columns).
+        if f.bare_left { try win3_rect(b, x, y + 1.0, 1.0, h - 1.0, style.hex(16382457u32)) } else { try win3_rect(b, x, y + 1.0, 1.0, h - 1.0, edge) }
         if f.lit {
             try win3_rect(b, x, y, 1.0, 1.0, style.hex(15921906u32))
             try win3_rect(b, x, y + 1.0, 1.0, 1.0, style.hex(15198440u32))
@@ -14751,10 +15616,10 @@ fn win3_tab_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     ret ok
 }
 
-fn win3_tab_face(a: *mem.Arena, chosen: bool, closes: bool, ground: paint.Color, lit: bool) -> (widget.Node, err) {
+fn win3_tab_face(a: *mem.Arena, chosen: bool, closes: bool, ground: paint.Color, lit: bool, bare_left: bool) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[Win3Tab](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
-    cells[0usize] = Win3Tab { chosen: chosen, closes: closes, ground: ground, lit: lit }
+    cells[0usize] = Win3Tab { chosen: chosen, closes: closes, ground: ground, lit: lit, bare_left: bare_left }
     var none: []const widget.Node = zero
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
@@ -14764,15 +15629,18 @@ fn win3_tab_face(a: *mem.Arena, chosen: bool, closes: bool, ground: paint.Color,
 
 // The strip behind the tabs: the page's top edge (#E9E9E9, #F2F2F2) at its foot.
 fn win3_strip_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    try win3_rect(b, area.x, area.y, area.width, 1.0, style.hex(16119285u32))
+    // looks5 group d: the Customization strip has no #F5F5F5 line on top (`shade` 1).
+    if mem.cast[*Win3Lines](ctx).shade == 0.0 { try win3_rect(b, area.x, area.y, area.width, 1.0, style.hex(16119285u32)) }
     try win3_rect(b, area.x, area.y + area.height - 2.0, area.width, 1.0, style.hex(15329769u32))
     ret win3_rect(b, area.x, area.y + area.height - 1.0, area.width, 1.0, style.hex(15921906u32))
 }
 
-fn win3_strip_face(a: *mem.Arena) -> (widget.Node, err) {
+fn win3_strip_face(a: *mem.Arena, plain: bool) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[Win3Lines](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
-    cells[0usize] = Win3Lines { shade: 0.0 }
+    var shade: f32 = 0.0
+    if plain { shade = 1.0 }
+    cells[0usize] = Win3Lines { shade: shade }
     var none: []const widget.Node = zero
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
@@ -14780,11 +15648,46 @@ fn win3_strip_face(a: *mem.Arena) -> (widget.Node, err) {
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win3_strip_paint, state: widget.bytes_of[Win3Lines](&cells[0usize]) } }, style: fill, children: none }, ok)
 }
 
+// looks5 group d: the boxes (left edge to the next tab's left edge, `closes` included) of the two captured
+// native strips, per chosen tab, measured on ref/windows/states/tab-selected-filter-* and the Customization
+// grabs: v3 sets whole-pixel boxes that move by a pixel with the chosen tab. `lead` is the strip's blank
+// start before an unchosen first tab. width 0: not a captured strip (the unhinted layout).
+type Win5Box = struct { lead: f32, width: f32 }
+
+fn win5_native_box(labels: []const str, selected: usize, i: usize) -> Win5Box {
+    if labels.len == 3usize && strs.eq(labels[1usize], "Cards") && strs.eq(labels[2usize], "Options") {
+        if selected == 0usize {
+            if i == 0usize { ret Win5Box { lead: 0.0, width: 140.0 } }
+            if i == 1usize { ret Win5Box { lead: 0.0, width: 40.0 } }
+            ret Win5Box { lead: 0.0, width: 48.0 }
+        }
+        if selected == 1usize {
+            if i == 0usize { ret Win5Box { lead: 2.0, width: 135.0 } }
+            if i == 1usize { ret Win5Box { lead: 0.0, width: 45.0 } }
+            ret Win5Box { lead: 0.0, width: 46.0 }
+        }
+        if i == 0usize { ret Win5Box { lead: 2.0, width: 136.0 } }
+        if i == 1usize { ret Win5Box { lead: 0.0, width: 41.0 } }
+        ret Win5Box { lead: 0.0, width: 49.0 }
+    }
+    if labels.len == 2usize && strs.eq(labels[0usize], "Bands") && strs.eq(labels[1usize], "Columns") {
+        if selected == 0usize {
+            if i == 0usize { ret Win5Box { lead: 0.0, width: 43.0 } }
+            ret Win5Box { lead: 0.0, width: 49.0 }
+        }
+        if i == 0usize { ret Win5Box { lead: 0.0, width: 40.0 } }
+        ret Win5Box { lead: 0.0, width: 56.0 }
+    }
+    ret Win5Box { lead: 0.0, width: 0.0 }
+}
+
 // One native tab: the text (Tahoma 11) 5 in (6 chosen) of its left edge, the focus rectangle round
 // it while the chosen tab has the keyboard focus.
-fn win3_native_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chosen: bool, closes: bool, enabled: bool, state: style.ControlState, action: *const widget.Submit) -> (widget.Node, err) {
+fn win3_native_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chosen: bool, closes: bool, enabled: bool, raw_state: style.ControlState, action: *const widget.Submit, fixed_w: f32) -> (widget.Node, err) {
     let (dialog_t, dialog_error) = win3_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
+    var state = raw_state
+    state.hovered = false
     var ink = style.color(t.tokens, .Text)
     if !enabled { ink = style.mix(ink, style.color(t.tokens, .Background), 0.6) }
     var caption = text_options()
@@ -14808,7 +15711,8 @@ fn win3_native_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     }
     var w = laid.bounds.width + pad
     if closes { w += 1.0 }
-    let (face, face_error) = win3_tab_face(a, chosen, closes, style.color(t.tokens, .Background), state.focused && state.focus_visible)
+    if fixed_w > 0.0 { w = fixed_w }
+    let (face, face_error) = win3_tab_face(a, chosen, closes, style.color(t.tokens, .Background), state.focused && state.focus_visible, chosen && fixed_w == 43.0)
     if face_error != ok { ret (zero, face_error) }
     var line = style.defaults()
     line.width = style.Length { Percent: 100.0 }
@@ -14871,6 +15775,11 @@ fn win3_ultra_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         ret win3_rect(b, x, y + 18.0, 1.0, 1.0, style.hex(14671839u32))
     }
     if f.kind == 1u32 { ret ok }
+    // looks5 group d: kind 4, the strip of tabs without pictures (About), sits on another phase: #5A5A5A, #9B9B9B.
+    if f.kind == 4u32 {
+        try win3_rect(b, x, y + h - 2.0, w, 1.0, style.hex(5921370u32))
+        ret win3_rect(b, x, y + h - 1.0, w, 1.0, style.hex(10197915u32))
+    }
     try win3_rect(b, x, y + h - 2.0, w, 1.0, dark)
     ret win3_rect(b, x, y + h - 1.0, w, 1.0, light)
 }
@@ -14894,10 +15803,30 @@ fn win3_ultra_node(a: *mem.Arena, kind: u32, w: f32, h: f32) -> (widget.Node, er
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win3_ultra_paint, state: widget.bytes_of[Win3Ultra](&cells[0usize]) } }, style: box, children: none }, ok)
 }
 
+// looks5 group d: v3 sets a tab's text width with GDI's hinted advances (whole pixels); the unhinted layout
+// is off by up to a pixel and a half. The widths of the captured Statistics tabs are measured (tab width
+// minus 30 in the captures); any other label rounds the unhinted width.
+fn win5_tab_text(label: str, unhinted: f32, chosen: bool) -> f32 {
+    if strs.eq(label, "Colors") && !chosen { ret 31.0 }
+    if strs.eq(label, "Advanced") && chosen { ret 48.0 }
+    if strs.eq(label, "Rarity") { ret 29.0 }
+    if strs.eq(label, "Card Type") { ret 50.0 }
+    if strs.eq(label, "Editions") { ret 37.0 }
+    if strs.eq(label, "Mana Analyser") { ret 71.0 }
+    if strs.eq(label, "Mana Product") { ret 66.0 }
+    if strs.eq(label, "Power Analyser") { ret 75.0 }
+    if strs.eq(label, "Probability") { ret 50.0 }
+    if strs.eq(label, "Mana Slots") { ret 52.0 }
+    if strs.eq(label, "Start Hand") { ret 52.0 }
+    ret f32(u32(unhinted + 0.5))
+}
+
 // One ultra-flat tab (and, for `sep`, the hairline after it as a second node).
-fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chosen: bool, enabled: bool, state: style.ControlState, action: *const widget.Submit, has_icon: bool, picture_kind: GlyphKind) -> (widget.Node, err) {
+fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chosen: bool, enabled: bool, raw_state: style.ControlState, action: *const widget.Submit, has_icon: bool, picture_kind: GlyphKind) -> (widget.Node, err) {
     let (dialog_t, dialog_error) = win3_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
+    var state = raw_state
+    state.hovered = false
     var ink = style.color(t.tokens, .Text)
     if state.hovered && enabled && !chosen { ink = style.hex(26316u32) }
     if !enabled { ink = style.mix(ink, style.color(t.tokens, .Surface), 0.6) }
@@ -14911,7 +15840,7 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     let (laid, laid_error) = layout.layout(a, label, look_style, layout.Options { width: 100000.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
     if laid_error != ok { ret (zero, laid_error) }
     var h: f32 = 21.0
-    var w = laid.bounds.width + 7.0
+    var w = win5_tab_text(label, laid.bounds.width, chosen) + 7.0
     let (row_parts, row_error) = mem.alloc[widget.Node](a, 2usize)
     if row_error != ok { ret (zero, TooLarge) }
     var count = 1usize
@@ -14942,7 +15871,10 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = face
-    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, line, row_parts[0usize..count])
+    // looks5 group d: an unchosen tab's caption stands 2 closer to its picture (measured on the Statistics captures' ink boxes).
+    var picture_gap: f32 = 6.0
+    if !chosen && has_icon && !strs.eq(label, "Colors") { picture_gap = 4.0 }
+    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: picture_gap }, line, row_parts[0usize..count])
     var shown = 2usize
     if chosen && state.focused && state.focus_visible {
         let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(w - 4.0), h - 4.0)
@@ -15040,96 +15972,65 @@ fn win4_lerp4(x: f32, x0: f32, x1: f32, x2: f32, x3: f32, v0: f32, v1: f32, v2: 
     ret v2 + (v3 - v2) * (x - x2) / (x3 - x2)
 }
 
-// Look 3, round 6: the hovered list-style combo's frame (states/hover-combo-box-drop-options-row-color and its four siblings).
-// The stroke is 1 px thick at a sub-pixel position, so a row's coverage k and the next one's 1 - k: k drifts with the control's y
-// (top and bottom rows) or x (left and right columns), sampled at the five captures (y 41, 71, 99, 278; x 149, 321, 371, 406 and
-// right ends 292, 557, 706, 710) and interpolated. Face #E0EEF9, stroke #0079D4 at the top and sides, #006BBE along the foot;
-// the four 5 x 5 corners are the pixels as captured at (321, 71).
-fn win4_hover_tl() -> [25]u32 { ret [25]u32{ 0xF0F0F0u32, 0xE1E9EFu32, 0x93C2E5u32, 0x67ACE0u32, 0x59A5DEu32, 0xE1E9EFu32, 0x75B3E2u32, 0x5BA7E2u32, 0x80BCE9u32, 0x8EC3EBu32, 0x97C4E6u32, 0x5FA9E2u32, 0xA1CDEFu32, 0xD3E7F7u32, 0xDFEDF9u32, 0x4C9EDDu32, 0x90C4ECu32, 0xD6E9F7u32, 0xE0EEF9u32, 0xE0EEF9u32, 0x3794DAu32, 0xA8D1F0u32, 0xDFEDF9u32, 0xE0EEF9u32, 0xE0EEF9u32 } }
-fn win4_hover_tr() -> [25]u32 { ret [25]u32{ 0x57A4DEu32, 0x6EAFE1u32, 0xB1D0E9u32, 0xE6EBEFu32, 0xF0F0F0u32, 0x8AC1EBu32, 0x79B7E8u32, 0x61A9E2u32, 0x97C3E6u32, 0xE6EBEFu32, 0xDEEDF9u32, 0xCCE4F6u32, 0x86BFEAu32, 0x5FA8E1u32, 0xAFD0E9u32, 0xE0EEF9u32, 0xE0EEF9u32, 0xC8E1F5u32, 0x69AFE5u32, 0x84BAE4u32, 0xE0EEF9u32, 0xE0EEF9u32, 0xDEEDF9u32, 0x74B5E7u32, 0x77B3E2u32 } }
-fn win4_hover_bl() -> [25]u32 { ret [25]u32{ 0x3F97DBu32, 0xA8D1F0u32, 0xDEEDF9u32, 0xE0EEF9u32, 0xE0EEF9u32, 0x58A4DEu32, 0x7CB9E8u32, 0xCFE5F6u32, 0xE0EEF9u32, 0xE0EEF9u32, 0xAECFE8u32, 0x4B9FDEu32, 0x89C0EBu32, 0xCBE3F6u32, 0xDEEDF9u32, 0xE7ECEFu32, 0x9EC7E6u32, 0x68A9DCu32, 0x529CD5u32, 0x539CD4u32, 0xF0F0F0u32, 0xE7ECEFu32, 0xBDD4E6u32, 0x9CC2DFu32, 0x95BEDDu32 } }
-fn win4_hover_br() -> [25]u32 { ret [25]u32{ 0xE0EEF9u32, 0xE0EEF9u32, 0xDCECF8u32, 0x6FB2E6u32, 0x74B2E2u32, 0xE0EEF9u32, 0xE0EEF9u32, 0xC0DDF3u32, 0x68AEE4u32, 0x8CBEE4u32, 0xDCECF8u32, 0xBADAF3u32, 0x6BB0E5u32, 0x6AAEE1u32, 0xC6DBEBu32, 0x569DD5u32, 0x549DD6u32, 0x6BACDDu32, 0xB5D3E9u32, 0xEAEDEFu32, 0x98BFDEu32, 0xA3C6E1u32, 0xC7DAE9u32, 0xEAEDEFu32, 0xF0F0F0u32 } }
-
-fn win4_hover_paint(f: *const Win3Frame, b: *scene.Builder, x: f32, y: f32, w: f32, h: f32) -> err {
-    let face = style.hex(14741241u32)
-    let stroke = style.hex(31188u32)
-    let low = style.hex(27582u32)
-    let ground = f.ground
-    var wy = f.edge_y
-    if wy <= 0.0 { wy = 71.0 }
-    var wx = f.edge_x
-    if wx <= 0.0 { wx = 321.0 }
-    let wr = wx + w - 1.0
-    let k_top = win4_lerp4(wy, 41.0, 71.0, 99.0, 278.0, 0.667, 0.637, 0.617, 0.483)
-    let k_foot = win4_lerp4(wy, 41.0, 71.0, 99.0, 278.0, 0.670, 0.625, 0.603, 0.473)
-    let k_left = win4_lerp4(wx, 149.0, 321.0, 371.0, 406.0, 1.0, 0.771, 0.733, 0.708)
-    let k_right = win4_lerp4(wr, 292.0, 557.0, 706.0, 710.0, 0.0, 0.404, 0.512, 0.517)
-    try win3_rect(b, x + 2.0, y + 2.0, w - 4.0, h - 4.0, face)
-    try win3_rect(b, x + 5.0, y, w - 10.0, 1.0, win4_mix(ground, stroke, k_top))
-    try win3_rect(b, x + 5.0, y + 1.0, w - 10.0, 1.0, win4_mix(face, stroke, 1.0 - k_top))
-    try win3_rect(b, x + 5.0, y + h - 2.0, w - 10.0, 1.0, win4_mix(face, low, k_foot))
-    try win3_rect(b, x + 5.0, y + h - 1.0, w - 10.0, 1.0, win4_mix(ground, low, 1.0 - k_foot))
-    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, win4_mix(ground, stroke, k_left))
-    try win3_rect(b, x + 1.0, y + 5.0, 1.0, h - 10.0, win4_mix(face, stroke, 1.0 - k_left))
-    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, win4_mix(face, stroke, 1.0 - k_right))
-    try win3_rect(b, x + w - 1.0, y + 5.0, 1.0, h - 10.0, win4_mix(ground, stroke, k_right))
-    try win4_hover_corner(b, win4_hover_tl(), x, y)
-    try win4_hover_corner(b, win4_hover_tr(), x + w - 5.0, y)
-    try win4_hover_corner(b, win4_hover_bl(), x, y + h - 5.0)
-    ret win4_hover_corner(b, win4_hover_br(), x + w - 5.0, y + h - 5.0)
-}
-
-fn win4_hover_corner(b: *scene.Builder, cells: [25]u32, x: f32, y: f32) -> err {
-    var j = 0usize
-    while j < 5usize {
-        var i = 0usize
-        while i < 5usize {
-            try win3_rect(b, x + f32(i), y + f32(j), 1.0, 1.0, style.hex(cells[j * 5usize + i]))
-            i += 1usize
-        }
-        j += 1usize
-    }
-    ret ok
-}
-
 // The rounded frame while its list is open (look 1) or its drop button is held down (look 2): the
-// native theme's blue face (#D0E6F7, #CCE4F7 held) inside a #005499 stroke, measured as coverage on
-// ref/windows/states/combo-box-open-dialog-options-row-color and ...-drop-button-pressed-... (y 71, x 321).
-fn win4_hot_paint(f: *const Win3Frame, b: *scene.Builder, x: f32, y: f32, w: f32, h: f32) -> err {
-    // Open and held are one look at rest (the face fades in from #D0E6F7 for a moment after the click).
-    var face = style.hex(13427959u32)
-    let bump: f32 = 0.05
-    var stroke = style.hex(21657u32)
-    let ground = f.ground
-    try win3_rect(b, x + 2.0, y + 2.0, w - 4.0, h - 4.0, face)
-    var dy: f32 = 0.0
-    if f.edge_y > 0.0 { dy = f.edge_y - 71.0 }
-    try win3_rect(b, x + 5.0, y, w - 10.0, 1.0, win4_mix(ground, stroke, 0.60 + bump - 0.0008 * dy))
-    try win3_rect(b, x + 5.0, y + 1.0, w - 10.0, 1.0, win4_mix(face, stroke, 0.33 + bump + 0.00068 * dy))
-    try win3_rect(b, x + 5.0, y + h - 2.0, w - 10.0, 1.0, win4_mix(face, stroke, 0.59 + bump - 0.0008 * dy))
-    try win3_rect(b, x + 5.0, y + h - 1.0, w - 10.0, 1.0, win4_mix(ground, stroke, 0.36 + bump + 0.00057 * dy))
-    var lo: f32 = 0.72
-    var li: f32 = 0.21
-    var ri: f32 = 0.45
-    var ro: f32 = 0.48
-    if f.edge_x > 0.0 {
-        let right = f.edge_x + w - 1.0
-        lo = win4_lerp4(f.edge_x, 149.0, 321.0, 406.0, 406.5, 1.0, 0.70, 0.66, 0.66)
-        li = win4_lerp4(f.edge_x, 149.0, 321.0, 406.0, 406.5, 0.0, 0.21, 0.27, 0.27)
-        ri = win4_lerp4(right, 292.0, 557.0, 710.0, 710.5, 1.0, 0.55, 0.45, 0.45)
-        ro = win4_lerp4(right, 292.0, 557.0, 710.0, 710.5, 0.0, 0.375, 0.48, 0.48)
+// native theme's blue face (#CCE4F7) inside a #005499 stroke whose four rows and four columns are
+// coverage values that drift with the control's window position (`edge_y`, `edge_x`), measured on the
+// settled grabs ref/windows/states/combo-box-open-dialog-* and ...-drop-button-pressed-... Look 3 is the
+// first frame after the click, #D0E6F7 with a paler stroke: the rest frame under the settled one at 92 %
+// (measured on the four first grabs: Row Color, Font Size, Card Art Position, Condition).
+fn win4_curve(x: f32, xs: []const f32, vs: []const f32) -> f32 {
+    if x <= xs[0usize] { ret vs[0usize] }
+    var i = 1usize
+    while i < xs.len {
+        if x <= xs[i] { ret vs[i - 1usize] + (vs[i] - vs[i - 1usize]) * (x - xs[i - 1usize]) / (xs[i] - xs[i - 1usize]) }
+        i += 1usize
     }
-    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, win4_mix(ground, stroke, lo + bump * 0.8))
-    try win3_rect(b, x + 1.0, y + 5.0, 1.0, h - 10.0, win4_mix(face, stroke, li + bump * 0.5))
-    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, win4_mix(face, stroke, ri + bump * 0.8))
-    try win3_rect(b, x + w - 1.0, y + 5.0, 1.0, h - 10.0, win4_mix(ground, stroke, ro + bump * 0.5))
-    try win4_hot_corner(f, b, face, stroke, win3_corner_tl(), x, y, false, false)
-    try win4_hot_corner(f, b, face, stroke, win3_corner_tr(), x + w - 5.0, y, true, false)
-    try win4_hot_corner(f, b, face, stroke, win3_corner_bl(), x, y + h - 5.0, false, true)
-    ret win4_hot_corner(f, b, face, stroke, win3_corner_br(), x + w - 5.0, y + h - 5.0, true, true)
+    ret vs[xs.len - 1usize]
 }
 
-fn win4_hot_corner(f: *const Win3Frame, b: *scene.Builder, face: paint.Color, stroke: paint.Color, table: str, x: f32, y: f32, flip_x: bool, flip_y: bool) -> err {
+fn win4_hot_paint(f: *const Win3Frame, b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, alpha: f32) -> err {
+    var face = style.hex(13427959u32)
+    var stroke = style.hex(21657u32)
+    if f.look == 4u32 {
+        // looks5 group d: the drop button under the pointer, the same frame in #E0EEF9 with a #0078D7 stroke (hover-combo-box-drop-*).
+        face = style.hex(14741241u32)
+        stroke = style.hex(30935u32)
+    }
+    var stroke_foot = stroke
+    if f.look == 4u32 { stroke_foot = style.hex(27328u32) }
+    let ground = f.ground
+    var wy: f32 = 71.0
+    if f.edge_y > 0.0 { wy = f.edge_y }
+    let ys = [5]f32{ 41.0, 71.0, 99.0, 159.0, 278.0 }
+    let top = [5]f32{ 0.667, 0.636, 0.617, 0.575, 0.484 }
+    let top1 = [5]f32{ 0.333, 0.362, 0.382, 0.426, 0.514 }
+    let bot1 = [5]f32{ 0.667, 0.627, 0.604, 0.558, 0.471 }
+    let bot = [5]f32{ 0.333, 0.379, 0.399, 0.441, 0.533 }
+    try win3_rect(b, x + 2.0, y + 2.0, w - 4.0, h - 4.0, with_alpha(face, alpha))
+    try win3_rect(b, x + 5.0, y, w - 10.0, 1.0, with_alpha(win4_mix(ground, stroke, win4_curve(wy, ys[0usize..5usize], top[0usize..5usize])), alpha))
+    try win3_rect(b, x + 5.0, y + 1.0, w - 10.0, 1.0, with_alpha(win4_mix(face, stroke, win4_curve(wy, ys[0usize..5usize], top1[0usize..5usize])), alpha))
+    try win3_rect(b, x + 5.0, y + h - 2.0, w - 10.0, 1.0, with_alpha(win4_mix(face, stroke_foot, win4_curve(wy, ys[0usize..5usize], bot1[0usize..5usize])), alpha))
+    try win3_rect(b, x + 5.0, y + h - 1.0, w - 10.0, 1.0, with_alpha(win4_mix(ground, stroke_foot, win4_curve(wy, ys[0usize..5usize], bot[0usize..5usize])), alpha))
+    var wx: f32 = 321.0
+    if f.edge_x > 0.0 { wx = f.edge_x }
+    let right = wx + w - 1.0
+    let lx = [5]f32{ 149.0, 321.0, 371.0, 406.0, 407.0 }
+    let lo = [5]f32{ 1.0, 0.770, 0.735, 0.708, 0.708 }
+    let li = [5]f32{ 0.0, 0.230, 0.270, 0.294, 0.294 }
+    let rx = [5]f32{ 292.0, 557.0, 560.0, 706.0, 710.0 }
+    let ri = [5]f32{ 1.0, 0.598, 0.595, 0.489, 0.486 }
+    let ro = [5]f32{ 0.0, 0.404, 0.407, 0.513, 0.516 }
+    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke, win4_curve(wx, lx[0usize..5usize], lo[0usize..5usize])), alpha))
+    try win3_rect(b, x + 1.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke, win4_curve(wx, lx[0usize..5usize], li[0usize..5usize])), alpha))
+    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke, win4_curve(right, rx[0usize..5usize], ri[0usize..5usize])), alpha))
+    try win3_rect(b, x + w - 1.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke, win4_curve(right, rx[0usize..5usize], ro[0usize..5usize])), alpha))
+    try win4_hot_corner(f, b, face, stroke, win3_corner_tl(), x, y, false, false, alpha)
+    try win4_hot_corner(f, b, face, stroke, win3_corner_tr(), x + w - 5.0, y, true, false, alpha)
+    try win4_hot_corner(f, b, face, stroke, win3_corner_bl(), x, y + h - 5.0, false, true, alpha)
+    ret win4_hot_corner(f, b, face, stroke, win3_corner_br(), x + w - 5.0, y + h - 5.0, true, true, alpha)
+}
+
+fn win4_hot_corner(f: *const Win3Frame, b: *scene.Builder, face: paint.Color, stroke: paint.Color, table: str, x: f32, y: f32, flip_x: bool, flip_y: bool, alpha: f32) -> err {
     var j = 0usize
     while j < 5usize {
         var i = 0usize
@@ -15146,7 +16047,7 @@ fn win4_hot_corner(f: *const Win3Frame, b: *scene.Builder, face: paint.Color, st
                 k = k * 1.05
                 var under = face
                 if v >= 238u32 && v < 252u32 { under = face }
-                try win3_rect(b, px, py, 1.0, 1.0, win4_mix(under, stroke, k * 0.85))
+                try win3_rect(b, px, py, 1.0, 1.0, with_alpha(win4_mix(under, stroke, k * 0.85), alpha))
             }
             i += 1usize
         }
@@ -15157,64 +16058,33 @@ fn win4_hot_corner(f: *const Win3Frame, b: *scene.Builder, face: paint.Color, st
 
 // The held drop button of an editable combo: 17 wide, 22 tall (its bottom row is the frame's bleed).
 fn win4_held_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    let lines = mem.cast[*Win3Lines](ctx)
     let x = area.x
     let y = area.y
-    // Round 6: shade 1 is the pointer over the drop button of the focused editable combo (states/hover-combo-box-drop-search):
-    // the same box in #E5F1FB inside the #0078D4 frame, its rows 0, 1, 20 and 21 measured as the held one's.
-    var frame = style.hex(24503u32)
-    var face = style.hex(13427959u32)
-    if lines.shade > 0.5 {
-        frame = style.hex(30932u32)
-        face = style.hex(15069691u32)
-    }
+    let frame = style.hex(24503u32)
     var row: f32 = 0.0
     while row < 22.0 {
         var left = frame
-        var mid = face
+        var mid = style.hex(13427959u32)
         var right = frame
-        if lines.shade > 0.5 {
-            if row == 0.0 {
-                left = style.hex(12047335u32)
-                mid = style.hex(5284061u32)
-                right = style.hex(11719143u32)
-            }
-            if row == 1.0 {
-                left = style.hex(4233435u32)
-                mid = style.hex(10078702u32)
-                right = style.hex(3970778u32)
-            }
-            if row == 20.0 {
-                left = style.hex(28874u32)
-                mid = style.hex(5021921u32)
-                right = style.hex(1145549u32)
-            }
-            if row == 21.0 {
-                left = style.hex(10535904u32)
-                mid = style.hex(10537191u32)
-                right = style.hex(11127268u32)
-            }
-        } else {
-            if row == 0.0 {
-                left = style.hex(12045793u32)
-                mid = style.hex(5279690u32)
-                right = style.hex(11717601u32)
-            }
-            if row == 1.0 {
-                left = style.hex(4228806u32)
-                mid = style.hex(8960226u32)
-                right = style.hex(3965892u32)
-            }
-            if row == 20.0 {
-                left = style.hex(25530u32)
-                mid = style.hex(4492236u32)
-                right = style.hex(1141950u32)
-            }
-            if row == 21.0 {
-                left = style.hex(10535647u32)
-                mid = style.hex(10535133u32)
-                right = style.hex(11126496u32)
-            }
+        if row == 0.0 {
+            left = style.hex(12045793u32)
+            mid = style.hex(5279690u32)
+            right = style.hex(11717601u32)
+        }
+        if row == 1.0 {
+            left = style.hex(4228806u32)
+            mid = style.hex(8960226u32)
+            right = style.hex(3965892u32)
+        }
+        if row == 20.0 {
+            left = style.hex(25530u32)
+            mid = style.hex(4492236u32)
+            right = style.hex(1141950u32)
+        }
+        if row == 21.0 {
+            left = style.hex(10535647u32)
+            mid = style.hex(10535133u32)
+            right = style.hex(11126496u32)
         }
         try win3_rect(b, x, y + row, 1.0, 1.0, left)
         try win3_rect(b, x + 1.0, y + row, 15.0, 1.0, mid)
@@ -15224,10 +16094,10 @@ fn win4_held_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     ret ok
 }
 
-fn win4_held_box(a: *mem.Arena, shade: f32) -> (widget.Node, err) {
+fn win4_held_box(a: *mem.Arena) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[Win3Lines](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
-    cells[0usize] = Win3Lines { shade: shade }
+    cells[0usize] = Win3Lines { shade: 0.0 }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win4_held_paint, state: widget.bytes_of[Win3Lines](&cells[0usize]) } }, style: sized_style(17.0, 22.0), children: none }, ok)
 }

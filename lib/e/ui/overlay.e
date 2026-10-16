@@ -143,6 +143,22 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
     surface[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, plate, parts[0usize..n])
+    if windows {
+        // looks5 group d: v3's toolbar hint window (#FFFFE1, bevelled), the shortcut in parentheses after the text.
+        var hint_line = text
+        if shortcut.len > 0usize {
+            let (joined, joined_error) = mem.alloc[u8](a, text.len + shortcut.len + 3usize)
+            if joined_error != ok { ret (zero, TooLarge) }
+            var at = control.copy_text(joined, text)
+            at += control.copy_text(joined[at..joined.len], " (")
+            at += control.copy_text(joined[at..joined.len], shortcut)
+            at += control.copy_text(joined[at..joined.len], ")")
+            hint_line = joined[0usize..at]
+        }
+        let (hint, hint_error) = control.win5_hint(a, 0u64, t, hint_line, false, 0.0, 0.0)
+        if hint_error != ok { ret (zero, hint_error) }
+        surface[0usize] = hint
+    }
     var sem: widget.Semantics = zero
     sem.role = 27u8
     sem.label = text
@@ -7966,13 +7982,19 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // laid over it, every one a node already positioned in window coordinates (the caption among them, a title bar from
 // e.ui.navigation). v3 forms are laid out by hand in the DFM, so there is no flow: the caller places the controls.
 fn windows_window(a: *mem.Arena, t: *const control.Theme, width: f32, height: f32, children: []const widget.Node) -> (widget.Node, err) {
+    let (win, win_error) = windows_window_with(a, t, width, height, children, false)
+    ret (win, win_error)
+}
+
+// looks5: `bottom` adds the #F5F5F5 row the last row of the Deck Legality, Deck Properties, About, Options and Customization captures is.
+fn windows_window_with(a: *mem.Arena, t: *const control.Theme, width: f32, height: f32, children: []const widget.Node, bottom: bool) -> (widget.Node, err) {
     var face = control.sized_style(width, height)
     face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     // The row under the caption is #F5F5F5 across the whole width in every captured form (the DWM client edge); a page or list
     // covering it (About's page control, Options' category list) overpaints it, as the captures show.
     var edge = control.sized_style(width, 1.0)
     edge.background = paint.Brush { Solid: style.hex(0xF5F5F5u32) }
-    let (all, all_error) = mem.alloc[widget.Node](a, children.len + 1usize)
+    let (all, all_error) = mem.alloc[widget.Node](a, children.len + 2usize)
     if all_error != ok { ret (zero, TooLarge) }
     all[0usize] = widget.positioned(0u64, 0.0, style.windows_caption_height(), style.defaults(), mem_one_box(a, edge))
     var i = 0usize
@@ -7980,7 +8002,12 @@ fn windows_window(a: *mem.Arena, t: *const control.Theme, width: f32, height: f3
         all[i + 1usize] = children[i]
         i += 1usize
     }
-    ret (widget.stack(0u64, face, all[0usize..children.len + 1usize]), ok)
+    var count = children.len + 1usize
+    if bottom {
+        all[count] = widget.positioned(0u64, 0.0, height - 1.0, style.defaults(), mem_one_box(a, edge))
+        count += 1usize
+    }
+    ret (widget.stack(0u64, face, all[0usize..count]), ok)
 }
 
 fn mem_one_box(a: *mem.Arena, look: style.Style) -> []const widget.Node {
