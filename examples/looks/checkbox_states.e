@@ -2,8 +2,8 @@
 // Rows are controls of the Options pages (Interface hide splash, Grids filter row and foil symbol,
 // Morph use, Interface tooltips), columns rest, pressed (mouse down) and keyboard focus. Reference
 // composite: ref/windows/checkbox_states.png (scripts/looks_refs_b.py), crops of
-// ref/windows/states/*. A blank cell has no capture (Show Foil Symbol's pressed grab shows only a focus
-// rectangle).
+// ref/windows/states/*. A blank cell has no capture. Show Foil Symbol's pressed grab (cell 7) shows only the focus
+// rectangle on a checked box, so that cell is driven with the focus.
 
 use e.mem
 use e.ui.control
@@ -26,10 +26,12 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     let action = &actions[0usize]
-    let labels = [5]str{ "Hide splash screen on start", "Show Filter &Row", "Show Foil &Symbol", "Use Morph effect", "Show tooltips" }
+    let labels = [5]str{ "Hide splash screen on start", "Show Filter &Row", "Show Foil &Symbol", "&Use Morph effect", "Show tooltips" }
     let checked = [5]bool{ false, false, true, true, true }
     let columns = [3]str{ "rest", "pressed", "focus" }
-    let skip = [15]bool{ false, false, false, false, false, true, false, true, false, false, false, false, false, false, false }
+    let window_xs = [5]f32{ 215.0, 224.0, 224.0, 215.0, 215.0 }
+    let window_ys = [5]f32{ 74.0, 132.0, 102.0, 71.0, 155.0 }
+    let skip = [15]bool{ false, false, false, false, false, true, false, false, false, false, false, false, false, false, false }
     let (held, held_error) = mem.alloc[widget.Node](a, 15usize)
     if held_error != ok { ret (0usize, held_error) }
     let first = looks.size_style(160.0, 29.0)
@@ -44,7 +46,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         var box: widget.Node = zero
         if t.tokens.profile == .Windows {
-            let (made, made_error) = control.windows_checkbox_sized(a, u64(i + 1usize), t, labels[row], checked[row], false, action, true, 21.0, false)
+            let (made, made_error) = control.windows_checkbox_phase(a, u64(i + 1usize), t, labels[row], checked[row], false, action, true, 21.0, false, 0u32, window_xs[row], window_ys[row])
             if made_error != ok { ret (0usize, made_error) }
             box = made
         } else {
@@ -56,7 +58,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         let placed = widget.positioned(0u64, 4.0, 4.0, style.defaults(), held[i..i + 1usize])
         var drive: looks.Drive = .None
         if column == 1usize { drive = .Press }
-        if column == 2usize { drive = .Focus }
+        if column == 2usize || i == 7usize { drive = .Focus }
         cells[i] = looks.Cell { caption: columns[column], node: widget.stack(0u64, first, zero), drive: drive }
         let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
         if inner_error != ok { ret (0usize, inner_error) }
