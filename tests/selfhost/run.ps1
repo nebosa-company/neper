@@ -2602,6 +2602,12 @@ $cssUaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $cssUaWritten -ne 'executable written') { throw 'css_ua emission failed' }
 & $cssUaPath
 if ($LASTEXITCODE -ne 0) { throw "a css_ua check failed: exit $LASTEXITCODE" }
+# `e.fmt.css.layout` with an Ahem-like measure: block stacking and margin collapsing, auto margins, box-sizing, min/max, text wrapping and alignment, floats and clearance, inline-blocks, relative and absolute positioning, list markers, replaced boxes (tracker 2.1 to 2.5, 2.13).
+$cssLayoutPath = Join-Path $testBuild 'css-layout-selfhost.exe'
+$cssLayoutWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\css_layout\src\main.e') $repo 'x64' 'windows' $cssLayoutPath
+if ($LASTEXITCODE -ne 0 -or $cssLayoutWritten -ne 'executable written') { throw 'css_layout emission failed' }
+& $cssLayoutPath
+if ($LASTEXITCODE -ne 0) { throw "a css_layout check failed: exit $LASTEXITCODE" }
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 $distConsensusPath = Join-Path $testBuild 'dist-consensus-selfhost.exe'
 $distConsensusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_consensus\src\main.e') $repo 'x64' 'windows' $distConsensusPath

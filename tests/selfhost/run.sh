@@ -2294,6 +2294,11 @@ chmod +x "$test_build/css-sheet-selfhost"
 css_ua_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_ua/src/main.e" "$repo" x64 linux "$test_build/css-ua-selfhost")
 [ "$css_ua_written" = 'executable written' ]
 chmod +x "$test_build/css-ua-selfhost"
+# `e.fmt.css.layout` with an Ahem-like measure: block stacking and margin collapsing, auto margins, box-sizing, min/max, text wrapping and alignment, floats and clearance, inline-blocks, relative and absolute positioning, list markers, replaced boxes (tracker 2.1 to 2.5, 2.13).
+css_layout_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_layout/src/main.e" "$repo" x64 linux "$test_build/css-layout-selfhost")
+[ "$css_layout_written" = 'executable written' ]
+chmod +x "$test_build/css-layout-selfhost"
+"$test_build/css-layout-selfhost"
 "$test_build/css-ua-selfhost"
 "$test_build/css-sheet-selfhost"
 "$test_build/css-style-selfhost"

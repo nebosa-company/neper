@@ -24792,6 +24792,146 @@ fn source(a: *mem.Arena) -> (str, err)
 fn rules(a: *mem.Arena, env: sheet.MediaEnv) -> (sheet.Loaded, err)
 ```
 
+### `e.fmt.css.layout`
+
+```neper
+type FontMetrics = struct { ascent: f64, descent: f64, line_gap: f64, x_height: f64 }
+type Intrinsic = struct { kind: u8, has_width: bool, width: f64, has_height: bool, height: f64, ratio: f64 }
+type Measure = struct
+type Inner = enum u8 { Flow, FlowRoot, Flex, Grid, Table, Replaced, Text, Break, Marker, RowGroup, Row, Cell, Caption, ColumnGroup, Column }
+const NONE: u32 = 4294967295u32
+type Box = struct
+type FragKind = enum u8 { Text, Segment, Atomic, Marker }
+type Frag = struct { kind: FragKind, box: u32, x: f64, y: f64, w: f64, h: f64, text: str, first: bool, last: bool }
+type Line = struct { x: f64, y: f64, w: f64, h: f64, baseline: f64, frag_first: u32, frag_count: u32, overflow_ellipsis: bool }
+type Layout = struct
+type FloatRec = struct { box: u32, x: f64, y: f64, w: f64, h: f64, left: bool, root: u32 }
+fn st(l: *const Layout, id: u32) -> *const style.Style
+fn bx(l: *Layout, id: u32) -> *Box
+fn bstyle(l: *const Layout, id: u32) -> *const style.Style
+fn new_box(l: *Layout, inner: Inner, inline_level: bool, anonymous: bool, node: u32, style_id: u32) -> u32
+fn append(l: *Layout, parent: u32, child: u32)
+fn detach(l: *Layout, child: u32)
+fn anon_style(l: *Layout, parent_style: u32, display: style.Display) -> u32
+fn is_replaced_tag(name: str) -> bool
+fn name_in(set: str, name: str) -> bool
+fn is_block_level(d: style.Display) -> bool
+fn is_inline_level_display(d: style.Display) -> bool
+fn is_out_of_flow(s: *const style.Style) -> bool
+fn gen_children(l: *Layout, node: u32, parent_box: u32)
+fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32)
+fn list_ordinal(l: *Layout, node: u32) -> u32
+fn has_start_attr(l: *Layout, parent: u32) -> bool
+fn is_ws_only(s: str) -> bool
+fn is_block_container(l: *const Layout, b: u32) -> bool
+fn fix_anonymous(l: *Layout, b: u32)
+fn promote_inline_with_blocks(l: *Layout, b: u32)
+fn flush_run(l: *Layout, parent: u32, first: u32, last: u32)
+fn collapses(l: *const Layout, b: u32) -> bool
+fn wrap_flex_items(l: *Layout, b: u32)
+type Flag = struct { v: bool }
+fn resolve_len(len: style.Len, basis: f64) -> (f64, bool)
+fn resolve_or(len: style.Len, basis: f64, fallback: f64) -> f64
+fn maxf(x: f64, y: f64) -> f64
+fn minf(x: f64, y: f64) -> f64
+type Margin = struct { pos: f64, neg: f64 }
+fn margin_of(v: f64) -> Margin
+fn collapse(x: Margin, y: Margin) -> Margin
+fn margin_value(m: Margin) -> f64
+fn no_margin() -> Margin
+fn is_bfc_root(l: *const Layout, b: u32) -> bool
+fn border_px(s: *const style.Style, side: usize) -> f64
+fn resolve_edges(l: *Layout, b: u32, cbw: f64)
+fn resolve_margins_fixed(l: *Layout, b: u32, cbw: f64)
+fn is_auto(len: style.Len) -> bool
+fn horizontal_extras(bb: *const Box) -> f64
+fn vertical_extras(bb: *const Box) -> f64
+fn to_content_w(l: *const Layout, b: u32, outer: f64) -> f64
+fn to_content_h(l: *const Layout, b: u32, outer: f64) -> f64
+fn clamp_width(l: *const Layout, b: u32, w: f64, cbw: f64) -> f64
+fn clamp_height(l: *const Layout, b: u32, h: f64, cbh: f64) -> f64
+fn float_edge_left(l: *const Layout, base: usize, y0: f64, y1: f64, floor_x: f64) -> f64
+fn float_edge_right(l: *const Layout, base: usize, y0: f64, y1: f64, ceil_x: f64) -> f64
+fn float_bottom(l: *const Layout, base: usize, side: u32, floor: f64) -> f64
+fn next_float_end(l: *const Layout, base: usize, y: f64) -> f64
+fn float_top_floor(l: *const Layout, base: usize, floor: f64) -> f64
+type PieceKind = enum u8 { Text, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
+type Piece = struct { kind: PieceKind, box: u32, text: str, w: f64, trail: f64, soft: bool, ink: bool, start: usize, clen: usize }
+type Builder = struct { l: *Layout, pieces: list.List[Piece], last_space: bool, ws_pending: bool, cbw: f64 }
+fn push_piece(bd: *Builder, p: Piece)
+fn is_space_byte(c: u8) -> bool
+fn spacing_extra(s: *const style.Style, text: str) -> f64
+fn text_advance(l: *const Layout, s: *const style.Style, text: str) -> f64
+fn apply_transform(l: *const Layout, s: *const style.Style, text: str) -> str
+fn process_text(l: *const Layout, b: u32, ends_space: *Flag) -> str
+fn font_ad(l: *const Layout, s: *const style.Style) -> (f64, f64)
+type Flow = struct { base: usize, ox: f64, oy: f64 }
+fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag)
+fn collect_inline(bd: *Builder, b: u32, ends_space: *Flag)
+fn alpha_text(l: *const Layout, n: i64, upper: bool) -> str
+fn roman_text(l: *const Layout, n: i64, upper: bool) -> str
+fn number_text(l: *const Layout, n: i64, pad: usize) -> str
+type TextBuf = struct { b: str.Builder, bad: bool }
+fn new_text(a: *mem.Arena, cap: usize) -> TextBuf
+fn text_put(t: *TextBuf, s: str)
+fn text_put_byte(t: *TextBuf, c: u8)
+fn text_take(t: *TextBuf) -> str
+fn marker_string(l: *const Layout, b: u32) -> str
+type Open = struct { box: u32, shift: f64, start: f64 }
+fn valign_shift(l: *const Layout, s: *const style.Style, ps: *const style.Style, a: f64, d: f64, lh: f64) -> f64
+fn line_align_x(s: *const style.Style, last_line: bool, avail: f64, width: f64, left: f64) -> f64
+fn place_float(l: *Layout, fc: *Flow, f: u32, cbx: f64, cbw: f64, y_min: f64, parent: u32)
+type Ifc = struct
+type Scan = struct { restart: bool, end: usize, lead: usize, forced: bool, line_x: f64, avail: f64 }
+fn split_piece(x: *Ifc, j: usize, max_w: f64) -> bool
+fn scan_line(x: *Ifc, i: usize) -> Scan
+fn flush_text_frag(l: *Layout, bxid: u32, x: f64, text: str, w: f64, shift: f64, baseline: f64)
+fn emit_segment(l: *Layout, ob: u32, x0: f64, x1: f64, baseline: f64, shift: f64, first: bool, last: bool)
+fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, fc: *Flow) -> f64
+fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64
+fn replaced_intrinsic(l: *Layout, b: u32) -> Intrinsic
+fn default_replaced(i: Intrinsic) -> (f64, f64)
+fn outer_content_widths(l: *Layout, c: u32) -> (f64, f64)
+fn content_widths(l: *Layout, b: u32) -> (f64, f64)
+fn has_inline_content(l: *const Layout, b: u32) -> bool
+fn inline_widths(l: *Layout, cont: u32) -> (f64, f64)
+fn if_trail(p: Piece) -> f64
+fn collect_inline_intrinsic(bd: *Builder, b: u32, ends_space: *Flag)
+fn used_replaced_size(l: *Layout, b: u32, cbw: f64, cbh: f64) -> (f64, f64)
+fn auto_margin_h(s: *const style.Style, side: usize) -> bool
+fn used_width_block(l: *Layout, c: u32, cbw: f64, avail: f64)
+fn used_margins_vertical(l: *Layout, c: u32, cbw: f64)
+fn in_flow_block(l: *const Layout, c: u32) -> bool
+fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool
+fn peek_top(l: *Layout, c: u32, cbw: f64) -> Margin
+fn last_baseline(l: *const Layout, b: u32) -> (bool, f64)
+fn first_baseline(l: *const Layout, b: u32) -> (bool, f64)
+fn layout_in_new_bfc(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
+fn set_baseline(l: *Layout, b: u32)
+fn layout_atomic(l: *Layout, b: u32, cbw: f64)
+fn layout_contents_height(l: *Layout, b: u32, cw: f64, cbh: f64)
+fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top: bool) -> (f64, Margin)
+fn position_markers(l: *Layout, b: u32)
+fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y_in: f64, acc: *Margin, consumed: *Flag, ox0: f64, oy0: f64) -> f64
+fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64)
+fn apply_relative(l: *Layout, c: u32, cbw: f64, cbh: f64)
+fn block_widths(l: *Layout, b: u32) -> (f64, f64)
+fn table_widths(l: *Layout, b: u32) -> (f64, f64)
+fn flex_widths(l: *Layout, b: u32) -> (f64, f64)
+fn grid_widths(l: *Layout, b: u32) -> (f64, f64)
+fn table_min_width(l: *Layout, b: u32) -> f64
+fn layout_table(l: *Layout, b: u32, cw: f64) -> f64
+fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
+fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
+fn abs_origin(l: *const Layout, b: u32) -> (f64, f64)
+fn containing_block_of(l: *const Layout, b: u32, fixed: bool) -> u32
+fn layout_abs(l: *Layout, b: u32)
+fn positioned_pass(l: *Layout, b: u32)
+fn extent_pass(l: *Layout, b: u32, ox: f64, oy: f64)
+fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure, viewport_width: f64, viewport_height: f64) -> (Layout, err)
+error TooBig
+```
+
 ### `e.fmt.html.template`
 
 ```neper
