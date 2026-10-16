@@ -45,7 +45,7 @@ type Build = fn(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []Cel
 // A sheet: `name` is the file stem (the control), `columns` cells per row, each cell a box of
 // `cell_w` x `cell_h` logical px with the control centred in it and its caption above.
 type Sheet = struct { name: str, cells: usize, columns: usize, cell_w: f32, cell_h: f32, ctx: *void, build: Build }
-type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, width: f32, height: f32, scale: f32, material_fonts: []shape.Font }
+type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, flip: bool, width: f32, height: f32, scale: f32, material_fonts: []shape.Font }
 error Failed
 
 // looks5-e: where a driven cell's pointer goes, as an offset from the cell's centre (default none): an app sets it
@@ -244,8 +244,17 @@ fn theme_of(rig: *Rig) -> control.Theme {
 }
 
 // The frame arena, emptied: everything built for one pass lives in it.
+// The pass before it is kept whole: the runtime holds the text buffers a pass built (an edit's `buffer` slice) until the
+// next pump, and a control reads them while it is built (a multi-line edit asks for its caret line), so the passes
+// alternate between the two halves of the storage and never overwrite what the runtime still points into.
 fn begin(rig: *Rig) -> *mem.Arena {
-    rig.frame = mem.arena_from(rig.frame_storage)
+    rig.flip = !rig.flip
+    let half = rig.frame_storage.len / 2usize
+    if rig.flip {
+        rig.frame = mem.arena_from(rig.frame_storage[half..rig.frame_storage.len])
+    } else {
+        rig.frame = mem.arena_from(rig.frame_storage[0usize..half])
+    }
     ret &rig.frame
 }
 
