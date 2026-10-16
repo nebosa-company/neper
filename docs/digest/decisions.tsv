@@ -2757,4 +2757,5 @@ D5121	550	The control is one browsing context; the shell is an app layer (browse
 D5122	670	`docs/browser-progress.html` is a hand-maintained exception; milestones are queue items L166 to L171 (browser K9)
 D5123	1607	Reusable browser parts go into the general-purpose library, not into the control (refines D5114)
 D5124	1873	`e.fmt.html` is the WHATWG tokenizer and tree builder; the current spec, scripting as a flag (browser 1.1 to 1.3)
-D5125	1234	`e.fmt.dom` is a mutable index table over the `e.fmt.html` node table (browser 1.7)
+D5125	1235	`e.fmt.dom` is a mutable index table over the `e.fmt.html` node table (browser 1.7)
+D5126	1668	The style resolver: expand before ranking, typed fields for layout, text for the rest (browser 1.13)

@@ -2282,6 +2282,11 @@ chmod +x "$test_build/fmt-css-selfhost"
 fmt_dom_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_dom/src/main.e" "$repo" x64 linux "$test_build/fmt-dom-selfhost")
 [ "$fmt_dom_written" = 'executable written' ]
 chmod +x "$test_build/fmt-dom-selfhost"
+# `e.fmt.css.style` and `e.fmt.css.expand`: shorthand and logical expansion, the cascade over expanded longhands, inheritance, computed values, custom properties with var(), currentcolor and blockification over an `e.fmt.dom` tree (tracker 1.13).
+css_style_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_style/src/main.e" "$repo" x64 linux "$test_build/css-style-selfhost")
+[ "$css_style_written" = 'executable written' ]
+chmod +x "$test_build/css-style-selfhost"
+"$test_build/css-style-selfhost"
 "$test_build/fmt-dom-selfhost"
 "$test_build/fmt-css-selfhost"
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).

@@ -24530,6 +24530,178 @@ fn walker_next(d: *const Dom, w: *Walker) -> NodeId
 fn walker_previous(d: *const Dom, w: *Walker) -> NodeId
 ```
 
+### `e.fmt.css.expand`
+
+```neper
+type Pair = struct { property: str, value: str }
+fn emit(out: *list.List[Pair], property: str, value: str)
+fn lc(a: *mem.Arena, s: str) -> str
+fn is_wide_keyword(v: str) -> bool
+fn join2(a: *mem.Arena, x: str, y: str) -> str
+fn dash(a: *mem.Arena, x: str, y: str) -> str
+fn dash3(a: *mem.Arena, x: str, y: str, z: str) -> str
+fn spaced(a: *mem.Arena, parts: []const str) -> str
+fn nm(set: str, name: str) -> bool
+type Four = struct { top: str, right: str, bottom: str, left: str, good: bool }
+fn box4(parts: []const str) -> Four
+fn expand_four(a: *mem.Arena, value: str, prefix: str, suffix: str, out: *list.List[Pair])
+fn expand_pair(a: *mem.Arena, value: str, start: str, end: str, out: *list.List[Pair])
+fn is_style_kw(t: str) -> bool
+fn is_width_kw(t: str) -> bool
+fn looks_numeric(t: str) -> bool
+type Edge = struct { width: str, style: str, color: str, good: bool }
+fn border_parts(a: *mem.Arena, value: str) -> Edge
+fn expand_edge(a: *mem.Arena, value: str, side: str, out: *list.List[Pair])
+fn expand_border_all(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn expand_radius(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn is_size_kw(t: str) -> bool
+fn is_system_font(t: str) -> bool
+fn is_weight_kw(t: str) -> bool
+fn is_stretch_kw(t: str) -> bool
+fn size_part(t: str) -> str
+fn expand_font(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn is_plain_number(t: str) -> bool
+fn expand_flex(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn is_repeat_kw(t: str) -> bool
+fn is_attach_kw(t: str) -> bool
+fn is_box_kw(t: str) -> bool
+fn is_position_kw(t: str) -> bool
+fn is_image(t: str) -> bool
+type Layer = struct { image: str, position: str, size: str, repeat: str, attachment: str, origin: str, clip: str, color: str, good: bool }
+fn parse_layer(a: *mem.Arena, text: str) -> Layer
+fn comma_join(a: *mem.Arena, parts: []const str) -> str
+fn expand_background(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn expand_list_style(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn expand_text_decoration(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn expand_outline(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn expand_columns(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn expand_overflow(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn expand_flex_flow(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn expand_place(a: *mem.Arena, value: str, first: str, second: str, out: *list.List[Pair])
+fn inline_start(rtl: bool) -> str
+fn inline_end(rtl: bool) -> str
+fn expand(a: *mem.Arena, property: str, value: str, rtl: bool, out: *list.List[Pair]) -> bool
+fn is_shorthand(p: str) -> bool
+fn sample_value(p: str) -> str
+fn logical_target(a: *mem.Arena, p: str, rtl: bool) -> str
+fn expand_value(a: *mem.Arena, p: str, v: str, rtl: bool, out: *list.List[Pair]) -> bool
+```
+
+### `e.fmt.css.style`
+
+```neper
+const TOP: usize = 0usize
+const RIGHT: usize = 1usize
+const BOTTOM: usize = 2usize
+const LEFT: usize = 3usize
+type LenKind = enum u8 { Auto, Px, None, MinContent, MaxContent, FitContent, Number, Normal }
+type Len = struct { kind: LenKind, px: f64, pct: f64 }
+type Display = enum u8 { Inline, Block, None, Contents, InlineBlock, Flex, InlineFlex, Grid, InlineGrid, Table, InlineTable, TableRow, TableCell, TableRowGroup, TableHeaderGroup, TableFooterGroup, TableColumn, TableColumnGroup, TableCaption, ListItem, FlowRoot, Ruby, RubyText, RubyBase, RubyTextContainer, RubyBaseContainer }
+type Position = enum u8 { Static, Relative, Absolute, Fixed, Sticky }
+type Float = enum u8 { None, Left, Right, InlineStart, InlineEnd }
+type Clear = enum u8 { None, Left, Right, Both, InlineStart, InlineEnd }
+type BoxSizing = enum u8 { ContentBox, BorderBox }
+type Overflow = enum u8 { Visible, Hidden, Scroll, Auto, Clip }
+type Visibility = enum u8 { Visible, Hidden, Collapse }
+type BorderStyle = enum u8 { None, Hidden, Dotted, Dashed, Solid, Double, Groove, Ridge, Inset, Outset }
+type FontStyle = enum u8 { Normal, Italic, Oblique }
+type TextAlign = enum u8 { Start, End, Left, Right, Center, Justify, MatchParent }
+type TextTransform = enum u8 { None, Capitalize, Uppercase, Lowercase, FullWidth }
+type WhiteSpace = enum u8 { Normal, Pre, Nowrap, PreWrap, PreLine, BreakSpaces }
+type WordBreak = enum u8 { Normal, BreakAll, KeepAll, BreakWord }
+type OverflowWrap = enum u8 { Normal, BreakWord, Anywhere }
+type TextOverflow = enum u8 { Clip, Ellipsis }
+type Direction = enum u8 { Ltr, Rtl }
+type WritingMode = enum u8 { HorizontalTb, VerticalRl, VerticalLr, SidewaysRl, SidewaysLr }
+type ListPosition = enum u8 { Outside, Inside }
+type BorderCollapse = enum u8 { Separate, Collapse }
+type TableLayout = enum u8 { Auto, Fixed }
+type CaptionSide = enum u8 { Top, Bottom }
+type EmptyCells = enum u8 { Show, Hide }
+type FlexDirection = enum u8 { Row, RowReverse, Column, ColumnReverse }
+type FlexWrap = enum u8 { Nowrap, Wrap, WrapReverse }
+type Align = enum u8 { Normal, Start, End, FlexStart, FlexEnd, Center, Stretch, SpaceBetween, SpaceAround, SpaceEvenly, Baseline, FirstBaseline, LastBaseline, SelfStart, SelfEnd, Left, Right, Safe, Unsafe, Auto }
+type DecorationStyle = enum u8 { Solid, Double, Dotted, Dashed, Wavy }
+type VAlign = enum u8 { Baseline, Sub, Super, Top, TextTop, Middle, Bottom, TextBottom, Length }
+const DECORATION_UNDERLINE: u8 = 1u8
+const DECORATION_OVERLINE: u8 = 2u8
+const DECORATION_LINE_THROUGH: u8 = 4u8
+type Custom = struct { name: str, value: str }
+type Extra = struct { name: str, value: str }
+type Style = struct
+type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool }
+fn new_context(a: *mem.Arena, viewport_width: f64, viewport_height: f64) -> Context
+fn len_auto() -> Len
+fn len_px(px: f64) -> Len
+fn len_none() -> Len
+fn len_normal() -> Len
+fn nm(set: str, name: str) -> bool
+fn idx_of(set: str, v: str) -> i32
+fn kw[T: type](v: str, set: str, fallback: T) -> T
+fn has_kw(v: str, set: str) -> bool
+fn is_wide(v: str) -> bool
+fn bases_for(c: *const Context, em: f64) -> cv.Bases
+const A_AUTO: u32 = 1u32
+const A_NONE: u32 = 2u32
+const A_CONTENT: u32 = 4u32
+const A_NORMAL: u32 = 8u32
+const A_NUMBER: u32 = 16u32
+const A_NEGATIVE: u32 = 32u32
+const A_PERCENT: u32 = 64u32
+fn parse_len(c: *const Context, v: str, em: f64, allow: u32) -> (Len, bool)
+fn plain_number(c: *const Context, t: str) -> (f64, bool)
+fn parse_px(c: *const Context, v: str, em: f64) -> (f64, bool)
+fn parse_color_value(c: *const Context, v: str, current: u32) -> (u32, bool)
+fn border_width_value(c: *const Context, v: str, em: f64) -> (f64, bool)
+fn parse_number_value(c: *const Context, v: str) -> (f64, bool)
+fn clamp01(x: f64) -> f64
+fn initial_style() -> Style
+fn inherit_from(parent: *const Style) -> Style
+fn inherited_extra(name: str) -> bool
+type Ap = struct { c: *const Context, s: *Style, parent: *const Style, a: *mem.Arena, extras: list.List[Extra] }
+fn side_of(rest: str) -> i32
+fn parse_display(v: str) -> (Display, bool)
+fn last_word(a: *mem.Arena, v: str) -> str
+fn parse_align(ap: *const Ap, v: str, fallback: Align) -> Align
+fn apply_box(ap: *Ap, prop: str, v: str) -> bool
+fn apply_size(ap: *Ap, prop: str, v: str) -> bool
+fn font_size_keyword(t: str) -> f64
+fn apply_font(ap: *Ap, prop: str, v: str) -> bool
+fn parse_decoration_lines(a: *mem.Arena, v: str) -> (u8, bool)
+fn apply_text(ap: *Ap, prop: str, v: str) -> bool
+fn apply_flex(ap: *Ap, prop: str, v: str) -> bool
+fn apply_misc(ap: *Ap, prop: str, v: str) -> bool
+fn put_extra(ap: *Ap, prop: str, v: str)
+fn drop_extra(ap: *Ap, prop: str)
+fn tier_inherits(prop: str) -> bool
+fn apply(ap: *Ap, prop: str, value: str)
+fn apply_wide(ap: *Ap, prop: str, keyword: str)
+fn copy_prop(ap: *Ap, src: *const Style, prop: str)
+fn copy_border(ap: *Ap, src: *const Style, prop: str)
+fn copy_extra(ap: *Ap, src: *const Style, prop: str)
+fn find_custom(customs: []const Custom, name: str) -> (str, bool)
+fn close_paren(s: str, open: usize) -> i64
+fn substitute(a: *mem.Arena, value: str, customs: []const Custom, depth: usize) -> (str, bool)
+type Text = struct { a: *mem.Arena, b: str.Builder, bad: bool }
+fn try_builder(a: *mem.Arena, cap: usize) -> Text
+fn builder_byte(t: *Text, c: u8)
+fn builder_text(t: *Text, s: str)
+fn builder_done(t: *Text) -> str
+type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, author: bool }
+fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet
+fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], sheet: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox)
+fn consider(best: *list.List[cascade.Declared], entry: cascade.Declared)
+fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -> []const cascade.Declared
+fn declared_direction(declared: []const cascade.Declared, fallback: bool) -> bool
+fn blockify(d: Display) -> Display
+fn finish(s: *Style)
+fn compute(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: *const Sheet, el: html.NodeId, parent: *const Style) -> (Style, err)
+fn parse_rules(a: *mem.Arena, source: str, order_start: i64) -> ([]const cascade.Rule, err)
+fn compute_below(c: *Context, m: *const cssm.Matcher, d: *const dom.Dom, ua: *const Sheet, author: *const Sheet, id: html.NodeId, parent: *const Style, out: []Style) -> err
+fn first_root_element(d: *const dom.Dom) -> html.NodeId
+fn compute_tree(c: *Context, d: *const dom.Dom, ua: []const cascade.Rule, author: []const cascade.Rule, out: []Style) -> err
+```
+
 ### `e.fmt.html.template`
 
 ```neper

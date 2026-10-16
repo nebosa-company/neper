@@ -2277,6 +2277,41 @@
    "blocked_by": []
   },
   {
+   "name": "e.fmt.css.expand",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.gfx.cssvalue",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.css.style",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.fmt.css.cascade",
+    "e.fmt.css.expand",
+    "e.fmt.css.match",
+    "e.fmt.css.selector",
+    "e.fmt.css.syntax",
+    "e.fmt.dom",
+    "e.fmt.html",
+    "e.gfx.cssvalue",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.fmt.html.template",
    "layer": 6,
    "surface": "partial",

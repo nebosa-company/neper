@@ -2584,6 +2584,12 @@ $fmtDomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtDomWritten -ne 'executable written') { throw 'fmt_dom emission failed' }
 & $fmtDomPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_dom check failed: exit $LASTEXITCODE" }
+# `e.fmt.css.style` and `e.fmt.css.expand`: shorthand and logical expansion, the cascade over expanded longhands, inheritance, computed values, custom properties with var(), currentcolor and blockification over an `e.fmt.dom` tree (tracker 1.13).
+$cssStylePath = Join-Path $testBuild 'css-style-selfhost.exe'
+$cssStyleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\css_style\src\main.e') $repo 'x64' 'windows' $cssStylePath
+if ($LASTEXITCODE -ne 0 -or $cssStyleWritten -ne 'executable written') { throw 'css_style emission failed' }
+& $cssStylePath
+if ($LASTEXITCODE -ne 0) { throw "a css_style check failed: exit $LASTEXITCODE" }
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 $distConsensusPath = Join-Path $testBuild 'dist-consensus-selfhost.exe'
 $distConsensusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_consensus\src\main.e') $repo 'x64' 'windows' $distConsensusPath

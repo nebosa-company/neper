@@ -428,6 +428,7 @@
    "delivered": 53,
    "pending": [],
    "fixtures": [
+    "css_style",
     "fmt_dom",
     "fmt_gaps_a",
     "fmt_html",
