@@ -461,7 +461,9 @@ fn build_main(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     }
     let (upper, upper_error) = boxed(a, t, &m.pool_grid, 497.0, upper_h)
     if upper_error != ok { ret (0usize, upper_error) }
-    let (lower, lower_error) = boxed(a, t, &m.coll_grid, 497.0, 242.0)
+    var lower_h: f32 = 242.0
+    if t.tokens.profile == .Windows { lower_h = 243.0 }
+    let (lower, lower_error) = boxed(a, t, &m.coll_grid, 497.0, lower_h)
     if lower_error != ok { ret (0usize, lower_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (0usize, parts_error) }

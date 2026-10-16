@@ -2457,11 +2457,34 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             if look.on { line.background = paint.Brush { Solid: look.line } }
             // looks5-e: a dialog's grid draws one crisp #DCDCDC column line
             if look.on && look.dialog_lines { line.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) } }
+            // looks5-e: the main window's column lines grow lighter to the right (live capture: #E3E3E3 and #F8F8F8 at x 36 to
+            // #ECECEC and #EFEFEF at x 486), a linear ramp over the row
+            var ramp: f32 = 0.0
+            if look.on && look.soft_lines && !look.dialog_lines {
+                var line_x: f32 = 0.0
+                var before = 0usize
+                while before <= c && before < columns.len {
+                    line_x += columns[before].width
+                    before += 1usize
+                }
+                ramp = (line_x - 36.0) / 450.0
+                if ramp < 0.0 { ramp = 0.0 }
+                if ramp > 1.0 { ramp = 1.0 }
+                var first_level = (227.0 + ramp * 9.0) / 255.0
+                // the indicator column's line is #EAEAEA over #FAFAFA
+                if c == 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 {
+                    first_level = 234.0 / 255.0
+                    ramp = 0.0 - 2.0 / 9.0
+                }
+                line.background = paint.Brush { Solid: paint.rgba(first_level, first_level, first_level, 1.0) }
+            }
             boxed[n] = widget.box(0u64, line, zero)
             n += 1usize
             if look.on && look.soft_lines && !look.dialog_lines {
                 var soft = control.sized_style(1.0, extent)
                 soft.background = paint.Brush { Solid: gl.rgb(0xF8F8F8u32) }
+                let second_level = (248.0 - ramp * 9.0) / 255.0
+                soft.background = paint.Brush { Solid: paint.rgba(second_level, second_level, second_level, 1.0) }
                 boxed[n] = widget.box(0u64, soft, zero)
                 n += 1usize
             }

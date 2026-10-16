@@ -9350,7 +9350,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var top_one = gl.rgb(0xF2F4F6u32)
         var top_two = gl.rgb(0xFAFBECu32)
         var bottom_one = gl.rgb(0xD9D9C8u32)
-        var bottom_two = gl.rgb(0xD2D2D2u32)
+        var bottom_two = gl.rgb(0xDADADAu32)
         if green {
             top_one = gl.rgb(0xEBE9E9u32)
             top_two = gl.rgb(0xE1EDE6u32)
