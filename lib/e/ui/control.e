@@ -9065,8 +9065,8 @@ fn win5_hint_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         ret win3_rect(b, x + 1.0, y + h - 1.0, 1.0, 1.0, style.hex(9671571u32))
     }
     if style.windark_active() {
-        // The Windows 11 dark tooltip: a #2B2B2B face in a 1 px #5A5A5A frame, white text.
-        try win3_rect(b, x, y, w, h, style.hex_raw(0x5A5A5Au32))
+        // The Windows 11 dark tooltip (native capture ref/windows-native/dark/tooltip-rest): a #2B2B2B face in a 1 px #767676 frame, white text.
+        try win3_rect(b, x, y, w, h, style.hex_raw(0x767676u32))
         ret win3_rect(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, style.hex_raw(0x2B2B2Bu32))
     }
     try win3_rect(b, x, y, w, h, style.hex(16777185u32))
@@ -9080,8 +9080,12 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
     // The toolbar's hint is Tahoma 12 (measured by ink width on the captures), the grid's Tahoma 11.
     var hint_px: f32 = 12.3
     if grid { hint_px = 11.1 }
-    let (dialog_t, dialog_error) = windows_tahoma_theme(a, t, hint_px)
+    if style.windark_active() && !grid { hint_px = 12.0 }
+    let (tahoma_t, dialog_error) = windows_tahoma_theme(a, t, hint_px)
     if dialog_error != ok { ret (zero, dialog_error) }
+    // The native dark tooltip is Segoe UI 12 px (the faces stay in the theme's order).
+    var dialog_t = tahoma_t
+    if style.windark_active() && !grid { dialog_t.fonts = t.fonts }
     var words = text_options()
     words.role = .BodyMedium
     words.wrap = .None
@@ -9097,6 +9101,11 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
     var tall: f32 = 20.0
     var left: f32 = 3.0
     var drop: f32 = 3.0
+    if style.windark_active() && !grid {
+        over = 12.0
+        left = 5.0
+        drop = 2.0
+    }
     if grid {
         over = 10.0
         tall = 25.0

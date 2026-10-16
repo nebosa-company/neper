@@ -72,6 +72,7 @@ fn hinted_spec(n: usize) -> Hinted {
     if n == 2usize { ret Hinted { name: "hint_toolbar_cards_f", text: "Add Foil cards to your collection", width: 180.0, high: 20.0, grid: false } }
     if n == 3usize { ret Hinted { name: "hint_toolbar_help_home", text: "Visit MTG Studio online resources", width: 188.0, high: 20.0, grid: false } }
     if n == 4usize { ret Hinted { name: "hint_toolbar_search_binoculars", text: "Start incremental search (Ctrl+F)", width: 185.0, high: 20.0, grid: false } }
+    if n == 7usize { ret Hinted { name: "hint_native", text: "This is the tooltip text", width: 126.0, high: 20.0, grid: false } }
     if n == 5usize { ret Hinted { name: "hint_toolbar_search_filter", text: "Filter top grid cards by various properties (F3)", width: 255.0, high: 20.0, grid: false } }
     ret Hinted { name: "hint_grid_header_name", text: "Name - the card's name appears in the upper left corner.", width: 285.0, high: 25.0, grid: true }
 }
@@ -109,6 +110,11 @@ fn build_t6(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.C
     ret (m, e)
 }
 
+fn build_t7(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hinted_n(a, t, cells, 7usize)
+    ret (m, e)
+}
+
 fn run_hinted(a: *mem.Arena, n: usize) -> err {
     let o = hinted_spec(n)
     var maker: looks.Build = build_t1
@@ -117,6 +123,7 @@ fn run_hinted(a: *mem.Arena, n: usize) -> err {
     if n == 4usize { maker = build_t4 }
     if n == 5usize { maker = build_t5 }
     if n == 6usize { maker = build_t6 }
+    if n == 7usize { maker = build_t7 }
     let sheet = looks.Sheet { name: o.name, cells: 1usize, columns: 1usize, cell_w: o.width, cell_h: o.high, ctx: zero, build: maker }
     ret looks.run_all(a, &sheet)
 }
