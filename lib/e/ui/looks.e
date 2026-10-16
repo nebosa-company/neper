@@ -36,7 +36,7 @@ type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, Material
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
-type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33 }
+type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -285,6 +285,11 @@ fn render(rig: *Rig, root: widget.Node, path: str) -> err {
 // What a driven cell needs the runtime to have seen before its frame.
 fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
     if drive == .Hover { ret testing.hover(&rig.harness, x, y) }
+    if drive == .FocusHover {
+        // The keyboard focus in an edit (the click lands 60 px left of the point), then the pointer over the point.
+        try testing.tap(&rig.harness, x - 60.0, y)
+        ret testing.hover(&rig.harness, x, y)
+    }
     if drive == .Press {
         try testing.hover(&rig.harness, x, y)
         ret testing.send(&rig.harness, input.Event { PointerDown: testing.pointer_at(x, y) })
@@ -374,7 +379,7 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
             var shot = first_shot
             // (pickers) A hover that opens something lands on the element the first frame
             // built: the pointer moves again over that layout, and the frame is taken again.
-            if drive == .Hover {
+            if drive == .Hover || drive == .FocusHover {
                 try testing.hover(&rig.harness, cx, cy)
                 step += 1i64
                 let pass_two = begin(rig)
