@@ -2538,9 +2538,15 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     let ringed = ring < 4u32
     // v3's caption sits 1 px left of and above the centre of the box (measured on Cancel and Apply).
     var pad_left = shift_x
+    var pad_right: f32 = 2.0
+    // round 13: a negative shift moves the caption left (a native split button's caption sits 8 px left of the middle): the room goes on the right
+    if shift_x < 0.0 {
+        pad_left = 0.0
+        pad_right = 2.0 - 2.0 * shift_x
+    }
     // round 12: the native dark label is centred (v3's light caption sits 1 px left of centre).
     if win_dark(t) { pad_left += 2.0 }
-    if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: pad_left }, top: style.Length { Px: shift_y }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
+    if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: pad_left }, top: style.Length { Px: shift_y }, right: style.Length { Px: pad_right }, bottom: style.Length { Px: 2.0 } } }
     let centred = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
     // A pressed button is focused too: v3 shows the dotted rectangle on it (states/button-pressed-*).
     // round 12: the native dark pressed button (button-pressed) shows no dotted rectangle: that is v3's light behaviour.
@@ -2639,7 +2645,12 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     if parts_error != ok { ret (zero, TooLarge) }
     var count = 0usize
     var content_w: f32 = 0.0
-    if has_icon && !options.loading {
+    // round 13: the native dark picture button (button-icon) holds its picture at (10, 7) of the face and centres the caption in the room
+    // to its right (the caption's middle 11.5 px right of the face's); the picture is not part of the caption row
+    let dark_picture = has_icon && !options.loading && t.tokens.palette == .Dark && t.tokens.profile == .Windows && corners.top_left == 0.0
+    var shift_caption = options.shift_x
+    if dark_picture { shift_caption = 23.0 }
+    if has_icon && !options.loading && !dark_picture {
         parts[count] = picture
         count += 1usize
         content_w = 16.0
@@ -2730,15 +2741,97 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         row = widget.stack(0u64, style.defaults(), layers[1usize..3usize])
         states = accessibility.STATE_BUSY
     }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, options.shift_x, options.shift_y, options.ring_x, options.ring_y, options.ring_x2, options.ring_y2)
+    let (shown_plain, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, shift_caption, options.shift_y, options.ring_x, options.ring_y, options.ring_x2, options.ring_y2)
     if shown_error != ok { ret (zero, shown_error) }
+    var shown = shown_plain
+    if dark_picture {
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = shown_plain
+        pair[1usize] = widget.positioned(0u64, 10.0, 7.0, style.defaults(), mem_one_node(a, picture))
+        shown = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
+    }
     let (node, node_error) = pressable_states(a, key, t, 3u8, label, look, options.enabled, selected, states, 0u32, 0u64, action, shown)
     ret (node, node_error)
+}
+
+// round 13: the native Windows 11 dark split button (button-split-* of docs/ui/looks/ref/windows-native/dark): the whole 150 x 32 button
+// is one face of the plain dark button, the caption centred 8 px left of its middle, a 2 px divider (#A0A0A0, #696969; disabled #A0A0A0,
+// #F0F0F0) on columns 133 and 134 from row 3 to 26 of the 148 x 30 face, and the arrow a 9 wide triangle on rows 13 to 17 centred on
+// column 140 (#C8C8C8, disabled #A0A0A0). A held button (the pointer down on its caption) lights the whole face.
+type DarkSplitMark = struct { disabled: bool, pressed: bool }
+
+fn dark_split_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*DarkSplitMark](ctx)
+    var first = style.hex_raw(0xA0A0A0u32)
+    var second = style.hex_raw(0x696969u32)
+    var glyph = style.hex_raw(0xC8C8C8u32)
+    if m.disabled {
+        second = style.hex_raw(0xF0F0F0u32)
+        glyph = style.hex_raw(0xA0A0A0u32)
+    }
+    // the right corners are the split's own (a little crisper than the plain button's): the top four rows and the bottom four, six columns
+    let rest_corner = [48]u8{ 155, 155, 154, 131, 46, 32, 51, 51, 64, 114, 151, 46, 51, 51, 51, 51, 114, 131, 51, 51, 51, 51, 64, 154, 51, 51, 51, 51, 64, 154, 51, 51, 51, 51, 114, 131, 51, 51, 64, 114, 151, 46, 139, 139, 139, 123, 46, 32 }
+    let held_corner = [48]u8{ 155, 155, 154, 131, 46, 32, 102, 102, 109, 134, 151, 46, 102, 102, 102, 102, 134, 131, 102, 102, 102, 102, 109, 154, 102, 102, 102, 102, 109, 154, 102, 102, 102, 102, 134, 131, 102, 102, 109, 134, 151, 46, 155, 155, 154, 131, 46, 32 }
+    let off_corner = [48]u8{ 64, 64, 64, 57, 36, 32, 51, 51, 53, 59, 62, 36, 51, 51, 51, 51, 59, 57, 51, 51, 51, 51, 53, 64, 51, 51, 51, 51, 53, 64, 51, 51, 51, 51, 59, 57, 51, 51, 53, 59, 62, 36, 64, 64, 64, 57, 36, 32 }
+    var k = 0usize
+    while k < 48usize {
+        var v = rest_corner[k]
+        if m.pressed { v = held_corner[k] }
+        if m.disabled { v = off_corner[k] }
+        var cy = f32(k / 6usize)
+        if k >= 24usize { cy += 22.0 }
+        try winpx.fill(b, area.x + 142.0 + f32(k % 6usize), area.y + cy, 1.0, 1.0, dark_gray(v))
+        k += 1usize
+    }
+    var y: f32 = 3.0
+    while y < 27.0 {
+        try winpx.fill(b, area.x + 133.0, area.y + y, 1.0, 1.0, first)
+        try winpx.fill(b, area.x + 134.0, area.y + y, 1.0, 1.0, second)
+        y += 1.0
+    }
+    var row: f32 = 0.0
+    while row < 5.0 {
+        try winpx.fill(b, area.x + 136.0 + row, area.y + 13.0 + row, 9.0 - 2.0 * row, 1.0, glyph)
+        row += 1.0
+    }
+    ret ok
+}
+
+fn windows_dark_split(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, open: bool, toggle: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    var face = options
+    if face.width <= 0.0 { face.width = 150.0 }
+    if face.height <= 0.0 { face.height = 31.0 }
+    face.shift_x = 0.0 - 8.0
+    let (head, head_error) = windows_button(a, key, t, label, widget.spacer(0u64, 0.0), false, true, false, zero, action, face)
+    if head_error != ok { ret (zero, head_error) }
+    let (marks, marks_error) = mem.alloc[DarkSplitMark](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    let held = control_state(t, key, options.enabled, false)
+    marks[0usize] = DarkSplitMark { disabled: !options.enabled, pressed: held.pressed }
+    var none: []const widget.Node = zero
+    let mark = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: dark_split_paint, state: widget.bytes_of[DarkSplitMark](&marks[0usize]) } }, style: sized_style(face.width - 2.0, face.height - 1.0), children: none }
+    // the arrow part opens the menu: a clear 14 px region over the arrow, keyed key + 1
+    let bare = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: paint.rgba(0.0, 0.0, 0.0, 0.0), border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 14.0, min_height: face.height - 1.0, corners: zero }
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (tail, tail_error) = pressable_states(a, key + 1u64, t, 3u8, "More", bare, options.enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, widget.spacer(0u64, 0.0))
+    if tail_error != ok { ret (zero, tail_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = head
+    layers[1usize] = mark
+    layers[2usize] = widget.positioned(0u64, 133.0, 0.0, style.defaults(), mem_one_node(a, tail))
+    ret (widget.stack(0u64, sized_style(face.width - 2.0, face.height - 1.0), layers[0usize..3usize]), ok)
 }
 
 // A split button: the head (caption) and, joined to it, the arrow part keyed `key + 1` that fires
 // `toggle` for the menu the caller places, as `split_button` does. The two borders meet in the divider.
 fn windows_split(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, open: bool, toggle: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    if t.tokens.palette == .Dark && t.tokens.profile == .Windows {
+        let (native, native_error) = windows_dark_split(a, key, t, label, action, open, toggle, options)
+        ret (native, native_error)
+    }
     let r = t.tokens.radii.sm
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -6332,9 +6425,17 @@ fn windows_edit_theme(a: *mem.Arena, t: *const Theme, line_height: f32) -> (Them
         swapped[1usize] = t.fonts[0usize]
         fonts = swapped
     }
-    var language = t.language
-    if dark_native { language = "kern" }
-    ret (Theme { tokens: &copies[0usize], fonts: fonts, language: language, runtime: t.runtime }, ok)
+    ret (Theme { tokens: &copies[0usize], fonts: fonts, language: t.language, runtime: t.runtime }, ok)
+}
+
+// round 13: the native dark edit control sets its text on hdmx whole pixel advances with kerning (language "kern", see text.layout); the
+// static texts (labels, check box and radio captions, list rows) of the same look keep the linear advances.
+fn windows_edit_theme_kerned(a: *mem.Arena, t: *const Theme, line_height: f32) -> (Theme, err) {
+    let (made, made_error) = windows_edit_theme(a, t, line_height)
+    if made_error != ok { ret (zero, made_error) }
+    var kerned = made
+    if win_dark(t) { kerned.language = "kern" }
+    ret (kerned, ok)
 }
 
 // The native Windows 11 edit as v3 draws it (NativeStyle): a white face, a 1 px border so light
@@ -6406,7 +6507,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var value_options = text_options()
     value_options.role = .BodyMedium
     value_options.mono = options.mono
-    let (ft, ft_error) = windows_edit_theme(a, t, 13.0)
+    let (ft, ft_error) = windows_edit_theme_kerned(a, t, 13.0)
     if ft_error != ok { ret (zero, ft_error) }
     let (text_look, style_error) = text_style_faced(a, &ft, value_options)
     if style_error != ok { ret (zero, style_error) }
@@ -6892,7 +6993,7 @@ fn windows_button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
     layers[1usize] = widget.positioned(0u64, options.width - 17.0, 2.0, style.defaults(), win_one(a, ellipsis))
-    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..1usize]), ok)
 }
 
 // A single-line text field.
@@ -6966,7 +7067,7 @@ fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
     layers[1usize] = widget.positioned(0u64, options.width - 4.0 - side, max_zero((h - side) * 0.5), style.defaults(), held[3usize..4usize])
-    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..1usize]), ok)
 }
 
 // A search field: a single line whose Enter is the search (`submit`), with a clear
@@ -9483,7 +9584,7 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
         inset_y = drop - 2.0
     }
     layers[1usize] = widget.positioned(0u64, inset_x, inset_y, style.defaults(), held[0usize..1usize])
-    ret (widget.stack(key, sized_style(w, h), layers[0usize..2usize]), ok)
+    ret (widget.stack(key, sized_style(w, h), layers[0usize..1usize]), ok)
 }
 // ---- end looks5 group d (hints) -------------------------------------------------------------------------------
 
@@ -10773,7 +10874,7 @@ fn button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buff
         stack_layers[0usize] = editor
         stack_layers[2usize] = trail
         stack_layers[1usize] = widget.positioned(0u64, options.width - 4.0 - 40.0, max_zero((field_h - 40.0) * 0.5), style.defaults(), stack_layers[2usize..3usize])
-        ret (widget.stack(0u64, style.defaults(), stack_layers[0usize..2usize]), ok)
+        ret (widget.stack(0u64, style.defaults(), stack_layers[0usize..1usize]), ok)
     }
     var dots: widget.Node = zero
     if t.tokens.profile == .CupertinoLike {
@@ -10799,7 +10900,7 @@ fn button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buff
     layers[0usize] = editor
     layers[2usize] = dots
     layers[1usize] = widget.positioned(0u64, dots_x, max_zero((h - dots_box) * 0.5), style.defaults(), layers[2usize..3usize])
-    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..1usize]), ok)
 }
 
 // A spin box's arrow: 24 x 24 with `radius-xs` corners, a 16 chevron in
@@ -14578,6 +14679,48 @@ fn scroll_arrows_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> er
     ret v3_chevron(b, area.x + area.width - 8.0, area.y + area.height * 0.5, 3u8, s.ink)
 }
 
+// round 13: the native Windows 11 dark scroll bar arrow glyphs, as pixels (vscroll/hscroll-pressed-arrow: the held arrow, #AFAFAF,
+// on a #171717 button; vscroll/hscroll-disabled: both arrows, #505050). `kind` 0 held, 1 disabled; `end` 0 the start arrow (up, left),
+// 1 the end one (down, right) as the start mirror image; the button square behind the held arrow is painted by the caller.
+type DarkArrow = struct { vertical: bool, kind: u32, end: u32, length: f32 }
+
+fn dark_gray(g: u8) -> paint.Color {
+    let v = u32(g)
+    ret style.hex_raw((v << 16u32) | (v << 8u32) | v)
+}
+
+fn dark_arrow_table(b: *scene.Builder, area: geometry.Rect, rows: usize, cols: usize, table: []const u8, x0: f32, y0: f32, flip_x: bool, flip_y: bool, length: f32) -> err {
+    var r = 0usize
+    while r < rows {
+        var c = 0usize
+        while c < cols {
+            var x = x0 + f32(c)
+            var y = y0 + f32(r)
+            if flip_x { x = length - 1.0 - x }
+            if flip_y { y = length - y }
+            try winpx.fill(b, area.x + x, area.y + y, 1.0, 1.0, dark_gray(table[r * cols + c]))
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+fn dark_arrow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*DarkArrow](ctx)
+    let held_v = [80]u8{ 23, 23, 23, 24, 60, 60, 24, 23, 23, 23, 23, 23, 23, 102, 175, 175, 102, 23, 23, 23, 23, 23, 58, 173, 175, 175, 173, 58, 23, 23, 23, 30, 154, 175, 175, 175, 175, 154, 30, 23, 23, 113, 175, 175, 175, 175, 175, 175, 113, 23, 62, 175, 175, 175, 175, 175, 175, 175, 175, 62, 92, 175, 175, 175, 175, 175, 175, 175, 175, 94, 28, 80, 90, 90, 90, 90, 90, 90, 80, 28 }
+    let held_h = [80]u8{ 23, 23, 23, 23, 23, 62, 91, 28, 23, 23, 23, 30, 113, 175, 175, 80, 23, 23, 58, 154, 175, 175, 175, 90, 24, 102, 173, 175, 175, 175, 175, 90, 69, 175, 175, 175, 175, 175, 175, 90, 69, 175, 175, 175, 175, 175, 175, 90, 24, 102, 173, 175, 175, 175, 175, 90, 23, 23, 58, 154, 175, 175, 175, 90, 23, 23, 23, 30, 113, 175, 175, 80, 23, 23, 23, 23, 23, 62, 93, 28 }
+    let off_v = [48]u8{ 23, 23, 34, 73, 73, 34, 23, 23, 23, 25, 70, 80, 80, 70, 25, 23, 23, 55, 80, 80, 80, 80, 55, 23, 37, 80, 80, 80, 80, 80, 80, 37, 73, 80, 80, 80, 80, 80, 80, 73, 70, 80, 80, 80, 80, 80, 80, 70 }
+    let off_h = [64]u8{ 23, 23, 23, 37, 73, 70, 23, 23, 23, 25, 55, 80, 80, 80, 23, 23, 34, 70, 80, 80, 80, 80, 23, 23, 74, 80, 80, 80, 80, 80, 23, 23, 74, 80, 80, 80, 80, 80, 23, 23, 34, 70, 80, 80, 80, 80, 23, 23, 23, 25, 55, 80, 80, 80, 23, 23, 23, 23, 23, 37, 73, 70, 23, 23 }
+    let flip = d.end == 1u32
+    if d.vertical {
+        if d.kind == 0u32 { ret dark_arrow_table(b, area, 8usize, 10usize, held_v[0usize..80usize], 4.0, 5.0, false, flip, d.length) }
+        ret dark_arrow_table(b, area, 6usize, 8usize, off_v[0usize..48usize], 5.0, 6.0, false, flip, d.length)
+    }
+    if d.kind == 0u32 { ret dark_arrow_table(b, area, 10usize, 8usize, held_h[0usize..80usize], 4.0, 4.0, flip, false, d.length) }
+    ret dark_arrow_table(b, area, 8usize, 8usize, off_h[0usize..64usize], 5.0, 5.0, flip, false, d.length)
+}
+
 // The bar alone: `length` long along `vertical`, for a viewport of `view` px over `content`
 // px scrolled to `offset`. Keyed `key` (its hover and press state).
 // looks5-e: a dialog's list bar (the Filter tree): a white first pixel and the thumb on whole pixels, as the grids of the dialogs
@@ -14586,7 +14729,25 @@ fn set_scroll_bar_crisp(on: bool) { scroll_bar_crisp = on }
 
 fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, view: f32, content: f32, offset: f32) -> (widget.Node, err) {
     style.windows_dark_enter(t.tokens)
-    let state = control_state(t, key, true, false)
+    var state = control_state(t, key, true, false)
+    // round 13: the native dark bar looks like its rest capture under a plain hover (vscroll-hover-*, hscroll-hover-arrow and -thumb are
+    // pixel-identical to rest); held on an end arrow it is the expanded bar (a #1E1E1E track, that arrow lit on its #171717 button, the thumb
+    // dim: *-pressed-arrow); with nothing to scroll both arrows show dim (*-disabled).
+    var dark_zone = 0u32
+    if style.windows_dark_on() {
+        if state.pressed && mem.address_of(t.runtime) != 0usize {
+            let (bar_box, has_bar_box) = keyed_bounds(t.runtime, key)
+            if has_bar_box {
+                let at = widget.pointer_position(t.runtime)
+                var along = at.y - bar_box.y
+                if !vertical { along = at.x - bar_box.x }
+                if along < 17.0 { dark_zone = 1u32 }
+                if along > length - 17.0 { dark_zone = 2u32 }
+            }
+        }
+        state.hovered = false
+        state.pressed = false
+    }
     // round 12: the native dark bar is the 17 wide pixel bar of vscroll-rest (crisp: thumb columns 8 and 9)
     let crisp = scroll_bar_crisp || style.windows_dark_on()
     // Measured at 100 % in the v3 main window (ref/windows/main-window@1x.png): the vertical bar's
@@ -14617,13 +14778,15 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         // thumb #858585 (rest; hot and held captures are pixel-identical to rest, so the colour stays), track #1E1E1E while
         // the bar is expanded under the pointer (vscroll-pressed-arrow)
         dark_track = style.hex_raw(0x171717u32)
-        if state.hovered || state.pressed { dark_track = style.hex_raw(0x1E1E1Eu32) }
+        if dark_zone != 0u32 { dark_track = style.hex_raw(0x1E1E1Eu32) }
         track.background = paint.Brush { Solid: dark_track }
         ink = style.hex_raw(0x858585u32)
+        if dark_zone != 0u32 { ink = style.hex_raw(0x303030u32) }
     }
     // (round 12) the native thumb body is #959595 between 1 px #858585 end rows
     var body = style.hex_raw(0x959595u32)
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
+    if dark_zone != 0u32 { body = style.hex_raw(0x333333u32) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 8usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var count = 0usize
     // looks4-e: the track's first pixel line, towards the content, is #F7F7F7 (live captures, scroll_bar_live*.png)
@@ -14732,6 +14895,37 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         if !vertical { fill = sized_style(length, 16.0) }
         layers[count] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&arrows[0usize]), measure: mark_measure, paint: scroll_arrows_paint, state: widget.bytes_of[ScrollArrows](&arrows[0usize]) } }, style: fill, children: none }
         count += 1usize
+    }
+    if style.windows_dark_on() && (dark_zone != 0u32 || content <= view) {
+        let (pieces, pieces_error) = mem.alloc[DarkArrow](a, 2usize)
+        if pieces_error != ok { ret (zero, TooLarge) }
+        var none: []const widget.Node = zero
+        var fill = sized_style(17.0, length)
+        if !vertical { fill = sized_style(length, 17.0) }
+        var made = 0usize
+        if dark_zone != 0u32 {
+            // the held arrow square: a 17 px square at its end
+            var end_square = sized_style(17.0, 17.0)
+            var at: f32 = 0.0
+            if dark_zone == 2u32 { at = length - 17.0 }
+            if vertical { end_square.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: at }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } } }
+            if !vertical { end_square.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } } }
+            end_square.background = paint.Brush { Solid: style.hex_raw(0x171717u32) }
+            layers[count] = widget.box(0u64, end_square, zero)
+            count += 1usize
+            pieces[0usize] = DarkArrow { vertical: vertical, kind: 0u32, end: dark_zone - 1u32, length: length }
+            made = 1usize
+        } else {
+            pieces[0usize] = DarkArrow { vertical: vertical, kind: 1u32, end: 0u32, length: length }
+            pieces[1usize] = DarkArrow { vertical: vertical, kind: 1u32, end: 1u32, length: length }
+            made = 2usize
+        }
+        var p = 0usize
+        while p < made {
+            layers[count] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&pieces[p]), measure: mark_measure, paint: dark_arrow_paint, state: widget.bytes_of[DarkArrow](&pieces[p]) } }, style: fill, children: none }
+            count += 1usize
+            p += 1usize
+        }
     }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
@@ -15301,7 +15495,7 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
     body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: row_gap }, line_style, bits[0usize..used])
     if lit && win_drop_dots {
         // looks4 group d: the lit row carries v3's XOR focus rectangle (orange on the blue).
-        let (dots, dots_error) = win4_xor_dots(a)
+        let (dots, dots_error) = win4_xor_dots(a, t.tokens.palette == .Dark && t.tokens.profile == .Windows)
         if dots_error != ok { ret (zero, dots_error) }
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
@@ -15890,7 +16084,9 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     var ch: f32 = 21.0
     if dark {
         ch = 22.0
-        let (dark_t, dark_error) = windows_edit_theme(a, t, 15.0)
+        var (dark_t, dark_error) = windows_edit_theme_kerned(a, t, 15.0)
+        // (the list-style combo is a static text: linear advances)
+        if options.read_only { (dark_t, dark_error) = windows_edit_theme(a, t, 15.0) }
         if dark_error != ok { ret (zero, dark_error) }
         bar_t = dark_t
     }
@@ -17067,30 +17263,51 @@ fn win4_xor_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let dot = style.hex(16746280u32)
     let w = u32(area.width) - 1u32
     let h = u32(area.height) - 1u32
+    let m = mem.cast[*Win3Lines](ctx)
+    if m.shade > 0.5 {
+        // round 13: the native dark popup's XOR rectangle inverts where the window coordinates x + y are even (combo-*-open: the top and
+        // bottom rows at odd x of a row whose top is on an odd line, the right column on the even lines), corners included
+        let ox = u32(area.x + 0.01)
+        let oy = u32(area.y + 0.01)
+        var i = 0u32
+        while i <= w {
+            if ((ox + i + oy) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y, 1.0, 1.0, dot) }
+            if ((ox + i + oy + h) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h), 1.0, 1.0, dot) }
+            i += 1u32
+        }
+        var k = 1u32
+        while k < h {
+            if ((ox + oy + k) & 1u32) == 0u32 { try win3_rect(b, area.x, area.y + f32(k), 1.0, 1.0, dot) }
+            if ((ox + w + oy + k) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(w), area.y + f32(k), 1.0, 1.0, dot) }
+            k += 1u32
+        }
+        ret ok
+    }
     var i = 1u32
     while i < w {
         if (i & 1u32) == 1u32 {
             try win3_rect(b, area.x + f32(i), area.y, 1.0, 1.0, dot)
+            if (h & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h), 1.0, 1.0, dot) }
         }
-        if ((i + h) & 1u32) == 1u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h), 1.0, 1.0, dot) }
         i += 1u32
     }
     var j = 1u32
     while j < h {
         if (j & 1u32) == 1u32 {
             try win3_rect(b, area.x, area.y + f32(j), 1.0, 1.0, dot)
+            try win3_rect(b, area.x + f32(w), area.y + f32(j), 1.0, 1.0, dot)
         }
-        // round 13: the XOR dot is on where x + y is odd, so the right edge is one row off the left edge when the rectangle is an odd number of px wide
-        if ((j + w) & 1u32) == 1u32 { try win3_rect(b, area.x + f32(w), area.y + f32(j), 1.0, 1.0, dot) }
         j += 1u32
     }
     ret ok
 }
 
-fn win4_xor_dots(a: *mem.Arena) -> (widget.Node, err) {
+fn win4_xor_dots(a: *mem.Arena, dark: bool) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[Win3Lines](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
-    cells[0usize] = Win3Lines { shade: 0.0 }
+    var tint: f32 = 0.0
+    if dark { tint = 1.0 }
+    cells[0usize] = Win3Lines { shade: tint }
     var none: []const widget.Node = zero
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }

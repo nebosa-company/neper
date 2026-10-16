@@ -301,10 +301,21 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         at += 1usize
         l += 1usize
     }
+    // round 13: button-hover-pressed (the held button also shows the dotted focus rectangle)
+    var held = control.button_options()
+    held.width = 110.0
+    held.height = 31.0
+    held.focused = true
+    let (held_node, held_error) = control.button(a, 2100u64, t, "Button", &actions[0usize], held)
+    if held_error != ok { ret (0usize, held_error) }
+    let (held_boxed, held_boxed_error) = placed(a, held_node, 45.0, 34.0)
+    if held_boxed_error != ok { ret (0usize, held_boxed_error) }
+    cells[at] = looks.Cell { caption: "button-hover-pressed", node: held_boxed, drive: .Press }
+    at += 1usize
     ret (at, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark", cells: 54usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark", cells: 55usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

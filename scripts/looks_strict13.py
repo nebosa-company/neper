@@ -48,13 +48,41 @@ def runs_mask(img, n=13):
     return m
 
 
+def dots_mask(img, n=6):
+    """pixels of a dotted line: along a row or a column the colour alternates (equal two apart, different one apart) for n or more steps"""
+    h, w, _ = img.shape
+    m = np.zeros((h, w), bool)
+    for axis in (0, 1):
+        a = img if axis == 1 else img.transpose(1, 0, 2)
+        hh, ww, _ = a.shape
+        mm = np.zeros((hh, ww), bool)
+        for y in range(hh):
+            row = a[y]
+            alt = np.zeros(ww, bool)
+            for x in range(ww - 2):
+                alt[x] = (row[x] == row[x + 2]).all() and not (row[x] == row[x + 1]).all()
+            x = 0
+            while x < ww:
+                if alt[x]:
+                    x2 = x
+                    while x2 < ww and alt[x2]:
+                        x2 += 1
+                    if x2 - x >= n:
+                        mm[y, x:x2 + 2] = True
+                    x = x2
+                else:
+                    x += 1
+        m |= mm if axis == 1 else mm.T
+    return m
+
+
 INSET = [3]  # glyphs are looked for this far in from the rect (0 for a borderless label)
 
 
 def glyph_pixels(ref):
     h, w, _ = ref.shape
     flat = sd.flat_mask(ref)
-    g = ~flat & ~runs_mask(ref)
+    g = ~flat & ~runs_mask(ref) & ~dots_mask(ref)
     inner = np.zeros((h, w), bool)
     k = INSET[0]
     inner[k:h - k, k:w - k] = True
@@ -185,6 +213,45 @@ def mask_table(outdir):
     return res
 
 
+def sheet_table(sheet, cols, cw, ch, spec, outdir, only=None, search=2):
+    """spec: (capture stem, cell index, rect index of controls.json, (x, y) of the control in its cell [or None], (w, h) crop override [or None])"""
+    sh = sd.load(sd.OURS + sheet + ".png")
+    res = []
+    for stem, idx, rect, anchor, over in spec:
+        if only and not any(stem.startswith(o) for o in only):
+            continue
+        img, (rx, ry, rw, rh) = sd.native(stem, rect=rect, pad=-1 if stem.startswith('button') else 0)  # a button's window rect has a 1 px margin
+        if over:
+            rw, rh = over
+        ref = img[ry:ry + rh, rx:rx + rw]
+        col, r_ = idx % cols, idx // cols
+        x, y = 12 + col * (cw + 10), 12 + r_ * (16 + 4 + ch + 10) + 20
+        px, py = place(ref, sh, x, y, cw, ch, search, anchor)
+        ours = sh[py:py + rh, px:px + rw]
+        res.append(row(stem, ref, ours, (px, py)))
+        if outdir:
+            dump(ref, ours, os.path.join(outdir, stem + ".png"))
+    return res
+
+
+# native_dark2 (examples/looks/native_dark2.e)
+SHEET2 = [("vscroll-rest", 0, 0, (20, 10), None), ("hscroll-rest", 1, 0, (16, 20), None), ("tooltip-rest", 2, 1, (30, 40), None),
+          ("vscroll-pressed-arrow", 3, 0, (20, 10), None), ("vscroll-disabled", 4, 0, (20, 10), None),
+          ("hscroll-pressed-arrow", 5, 0, (16, 20), None), ("hscroll-disabled", 6, 0, (16, 20), None),
+          # captures pixel-identical to rest (the pointer did not make the bar hot): compared against the rest cell
+          ("vscroll-hover-arrow", 0, 0, (20, 10), None), ("vscroll-hover-thumb", 0, 0, (20, 10), None),
+          ("vscroll-hover-track", 0, 0, (20, 10), None), ("vscroll-pressed-thumb", 0, 0, (20, 10), None),
+          ("hscroll-hover-arrow", 1, 0, (16, 20), None), ("hscroll-hover-thumb", 1, 0, (16, 20), None),
+          ("hscroll-pressed-thumb", 1, 0, (16, 20), None)]
+# not compared: hscroll-hover-track (the whole bar rect is the #202020 window colour: the bar was not painted in that capture)
+
+
+# native_dark3 (examples/looks/native_dark3.e): the control's face (rect grown by -1 for a button) at (20, 20) of its 260 x 200 cell
+SHEET3 = [("button-split", 0, 0, (20, 20), None), ("button-split-pressed", 1, 0, (20, 20), None), ("button-split-disabled", 2, 0, (20, 20), None),
+          ("button-split-hover-main", 0, 0, (20, 20), None), ("button-split-hover-arrow", 0, 0, (20, 20), None),
+          ("button-icon", 3, 0, (20, 20), None), ("button-icon-disabled", 4, 0, (20, 20), None), ("button-icon-hover", 3, 0, (20, 20), None)]
+
+
 def open_table(outdir):
     """combo-*-open captures: the head (150 x 23) and its list (150 x 122) against native_dark_open<n> (head at (20, 8) of a cell at (12, 32))."""
     ok_all = []
@@ -206,6 +273,14 @@ def open_table(outdir):
 
 
 if __name__ == "__main__":
+    if "--two" in sys.argv:
+        r = sheet_table("native_dark2", 4, 260, 200, SHEET2, ([a.split("=", 1)[1] for a in sys.argv if a.startswith("--dump=")] or [None])[0])
+        print("PASS %d / %d" % (sum(r), len(r)))
+        sys.exit(0)
+    if "--three" in sys.argv:
+        r = sheet_table("native_dark3", 4, 260, 200, SHEET3, ([a.split("=", 1)[1] for a in sys.argv if a.startswith("--dump=")] or [None])[0])
+        print("PASS %d / %d" % (sum(r), len(r)))
+        sys.exit(0)
     if "--mask" in sys.argv:
         r = mask_table(([a.split("=", 1)[1] for a in sys.argv if a.startswith("--dump=")] or [None])[0])
         print("PASS %d / %d" % (sum(r), len(r)))

@@ -22,6 +22,8 @@ from scipy import ndimage
 HERE = os.path.dirname(os.path.abspath(__file__))
 NATIVE = os.path.join(HERE, "..", "docs", "ui", "looks", "ref", "windows-native") + os.sep
 OURS = os.path.join(HERE, "..", "docs", "ui", "looks", "windows-dark") + os.sep
+if os.environ.get("LOOKS_OURS"):  # round 13: render into a scratch folder instead of the committed sheets
+    OURS = os.environ["LOOKS_OURS"].rstrip("/") + "/"
 
 
 def load(p):
@@ -145,7 +147,7 @@ for _kind, _states in (("checkbox", ("unchecked", "checked", "indeterminate")), 
             _i += 1
 
 
-NATIVE_DARK += [("edit-multiline-vscroll", 51, 0), ("label-rest", 52, 0), ("label-disabled", 53, 0)]
+NATIVE_DARK += [("edit-multiline-vscroll", 51, 0), ("label-rest", 52, 0), ("label-disabled", 53, 0), ("button-hover-pressed", 54, 0)]
 
 
 def table(sheet="native_dark", spec=None, cols=7, cw=200, ch=100, only=None):
