@@ -16,7 +16,8 @@ import re
 import numpy as np
 from PIL import Image
 
-ROOT = "D:/Temp/lanes/looks4-c/"
+import os
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..") + os.sep
 R = ROOT + "docs/ui/looks/ref/windows/states/"
 OUT = ROOT + "lib/e/ui/winedit.e"
 SPECIAL = [0, 1, 19, 20, 21]
@@ -205,6 +206,22 @@ def main():
         if sl:
             LSLOPED.add(state)
             lines.append("fn wedit_left_slope_%d() -> [%d]f32 { ret [%d]f32{ %s } }" % (state, len(sl), len(sl), ", ".join("%.4f" % v for v in sl)))
+    # The morph spin edits stand at x = 406 where the left rim column 1 is 3 levels darker than at x = 215: their own tiles.
+    for state, (n, x, y, w) in ((0, ("dialog-options-morph-rest", 406, 105, 67)), (1, ("spin-edit-focused-options-morph-speed", 406, 105, 67))):
+        cells = tile(n, x, y, LEFT_K, False, w)
+        lines.append("// left rim of the morph spin edits, state %d: %s" % (state, n))
+        lines.append("fn wedit_left2_%d() -> [%d]u32 { ret [%d]u32{ %s } }" % (state, LEFT_K * H, LEFT_K * H, fmt_u32(cells)))
+        lines.append("fn wedit_left2_%d_y() -> f32 { ret %d.0 }" % (state, y))
+    lines.append("fn wedit_left2(state: u32, out: []u32) -> f32 {")
+    for state in (0, 1):
+        lines.append("    if state == %du32 {" % state)
+        lines.append("        let t = wedit_left2_%d()" % state)
+        lines.append("        var i = 0usize")
+        lines.append("        while i < %dusize {\n            out[i] = t[i]\n            i += 1usize\n        }" % (LEFT_K * H))
+        lines.append("        ret wedit_left2_%d_y()" % state)
+        lines.append("    }")
+    lines.append("    ret 0.0")
+    lines.append("}")
     lines.append("// the right end of kind `kind` in `state` copied into `out` (K columns x 22 rows, row-major): answers K * 22 and the capture's y")
     lines.append("fn wedit_right(kind: u32, state: u32, out: []u32) -> (usize, f32) {")
     for (kind, state), (n, x, y, w) in sorted(SRC.items()):

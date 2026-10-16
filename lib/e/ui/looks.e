@@ -35,7 +35,7 @@ type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark }
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
-type Drive = enum u8 { None, Hover, Press, Focus, Select }
+type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33 }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -268,6 +268,31 @@ fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
         try testing.tap(&rig.harness, x, y)
         try testing.tab(&rig.harness, false)
         try testing.tab(&rig.harness, true)
+        ret testing.hover(&rig.harness, -500.0, -500.0)
+    }
+    if drive == .SelectPress {
+        // An edit with its text selected and an end button pressed (a button edit's ellipsis): the click that focuses the
+        // edit lands 60 px left of the point, Ctrl+A selects, then the button at the point is held down.
+        try testing.tap(&rig.harness, x - 60.0, y)
+        var chord: input.Modifiers = zero
+        chord.control = true
+        try testing.press_key(&rig.harness, 65u32, chord)
+        try testing.hover(&rig.harness, x, y)
+        ret testing.send(&rig.harness, input.Event { PointerDown: testing.pointer_at(x, y) })
+    }
+    if drive == .Caret2 || drive == .Caret33 {
+        // Focus, then the caret put after the 2nd or the 33rd character (a pointer click does not place it in the harness):
+        // the captures show a clicked edit with its caret mid-text.
+        try testing.tap(&rig.harness, x, y)
+        var none: input.Modifiers = zero
+        try testing.press_key(&rig.harness, 36u32, none)
+        var count = 2usize
+        if drive == .Caret33 { count = 33usize }
+        var n = 0usize
+        while n < count {
+            try testing.press_key(&rig.harness, 39u32, none)
+            n += 1usize
+        }
         ret testing.hover(&rig.harness, -500.0, -500.0)
     }
     if drive == .Select {

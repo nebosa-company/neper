@@ -5624,7 +5624,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var value_options = text_options()
     value_options.role = .BodyMedium
     value_options.mono = options.mono
-    let (ft, ft_error) = windows_edit_theme(a, t, if_else(multiline, 13.0, 12.0))
+    let (ft, ft_error) = windows_edit_theme(a, t, 13.0)
     if ft_error != ok { ret (zero, ft_error) }
     let (text_look, style_error) = text_style_faced(a, &ft, value_options)
     if style_error != ok { ret (zero, style_error) }
@@ -5694,7 +5694,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     frame_style.border = style.Border { width: 1.0, color: face }
     frame_style.radius = 0.0
     frame_style.overflow = .Clip
-    var pad_y: f32 = 4.0
+    var pad_y: f32 = 3.384
     if multiline { pad_y = 3.0 }
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: pad + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: pad + options.end_space }, bottom: style.Length { Px: pad_y } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
@@ -5795,7 +5795,7 @@ fn windows_token(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, re
 // The Windows token edit: the native edit box (white, faint border, darker foot line, accent foot
 // while the input is focused) holding the tokens and the input as a wrapping flow, 22 high at
 // least (the v3 single-line token edit is 26, its two-line one 45).
-fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32, height: f32, window_y: f32) -> (widget.Node, err) {
     if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
     let (ft, ft_error) = windows_edit_theme(a, t, 13.0)
     if ft_error != ok { ret (zero, ft_error) }
@@ -5862,14 +5862,31 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     if lines_error != ok { ret (zero, TooLarge) }
     lines[0usize] = flow
     lines[1usize] = widget.box(0u64, bar, zero)
+    var line_count = 2usize
+    // A given height: the edit's frame is the chrome of e.ui.winedit (the empty token edits of the Filter dialog's Cards tab are
+    // 315 x 46, 315 x 46 and 315 x 27 pixels drawn like a plain edit: rim, foot, accent foot while focused).
+    if height > 0.0 { line_count = 1usize }
     var frame_style = style.defaults()
     frame_style.width = style.Length { Px: width }
     frame_style.min_height = style.Length { Px: 22.0 }
+    if height > 0.0 { frame_style.height = style.Length { Px: height } }
     frame_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
     frame_style.border = style.Border { width: 1.0, color: win_rgb(237u32, 237u32, 237u32) }
     frame_style.radius = t.tokens.radii.xs
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 1.0 } }
-    let framed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, lines[0usize..2usize])
+    var framed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, lines[0usize..line_count])
+    if height > 0.0 {
+        frame_style.border = style.Border { width: 1.0, color: style.color(t.tokens, .Surface) }
+        frame_style.radius = 0.0
+        frame_style.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 3.0 }, bottom: style.Length { Px: 3.0 } }
+        let (rim, rim_error) = winedit.token_chrome(a, width, height, state.focused)
+        if rim_error != ok { ret (zero, rim_error) }
+        let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
+        if stacked_error != ok { ret (zero, TooLarge) }
+        stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, lines[0usize..1usize])
+        stacked[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, rim))
+        framed = widget.stack(0u64, style.defaults(), stacked[0usize..2usize])
+    }
     var none: []const widget.Node = zero
     let (made, made_error) = suggesting(a, key, t, label, framed, none, key + 62u64, key + 63u64, suggestions, active, open, picks, activate, dismiss)
     ret (made, made_error)
@@ -5878,20 +5895,19 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
 // A transparent hit target `w` by `h` over a button of a Windows edit (a spin arrow, the ellipsis): e.ui.winedit's chrome
 // draws the button, and the captures show no visible press on a spin arrow (hover is not captured).
 fn windows_hit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, enabled: bool, w: f32, h: f32) -> (widget.Node, err) {
-    let state = control_state(t, key, enabled, false)
-    var look = style.windows_resolve(t.tokens, .Filled, state)
-    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
-    look.background = clear
-    look.border = clear
-    look.border_width = 0.0
-    look.radius = 0.0
-    look.padding = 0.0
-    look.padding_y = 0.0
-    look.custom_padding = true
-    look.min_width = w
-    look.min_height = h
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, false, action, widget.box(0u64, sized_style(w, h), zero))
-    ret (node, node_error)
+    // Not focusable: DevExpress's spin arrows and ellipsis keep the keyboard focus (and the selection) in the edit while pressed.
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.box(0u64, sized_style(w, h), zero)
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: false }, sized_style(w, h), body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 3u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
 }
 
 // `node` at (x, y) of a stack, as the one-element slice of layers a stack takes.
@@ -5929,6 +5945,9 @@ fn windows_spin_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     options.chrome_kind = 2u32
     if fast { options.chrome_kind = 1u32 }
     options.window_y = window_y
+    // A pressed arrow or fast button gives the edit the keyboard focus in v3: the frame shows its focused look (the captures
+    // states/spin-edit-arrow-*-pressed-* show the accent foot and the caret, the arrow itself unchanged).
+    if control_state(t, key + 1u64, true, false).pressed || control_state(t, key + 2u64, true, false).pressed || control_state(t, key + 4u64, true, false).pressed || control_state(t, key + 5u64, true, false).pressed { options.chrome_pressed = true }
     let can_up = value < high
     let can_down = value > low
     // The arrows left to right: (left,) up, down, (right).
@@ -9995,6 +10014,17 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
     ret (made, made_error)
 }
 
+// The token field with a given height and window y: under the Windows look the frame is the chrome of e.ui.winedit at that
+// height (the Filter dialog's empty token edits); other looks answer `token_field`.
+fn token_field_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32, height: f32, window_y: f32) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (win, win_error) = windows_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width, height, window_y)
+        ret (win, win_error)
+    }
+    let (other, other_error) = token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width)
+    ret (other, other_error)
+}
+
 // A token field: the tokens as input chips (keyed `key + 1 + 2 * index`, their
 // remove buttons `key + 2 + 2 * index`, at most 30) before a text field (keyed
 // `key`) whose Enter is `add` (the caller pushes the typed text and clears it),
@@ -10002,7 +10032,7 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
 // `key + 63 + index`).
 fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if t.tokens.profile == .Windows {
-        let (win, win_error) = windows_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width)
+        let (win, win_error) = windows_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width, 0.0, -1.0)
         ret (win, win_error)
     }
     if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
