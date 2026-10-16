@@ -1,0 +1,797 @@
+{
+ "label": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/label.png",
+    "notes": "Audit 4: all 12 label crops match the live crops (0 structural px off, max 1 level, ink boxes within 1 px) and the 2 link hover and pressed grabs are identical to rest.",
+    "gaps": [
+     "Not compared (antialiasing): the text is grayscale and the captures are ClearType; ink boxes agree within 1 px, glyph pixels do not within 2 levels",
+     "The Options page title bars (bold white on grey gradient) are a panel, not a TcxLabel",
+     "Disabled: #A0A0A0 from the native light static capture (a TcxLabel may differ: v3 never showed one disabled)",
+     "Audit 4: the 'Row Color:' ink box agrees at 100 and 150 levels, and at 60 once the mnemonic underline (2 rows under the glyphs) is merged into its text line; a plain row grouping splits it",
+     "Audit 4 uncaptured: disabled (native #A0A0A0 only), rotated labels, other backgrounds, non-ASCII text"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/label.png",
+    "notes": "Audit 4: the native dark label-rest (white Segoe UI on #202020) is matched in colour only; v3's Tahoma text has other ink boxes, so no cell can match.",
+    "gaps": [
+     "label-disabled in the dark capture is the same white (the app colours static text): no native disabled look, ours is the mapped #A0A0A0",
+     "Link colours (syslink) are #0067C0-ish blue in the capture; ours map v3's #336CCC",
+     "Audit 4: no windows_dark control is matched; matched needs the native dark geometry, fonts and every captured native state"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_states.png",
+    "notes": "Audit 4: 74 of 80 crops pass (0 chrome px; 6 fail on text ink boxes) and 57 of 63 captured states pass, but the disabled Edit Rule button and the pressed card art arrow button have no cell and the pressed Set grab fails on ink.",
+    "gaps": [
+     "Corner arcs and focus dots of the scaled forms are a bilinear mix of the crisp tile (not structural); dots measured 13 levels mean error",
+     "Unverified: toggle, split, loading and plain kinds (no capture); disabled has one capture",
+     "Scale: 1.5x ring tile is uneven (informational)",
+     "Edit Rule and New Rule pictures are v3 bitmap artwork (decided: not text), drawn as a placeholder glyph and excluded",
+     "Audit 4: states 57 pass, 1 fail (pressed Set), 2 without a cell (disabled Edit Rule, pressed image button), 3 identical to rest; 13 px near text (max 114 levels) in button_kinds",
+     "Audit 4 uncaptured: toggle, split, loading and plain kinds; disabled has one capture and no cell"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/button.png",
+    "notes": "Audit 4: ring, face and focus rectangle follow the native dark button, but against the native 110 x 32 captures 890 to 1518 of 2315 to 3045 flat px are off at the best placement (v3 sizes and Tahoma label).",
+    "gaps": [
+     "Unverified: hover: the native hover capture is pixel-identical to rest, so the #3C3C3C hover face is a guess",
+     "Not native-drawn: split, picture-only, picture + caption, toggle, loading and plain buttons keep the older drawing (native button-split-* and button-icon-* exist, not matched)",
+     "Label font stays v3's Tahoma 11 px (native: Segoe UI 9 pt), so ink boxes differ",
+     "The right edge of the dotted rectangle alternates by the screen x of the button (native 108 wide even, ours odd): parity may differ",
+     "Audit 4: split, picture and toggle kinds are not native-drawn"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/checkbox_states-vs-ref.png",
+    "notes": "Audit 4: all 29 crops in 3 sheets match (0 structural px off, max 0 levels) and all 16 captured states (7 hover, 5 pressed, 4 focus) pass.",
+    "gaps": [
+     "Not compared (antialiasing): text is grayscale against ClearType captures; ink boxes within 1 px",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 96.9 %; 1.5 89.0 % of runs hold (informational)",
+     "Disabled and indeterminate: native light captures only (box tiles exact, caption #6D6D6D as captured; v3 never showed them); hover of indeterminate is its rest look (native hover is identical to rest)",
+     "Audit 4 uncaptured: disabled and indeterminate (native light captures only, box tiles exact)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/checkbox.png",
+    "notes": "Audit 4: the 13 x 13 mark tiles equal the native dark ones (8 of 2184 flat px off at rest, 123 pressed, 75 to 152 disabled over the whole control rect), but the caption is Tahoma and the focus rectangle v3's.",
+    "gaps": [
+     "Caption is v3's Tahoma 11 px with v3's dotted focus rectangle (native: Segoe UI 9 pt, DrawFocusRect): ink boxes and the rectangle differ",
+     "Disabled caption #CCCCCC as captured; the native radio and check captions at rest are black on the dark page in the capture (app colour not set), not copied",
+     "Audit 4: native hover is identical to rest, so hover has no distinct reference"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_states-vs-ref.png",
+    "notes": "Audit 4: all 20 crops match (0 structural px off) and 14 of 24 captured states pass with 9 identical to rest, but the hover over Search Cards has no cell.",
+    "gaps": [
+     "Mismatch: radio_states cells 4 to 7 (100 px each) and radio_hover cells 0 and 1 (292 and 304 px): ring and dot colour up to 9 levels off",
+     "Failing states: focused Filter Blocks, pressed Filter Blocks and Formats; no cell: hover Search Cards",
+     "Captured but identical to rest: 9 hover grabs and 1 pressed grab show no distinct look",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 100 %; 1.5 87.2 % of runs hold (informational)",
+     "Disabled: native light capture only (the dot and ring tile exact); the native light radio-checked-pressed capture is blank, so pressed stays v3's",
+     "Audit 4: audit 3's ring and dot mismatch (up to 9 levels) is gone; the one captured state without a cell is the hover over Search Cards",
+     "Audit 4 uncaptured: disabled (native light tile)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/radio.png",
+    "notes": "Audit 4: the dot and ring tiles are the native dark ones (worker: 0 levels off, 1 on pressed); the caption is Tahoma and the focus rectangle v3's, so the control rect does not match.",
+    "gaps": [
+     "Caption: v3 Tahoma 11 px and focus rectangle, not the native Segoe UI 9 pt",
+     "Native radio captions render black in the dark captures (app colour not set): not copied",
+     "Audit 4: not re-measured pixel for pixel (the radio sheet has no anchor in the native crop)"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/radio_group_states-vs-ref.png",
+    "notes": "Audit 4: all 17 crops (radio_group_dialog 3, radio_group_states 14) match with 0 structural px off (max 2 levels) and ink boxes within 1 px.",
+    "gaps": [
+     "The radio buttons inside the group are judged under radio (the standalone radio cells fail on the selected ring)",
+     "Not compared (antialiasing): text is grayscale against ClearType captures",
+     "Disabled: radios from the native light capture (windows-native/light/radio-*-disabled); the native group box has no distinct disabled look (groupbox-disabled is pixel-identical to rest), so the frame and caption dimming stay a guess",
+     "Audit 4 uncaptured: disabled (native has no distinct look, frame dimming is a guess)"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/radio_group.png",
+    "notes": "Audit 4: the group frame has no native dark reference (the native group box stays light), so nothing is compared for the frame.",
+    "gaps": [
+     "No native dark reference for the group frame (windows-native README: group box frame stays light)",
+     "The radios are judged under radio",
+     "Audit 4: the radios inside are judged under radio"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Audit 4: the 37 edit crops of edits_dialog, edits_states and edits_hover match (0 chrome px, max 4 levels on 8 text-edge px) and both hot key edit states pass, but no TcxTextEdit is captured: the hot key and password edits stand in.",
+    "gaps": [
+     "No TcxTextEdit capture: v3 shows only the TcxMaskEdit password fields and a hot key edit (same chrome, different class)",
+     "Unverified: selection, disabled (v3's captured disabled edit is the button edit's: white face, #A0A0A0 text; the native Win32 edit has a #F0F0F0 face and #6D6D6D text), invalid (no native state)",
+     "Read-only: face #F0F0F0 from the native light capture; the frame is v3's tile (the native Win32 edit draws a crisper 1 px border, 8 levels apart in the foot)",
+     "Text: ClearType colour fringes not reproduced (grayscale); the hot key cell's fringe 3 px left of the C is up to 94 levels (text, excluded)",
+     "Scale (looks_scale_check): 2.0 93.1 % of runs hold; edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Audit 4: audit 3's hot key focused ink box (3 px) now agrees; the status stays review because the control itself has no capture",
+     "Audit 4 uncaptured: every state of a TcxTextEdit; selection, read-only, disabled, invalid"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/text_edit.png",
+    "notes": "Audit 4: downgraded from matched: the native dark edit is 150 x 24 and ours 141 x 22, so against the capture 693 of 3137 flat px are off at rest (650 of 3102 focused); the worker's 0 came after cutting two plain rows.",
+    "gaps": [
+     "Unverified: invalid (no native state; a red outline guess), long text, placeholder colour",
+     "Control height stays v3's 22 (native 24) and the text origin v3's 3 px (native 6 px)",
+     "Multi-line is the memo; the native multi-line capture has a light unthemed scroll bar",
+     "Audit 4: height 22 against 24, text origin 3 against 6 and Tahoma against Segoe UI differ from every native dark edit state"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "Audit 4: all 37 edit crops match (0 chrome px, max 4 levels on 8 text-edge px) and all 16 captured spin states (8 hover, 6 pressed, 2 focus) pass.",
+    "gaps": [
+     "Pressed arrows auto-repeat in the v3 grabs (the number changes 5, 1, 11): compared outside the number",
+     "edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 94.7 %; 1.5 94.4 % of runs hold",
+     "Disabled: native light capture only (face #F0F0F0, text #838383, arrows dimmed from the rest tile); read-only unverified",
+     "Audit 4: the chrome tiles and the y-drift model are fitted to these same captures (held-out checks in audit 2)",
+     "Audit 4 uncaptured: disabled, read-only, limit-greyed arrows"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/spin_edit.png",
+    "notes": "Audit 4: downgraded from matched: the up-down is near exact (26 of 98 flat px off, 1 chrome) but the edit part is 264 of 1234 off (height 22 against 24, text origin 3 against 6); 0 was reached only after cutting plain rows.",
+    "gaps": [
+     "Unverified: arrows dimmed at the bounds (greyed from the disabled capture's glyph, no native single-arrow capture)",
+     "The fast (four-arrow) v3 spin edit draws the native up-down only",
+     "Control height v3's 22 and text origin 3 px (native 24 and 6 px)",
+     "Audit 4: the digit text is masked in the worker's count and uses Tahoma"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_focus.png",
+    "notes": "Audit 4: 41 of 44 crops and 59 of 66 captured states pass, but the flat card combo has a drop-button flat pixel 3 levels off, the open Condition list head one 4 levels off, and the in-place grid editor combo has no cell.",
+    "gaps": [
+     "Unverified: disabled and read-only closed combos (v3 never showed them; the native Win32 combo is a different frame family: face #FAFAFA, chevron #BDBDBD against ours #F7F7F7 and #E0E0E0)",
+     "Sub-pixel focus rectangle: the two captured focused list combos only (Row Color at window x 321, Show at x 149); any other focused list combo keeps the old fixed greys",
+     "The top-right and bottom-right corner pixels of the Row Color focus rectangle are 13 levels lighter than the grab (dots that share a pixel compound instead of adding)",
+     "Text: v3's ClearType colour fringes are not reproduced (grayscale); ink boxes at the 150 level are 1 to 3 px short of the ClearType stems on a few lines",
+     "Composite references: each open-list sheet joins an exact head crop and an exact popup crop (no single capture holds both windows)",
+     "The in-place combo editor of the vertical grid (Deck Properties, Archetype) has no cell here: it is the vertical grid's editor look (no frame, dotted rectangle in the cell)",
+     "Hover over the combo edit of Auth Type and Search is identical to rest (no distinct look)",
+     "Scale (looks_scale_check): 2.0 100.0 % of runs hold",
+     "Audit 4: the workers' looks_cells ANDs the reference's structural mask with ours, which hid both pixels (combo_box_flat_card 1 px at 3 levels, image_combo_box_open_condition_head 1 px at 4 levels); the flat Mode combos also fail the ink rule on a 1 px foreign pixel in the reference crop",
+     "Audit 4: the combo edit's right rule is 221 in the capture against 227 in ours along 14 px (a rare colour, not structural by the definition)",
+     "Audit 4 uncaptured: disabled, read-only; the in-place editor of the vertical grid is captured and has no cell"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/combo_box.png",
+    "notes": "Audit 4: against the native dark combos 887 of 3082 (edit rest) and 638 of 3089 (list rest) flat px are off at the best placement; the frame and chevron tiles agree, geometry and text do not.",
+    "gaps": [
+     "Open popup geometry (row height 13 vs native 15, popup offset) not compared numerically",
+     "Hover arrow is the rest look (the native hover capture is identical to rest)",
+     "The native drop list scroll bar is light-themed and not copied",
+     "Flat (toolbar) combo keeps the mapped v3 look: no native counterpart",
+     "Audit 4: the open popup geometry (row height 13 against 15) and the light-themed native scroll bar are not matched"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image_combo_box_open_condition.png",
+    "notes": "Audit 4: 28 of 29 crops and 27 of 29 captured states pass (1 fails, 1 identical to rest); the open Condition head has one flat pixel 4 levels off (tolerance 2), so the open Condition state fails.",
+    "gaps": [
+     "Unverified: disabled",
+     "Composite references: each open sheet joins an exact head crop and an exact popup crop (no single capture holds both windows)",
+     "Pictures are v3's coloured bitmaps drawn as placeholders where the sheet has them (artwork excluded)",
+     "Scale (looks_scale_check): 2.0 94.9 % of runs hold",
+     "Audit 4: the open Art 2 composite head shows Stretch where ours shows Top-Left Corner (text content differs inside the head, 196 px near text)",
+     "Audit 4 uncaptured: disabled, row hover"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/image_combo_box.png",
+    "notes": "Audit 4: the head, drop list and selected row follow the native combo-list ones; no native combo has pictures, so the cells are not comparable beyond the list frame.",
+    "gaps": [
+     "Pictures are not native (drawn glyphs for v3's image list)",
+     "Open popup geometry not compared numerically",
+     "Audit 4: the bitmaps are v3's drawn as glyphs"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Audit 4: no TcxDateEdit with an editor or drop button is in any v3 capture, so nothing is compared.",
+    "gaps": [
+     "Unverified: every state (no v3 capture of an editing date edit; its drop button, calendar popup, Today and Clear buttons are DevExpress-drawn and never shown)",
+     "Native DTP (160 x 26, #8D8D8D line, calendar icon and arrow glyph, #0078D4 focus frame) and MonthCal (Sun to Sat, right-aligned days, #979797 frame, Today row) are a different control and are not reproduced",
+     "No disabled cell: the date picker has no enabled option",
+     "Audit 4 uncaptured: every state"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/date_edit.png",
+    "notes": "Audit 4: the native date-time picker and month calendar stay light under the dark theme, so there is no dark reference.",
+    "gaps": [
+     "No native dark reference for the calendar popup (README: date picker and month calendar stay light)",
+     "Native DTP and MonthCal glyph and layout not reproduced (see the light entry)",
+     "Audit 4: the editable field frame follows the native dark combo"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "Audit 4: all 3 captured password mask edit states (rest, hover, focus) pass and the 37 edit crops show 0 chrome px (max 4 levels on 8 text-edge px).",
+    "gaps": [
+     "Baked edit chrome: the captures are the only reference; 1.0 is exact",
+     "edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 92.0 % (below the 93 % threshold, clean on view); 1.5 92.8 % of runs hold",
+     "Read-only: face #F0F0F0 from the native light edit capture",
+     "Unverified: text (non-password) content, invalid mask, disabled (v3 shows white face and #A0A0A0 text)",
+     "Audit 4 uncaptured: typed text, invalid, disabled, read-only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/mask_edit.png",
+    "notes": "Audit 4: downgraded from matched: the same 22 against 24 high frame as the text edit (693 of 3137 flat px off against the native dark edit capture at rest); the worker's 0 followed a row cut and masked text.",
+    "gaps": [
+     "Unverified: invalid mask (no native state), long text",
+     "Control height v3's 22 and text origin 3 px (native 24 and 6)",
+     "Audit 4: all 7 native edit states exist, none reproduces at native geometry"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/memo.png",
+    "notes": "Audit 4: no TcxMemo is in any v3 capture; only the native multi-line edit was sampled (rim 236 to 238, foot 131 against 187 and 190), so nothing is verified pixel for pixel.",
+    "gaps": [
+     "No v3 capture of any memo (Import wizard Confirm page and the Notes window are not captured)",
+     "Unverified: every state (rest, hover, focus, selection, disabled, read-only #F0F0F0 from the native edit, invalid, placeholder, scroll bar)",
+     "Wrapping is the outline font's, not GDI's whole-pixel advances (the memo is multi-line, so the GDI text path is not used)",
+     "Scroll bar: ours is the Neper thin scroll bar; the native multi-line edit and v3 (NativeStyle) draw the system scroll bar",
+     "Audit 4 uncaptured: every state"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/memo.png",
+    "notes": "Audit 4: the frame follows the native dark multi-line edit (#9B9B9B and #383838 lines), but the native capture has a light unthemed scroll bar and 2215 of 12,743 flat px are off at the best placement.",
+    "gaps": [
+     "The native multi-line capture has a light unthemed vertical scroll bar (not copied: ours is the dark one)",
+     "Unverified: invalid, placeholder",
+     "Audit 4: the scroll bar of the native capture is light-themed and not copied"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Audit 4: all 7 captured button edit states pass and the 37 edit crops show 0 chrome px; the ellipsis frame pixel flagged in audit 3 is gone (the 1 px left is text AA at 4 levels).",
+    "gaps": [
+     "Unverified: read-only (native light #F0F0F0 face, no v3 capture), invalid (red outline guess), placeholder, long text",
+     "The ellipsis button geometry in hover over the button is v3's (captured); the pressed look of the dark twin is a guess (see windows_dark)",
+     "edits_hover cell layout differs from the ref composite (ours 994 px tall against 924: the numbers come from looks_edits_hover_eval.py per cell)",
+     "Text: ClearType colour fringes not reproduced (grayscale), ink boxes within 1 px",
+     "Scale (looks_scale_check): 2.0 96.6 % of runs hold; edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Audit 4 uncaptured: read-only, invalid, long text"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/button_edit.png",
+    "notes": "Audit 4: no native dark capture has an edit with an ellipsis button, so the button is not compared; the frame follows the native dark edit (22 against 24 high).",
+    "gaps": [
+     "The ellipsis button geometry and dots are guesses",
+     "Invalid: red outline guess",
+     "Audit 4: the ellipsis button geometry and dots are guesses"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/token_edit_dialog-vs-ref.png",
+    "notes": "Audit 4: the 3 token edit crops are exact sub-images of the Filter Cards tab grab (audit 3's stand-in finding was wrong) and match with 0 structural px off at any level.",
+    "gaps": [
+     "Unverified: focus, hover, disabled, tokens present (only the empty rest state is captured)",
+     "Dark twin stands on a #272727 face (unmeasured)",
+     "Audit 4 uncaptured: focus, hover, disabled, tokens present"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/token_edit.png",
+    "notes": "Audit 4: no native control has tokens, so only the edit frame (22 against 24 high) has a reference.",
+    "gaps": [
+     "No native or v3 reference for the chips",
+     "Audit 4: the chips keep the mapped v3 guess"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/check_list_box_states-vs-ref.png",
+    "notes": "Audit 4: 12 of 15 crops pass; the 3 selected focused row crops have 13 flat px up to 95 levels off, so 5 captured states pass, 1 fails and 5 hover grabs are identical to rest.",
+    "gaps": [
+     "Mismatch: item pitch and check boxes (895 px, up to 93 levels, 14 cells); check_list_box_dialog 26 px",
+     "Failing states: pressed check box, focused list, 4 selected focused or unfocused rows",
+     "Unverified: disabled, multi-select, indeterminate rows",
+     "At 2.0 the check glyphs render blocky (checked on view)",
+     "Unverified: disabled (native light capture exists, #F0F0F0 fill and #6D6D6D text; no sheet cell)",
+     "Audit 4: audit 3's 893 to 956 px mismatch is down to 13 px (the check box edge of the selected focused row)",
+     "Audit 4 uncaptured: disabled, multi-select, indeterminate rows"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/check_list_box.png",
+    "notes": "Audit 4: the face #202020 and the selected row #1A364D come from the native dark list view, whose check boxes are the light theme's, so ours differ by design.",
+    "gaps": [
+     "Check marks: native dark list view shows light-theme boxes; ours use the native dark check box (mismatch by design)",
+     "Disabled and unfocused selected rows have no cell (the native disabled list view stays light)",
+     "The native list scroll bar is light-themed and not copied",
+     "Audit 4: disabled and unfocused selected rows have no cell"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Audit 4: not checked against a v3 capture (the bar is in no v3 frame); frame and fill runs were set from the native light captures only.",
+    "gaps": [
+     "Height 21 (v3 DFM default) against the native 16: the theme part scaled, unverified against a v3 capture of the import form",
+     "Marquee: the native block is at least 126 wide and overdraws the frame edge; our 0.6 segment is a guess; the lighter lower half is not drawn",
+     "Native vertical bar has no Neper cell (v3's statistics bar is a flat vertical bar, not captured)",
+     "Percent text (v3 cxtsText) has no native counterpart; main-window bar (148 x 21, cxbsGradient teal, Enabled False) is DevExpress-drawn and was never captured: it still draws the native look",
+     "Native disabled progress is drawn identical to enabled (green); we do the same",
+     "Audit 4 uncaptured: every state (3 progress frames show the report window only)"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/progress_bar.png",
+    "notes": "Audit 4: the native dark progress bar is the light one (uxtheme has no dark progress bar), so there is no dark reference.",
+    "gaps": [
+     "No native dark reference exists (the control has no dark theme)",
+     "Paused and error tones are from memory of the Windows 11 dark system colours",
+     "Audit 4: paused and error tones are not measured"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "Audit 4: downgraded from matched: the frame reference is the Deck Legality capture with its interior blanked, the 3 Options title bar crops fail the ink rule, and the page header hover grab has no cell.",
+    "gaps": [
+     "Unverified: disabled, focus (no capture)",
+     "The reference frame is the live crop with the dialog interior blanked, not an untouched crop; the header icons (v3 artwork) are excluded",
+     "Disabled: native has no distinct look; the dimmed caption is a guess",
+     "Audit 4: the frame crop and the Options title bars match with 0 structural px off (max 1 to 2 levels); the title bar ink boxes differ outside the masked icon art",
+     "Audit 4 uncaptured: disabled, focus; the page header hover grab has no cell"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/group_box.png",
+    "notes": "Audit 4: the native dark group box keeps its light #DCDCDC frame, so there is no dark reference.",
+    "gaps": [
+     "No native dark reference: the capture is the unthemed light frame",
+     "Disabled has no distinct native look (groupbox-disabled is pixel-identical to rest)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control_stats_1-vs-ref.png",
+    "notes": "Audit 4: 8 of 21 crops pass (tab strips 0 chrome px, but the tab icon artwork and 4 strips fail the text rules); 4 states pass, 10 fail and 18 hover grabs are identical to rest.",
+    "gaps": [
+     "Native tab-disabled shows no disabled look; tab-hot equals rest",
+     "Mismatch: statistics tab strips and the Options, Cards and Filter strips (audit 3)",
+     "Unverified: disabled tab, scroll buttons",
+     "Audit 4: the statistics strips fail on 12 to 14 px near the tab text (up to 212 levels) and on tab icon groups",
+     "Audit 4 uncaptured: disabled tab, scroll buttons"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/page_control.png",
+    "notes": "Audit 4: the native dark tab control is the light tab on #202020, so there is no dark reference.",
+    "gaps": [
+     "No native dark reference exists"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/splitter_live_across_held-vs-ref.png",
+    "notes": "Audit 4: all 8 crops match (0 structural px off, max 2 levels) and the 3 hover and 3 pressed grabs show no distinct look inside the strips.",
+    "gaps": [
+     "Hover: the horizontal hover grab is identical to rest",
+     "Unverified: drag, disabled",
+     "Audit 4: the ref/windows splitter_live-across sheet has no sheet of ours (a duplicate of splitter_live_across)",
+     "Audit 4 uncaptured: drag, disabled"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/splitter.png",
+    "notes": "Audit 4: the native gallery has no splitter, so there is no dark reference.",
+    "gaps": [
+     "No native or live dark reference exists"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/status_bar.png",
+    "notes": "Audit 4: all 8 crops match (0 structural px off, max 0 levels) and the 4 panel hover grabs are identical to rest.",
+    "gaps": [
+     "Unverified: disabled panels, pressed panel",
+     "Not compared (antialiasing): panel text is grayscale against ClearType captures; ink boxes within 1 px",
+     "Audit 4 uncaptured: disabled panels, pressed panel"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/status_bar.png",
+    "notes": "Audit 4: the native status bar stays light under the dark theme, so there is no dark reference.",
+    "gaps": [
+     "Panel hover is none (as v3); progress fill is a guess"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/toolbar_button_row.png",
+    "notes": "Audit 4: all 11 strips match (0 flat px off outside v3's icon bitmaps) and 14 hot, pressed and hint states pass with 10 hover grabs identical to rest.",
+    "gaps": [
+     "v3 icon artwork (34 to 39 flat-run px per strip) is a drawn glyph here and excluded",
+     "Reference edit: last row of the three toolbar ref crops (foreign grid border) replaced",
+     "Unverified: checked, focus, dropdown, disabled (hover grabs identical to rest)",
+     "Audit 4: the last row (y 25, x 288 on) of the 3 toolbar reference crops is an edited row, not a capture; the v3 icon bitmaps (groups up to 20 x 20 px) are excluded from both images",
+     "Audit 4 uncaptured: checked, focus, dropdown, disabled"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/toolbar_button.png",
+    "notes": "Audit 4: downgraded from review: the native dark toolbar is the light toolbar on #202020 (hot #E5F3FF, near-black text), so there is no dark reference.",
+    "gaps": [
+     "Hot, pressed, checked, disabled washes are guesses from the Windows 11 ramp",
+     "No native dark theme: cannot be matched",
+     "Audit 4: hot, pressed, checked and disabled washes are guesses from the Windows 11 ramp"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "Audit 4: all 21 crops match (rest, 11 hot-title crops, 9 open titles; 0 structural px off, max 1 level) and all 24 captured states pass.",
+    "gaps": [
+     "Unverified: disabled item, Alt-key focus",
+     "ClearType text edges not compared",
+     "Audit 4 uncaptured: disabled item, Alt-key focus"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/menu_bar.png",
+    "notes": "Audit 4: the native menu bar stays white under the dark theme, so there is no dark reference.",
+    "gaps": [
+     "Hot/open washes are guesses; title paddings are v3's"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Audit 4: 14 of 77 popup crops pass (chrome 370 px over 32 crops, ink boxes fail on 17); 14 of 93 captured states pass, 63 fail and 8 have no cell.",
+    "gaps": [
+     "Remaining non-artwork: Cards Print arrow row 4 px up to 7 levels, File 2 px, Tools 1 px (5 levels), Search/Cardart text stems up to 139 levels at 1 to 2 px (ClearType)",
+     "Placeholder icons (v3 artwork excluded)",
+     "Unverified: disabled items beyond the captured menus",
+     "Scale: popup_menu_file 2.0 100 %; 1.5 79.2 % (informational)",
+     "Audit 4: the failing crops differ on mnemonic underlines, arrow rows and the v3 icon column (gray placeholders against v3 bitmaps)",
+     "Audit 4 uncaptured: disabled items beyond the captured menus; 8 captured states have no cell"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/popup_menu.png",
+    "notes": "Audit 4: the frame #808080, body #2C2C2C and separator #3E3E3E equal the native dark menu-popup-rest; the filled hot row and check glyph have no native counterpart.",
+    "gaps": [
+     "Native selection is a white outline cue with no fill (keyboard); v3's filled hot row kept, mouse-hover fill of native not captured",
+     "Check glyph and submenu chevron are v3 pictures, not compared",
+     "No drop shadow; native 2 px #2B2B2B inner rim not reproduced (1 level)",
+     "Audit 4: 87 windows-dark PNGs at 1.0 (every popup_menu_sel_* and menu_bar_open_* sheet among them) are not what HEAD renders (stale thumbnails)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/hint_toolbar_cards_f-vs-ref.png",
+    "notes": "Audit 4: all 6 captured hints match (0 structural px off, max 1 level, ink boxes within 1 px) and all 6 states pass.",
+    "gaps": [
+     "tooltip-balloon (rounded 8, icon, title) is not drawn: not cut",
+     "Native tooltip text is ClearType, ours greyscale; the native tooltip is a separate variant (control.win_native_tooltip), not what overlay.tooltip_of draws",
+     "Unverified: multi-line hints, other placements",
+     "Audit 4 uncaptured: multi-line hints, other placements"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/hint_native.png",
+    "notes": "Audit 4: the native dark tooltip is matched on its 126 x 20 frame ring by the worker's cell (greyscale Segoe UI against the capture's ClearType text); the balloon variant has no cell, so not every native dark state is covered.",
+    "gaps": [
+     "tooltip-balloon (rounded 8, icon, title) has no Neper cell, so not every native dark state is covered",
+     "Native tooltip is ClearType; ours greyscale",
+     "The grid header hint variant keeps the mapped v3 bevel",
+     "Audit 4: tooltip-balloon has no Neper cell"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar_live.png",
+    "notes": "Audit 4: the one live scroll bar crop is 611 px off (586 chrome, up to 240 levels); 16 of 18 captured states fail and 1 has no cell.",
+    "gaps": [
+     "Not matched: hover/pressed thumb, arrows, horizontal bar re-fit and the native disabled bar (ref/windows-native/light/vscroll-disabled) were not done this round",
+     "scroll_bar_live is not compared cell by cell (ref is a 24 x 118 grid crop, ours a control sheet)",
+     "Audit 4 uncaptured: disabled, horizontal bar; the hover and pressed grabs have no passing cell"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/scroll_bar.png",
+    "notes": "Audit 4: track #171717, thumb #858585 and the expanded track are the native values, but the native 17 x 170 bar is 2592 of 2866 flat px off against v3's 16 px geometry; hover and pressed native captures equal rest.",
+    "gaps": [
+     "Native hover and pressed-thumb captures are pixel-identical to rest (the fake pointer did not engage): hover pill width and hover colour unverified",
+     "Native arrow buttons (glyph #AFAFAF, 17 px bar) and the disabled bar (arrows #505050, no thumb) are not drawn as cells; the v3 geometry (16 px track, pill thumb) is kept",
+     "Horizontal bar compared by colours only",
+     "Audit 4: arrow buttons and the disabled bar are not drawn as cells"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/list_box_focus-vs-ref.png",
+    "notes": "Audit 4: upgraded from review: all 3 crops match (0 structural px off, max 1 level, ink boxes within 1 px) and the 2 non-hover states pass with 2 hover grabs identical to rest.",
+    "gaps": [
+     "Mismatch: list_box_blur and list_box_dialog ink boxes 2 to 3 px",
+     "Captured but identical to rest: 2 hover grabs",
+     "Unverified: disabled, multi-select",
+     "Unverified: disabled (native listbox-disabled keeps the white face with a dimmed row text; no sheet cell)",
+     "Audit 4 uncaptured: disabled, multi-select"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/list_box.png",
+    "notes": "Audit 4: the native dark list box is the unthemed light Win32 list, so there is no dark reference.",
+    "gaps": [
+     "No native dark reference for the frame and scroll bar (README: list box stays light under DarkMode)",
+     "The native listbox keeps the #0078D7 selection when the list loses focus; v3's list hides it (kept)"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list_rules.png",
+    "notes": "Audit 4: 0 of 11 crops pass (871 chrome px, 6047 px in all, max 255 levels); 7 captured states fail, 1 has no cell and 4 are identical to rest.",
+    "gaps": [
+     "Other tree states (check, focus, hover, expanded) not re-fitted this round",
+     "Native list view states (disabled, gridlines, sort arrows) not added",
+     "Audit 4 uncaptured: disabled"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/tree_list_expanded.png",
+    "notes": "Audit 4: row, selection and line colours come from the native dark tree captures; the +/- boxes and check boxes are light tiles mapped to dark and no cell was compared pixel for pixel.",
+    "gaps": [
+     "v3 +/- boxes and check boxes are the light tiles mapped to dark; native uses chevrons and a #60CDFF focus ring, not reproduced",
+     "Native tree-disabled and classic-lines not in the sheet",
+     "Audit 4: native chevrons and the #60CDFF focus ring are not reproduced"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Audit 4: 0 of 11 crops pass (6206 chrome px, 15,825 px in all, max 255 levels); 4 captured states fail, 2 category list hovers have no cell and 5 are identical to rest.",
+    "gaps": [
+     "State 5 (General shut, focused band) not matched: focused band dotted rectangle and band line drift (1516 px)",
+     "Computed section icons/gradients are app artwork and not drawn",
+     "Unverified: 150 %, disabled, dark",
+     "Audit 4 uncaptured: other editors, disabled"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/vertical_grid_states.png",
+    "notes": "Audit 4: downgraded from review: no native property grid exists, so only list view colours were borrowed and nothing is compared.",
+    "gaps": [
+     "Selection #264F78 and the band gradient are guesses (native list view selection is #1A364D)",
+     "Colour cells and bars keep the map",
+     "Audit 4: selection #264F78 and the band gradient are guesses"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_top.png",
+    "notes": "Audit 4: 0 of 68 crops pass (41,354 chrome px, 65,590 px in all, largest crop 6219); 49 captured states fail, 2 have no cell and 13 are identical to rest.",
+    "gaps": [
+     "Not matched: group sheets (data_grid_group*, hover8 right cell) 1700-3000 px: group order, indent column, group box not as v3",
+     "Shortcuts and Sort hover cells: header hover face bottom row and frame ring pixels still off (about 100-800 px); Missing list: frame foot marks and bar left edge",
+     "Navigator button bitmaps of the top grid differ in their edge rows from the bottom grid's (artwork, excluded from the counts)",
+     "Unverified: 150 %, edit mode, disabled; windows dark re-rendered without native dark reference for grids",
+     "Audit 4: the group sheets are the largest mismatches (data_grid_group2 6219 and 4701 px, data_grid_group 5973, data_grid_group3 5538)",
+     "Audit 4 uncaptured: edit mode, disabled, sort and filter popups, 150 %"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/data_grid_main.png",
+    "notes": "Audit 4: the header, separator, frame and selection colours come from the native dark list view captures; there is no per-cell diff against the native crops.",
+    "gaps": [
+     "Native header text is near-black in the capture (not a usable reference): header text colour kept light",
+     "Native header hot is identical to rest in the capture: header_hover #2B2B2B is a guess",
+     "Native gridlines are #F0F0F0 white in dark (system colour quirk): not copied",
+     "Rows #202020 and stripe #2B2B2B are the gallery's app-chosen colours",
+     "Group rows, footer, navigator keep the round 7 map (no native equivalent)",
+     "Sub-sheets (data_grid_*) re-rendered; no per-cell numeric diff against the native crop",
+     "Audit 4: group rows, footer and navigator have no native equivalent"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog_message.png",
+    "notes": "Audit 4: the 7 title bar and caption states pass (0 px off); 31 of 99 dialog crops fail because the dialog bodies are app content the sheet does not compose.",
+    "gaps": [
+     "Dialog close button: v3's 33 wide one kept; the native dialog's is 46 wide (56 flat px off in the dialog cells)",
+     "Caption buttons are 1 px right of the native window's (v3 geometry kept)",
+     "Task dialog (command links, footer, verification box) is captured natively but has no Neper control: not built",
+     "Message box width is fixed at 338; Windows sizes it to the text",
+     "Caption hot and pressed: the native hot captures equal rest; pressed is not capturable",
+     "Info, warning and error message box bitmaps were not captured; Info draws the question bitmap",
+     "The OK button's dotted keyboard focus cue (visible in the native capture) is not drawn: a driven focus on the modal dialog reached no button",
+     "Message box text 11.7 px stands for the native 12 px hinted line (ClearType in the capture)",
+     "Message box icon is a 96 DPI tile: blocky at 1.5x",
+     "Audit 4 uncaptured: caption pressed (not capturable), resize, disabled; inactive caption only for the main window"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/title_bar_native.png",
+    "notes": "Audit 4: the window caption cells match the native dark window captions (worker: 0 of about 7300 flat px off); dialog close buttons (33 against 46 wide), the message box and the task dialog are not matched.",
+    "gaps": [
+     "Dialog close button 33 wide (v3) against the native 46",
+     "Glyphs and title 1 px right of the native window's (v3 geometry kept)",
+     "Dark message box and task dialog: no native dark reference (the native ones stay light)",
+     "The dialog window keeps its derived #484848 window edge (the native dark dialog capture has a #6A6A6A rule under the caption that v3 never shows)",
+     "Hot and pressed caption buttons: the native hot captures equal rest",
+     "Audit 4: the native message box and task dialog stay light"
+    ]
+   }
+  }
+ }
+}
