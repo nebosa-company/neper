@@ -14,6 +14,7 @@ use e.gfx.scene
 use e.mem
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 
 // kind: 0 plain, 1 spin with fast buttons, 2 spin with stacked arrows, 3 button edit. state: 0 rest, 1 focused,
@@ -298,7 +299,7 @@ fn wedit_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
 }
 
 fn wedit_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, argb: u32) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: style.hex(argb & 0xFFFFFFu32) } } })
+    ret winpx.fill(b, x, y, w, h, style.hex(argb & 0xFFFFFFu32))
 }
 
 // The row's place in the models (0, 1, 19, 20, 21 -> 0..4) or 99 for a row that is plain face.

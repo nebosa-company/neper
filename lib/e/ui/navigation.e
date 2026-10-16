@@ -22,6 +22,7 @@ use e.ui.style
 use e.ui.widget
 use e.ui.winchrome
 use e.ui.window as win
+use e.ui.winpx
 
 error TooLarge
 
@@ -9221,53 +9222,46 @@ fn windows_item_label(a: *mem.Arena, t: *const control.Theme, label: str, captio
 fn windows_menu_check(a: *mem.Arena, ink: paint.Color) -> (widget.Node, err) {
     let solid = [14]u8{ 165u8, 150u8, 166u8, 71u8, 135u8, 151u8, 72u8, 88u8, 120u8, 136u8, 89u8, 105u8, 121u8, 106u8 }
     let edge = [7]u8{ 164u8, 149u8, 70u8, 134u8, 87u8, 119u8, 104u8 }
-    let (dots, dots_error) = mem.alloc[widget.Node](a, 23usize)
-    if dots_error != ok { ret (zero, TooLarge) }
+    let (codes, codes_error) = mem.alloc[u8](a, 23usize)
+    if codes_error != ok { ret (zero, TooLarge) }
+    let (colors, colors_error) = mem.alloc[paint.Color](a, 23usize)
+    if colors_error != ok { ret (zero, TooLarge) }
     let soft = style.mix(ink, style.hex(15790320u32), 0.8)
     var i = 0usize
     while i < 23usize {
-        var code = 0u8
-        var color = ink
-        if i < 14usize { code = solid[i] } else if i < 21usize {
-            code = edge[i - 14usize]
-            color = soft
+        if i < 14usize {
+            codes[i] = solid[i]
+            colors[i] = ink
+        } else if i < 21usize {
+            codes[i] = edge[i - 14usize]
+            colors[i] = soft
         } else {
             // Two white pixels of the bitmap, where the dither would leave the face.
-            code = [2]u8{ 181u8, 55u8 }[i - 21usize]
-            color = style.hex(16777215u32)
+            codes[i] = [2]u8{ 181u8, 55u8 }[i - 21usize]
+            colors[i] = style.hex(16777215u32)
         }
-        var dot = windows_flat(0u32)
-        dot.background = paint.Brush { Solid: color }
-        dot.width = style.Length { Px: 1.0 }
-        dot.height = style.Length { Px: 1.0 }
-        dots[i] = widget.positioned(0u64, f32(u32(code) / 16u32), f32(u32(code) % 16u32), dot, zero)
         i += 1usize
     }
-    ret (widget.stack(0u64, control.sized_style(16.0, 16.0), dots[0usize..23usize]), ok)
+    // One node painting whole device pixels, so that the check is as crisp at 150 % as at 100 %.
+    let (sprite, sprite_error) = winpx.sprite(a, codes[0usize..23usize], colors[0usize..23usize], 16.0, 16.0)
+    ret (sprite, sprite_error)
 }
 
 // The ground of a checked item's slot, 18 x 18: v3 dithers white pixels (every other one, where x + y
 // is odd) over the face, and the 16 px `picture` sits 1 in.
 fn windows_menu_checked_ground(a: *mem.Arena, picture: widget.Node, flip: bool, plain: bool) -> (widget.Node, err) {
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 18usize * 9usize + 1usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize + 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
-    var y = 0usize
-    while y < 18usize {
-        // (looks4-f) the dither follows the window's screen position: `flip` takes the other phase.
-        var x = (y + 1usize) % 2usize
-        if flip { x = y % 2usize }
-        // A disabled or highlighted checked slot has no dither (search All Cards, toolbars Standard).
-        if plain { x = 18usize }
-        while x < 18usize {
-            var dot = windows_flat(16777215u32)
-            dot.width = style.Length { Px: 1.0 }
-            dot.height = style.Length { Px: 1.0 }
-            parts[n] = widget.positioned(0u64, f32(x), f32(y), dot, zero)
-            n += 1usize
-            x += 2usize
-        }
-        y += 1usize
+    // (looks4-f) the dither follows the window's screen position: `flip` takes the other phase. A disabled or
+    // highlighted checked slot has no dither (search All Cards, toolbars Standard). One node of whole device pixels.
+    if !plain {
+        var parity = 1u32
+        if flip { parity = 0u32 }
+        let (dither, dither_error) = winpx.dither(a, 18u32, 18u32, parity, style.hex(16777215u32))
+        if dither_error != ok { ret (zero, dither_error) }
+        parts[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one(a, dither))
+        n += 1usize
     }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }

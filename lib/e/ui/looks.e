@@ -19,6 +19,7 @@ use e.gfx.scene
 use e.gpu
 use e.io
 use e.mem
+use e.os
 use e.str as strs
 use e.text.shape
 use e.time
@@ -117,6 +118,8 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 16384usize, max_states: 1024usize, state_bytes: 65536usize, state_classes: 8u16, max_depth: 48u16, max_commands: 49152usize })
     if runtime_error != ok { ret (rig, runtime_error) }
     rig.runtime = rt
+    // The app sets this from the window; here, so that pixel art lands on whole device pixels. Left alone at 100 %.
+    if scale != 1.0 { widget.set_snap(&rig.runtime, 1.0 / scale) }
     let physical_w = u32(width * scale + 0.5)
     let physical_h = u32(height * scale + 0.5)
     let (h, harness_error) = testing.harness(a, &rig.runtime, physical_w, physical_h, scale)
@@ -350,12 +353,33 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
 }
 
 fn scale_suffix(scale: f32) -> str {
-    if scale > 1.25 { ret "@1.5x" }
+    if scale > 1.9 { ret "@2x" }
+    if scale > 1.4 { ret "@1.5x" }
+    if scale > 1.1 { ret "@1.25x" }
     ret ""
 }
 
+// The environment variable NEPER_LOOKS_SCALE (a number such as 1.25, 1.5 or 2) makes run_all render
+// that one scale instead of 1.0 and 1.5, and NEPER_LOOKS_OUT names the folder to write into instead of
+// docs/ui/looks, so a scale check never touches the committed PNGs. Unset, nothing changes.
+fn env_scale(a: *mem.Arena) -> f32 {
+    let (text, text_error) = os.env(a, "NEPER_LOOKS_SCALE")
+    if text_error != ok { ret 0.0 }
+    if strs.eq(text, "1.25") { ret 1.25 }
+    if strs.eq(text, "1.5") { ret 1.5 }
+    if strs.eq(text, "2") || strs.eq(text, "2.0") { ret 2.0 }
+    if strs.eq(text, "1") || strs.eq(text, "1.0") { ret 1.0 }
+    ret 0.0
+}
+
+fn env_out(a: *mem.Arena) -> str {
+    let (text, text_error) = os.env(a, "NEPER_LOOKS_OUT")
+    if text_error != ok || text.len == 0usize { ret out_root() }
+    ret text
+}
+
 fn path_of(a: *mem.Arena, look: str, name: str, tail: str, scale: f32, ext: str) -> (str, err) {
-    let parts = [8]str{ out_root(), "/", look, "/", name, tail, scale_suffix(scale), ext }
+    let parts = [8]str{ env_out(a), "/", look, "/", name, tail, scale_suffix(scale), ext }
     let (joined, joined_error) = strs.join(a, parts[0usize..8usize], "")
     if joined_error != ok { ret (zero, joined_error) }
     ret (joined, ok)
@@ -389,10 +413,17 @@ fn load_reference(a: *mem.Arena, path: str) -> (image.Image, bool) {
 
 // Renders `s` under the Neper, Windows and Windows dark looks at 100 % and 150 %.
 fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
+    let only_scale = env_scale(a)
+    let (no_text, no_text_error) = os.env(a, "NEPER_LOOKS_NOTEXT")
+    scene.set_text_hidden(no_text_error == ok && no_text.len > 0usize)
     var scale_index = 0usize
     while scale_index < 2usize {
         var scale: f32 = 1.0
         if scale_index == 1usize { scale = 1.5 }
+        if only_scale > 0.0 {
+            if scale_index == 1usize { break }
+            scale = only_scale
+        }
         var look_index = 0usize
         while look_index < 3usize {
             var look: Look = .Neper

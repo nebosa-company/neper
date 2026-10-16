@@ -26,6 +26,7 @@ use e.ui.widget
 use e.ui.winbutton
 use e.ui.winedit
 use e.ui.winmark
+use e.ui.winpx
 
 // What a page is set in: the theme's tokens, the fonts in preference order, the
 // language for shaping, and the page's runtime, from which a control reads what the
@@ -2446,14 +2447,14 @@ fn windows_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err
     let d = mem.cast[*WindowsDots](ctx)
     var x: f32 = 0.0
     while x < area.width {
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + x, y: area.y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + x, y: area.y + area.height - 1.0, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        try winpx.fill(b, area.x + x, area.y, 1.0, 1.0, d.color)
+        try winpx.fill(b, area.x + x, area.y + area.height - 1.0, 1.0, 1.0, d.color)
         x += 2.0
     }
     var y: f32 = 2.0
     while y < area.height - 1.0 {
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: area.y + y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + area.width - 1.0, y: area.y + y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: d.color } } })
+        try winpx.fill(b, area.x, area.y + y, 1.0, 1.0, d.color)
+        try winpx.fill(b, area.x + area.width - 1.0, area.y + y, 1.0, 1.0, d.color)
         y += 2.0
     }
     ret ok
@@ -3753,7 +3754,7 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
 type Dotted = struct { color: paint.Color, dot: f32, gap: f32, dot_spill: f32, gap_spill: f32 }
 
 fn dotted_pixel(b: *scene.Builder, color: paint.Color, x: f32, y: f32, alpha: f32) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: with_alpha(color, alpha) } } })
+    ret winpx.fill(b, x, y, 1.0, 1.0, with_alpha(color, alpha))
 }
 
 fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {

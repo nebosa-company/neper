@@ -3032,6 +3032,7 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     let (b, builder_error) = scene.builder(frame_arena, s.limits.max_commands)
     if builder_error != ok { ret (zero, TooLarge) }
     var builder = b
+    if s.snap > 0.0 { scene.set_builder_scale(&builder, 1.0 / s.snap) }
     s.overlay_count = 0usize
     s.window_size = size
     var place_error = place(s, frame_arena, &root, root_index, geometry.Rect { x: 0.0, y: 0.0, width: size.width, height: size.height }, &builder, 1usize)
