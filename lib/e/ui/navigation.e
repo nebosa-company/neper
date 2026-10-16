@@ -665,7 +665,9 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
             small.max_lines = 1u32
             small.ellipsis = "…"
         }
-        let (said, said_error) = control.colored_text(a, 0u64, item.text, t, small, ink)
+        var words = ink
+        if t.tokens.profile == .MaterialLike && item.tone == .Error { words = style.color(t.tokens, .Error) }
+        let (said, said_error) = control.colored_text(a, 0u64, item.text, t, small, words)
         if said_error != ok { ret (zero, said_error) }
         bits[n] = said
         if squeezed {

@@ -5697,7 +5697,10 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     }
     let state = control_state(t, key, options.enabled, false)
     let focused = state.focused && options.enabled
-    let hovered = state.hovered && options.enabled
+    var over = state.hovered
+    // Android: in a multi-line field the pointer is over the scrolling viewport, not the editor.
+    if t.tokens.profile == .MaterialLike && options.rows > 1u32 { over = over || control_state(t, key + 1048612u64, options.enabled, false).hovered }
+    let hovered = over && options.enabled
     let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
     var h = t.tokens.metrics.control_height + 16.0
     if options.height > 0.0 { h = options.height }
@@ -5892,6 +5895,10 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         if t.tokens.profile == .MaterialLike && options.width > 0.0 { indicator.width = style.Length { Px: options.width } }
         indicator.background = paint.Brush { Solid: edge }
         indicator.margin = style.EdgeLengths { left: style.Length { Px: 0.0 - pad_x }, top: style.Length { Px: max_zero(pad_top - edge_width) }, right: style.Length { Px: 0.0 - pad_x }, bottom: style.Length { Px: 0.0 } }
+        if t.tokens.profile == .MaterialLike {
+            indicator.margin.left = style.Length { Px: 0.0 - pad_x - options.start_space }
+            indicator.margin.right = style.Length { Px: 0.0 - pad_x - options.end_space }
+        }
         lines[parts_at] = widget.box(0u64, indicator, zero)
         parts_at += 1usize
     } else {
@@ -6615,27 +6622,48 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     at += 1usize
     var count = 1usize
     if len != 0usize { count = 2usize }
+    var first = 0usize
+    let android = t.tokens.profile == .MaterialLike
+    if android { count += 1usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
     if parts_error != ok { ret (zero, TooLarge) }
     var grow = style.defaults()
     grow.width = style.Length { Flex: 1.0 }
-    parts[0usize] = widget.stack(0u64, grow, layers[0usize..at])
+    if android {
+        // Android (md.comp.search-bar): the 24 dp search icon in `on-surface` at the start, a 40 dp cross icon button to clear.
+        let (lens, lens_error) = icon_square(a, style.color(t.tokens, .OnSurface), .Search, 24.0)
+        if lens_error != ok { ret (zero, lens_error) }
+        parts[0usize] = lens
+        first = 1usize
+    }
+    parts[first] = widget.stack(0u64, grow, layers[0usize..at])
     if len != 0usize {
-        var plain = button_options()
-        plain.variant = .Plain
-        let (clear_button, clear_error) = button(a, key + 1u64, t, "Clear", clear, plain)
-        if clear_error != ok { ret (zero, clear_error) }
-        parts[1usize] = clear_button
+        if android {
+            let (cross, cross_error) = material_icon_button(a, key + 1u64, t, .Cross, "Clear", clear, .Plain, options.enabled, false)
+            if cross_error != ok { ret (zero, cross_error) }
+            parts[first + 1usize] = cross
+        } else {
+            var plain = button_options()
+            plain.variant = .Plain
+            let (clear_button, clear_error) = button(a, key + 1u64, t, "Clear", clear, plain)
+            if clear_error != ok { ret (zero, clear_error) }
+            parts[first + 1usize] = clear_button
+        }
     }
     var bar = style.defaults()
     bar.width = style.Length { Px: options.width }
     bar.min_height = style.Length { Px: h }
     var fill = style.color(t.tokens, .SurfaceContainerHigh)
     if state.hovered { fill = style.layer(fill, style.color(t.tokens, .OnSurface), t.tokens.states.hover) }
+    if android && !options.enabled { fill = style.layer(fill, style.color(t.tokens, .OnSurface), 0.0) }
     bar.background = paint.Brush { Solid: fill }
     bar.radius = h * 0.5
     let pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
     bar.padding = style.EdgeLengths { left: style.Length { Px: lead }, top: pad_y, right: style.Length { Px: trail }, bottom: pad_y }
+    if android && !options.enabled {
+        // Disabled: the bar at the 38 % content level.
+        bar.opacity = t.tokens.states.disabled_content
+    }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, bar, parts[0usize..count]), ok)
 }
 
@@ -6726,7 +6754,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     if state.hovered { edge = ink }
     var point = muted
     var label_color = muted
-    if open {
+    if open || (state.focused && t.tokens.profile == .MaterialLike) {
         edge = style.color(t.tokens, .Primary)
         edge_width = t.tokens.sizes.outline_focused
         point = edge
@@ -6746,6 +6774,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     look.padding_y = max_zero((h - mark) * 0.5)
     look.min_height = h
     look.min_width = 112.0
+    if t.tokens.profile == .MaterialLike { look.min_width = 210.0 }
     var value_role: style.TextRole = .BodyLarge
     if dense { value_role = .BodyMedium }
     var words = text_options()
@@ -6774,6 +6803,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     // The chevron at the end of the least width.
     var spread = style.defaults()
     spread.min_width = style.Length { Px: 112.0 - pad_x - 12.0 }
+    if t.tokens.profile == .MaterialLike { spread.min_width = style.Length { Px: 210.0 - pad_x - 12.0 } }
     let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 12.0 }, spread, bits[0usize..2usize])
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
@@ -6802,6 +6832,14 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
 // `surface-container` with 8 corners and elevation 2, 8 above and below its rows,
 // 4 below the field, matching its width; its rows are `menu_row`s.
 fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+    var none: []const widget.Node = zero
+    let (made, made_error) = select_led(a, key, t, label, options, selected, open, toggle, picks, none)
+    ret (made, made_error)
+}
+
+// `select` with a picture before each option: the head shows the chosen option's, the menu rows show their own (the
+// Android look's image combo box). `icons` empty gives the plain select.
+fn select_led(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, icons: []const widget.Node) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = win_select(a, key, t, label, options, selected, open, toggle, picks)
@@ -6811,7 +6849,9 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     var shown = label
     if chosen { shown = options[selected] }
     let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
-    let (head, head_error) = field_head(a, key, t, label, shown, chosen, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense)
+    var lead: []const widget.Node = zero
+    if icons.len == options.len && chosen { lead = icons[selected..selected + 1usize] }
+    let (head, head_error) = led_head(a, key, t, label, shown, chosen, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense, lead)
     if head_error != ok { ret (zero, head_error) }
     var count = 1usize
     if open { count = 2usize }
@@ -6823,7 +6863,17 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         if items_error != ok { ret (zero, TooLarge) }
         var i = 0usize
         while i < options.len {
-            let (item, item_error) = menu_row(a, key + 2u64 + u64(i), t, options[i], i == selected, &picks[i])
+            var item: widget.Node = zero
+            var item_error: err = ok
+            if icons.len == options.len {
+                let (pictured, pictured_error) = menu_icon_row(a, key + 2u64 + u64(i), t, options[i], icons[i], i == selected, &picks[i])
+                item = pictured
+                item_error = pictured_error
+            } else {
+                let (plain_row, plain_row_error) = menu_row(a, key + 2u64 + u64(i), t, options[i], i == selected, &picks[i])
+                item = plain_row
+                item_error = plain_row_error
+            }
             if item_error != ok { ret (zero, item_error) }
             var entry: widget.Semantics = zero
             entry.role = accessibility.ROLE_OPTION
@@ -6846,6 +6896,7 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         sheet_style.padding.top = style.Length { Px: 8.0 }
         sheet_style.padding.bottom = style.Length { Px: 8.0 }
         sheet_style.min_width = style.Length { Px: 112.0 }
+        if t.tokens.profile == .MaterialLike { sheet_style.radius = 4.0 }
         if t.tokens.profile == .CupertinoLike {
             sheet_style = cupertino_menu_sheet_style(t, 4.0)
             sheet_style.min_width = style.Length { Px: 112.0 }
@@ -6881,6 +6932,39 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     sem.value = shown
     if open { sem.states = accessibility.STATE_EXPANDED }
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A menu row with a picture before its label (md.comp.menu.list-item with a leading icon): 48 dp, 12 dp at the sides,
+// 12 between icon and label, `body-large`; the chosen row on `secondary-container`, the pointer's 8 % layer over it.
+fn menu_icon_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lead_mark: widget.Node, chosen: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var words = style.color(t.tokens, .OnSurface)
+    if chosen {
+        fill = style.color(t.tokens, .SecondaryContainer)
+        words = style.color(t.tokens, .OnSecondaryContainer)
+    }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = style.layer(fill, words, state_opacity(t, state))
+    look.foreground = words
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 12.0
+    look.padding_start = 12.0
+    look.padding_y = 12.0
+    look.min_height = 48.0
+    var caption = text_options()
+    caption.role = .BodyLarge
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, words)
+    if label_error != ok { ret (zero, label_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = lead_mark
+    parts[1usize] = label_node
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), parts[0usize..2usize])
+    let (node, node_error) = pressable_states_fill(a, key, t, 3u8, label, look, true, chosen, 0u32, accessibility.ACTION_PRESS, 0u64, action, true, content)
+    ret (node, node_error)
 }
 
 // A menu's option row (D956, docs/ux/components/Select): `body-medium` in
@@ -7009,8 +7093,11 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var selection_fill = style.color(t.tokens, .SecondaryContainer)
         // Inset grouped lists mark the choice with a trailing check, not a fill.
         if t.tokens.profile == .CupertinoLike { selection_fill.alpha = 0.0 }
+        // Android: a list of check boxes marks a choice with its box, not a container.
+        if t.tokens.profile == .MaterialLike && multi { selection_fill.alpha = 0.0 }
         let fill = with_alpha(selection_fill, selection_fill.alpha * picked_share)
-        let words = style.mix(style.color(t.tokens, .OnSurface), style.color(t.tokens, .OnSecondaryContainer), picked_share)
+        var words = style.mix(style.color(t.tokens, .OnSurface), style.color(t.tokens, .OnSecondaryContainer), picked_share)
+        if t.tokens.profile == .MaterialLike && multi { words = style.color(t.tokens, .OnSurface) }
         var row_style = style.defaults()
         row_style.width = style.Length { Px: row_width }
         row_style.height = style.Length { Px: row_height }
@@ -7081,6 +7168,7 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     view_style.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
     view_style.radius = t.tokens.radii.sm
     if multi { view_style.radius = t.tokens.radii.md }
+    if t.tokens.profile == .MaterialLike && multi { view_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) } }
     var one = style.Length { Px: 1.0 }
     var four = style.Length { Px: 4.0 }
     if t.tokens.profile == .CupertinoLike {
@@ -9944,6 +10032,11 @@ fn step_button(a: *mem.Arena, key: widget.Key, t: *const Theme, glyph: str, acti
 }
 
 fn step_pair(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.Key, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64]) -> ([]widget.Node, []widget.Shortcut, err) {
+    let (pair, shortcuts, pair_error) = step_pair_enabled(a, t, less, more, value, low, high, step, change, true)
+    ret (pair, shortcuts, pair_error)
+}
+
+fn step_pair_enabled(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.Key, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], enabled: bool) -> ([]widget.Node, []widget.Shortcut, err) {
     let (steps, steps_error) = mem.alloc[Step](a, 2usize)
     if steps_error != ok { ret (zero, zero, TooLarge) }
     steps[0usize] = Step { value: value, low: low, high: high, amount: 0i64 - step, change: change }
@@ -9956,12 +10049,22 @@ fn step_pair(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.Key,
     if buttons_error != ok { ret (zero, zero, TooLarge) }
     // v2 (D952, docs/ux/components/Stepper): round buttons in `on-surface`, the
     // control height less the pill's inner padding across.
-    let (minus, minus_error) = step_button(a, less, t, "-", &actions[0usize], value > low)
+    if t.tokens.profile == .MaterialLike {
+        // Android: M3 has no spinner; the number field is flanked by two 40 dp tonal icon buttons, a dash and a plus.
+        let (minus, minus_error) = material_icon_button(a, less, t, .Dash, "Decrease", &actions[0usize], .Tonal, enabled && value > low, false)
+        if minus_error != ok { ret (zero, zero, minus_error) }
+        buttons[0usize] = minus
+        let (plus, plus_error) = material_icon_button(a, more, t, .Add, "Increase", &actions[1usize], .Tonal, enabled && value < high, false)
+        if plus_error != ok { ret (zero, zero, plus_error) }
+        buttons[1usize] = plus
+    } else {
+    let (minus, minus_error) = step_button(a, less, t, "-", &actions[0usize], enabled && value > low)
     if minus_error != ok { ret (zero, zero, minus_error) }
     buttons[0usize] = minus
-    let (plus, plus_error) = step_button(a, more, t, "+", &actions[1usize], value < high)
+    let (plus, plus_error) = step_button(a, more, t, "+", &actions[1usize], enabled && value < high)
     if plus_error != ok { ret (zero, zero, plus_error) }
     buttons[1usize] = plus
+    }
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
     if shortcuts_error != ok { ret (zero, zero, TooLarge) }
     shortcuts[0usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: actions[0usize] }
@@ -10054,6 +10157,12 @@ fn spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer:
 
 // The same spin box `width` wide (D961: the font picker's 104).
 fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
+    let (made, made_error) = spin_box_full(a, key, t, label, buffer, value, low, high, step, change, typed, width, true, false)
+    ret (made, made_error)
+}
+
+// The spin box with the field's disabled and invalid states (the Android look draws both; the others ignore them).
+fn spin_box_full(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, enabled: bool, invalid: bool) -> (widget.Node, err) {
     if t.tokens.profile == .Windows {
         let (win, win_error) = windows_spin(a, key, t, label, buffer, value, low, high, step, change, typed, width)
         ret (win, win_error)
@@ -10062,11 +10171,13 @@ fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         let (cup, cup_error) = cupertino_spin_box(a, key, t, label, buffer, value, low, high, step, change, typed, width)
         ret (cup, cup_error)
     }
-    let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
+    let (buttons, shortcuts, pair_error) = step_pair_enabled(a, t, key + 1u64, key + 2u64, value, low, high, step, change, enabled)
     if pair_error != ok { ret (zero, pair_error) }
     let len = write_i64(buffer, value)
     var options = field_options()
     options.width = width
+    options.enabled = enabled
+    options.invalid = invalid
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     // (D1598) Two 24 arrows stack only in a field 48 or taller; a denser field
     // puts them side by side, Decrease then Increase, and the value gives way.
@@ -10140,9 +10251,23 @@ fn button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buff
     }
     var reserved = options
     reserved.end_space = 24.0 - 8.0
+    if t.tokens.profile == .MaterialLike { reserved.end_space = 36.0 }
     let (editor, editor_error) = text_field(a, key, t, label, buffer, len, change, submit, reserved)
     if editor_error != ok { ret (zero, editor_error) }
     let usable = options.enabled && !options.read_only
+    if t.tokens.profile == .MaterialLike {
+        // Android: a trailing icon button (md.comp.outlined-text-field trailing icon) 40 dp, 4 dp from the field's end.
+        let (trail, trail_error) = material_icon_button(a, key + 1u64, t, .MoreHoriz, button_label, action, .Plain, usable, false)
+        if trail_error != ok { ret (zero, trail_error) }
+        var field_h = options.height
+        if field_h <= 0.0 { field_h = t.tokens.metrics.control_height + 16.0 }
+        let (stack_layers, stack_error) = mem.alloc[widget.Node](a, 3usize)
+        if stack_error != ok { ret (zero, TooLarge) }
+        stack_layers[0usize] = editor
+        stack_layers[2usize] = trail
+        stack_layers[1usize] = widget.positioned(0u64, options.width - 4.0 - 40.0, max_zero((field_h - 40.0) * 0.5), style.defaults(), stack_layers[2usize..3usize])
+        ret (widget.stack(0u64, style.defaults(), stack_layers[0usize..2usize]), ok)
+    }
     let (dots, dots_error) = arrow_button(a, key + 1u64, t, .MoreHoriz, button_label, action, usable)
     if dots_error != ok { ret (zero, dots_error) }
     var h = options.height
@@ -10603,6 +10728,32 @@ fn list_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, active:
     }
     let state = control_state(t, key, true, false)
     let ink = style.color(t.tokens, .OnSurface)
+    if t.tokens.profile == .MaterialLike {
+        // Android: a menu item (md.comp.menu.list-item) 48 dp high, 12 dp at the sides, `body-large`; the chosen item sits
+        // on `secondary-container`, the pointer or focus adds the 8 / 10 % state layer.
+        var item = style.resolve(t.tokens, .Plain, state)
+        var words = ink
+        item.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        if active {
+            item.background = style.color(t.tokens, .SecondaryContainer)
+            words = style.color(t.tokens, .OnSecondaryContainer)
+        }
+        if state.hovered { item.background = style.layer(item.background, words, t.tokens.states.hover) }
+        if state.focused { item.background = style.layer(item.background, words, t.tokens.states.focus) }
+        item.foreground = words
+        item.radius = 0.0
+        item.custom_padding = true
+        item.padding = 12.0
+        item.padding_y = 12.0
+        item.min_height = 48.0
+        var line_words = text_options()
+        line_words.role = .BodyLarge
+        line_words.wrap = .None
+        let (line_node, line_error) = colored_text(a, 0u64, label, t, line_words, words)
+        if line_error != ok { ret (zero, line_error) }
+        let (row, row_error) = pressable_states_fill(a, key, t, 3u8, label, item, true, active, 0u32, accessibility.ACTION_PRESS, 0u64, action, true, line_node)
+        ret (row, row_error)
+    }
     var look = style.resolve(t.tokens, .Plain, state)
     look.foreground = ink
     look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -10632,6 +10783,12 @@ fn list_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, active:
 // pick and whose Escape is `dismiss`. A group in the tree named `label`, expanded
 // while open, its active descendant the active suggestion.
 fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field_node: widget.Node, extra: []const widget.Node, list_key: widget.Key, first: widget.Key, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = suggesting_wide(a, key, t, label, field_node, extra, list_key, first, suggestions, active, open, picks, activate, dismiss, 0.0)
+    ret (made, made_error)
+}
+
+// `suggesting` with the menu at least `menu_w` wide (the Android look opens it as wide as the field).
+fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field_node: widget.Node, extra: []const widget.Node, list_key: widget.Key, first: widget.Key, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, menu_w: f32) -> (widget.Node, err) {
     if picks.len != suggestions.len { ret (zero, TooLarge) }
     let listing = open && suggestions.len > 0usize
     var count = 1usize + extra.len
@@ -10677,6 +10834,10 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         var sheet_style = surface_style(t, sheet)
         sheet_style.padding.top = style.Length { Px: 8.0 }
         sheet_style.padding.bottom = style.Length { Px: 8.0 }
+        if t.tokens.profile == .MaterialLike {
+            sheet_style.radius = 4.0
+            if menu_w > 0.0 { sheet_style.width = style.Length { Px: menu_w } }
+        }
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
@@ -10694,7 +10855,17 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         popup[0usize] = widget.semantics(0u64, list_sem, style.defaults(), column[0usize..1usize])
         var below: f32 = 4.0
         if t.tokens.profile == .Windows { below = 0.0 }
-        parts[count - 1usize] = widget.overlay(list_key, widget.Overlay { anchor: key, placement: .BelowMatch, offset: geometry.Point { x: 0.0, y: below }, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
+        // Android: the anchor is the editor, 16 dp inside the 56 dp field: the menu opens at the field's bottom edge.
+        var placed_at: widget.Placement = .BelowMatch
+        var shift: f32 = 0.0
+        if t.tokens.profile == .MaterialLike {
+            below = 20.0
+            if menu_w > 0.0 {
+                placed_at = .Below
+                shift = -16.0
+            }
+        }
+        parts[count - 1usize] = widget.overlay(list_key, widget.Overlay { anchor: key, placement: placed_at, offset: geometry.Point { x: shift, y: below }, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
         if active < picks.len { default_action = picks[active] }
     }
     let (moves, moves_error) = mem.alloc[Move](a, 2usize)
@@ -10786,7 +10957,7 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
     layers[1usize] = widget.positioned(0u64, options.width - 4.0 - side, max_zero((h - side) * 0.5), style.defaults(), layers[2usize..3usize])
     let boxed = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
     var none: []const widget.Node = zero
-    let (made, made_error) = suggesting(a, key, t, label, boxed, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle)
+    let (made, made_error) = suggesting_wide(a, key, t, label, boxed, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle, options.width)
     ret (made, made_error)
 }
 
@@ -14641,6 +14812,19 @@ fn win_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, optio
 // pic (`icons`, one 16 x 16 node per option, or none). Under the other looks it is the
 // plain select: no icons.
 fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+    if t.tokens.profile == .MaterialLike {
+        let (pictured, pictured_error) = select_led(a, key, t, label, options, selected, open, toggle, picks, icons)
+        if pictured_error != ok { ret (zero, pictured_error) }
+        if enabled { ret (pictured, ok) }
+        // Disabled: the whole field at the M3 `on-surface` 38 % content level.
+        var dimmed = style.defaults()
+        dimmed.opacity = t.tokens.states.disabled_content
+        dimmed.padding.top = style.Length { Px: 10.0 }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = pictured
+        ret (widget.box(0u64, dimmed, held[0usize..1usize]), ok)
+    }
     if t.tokens.profile != .Windows {
         let (plain, plain_error) = select(a, key, t, label, options, selected, open, toggle, picks)
         ret (plain, plain_error)

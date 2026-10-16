@@ -1,0 +1,1082 @@
+{
+ "label": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/label.png",
+    "notes": "The M3 type scale as labels: display small to label medium in on-surface, then the colour states of a label (supporting in on-surface-variant, primary, error, disabled at 38 %, a link in primary). Roboto Regular/Medium.",
+    "gaps": [
+     "The link form is primary text without an underline or a visited colour",
+     "No separate 'label for a field' form: a field's floating label is part of text_edit",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/label.png",
+    "notes": "The M3 type scale as labels: display small to label medium in on-surface, then the colour states of a label (supporting in on-surface-variant, primary, error, disabled at 38 %, a link in primary). Roboto Regular/Medium. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The link form is primary text without an underline or a visited colour",
+     "No separate 'label for a field' form: a field's floating label is part of text_edit",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/button.png",
+    "notes": "Five M3 variants (filled, tonal, elevated, outlined, text) in enabled, hovered, focused, pressed, disabled; button_icon.png adds the leading icon; fab.png has the FABs and icon buttons. Exact spec values: 40 dp height, full corners, 24 dp side padding, state layers 8/10/10 %, disabled 12 % container / 38 % label.",
+    "gaps": [
+     "Approximations: elevated shadow, text-button padding with an icon (16 where M3 says 12)",
+     "The icon-button toggled forms are approximated",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/button.png",
+    "notes": "Five M3 variants (filled, tonal, elevated, outlined, text) in enabled, hovered, focused, pressed, disabled; button_icon.png adds the leading icon; fab.png has the FABs and icon buttons. Exact spec values: 40 dp height, full corners, 24 dp side padding, state layers 8/10/10 %, disabled 12 % container / 38 % label. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Approximations: elevated shadow, text-button padding with an icon (16 where M3 says 12)",
+     "The icon-button toggled forms are approximated",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/checkbox.png",
+    "notes": "M3 check box: 18 dp box with 2 dp corners and 2 dp outline in a 40 dp state layer inside a 48 dp target, primary when checked, dash for indeterminate, error state, disabled at 38 %. Enabled, hovered, focused, pressed, checked, indeterminate, error, disabled.",
+    "gaps": [
+     "The check mark is a stroked path, not the M3 animated check",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/checkbox.png",
+    "notes": "M3 check box: 18 dp box with 2 dp corners and 2 dp outline in a 40 dp state layer inside a 48 dp target, primary when checked, dash for indeterminate, error state, disabled at 38 %. Enabled, hovered, focused, pressed, checked, indeterminate, error, disabled. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The check mark is a stroked path, not the M3 animated check",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/radio.png",
+    "notes": "M3 radio button: 20 dp ring with a 10 dp dot, 40 dp state layer in a 48 dp target; enabled, hovered, focused, pressed, selected, error, disabled.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/radio.png",
+    "notes": "M3 radio button: 20 dp ring with a 10 dp dot, 40 dp state layer in a 48 dp target; enabled, hovered, focused, pressed, selected, error, disabled. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/radio_group.png",
+    "notes": "A group of three M3 radio buttons with their labels: first selected, second selected, hovered, pressed, focused, disabled. M3 has no group box or legend, so the group is only its rows.",
+    "gaps": [
+     "The group label is not drawn under the Android look (M3 groups have none; the label only names the group for accessibility)",
+     "No error state for the group as a whole",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/radio_group.png",
+    "notes": "A group of three M3 radio buttons with their labels: first selected, second selected, hovered, pressed, focused, disabled. M3 has no group box or legend, so the group is only its rows. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The group label is not drawn under the Android look (M3 groups have none; the label only names the group for accessibility)",
+     "No error state for the group as a whole",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/text_field.png",
+    "notes": "M3 filled and outlined text fields with a floating label, supporting text and error text: enabled, hovered, focused (empty and with text), disabled, error. 56 dp tall, 16 dp sides, 1 dp outline growing to 2 dp primary on focus, 4 dp corners (outlined) / 4 dp top corners and an indicator (filled).",
+    "gaps": [
+     "No leading/trailing icon forms in this sheet (button_edit.png and search_bar.png have trailing/leading icons)",
+     "The outlined label notch is cut from the outline by the layout, not animated",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/text_field.png",
+    "notes": "M3 filled and outlined text fields with a floating label, supporting text and error text: enabled, hovered, focused (empty and with text), disabled, error. 56 dp tall, 16 dp sides, 1 dp outline growing to 2 dp primary on focus, 4 dp corners (outlined) / 4 dp top corners and an indicator (filled). The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "No leading/trailing icon forms in this sheet (button_edit.png and search_bar.png have trailing/leading icons)",
+     "The outlined label notch is cut from the outline by the layout, not animated",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/spin_edit.png",
+    "notes": "M3 has no spinner: the number field is an outlined text field flanked by two 40 dp tonal icon buttons (dash, plus). Enabled, hovered (field, minus, plus), pressed, focused, selected text, at a bound (the button dims), disabled, error.",
+    "gaps": [
+     "An approximation of a stepper row: M3 defines no number-field component",
+     "The field is 96 dp wide; typed text is parsed by the caller as everywhere",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/spin_edit.png",
+    "notes": "M3 has no spinner: the number field is an outlined text field flanked by two 40 dp tonal icon buttons (dash, plus). Enabled, hovered (field, minus, plus), pressed, focused, selected text, at a bound (the button dims), disabled, error. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "An approximation of a stepper row: M3 defines no number-field component",
+     "The field is 96 dp wide; typed text is parsed by the caller as everywhere",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/combo_box.png",
+    "notes": "M3 exposed dropdown menu: an outlined or filled text field with a trailing arrow (chevron up while open) and the menu opening at the field's bottom edge, as wide as the field: surface-container, 4 dp corners, elevation 2, 48 dp items with 12 dp sides, the chosen item on secondary-container, 8/10 % state layers. combo_box_lists.png has the open states.",
+    "gaps": [
+     "Menu elevation is a hard shadow",
+     "No menu open/close animation is shown",
+     "The filled field keeps its idle indicator while open",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/combo_box.png",
+    "notes": "M3 exposed dropdown menu: an outlined or filled text field with a trailing arrow (chevron up while open) and the menu opening at the field's bottom edge, as wide as the field: surface-container, 4 dp corners, elevation 2, 48 dp items with 12 dp sides, the chosen item on secondary-container, 8/10 % state layers. combo_box_lists.png has the open states. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Menu elevation is a hard shadow",
+     "No menu open/close animation is shown",
+     "The filled field keeps its idle indicator while open",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/image_combo_box.png",
+    "notes": "The exposed dropdown with a 24 dp leading icon in the head (the chosen item's) and in each menu row. States: enabled, hovered, focused, disabled (the whole field at 38 %), no pictures, nothing chosen; image_combo_box_lists.png has the open menu with the chosen row on secondary-container and a hovered row.",
+    "gaps": [
+     "Disabled is the whole field at 38 % opacity, not the M3 12 % outline / 38 % text split",
+     "The icons are generic glyphs standing in for the image list's bitmaps",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/image_combo_box.png",
+    "notes": "The exposed dropdown with a 24 dp leading icon in the head (the chosen item's) and in each menu row. States: enabled, hovered, focused, disabled (the whole field at 38 %), no pictures, nothing chosen; image_combo_box_lists.png has the open menu with the chosen row on secondary-container and a hovered row. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Disabled is the whole field at 38 % opacity, not the M3 12 % outline / 38 % text split",
+     "The icons are generic glyphs standing in for the image list's bitmaps",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/date_picker.png",
+    "notes": "M3 date input (date_input.png, a text field with a calendar icon) and the modal date picker (header with the selected date, month and year selector, weekday row, 48 dp day cells with a primary-filled selected day and an outlined today), in the usual states.",
+    "gaps": [
+     "Range pickers and the docked picker are not drawn",
+     "The picker is a static sheet cell, not an open overlay",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "M3 date input (date_input.png, a text field with a calendar icon) and the modal date picker (header with the selected date, month and year selector, weekday row, 48 dp day cells with a primary-filled selected day and an outlined today), in the usual states. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Range pickers and the docked picker are not drawn",
+     "The picker is a static sheet cell, not an open overlay",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/mask_edit.png",
+    "notes": "M3 field carrying the mask: the fixed text as prefix and suffix (on-surface-variant), supporting text and an error line under it. Enabled, hovered, focused, selected text, error (the mask rejects the text), disabled, read-only, filled with prefix and suffix, empty with placeholder, password (bullets).",
+    "gaps": [
+     "The prefix's trailing space is trimmed by the text layout",
+     "The mask is a validator only: it does not insert separators while typing",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/mask_edit.png",
+    "notes": "M3 field carrying the mask: the fixed text as prefix and suffix (on-surface-variant), supporting text and an error line under it. Enabled, hovered, focused, selected text, error (the mask rejects the text), disabled, read-only, filled with prefix and suffix, empty with placeholder, password (bullets). The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The prefix's trailing space is trimmed by the text layout",
+     "The mask is a validator only: it does not insert separators while typing",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/memo.png",
+    "notes": "M3 multi-line text field, outlined and filled, with supporting text and a character counter at the end of the supporting line: enabled, hovered, focused with selection, disabled, read-only, error, empty with placeholder, scrolling, filled, filled focused.",
+    "gaps": [
+     "The hover outline of the multi-line field is not drawn in the sheet (the pointer lands on its scrolling viewport)",
+     "The scroll thumb is the Neper 4 dp thumb 8 dp from the end, not the Android overlay scrollbar",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/memo.png",
+    "notes": "M3 multi-line text field, outlined and filled, with supporting text and a character counter at the end of the supporting line: enabled, hovered, focused with selection, disabled, read-only, error, empty with placeholder, scrolling, filled, filled focused. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The hover outline of the multi-line field is not drawn in the sheet (the pointer lands on its scrolling viewport)",
+     "The scroll thumb is the Neper 4 dp thumb 8 dp from the end, not the Android overlay scrollbar",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/button_edit.png",
+    "notes": "M3 outlined or filled text field with a 40 dp trailing icon button (the three-dot icon) 4 dp from the end, which takes the hover and press state layers on its own: enabled, hovered (field, button), pressed (button), focused, disabled, read-only, error, empty, filled.",
+    "gaps": [
+     "The icon is three dots (the v3 ellipsis), not a task icon such as a folder",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/button_edit.png",
+    "notes": "M3 outlined or filled text field with a 40 dp trailing icon button (the three-dot icon) 4 dp from the end, which takes the hover and press state layers on its own: enabled, hovered (field, button), pressed (button), focused, disabled, read-only, error, empty, filled. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The icon is three dots (the v3 ellipsis), not a task icon such as a folder",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/token_edit.png",
+    "notes": "An outlined field of M3 input chips (32 dp, 8 dp corners, close icon) that wraps; the input follows the last chip. Enabled, hovered chip, hovered close, focused input, empty (hint, focused); token_edit_wrapped.png has seven chips over four lines and one chip.",
+    "gaps": [
+     "M3 has no token field: this is the input-chip pattern in an outlined box",
+     "The close icon has no separate hover layer; hover shows on the chip",
+     "A field with three chips wraps the input to a second row at 360 dp wide",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/token_edit.png",
+    "notes": "An outlined field of M3 input chips (32 dp, 8 dp corners, close icon) that wraps; the input follows the last chip. Enabled, hovered chip, hovered close, focused input, empty (hint, focused); token_edit_wrapped.png has seven chips over four lines and one chip. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "M3 has no token field: this is the input-chip pattern in an outlined box",
+     "The close icon has no separate hover layer; hover shows on the chip",
+     "A field with three chips wraps the input to a second row at 360 dp wide",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/check_list_box.png",
+    "notes": "M3 list of 56 dp items with a leading check box (state layer on hover), no container on checked rows: enabled, hovered, pressed, focused, empty. Frame is outline-variant with 12 dp corners.",
+    "gaps": [
+     "No disabled or error row is drawn",
+     "The frame has no scrollbar in the sheet (three rows fit)",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/check_list_box.png",
+    "notes": "M3 list of 56 dp items with a leading check box (state layer on hover), no container on checked rows: enabled, hovered, pressed, focused, empty. Frame is outline-variant with 12 dp corners. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "No disabled or error row is drawn",
+     "The frame has no scrollbar in the sheet (three rows fit)",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/progress.png",
+    "notes": "M3 linear (4 dp, rounded, primary over secondary-container, buffer and indeterminate) and circular progress indicators.",
+    "gaps": [
+     "The indeterminate animation is a static phase",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/progress.png",
+    "notes": "M3 linear (4 dp, rounded, primary over secondary-container, buffer and indeterminate) and circular progress indicators. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The indeterminate animation is a static phase",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/group_box.png",
+    "notes": "M3 card as a group box: outlined (surface, 1 dp outline-variant, 12 dp corners) and filled, the title title-small above, rows divided by hairlines; disabled (title and rows 38 %), invalid (2 dp error edge and a message with an alert mark), with a description, collapsed and expanded with a chevron toggle, plain (section header), empty.",
+    "gaps": [
+     "The filled card uses surface-container-low where M3 filled cards use surface-container-highest",
+     "No elevated card",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/group_box.png",
+    "notes": "M3 card as a group box: outlined (surface, 1 dp outline-variant, 12 dp corners) and filled, the title title-small above, rows divided by hairlines; disabled (title and rows 38 %), invalid (2 dp error edge and a message with an alert mark), with a description, collapsed and expanded with a chevron toggle, plain (section header), empty. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The filled card uses surface-container-low where M3 filled cards use surface-container-highest",
+     "No elevated card",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/tabs.png",
+    "notes": "M3 primary and secondary tabs: 48 dp, the active indicator (3 dp primary, rounded top) under the label, icons and badges, enabled, hovered, focused, pressed, selected, disabled.",
+    "gaps": [
+     "The tab indicator does not animate between tabs",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/tabs.png",
+    "notes": "M3 primary and secondary tabs: 48 dp, the active indicator (3 dp primary, rounded top) under the label, icons and badges, enabled, hovered, focused, pressed, selected, disabled. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The tab indicator does not animate between tabs",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/splitter.png",
+    "notes": "M3 divider with a drag handle: a 1 dp outline line with a 4 x 48 dp pill handle, upright and lying, at rest, hovered (handle in outline), dragged (2 dp primary line and primary handle) and keyboard focused (handle in outline).",
+    "gaps": [
+     "M3 has no splitter: the resizable-pane sash of the base look is the divider plus handle",
+     "The handle is always visible (touch density), hover and focus only change its colour",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/splitter.png",
+    "notes": "M3 divider with a drag handle: a 1 dp outline line with a 4 x 48 dp pill handle, upright and lying, at rest, hovered (handle in outline), dragged (2 dp primary line and primary handle) and keyboard focused (handle in outline). The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "M3 has no splitter: the resizable-pane sash of the base look is the divider plus handle",
+     "The handle is always visible (touch density), hover and focus only change its colour",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/status_bar.png",
+    "notes": "No M3 status bar: a surface-container strip (the bottom app bar's container) of body-small panels with the progress meter, the pressable and error forms; snackbar.png is the M3 footer message.",
+    "gaps": [
+     "Approximation: a strip of panels, not a bottom app bar (no icons, no FAB cut-out)",
+     "The hover layer of the pressable panel is not shown in the sheet",
+     "Error tone only colours the text",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/status_bar.png",
+    "notes": "No M3 status bar: a surface-container strip (the bottom app bar's container) of body-small panels with the progress meter, the pressable and error forms; snackbar.png is the M3 footer message. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Approximation: a strip of panels, not a bottom app bar (no icons, no FAB cut-out)",
+     "The hover layer of the pressable panel is not shown in the sheet",
+     "Error tone only colours the text",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/fab.png",
+    "notes": "M3 icon buttons (standard, filled, tonal, outlined; 40 dp circle, 24 dp icon in a 48 dp target) and the floating action buttons, with toggled forms.",
+    "gaps": [
+     "There is no Delphi toolbar band: the row stands in for it",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/fab.png",
+    "notes": "M3 icon buttons (standard, filled, tonal, outlined; 40 dp circle, 24 dp icon in a 48 dp target) and the floating action buttons, with toggled forms. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "There is no Delphi toolbar band: the row stands in for it",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/navigation_bar.png",
+    "notes": "The M3 navigation bar (80 dp, active indicator pill on secondary-container, badge and dot) stands in for the bar of destinations; app_bar.png has the top app bar (small, centre, medium, large) with its overflow icon.",
+    "gaps": [
+     "A desktop menu bar has no M3 counterpart: the top app bar with an overflow menu is the nearest idiom",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/navigation_bar.png",
+    "notes": "The M3 navigation bar (80 dp, active indicator pill on secondary-container, badge and dot) stands in for the bar of destinations; app_bar.png has the top app bar (small, centre, medium, large) with its overflow icon. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "A desktop menu bar has no M3 counterpart: the top app bar with an overflow menu is the nearest idiom",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/menu.png",
+    "notes": "M3 menu: surface-container, 4 dp corners, elevation 2, 48 dp items with leading/trailing icons, dividers, the item under the pointer on the 8 % layer.",
+    "gaps": [
+     "Nested submenus are not drawn",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/menu.png",
+    "notes": "M3 menu: surface-container, 4 dp corners, elevation 2, 48 dp items with leading/trailing icons, dividers, the item under the pointer on the 8 % layer. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Nested submenus are not drawn",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/tooltip.png",
+    "notes": "M3 plain tooltip (inverse-surface, body-small) and rich tooltip (surface-container, title, supporting text and actions).",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/tooltip.png",
+    "notes": "M3 plain tooltip (inverse-surface, body-small) and rich tooltip (surface-container, title, supporting text and actions). The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/scroll_bar.png",
+    "notes": "Thin Android scroll thumb: a 4 dp rounded thumb inside the edge, thickening on hover and while dragged, no track, no arrows: rest, hovered, pressed (dragged), scrolled, content that fits (no thumb), and the horizontal forms.",
+    "gaps": [
+     "The thumb is always shown in the sheet; Android fades it out when idle",
+     "No fast-scroll handle",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/scroll_bar.png",
+    "notes": "Thin Android scroll thumb: a 4 dp rounded thumb inside the edge, thickening on hover and while dragged, no track, no arrows: rest, hovered, pressed (dragged), scrolled, content that fits (no thumb), and the horizontal forms. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The thumb is always shown in the sheet; Android fades it out when idle",
+     "No fast-scroll handle",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/list.png",
+    "notes": "M3 list items: one, two and three lines with leading and trailing icons and meta text, enabled, hovered, focused, pressed, selected (secondary-container) and disabled.",
+    "gaps": [
+     "No swipe actions or drag handles",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/list.png",
+    "notes": "M3 list items: one, two and three lines with leading and trailing icons and meta text, enabled, hovered, focused, pressed, selected (secondary-container) and disabled. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "No swipe actions or drag handles",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/tree_list.png",
+    "notes": "An expandable list: a header row (label-large, sort arrow, column separators) over 48 dp rows with a chevron before the branch label, the nested rows indented, a trailing column in on-surface-variant, the selected row on secondary-container.",
+    "gaps": [
+     "The hover and keyboard-focus layers of a row do not show in the sheet (the pointer lands on the virtual list)",
+     "M3 defines no tree: this is the list idiom with chevrons",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/tree_list.png",
+    "notes": "An expandable list: a header row (label-large, sort arrow, column separators) over 48 dp rows with a chevron before the branch label, the nested rows indented, a trailing column in on-surface-variant, the selected row on secondary-container. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The hover and keyboard-focus layers of a row do not show in the sheet (the pointer lands on the virtual list)",
+     "M3 defines no tree: this is the list idiom with chevrons",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/vertical_grid.png",
+    "notes": "A key-value list: category section headers with a chevron and the number of properties when shut, the keys in on-surface-variant at the start, the values in on-surface, the selected row on secondary-container.",
+    "gaps": [
+     "M3 defines no property grid",
+     "No inline editors are drawn in the sheet (values are text), and the hover layer does not show",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/vertical_grid.png",
+    "notes": "A key-value list: category section headers with a chevron and the number of properties when shut, the keys in on-surface-variant at the start, the values in on-surface, the selected row on secondary-container. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "M3 defines no property grid",
+     "No inline editors are drawn in the sheet (values are text), and the hover layer does not show",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/data_grid.png",
+    "notes": "The M3 data table idiom: a header row on surface-container with label-large titles, the sort arrow and column separators, 52 dp rows with hairline dividers, numeric columns right aligned, the selected row on secondary-container; data_grid_select.png adds the select mode (a check box column).",
+    "gaps": [
+     "The hover layer does not show in the sheet",
+     "No sticky header, row grouping or inline editing is drawn here (the v3 grid look is gridlook.v3, Windows only)",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/data_grid.png",
+    "notes": "The M3 data table idiom: a header row on surface-container with label-large titles, the sort arrow and column separators, 52 dp rows with hairline dividers, numeric columns right aligned, the selected row on secondary-container; data_grid_select.png adds the select mode (a check box column). The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "The hover layer does not show in the sheet",
+     "No sticky header, row grouping or inline editing is drawn here (the v3 grid look is gridlook.v3, Windows only)",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/dialog.png",
+    "notes": "M3 basic dialog (surface-container-high, 28 dp corners, 24 dp padding, headline-small title, body-medium text, text-button actions) with and without an icon.",
+    "gaps": [
+     "No full-screen dialog",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/dialog.png",
+    "notes": "M3 basic dialog (surface-container-high, 28 dp corners, 24 dp padding, headline-small title, body-medium text, text-button actions) with and without an icon. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "No full-screen dialog",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "switch": {
+  "name": "Switch",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/switch.png",
+    "notes": "M3 switch: 52 x 32 dp track, thumb 16 / 24 / 28 dp, optional check icon, 40 dp state layer; off, on, hovered, focused, pressed, disabled.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/switch.png",
+    "notes": "M3 switch: 52 x 32 dp track, thumb 16 / 24 / 28 dp, optional check icon, 40 dp state layer; off, on, hovered, focused, pressed, disabled. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "slider": {
+  "name": "Slider",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/slider.png",
+    "notes": "M3 slider: 4 dp track, 20 dp handle, value label, centred and range forms; enabled, hovered, focused, pressed, disabled.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/slider.png",
+    "notes": "M3 slider: 4 dp track, 20 dp handle, value label, centred and range forms; enabled, hovered, focused, pressed, disabled. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "chip": {
+  "name": "Chip",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/chips.png",
+    "notes": "M3 assist, filter (off/on), input and suggestion chips: 32 dp, 8 dp corners, outline-variant, enabled, hovered, focused, pressed.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/chips.png",
+    "notes": "M3 assist, filter (off/on), input and suggestion chips: 32 dp, 8 dp corners, outline-variant, enabled, hovered, focused, pressed. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "fab": {
+  "name": "Floating action button",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/fab.png",
+    "notes": "M3 FAB: small 40, regular 56, large 96 and extended, primary-container, elevation 3.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/fab.png",
+    "notes": "M3 FAB: small 40, regular 56, large 96 and extended, primary-container, elevation 3. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "snackbar": {
+  "name": "Snackbar",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/snackbar.png",
+    "notes": "M3 snackbar: inverse-surface, 4 dp corners, action in inverse-primary, optional dismiss, one and two lines.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/snackbar.png",
+    "notes": "M3 snackbar: inverse-surface, 4 dp corners, action in inverse-primary, optional dismiss, one and two lines. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "navigation_bar": {
+  "name": "Navigation bar",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/navigation_bar.png",
+    "notes": "M3 navigation bar: 80 dp, 64 x 32 active indicator pill, labels, badge and dot.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/navigation_bar.png",
+    "notes": "M3 navigation bar: 80 dp, 64 x 32 active indicator pill, labels, badge and dot. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "top_app_bar": {
+  "name": "Top app bar",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/app_bar.png",
+    "notes": "M3 top app bar: small, centre-aligned, medium and large, with leading, trailing and overflow icons; scrolled container.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/app_bar.png",
+    "notes": "M3 top app bar: small, centre-aligned, medium and large, with leading, trailing and overflow icons; scrolled container. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "date_picker": {
+  "name": "Date picker",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/date_picker.png",
+    "notes": "M3 modal date picker and date input.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "M3 modal date picker and date input. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "search_bar": {
+  "name": "Search bar",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/search_bar.png",
+    "notes": "M3 search bar: 56 dp surface-container-high pill, 24 dp search icon, body-large query over its placeholder, a 40 dp cross icon button to clear; enabled, hovered, focused, with text, disabled (38 %).",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/search_bar.png",
+    "notes": "M3 search bar: 56 dp surface-container-high pill, 24 dp search icon, body-large query over its placeholder, a 40 dp cross icon button to clear; enabled, hovered, focused, with text, disabled (38 %). The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ },
+ "badge": {
+  "name": "Badge",
+  "extra": true,
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/badge.png",
+    "notes": "M3 badges: the 6 dp dot and the large count (error, 16 dp, '99+' above 99), alone and anchored to an icon.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/badge.png",
+    "notes": "M3 badges: the 6 dp dot and the large count (error, 16 dp, '99+' above 99), alone and anchored to an icon. The Material dark palette variant of the same sheet.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only"
+    ]
+   }
+  }
+ }
+}
