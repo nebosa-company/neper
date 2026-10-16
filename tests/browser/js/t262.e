@@ -165,11 +165,18 @@ fn run_all(ctx: *Ctx) {
             let (m1, has1) = str.find_from(src, "---*/", m0)
             if has1 { meta = src[m0..m1] }
         }
-        let (f1, is_raw) = str.find(meta, "raw")
-        let (f2, is_module) = str.find(meta, "module")
-        let (f3, is_async) = str.find(meta, "async")
-        let (f4, only_strict) = str.find(meta, "onlyStrict")
-        let (f5, no_strict) = str.find(meta, "noStrict")
+        var flags = ""
+        let (ff, has_flags) = str.find(meta, "flags:")
+        if has_flags {
+            var fe2 = ff
+            while fe2 < meta.len && meta[fe2] != 10u8 { fe2 += 1usize }
+            flags = meta[ff..fe2]
+        }
+        let (f1, is_raw) = str.find(flags, "raw")
+        let (f2, is_module) = str.find(flags, "module")
+        let (f3, is_async) = str.find(flags, "async")
+        let (f4, only_strict) = str.find(flags, "onlyStrict")
+        let (f5, no_strict) = str.find(flags, "noStrict")
         var expect_phase = ""
         var expect_type = ""
         let (nn, has_neg) = str.find(meta, "negative:")

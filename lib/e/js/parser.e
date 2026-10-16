@@ -19,7 +19,7 @@ error ParseError
 type Parser = struct {
     a: *mem.Arena, lx: lex.Lexer, tok: lex.Tok, prev_end: usize, prev_start: usize, prev_line: u32,
     nodes: list.List[ast.Node], kids: list.List[u32], strs: list.List[ast.TemplateStr], vars: list.List[u32],
-    strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool,
+    strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool, blk: u32,
     message: str, line: u32
 }
 
@@ -1259,6 +1259,8 @@ fn parse_function_rest(p: *Parser, fid: u32) -> err {
     let saved_args = p.uses_args
     let saved_no_in = p.no_in
     let saved_vars = p.vars.len
+    let saved_blk = p.blk
+    p.blk = 0u32
     let fl = node(p, fid).flags
     p.in_async = (fl & ast.F_ASYNC) != 0u16
     p.in_generator = (fl & ast.F_GENERATOR) != 0u16
@@ -1275,6 +1277,7 @@ fn parse_function_rest(p: *Parser, fid: u32) -> err {
     node(p, fid).c = body
     if p.uses_args { node(p, fid).flags = node(p, fid).flags | ast.F_USES_ARGS }
     close_hoist(p, fid, saved_vars)
+    p.blk = saved_blk
     p.in_async = saved_async
     p.in_generator = saved_gen
     p.in_function = saved_fn
@@ -1307,6 +1310,11 @@ fn parse_function(p: *Parser, decl: bool, is_async: bool) -> (u32, err) {
     }
     try parse_function_rest(p, fid)
     node(p, fid).text2 = p.lx.src[fn_start..p.prev_end]
+    // Annex B.3.3: a plain function declaration in a sloppy block also declares a `var` of the same name.
+    if decl && !p.strict && p.blk > 0u32 && (fl & (ast.F_ASYNC | ast.F_GENERATOR)) == 0u16 {
+        node(p, fid).op = 1u8
+        try list.push[u32](&p.vars, fid)
+    }
     ret (fid, ok)
 }
 
@@ -1455,11 +1463,13 @@ fn parse_block(p: *Parser) -> (u32, err) {
     let (ids_0, ie) = new_ids(p)
     var ids = ids_0
     if ie != ok { ret (ast.NONE, ie) }
+    p.blk += 1u32
     while !is_p(p, "}") {
         if p.tok.kind == lex.T_EOF { ret (ast.NONE, fail(p, "unexpected end of input")) }
         let s = try parse_statement(p)
         try list.push[u32](&ids, s)
     }
+    p.blk -= 1u32
     try adv(p)
     let (first, ke) = commit(p, &ids)
     if ke != ok { ret (ast.NONE, ke) }
@@ -1590,6 +1600,28 @@ fn parse_for(p: *Parser) -> (u32, err) {
     ret (id2, ok)
 }
 
+// Annex B.3.4: `if (x) function f() {}` behaves as if the declaration were wrapped in a block.
+fn parse_if_body(p: *Parser) -> (u32, err) {
+    if !is_k(p, "function") || p.strict {
+        let r = try parse_statement(p)
+        ret (r, ok)
+    }
+    let (bid, me) = mk(p, ast.N_BLOCK)
+    if me != ok { ret (ast.NONE, me) }
+    let (ids_0, ie) = new_ids(p)
+    var ids = ids_0
+    if ie != ok { ret (ast.NONE, ie) }
+    p.blk += 1u32
+    let s = try parse_statement(p)
+    p.blk -= 1u32
+    try list.push[u32](&ids, s)
+    let (first, ke) = commit(p, &ids)
+    if ke != ok { ret (ast.NONE, ke) }
+    node(p, bid).a = first
+    node(p, bid).b = 1u32
+    ret (bid, ok)
+}
+
 fn parse_statement(p: *Parser) -> (u32, err) {
     if p.tok.kind == lex.T_PUNCT {
         if is_p(p, "{") {
@@ -1640,12 +1672,12 @@ fn parse_statement(p: *Parser) -> (u32, err) {
             try expect_p(p, "(")
             let test = try parse_expression(p)
             try expect_p(p, ")")
-            let yes = try parse_statement(p)
+            let yes = try parse_if_body(p)
             node(p, id2).a = test
             node(p, id2).b = yes
             if is_k(p, "else") {
                 try adv(p)
-                let no = try parse_statement(p)
+                let no = try parse_if_body(p)
                 node(p, id2).c = no
             }
             ret (id2, ok)
@@ -1770,11 +1802,13 @@ fn parse_statement(p: *Parser) -> (u32, err) {
                 let (body_ids_0, bie) = new_ids(p)
                 var body_ids = body_ids_0
                 if bie != ok { ret (ast.NONE, bie) }
+    p.blk += 1u32
                 while !is_p(p, "}") && !is_k(p, "case") && !is_k(p, "default") {
                     if p.tok.kind == lex.T_EOF { ret (ast.NONE, fail(p, "unexpected end of input")) }
                     let s = try parse_statement(p)
                     try list.push[u32](&body_ids, s)
                 }
+                p.blk -= 1u32
                 let (bfirst, bke) = commit(p, &body_ids)
                 if bke != ok { ret (ast.NONE, bke) }
                 node(p, kid).b = bfirst

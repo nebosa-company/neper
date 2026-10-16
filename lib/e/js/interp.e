@@ -70,7 +70,7 @@ type Prop = struct { key: Key, value: Value, getter: *Obj, setter: *Obj, flags: 
 
 type NativeFn = fn(*Interp, Value, []const Value) -> (Value, err)
 
-type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool }
+type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool, is_var: bool }
 
 // Binding flags.
 const B_CONST: u8 = 1u8
@@ -2422,6 +2422,7 @@ fn bind_function(it: *Interp, f: *Frame, fo: *Obj, n: ast.Node, args: []const Va
         i += 1usize
     }
     // Hoisted `var`s.
+    f.env.is_var = true
     var h = 0usize
     while h < usize(n.hoist_count) {
         let hid = f.prog.kids[usize(n.hoist_first) + h]
@@ -2610,6 +2611,11 @@ fn set_function_name(it: *Interp, v: Value, name: str) {
     if !is_object(v) { ret }
     let fo = as_object(v)
     if fo.class != C_FUNCTION { ret }
+    // A class that defines its own static `name` keeps it.
+    let (cur, has) = get_own(it, fo, key_of("name"))
+    if has && (cur.flags & P_ACCESSOR) != 0u8 { ret }
+    if has && is_string(cur.value) && value_str(cur.value).len > 0usize { ret }
+    if has && !is_string(cur.value) { ret }
     let e = define_data(it, fo, key_of("name"), str_value(name), P_CONFIGURABLE)
 }
 
@@ -4009,6 +4015,26 @@ fn is_lexical_decl(f: *const Frame, id: u32) -> bool {
 // Declares the lexical bindings (let/const/class/function) of a statement list in `f.env`: let/const/class start in their
 // temporal dead zone, function declarations are created now.
 fn hoist_declarations(it: *Interp, f: *Frame, first: u32, count: u32) -> err {
+    ret hoist_declarations_in(it, f, first, count, null_env())
+}
+
+// Creates a function declaration's binding: in `vscope` (sloppy direct eval: the caller's variable scope) or the current scope.
+fn bind_function_decl(it: *Interp, f: *Frame, vscope: *Env, name: str, fo: *Obj) -> err {
+    if vscope == null_env() { ret declare(it, f.env, name, obj_value(fo), 0u8) }
+    if vscope.parent == null_env() {
+        if has_own(it, it.global, key_of(name)) {
+            let (ok2, se) = set_prop(it, it.global, key_of(name), obj_value(fo), obj_value(it.global))
+            ret se
+        }
+        ret define_data(it, it.global, key_of(name), obj_value(fo), P_DEFAULT)
+    }
+    try declare_var(it, vscope, name)
+    let (at, found) = env_index(vscope, name)
+    if found { vscope.vars.items[at].value = obj_value(fo) }
+    ret ok
+}
+
+fn hoist_declarations_in(it: *Interp, f: *Frame, first: u32, count: u32, vscope: *Env) -> err {
     var i = 0usize
     while i < usize(count) {
         let sid = f.prog.kids[usize(first) + i]
@@ -4028,7 +4054,7 @@ fn hoist_declarations(it: *Interp, f: *Frame, first: u32, count: u32) -> err {
         } else if sn.kind == ast.N_FUNC && (sn.flags & ast.F_DECL) != 0u16 {
             let (fo, fe) = make_function(it, f, sid)
             if fe != ok { ret fe }
-            try declare(it, f.env, sn.text, obj_value(fo), 0u8)
+            try bind_function_decl(it, f, vscope, sn.text, fo)
         } else if sn.kind == ast.N_LABELED {
             // A labelled function declaration.
             var inner = sn.a
@@ -4041,7 +4067,7 @@ fn hoist_declarations(it: *Interp, f: *Frame, first: u32, count: u32) -> err {
             if inn.kind == ast.N_FUNC && (inn.flags & ast.F_DECL) != 0u16 {
                 let (fo2, fe2) = make_function(it, f, inner)
                 if fe2 != ok { ret fe2 }
-                try declare(it, f.env, inn.text, obj_value(fo2), 0u8)
+                try bind_function_decl(it, f, vscope, inn.text, fo2)
             }
         }
     }
@@ -4218,6 +4244,27 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
         let (c4, e4) = exec_block(it, f, n)
         ret (c4, e4)
     }
+    if k == ast.N_FUNC && n.op == 1u8 && !f.strict && f.env.parent != f.env {
+        // Annex B.3.3: evaluating a block-level function declaration copies it to the function-level `var`.
+        let (at, found) = env_index(f.env, n.text)
+        if found {
+            let bv = f.env.vars.items[at].value
+            var tgt = f.env.parent
+            let z = null_env()
+            while tgt.parent != z && !env_is_var_scope(it, tgt) { tgt = tgt.parent }
+            if tgt.parent == z {
+                let saved_env = f.env
+                f.env = tgt
+                let ae = assign_name(it, f, n.text, bv)
+                f.env = saved_env
+                if ae != ok { ret (normal(), ae) }
+            } else {
+                let (vat, vfound) = env_index(tgt, n.text)
+                if vfound { tgt.vars.items[vat].value = bv }
+            }
+        }
+        ret (normal(), ok)
+    }
     if k == ast.N_FUNC || k == ast.N_EMPTY || k == ast.N_DEBUGGER { ret (normal(), ok) }
     if k == ast.N_CLASS {
         let (cv, ce) = eval_class(it, f, n)
@@ -4355,9 +4402,15 @@ fn exec_for(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Comple
                 }
             }
         }
-        let (c, e) = exec(it, f, n.a)
+        var e: err = ok
+        if init.kind == ast.N_VAR {
+            let (c, ce) = exec(it, f, n.a)
+            e = ce
+        } else {
+            let (v0, ve) = eval(it, f, n.a)
+            e = ve
+        }
         if e != ok {
-            // An initialiser may also be an expression.
             f.env = saved
             ret (normal(), e)
         }
@@ -4813,22 +4866,28 @@ fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
     g.home = f.home
     g.has_home = f.has_home
     g.strict = f.strict || (root.flags & ast.F_STRICT) != 0u16
+    g.env.is_var = g.strict
+    var tgt = g.env
+    if !g.strict {
+        tgt = f.env
+        let z = null_env()
+        while tgt.parent != z && !env_is_var_scope(it, tgt) { tgt = tgt.parent }
+    }
     var h = 0usize
     while h < usize(root.hoist_count) {
         let hid = prog.kids[usize(root.hoist_first) + h]
         let name = prog.nodes[usize(hid)].text
         // `var`s of sloppy direct eval land in the caller's variable scope.
-        if g.strict {
-            try declare_var(it, g.env, name)
+        if tgt.parent == null_env() {
+            if !has_own(it, it.global, key_of(name)) { try define_data(it, it.global, key_of(name), undefv(), P_DEFAULT) }
         } else {
-            var tgt = f.env
-            let z = null_env()
-            while tgt.parent != z && !env_is_var_scope(it, tgt) { tgt = tgt.parent }
             try declare_var(it, tgt, name)
         }
         h += 1usize
     }
-    try hoist_declarations(it, &g, root.a, root.b)
+    var lex_scope = null_env()
+    if !g.strict { lex_scope = tgt }
+    try hoist_declarations_in(it, &g, root.a, root.b, lex_scope)
     var last = undefv()
     var k = 0usize
     while k < usize(root.b) {
@@ -4842,7 +4901,7 @@ fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
 
 fn env_is_var_scope(it: *Interp, e: *Env) -> bool {
     // A function call's scope holds its parameters or `arguments`; the global scope has no parent.
-    ret e.parent == it.global_env || e.parent == null_env()
+    ret e.is_var || e.parent == null_env()
 }
 
 // --- coroutines: generators and async functions
