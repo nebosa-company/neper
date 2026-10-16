@@ -24916,7 +24916,6 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
 fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64)
 fn apply_relative(l: *Layout, c: u32, cbw: f64, cbh: f64)
 fn block_widths(l: *Layout, b: u32) -> (f64, f64)
-fn grid_widths(l: *Layout, b: u32) -> (f64, f64)
 type CellInfo = struct { box: u32, row: usize, col: usize, rs: usize, cs: usize, min: f64, max: f64, spec: f64, pct: f64 }
 type TableData = struct
 fn is_ws_text(l: *const Layout, k: u32) -> bool
@@ -24941,6 +24940,44 @@ fn flex_cross_width(l: *Layout, id: u32, cw: f64, stretch: bool) -> f64
 fn flex_place_item(l: *Layout, id: u32, w: f64, hspec: f64)
 fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
 fn if_factor(grow_mode: bool, grow: f64, shrink: f64) -> f64
+fn inf() -> f64
+type SizeFn = struct { kind: u8, v: f64 }
+type GTrack = struct { min: SizeFn, max: SizeFn, base: f64, limit: f64, pos: f64 }
+type GName = struct { name: str, line: i32 }
+type GArea = struct { name: str, r0: i32, r1: i32, c0: i32, c1: i32 }
+type LineSpec = struct { kind: u8, n: i32, name: str, span_name: bool }
+type GItem = struct
+type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64 }
+fn extra_text(s: *const style.Style, name: str) -> (str, bool)
+fn push_name(names: *list.List[GName], name: str, line: i32)
+fn grid_split(a: *mem.Arena, s: str) -> []const str
+fn gp_size(gp: *GridParse, tok: str) -> (SizeFn, bool)
+fn gp_track(gp: *GridParse, tok: str, out: *list.List[GTrack]) -> bool
+fn gp_list(gp: *GridParse, text: str, out: *list.List[GTrack], names: *list.List[GName])
+type Dims = struct { rows: i32, cols: i32 }
+fn parse_areas(a: *mem.Arena, text: str, areas: *list.List[GArea], dims: *Dims)
+fn parse_line_spec(a: *mem.Arena, text: str) -> LineSpec
+fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, end: bool, a: *mem.Arena) -> i32
+fn resolve_axis(names: *const list.List[GName], explicit: i32, s: LineSpec, e: LineSpec, a: *mem.Arena) -> (i32, i32)
+fn split_slash(text: str) -> (str, str, bool)
+fn item_axis_specs(a: *mem.Arena, s: *const style.Style, col: bool) -> (LineSpec, LineSpec)
+type Grid = struct
+fn occ_free(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize) -> bool
+fn occ_mark(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize)
+fn grid_autoplace(a: *mem.Arena, items: []GItem, n: usize, ec: i32, er: i32, dense: bool) -> bool
+fn swap_axes(items: []GItem, n: usize)
+fn auto_track_list(gp: *GridParse, s: *const style.Style, prop: str) -> list.List[GTrack]
+fn grid_make_track(auto_list: *const list.List[GTrack], index: usize) -> GTrack
+fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool)
+fn is_intrinsic_min(k: u8) -> bool
+fn is_intrinsic_max(k: u8) -> bool
+fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nitems: usize, is_col: bool, min_mode: bool, stretch: bool)
+fn tracks_total(tr: []GTrack, n: usize, gap: f64) -> f64
+fn position_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, mode: style.Align)
+fn grid_area_size(tr: []GTrack, start: i32, span: i32, gap: f64) -> f64
+fn grid_item_width(l: *Layout, id: u32, cs: *const style.Style, area_w: f64) -> f64
+fn grid_axis_offset(mode: style.Align, free: f64) -> f64
+fn grid_widths(l: *Layout, b: u32) -> (f64, f64)
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
 fn abs_origin(l: *const Layout, b: u32) -> (f64, f64)
 fn containing_block_of(l: *const Layout, b: u32, fixed: bool) -> u32

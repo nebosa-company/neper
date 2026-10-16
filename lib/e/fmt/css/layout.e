@@ -15,6 +15,7 @@
 // Memory: the arena is retained; every array lives in it.
 
 use e.data.list as list
+use e.gfx.cssvalue as cv
 use e.fmt.css.style as style
 use e.fmt.dom as dom
 use e.fmt.html as html
@@ -2304,11 +2305,6 @@ fn block_widths(l: *Layout, b: u32) -> (f64, f64) {
     ret (mn, mx)
 }
 
-fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
-    let (mn, mx) = block_widths(l, b)
-    ret (mn, mx)
-}
-
 // --- Tables (CSS 2.1 17): anonymous boxes, the cell grid, column widths, row heights, vertical alignment.
 // Captions live inside the table box (no wrapper). `border-collapse: collapse` drops the spacing but keeps each cell's own
 // borders; conflict resolution between neighbouring borders is not done.
@@ -3576,10 +3572,1135 @@ fn if_factor(grow_mode: bool, grow: f64, shrink: f64) -> f64 {
     ret shrink
 }
 
+// --- Grid layout (CSS Grid 6 to 12): templates, named lines and areas, auto placement, track sizing, alignment.
+// Templates and placements come from the declared text in `extras` (the style module keeps them as text). Not done:
+// subgrid, masonry, dense packing of explicit-row items beyond the sparse rule, baseline-aligned items.
+
+fn inf() -> f64 { ret 1000000000.0f64 }
+
+// A track sizing function: kind 0 length, 1 percentage (0..1), 2 flexible (fr), 3 auto, 4 min-content, 5 max-content,
+// 6 fit-content(limit).
+type SizeFn = struct { kind: u8, v: f64 }
+
+type GTrack = struct { min: SizeFn, max: SizeFn, base: f64, limit: f64, pos: f64 }
+
+type GName = struct { name: str, line: i32 }
+
+type GArea = struct { name: str, r0: i32, r1: i32, c0: i32, c1: i32 }
+
+// A line reference: kind 0 auto, 1 line number, 2 span, 3 named line (`n` is the occurrence or span count).
+type LineSpec = struct { kind: u8, n: i32, name: str, span_name: bool }
+
+type GItem = struct {
+    box: u32, order: i64,
+    rs: i32, rn: i32, cs: i32, cn: i32,
+    cmin: f64, cmax: f64, rmin: f64, rmax: f64
+}
+
+type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64 }
+
+fn extra_text(s: *const style.Style, name: str) -> (str, bool) {
+    var i = 0usize
+    while i < s.extras.len {
+        if str.eq(s.extras[i].name, name) { ret (s.extras[i].value, true) }
+        i += 1usize
+    }
+    ret ("", false)
+}
+
+fn push_name(names: *list.List[GName], name: str, line: i32) {
+    let pushed = list.push[GName](names, GName { name: name, line: line })
+}
+
+// Splits on spaces outside parentheses, keeping a [bracketed group] as one token.
+fn grid_split(a: *mem.Arena, s: str) -> []const str {
+    var out = cv.strings_list(a)
+    var depth = 0i64
+    var start = 0usize
+    var i = 0usize
+    while i < s.len {
+        let c = s[i]
+        if c == 40u8 || c == 91u8 {
+            depth += 1i64
+        } else if c == 41u8 || c == 93u8 {
+            if depth > 0i64 { depth -= 1i64 }
+        } else if depth == 0i64 && (c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8) {
+            if i > start { cv.push_str(&out, s[start..i]) }
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    if start < s.len { cv.push_str(&out, s[start..]) }
+    ret list.slice_const[str](&out)
+}
+
+fn gp_size(gp: *GridParse, tok: str) -> (SizeFn, bool) {
+    let t = cv.lower(gp.c.a, cv.trim_ws(tok))
+    if str.eq(t, "auto") { ret (SizeFn { kind: 3u8, v: 0.0f64 }, true) }
+    if str.eq(t, "min-content") { ret (SizeFn { kind: 4u8, v: 0.0f64 }, true) }
+    if str.eq(t, "max-content") { ret (SizeFn { kind: 5u8, v: 0.0f64 }, true) }
+    if str.ends_with(t, "fr") {
+        let (n, good) = cv.try_parse(gp.c.a, t[..t.len - 2usize])
+        if good && n >= 0.0f64 { ret (SizeFn { kind: 2u8, v: n }, true) }
+        ret (SizeFn { kind: 3u8, v: 0.0f64 }, false)
+    }
+    let (len, parsed) = style.parse_len(&gp.c, t, gp.em, style.A_PERCENT)
+    if !parsed { ret (SizeFn { kind: 3u8, v: 0.0f64 }, false) }
+    if len.pct != 0.0f64 && len.px == 0.0f64 { ret (SizeFn { kind: 1u8, v: len.pct }, true) }
+    ret (SizeFn { kind: 0u8, v: len.px }, true)
+}
+
+fn gp_track(gp: *GridParse, tok: str, out: *list.List[GTrack]) -> bool {
+    let t = cv.lower(gp.c.a, cv.trim_ws(tok))
+    var tr = GTrack { min: SizeFn { kind: 3u8, v: 0.0f64 }, max: SizeFn { kind: 3u8, v: 0.0f64 }, base: 0.0f64, limit: inf(), pos: 0.0f64 }
+    if str.starts_with(t, "minmax(") && str.ends_with(t, ")") {
+        let parts = cv.split_top_level_commas(gp.c.a, t[7usize..t.len - 1usize])
+        if parts.len != 2usize { ret false }
+        let (lo, ok_lo) = gp_size(gp, parts[0usize])
+        let (hi, ok_hi) = gp_size(gp, parts[1usize])
+        if !ok_lo || !ok_hi { ret false }
+        tr.min = lo
+        tr.max = hi
+        if lo.kind == 2u8 { tr.min = SizeFn { kind: 3u8, v: 0.0f64 } }
+    } else if str.starts_with(t, "fit-content(") && str.ends_with(t, ")") {
+        let (lim, ok_lim) = gp_size(gp, t[12usize..t.len - 1usize])
+        if !ok_lim { ret false }
+        tr.max = SizeFn { kind: 6u8, v: lim.v }
+        if lim.kind == 1u8 && gp.avail >= 0.0f64 { tr.max.v = lim.v * gp.avail }
+    } else {
+        let (sz, ok_sz) = gp_size(gp, t)
+        if !ok_sz { ret false }
+        tr.max = sz
+        if sz.kind == 2u8 {
+            tr.min = SizeFn { kind: 3u8, v: 0.0f64 }
+        } else {
+            tr.min = sz
+        }
+    }
+    let pushed = list.push[GTrack](out, tr)
+    ret true
+}
+
+// The tokens of a track list; `[name]` groups and `repeat()` are expanded.
+fn gp_list(gp: *GridParse, text: str, out: *list.List[GTrack], names: *list.List[GName]) {
+    let toks = grid_split(gp.c.a, text)
+    var i = 0usize
+    while i < toks.len {
+        let tok = toks[i]
+        i += 1usize
+        if out.len >= 1000usize { break }
+        if tok.len >= 2usize && tok[0usize] == 91u8 {
+            let inner = tok[1usize..tok.len - 1usize]
+            let words = cv.split_top_level_spaces(gp.c.a, inner)
+            var w = 0usize
+            while w < words.len {
+                push_name(names, words[w], i32(out.len) + 1i32)
+                w += 1usize
+            }
+        } else if str.starts_with(cv.lower(gp.c.a, tok), "repeat(") && str.ends_with(tok, ")") {
+            let parts = cv.split_top_level_commas(gp.c.a, tok[7usize..tok.len - 1usize])
+            if parts.len < 2usize { continue }
+            let count_text = cv.lower(gp.c.a, cv.trim_ws(parts[0usize]))
+            var body = parts[1usize]
+            var pj = 2usize
+            while pj < parts.len {
+                body = cv.cat(gp.c.a, cv.cat(gp.c.a, body, ","), parts[pj])
+                pj += 1usize
+            }
+            var n = 1i64
+            if str.eq(count_text, "auto-fill") || str.eq(count_text, "auto-fit") {
+                // As many repetitions as fit the available size.
+                let (tmp, te) = list.init[GTrack](gp.c.a, 8usize)
+                let (nm2, ne2) = list.init[GName](gp.c.a, 4usize)
+                if te != ok || ne2 != ok { continue }
+                var tl = tmp
+                var tmp_names = nm2
+                gp_list(gp, body, &tl, &tmp_names)
+                var per = 0.0f64
+                var tk = 0usize
+                while tk < tl.len {
+                    var sz = tl.items[tk].min
+                    if sz.kind == 3u8 || sz.kind == 4u8 || sz.kind == 5u8 { sz = tl.items[tk].max }
+                    if sz.kind == 0u8 { per += sz.v } else if sz.kind == 1u8 && gp.avail >= 0.0f64 { per += sz.v * gp.avail }
+                    tk += 1usize
+                }
+                n = 1i64
+                if gp.avail >= 0.0f64 && tl.len > 0usize && per > 0.0f64 {
+                    let each = per + gp.gap * f64(tl.len)
+                    let fit = (gp.avail + gp.gap) / each
+                    n = i64(fit)
+                    if n < 1i64 { n = 1i64 }
+                }
+            } else {
+                let (cnt, good) = str.parse_i64(count_text)
+                if good == ok && cnt >= 1i64 { n = cnt }
+            }
+            var rep = 0i64
+            while rep < n && out.len < 1000usize {
+                gp_list(gp, body, out, names)
+                rep += 1i64
+            }
+        } else {
+            let added = gp_track(gp, tok, out)
+        }
+    }
+}
+
+// grid-template-areas: the quoted rows; "." is an empty cell.
+type Dims = struct { rows: i32, cols: i32 }
+
+fn parse_areas(a: *mem.Arena, text: str, areas: *list.List[GArea], dims: *Dims) {
+    var row = 0i32
+    var i = 0usize
+    while i < text.len {
+        if text[i] != 34u8 && text[i] != 39u8 {
+            i += 1usize
+            continue
+        }
+        let quote = text[i]
+        var j = i + 1usize
+        while j < text.len && text[j] != quote { j += 1usize }
+        let words = cv.split_top_level_spaces(a, text[i + 1usize..j])
+        var col = 0usize
+        while col < words.len {
+            let name = words[col]
+            if !str.eq(name, ".") {
+                var found = false
+                var k = 0usize
+                while k < areas.len {
+                    if str.eq(areas.items[k].name, name) {
+                        found = true
+                        areas.items[k].r1 = row + 2i32
+                        if i32(col) + 2i32 > areas.items[k].c1 { areas.items[k].c1 = i32(col) + 2i32 }
+                    }
+                    k += 1usize
+                }
+                if !found {
+                    let pushed = list.push[GArea](areas, GArea { name: name, r0: row + 1i32, r1: row + 2i32, c0: i32(col) + 1i32, c1: i32(col) + 2i32 })
+                }
+            }
+            col += 1usize
+        }
+        if i32(words.len) > dims.cols { dims.cols = i32(words.len) }
+        row += 1i32
+        dims.rows = row
+        i = j + 1usize
+    }
+}
+
+fn parse_line_spec(a: *mem.Arena, text: str) -> LineSpec {
+    var out = LineSpec { kind: 0u8, n: 0i32, name: "", span_name: false }
+    let t = cv.lower(a, cv.trim_ws(text))
+    if t.len == 0usize || str.eq(t, "auto") { ret out }
+    let toks = cv.split_top_level_spaces(a, t)
+    var span = false
+    var n = 0i32
+    var has_n = false
+    var name = ""
+    var i = 0usize
+    while i < toks.len {
+        let tk = toks[i]
+        i += 1usize
+        if str.eq(tk, "span") {
+            span = true
+            continue
+        }
+        let (v, good) = str.parse_i64(tk)
+        if good == ok {
+            n = i32(v)
+            has_n = true
+        } else {
+            name = tk
+        }
+    }
+    if span {
+        out.kind = 2u8
+        out.n = 1i32
+        if has_n && n > 0i32 { out.n = n }
+        out.name = name
+        ret out
+    }
+    if name.len > 0usize {
+        out.kind = 3u8
+        out.name = name
+        out.n = 1i32
+        if has_n && n != 0i32 { out.n = n }
+        ret out
+    }
+    if has_n && n != 0i32 {
+        out.kind = 1u8
+        out.n = n
+    }
+    ret out
+}
+
+// The line number a line reference stands for on this axis (0: none found). `end` selects the implicit `-end` name.
+fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, end: bool, a: *mem.Arena) -> i32 {
+    if spec.kind == 1u8 {
+        if spec.n > 0i32 { ret spec.n }
+        ret explicit + 2i32 + spec.n
+    }
+    if spec.kind != 3u8 { ret 0i32 }
+    var pass = 0usize
+    while pass < 2usize {
+        var want = spec.name
+        if pass == 1usize {
+            if end { want = cv.cat(a, spec.name, "-end") } else { want = cv.cat(a, spec.name, "-start") }
+        }
+        var count = 0i32
+        var found = 0i32
+        var k = 0usize
+        if spec.n > 0i32 {
+            while k < names.len {
+                if str.eq(names.items[k].name, want) {
+                    count += 1i32
+                    if count == spec.n { found = names.items[k].line }
+                }
+                k += 1usize
+            }
+        } else {
+            k = names.len
+            while k > 0usize {
+                k -= 1usize
+                if str.eq(names.items[k].name, want) {
+                    count += 1i32
+                    if count == -spec.n { found = names.items[k].line }
+                }
+            }
+        }
+        if found > 0i32 { ret found }
+        pass += 1usize
+    }
+    ret 0i32
+}
+
+// Start track (0-based, -1: auto) and span from a start and an end reference.
+fn resolve_axis(names: *const list.List[GName], explicit: i32, s: LineSpec, e: LineSpec, a: *mem.Arena) -> (i32, i32) {
+    let sl = resolve_line(names, explicit, s, false, a)
+    let el = resolve_line(names, explicit, e, true, a)
+    var s_line = s.kind == 1u8 || s.kind == 3u8
+    var e_line = e.kind == 1u8 || e.kind == 3u8
+    if s_line && sl <= 0i32 { s_line = false }
+    if e_line && el <= 0i32 { e_line = false }
+    if s_line && e_line {
+        var lo = sl
+        var hi = el
+        if hi < lo {
+            lo = el
+            hi = sl
+        }
+        if hi == lo { hi = lo + 1i32 }
+        ret (lo - 1i32, hi - lo)
+    }
+    if s_line {
+        if e.kind == 2u8 { ret (sl - 1i32, e.n) }
+        ret (sl - 1i32, 1i32)
+    }
+    if e_line {
+        if s.kind == 2u8 {
+            var st0 = el - s.n
+            if st0 < 1i32 { st0 = 1i32 }
+            ret (st0 - 1i32, s.n)
+        }
+        if el - 2i32 < 0i32 { ret (0i32, 1i32) }
+        ret (el - 2i32, 1i32)
+    }
+    if s.kind == 2u8 { ret (-1i32, s.n) }
+    if e.kind == 2u8 { ret (-1i32, e.n) }
+    ret (-1i32, 1i32)
+}
+
+// The two halves of "a / b" (the second empty when there is no slash).
+fn split_slash(text: str) -> (str, str, bool) {
+    var i = 0usize
+    while i < text.len {
+        if text[i] == 47u8 { ret (str.trim(text[..i]), str.trim(text[i + 1usize..]), true) }
+        i += 1usize
+    }
+    ret (str.trim(text), "", false)
+}
+
+// grid-row-start/-end (or grid-column-*) of an item, from the longhands, else the shorthand, else grid-area.
+fn item_axis_specs(a: *mem.Arena, s: *const style.Style, col: bool) -> (LineSpec, LineSpec) {
+    var start_name = "grid-row-start"
+    var end_name = "grid-row-end"
+    var short_name = "grid-row"
+    if col {
+        start_name = "grid-column-start"
+        end_name = "grid-column-end"
+        short_name = "grid-column"
+    }
+    var sp = parse_line_spec(a, "")
+    var ep = parse_line_spec(a, "")
+    let (area, has_area) = extra_text(s, "grid-area")
+    if has_area {
+        // row-start / column-start / row-end / column-end
+        let (p1, rest1, sl1) = split_slash(area)
+        let (p2, rest2, sl2) = split_slash(rest1)
+        let (p3, p4, sl3) = split_slash(rest2)
+        if !sl1 {
+            // One name: it stands for all four edges.
+            let one = parse_line_spec(a, p1)
+            sp = one
+            ep = one
+        } else {
+            var rs = parse_line_spec(a, p1)
+            var cs = parse_line_spec(a, p2)
+            var re = parse_line_spec(a, p3)
+            var ce = parse_line_spec(a, p4)
+            if !sl2 {
+                cs = rs
+                re = rs
+                ce = cs
+            } else if !sl3 {
+                re = rs
+                ce = cs
+            }
+            if col {
+                sp = cs
+                ep = ce
+            } else {
+                sp = rs
+                ep = re
+            }
+        }
+    }
+    let (short, has_short) = extra_text(s, short_name)
+    if has_short {
+        let (h1, h2, hs) = split_slash(short)
+        sp = parse_line_spec(a, h1)
+        if hs { ep = parse_line_spec(a, h2) } else {
+            ep = parse_line_spec(a, "")
+            if sp.kind == 3u8 { ep = sp }
+        }
+    }
+    let (st_text, has_st) = extra_text(s, start_name)
+    if has_st { sp = parse_line_spec(a, st_text) }
+    let (en_text, has_en) = extra_text(s, end_name)
+    if has_en { ep = parse_line_spec(a, en_text) }
+    ret (sp, ep)
+}
+
+// --- The grid: explicit and implicit tracks, item placement.
+
+type Grid = struct {
+    cols: []GTrack, rows: []GTrack, nc: usize, nr: usize,
+    items: []GItem, n: usize, gap_c: f64, gap_r: f64
+}
+
+fn occ_free(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize) -> bool {
+    if r + rn > rows_cap || c + cn > ncols { ret false }
+    var rr = 0usize
+    while rr < rn {
+        var cc = 0usize
+        while cc < cn {
+            if occ[(r + rr) * ncols + c + cc] { ret false }
+            cc += 1usize
+        }
+        rr += 1usize
+    }
+    ret true
+}
+
+fn occ_mark(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize) {
+    var rr = 0usize
+    while rr < rn {
+        var cc = 0usize
+        while cc < cn {
+            if r + rr < rows_cap && c + cc < ncols { occ[(r + rr) * ncols + c + cc] = true }
+            cc += 1usize
+        }
+        rr += 1usize
+    }
+}
+
+// Auto placement in row flow (CSS Grid 8.5); column flow runs on transposed items. Fills every item's rs/cs.
+fn grid_autoplace(a: *mem.Arena, items: []GItem, n: usize, ec: i32, er: i32, dense: bool) -> bool {
+    var ncols = ec
+    if ncols < 1i32 { ncols = 1i32 }
+    var rows_sum = er + i32(n) + 8i32
+    var i = 0usize
+    while i < n {
+        if items[i].cn > ncols { ncols = items[i].cn }
+        if items[i].cs >= 0i32 && items[i].cs + items[i].cn > ncols { ncols = items[i].cs + items[i].cn }
+        rows_sum += items[i].rn
+        if items[i].rs >= 0i32 && items[i].rs + items[i].rn > rows_sum { rows_sum = items[i].rs + items[i].rn + 8i32 }
+        i += 1usize
+    }
+    if ncols > 1000i32 { ncols = 1000i32 }
+    if rows_sum > 5000i32 { rows_sum = 5000i32 }
+    let rows_cap = usize(rows_sum)
+    let nc = usize(ncols)
+    let (occ, oe) = mem.alloc[bool](a, rows_cap * nc + 1usize)
+    let (rowcur, re) = mem.alloc[usize](a, rows_cap + 1usize)
+    if oe != ok || re != ok { ret false }
+    var z = 0usize
+    while z < rows_cap * nc + 1usize {
+        occ[z] = false
+        z += 1usize
+    }
+    z = 0usize
+    while z < rows_cap + 1usize {
+        rowcur[z] = 0usize
+        z += 1usize
+    }
+    // 1. Definite in both axes.
+    i = 0usize
+    while i < n {
+        if items[i].rs >= 0i32 && items[i].cs >= 0i32 {
+            occ_mark(occ, nc, rows_cap, usize(items[i].rs), usize(items[i].cs), usize(items[i].rn), usize(items[i].cn))
+        }
+        i += 1usize
+    }
+    // 2. A definite row, an automatic column.
+    i = 0usize
+    while i < n {
+        if items[i].rs >= 0i32 && items[i].cs < 0i32 {
+            let r = usize(items[i].rs)
+            var c = 0usize
+            if !dense && r < rows_cap { c = rowcur[r] }
+            var placed = false
+            while c + usize(items[i].cn) <= nc {
+                if occ_free(occ, nc, rows_cap, r, c, usize(items[i].rn), usize(items[i].cn)) {
+                    placed = true
+                    break
+                }
+                c += 1usize
+            }
+            if !placed { c = 0usize }
+            items[i].cs = i32(c)
+            occ_mark(occ, nc, rows_cap, r, c, usize(items[i].rn), usize(items[i].cn))
+            if r < rows_cap { rowcur[r] = c + usize(items[i].cn) }
+        }
+        i += 1usize
+    }
+    // 3. The rest, by the auto-placement cursor.
+    var cr = 0usize
+    var cc2 = 0usize
+    i = 0usize
+    while i < n {
+        if items[i].rs < 0i32 {
+            if dense {
+                cr = 0usize
+                cc2 = 0usize
+            }
+            let rn = usize(items[i].rn)
+            let cn = usize(items[i].cn)
+            if items[i].cs >= 0i32 {
+                if usize(items[i].cs) < cc2 { cr += 1usize }
+                cc2 = usize(items[i].cs)
+                while cr < rows_cap && !occ_free(occ, nc, rows_cap, cr, cc2, rn, cn) { cr += 1usize }
+            } else {
+                var found = false
+                while !found && cr < rows_cap {
+                    while cc2 + cn <= nc {
+                        if occ_free(occ, nc, rows_cap, cr, cc2, rn, cn) {
+                            found = true
+                            break
+                        }
+                        cc2 += 1usize
+                    }
+                    if !found {
+                        cr += 1usize
+                        cc2 = 0usize
+                    }
+                }
+            }
+            if cr >= rows_cap { cr = rows_cap - 1usize }
+            items[i].rs = i32(cr)
+            items[i].cs = i32(cc2)
+            occ_mark(occ, nc, rows_cap, cr, cc2, rn, cn)
+        }
+        i += 1usize
+    }
+    ret true
+}
+
+fn swap_axes(items: []GItem, n: usize) {
+    var i = 0usize
+    while i < n {
+        let r0 = items[i].rs
+        let rn = items[i].rn
+        items[i].rs = items[i].cs
+        items[i].rn = items[i].cn
+        items[i].cs = r0
+        items[i].cn = rn
+        i += 1usize
+    }
+}
+
+fn auto_track_list(gp: *GridParse, s: *const style.Style, prop: str) -> list.List[GTrack] {
+    let (tl, te) = list.init[GTrack](gp.c.a, 4usize)
+    let (nl, ne) = list.init[GName](gp.c.a, 1usize)
+    var out = tl
+    var scratch = nl
+    let (txt, has) = extra_text(s, prop)
+    if te == ok && ne == ok && has { gp_list(gp, txt, &out, &scratch) }
+    if out.len == 0usize {
+        let added = gp_track(gp, "auto", &out)
+    }
+    ret out
+}
+
+fn grid_make_track(auto_list: *const list.List[GTrack], index: usize) -> GTrack {
+    var t = auto_list.items[index % auto_list.len]
+    t.base = 0.0f64
+    t.pos = 0.0f64
+    ret t
+}
+
+// Builds the grid of container `b`: tracks, items (margins resolved, contributions measured) and their placement.
+fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
+    let cs = bstyle(l, b)
+    let (gcell, ge) = mem.alloc[Grid](l.a, 1usize)
+    if ge != ok { ret (zero, false) }
+    let g = &gcell[0usize]
+    let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
+    var gp = GridParse { c: ctx, em: cs.font_size, avail: avail_w, gap: 0.0f64 }
+    g.gap_c = flex_gap(cs.column_gap, maxf(avail_w, 0.0f64))
+    g.gap_r = flex_gap(cs.row_gap, maxf(avail_h, 0.0f64))
+    // Explicit tracks and line names.
+    let (cl, e1) = list.init[GTrack](l.a, 8usize)
+    let (rl, e2) = list.init[GTrack](l.a, 8usize)
+    let (cnl, e3) = list.init[GName](l.a, 8usize)
+    let (rnl, e4) = list.init[GName](l.a, 8usize)
+    let (al, e5) = list.init[GArea](l.a, 4usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (g, false) }
+    var ctr = cl
+    var rtr = rl
+    var cnames = cnl
+    var rnames = rnl
+    var areas = al
+    gp.gap = g.gap_c
+    gp.avail = avail_w
+    let (ctext, has_ct) = extra_text(cs, "grid-template-columns")
+    if has_ct { gp_list(&gp, ctext, &ctr, &cnames) }
+    gp.gap = g.gap_r
+    gp.avail = avail_h
+    let (rtext, has_rt) = extra_text(cs, "grid-template-rows")
+    if has_rt { gp_list(&gp, rtext, &rtr, &rnames) }
+    var dims = Dims { rows: 0i32, cols: 0i32 }
+    let (atext, has_at) = extra_text(cs, "grid-template-areas")
+    if has_at { parse_areas(l.a, atext, &areas, &dims) }
+    var k = 0usize
+    while k < areas.len {
+        push_name(&rnames, cv.cat(l.a, areas.items[k].name, "-start"), areas.items[k].r0)
+        push_name(&rnames, cv.cat(l.a, areas.items[k].name, "-end"), areas.items[k].r1)
+        push_name(&cnames, cv.cat(l.a, areas.items[k].name, "-start"), areas.items[k].c0)
+        push_name(&cnames, cv.cat(l.a, areas.items[k].name, "-end"), areas.items[k].c1)
+        k += 1usize
+    }
+    var ec = i32(ctr.len)
+    var er = i32(rtr.len)
+    if dims.cols > ec { ec = dims.cols }
+    if dims.rows > er { er = dims.rows }
+    gp.avail = avail_w
+    gp.gap = g.gap_c
+    var auto_cols = auto_track_list(&gp, cs, "grid-auto-columns")
+    gp.avail = avail_h
+    gp.gap = g.gap_r
+    var auto_rows = auto_track_list(&gp, cs, "grid-auto-rows")
+    // Items.
+    var n = 0usize
+    var kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        if flex_in(l, kid) { n += 1usize }
+        kid = l.boxes.items[usize(kid)].next
+    }
+    g.n = n
+    if n == 0usize {
+        g.nc = usize(ec)
+        g.nr = usize(er)
+    }
+    let (items, ie) = mem.alloc[GItem](l.a, n + 1usize)
+    if ie != ok { ret (g, false) }
+    g.items = items
+    var count = 0usize
+    kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        if flex_in(l, kid) {
+            let ks = bstyle(l, kid)
+            resolve_edges(l, kid, maxf(avail_w, 0.0f64))
+            resolve_margins_fixed(l, kid, maxf(avail_w, 0.0f64))
+            let (sc, ecs) = item_axis_specs(l.a, ks, true)
+            let (sr, ers) = item_axis_specs(l.a, ks, false)
+            let (c0, cn) = resolve_axis(&cnames, ec, sc, ecs, l.a)
+            let (r0, rn) = resolve_axis(&rnames, er, sr, ers, l.a)
+            var it: GItem = zero
+            it.box = kid
+            it.order = ks.order
+            it.cs = c0
+            it.cn = cn
+            it.rs = r0
+            it.rn = rn
+            let (mn, mx) = outer_content_widths(l, kid)
+            it.cmin = mn
+            it.cmax = mx
+            var at = count
+            while at > 0usize && items[at - 1usize].order > it.order {
+                items[at] = items[at - 1usize]
+                at -= 1usize
+            }
+            items[at] = it
+            count += 1usize
+        }
+        kid = l.boxes.items[usize(kid)].next
+    }
+    // Placement: column flow runs the row-flow algorithm on transposed items.
+    let (flow_raw, has_flow) = extra_text(cs, "grid-auto-flow")
+    var flow_col = false
+    var dense = false
+    if has_flow {
+        let ft = cv.lower(l.a, flow_raw)
+        flow_col = str.contains(ft, "column")
+        dense = str.contains(ft, "dense")
+    }
+    var placed_ok = true
+    if flow_col {
+        swap_axes(items, n)
+        placed_ok = grid_autoplace(l.a, items, n, er, ec, dense)
+        swap_axes(items, n)
+    } else {
+        placed_ok = grid_autoplace(l.a, items, n, ec, er, dense)
+    }
+    if !placed_ok { ret (g, false) }
+    var nc = usize(ec)
+    var nr = usize(er)
+    var i = 0usize
+    while i < n {
+        if usize(items[i].cs + items[i].cn) > nc { nc = usize(items[i].cs + items[i].cn) }
+        if usize(items[i].rs + items[i].rn) > nr { nr = usize(items[i].rs + items[i].rn) }
+        i += 1usize
+    }
+    if nc > 1000usize { nc = 1000usize }
+    if nr > 5000usize { nr = 5000usize }
+    g.nc = nc
+    g.nr = nr
+    let (ct, ce) = mem.alloc[GTrack](l.a, nc + 1usize)
+    let (rt, re) = mem.alloc[GTrack](l.a, nr + 1usize)
+    if ce != ok || re != ok { ret (g, false) }
+    k = 0usize
+    while k < nc {
+        if k < ctr.len { ct[k] = ctr.items[k] } else if k >= usize(ec) { ct[k] = grid_make_track(&auto_cols, k - usize(ec)) } else { ct[k] = grid_make_track(&auto_cols, 0usize) }
+        k += 1usize
+    }
+    k = 0usize
+    while k < nr {
+        if k < rtr.len { rt[k] = rtr.items[k] } else if k >= usize(er) { rt[k] = grid_make_track(&auto_rows, k - usize(er)) } else { rt[k] = grid_make_track(&auto_rows, 0usize) }
+        k += 1usize
+    }
+    g.cols = ct
+    g.rows = rt
+    ret (g, true)
+}
+
+// --- Track sizing (CSS Grid 12): base sizes and growth limits, intrinsic contributions, flexible tracks.
+
+fn is_intrinsic_min(k: u8) -> bool { ret k == 3u8 || k == 4u8 || k == 5u8 }
+
+fn is_intrinsic_max(k: u8) -> bool { ret k == 3u8 || k == 4u8 || k == 5u8 || k == 6u8 }
+
+fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nitems: usize, is_col: bool, min_mode: bool, stretch: bool) {
+    if n == 0usize { ret }
+    var t = 0usize
+    while t < n {
+        var base = 0.0f64
+        let sf = tr[t].min
+        if sf.kind == 0u8 { base = sf.v } else if sf.kind == 1u8 && avail >= 0.0f64 { base = sf.v * avail }
+        var limit = inf()
+        let mf = tr[t].max
+        if mf.kind == 0u8 { limit = mf.v } else if mf.kind == 1u8 && avail >= 0.0f64 { limit = mf.v * avail }
+        if limit < base { limit = base }
+        tr[t].base = base
+        tr[t].limit = limit
+        tr[t].pos = 0.0f64
+        t += 1usize
+    }
+    // Items covering one track.
+    var i = 0usize
+    while i < nitems {
+        var start = items[i].rs
+        var span = items[i].rn
+        var mn = items[i].rmin
+        var mx = items[i].rmax
+        if is_col {
+            start = items[i].cs
+            span = items[i].cn
+            mn = items[i].cmin
+            mx = items[i].cmax
+        }
+        if min_mode { mx = mn }
+        if span == 1i32 && usize(start) < n {
+            let c = usize(start)
+            let sk = tr[c].min.kind
+            if sk == 3u8 || sk == 4u8 { tr[c].base = maxf(tr[c].base, mn) } else if sk == 5u8 { tr[c].base = maxf(tr[c].base, mx) }
+            let mk = tr[c].max.kind
+            if is_intrinsic_max(mk) {
+                var contribution = mx
+                if mk == 4u8 { contribution = mn }
+                if tr[c].limit >= inf() { tr[c].limit = contribution } else { tr[c].limit = maxf(tr[c].limit, contribution) }
+            }
+        }
+        i += 1usize
+    }
+    t = 0usize
+    while t < n {
+        if tr[t].limit >= inf() && is_intrinsic_max(tr[t].max.kind) { tr[t].limit = tr[t].base }
+        if tr[t].max.kind == 6u8 { tr[t].limit = minf(tr[t].limit, maxf(tr[t].max.v, tr[t].base)) }
+        if tr[t].limit < tr[t].base { tr[t].limit = tr[t].base }
+        t += 1usize
+    }
+    // Items covering several tracks (those touching flexible tracks size those tracks later).
+    i = 0usize
+    while i < nitems {
+        var start2 = items[i].rs
+        var span2 = items[i].rn
+        var mn2 = items[i].rmin
+        var mx2 = items[i].rmax
+        if is_col {
+            start2 = items[i].cs
+            span2 = items[i].cn
+            mn2 = items[i].cmin
+            mx2 = items[i].cmax
+        }
+        if min_mode { mx2 = mn2 }
+        if span2 > 1i32 && usize(start2 + span2) <= n {
+            var has_flex = false
+            var cover = gap * f64(span2 - 1i32)
+            var cover_limit = cover
+            var intrinsic = 0usize
+            var q = usize(start2)
+            while q < usize(start2 + span2) {
+                if tr[q].max.kind == 2u8 { has_flex = true }
+                cover += tr[q].base
+                cover_limit += tr[q].limit
+                if is_intrinsic_min(tr[q].min.kind) { intrinsic += 1usize }
+                q += 1usize
+            }
+            if !has_flex {
+                if mn2 > cover && intrinsic > 0usize {
+                    let share = (mn2 - cover) / f64(intrinsic)
+                    q = usize(start2)
+                    while q < usize(start2 + span2) {
+                        if is_intrinsic_min(tr[q].min.kind) { tr[q].base += share }
+                        q += 1usize
+                    }
+                }
+                var growable = 0usize
+                q = usize(start2)
+                while q < usize(start2 + span2) {
+                    if is_intrinsic_max(tr[q].max.kind) { growable += 1usize }
+                    q += 1usize
+                }
+                if mx2 > cover_limit && growable > 0usize {
+                    let share2 = (mx2 - cover_limit) / f64(growable)
+                    q = usize(start2)
+                    while q < usize(start2 + span2) {
+                        if is_intrinsic_max(tr[q].max.kind) { tr[q].limit += share2 }
+                        q += 1usize
+                    }
+                }
+                q = usize(start2)
+                while q < usize(start2 + span2) {
+                    if tr[q].limit < tr[q].base { tr[q].limit = tr[q].base }
+                    q += 1usize
+                }
+            }
+        }
+        i += 1usize
+    }
+    // Maximise: share the free space among the tracks that can still grow.
+    if avail >= 0.0f64 {
+        var round = 0usize
+        while round < 16usize {
+            var used = gap * f64(n - 1usize)
+            var growing = 0usize
+            t = 0usize
+            while t < n {
+                used += tr[t].base
+                if tr[t].base < tr[t].limit - 0.0001f64 && tr[t].max.kind != 2u8 { growing += 1usize }
+                t += 1usize
+            }
+            let free = avail - used
+            if free <= 0.0001f64 || growing == 0usize { break }
+            let share = free / f64(growing)
+            t = 0usize
+            while t < n {
+                if tr[t].base < tr[t].limit - 0.0001f64 && tr[t].max.kind != 2u8 { tr[t].base = minf(tr[t].limit, tr[t].base + share) }
+                t += 1usize
+            }
+            round += 1usize
+        }
+    }
+    // Flexible tracks.
+    var sum_fr = 0.0f64
+    t = 0usize
+    while t < n {
+        if tr[t].max.kind == 2u8 {
+            sum_fr += tr[t].max.v
+            tr[t].pos = 1.0f64
+        }
+        t += 1usize
+    }
+    if sum_fr > 0.0f64 {
+        var fr_size = 0.0f64
+        if avail >= 0.0f64 {
+            var guard = 0usize
+            while guard < 16usize {
+                var left = avail - gap * f64(n - 1usize)
+                var factors = 0.0f64
+                t = 0usize
+                while t < n {
+                    if tr[t].pos > 0.5f64 { factors += tr[t].max.v } else { left -= tr[t].base }
+                    t += 1usize
+                }
+                if factors < 1.0f64 { factors = 1.0f64 }
+                fr_size = maxf(0.0f64, left) / factors
+                var changed = false
+                t = 0usize
+                while t < n {
+                    if tr[t].pos > 0.5f64 && fr_size * tr[t].max.v < tr[t].base {
+                        tr[t].pos = 0.0f64
+                        changed = true
+                    }
+                    t += 1usize
+                }
+                if !changed { break }
+                guard += 1usize
+            }
+        } else {
+            // No definite size: the largest need per fr, from the tracks' own bases and the items' contributions.
+            t = 0usize
+            while t < n {
+                if tr[t].max.kind == 2u8 && tr[t].max.v > 0.0f64 { fr_size = maxf(fr_size, tr[t].base / tr[t].max.v) }
+                t += 1usize
+            }
+            i = 0usize
+            while i < nitems {
+                var start3 = items[i].rs
+                var span3 = items[i].rn
+                var mx3 = items[i].rmax
+                if is_col {
+                    start3 = items[i].cs
+                    span3 = items[i].cn
+                    mx3 = items[i].cmax
+                    if min_mode { mx3 = items[i].cmin }
+                }
+                if usize(start3 + span3) <= n {
+                    var fsum = 0.0f64
+                    var fixed = gap * f64(span3 - 1i32)
+                    var q2 = usize(start3)
+                    while q2 < usize(start3 + span3) {
+                        if tr[q2].max.kind == 2u8 { fsum += tr[q2].max.v } else { fixed += tr[q2].base }
+                        q2 += 1usize
+                    }
+                    if fsum > 0.0f64 { fr_size = maxf(fr_size, (mx3 - fixed) / maxf(fsum, 1.0f64)) }
+                }
+                i += 1usize
+            }
+        }
+        t = 0usize
+        while t < n {
+            if tr[t].max.kind == 2u8 && (tr[t].pos > 0.5f64 || avail < 0.0f64) { tr[t].base = maxf(tr[t].base, fr_size * tr[t].max.v) }
+            t += 1usize
+        }
+    }
+    // Stretch the auto tracks over any space left.
+    if stretch && avail >= 0.0f64 {
+        var used2 = gap * f64(n - 1usize)
+        var autos = 0usize
+        t = 0usize
+        while t < n {
+            used2 += tr[t].base
+            if tr[t].max.kind == 3u8 { autos += 1usize }
+            t += 1usize
+        }
+        if avail > used2 && autos > 0usize {
+            let each = (avail - used2) / f64(autos)
+            t = 0usize
+            while t < n {
+                if tr[t].max.kind == 3u8 { tr[t].base += each }
+                t += 1usize
+            }
+        }
+    }
+}
+
+fn tracks_total(tr: []GTrack, n: usize, gap: f64) -> f64 {
+    var sum = 0.0f64
+    var t = 0usize
+    while t < n {
+        sum += tr[t].base
+        t += 1usize
+    }
+    if n > 1usize { sum += gap * f64(n - 1usize) }
+    ret sum
+}
+
+// Track positions with the content distribution (`justify-content` / `align-content`) over a definite size.
+fn position_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, mode: style.Align) {
+    var lead = 0.0f64
+    var spacing = 0.0f64
+    let free = avail - tracks_total(tr, n, gap)
+    if avail >= 0.0f64 && n > 0usize {
+        if mode == .End || mode == .FlexEnd || mode == .Right {
+            lead = free
+        } else if mode == .Center {
+            lead = free / 2.0f64
+        } else if free > 0.0f64 {
+            if mode == .SpaceBetween && n > 1usize {
+                spacing = free / f64(n - 1usize)
+            } else if mode == .SpaceAround {
+                spacing = free / f64(n)
+                lead = spacing / 2.0f64
+            } else if mode == .SpaceEvenly {
+                spacing = free / f64(n + 1usize)
+                lead = spacing
+            }
+        }
+    }
+    var cursor = lead
+    var t = 0usize
+    while t < n {
+        tr[t].pos = cursor
+        cursor += tr[t].base + gap + spacing
+        t += 1usize
+    }
+}
+
+fn grid_area_size(tr: []GTrack, start: i32, span: i32, gap: f64) -> f64 {
+    var sum = gap * f64(span - 1i32)
+    var q = usize(start)
+    while q < usize(start + span) {
+        sum += tr[q].base
+        q += 1usize
+    }
+    ret sum
+}
+
+// The content width item `id` takes in an area `area_w` wide (the margins are in the box already).
+fn grid_item_width(l: *Layout, id: u32, cs: *const style.Style, area_w: f64) -> f64 {
+    let is = bstyle(l, id)
+    let ib = bx(l, id)
+    var just = is.justify_self
+    if just == .Auto { just = cs.justify_items }
+    let extras = horizontal_extras(ib)
+    let avail = area_w - ib.margin[3usize] - ib.margin[1usize] - extras
+    let (wv, has_w) = resolve_len(is.width, area_w)
+    if is.width.kind == .Px && has_w { ret maxf(0.0f64, clamp_width(l, id, to_content_w(l, id, wv), area_w)) }
+    let stretch = (just == .Normal || just == .Stretch) && is.margin[3usize].kind != .Auto && is.margin[1usize].kind != .Auto
+    if ib.inner == .Replaced {
+        let (rw, _rh) = used_replaced_size(l, id, area_w, -1.0f64)
+        if just == .Stretch && stretch { ret maxf(0.0f64, avail) }
+        ret rw
+    }
+    if stretch { ret maxf(0.0f64, clamp_width(l, id, avail, area_w)) }
+    let (mn, mx) = content_widths(l, id)
+    ret maxf(0.0f64, clamp_width(l, id, minf(maxf(mn, avail), mx), area_w))
+}
+
+fn grid_axis_offset(mode: style.Align, free: f64) -> f64 {
+    if free <= 0.0f64 { ret 0.0f64 }
+    if mode == .End || mode == .FlexEnd || mode == .SelfEnd || mode == .Right { ret free }
+    if mode == .Center { ret free / 2.0f64 }
+    ret 0.0f64
+}
+
+fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
+    var mn = 0.0f64
+    var mx = 0.0f64
+    var pass = 0usize
+    while pass < 2usize {
+        let (g, built) = grid_build(l, b, -1.0f64, -1.0f64)
+        if !built { ret (0.0f64, 0.0f64) }
+        size_tracks(g.cols, g.nc, g.gap_c, -1.0f64, g.items, g.n, true, pass == 0usize, false)
+        let total = tracks_total(g.cols, g.nc, g.gap_c)
+        if pass == 0usize { mn = total } else { mx = total }
+        pass += 1usize
+    }
+    ret (mn, mx)
+}
+
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
-    var fc = Flow { base: l.floats.len, ox: 0.0f64, oy: 0.0f64 }
-    let (h, _m) = layout_children(l, b, cw, ch, &fc, false)
-    ret h
+    let cs = bstyle(l, b)
+    let (g, built) = grid_build(l, b, cw, ch)
+    if !built || g.n == 0usize { ret 0.0f64 }
+    let stretch_cols = cs.justify_content == .Normal || cs.justify_content == .Stretch
+    let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
+    size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
+    // Row contributions are the items' heights at their column widths.
+    var i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let area_w = grid_area_size(g.cols, g.items[i].cs, g.items[i].cn, g.gap_c)
+        let w = grid_item_width(l, id, cs, area_w)
+        let is0 = bstyle(l, id)
+        var hs0 = -1.0f64
+        let (hv0, has_h0) = resolve_len(is0.height, -1.0f64)
+        if is0.height.kind == .Px && has_h0 { hs0 = to_content_h(l, id, hv0) }
+        flex_place_item(l, id, w, hs0)
+        let ib = bx(l, id)
+        let outer = ib.h + ib.margin[0usize] + ib.margin[2usize]
+        g.items[i].rmin = outer
+        g.items[i].rmax = outer
+        i += 1usize
+    }
+    size_tracks(g.rows, g.nr, g.gap_r, ch, g.items, g.n, false, false, stretch_rows && ch >= 0.0f64)
+    position_tracks(g.cols, g.nc, g.gap_c, cw, cs.justify_content)
+    position_tracks(g.rows, g.nr, g.gap_r, ch, cs.align_content)
+    let bb0 = bx(l, b)
+    let ox0 = bb0.border[3usize] + bb0.padding[3usize]
+    let oy0 = bb0.border[0usize] + bb0.padding[0usize]
+    let rtl = cs.direction == .Rtl
+    i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let is = bstyle(l, id)
+        let area_w = grid_area_size(g.cols, g.items[i].cs, g.items[i].cn, g.gap_c)
+        let area_h = grid_area_size(g.rows, g.items[i].rs, g.items[i].rn, g.gap_r)
+        let ax = g.cols[usize(g.items[i].cs)].pos
+        let ay = g.rows[usize(g.items[i].rs)].pos
+        let w = grid_item_width(l, id, cs, area_w)
+        // Height: specified, stretched to the area, or from the content.
+        var align = is.align_self
+        if align == .Auto { align = cs.align_items }
+        let ib = bx(l, id)
+        var hspec = -1.0f64
+        let (hv, has_h) = resolve_len(is.height, area_h)
+        if is.height.kind == .Px && has_h {
+            hspec = to_content_h(l, id, hv)
+        } else if (align == .Normal || align == .Stretch) && is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced {
+            hspec = maxf(0.0f64, area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
+        }
+        flex_place_item(l, id, w, hspec)
+        let pb = bx(l, id)
+        // Auto margins and the alignment offsets.
+        var just = is.justify_self
+        if just == .Auto { just = cs.justify_items }
+        let free_w = area_w - pb.w - pb.margin[3usize] - pb.margin[1usize]
+        var dx = grid_axis_offset(just, free_w)
+        if is.margin[3usize].kind == .Auto || is.margin[1usize].kind == .Auto {
+            dx = 0.0f64
+            if is.margin[3usize].kind == .Auto && is.margin[1usize].kind == .Auto { dx = maxf(0.0f64, free_w) / 2.0f64 } else if is.margin[3usize].kind == .Auto { dx = maxf(0.0f64, free_w) }
+        }
+        let free_h = area_h - pb.h - pb.margin[0usize] - pb.margin[2usize]
+        var dy = grid_axis_offset(align, free_h)
+        if is.margin[0usize].kind == .Auto || is.margin[2usize].kind == .Auto {
+            dy = 0.0f64
+            if is.margin[0usize].kind == .Auto && is.margin[2usize].kind == .Auto { dy = maxf(0.0f64, free_h) / 2.0f64 } else if is.margin[0usize].kind == .Auto { dy = maxf(0.0f64, free_h) }
+        }
+        var px = ax + dx + pb.margin[3usize]
+        if rtl { px = cw - (ax + dx) - pb.w - pb.margin[1usize] - 0.0f64 }
+        pb.x = ox0 + px
+        pb.y = oy0 + ay + dy + pb.margin[0usize]
+        i += 1usize
+    }
+    var total = tracks_total(g.rows, g.nr, g.gap_r)
+    if g.nr > 0usize {
+        let last = g.rows[g.nr - 1usize]
+        total = maxf(total, last.pos + last.base)
+    }
+    ret total
 }
 
 // --- Positioned boxes.

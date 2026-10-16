@@ -275,5 +275,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 40. An inline flex container shrinks to its items.
     let (p40, ok40) = build(a, "<div><div style=\"display:inline-flex\" id=f><div style=\"width:30px;height:10px\"></div><div style=\"width:20px;height:10px\"></div></div></div>", fcss)
     if !ok40 || !is_rect(rect_of(p40, "f"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(64) }
+    let gcss = "div { font-size: 10px; }"
+    // 41. Fixed and flexible columns.
+    let (p41, ok41) = build(a, "<div style=\"display:grid;grid-template-columns:100px 1fr;width:300px\"><div id=a style=\"height:10px\"></div><div id=b style=\"height:10px\"></div></div>", gcss)
+    if !ok41 || !is_rect(rect_of(p41, "a"), 0.0f64, 0.0f64, 100.0f64, 10.0f64) || !is_rect(rect_of(p41, "b"), 100.0f64, 0.0f64, 200.0f64, 10.0f64) { os.exit(70) }
+    // 42. Rows from the template; items fill the cells in order and stretch.
+    let (p42, ok42) = build(a, "<div style=\"display:grid;grid-template-columns:1fr 1fr;grid-template-rows:20px 30px;width:200px\"><div id=a></div><div id=b></div><div id=c></div><div id=d></div></div>", gcss)
+    if !ok42 || !is_rect(rect_of(p42, "c"), 0.0f64, 20.0f64, 100.0f64, 30.0f64) || !is_rect(rect_of(p42, "d"), 100.0f64, 20.0f64, 100.0f64, 30.0f64) { os.exit(71) }
+    // 43. Gaps.
+    let (p43, ok43) = build(a, "<div style=\"display:grid;grid-template-columns:50px 50px;gap:10px\"><div id=a style=\"height:10px\"></div><div id=b style=\"height:10px\"></div><div id=c style=\"height:10px\"></div></div>", gcss)
+    if !ok43 || !is_rect(rect_of(p43, "b"), 60.0f64, 0.0f64, 50.0f64, 10.0f64) || !is_rect(rect_of(p43, "c"), 0.0f64, 20.0f64, 50.0f64, 10.0f64) { os.exit(72) }
+    // 44. Spanning columns, and line numbers.
+    let (p44, ok44) = build(a, "<div style=\"display:grid;grid-template-columns:50px 50px 50px\"><div id=a style=\"grid-column:1 / span 2;height:10px\"></div><div id=b style=\"grid-column:2 / 4;grid-row:2;height:10px\"></div></div>", gcss)
+    if !ok44 || !is_rect(rect_of(p44, "a"), 0.0f64, 0.0f64, 100.0f64, 10.0f64) || !is_rect(rect_of(p44, "b"), 50.0f64, 10.0f64, 100.0f64, 10.0f64) { os.exit(73) }
+    // 45. Named areas.
+    let (p45, ok45) = build(a, "<div style=\"display:grid;grid-template-columns:50px 150px;grid-template-areas:'h h' 's m'\"><div id=m style=\"grid-area:m;height:20px\"></div><div id=h style=\"grid-area:h;height:10px\"></div><div id=s style=\"grid-area:s\"></div></div>", gcss)
+    if !ok45 || !is_rect(rect_of(p45, "h"), 0.0f64, 0.0f64, 200.0f64, 10.0f64) || !is_rect(rect_of(p45, "s"), 0.0f64, 10.0f64, 50.0f64, 20.0f64) || !is_rect(rect_of(p45, "m"), 50.0f64, 10.0f64, 150.0f64, 20.0f64) { os.exit(74) }
+    // 46. repeat() and auto-fill.
+    let (p46, ok46) = build(a, "<div style=\"display:grid;grid-template-columns:repeat(3,1fr);width:300px\"><div id=a style=\"height:10px\"></div><div id=b style=\"height:10px\"></div><div id=c style=\"height:10px\"></div></div>", gcss)
+    if !ok46 || !is_rect(rect_of(p46, "c"), 200.0f64, 0.0f64, 100.0f64, 10.0f64) { os.exit(75) }
+    let (p47, ok47) = build(a, "<div style=\"display:grid;grid-template-columns:repeat(auto-fill,100px);width:350px\"><div id=a style=\"height:10px\"></div><div id=b style=\"height:10px\"></div><div id=c style=\"height:10px\"></div><div id=d style=\"height:10px\"></div></div>", gcss)
+    if !ok47 || !is_rect(rect_of(p47, "c"), 200.0f64, 0.0f64, 100.0f64, 10.0f64) || !is_rect(rect_of(p47, "d"), 0.0f64, 10.0f64, 100.0f64, 10.0f64) { os.exit(76) }
+    // 48. Implicit rows size to their content.
+    let (p48, ok48) = build(a, "<div style=\"display:grid\"><div id=a style=\"height:10px\"></div><div id=b style=\"height:20px\"></div><div id=c style=\"height:5px\"></div></div>", gcss)
+    if !ok48 || !is_rect(rect_of(p48, "b"), 0.0f64, 10.0f64, 800.0f64, 20.0f64) || !is_rect(rect_of(p48, "c"), 0.0f64, 30.0f64, 800.0f64, 5.0f64) { os.exit(77) }
+    // 49. Centred items.
+    let (p49, ok49) = build(a, "<div style=\"display:grid;grid-template-columns:100px;grid-template-rows:50px;align-items:center;justify-items:center\"><div id=a style=\"width:20px;height:10px\"></div></div>", gcss)
+    if !ok49 || !is_rect(rect_of(p49, "a"), 40.0f64, 20.0f64, 20.0f64, 10.0f64) { os.exit(78) }
+    // 50. Column flow.
+    let (p50, ok50) = build(a, "<div style=\"display:grid;grid-template-rows:20px 20px;grid-auto-flow:column;grid-auto-columns:50px\"><div id=a></div><div id=b></div><div id=c></div></div>", gcss)
+    if !ok50 || !is_rect(rect_of(p50, "b"), 0.0f64, 20.0f64, 50.0f64, 20.0f64) || !is_rect(rect_of(p50, "c"), 50.0f64, 0.0f64, 50.0f64, 20.0f64) { os.exit(79) }
+    // 51. An inline grid shrinks to its tracks; auto tracks share the leftover space.
+    let (p51, ok51) = build(a, "<div><div id=g style=\"display:inline-grid;grid-template-columns:30px 20px\"><div style=\"height:10px\"></div><div style=\"height:10px\"></div></div></div>", gcss)
+    if !ok51 || !is_rect(rect_of(p51, "g"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(80) }
+    let (p52, ok52) = build(a, "<div style=\"display:grid;grid-template-columns:auto auto;width:100px\"><div id=a>aaaa</div><div id=b>bb</div></div>", gcss)
+    if !ok52 || !is_rect(rect_of(p52, "a"), 0.0f64, 0.0f64, 60.0f64, 10.0f64) || !is_rect(rect_of(p52, "b"), 60.0f64, 0.0f64, 40.0f64, 10.0f64) { os.exit(81) }
     ret ok
 }
