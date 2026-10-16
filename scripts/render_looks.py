@@ -38,6 +38,9 @@ CACHE = Path(tempfile.gettempdir()) / "neper-looks-thumbs"
 # reproduces it within tolerance (hover, pressed and other uncaptured states are listed as unverified);
 # ready = matched and no unverified state is left.
 ORDER = ["planned", "started", "review", "matched", "ready"]
+# Completion % = the weighted share of the Delphi-equivalent controls: planned 0, started 20, review 60, matched 100,
+# ready 100 (matched is the best a look can reach while a state has no capture; ready only adds that no state is left).
+WEIGHT = {"planned": 0.0, "started": 0.2, "review": 0.6, "matched": 1.0, "ready": 1.0}
 NOTE_AUTO = "Rendered from the platform palette; not compared with a real screen."
 # The five flavor columns, in the maintainer's priority order: (heading, light look id, dark look id, what it stands for).
 FLAVORS = [("Windows", "windows", "windows_dark", "Windows 11; Light is audited against v3 captures"),
@@ -54,6 +57,9 @@ main{max-width:1800px;margin:0 auto;padding:16px}h1{font-size:1.4rem;margin:.2em
 .mut{color:var(--mut)}.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .box{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
 .box b{display:block;margin-bottom:2px}.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--chip);margin:6px 0}
+.total{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:12px 0}
+.total .big{font-size:1.6rem}.total .big b{font-size:2.4rem}.total .big-bar{height:14px;border-radius:7px}
+.total .flav{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}.pct{font-weight:700;color:var(--review)}
 .bar i{display:block;height:100%}.counts{display:flex;gap:4px 8px;flex-wrap:wrap;font-size:.8rem}
 .chip{display:inline-block;border-radius:10px;padding:0 8px;font-size:.78rem;font-weight:600;color:#fff;line-height:1.5}
 .s-planned{background:var(--planned)}.s-started{background:var(--started)}.s-review{background:var(--review)}.s-matched{background:var(--matched)}.s-ready{background:var(--ready)}
@@ -214,14 +220,32 @@ def main():
              'docs/ui/looks/status.json and status.d by scripts/render_looks.py; updated %s. %d Delphi-equivalent controls and %d platform idiom controls. '
              'A look with no status entry whose picture exists is shown as started: rendered from the platform palette, not compared with a real screen.</p>'
              % (escape(data.get("updated", "")), len(controls), len(extra_rows)))
+    # completion over the Delphi-equivalent controls only (the platform idiom rows exist for some looks only)
+    done = {}
+    for l in looks:
+        got = sum(WEIGHT[info_of(c, l["id"]).get("status", "planned")] for c in controls)
+        done[l["id"]] = 100.0 * got / max(1, len(controls))
+    flavor_pct = [(t, 0.5 * (done[a] + done[b]), done[a], done[b]) for t, a, b, w in FLAVORS]
+    overall = sum(f[1] for f in flavor_pct) / max(1, len(flavor_pct))
+    p.append('<section class="total" aria-label="Total completion"><div class="big"><b>%.0f%%</b> overall</div>'
+             '<div class="bar big-bar"><i style="width:%.1f%%;background:var(--ready)"></i></div>' % (overall, overall))
+    p.append('<div class="flav">%s</div>' % "".join(
+        '<div><b>%s</b> %.0f%%<div class="bar"><i style="width:%.1f%%;background:var(--review)"></i></div>'
+        '<span class="mut">Light %.0f%% &middot; Dark %.0f%%</span></div>' % (escape(t), pct, pct, lt, dk)
+        for t, pct, lt, dk in flavor_pct))
+    p.append('<p class="mut">Completion is the weighted share of the %d Delphi-equivalent controls in each look: planned 0 %%, started 20 %%, '
+             'review 60 %%, matched or ready 100 %%. Overall is the mean of the five flavors; each flavor is the mean of its Light and Dark look. '
+             'The weights are a rough measure of how close a control is, not an audit result; an independent audit sets the statuses '
+             '(docs/ui/looks/audit.md). Matched means every state that has a real capture reproduces it; states with no capture stay unverified, '
+             'so nothing reaches ready yet.</p></section>' % len(controls))
     p.append('<div class="sum">')
     total = len(allrows)
     for l in looks:
         c = counts[l["id"]]
         bar = "".join('<i class="s-%s" style="width:%.1f%%"></i>' % (s, 100.0 * c[s] / total) for s in reversed(ORDER))
         chips = "".join('<span><span class="chip s-%s">%s</span> %d</span>' % (s, s, c[s]) for s in ORDER)
-        p.append('<div class="box"><b>%s</b><div class="mut">profile %s, %d controls</div><div class="bar">%s</div><div class="counts">%s</div></div>'
-                 % (escape(l["label"]), escape(l["profile"]), total, bar, chips))
+        p.append('<div class="box"><b>%s</b> <span class="pct">%.0f%%</span><div class="mut">profile %s, %d controls</div><div class="bar">%s</div><div class="counts">%s</div></div>'
+                 % (escape(l["label"]), done[l["id"]], escape(l["profile"]), total, bar, chips))
     p.append("</div>")
     p.append('<div class="legend" aria-label="Flavor columns">%s</div>' % "".join(
         '<div><b>%s</b>Light: %s<br>Dark: %s<br><span class="mut">%s</span></div>'
