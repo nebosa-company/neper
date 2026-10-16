@@ -1271,6 +1271,8 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
     var face = color(t, .SurfaceContainerLowest)
     var ink = color(t, .Text)
     var edge = color(t, .Border)
+    // Windows 11 dark: the button face is #333333 (the field's #2B2B2B stays the edit's).
+    if t.palette == .Dark { face = hex_raw(0x333333u32) }
     let contrast = windows_contrast(t)
     let accent = windows_accent(t)
     let plain = variant == .Plain
@@ -1290,8 +1292,8 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
     // looks4: the pressed face measured on v3's pressed buttons (docs/ui/looks/ref/windows/states/button-pressed-*): #CCE4F7.
     var press = hex_raw(0xCCE4F7u32)
     if t.palette == .Dark {
-        hover = hex_raw(0x323232u32)
-        press = hex_raw(0x272727u32)
+        hover = hex_raw(0x3C3C3Cu32)
+        press = hex_raw(0x323232u32)
     }
     if state.hovered && !state.pressed {
         if contrast {
@@ -1319,9 +1321,9 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
         edge = hex_raw(0xEAEAEAu32)
         ink = hex_raw(0x878787u32)
         if t.palette == .Dark {
-            face = hex_raw(0x282828u32)
-            edge = hex_raw(0x333333u32)
-            ink = hex_raw(0x757575u32)
+            face = hex_raw(0x2B2B2Bu32)
+            edge = hex_raw(0x3A3A3Au32)
+            ink = hex_raw(0x787878u32)
         }
         if contrast {
             face = color(t, .SurfaceContainerLowest)

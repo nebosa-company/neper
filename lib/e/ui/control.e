@@ -2548,7 +2548,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
             dots_kind = 1u32
             if state.pressed { dots_kind = 2u32 }
         }
-        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, shift_x, shift_y, dots_kind)
+        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, shift_x, shift_y, dots_kind, t.tokens.palette == .Dark)
         if face_error != ok { ret (zero, face_error) }
         layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, face_node))
         n += 1usize
@@ -2557,7 +2557,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     n += 1usize
     if focus {
         if ringed && shift_x == 0.0 && shift_y == 0.0 {
-            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height)
+            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, t.tokens.palette == .Dark)
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
             n += 1usize
@@ -2594,10 +2594,19 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     // The native ring (looks3 group a): a whole button, not a split's head, not the plain one.
     var rk: u32 = 9u32
     var face: u32 = 0u32
-    if corners.top_left == 0.0 && corners.top_right == 0.0 && options.variant != .Plain && t.tokens.palette == .Light {
+    if corners.top_left == 0.0 && corners.top_right == 0.0 && options.variant != .Plain && (t.tokens.palette == .Light || t.tokens.palette == .Dark) {
         rk = 0u32
-        if variant == .Default || state.focus_visible || state.focused || selected || (state.hovered && !state.pressed && options.enabled) { rk = 1u32 }
-        if state.pressed && !state.disabled && !selected { rk = 3u32 }
+        // Light: a hovered button wears the accent ring (measured). Dark: only the face changes (Windows 11 dark).
+        let accent_hover = t.tokens.palette == .Light && state.hovered && !state.pressed && options.enabled
+        if variant == .Default || state.focus_visible || state.focused || selected || accent_hover { rk = 1u32 }
+        if state.pressed && !state.disabled && !selected {
+            rk = 3u32
+            // Dark: a pressed plain button keeps its grey stroke, a default one its accent.
+            if t.tokens.palette == .Dark {
+                rk = 0u32
+                if variant == .Default { rk = 1u32 }
+            }
+        }
         if state.disabled { rk = 2u32 }
         face = windows_rgb(look.background)
         look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -2772,7 +2781,10 @@ fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: 
 // `box_w` above 0 centres the one-line label in a box of that width on a whole pixel (GDI's DT_CENTER halves with an integer
 // division), the hinted advances being whole pixels. `phase` (0 to 1) is the fraction of a pixel the underline sits below its row, for the
 // labels of v3's DPI-scaled forms (Options, About), whose captures draw it as two rows of 1 - phase and phase of the ink.
-fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32, face: u32, box_w: f32, phase: f32) -> (widget.Node, err) {
+fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink_in: paint.Color, underline: bool, width: f32, face: u32, box_w: f32, phase: f32) -> (widget.Node, err) {
+    // Windows 11 dark: a label colour the author chose dark (v3's #33486C, #336CCC) is lifted toward white so it reads on #202020.
+    var ink = ink_in
+    if t.tokens.palette == .Dark && ink_in.red * 0.299 + ink_in.green * 0.587 + ink_in.blue * 0.114 < 0.5 { ink = style.mix(ink_in, style.hex_raw(0xFFFFFFu32), 0.55) }
     var options = text_options()
     options.face = face
     options.size = size
@@ -4031,7 +4043,7 @@ type Phase = struct { context: u32, x: f32, y: f32 }
 fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
     // looks4: rest and pressed are painted pixel for pixel from the live captures (e.ui.winmark); hover,
     // disabled and mixed have no capture and keep the drawn mark below.
-    if t.tokens.palette == .Light && !state.disabled && !mixed {
+    if (t.tokens.palette == .Light || t.tokens.palette == .Dark) && !state.disabled && !mixed {
         var kind: u32 = 0u32
         if round { kind = 4u32 }
         if chosen { kind += 2u32 }
@@ -4045,7 +4057,7 @@ fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chose
         }
         var at_y = phase.y
         if at_y >= 0.0 { at_y += f32(i32((high - 14.0) * 0.5 + 0.5)) }
-        let (baked, baked_error) = winmark.mark_node(a, phase.context, kind, at_y)
+        let (baked, baked_error) = winmark.mark_node(a, phase.context, kind, at_y, t.tokens.palette == .Dark)
         if baked_error != ok { ret (zero, baked_error) }
         let (cell, cell_error) = mem.alloc[widget.Node](a, 1usize)
         if cell_error != ok { ret (zero, TooLarge) }
@@ -4248,6 +4260,11 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     // 2 in; the rectangle 1 under the caption's top) and which window's scale it is drawn at.
     var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0 }
     if phase.context == 4u32 || phase.context == 5u32 { geom.face = 249.0 }
+    // Dark: the dots are the XOR of the page, #202020 (the tab page of the Filter dialog #272727).
+    if t.tokens.palette == .Dark {
+        geom.face = 32.0
+        if phase.context == 4u32 || phase.context == 5u32 { geom.face = 39.0 }
+    }
     if phase.context == 0u32 { geom.s = 0.0007 }
     if phase.context == 6u32 { geom.s = 0.00073 }
     if phase.context == 0u32 || phase.context == 6u32 { geom.line = 0.3125 }
@@ -4331,6 +4348,12 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
 
 // A TcxCheckListBox in the Windows look (the Options Rules, Prices and Card Art pages), `rows` 15 unit
 // rows tall; see `windows_check_list_sized`.
+// The highlighted row of a check list: the system highlight #0078D7 (Windows 11 dark: the selection #264F78).
+fn check_highlight(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.hex_raw(0x264F78u32) }
+    ret style.hex(30935u32)
+}
+
 fn windows_check_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
     let (list, list_error) = windows_check_list_sized(a, key, t, label, options, chosen, picks, width, f32(rows) * 15.0 + 4.0, options.len)
     ret (list, list_error)
@@ -4450,13 +4473,13 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         // than the Rules list's, its last 0.4 spilling into the next row.
         if current {
             var bar = sized_style(light_w, light_tall)
-            bar.background = paint.Brush { Solid: style.hex(30935u32) }
+            bar.background = paint.Brush { Solid: check_highlight(t) }
             parts[n] = widget.positioned(0u64, light_left, light_top, bar, zero)
             n += 1usize
         }
         if below {
             var tail = sized_style(light_w, light_top)
-            tail.background = paint.Brush { Solid: style.hex(30935u32) }
+            tail.background = paint.Brush { Solid: check_highlight(t) }
             parts[n] = widget.positioned(0u64, light_left, 0.0, tail, zero)
             n += 1usize
         }
@@ -4471,14 +4494,14 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     }
     if current && !art {
         var bar = sized_style(light_w, light_tall)
-        bar.background = paint.Brush { Solid: style.hex(30935u32) }
+        bar.background = paint.Brush { Solid: check_highlight(t) }
         parts[n] = widget.positioned(0u64, light_left, light_top, bar, zero)
         n += 1usize
     }
     if below && !art {
         // The current row's highlight spills into this row's first line.
         var tail = sized_style(light_w, light_top)
-        tail.background = paint.Brush { Solid: style.hex(30935u32) }
+        tail.background = paint.Brush { Solid: check_highlight(t) }
         parts[n] = widget.positioned(0u64, light_left, 0.0, tail, zero)
         n += 1usize
     }
@@ -6120,7 +6143,9 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         ink = win_rgb(160u32, 160u32, 160u32)
     }
     // v3 selects with the system highlight and white text.
-    let highlight = win_rgb(0u32, 120u32, 215u32)
+    var highlight = win_rgb(0u32, 120u32, 215u32)
+    // Windows 11 dark: the selection is #264F78 under white text.
+    if t.tokens.palette == .Dark { highlight = style.hex_raw(0x264F78u32) }
     let highlighted = win_rgb(255u32, 255u32, 255u32)
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -6218,7 +6243,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     if focused { chrome_state = 1u32 }
     if !options.enabled { chrome_state = 2u32 }
     if options.chrome_pressed && options.enabled { chrome_state = 3u32 }
-    let (rim, rim_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim)
+    let (rim, rim_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim, t.tokens.palette == .Dark)
     if rim_error != ok { ret (zero, rim_error) }
     stacked[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, rim))
     var layers_at = 2usize
@@ -6241,7 +6266,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 {
         var zone = 0u32
         if options.chrome_hover > 1u32 { zone = options.chrome_hover - 1u32 }
-        let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y)
+        let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y, t.tokens.palette == .Dark)
         if veil_error != ok { ret (zero, veil_error) }
         stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, veil))
         layers_at += 1usize
@@ -6394,7 +6419,7 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
         frame_style.border = style.Border { width: 1.0, color: style.color(t.tokens, .Surface) }
         frame_style.radius = 0.0
         frame_style.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 3.0 }, bottom: style.Length { Px: 3.0 } }
-        let (rim, rim_error) = winedit.token_chrome(a, width, height, state.focused)
+        let (rim, rim_error) = winedit.token_chrome(a, width, height, state.focused, t.tokens.palette == .Dark)
         if rim_error != ok { ret (zero, rim_error) }
         let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
         if stacked_error != ok { ret (zero, TooLarge) }
@@ -13923,6 +13948,15 @@ fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title
     if bars_error != ok { ret (zero, TooLarge) }
     bars[0usize].stops[0usize] = paint.Stop { offset: 0.0, color: style.hex(8421504u32) }
     bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex(12632256u32) }
+    // Windows 11 dark: the TGradient runs #4A4A4A to #2B2B2B under a white title and a #C5C5C5 aside.
+    var title_ink = style.hex(16777215u32)
+    var aside_ink = style.hex(0u32)
+    if t.tokens.palette == .Dark {
+        bars[0usize].stops[0usize] = paint.Stop { offset: 0.0, color: style.hex_raw(0x4A4A4Au32) }
+        bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex_raw(0x2B2B2Bu32) }
+        title_ink = style.hex_raw(0xFFFFFFu32)
+        aside_ink = style.hex_raw(0xC5C5C5u32)
+    }
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
@@ -13951,11 +13985,11 @@ fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title
     var heading = text_options()
     heading.wrap = .None
     heading.weight = 700u32
-    let (head_node, head_error) = colored_text(a, 0u64, title, &bold_t, heading, style.hex(16777215u32))
+    let (head_node, head_error) = colored_text(a, 0u64, title, &bold_t, heading, title_ink)
     if head_error != ok { ret (zero, head_error) }
     var side = text_options()
     side.wrap = .None
-    let (side_node, side_error) = colored_text(a, 0u64, aside, &dialog_t, side, style.hex(0u32))
+    let (side_node, side_error) = colored_text(a, 0u64, aside, &dialog_t, side, aside_ink)
     if side_error != ok { ret (zero, side_error) }
     var span = width
     if !(span > 0.0) { span = 505.0 }

@@ -151,7 +151,7 @@ fn mark_width(kind: u32) -> f32 {
 fn mark_height() -> f32 { ret 14.0 }
 
 // `y` is the control's y in its window (negative: the family's table A).
-type Mark = struct { id: u32, y: f32 }
+type Mark = struct { id: u32, y: f32, dark: bool }
 
 fn mark_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -187,8 +187,13 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     while i < 196usize {
         let alpha = mark_alpha(ta, tb, w, i)
         if alpha > 0.002 {
-            let va = ta[i]
-            let vb = tb[i]
+            var va = ta[i]
+            var vb = tb[i]
+            // The dark palette: the same pixels, mapped (winpx.dark_argb: a tick is black, the box face the dark control face).
+            if d.dark {
+                va = winpx.dark_argb(va, 0u32, 0x000000u32)
+                vb = winpx.dark_argb(vb, 0u32, 0x000000u32)
+            }
             let wa = f32(va >> 24u32) / 255.0
             let wb = f32(vb >> 24u32) / 255.0
             // Premultiplied blend, so a pixel only one table paints keeps that table's colour.
@@ -220,10 +225,10 @@ fn clamp_unit(v: f32) -> f32 {
 }
 
 // The mark of (`context`, `kind`) as a node of its own size, for a control `y` px down its window (negative: unknown).
-fn mark_node(a: *mem.Arena, context: u32, kind: u32, y: f32) -> (widget.Node, err) {
+fn mark_node(a: *mem.Arena, context: u32, kind: u32, y: f32, dark: bool) -> (widget.Node, err) {
     let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
     if marks_error != ok { ret (zero, marks_error) }
-    marks[0usize] = Mark { id: mark_resolve(context, kind), y: y }
+    marks[0usize] = Mark { id: mark_resolve(context, kind), y: y, dark: dark }
     var s = style.defaults()
     s.width = style.Length { Px: mark_width(kind) }
     s.height = style.Length { Px: mark_height() }
