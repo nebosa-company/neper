@@ -55,6 +55,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         var options = control.field_options()
         options.width = 140.0
+        if t.tokens.palette == .Dark && t.tokens.profile == .Windows { options.width = 149.0 }
         options.placeholder = ""
         if i == 5usize { options.enabled = false }
         if i == 6usize { options.read_only = true }

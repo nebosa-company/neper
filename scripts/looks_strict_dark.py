@@ -218,7 +218,24 @@ def open_table():
         print("%-28s flat off %4d / %4d (max %3d)  chrome off %4d  at %s" % (stem, r[5], r[4], r[6], r[0], at))
 
 
+def cmp_cell(sheet, cols, cw, ch, idx, stem, rect=0):
+    """One cell of any dark sheet (cells cw x ch in `cols` columns, the sheet's own layout) against a native capture, the control centred in it."""
+    sh = load(OURS + sheet + ".png")
+    img, (rx, ry, rw, rh) = native(stem, rect=rect)
+    ref = img[ry:ry + rh, rx:rx + rw]
+    col, row = idx % cols, idx // cols
+    x, y = 12 + col * (cw + 10), 12 + row * (16 + 4 + ch + 10) + 20
+    ZONE[:] = [3, 3, 22]
+    _CACHE.clear()
+    r, at = best(ref, sh, x, y, cw, ch, 4)
+    print("%-20s cell %2d vs %-14s flat off %4d / %4d (max %3d)  chrome off %4d  at %s" % (sheet, idx, stem, r[5], r[4], r[6], r[0], at))
+
+
 def main():
+    if "--cell" in sys.argv:
+        a = [v for v in sys.argv[1:] if not v.startswith("--")]
+        cmp_cell(a[0], int(a[1]), int(a[2]), int(a[3]), int(a[4]), a[5])
+        return
     if "--two" in sys.argv:
         table2(only=([a for a in sys.argv[1:] if not a.startswith("--")] or [None])[0])
         return

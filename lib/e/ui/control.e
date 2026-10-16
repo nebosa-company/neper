@@ -2539,13 +2539,13 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     // v3's caption sits 1 px left of and above the centre of the box (measured on Cancel and Apply).
     var pad_left = shift_x
     // round 12: the native dark label is centred (v3's light caption sits 1 px left of centre).
-    if t.tokens.palette == .Dark { pad_left += 2.0 }
+    if win_dark(t) { pad_left += 2.0 }
     if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: pad_left }, top: style.Length { Px: shift_y }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
     let centred = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
     // A pressed button is focused too: v3 shows the dotted rectangle on it (states/button-pressed-*).
     // round 12: the native dark pressed button (button-pressed) shows no dotted rectangle: that is v3's light behaviour.
     var focus = (state.focus_visible || state.focused || state.pressed) && enabled
-    if t.tokens.palette == .Dark { focus = state.focus_visible && enabled }
+    if win_dark(t) { focus = state.focus_visible && enabled }
     if !focus && !ringed { ret (centred, ok) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
@@ -6083,7 +6083,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         var first_line = 0usize
         if caret_line + 1usize > usize(options.rows) { first_line = caret_line + 1usize - usize(options.rows) }
         // round 12: an unfocused native dark multi-line edit shows its first line (edit-multiline-vscroll), whatever the caret
-        if t.tokens.palette == .Dark && !focused { first_line = 0usize }
+        if win_dark(t) && !focused { first_line = 0usize }
         // The viewport and the editor inside it take the field's inner width, as
         // a scroll lays its content out unbounded along its axis only.
         let inner = max_zero(options.width - 2.0 * pad_x - options.start_space - options.end_space)
@@ -6313,7 +6313,7 @@ fn windows_edit_theme(a: *mem.Arena, t: *const Theme, line_height: f32) -> (Them
     copies[0usize] = *t.tokens
     var small = style.TextStyle { size: 10.8, line_height: line_height, weight: 400u16, italic: false }
     // round 12: the dark edits follow the native Windows 11 dark ones: Segoe UI 9 pt (12 px), no Tahoma swap.
-    let dark_native = t.tokens.palette == .Dark
+    let dark_native = win_dark(t)
     if dark_native { small = style.TextStyle { size: 12.0, line_height: 15.0, weight: 400u16, italic: false } }
     copies[0usize].text[17usize] = small
     var fonts = t.fonts
@@ -6343,12 +6343,12 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     let multiline = options.rows > 1u32
     var line: f32 = 13.0
     // round 12: the native dark multi-line edit sets Segoe UI 9 pt on a 15 px line
-    if t.tokens.palette == .Dark { line = 15.0 }
+    if win_dark(t) { line = 15.0 }
     var h = t.tokens.metrics.control_height
     if options.height > 0.0 { h = options.height }
     if multiline { h = max_of(h, f32(options.rows) * line + 8.0) }
     // round 12: a native Windows 11 dark edit is 24 high (Segoe UI 9 pt); v3's DevExpress sizes are light only.
-    if t.tokens.palette == .Dark && !multiline { h = 24.0 }
+    if win_dark(t) && !multiline { h = 24.0 }
     var face = style.color(t.tokens, .Surface)
     var side = win_rgb(237u32, 237u32, 237u32)
     var foot = win_rgb(146u32, 146u32, 146u32)
@@ -6388,7 +6388,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     if t.tokens.palette == .Dark { highlighted = style.hex_raw(0xFFFFFFu32) }
     // round 12: the native dark password edit shows U+25CF bullets (7 px apart); the engine masks with one asterisk per byte, so the edit's
     // own text is made transparent (caret and selection stay) and the bullets are laid over it.
-    let bullets = secret && t.tokens.palette == .Dark && len > 0usize
+    let bullets = secret && win_dark(t) && len > 0usize
     var edit_ink = ink
     if bullets { edit_ink = with_alpha(ink, 0.0) }
     var value_options = text_options()
@@ -6399,9 +6399,9 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     let (text_look, style_error) = text_style_faced(a, &ft, value_options)
     if style_error != ok { ret (zero, style_error) }
     var pad: f32 = 3.0
-    if t.tokens.palette == .Dark { pad = 6.0 }
+    if win_dark(t) { pad = 6.0 }
     // the native multi-line edit sets its text one pixel further in (edit-multiline-vscroll: ink from x 7)
-    if t.tokens.palette == .Dark && multiline { pad = 6.0 }
+    if win_dark(t) && multiline { pad = 6.0 }
     let inner = max_zero(options.width - 2.0 - 2.0 * pad - options.start_space - options.end_space)
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
@@ -6487,7 +6487,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         var viewport = style.defaults()
         viewport.width = style.Length { Px: inner }
         viewport.height = style.Length { Px: max_zero(h - 8.0) }
-        if t.tokens.palette == .Dark { viewport.height = style.Length { Px: max_zero(h - 4.0) } }
+        if win_dark(t) { viewport.height = style.Length { Px: max_zero(h - 4.0) } }
         viewport.overflow = .Clip
         layers[at] = widget.scroll(key + 1048612u64, widget.Scroll { axis: .Vertical, offset: f32(first_line) * line, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, viewport, scrolled[0usize..1usize])
     } else {
@@ -6509,9 +6509,9 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     frame_style.radius = 0.0
     frame_style.overflow = .Clip
     var pad_y: f32 = 3.384
-    if t.tokens.palette == .Dark { pad_y = 3.0 }
+    if win_dark(t) { pad_y = 3.0 }
     if multiline { pad_y = 3.0 }
-    if multiline && t.tokens.palette == .Dark { pad_y = 2.0 }
+    if multiline && win_dark(t) { pad_y = 2.0 }
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: pad + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: pad + options.end_space }, bottom: style.Length { Px: pad_y } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
@@ -11353,12 +11353,12 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
         if t.tokens.profile == .Windows {
             var sheet_row: f32 = 13.0
-            if t.tokens.palette == .Dark { sheet_row = 15.0 }
+            if win_dark(t) { sheet_row = 15.0 }
             let (flat, flat_error) = win_sheet(a, t, key + 1048701u64, items[0usize..suggestions.len], sheet_row, win_drop_rows(), lit, 0u32)
             if flat_error != ok { ret (zero, flat_error) }
             column[0usize] = flat
             // round 12: the native dark drop list is one pixel wider than the combo's layout box (150 for DFM 149)
-            if t.tokens.palette == .Dark && menu_w > 0.0 {
+            if win_dark(t) && menu_w > 0.0 {
                 var wide = style.defaults()
                 wide.width = style.Length { Px: menu_w }
                 let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
@@ -15079,6 +15079,9 @@ fn windows_bar_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
 type WinLook = struct { face: paint.Color, edge: paint.Color, edge_width: f32, ink: paint.Color, chevron: paint.Color }
 
 fn win_row_height() -> f32 { ret 15.0 }
+
+// round 12: the Windows dark look proper (the Neper dark look draws the same controls with its own palette and keeps its sizes).
+fn win_dark(t: *const Theme) -> bool { ret t.tokens.palette == .Dark && t.tokens.profile == .Windows }
 fn win_icon_row_height() -> f32 { ret 18.0 }
 fn win_drop_rows() -> usize { ret 8usize }
 
@@ -15297,7 +15300,7 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
 fn win_drop_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: bool, action: *const widget.Submit) -> (widget.Node, err) {
     var none: []const widget.Node = zero
     var row_line: f32 = 13.0
-    if t.tokens.palette == .Dark { row_line = 15.0 }
+    if win_dark(t) { row_line = 15.0 }
     let (made, made_error) = win_row(a, key, t, label, lit, action, none, false, row_line)
     ret (made, made_error)
 }
@@ -15317,7 +15320,7 @@ fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []co
         frame_style.border = style.Border { width: 1.0, color: style.hex_raw(0x7A7A7Au32) }
     }
     frame_style.padding = edges(1.0, 1.0, 1.0, 1.0)
-    if t.tokens.palette == .Dark {
+    if win_dark(t) {
         // the native dark drop list: the rows and its 1 px line, nothing more (combo-*-open: 8 rows of 15 in 122)
         var shown_rows = items.len
         if shown_rows > max_rows { shown_rows = max_rows }
@@ -15610,7 +15613,7 @@ fn win_combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var none: []const widget.Node = zero
     var popup_w: f32 = 0.0
     win_drop_dots = true
-    if t.tokens.palette == .Dark {
+    if win_dark(t) {
         popup_w = options.width + 1.0
         win_drop_dots = options.read_only
     }
@@ -16021,6 +16024,14 @@ fn win3_lines_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     var list_face = style.hex(16777215u32)
     if style.windark_active() { list_face = style.hex_raw(0x202020u32) }
     try win3_rect(b, x + 1.0, y + 1.0, area.width - 3.0, area.height - 2.0, list_face)
+    // round 12: the dark list frame is the native dark list's line (combo-*-open: #7A7A7A, 3.8 : 1 against the #202020 page), all round
+    if style.windark_active() {
+        let line = style.hex_raw(0x7A7A7Au32)
+        try win3_rect(b, x, y, area.width - 1.0, 1.0, line)
+        try win3_rect(b, x, y + 1.0, 1.0, area.height - 1.0, line)
+        try win3_rect(b, x + area.width - 2.0, y + 1.0, 1.0, area.height - 2.0, line)
+        ret win3_rect(b, x + 1.0, y + area.height - 1.0, area.width - 3.0, 1.0, line)
+    }
     try win3_rect(b, x, y, area.width - 1.0, 1.0, style.hex(12698049u32))
     try win3_rect(b, x, y + 1.0, 1.0, area.height - 1.0, style.hex(10592673u32))
     try win3_rect(b, x + area.width - 2.0, y + 1.0, 1.0, area.height - 2.0, style.hex(15395562u32))
@@ -19484,7 +19495,7 @@ fn native_tooltip_corner_node(a: *mem.Arena, which: usize) -> (widget.Node, err)
 
 fn win_native_tooltip(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, width: f32, height: f32) -> (widget.Node, err) {
     let frame = sized_style(width, height)
-    if t.tokens.palette == .Dark {
+    if win_dark(t) {
         // round 12: the dark tooltip (tooltip-rest of the native dark captures) is square: a 1 px #767676 line round a #2B2B2B face, white text
         var rim = sized_style(width, height)
         rim.background = paint.Brush { Solid: style.hex_raw(0x767676u32) }
