@@ -241,7 +241,7 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if f.selected[r] {
             var dh: f32 = 17.0
             if r < f.heights.len { dh = f.heights[r] }
-            try dotted(b, x + value_x + 1.0, y + f.rows[r] - 1.0, w - value_x - 1.0, dh + 1.0, 0x6A6A6Au32)
+            try dotted(b, x + value_x + 1.0, y + f.rows[r] - 1.0, w - value_x - 2.0, dh + 1.0, 0x6A6A6Au32)
         }
         r += 1usize
     }

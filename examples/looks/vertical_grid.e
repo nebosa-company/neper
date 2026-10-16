@@ -27,6 +27,8 @@ var pick: Pick = zero
 // looks5-e: under the Windows look the Computed category has v3's six rows (Deck | Sideboard, Land | Crea | Spell, Colors,
 // Archetype, Strategy, Legality), some with cell lines of their own and taller than the rest (ref/windows/vertical_grid.png)
 var windows_rows: bool = false
+// the first sheet's capture (the dialog grab) shows another file name than the states grabs
+var desktop: bool = false
 
 fn shapes(on: bool) {
     windows_rows = on
@@ -75,7 +77,10 @@ fn values(index: usize) -> str {
     if index == 1usize { ret "gaddl" }
     if index == 3usize || index == 4usize { ret "10/11/2026" }
     if index == 5usize { ret "1.0" }
-    if index == 7usize { ret "D:\\Temp\\claude\\v3run\\Probe ..." }
+    if index == 7usize {
+        if desktop { ret "C:\\Users\\gaddl\\Desktop\\New..." }
+        ret "D:\\Temp\\claude\\v3run\\Probe ..."
+    }
     if index == 8usize { ret "MTG Studio (Xml)" }
     if windows_rows {
         if index == 12usize { ret "Unspecified" }
@@ -250,6 +255,7 @@ fn grid(a: *mem.Arena, t: *const control.Theme, key: widget.Key, collapsed: []co
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     shapes(t.tokens.profile == .Windows)
+    desktop = t.tokens.profile == .Windows
     let (shut, shut_error) = mem.alloc[widget.Key](a, 2usize)
     if shut_error != ok { ret (0usize, shut_error) }
     shut[0usize] = collection.property_group_key("General")
@@ -306,7 +312,7 @@ fn state_editor(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> e
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret pair_error }
         pair[0usize] = widget.spacer(0u64, 1.0)
-        pair[1usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), mem_one_node(a, button))
+        pair[1usize] = widget.padded(0u64, 0.0, 1.0, 2.0, 0.0, style.defaults(), mem_one_node(a, button))
         var row = style.defaults()
         row.width = style.Length { Percent: 100.0 }
         *out = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row, pair[0usize..2usize])
