@@ -12,12 +12,17 @@ use e.ui.widget
 fn noop_change(ctx: *void, value: f32) -> err { ret ok }
 
 // A pane: a white box with a grey frame, standing for the panels v3 splits.
-fn pane() -> widget.Node {
+fn pane(t: *const control.Theme) -> widget.Node {
     var s = style.defaults()
     s.width = style.Length { Percent: 100.0 }
     s.height = style.Length { Percent: 100.0 }
     s.background = paint.Brush { Solid: style.hex(16777215u32) }
     s.border = style.Border { width: 1.0, color: style.hex(8554384u32) }
+    // Neper dark: the page's surface and the theme's border instead of white and grey
+    if t.tokens.palette == .Dark && t.tokens.profile == .Neper {
+        s.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+        s.border = style.Border { width: 1.0, color: style.color(t.tokens, .Border) }
+    }
     ret widget.box(0u64, s, zero)
 }
 
@@ -34,7 +39,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             position = 56.0
         }
         let change = widget.Change[f32] { ctx: zero, invoke: noop_change }
-        let (node, node_error) = control.split_view(a, u64(1000usize * (i + 1usize)), t, axis, pane(), pane(), position, 40.0, 40.0, change, 200.0, 120.0)
+        let (node, node_error) = control.split_view(a, u64(1000usize * (i + 1usize)), t, axis, pane(t), pane(t), position, 40.0, 40.0, change, 200.0, 120.0)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         let step = i % 4usize

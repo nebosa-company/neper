@@ -1,0 +1,376 @@
+{
+ "label": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/label.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Every state of the label sheet viewed next to the light twin. Custom inks (a card's #33486C, the link blue #336CCC) are lifted toward white by style.lift_ink inside control.colored_text (Neper + Dark only) to at least 4.6:1 on the lightest dark surface, so the link measures 8.9:1; the hue stays recognisable but paler.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/button.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. All variants and states viewed (rest, default, hover, pressed, focus, disabled, split, toggle, loading): the focus ring is #B3C5FF on the dark page; hover and pressed shift the fill by the state layer and stay distinguishable.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/checkbox.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Unchecked, checked, mixed, hover, pressed, focus and disabled viewed; the check mark is OnPrimary on the accent box, the focus bar is the accent.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/radio.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, hover, pressed, focus, disabled viewed in radio, radio_dialog, radio_hover, radio_states: ring and dot in the accent, state circle visible.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/radio_group.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. radio_group, _dialog and _states viewed; same marks as the radio.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/text_edit.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. All ten states viewed (rest, hover, focus, disabled, read-only, invalid, placeholder, selection, long text). Invalid border #FFB3AD 10.9:1; selected text sits on #00468B (7.4:1 for #E1E2E9).",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The Windows THotKey replica in edits_states/edits_hover (a pixel-baked grey frame and white face) is Windows-only and stays light in neper-dark: a white box with dark text, readable but not dark"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/spin_edit.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Arrows, pressed and hover state layers, at minimum / maximum, focus and selection viewed; the dimmed arrow at the limit is 38 % on-surface.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/combo_box.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. All states of combo_box, combo_hover and the editable variants viewed; the chevron and the drop-button hover disc are visible on the dark field.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/image_combo_box.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, hover, open (surface #1D1E23 list, selected row #364359), row hover and focus viewed.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The Disabled cell is identical to the enabled one in light and in dark: control.image_select has no disabled look outside the Windows profile (control.select takes no `enabled`); a Neper-wide gap, not a dark one, and fixing it would change the light PNG"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/date_edit.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Field states and the open calendar viewed: the calendar panel is a dark container, the selected day is the accent disc with OnPrimary text, the weekday header is muted (10.9:1).",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/mask_edit.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, focus, empty, hover viewed; same field as text_edit.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/memo.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, hover, focus with selection, disabled, read-only, invalid, placeholder, scrollbar viewed; the scroll thumb #767882 is 4.2:1 on the field.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/button_edit.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Hover over the field and over the ellipsis, pressed ellipsis (pale accent ring #B3C5FF around a #24252B face), disabled viewed.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The Windows hot key edit of the same sheets is a Windows-only pixel replica (light)"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/token_edit.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, hover token, hover close, focus, empty, wrapped and one-token states viewed; token chips outlined in Border (5.8:1), close glyph on-surface.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/check_list_box.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, hover, focus, empty and the three Options dialog lists viewed. Selected rows #39475F with #E1E2E9 text 7.3:1; the focused row's edge is the accent (5.5:1 on the selection).",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/progress_bar.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Determinate and marquee states viewed; the track #39475F is 2.0:1 on the page (a track, like the light look's), the fill the accent.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/group_box.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, disabled, long caption, plain, empty and section header viewed; the frame is OutlineVariant (2.0:1, light twin 1.7:1).",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/page_control.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, hover, pressed, focus, disabled and tab-view states viewed; the selected tab's accent underline and the focus box are #B3C5FF.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/splitter.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, hover, dragged and focus viewed; the sheet's panes took a hard-coded white face (a sheet colour, not the control): neper-dark now uses the theme surface and border, the light sheet is unchanged. The focused sash is the accent (10.9:1).",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/status_bar.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, progress, pressable (hover), error tone and narrow panels viewed; the panel text is muted on #1E1F24.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Muted panel text measures 4.4:1 at its dimmest (#82848F on #1E1F24), just under 4.5:1"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/toolbar_button.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Glyph buttons at rest, hover, pressed, focus, checked, and the captioned buttons viewed.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The Disabled glyph looks the same as the enabled one in light and dark: the Neper glyph button draws no disabled look (a Neper-wide gap)"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/menu_bar.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Bar at rest, hover and pressed viewed (hover and open fill are state layers, visible).",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The open drop-down is not rendered by the Neper sheet in light either (menu_bar-open shows only the bar); the dark dropdown panel is judged only through popup_menu-hover"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. The hover sheet (popup_menu-hover) viewed: surface #1D1E23, separators, shortcuts muted, disabled item 38 %.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The other popup_menu_* sheets render empty under Neper (light as well): the Windows-only menu pictures, nothing to do",
+     "Hover row on a disabled item is barely visible (a state layer on #1D1E23)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/hint.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Plain, wrapped and shortcut tooltips (inverse surface #E1E2E9 with dark text, a light bubble on the dark page, 12:1) and the rich hint card viewed.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The rich hint card (#1F2024) has no border and is only 1.1:1 against the page: it relies on its elevation shadow, which does not show on a dark page"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/scroll_bar.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, hover, pressed, scrolled and horizontal viewed: the thumb #767882 is 4.2:1 on the page and 3.3:1 on the sheet's content box. The sheet's content box was hard-coded white (a sheet colour): neper-dark uses SurfaceContainerHigh, the light sheet is unchanged.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/list_box.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Rest, hover, focus, scrolling, empty, long rows and no-choice viewed; the selected row #39475F with the check mark and text 7.3:1, the focused row's accent edge.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/tree_list.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Filter list, check variants and the empty rules list viewed. Row inks the sheet sets for the light page (red, black, blue ...) are lifted to at least 4.6:1 by style.lift_ink; the sheet's v3 check box was a light-only pixel tile and is a themed box (Surface + Border) under Neper dark, the light sheet is unchanged.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The plus box and the row triangle are small glyph tiles drawn in on-surface: visible, but not individually measured"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/vertical_grid.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. Both sheets viewed: category rows, name column muted, selected row #39475F, the collapsed summary with its counts; no light-only colour left.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/data_grid.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. The Neper theme grid (data_grid, data_grid_dialogs, filter row, grouped, summary footer) is fully dark; row inks (card colours) are lifted. The v3-look sheet (data_grid_main) now uses gridlook.neper_dark_of (new, applied in datagrid.build only for Neper + Dark): header #1E2027, rows #12131A / #1A1C23, selection #34435F with accent edge, group rows #22242B, footer olive #3A3920, plus collection.dk and datagrid.skin for the pixel lines of the soft-line table.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "data_grid_main still shows light baked v3 pixels: the indicator icons, the star, the filter funnel, the navigator buttons and the dotted filter-row line are 96 DPI capture tiles in white/blue; the grid frame is a lighter grey line",
+     "The v3 dialogs of datagrid.e (page setup, format rules, statistics ...) are hundreds of hard-coded light colours (gl.rgb 0xFFFFFF / 0xF0F0F0); they are Windows-only and stay light",
+     "The v3 look's row inks are lifted generically, not mapped per card colour"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/dialog.png",
+    "notes": "Neper dark = style.reference(.Dark) tokens, no platform branch. Measured on the 1.0 PNG with PIL (WCAG 2): text #E1E2E9 on page #121318 14.4:1, muted text #C4C6D5 10.9:1, field border (Border #8D909E) 5.8:1, focus ring / accent #B3C5FF 10.9:1, accent button label #002F65 on #B3C5FF 7.7:1, text on the selection row #39475F 7.3:1 and its edge #B3C5FF 5.5:1, disabled text 38 % = 3.3:1 (by design, WCAG exempts disabled). Group and list frames use OutlineVariant #434653 = 2.0:1, the same ratio as the light look (1.7:1): decorative dividers, not field borders. The dialog, message box and wide sheets viewed: the dialog surface #292A2F on the page; the scrim (black over a dark page) is invisible, so the dialog is told apart only by its lighter surface (1.4:1 to the page) and has no shadow.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Scrim and elevation shadow do not read on a dark page; a 1 px OutlineVariant border would help (not added: it would be new chrome)"
+    ]
+   }
+  }
+ }
+}

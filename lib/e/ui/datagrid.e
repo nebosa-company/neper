@@ -7437,6 +7437,19 @@ fn summary_text(a: *mem.Arena, s: ColumnSpec, summary: grp.Summary) -> (str, err
     ret (str.done(&sb), ok)
 }
 
+// Neper dark: the v3 look's light constants (white, #F0F0F0) in the dark grid's surfaces; any other look keeps them.
+fn skin(grid: *const Grid, value: u32) -> paint.Color {
+    if grid.theme.tokens.profile == .Neper && grid.theme.tokens.palette == .Dark && grid.look.on {
+        if value == 0xFFFFFFu32 { ret grid.look.even }
+        if value == 0xF0F0F0u32 { ret grid.look.group_row }
+        if value == 0xF8F8F8u32 { ret gl.rgb(0x181A20u32) }
+        if value == 0xEBEBEBu32 { ret gl.rgb(0x24262Du32) }
+        if value == 0xE3E3E3u32 { ret gl.rgb(0x272930u32) }
+        if value == 0xDCDCDCu32 { ret gl.rgb(0x2F3138u32) }
+    }
+    ret gl.rgb(value)
+}
+
 // A data cell's text: in the row's own ink when the application gave one (`set_row_ink`), else
 // in `role`.
 fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role: style.ColorRole, row: usize, out: *widget.Node) -> err {
@@ -8853,12 +8866,12 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         band.width = style.Length { Px: 0.0 }
         var live_band = style.defaults()
         live_band.height = style.Length { Px: 23.0 }
-        live_band.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        live_band.background = paint.Brush { Solid: skin(grid, 0xFFFFFFu32) }
         info = widget.padded(0u64, 5.0, 5.0, 4.0, 0.0, live_band, one(a, info_text))
     } else if grid.has_nav_icons {
         // v3 sets the position on a white band as wide as the gap between its buttons
         var band = control.sized_style(115.0, 30.0)
-        band.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        band.background = paint.Brush { Solid: skin(grid, 0xFFFFFFu32) }
         info = widget.padded(0u64, 10.0, 8.0, 0.0, 0.0, band, one(a, info_text))
     }
     cells[3usize] = info
@@ -9064,7 +9077,7 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let orig = grid.origin[at]
         picks[at] = FilterPick { grid: grid, spec: orig }
         var cell_style = control.sized_style(grid.columns[at].width, 20.0)
-        cell_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        cell_style.background = paint.Brush { Solid: skin(grid, 0xFFFFFFu32) }
         if held_spec <= grid.all.len && held_spec != orig { cell_style.background = paint.Brush { Solid: gl.rgb(0xA6D2FFu32) } }
         if s.kind == CellKind.Indicator {
             // the funnel of the filter row stands in the indicator column
@@ -9094,7 +9107,7 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let sign = widget.region(grid.key + FILTER_KEY + 1100u64 + u64(orig), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[at]), invoke: on_filter_sign }, gestures: 1u8, enabled: true, focusable: false }, sign_box, one(a, widget.padded(0u64, 6.0, 10.0, 0.0, 0.0, style.defaults(), one(a, sign_text))))
             let buffer = grid.filter_text[orig * FILTER_TEXT..(orig + 1usize) * FILTER_TEXT]
             var inner_width = grid.columns[at].width - 36.0
-            var field_fill = gl.rgb(0xFFFFFFu32)
+            var field_fill = skin(grid, 0xFFFFFFu32)
             if held_spec <= grid.all.len && held_spec != orig { field_fill = gl.rgb(0xA6D2FFu32) }
             if inner_width < 8.0 { inner_width = 8.0 }
             let (field, field_error) = control.bare_field(a, grid.key + FILTER_KEY + u64(orig), grid.theme, s.title, buffer, grid.filter_lens[orig], widget.Change[str] { ctx: mem.cast[*void](&picks[at]), invoke: on_filter }, zero, inner_width, 18.0, grid.look.text_size, field_fill, field_fill)
@@ -9113,9 +9126,9 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var line_at = 0usize
     while line_at < grid.specs.len {
         var edge_a = control.sized_style(1.0, 20.0)
-        edge_a.background = paint.Brush { Solid: gl.rgb(0xE3E3E3u32) }
+        edge_a.background = paint.Brush { Solid: skin(grid, 0xE3E3E3u32) }
         var edge_b = control.sized_style(1.0, 20.0)
-        edge_b.background = paint.Brush { Solid: gl.rgb(0xF8F8F8u32) }
+        edge_b.background = paint.Brush { Solid: skin(grid, 0xF8F8F8u32) }
         let (edged, edged_error) = mem.alloc[widget.Node](a, 3usize)
         if edged_error != ok { ret (zero, control.TooLarge) }
         edged[0usize] = cells[line_at]
@@ -9129,10 +9142,10 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (stack, stack_error) = mem.alloc[widget.Node](a, 3usize)
     if stack_error != ok { ret (zero, control.TooLarge) }
     var line_a = control.sized_style(4000.0, 1.0)
-    line_a.background = paint.Brush { Solid: gl.rgb(0xEBEBEBu32) }
+    line_a.background = paint.Brush { Solid: skin(grid, 0xEBEBEBu32) }
     line_a.margin = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     var line_b = control.sized_style(4000.0, 1.0)
-    line_b.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) }
+    line_b.background = paint.Brush { Solid: skin(grid, 0xDCDCDCu32) }
     line_b.margin = line_a.margin
     stack[0usize] = filter_cells
     stack[1usize] = widget.box(0u64, line_a, zero)
@@ -9141,10 +9154,10 @@ fn v3_filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (full, full_error) = mem.alloc[widget.Node](a, 5usize)
     if full_error != ok { ret (zero, control.TooLarge) }
     var rim = control.sized_style(4000.0, 1.0)
-    rim.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) }
+    rim.background = paint.Brush { Solid: skin(grid, 0xF0F0F0u32) }
     rim.margin = line_a.margin
     var white_strip = control.sized_style(4000.0, 3.0)
-    white_strip.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+    white_strip.background = paint.Brush { Solid: skin(grid, 0xFFFFFFu32) }
     white_strip.margin = line_a.margin
     full[0usize] = filter_cells
     full[1usize] = stack[1usize]
@@ -9319,7 +9332,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var cell_style = style.defaults()
         cell_style.width = style.Length { Px: grid.columns[at].width }
         if grid.look.on && text.len != 0usize { cell_style.background = paint.Brush { Solid: grid.look.footer_cell } }
-        if live_footer && s.kind == CellKind.Indicator { cell_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) } }
+        if live_footer && s.kind == CellKind.Indicator { cell_style.background = paint.Brush { Solid: skin(grid, 0xF0F0F0u32) } }
         if grid.look.on && text.len != 0usize {
             // v3 (FR-footer recording): the count sits at the left of its cell, a whole number is
             // centred, an amount stands at the right
@@ -9548,7 +9561,7 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         inside[1usize] = triangle
         if grid.look.on && false { inside[1usize] = title }
         var chip_style = style.defaults()
-        chip_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        chip_style.background = paint.Brush { Solid: skin(grid, 0xFFFFFFu32) }
         chip_style.height = style.Length { Px: 18.7 }
         var chip_left: f32 = 6.0
         if grid.look.on && grid.look.group_flat {
@@ -9780,6 +9793,8 @@ fn reveal_current(grid: *Grid) {
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     // The Windows look (docs/ui/looks) is the measured v3 grid, unless the application set its own.
     if theme.tokens.profile == .Windows && !grid.look.on { set_look(grid, gl.v3()) }
+    // Neper dark: the v3 grid's light surfaces become the dark tokens' (the light look is untouched)
+    if theme.tokens.profile == .Neper && theme.tokens.palette == .Dark && grid.base_look.on { grid.look = gl.neper_dark_of(grid.look, grid.base_look) }
     // looks4-e: v3's grids draw Tahoma 8 pt (11 px), as its dialogs do
     var drawn_with = theme
     if theme.tokens.profile == .Windows && grid.look.on {
@@ -10089,7 +10104,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         gap = 0.0
     }
     var inner_style = style.defaults()
-    if grid.look.on && !grid.look.frame_none { inner_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) } }
+    if grid.look.on && !grid.look.frame_none { inner_style.background = paint.Brush { Solid: skin(grid, 0xF0F0F0u32) } }
     var stacked = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap }, inner_style, parts[0usize..part_count])
     if grid.look.on && !grid.look.frame_none { stacked = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, frame, one(a, stacked)) }
     let (keyed, keyed_error) = with_keys(a, grid, stacked)
