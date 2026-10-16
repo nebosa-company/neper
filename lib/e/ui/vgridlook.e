@@ -115,7 +115,8 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         // the capture's hairlines drift 0.013 px a row (fractional layout): dark C6 -> CE, light D9 -> D2
         // looks5-e: the drift follows the row's place down the grid, not the category (live capture: #C5C5C8 over #DADADB
         // at the first row, #D1D1D3 over #CECED0 at y 234, #D8D8D9 over #C7C7CA at y 337)
-        var drift = (f.rows[r] - 51.0) * 0.065
+        // looks13-r2: refitted on both Deck Properties states (the first row 0, #C7 at row top 62, #D8 at 320): +2 at row top 62, 0.0659 a pixel
+        var drift = (f.rows[r] - 62.0) * 0.0659 + 2.0
         if drift < 0.0 { drift = 0.0 }
         k = u32(drift + 0.5)
         let dark = 0xC5C5C8u32 + k * 0x010101u32

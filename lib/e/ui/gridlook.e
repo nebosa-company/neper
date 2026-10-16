@@ -971,18 +971,32 @@ fn pix_digit(c: u8) -> f32 {
 fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
     var at = 0usize
     var n = 0usize
+    // looks13-r2: runs of equal pixels in a row are one rectangle (the same pixels, far fewer commands: v3's bitmaps are mostly flat)
     while at + 6usize <= m.pix.len {
+        let col = n % m.cols
+        var run = 1usize
+        if col >= m.skip {
+            while col + run < m.cols && at + (run + 1usize) * 6usize <= m.pix.len {
+                var same = true
+                var d = 0usize
+                while d < 6usize {
+                    if m.pix[at + d] != m.pix[at + run * 6usize + d] { same = false }
+                    d += 1usize
+                }
+                if !same { break }
+                run += 1usize
+            }
+        }
         let ri = u32(pix_digit(m.pix[at]) * 16.0 + pix_digit(m.pix[at + 1usize]))
         let gi = u32(pix_digit(m.pix[at + 2usize]) * 16.0 + pix_digit(m.pix[at + 3usize]))
         let bi = u32(pix_digit(m.pix[at + 4usize]) * 16.0 + pix_digit(m.pix[at + 5usize]))
         // (round 7) under the Windows dark map the bitmap's pixels take their dark counterpart (a no-op in light)
         let shown = rgb(ri * 65536u32 + gi * 256u32 + bi)
-        let col = n % m.cols
         let px = f32(col) - f32(m.skip)
         let py = f32(n / m.cols)
-        if col >= m.skip { try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, 1.0, 1.0, shown) }
-        at += 6usize
-        n += 1usize
+        if col >= m.skip { try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, f32(run), 1.0, shown) }
+        at += 6usize * run
+        n += run
     }
     ret ok
 }

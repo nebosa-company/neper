@@ -11250,17 +11250,40 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // looks5-e: the shape of a row of the Windows property grid when it is not the plain 17 px one: its content height, up to two extra
 // lines in its header cell and in its value cell (x from the grid's left edge, 0 for none) and the captions of its header cells
 // (centred between the lines). An application sets the shapes before it builds the grid (Deck Properties' Computed rows).
-type PropertyShape = struct { height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str }
+type PropertyShape = struct { height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str, tx1: f32, tx2: f32, tx3: f32, px1: f32, px2: f32, px3: f32, pic1: str, pic2: str, pic3: str, pic_w: f32, pic_h: f32 }
 var property_shapes: [64]PropertyShape = zero
 
 fn property_row_shape(index: usize, height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str) {
-    if index < 64usize { property_shapes[index] = PropertyShape { height: height, hs1: hs1, hs2: hs2, vs1: vs1, vs2: vs2, l1: l1, l2: l2, l3: l3 } }
+    if index < 64usize { property_shapes[index] = PropertyShape { height: height, hs1: hs1, hs2: hs2, vs1: vs1, vs2: vs2, l1: l1, l2: l2, l3: l3, tx1: 0.0, tx2: 0.0, tx3: 0.0, px1: 0.0, px2: 0.0, px3: 0.0, pic1: "", pic2: "", pic3: "", pic_w: 0.0, pic_h: 0.0 } }
+}
+
+// looks13-r2: the left edges of the three header captions of a shaped row, where v3 draws them left-aligned after a picture (0 = centred)
+// looks13-r2: three pictures (pixel strings of `w` x `h`) at the given x in the header of a shaped row, as v3 draws the Land, Crea and Spell icons
+fn property_row_pics(index: usize, x1: f32, p1: str, x2: f32, p2: str, x3: f32, p3: str, w: f32, h: f32) {
+    if index < 64usize {
+        property_shapes[index].px1 = x1
+        property_shapes[index].px2 = x2
+        property_shapes[index].px3 = x3
+        property_shapes[index].pic1 = p1
+        property_shapes[index].pic2 = p2
+        property_shapes[index].pic3 = p3
+        property_shapes[index].pic_w = w
+        property_shapes[index].pic_h = h
+    }
+}
+
+fn property_row_text_x(index: usize, x1: f32, x2: f32, x3: f32) {
+    if index < 64usize {
+        property_shapes[index].tx1 = x1
+        property_shapes[index].tx2 = x2
+        property_shapes[index].tx3 = x3
+    }
 }
 
 fn property_shapes_clear() {
     var at = 0usize
     while at < 64usize {
-        property_shapes[at] = PropertyShape { height: 0.0, hs1: 0.0, hs2: 0.0, vs1: 0.0, vs2: 0.0, l1: "", l2: "", l3: "" }
+        property_shapes[at] = PropertyShape { height: 0.0, hs1: 0.0, hs2: 0.0, vs1: 0.0, vs2: 0.0, l1: "", l2: "", l3: "", tx1: 0.0, tx2: 0.0, tx3: 0.0, px1: 0.0, px2: 0.0, px3: 0.0, pic1: "", pic2: "", pic3: "", pic_w: 0.0, pic_h: 0.0 }
         at += 1usize
     }
 }
@@ -11426,7 +11449,8 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     value_sem.row = u32(k + 1usize)
                     value_sem.column = 2u32
                     var value_box = control.sized_style(control.max_zero(width - value_x - 2.0), rh)
-                    value_box.overflow = .Clip
+                    // looks13-r2: the shaped Computed rows carry v3 bitmaps that cover the row's hairlines
+                    if shape.height <= 0.0 { value_box.overflow = .Clip }
                     let (value_flex, value_flex_error) = mem.alloc[widget.Node](a, 1usize)
                     if value_flex_error != ok { ret (zero, TooLarge) }
                     value_flex[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, value_box, valued[0usize..1usize])
@@ -11455,11 +11479,42 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                             seg_held[0usize] = seg_node
                             var seg_box = control.sized_style(seg_to - seg_from, rh)
                             seg_box.overflow = .Clip
-                            parts[n] = widget.positioned(0u64, seg_from, cursor, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, seg_box, seg_held[0usize..1usize])))
+                            var tx = shape.tx1
+                            if seg_at == 1usize { tx = shape.tx2 }
+                            if seg_at == 2usize { tx = shape.tx3 }
+                            if tx > 0.0 {
+                                seg_box = control.sized_style(seg_to - tx, rh)
+                                seg_box.overflow = .Clip
+                                parts[n] = widget.positioned(0u64, tx, cursor, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, seg_box, seg_held[0usize..1usize])))
+                            } else {
+                                parts[n] = widget.positioned(0u64, seg_from, cursor, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, seg_box, seg_held[0usize..1usize])))
+                            }
                             n += 1usize
                         }
                         seg_from = seg_to + 2.0
                         seg_at += 1usize
+                    }
+                    if shape.pic_w > 0.0 {
+                        var pic_at = 0usize
+                        while pic_at < 3usize {
+                            var pic = shape.pic1
+                            var pic_x = shape.px1
+                            if pic_at == 1usize {
+                                pic = shape.pic2
+                                pic_x = shape.px2
+                            }
+                            if pic_at == 2usize {
+                                pic = shape.pic3
+                                pic_x = shape.px3
+                            }
+                            if pic.len > 0usize {
+                                let (pic_node, pic_error) = gl.pixels(a, pic, shape.pic_w, shape.pic_h)
+                                if pic_error != ok { ret (zero, pic_error) }
+                                parts[n] = widget.positioned(0u64, pic_x, cursor, style.defaults(), one_node(a, pic_node))
+                                n += 1usize
+                            }
+                            pic_at += 1usize
+                        }
                     }
                     rows += 1usize
                     cursor += rh + 2.0
