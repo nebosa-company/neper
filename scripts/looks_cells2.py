@@ -18,14 +18,31 @@ import looks_cells  # noqa: E402
 
 ROOT = looks_cells.ROOT
 CLUSTERS = 0
+OURS_DIR = os.environ.get("LOOKS_OURS_DIR", "")  # a folder of ours PNGs to compare instead of docs/ui/looks/<look>/ (baselines)
 
 
 def run(name, look="windows", verbose=False, masks=(), save=None):
     ref = np.array(Image.open(ROOT + "ref/windows/%s.png" % name).convert("RGB"))
-    ours = np.array(Image.open(ROOT + "%s/%s.png" % (look, name)).convert("RGB"))
+    ours_path = os.path.join(OURS_DIR, name + ".png") if OURS_DIR else ROOT + "%s/%s.png" % (look, name)
+    ours = np.array(Image.open(ours_path).convert("RGB"))
     if ref.shape != ours.shape:
-        print("%s: SIZE ref %s ours %s" % (name, ref.shape, ours.shape))
-        return None
+        if ref.shape[0] <= ours.shape[0] and ref.shape[1] <= ours.shape[1]:
+            # ours is a bigger sheet: the reference crop is placed at the offset of fewest flat pixels off (only sizes and inner geometry are tested)
+            sm0 = looks_struct.struct_mask(ref)
+            ys, xs = np.nonzero(sm0)
+            ys, xs = ys[::17], xs[::17]  # a sample of the structural pixels is enough to find the offset
+            rv = ref[ys, xs].astype(int)
+            best = None
+            for dy in range(0, ours.shape[0] - ref.shape[0] + 1):
+                for dx in range(0, ours.shape[1] - ref.shape[1] + 1):
+                    bad = int((np.abs(ours[ys + dy, xs + dx].astype(int) - rv).max(axis=1) > 2).sum())
+                    if best is None or bad < best[0]:
+                        best = (bad, dx, dy)
+            print("%s: sheet sizes differ (ref %s ours %s): crop placed at ours offset (%d, %d)" % (name, ref.shape[:2], ours.shape[:2], best[1], best[2]))
+            ours = ours[best[2]:best[2] + ref.shape[0], best[1]:best[1] + ref.shape[1]]
+        else:
+            print("%s: SIZE ref %s ours %s" % (name, ref.shape, ours.shape))
+            return None
     for (x0, y0, x1, y1) in masks:
         ref[y0:y1, x0:x1] = ref[0, 0]
         ours[y0:y1, x0:x1] = ref[0, 0]

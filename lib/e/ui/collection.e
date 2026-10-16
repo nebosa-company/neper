@@ -4965,7 +4965,19 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             bar_parts[1usize] = widget.positioned(0u64, width + lk.bar_margin, 0.0 - lk.bar_top, style.defaults(), over_held[0usize..1usize])
             var over_style = style.defaults()
             over_style.width = style.Length { Px: width + lk.scroll_width + 18.0 }
-            column_node[0usize] = widget.stack(0u64, over_style, bar_parts[0usize..2usize])
+            // round 12: the top grid's rows end in a #F8F8F8 pixel before the bar's #F7F7F7 one (live captures, every state)
+            if lk.top_fit && t.tokens.profile == .Windows && lk.soft_lines {
+                var pre_strip = control.sized_style(1.0, track_h - head_height)
+                pre_strip.background = paint.Brush { Solid: gl.rgb(0xF8F8F8u32) }
+                let (with_pre, with_pre_error) = mem.alloc[widget.Node](a, 3usize)
+                if with_pre_error != ok { ret (zero, TooLarge) }
+                with_pre[0usize] = bar_parts[0usize]
+                with_pre[1usize] = bar_parts[1usize]
+                with_pre[2usize] = widget.positioned(0u64, width + lk.bar_margin - 1.0, head_height - lk.bar_top, style.defaults(), one_node(a, widget.box(0u64, pre_strip, zero)))
+                column_node[0usize] = widget.stack(0u64, over_style, with_pre[0usize..3usize])
+            } else {
+                column_node[0usize] = widget.stack(0u64, over_style, bar_parts[0usize..2usize])
+            }
         } else if lk.dialog_lines {
             var strip = control.sized_style(1.0, track_h)
             strip.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }

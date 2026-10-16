@@ -1109,7 +1109,7 @@ fn extra_of(grid: *const Grid, at: usize) -> f32 {
         // looks5-e: directly under the header (no filter row) the first group row is 16 tall (live capture)
         if at == 0usize && !grid.filter_visible { ret -3.0 }
         // round 12: the current group row of the Windows top grid keeps the pixel its focus rectangle's foot line uses
-        if grid.has_position && grid.position == at && grid.look.group_counts && win_look(grid) { ret 0.0 }
+        if grid.has_position && grid.position == at && at + 1usize >= grp.visible_len(grid.g) && (grid.look.group_counts || grid.look.group_rect) && win_look(grid) { ret 0.0 }
         ret -1.0
     }
     if grid.preview_on && grid.look.on && !grp.visible_is_group(grid.g, at) { ret preview_extra() }
@@ -7619,7 +7619,7 @@ fn group_cell(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: *widge
         dot_h = 18.0
     }
     // round 12: the Windows top grid draws the focus rectangle of its current group row over the whole row (collection.e, `group_current`)
-    let row_rect = grid.look.group_flat && grid.look.group_counts && win_look(grid)
+    let row_rect = grid.look.group_flat && (grid.look.group_counts || grid.look.group_rect) && win_look(grid)
     if row_rect && spec != 0usize {
         *out = plain
         ret ok
@@ -8919,9 +8919,11 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     text_options.size = grid.look.text_size
     var info_text: widget.Node = zero
     var info_error: err = ok
-    if grid.look.on && grid.look.group_flat && grid.look.group_counts && win_look(grid) {
+    if grid.look.on && grid.look.group_flat && win_look(grid) {
         // round 12: the position text is GDI's Tahoma 11 px at whole pixel advances (the box grows with it as v3's does)
-        let (gdi_info, gdi_info_width, gdi_info_error) = control.choices_words(a, grid.theme, text_options, style.color(grid.theme.tokens, .Text), str.done(&sb))
+        var info_words = text_options
+        info_words.wrap = .None
+        let (gdi_info, gdi_info_width, gdi_info_error) = control.choices_words(a, grid.theme, info_words, style.color(grid.theme.tokens, .Text), str.done(&sb))
         info_text = gdi_info
         info_error = gdi_info_error
     } else {
@@ -8941,6 +8943,8 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         live_band.background = paint.Brush { Solid: skin(grid, 0xFFFFFFu32) }
         // looks5-e: v3's hinted text is wider than ours: the box follows the capture (the next buttons stand 3 px further)
         info = widget.padded(0u64, 5.0, 5.0, 7.0, 0.0, live_band, one(a, info_text))
+        // round 12: GDI's text node stands a pixel right and a pixel higher than the plain text it replaces
+        if win_look(grid) { info = widget.padded(0u64, 6.0, 4.0, 6.0, 0.0, live_band, one(a, info_text)) }
     } else if grid.has_nav_icons {
         // v3 sets the position on a white band as wide as the gap between its buttons
         var band = control.sized_style(115.0, 30.0)
@@ -9868,7 +9872,18 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     var content: widget.Node = zero
     if n == 0usize {
         // v3's hint of an empty box
-        let hint_error = text_node(a, grid, "Drag a column header here to group by that column", false, .Text, &content)
+        var hint_error: err = ok
+        if grid.look.on && grid.look.group_counts && win_look(grid) {
+            // round 12: GDI's Tahoma 11 px at whole pixel advances (the capture's ink is 247 px wide)
+            var hint_words = control.text_options()
+            hint_words.wrap = .None
+            hint_words.size = grid.look.text_size
+            let (gdi_hint, gdi_hint_width, gdi_hint_error) = control.choices_words(a, grid.theme, hint_words, style.color(grid.theme.tokens, .Text), "Drag a column header here to group by that column")
+            content = widget.padded(0u64, 1.0, 3.0, 0.0, 0.0, style.defaults(), one(a, gdi_hint))
+            hint_error = gdi_hint_error
+        } else {
+            hint_error = text_node(a, grid, "Drag a column header here to group by that column", false, .Text, &content)
+        }
         if hint_error != ok { ret (zero, hint_error) }
     } else {
         content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), chips[0usize..n])
@@ -10180,7 +10195,7 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
 
 // round 12: the visible entry (+ 1) of the current group row of the Windows top grid, else 0
 fn current_group_entry(grid: *const Grid) -> usize {
-    if !grid.look.on || !grid.look.group_flat || !grid.look.group_counts || !win_look(grid) || !grid.has_position { ret 0usize }
+    if !grid.look.on || !grid.look.group_flat || !(grid.look.group_counts || grid.look.group_rect) || !win_look(grid) || !grid.has_position { ret 0usize }
     if grid.position >= grp.visible_len(grid.g) || !grp.visible_is_group(grid.g, grid.position) || grp.visible_is_footer(grid.g, grid.position) { ret 0usize }
     ret grid.position + 1usize
 }

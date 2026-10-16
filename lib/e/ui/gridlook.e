@@ -61,6 +61,8 @@ type Look = struct {
     // looks5-e: a grid without the focus paints its selected row in this fill and edge (the Options grids), else as focused
     // looks5-e: a group row carries "(Count: n)" (the View > Group by captures; the main window's Rarity groups do not)
     group_counts: bool,
+    // round 12: the group row focus rectangle drawn over the whole row (the pool grid of the main window shows no counts)
+    group_rect: bool,
     // round 12: the current group row's focus rectangle is the solid one of the pointer states (hover grabs), not the dotted one
     group_solid: bool,
     idle_on: bool,
@@ -148,6 +150,7 @@ fn v3() -> Look {
         foot_set: false,
         foot_drift: 0.0,
         group_counts: false,
+        group_rect: false,
         group_solid: false,
         idle_on: false,
         idle_fill: rgb(0xD5E4EEu32),
