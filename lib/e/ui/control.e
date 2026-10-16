@@ -9081,7 +9081,28 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
     words.wrap = .None
     var ink = style.color(t.tokens, .Text)
     if grid { ink = style.hex(6713980u32) }
-    let (said, said_error) = colored_text(a, 0u64, hint_text, &dialog_t, words, ink)
+    // looks9: v3 sets the hint's characters on GDI's whole pixel advances (Tahoma 12 px on the toolbar's, 11 px on the grid's): the hinted
+    // label (it keeps a pixel of inset left and above, which the offsets below leave out)
+    var one_line = true
+    var line_break = 0usize
+    while line_break < hint_text.len {
+        if hint_text[line_break] == 10u8 { one_line = false }
+        line_break += 1usize
+    }
+    var said_node: widget.Node = zero
+    var said_error: err = ok
+    if one_line {
+        var tahoma_px: f32 = 12.0
+        if grid { tahoma_px = 11.0 }
+        let (hinted_said, hinted_error) = windows_label(a, t, hint_text, tahoma_px, 400u32, ink, false, 0.0)
+        said_node = hinted_said
+        said_error = hinted_error
+    } else {
+        let (plain_said, plain_error) = colored_text(a, 0u64, hint_text, &dialog_t, words, ink)
+        said_node = plain_said
+        said_error = plain_error
+    }
+    let said = said_node
     if said_error != ok { ret (zero, said_error) }
     let (look_style, look_error) = text_style_faced(a, &dialog_t, words)
     if look_error != ok { ret (zero, look_error) }
@@ -9120,7 +9141,13 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = said
     layers[0usize] = face
-    layers[1usize] = widget.positioned(0u64, left, drop, style.defaults(), held[0usize..1usize])
+    var inset_x = left
+    var inset_y = drop
+    if one_line {
+        inset_x = left - 1.0
+        inset_y = drop - 2.0
+    }
+    layers[1usize] = widget.positioned(0u64, inset_x, inset_y, style.defaults(), held[0usize..1usize])
     ret (widget.stack(key, sized_style(w, h), layers[0usize..2usize]), ok)
 }
 // ---- end looks5 group d (hints) -------------------------------------------------------------------------------
