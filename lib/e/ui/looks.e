@@ -19,6 +19,7 @@ use e.gfx.scene
 use e.gpu
 use e.io
 use e.mem
+use e.os
 use e.str as strs
 use e.text.shape
 use e.time
@@ -31,11 +32,11 @@ use e.ui.widget
 
 // The four looks. Cupertino and Material have no tokens of their own yet: `theme_for` answers
 // the Neper tokens carrying their profile, and `run_all` does not render them.
-type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark }
+type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, MaterialDark, CupertinoDark }
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
-type Drive = enum u8 { None, Hover, Press, Focus, Select }
+type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33 }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -44,7 +45,7 @@ type Build = fn(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []Cel
 // A sheet: `name` is the file stem (the control), `columns` cells per row, each cell a box of
 // `cell_w` x `cell_h` logical px with the control centred in it and its caption above.
 type Sheet = struct { name: str, cells: usize, columns: usize, cell_w: f32, cell_h: f32, ctx: *void, build: Build }
-type Rig = struct { a: *mem.Arena, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, width: f32, height: f32, scale: f32 }
+type Rig = struct { a: *mem.Arena, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, width: f32, height: f32, scale: f32, material_fonts: []shape.Font }
 error Failed
 
 fn margin() -> f32 { ret 12.0 }
@@ -53,6 +54,8 @@ fn caption_h() -> f32 { ret 16.0 }
 fn out_root() -> str { ret "docs/ui/looks" }
 fn segoe_path() -> str { ret "C:/Windows/Fonts/segoeui.ttf" }
 fn tahoma_path() -> str { ret "C:/Windows/Fonts/tahoma.ttf" }
+fn roboto_path() -> str { ret "C:/Windows/Fonts/Roboto-Regular.ttf" }
+fn roboto_medium_path() -> str { ret "C:/Windows/Fonts/Roboto-Medium.ttf" }
 // Segoe UI Bold (font id 9), last in the chain: only a control that asks for weight 700 reaches it.
 fn segoe_bold_path() -> str { ret "C:/Windows/Fonts/segoeuib.ttf" }
 // Tahoma Bold (font id 10), last: v3 draws bold labels, captions, the Options pages' header title and the bars' group headers in it.
@@ -63,9 +66,11 @@ fn tahoma_bold_path() -> str { ret "C:/Windows/Fonts/tahomabd.ttf" }
 fn theme_for(look: Look) -> style.ThemeTokens {
     if look == .Windows { ret style.windows(.Light) }
     if look == .WindowsDark { ret style.windows(.Dark) }
+    if look == .Material { ret style.material(.Light) }
+    if look == .MaterialDark { ret style.material(.Dark) }
+    if look == .Cupertino { ret style.cupertino(.Light) }
+    if look == .CupertinoDark { ret style.cupertino(.Dark) }
     var t = style.reference(.Light)
-    if look == .Cupertino { t.profile = .CupertinoLike }
-    if look == .Material { t.profile = .MaterialLike }
     ret t
 }
 
@@ -73,7 +78,9 @@ fn look_dir(look: Look) -> str {
     if look == .Windows { ret "windows" }
     if look == .WindowsDark { ret "windows-dark" }
     if look == .Cupertino { ret "cupertino" }
+    if look == .CupertinoDark { ret "cupertino-dark" }
     if look == .Material { ret "material" }
+    if look == .MaterialDark { ret "material-dark" }
     ret "neper"
 }
 
@@ -103,6 +110,22 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 64u32)
     if renderer_error != ok { ret (rig, renderer_error) }
     rig.renderer = r
+    // The Android look: Roboto Regular (id 11) and Medium (id 12), led by themselves, then the Windows faces for glyphs Roboto lacks.
+    let (roboto_bytes, roboto_error) = fs.read_file(a, roboto_path(), 16777216usize)
+    if roboto_error != ok { ret (rig, roboto_error) }
+    let (medium_bytes, medium_error) = fs.read_file(a, roboto_medium_path(), 16777216usize)
+    if medium_error != ok { ret (rig, medium_error) }
+    let (droid, droid_error) = mem.alloc[shape.Font](a, 6usize)
+    if droid_error != ok { ret (rig, droid_error) }
+    droid[0usize] = shape.Font { id: 11u32, data: roboto_bytes, face_index: 0u32 }
+    droid[1usize] = shape.Font { id: 12u32, data: medium_bytes, face_index: 0u32 }
+    droid[2usize] = shape.Font { id: 7u32, data: segoe_bytes, face_index: 0u32 }
+    droid[3usize] = shape.Font { id: 9u32, data: bold_bytes, face_index: 0u32 }
+    droid[4usize] = shape.Font { id: 8u32, data: tahoma_bytes, face_index: 0u32 }
+    droid[5usize] = shape.Font { id: 10u32, data: tahoma_bold_bytes, face_index: 0u32 }
+    try scene.register_font(&rig.renderer, droid[0usize])
+    try scene.register_font(&rig.renderer, droid[1usize])
+    rig.material_fonts = droid[0usize..6usize]
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 4usize)
     if fonts_error != ok { ret (rig, fonts_error) }
     fonts[0usize] = shape.Font { id: 7u32, data: segoe_bytes, face_index: 0u32 }
@@ -117,8 +140,8 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 16384usize, max_states: 1024usize, state_bytes: 65536usize, state_classes: 8u16, max_depth: 48u16, max_commands: 49152usize })
     if runtime_error != ok { ret (rig, runtime_error) }
     rig.runtime = rt
-    // the window's device pixel, as the real app sets it (app.e): pixel-exact painters align to it
-    widget.set_snap(&rig.runtime, 1.0 / scale)
+    // The app sets this from the window; here, so that pixel art lands on whole device pixels. Left alone at 100 %.
+    if scale != 1.0 { widget.set_snap(&rig.runtime, 1.0 / scale) }
     let physical_w = u32(width * scale + 0.5)
     let physical_h = u32(height * scale + 0.5)
     let (h, harness_error) = testing.harness(a, &rig.runtime, physical_w, physical_h, scale)
@@ -134,6 +157,8 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
 
 fn set_look(rig: *Rig, look: Look) {
     rig.tokens = theme_for(look)
+    widget.set_arc_corners(rig.tokens.profile == .MaterialLike)
+    if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
 }
 
 // The control theme of the rig: its tokens, fonts and runtime.
@@ -272,6 +297,31 @@ fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
         try testing.tab(&rig.harness, true)
         ret testing.hover(&rig.harness, -500.0, -500.0)
     }
+    if drive == .SelectPress {
+        // An edit with its text selected and an end button pressed (a button edit's ellipsis): the click that focuses the
+        // edit lands 60 px left of the point, Ctrl+A selects, then the button at the point is held down.
+        try testing.tap(&rig.harness, x - 60.0, y)
+        var chord: input.Modifiers = zero
+        chord.control = true
+        try testing.press_key(&rig.harness, 65u32, chord)
+        try testing.hover(&rig.harness, x, y)
+        ret testing.send(&rig.harness, input.Event { PointerDown: testing.pointer_at(x, y) })
+    }
+    if drive == .Caret2 || drive == .Caret33 {
+        // Focus, then the caret put after the 2nd or the 33rd character (a pointer click does not place it in the harness):
+        // the captures show a clicked edit with its caret mid-text.
+        try testing.tap(&rig.harness, x, y)
+        var none: input.Modifiers = zero
+        try testing.press_key(&rig.harness, 36u32, none)
+        var count = 2usize
+        if drive == .Caret33 { count = 33usize }
+        var n = 0usize
+        while n < count {
+            try testing.press_key(&rig.harness, 39u32, none)
+            n += 1usize
+        }
+        ret testing.hover(&rig.harness, -500.0, -500.0)
+    }
     if drive == .Select {
         try testing.tap(&rig.harness, x, y)
         var modifiers: input.Modifiers = zero
@@ -352,12 +402,33 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
 }
 
 fn scale_suffix(scale: f32) -> str {
-    if scale > 1.25 { ret "@1.5x" }
+    if scale > 1.9 { ret "@2x" }
+    if scale > 1.4 { ret "@1.5x" }
+    if scale > 1.1 { ret "@1.25x" }
     ret ""
 }
 
+// The environment variable NEPER_LOOKS_SCALE (a number such as 1.25, 1.5 or 2) makes run_all render
+// that one scale instead of 1.0 and 1.5, and NEPER_LOOKS_OUT names the folder to write into instead of
+// docs/ui/looks, so a scale check never touches the committed PNGs. Unset, nothing changes.
+fn env_scale(a: *mem.Arena) -> f32 {
+    let (text, text_error) = os.env(a, "NEPER_LOOKS_SCALE")
+    if text_error != ok { ret 0.0 }
+    if strs.eq(text, "1.25") { ret 1.25 }
+    if strs.eq(text, "1.5") { ret 1.5 }
+    if strs.eq(text, "2") || strs.eq(text, "2.0") { ret 2.0 }
+    if strs.eq(text, "1") || strs.eq(text, "1.0") { ret 1.0 }
+    ret 0.0
+}
+
+fn env_out(a: *mem.Arena) -> str {
+    let (text, text_error) = os.env(a, "NEPER_LOOKS_OUT")
+    if text_error != ok || text.len == 0usize { ret out_root() }
+    ret text
+}
+
 fn path_of(a: *mem.Arena, look: str, name: str, tail: str, scale: f32, ext: str) -> (str, err) {
-    let parts = [8]str{ out_root(), "/", look, "/", name, tail, scale_suffix(scale), ext }
+    let parts = [8]str{ env_out(a), "/", look, "/", name, tail, scale_suffix(scale), ext }
     let (joined, joined_error) = strs.join(a, parts[0usize..8usize], "")
     if joined_error != ok { ret (zero, joined_error) }
     ret (joined, ok)
@@ -391,10 +462,17 @@ fn load_reference(a: *mem.Arena, path: str) -> (image.Image, bool) {
 
 // Renders `s` under the Neper, Windows and Windows dark looks at 100 % and 150 %.
 fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
+    let only_scale = env_scale(a)
+    let (no_text, no_text_error) = os.env(a, "NEPER_LOOKS_NOTEXT")
+    scene.set_text_hidden(no_text_error == ok && no_text.len > 0usize)
     var scale_index = 0usize
     while scale_index < 2usize {
         var scale: f32 = 1.0
         if scale_index == 1usize { scale = 1.5 }
+        if only_scale > 0.0 {
+            if scale_index == 1usize { break }
+            scale = only_scale
+        }
         var look_index = 0usize
         while look_index < 3usize {
             var look: Look = .Neper
@@ -420,6 +498,61 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
                     try beside(a, const_view(reference), ours, pair_path)
                 }
             }
+            look_index += 1usize
+        }
+        scale_index += 1usize
+    }
+    ret ok
+}
+
+// The Android look (docs/ui/looks/material, material-dark): `s` under style.material at 100 % and 150 %. Only these two
+// looks are written, so a sheet can be run without touching the Neper and Windows pictures.
+fn run_material(a: *mem.Arena, s: *const Sheet) -> err {
+    var scale_index = 0usize
+    while scale_index < 2usize {
+        var scale: f32 = 1.0
+        if scale_index == 1usize { scale = 1.5 }
+        var look_index = 0usize
+        while look_index < 2usize {
+            var look: Look = .Material
+            if look_index == 1usize { look = .MaterialDark }
+            let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
+            if open_error != ok { ret open_error }
+            set_look(rig, look)
+            let (folder, folder_error) = path_of(a, look_dir(look), "", "", 1.0, "")
+            if folder_error != ok { ret folder_error }
+            try fs.make_dirs(a, folder)
+            let (path, path_error) = path_of(a, look_dir(look), s.name, "", scale, ".png")
+            if path_error != ok { ret path_error }
+            let (ours, render_error) = render_sheet(rig, s, path)
+            if render_error != ok { ret render_error }
+            look_index += 1usize
+        }
+        scale_index += 1usize
+    }
+    ret ok
+}
+
+// The Cupertino looks, Light and Dark, at 100 % and 150 %: docs/ui/looks/cupertino and cupertino-dark.
+fn run_cupertino(a: *mem.Arena, s: *const Sheet) -> err {
+    var scale_index = 0usize
+    while scale_index < 2usize {
+        var scale: f32 = 1.0
+        if scale_index == 1usize { scale = 1.5 }
+        var look_index = 0usize
+        while look_index < 2usize {
+            var look: Look = .Cupertino
+            if look_index == 1usize { look = .CupertinoDark }
+            let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
+            if open_error != ok { ret open_error }
+            set_look(rig, look)
+            let (folder, folder_error) = path_of(a, look_dir(look), "", "", 1.0, "")
+            if folder_error != ok { ret folder_error }
+            try fs.make_dirs(a, folder)
+            let (path, path_error) = path_of(a, look_dir(look), s.name, "", scale, ".png")
+            if path_error != ok { ret path_error }
+            let (ours, render_error) = render_sheet(rig, s, path)
+            if render_error != ok { ret render_error }
             look_index += 1usize
         }
         scale_index += 1usize

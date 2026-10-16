@@ -10,11 +10,11 @@
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
-use e.math
 use e.mem
 use e.str as strs
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 
 // Generated from the v3 captures in docs/ui/looks/ref/windows/dialogs (the crisp 96 DPI buttons of Search for Card,
@@ -42,29 +42,15 @@ fn ring_pressed_edges() -> [8]u32 { ret [8]u32{ 0xAA005499u32, 0xFF88B4D8u32, 0x
 // Which ring: 0 rest, 1 default (accent), 2 disabled, 3 pressed.
 // `dx`, `dy` (looks5): the sub-pixel shift of v3's DPI-scaled forms, `dots` the focus rectangle drawn with the ring (0 none, 1
 // normal, 2 pressed) when it is shifted too.
-type Ring = struct { kind: u32, face: u32, tint: u32, snap: f32, dx: f32, dy: f32, dots: u32 }
+type Ring = struct { kind: u32, face: u32, tint: u32, dx: f32, dy: f32, dots: u32 }
 
 // `value` is 0xAARRGGBB; an alpha byte of 0 (a plain 0xRRGGBB) is opaque. looks5: the outer rows and corner cells of a
 // ring carry the share of ring over the dialog face they sit on (v3's Filter dialog is #F9F9F9, the others #F0F0F0).
-// `snap` is the logical size of a device pixel (zero or one: a whole pixel): the rectangle's edges move to the device
-// grid, so at a fractional scale a one pixel line is one or two device pixels wide and never a blurred half.
-fn ring_rect(b: *scene.Builder, snap: f32, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
+fn ring_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
     var color = style.hex(value & 0xFFFFFFu32)
     let alpha = value / 16777216u32
     if alpha != 0u32 && alpha < 255u32 { color.alpha = f32(alpha) / 255.0 }
-    var left = x
-    var top = y
-    var right = x + w
-    var bottom = y + h
-    if snap > 0.0 && snap != 1.0 {
-        left = math.round[f32](x / snap) * snap
-        top = math.round[f32](y / snap) * snap
-        right = math.round[f32]((x + w) / snap) * snap
-        bottom = math.round[f32]((y + h) / snap) * snap
-        if right <= left { right = left + snap }
-        if bottom <= top { bottom = top + snap }
-    }
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: left, y: top, width: right - left, height: bottom - top }, brush: paint.Brush { Solid: color } } })
+    ret winpx.fill(b, x, y, w, h, color)
 }
 
 // One channel of a corner cell for another face: the cell is a blend of the ring colour `edge` and the captured face
@@ -166,16 +152,16 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let h = f32(u32(area.height + 0.5))
     let x0 = area.x
     let y0 = area.y
-    try ring_rect(b, d.snap, x0 + 6.0, y0 + 1.0, w - 12.0, h - 2.0, d.face)
-    try ring_rect(b, d.snap, x0 + 1.0, y0 + 6.0, 5.0, h - 12.0, d.face)
-    try ring_rect(b, d.snap, x0 + w - 6.0, y0 + 6.0, 5.0, h - 12.0, d.face)
-    try ring_rect(b, d.snap, x0 + 6.0, y0, w - 12.0, 1.0, ring_edge(d.kind, 0usize))
-    try ring_rect(b, d.snap, x0 + 6.0, y0 + 1.0, w - 12.0, 1.0, ring_edge(d.kind, 1usize))
+    try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, h - 2.0, d.face)
+    try ring_rect(b, x0 + 1.0, y0 + 6.0, 5.0, h - 12.0, d.face)
+    try ring_rect(b, x0 + w - 6.0, y0 + 6.0, 5.0, h - 12.0, d.face)
+    try ring_rect(b, x0 + 6.0, y0, w - 12.0, 1.0, ring_edge(d.kind, 0usize))
+    try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, 1.0, ring_edge(d.kind, 1usize))
     // bottom: edge 2 is the row h - 2, edge 3 the row h - 1
-    try ring_rect(b, d.snap, x0 + 6.0, y0 + h - 2.0, w - 12.0, 1.0, ring_edge(d.kind, 2usize))
-    try ring_rect(b, d.snap, x0 + 6.0, y0 + h - 1.0, w - 12.0, 1.0, ring_edge(d.kind, 3usize))
-    try ring_rect(b, d.snap, x0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 4usize))
-    try ring_rect(b, d.snap, x0 + w - 1.0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 7usize))
+    try ring_rect(b, x0 + 6.0, y0 + h - 2.0, w - 12.0, 1.0, ring_edge(d.kind, 2usize))
+    try ring_rect(b, x0 + 6.0, y0 + h - 1.0, w - 12.0, 1.0, ring_edge(d.kind, 3usize))
+    try ring_rect(b, x0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 4usize))
+    try ring_rect(b, x0 + w - 1.0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 7usize))
     let baked = ring_baked(d.kind)
     let line = ring_line(d.kind)
     var c = 0usize
@@ -188,7 +174,7 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         while k < 36usize {
             let cell = ring_cell(d.kind, c * 36usize + k)
             if cell != 0u32 {
-                try ring_rect(b, d.snap, x0 + ox + f32(k % 6usize), y0 + oy + f32(k / 6usize), 1.0, 1.0, ring_pick(cell, baked, line, d.face))
+                try ring_rect(b, x0 + ox + f32(k % 6usize), y0 + oy + f32(k / 6usize), 1.0, 1.0, ring_pick(cell, baked, line, d.face))
             }
             k += 1usize
         }
@@ -363,7 +349,7 @@ fn ring_paint_shifted(d: *const Ring, b: *scene.Builder, area: geometry.Rect) ->
             // a run of equal pixels ends here
             if ox > 0 && value != run_value {
                 if run_value != 0u32 {
-                    try ring_rect(b, d.snap, area.x + f32(run_from), area.y + f32(oy), f32(ox - run_from), 1.0, run_value)
+                    try ring_rect(b, area.x + f32(run_from), area.y + f32(oy), f32(ox - run_from), 1.0, run_value)
                 }
                 run_from = ox
             }
@@ -376,10 +362,10 @@ fn ring_paint_shifted(d: *const Ring, b: *scene.Builder, area: geometry.Rect) ->
 }
 
 // The ring, `width` x `height` (the visible box), over a face 0xRRGGBB; `kind` as in `Ring`. A node to put under a button's label.
-fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32, snap: f32, dx: f32, dy: f32, dots: u32) -> (widget.Node, err) {
+fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32, dx: f32, dy: f32, dots: u32) -> (widget.Node, err) {
     let (rings, rings_error) = mem.alloc[Ring](a, 1usize)
     if rings_error != ok { ret (zero, rings_error) }
-    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32, snap: snap, dx: dx, dy: dy, dots: dots }
+    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32, dx: dx, dy: dy, dots: dots }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: height }
@@ -408,15 +394,15 @@ fn mnemonic(a: *mem.Arena, label: str) -> (str, usize, err) {
 // and 4 (and h - 4 and h - 3) of dots every 2 px from x = 6 to w - 7, two columns at x = 3 and w - 4 that alternate
 // per row, and four corner cells that are blends. The dot colours depend on the face: grey #555555 / #AAAAAA on the
 // #FDFDFD face, #665E57 / #99A1A8 on the pressed face.
-type FocusDots = struct { pressed: bool, snap: f32 }
+type FocusDots = struct { pressed: bool }
 
 fn focus_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
 }
 
 // One pixel at rect coordinates (rx, ry).
-fn focus_px(b: *scene.Builder, snap: f32, area: geometry.Rect, rx: f32, ry: f32, value: u32) -> err {
-    ret ring_rect(b, snap, area.x + rx - 1.0, area.y + ry - 1.0, 1.0, 1.0, value)
+fn focus_px(b: *scene.Builder, area: geometry.Rect, rx: f32, ry: f32, value: u32) -> err {
+    ret ring_rect(b, area.x + rx - 1.0, area.y + ry - 1.0, 1.0, 1.0, value)
 }
 
 fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
@@ -434,23 +420,23 @@ fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         light_corner = 0x919BA4u32
     }
     // the top rows: x = 4 and w - 5 are the corner cells
-    try focus_px(b, d.snap, area, 4.0, 3.0, dark_corner)
-    try focus_px(b, d.snap, area, w - 5.0, 3.0, dark_corner)
-    try focus_px(b, d.snap, area, 3.0, 4.0, dark)
-    try focus_px(b, d.snap, area, 4.0, 4.0, light)
-    try focus_px(b, d.snap, area, w - 5.0, 4.0, light)
-    try focus_px(b, d.snap, area, w - 4.0, 4.0, dark)
+    try focus_px(b, area, 4.0, 3.0, dark_corner)
+    try focus_px(b, area, w - 5.0, 3.0, dark_corner)
+    try focus_px(b, area, 3.0, 4.0, dark)
+    try focus_px(b, area, 4.0, 4.0, light)
+    try focus_px(b, area, w - 5.0, 4.0, light)
+    try focus_px(b, area, w - 4.0, 4.0, dark)
     // the bottom rows
-    try focus_px(b, d.snap, area, 4.0, h - 4.0, dark)
-    try focus_px(b, d.snap, area, w - 5.0, h - 4.0, dark)
-    try focus_px(b, d.snap, area, 4.0, h - 3.0, light_corner)
-    try focus_px(b, d.snap, area, w - 5.0, h - 3.0, light_corner)
+    try focus_px(b, area, 4.0, h - 4.0, dark)
+    try focus_px(b, area, w - 5.0, h - 4.0, dark)
+    try focus_px(b, area, 4.0, h - 3.0, light_corner)
+    try focus_px(b, area, w - 5.0, h - 3.0, light_corner)
     var x: f32 = 6.0
     while x <= w - 7.0 {
-        try focus_px(b, d.snap, area, x, 3.0, dark)
-        try focus_px(b, d.snap, area, x, 4.0, light)
-        try focus_px(b, d.snap, area, x, h - 4.0, dark)
-        try focus_px(b, d.snap, area, x, h - 3.0, light)
+        try focus_px(b, area, x, 3.0, dark)
+        try focus_px(b, area, x, 4.0, light)
+        try focus_px(b, area, x, h - 4.0, dark)
+        try focus_px(b, area, x, h - 3.0, light)
         x += 2.0
     }
     // the side columns alternate per row: dark on even rows, light on odd ones
@@ -458,18 +444,18 @@ fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     while y <= h - 4.0 {
         var v = light
         if (u32(y) % 2u32) == 0u32 { v = dark }
-        try focus_px(b, d.snap, area, 3.0, y, v)
-        try focus_px(b, d.snap, area, w - 4.0, y, v)
+        try focus_px(b, area, 3.0, y, v)
+        try focus_px(b, area, w - 4.0, y, v)
         y += 1.0
     }
     ret ok
 }
 
 // The focus rectangle over a ring box of `width` x `height` (the visible box); `pressed` for the pressed face.
-fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32, snap: f32) -> (widget.Node, err) {
+fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[FocusDots](a, 1usize)
     if dots_error != ok { ret (zero, dots_error) }
-    dots[0usize] = FocusDots { pressed: pressed, snap: snap }
+    dots[0usize] = FocusDots { pressed: pressed }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: height }

@@ -6,10 +6,10 @@
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
-use e.math
 use e.mem
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 
 fn icon_pixels() -> [256]u32 { ret [256]u32{ 0u32, 0u32, 0u32, 0u32, 0xDD5C4831u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xE4988566u32, 0x133A2D07u32, 0u32, 0x70947E54u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xF7837251u32, 0xB14F2D09u32, 0u32, 0xB788753Eu32, 0x9B3D341Au32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0x13472D15u32, 0u32, 0u32, 0xE98D7544u32, 0xFB673B10u32, 0u32, 0xBF9B853Bu32, 0xF6543910u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0x9E674F2Du32, 0u32, 0u32, 0x9B876F3Bu32, 0xF8966526u32, 0x24341906u32, 0xA199873Eu32, 0xFB764D12u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0x0B636439u32, 0xF4775D25u32, 0x0C33340Eu32, 0u32, 0x306F5B32u32, 0xF7A5792Du32, 0xAA3A2307u32, 0x86867639u32, 0xFD95631Fu32, 0x1740360Cu32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xF6AA8639u32, 0x97331B02u32, 0x8C6D3B1Du32, 0x8551160Du32, 0xFBA87D2Bu32, 0xF5533209u32, 0x96746431u32, 0xFA90601Cu32, 0x38433B14u32, 0u32, 0u32, 0x174C3717u32, 0x37655843u32, 0u32, 0u32, 0u32, 0xA09F883Au32, 0xF36A4014u32, 0xDC693016u32, 0xE66B3811u32, 0xFFD9B640u32, 0xFF8A6910u32, 0xDA9A7F39u32, 0xF97D5214u32, 0x454F4117u32, 0u32, 0x99997A34u32, 0xB362380Du32, 0x1B694F3Eu32, 0u32, 0u32, 0u32, 0x2F76712Du32, 0xFEAF7E3Au32, 0xF0532A07u32, 0xFA9B6629u32, 0xF8907322u32, 0xF9AD842Fu32, 0xF6785B1Du32, 0xF8794B14u32, 0x794D461Au32, 0x0A505122u32, 0xF3926A22u32, 0xEC3D2308u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xF3B59146u32, 0xF881591Bu32, 0xF9B5813Au32, 0xF8745012u32, 0xF7B08037u32, 0xF8644611u32, 0xF88C5D1Fu32, 0xD8684D14u32, 0xB09F6D2Bu32, 0xFA7C5414u32, 0x5D2D1B07u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0x86977D37u32, 0xFAC09742u32, 0xFB955422u32, 0xF88A5F1Cu32, 0xF6A97A2Du32, 0xF7573A0Cu32, 0xF8905F1Du32, 0xF9775113u32, 0xFA956723u32, 0xFA4A350Cu32, 0x093C3D22u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0x1C7B6022u32, 0xFDDDB25Bu32, 0xFB844D16u32, 0xF7A97B39u32, 0xF6A57C2Cu32, 0xF74E330Bu32, 0xFAA06B1Eu32, 0xF965460Eu32, 0xFA664614u32, 0x61372B08u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xDAAE903Eu32, 0xFAAF8135u32, 0xF8B08041u32, 0xF5906B1Fu32, 0xF956380Eu32, 0xFA875718u32, 0xFA583D0Du32, 0xC546300Du32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0x458D7529u32, 0xFED4A34Eu32, 0xF999662Fu32, 0xF58C661Au32, 0xF866410Fu32, 0xF9764913u32, 0xFB543A0Du32, 0x3A3E2D0Cu32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0x91B08C3Eu32, 0xF8AD7D40u32, 0xF69F7426u32, 0xF8744912u32, 0xF8744A0Fu32, 0xFD4F370Bu32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0x4B665A14u32, 0xFBCC9953u32, 0xF7A0732Au32, 0xF8764913u32, 0xF85B390Bu32, 0xFD3F2C08u32, 0x0C1F0C0Eu32, 0u32, 0u32, 0u32, 0u32, 0u32 } }
@@ -18,63 +18,41 @@ fn icon_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
 }
 
-// looks5: each pixel is 0xAARRGGBB, the colour and its share over the caption (solved from the icon on the dark and on the
-// light caption), so the icon sits on either; `snap` aligns the pixels to the device grid at a fractional scale.
-type Icon = struct { snap: f32 }
-
 fn icon_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    let d = mem.cast[*Icon](ctx)
     let pixels = icon_pixels()
     var i = 0usize
     while i < 256usize {
         if pixels[i] != 0u32 {
+            // looks5: each pixel is 0xAARRGGBB: the colour and its share over the caption (solved from the icon on the dark and the
+            // light caption), so the icon sits on either
             var color = style.hex(pixels[i] & 0xFFFFFFu32)
             color.alpha = f32(pixels[i] / 16777216u32) / 255.0
-            try pixel_rect(b, d.snap, area.x + f32(i % 16usize), area.y + f32(i / 16usize), 1.0, 1.0, color)
+            try winpx.fill(b, area.x + f32(i % 16usize), area.y + f32(i / 16usize), 1.0, 1.0, color)
         }
         i += 1usize
     }
     ret ok
 }
 
-// A rectangle with its edges moved to the device grid (`snap` is the logical size of a device pixel; zero or one changes nothing).
-fn pixel_rect(b: *scene.Builder, snap: f32, x: f32, y: f32, w: f32, h: f32, color: paint.Color) -> err {
-    var left = x
-    var top = y
-    var right = x + w
-    var bottom = y + h
-    if snap > 0.0 && snap != 1.0 {
-        left = math.round[f32](x / snap) * snap
-        top = math.round[f32](y / snap) * snap
-        right = math.round[f32]((x + w) / snap) * snap
-        bottom = math.round[f32]((y + h) / snap) * snap
-        if right <= left { right = left + snap }
-        if bottom <= top { bottom = top + snap }
-    }
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: left, y: top, width: right - left, height: bottom - top }, brush: paint.Brush { Solid: color } } })
-}
-
 // The program icon, 16 x 16, for a Windows caption.
-fn icon_node(a: *mem.Arena, snap: f32) -> (widget.Node, err) {
-    let (icons, icons_error) = mem.alloc[Icon](a, 1usize)
-    if icons_error != ok { ret (zero, icons_error) }
-    icons[0usize] = Icon { snap: snap }
+fn icon_node() -> widget.Node {
     var s = style.defaults()
     s.width = style.Length { Px: 16.0 }
     s.height = style.Length { Px: 16.0 }
     var none: []const widget.Node = zero
-    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&icons[0usize]), measure: icon_measure, paint: icon_paint, state: widget.bytes_of[Icon](&icons[0usize]) } }, style: s, children: none }, ok)
+    var state: []const u8 = zero
+    ret widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: zero, measure: icon_measure, paint: icon_paint, state: state } }, style: s, children: none }
 }
 
 // The minimise and maximise glyphs of a 46 x 31 caption button, painted with fractional rectangles the way the live
 // capture antialiases them: the dash is 10 x 0.75 at (16.8, 15.25), the square a 1 px outline 10 x 10 at (16.75, 10.75)
 // (both 1.25 px left of the button's centre). `kind` 0 minimise, 1 maximise, 2 close; `ink` is 0xRRGGBB, `alpha` its opacity.
-type Glyph = struct { kind: u32, ink: u32, alpha: f32, width: f32, snap: f32 }
+type Glyph = struct { kind: u32, ink: u32, alpha: f32, width: f32 }
 
-fn glyph_rect(b: *scene.Builder, snap: f32, area: geometry.Rect, x: f32, y: f32, w: f32, h: f32, ink: u32, alpha: f32) -> err {
+fn glyph_rect(b: *scene.Builder, area: geometry.Rect, x: f32, y: f32, w: f32, h: f32, ink: u32, alpha: f32) -> err {
     var c = style.hex(ink)
     c.alpha = alpha
-    ret pixel_rect(b, snap, area.x + x, area.y + y, w, h, c)
+    ret winpx.fill(b, area.x + x, area.y + y, w, h, c)
 }
 
 // The close X: 10 columns by 11 rows of coverage (0 to 255) at (18, 10) of the 46 x 31 button, from the capture.
@@ -86,7 +64,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         let cover = cross_cover()
         var i = 0usize
         while i < 110usize {
-            if cover[i] != 0u32 { try glyph_rect(b, g.snap, area, f32(u32((g.width - 10.0) * 0.5 + 0.5)) + f32(i % 10usize), 10.0 + f32(i / 10usize), 1.0, 1.0, g.ink, g.alpha * f32(cover[i]) / 255.0) }
+            if cover[i] != 0u32 { try glyph_rect(b, area, f32(u32((g.width - 10.0) * 0.5 + 0.5)) + f32(i % 10usize), 10.0 + f32(i / 10usize), 1.0, 1.0, g.ink, g.alpha * f32(cover[i]) / 255.0) }
             i += 1usize
         }
         ret ok
@@ -98,7 +76,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     if g.kind == 4u32 {
         var e = 0usize
         while e < 10usize {
-            try glyph_rect(b, g.snap, area, 17.0 + f32(e), 15.0, 1.0, 1.0, g.ink, g.alpha * 191.0 / 255.0)
+            try glyph_rect(b, area, 17.0 + f32(e), 15.0, 1.0, 1.0, g.ink, g.alpha * 191.0 / 255.0)
             e += 1usize
         }
         ret ok
@@ -107,7 +85,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         let box = square_cover_odd()
         var m = 0usize
         while m < 110usize {
-            if box[m] != 0u32 { try glyph_rect(b, g.snap, area, 17.0 + f32(m % 10usize), 10.0 + f32(m / 10usize), 1.0, 1.0, g.ink, g.alpha * f32(box[m]) / 255.0) }
+            if box[m] != 0u32 { try glyph_rect(b, area, 17.0 + f32(m % 10usize), 10.0 + f32(m / 10usize), 1.0, 1.0, g.ink, g.alpha * f32(box[m]) / 255.0) }
             m += 1usize
         }
         ret ok
@@ -116,7 +94,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         let wide = cross46_cover_odd()
         var n = 0usize
         while n < 121usize {
-            if wide[n] != 0u32 { try glyph_rect(b, g.snap, area, 18.0 + f32(n % 11usize), 10.0 + f32(n / 11usize), 1.0, 1.0, g.ink, g.alpha * f32(wide[n]) / 255.0) }
+            if wide[n] != 0u32 { try glyph_rect(b, area, 18.0 + f32(n % 11usize), 10.0 + f32(n / 11usize), 1.0, 1.0, g.ink, g.alpha * f32(wide[n]) / 255.0) }
             n += 1usize
         }
         ret ok
@@ -126,7 +104,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if g.kind == 7u32 { odd = cross_cover_odd_active() }
         var k = 0usize
         while k < 132usize {
-            if odd[k] != 0u32 { try glyph_rect(b, g.snap, area, 11.0 + f32(k % 12usize), 10.0 + f32(k / 12usize), 1.0, 1.0, g.ink, g.alpha * f32(odd[k]) / 255.0) }
+            if odd[k] != 0u32 { try glyph_rect(b, area, 11.0 + f32(k % 12usize), 10.0 + f32(k / 12usize), 1.0, 1.0, g.ink, g.alpha * f32(odd[k]) / 255.0) }
             k += 1usize
         }
         ret ok
@@ -135,7 +113,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         let dash = dash_cover()
         var d = 0usize
         while d < 11usize {
-            try glyph_rect(b, g.snap, area, 16.0 + f32(d), 15.0, 1.0, 1.0, g.ink, g.alpha * f32(dash[d]) / 255.0)
+            try glyph_rect(b, area, 16.0 + f32(d), 15.0, 1.0, 1.0, g.ink, g.alpha * f32(dash[d]) / 255.0)
             d += 1usize
         }
         ret ok
@@ -143,7 +121,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let square = square_cover()
     var q = 0usize
     while q < 121usize {
-        if square[q] != 0u32 { try glyph_rect(b, g.snap, area, 16.0 + f32(q % 11usize), 10.0 + f32(q / 11usize), 1.0, 1.0, g.ink, g.alpha * f32(square[q]) / 255.0) }
+        if square[q] != 0u32 { try glyph_rect(b, area, 16.0 + f32(q % 11usize), 10.0 + f32(q / 11usize), 1.0, 1.0, g.ink, g.alpha * f32(square[q]) / 255.0) }
         q += 1usize
     }
     ret ok
@@ -159,10 +137,10 @@ fn dash_cover() -> [11]u32 { ret [11]u32{ 48u32, 191u32, 191u32, 191u32, 191u32,
 
 fn square_cover() -> [121]u32 { ret [121]u32{ 4u32, 47u32, 64u32, 64u32, 64u32, 64u32, 64u32, 64u32, 64u32, 58u32, 12u32, 47u32, 218u32, 171u32, 171u32, 171u32, 171u32, 171u32, 171u32, 171u32, 214u32, 140u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 98u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 96u32, 191u32, 64u32, 171u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 97u32, 191u32, 58u32, 214u32, 98u32, 96u32, 96u32, 96u32, 96u32, 96u32, 97u32, 178u32, 175u32, 12u32, 140u32, 191u32, 191u32, 191u32, 191u32, 191u32, 191u32, 191u32, 175u32, 36u32 } }
 
-fn glyph_node(a: *mem.Arena, kind: u32, ink: u32, alpha: f32, width: f32, snap: f32) -> (widget.Node, err) {
+fn glyph_node(a: *mem.Arena, kind: u32, ink: u32, alpha: f32, width: f32) -> (widget.Node, err) {
     let (gs, gs_error) = mem.alloc[Glyph](a, 1usize)
     if gs_error != ok { ret (zero, gs_error) }
-    gs[0usize] = Glyph { kind: kind, ink: ink, alpha: alpha, width: width, snap: snap }
+    gs[0usize] = Glyph { kind: kind, ink: ink, alpha: alpha, width: width }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: 31.0 }
@@ -181,26 +159,21 @@ fn cross46_cover_odd() -> [121]u32 { ret [121]u32{ 43u32, 25u32, 0u32, 0u32, 0u3
 // dialog-customization-rest (opaque pixels over the light caption #F0F4F8; 0 is the caption showing through).
 fn tool_close_pixels() -> [506]u32 { ret [506]u32{ 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0xFFE8D5D8u32, 0xFFE6CBCEu32, 0xFFE6CBCEu32, 0xFFE6CBCEu32, 0xFFE6CBCEu32, 0xFFE6CBCEu32, 0xFFE6CBCEu32, 0xFFE6CBCEu32, 0xFFE6CBCEu32, 0xFFE6CBCDu32, 0xFFE6CBCDu32, 0xFFE6CBCDu32, 0xFFE6CBCDu32, 0xFFE6CACDu32, 0xFFE6CACDu32, 0xFFE6CACDu32, 0xFFE6CACDu32, 0xFFE6CACDu32, 0xFFE6CACDu32, 0xFFE6CACDu32, 0xFFEDE9EDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFCB5B5Bu32, 0xFFD57C7Cu32, 0xFFD27171u32, 0xFFC75050u32, 0xFFCB5B5Bu32, 0xFFD57C7Cu32, 0xFFD27171u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFCB5B5Bu32, 0xFFF4DEDEu32, 0xFFFBF4F4u32, 0xFFD27171u32, 0xFFF4DEDEu32, 0xFFFFFFFFu32, 0xFFD27171u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFF4DEDEu32, 0xFFFFFFFFu32, 0xFFFBF4F4u32, 0xFFD27171u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFF4DEDEu32, 0xFFFFFFFFu32, 0xFFFBF4F4u32, 0xFFD27171u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFCB5B5Bu32, 0xFFF4DEDEu32, 0xFFFBF4F4u32, 0xFFD27171u32, 0xFFF4DEDEu32, 0xFFFFFFFFu32, 0xFFD27171u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFCB5B5Bu32, 0xFFD57C7Cu32, 0xFFD27171u32, 0xFFC75050u32, 0xFFCB5B5Bu32, 0xFFD57C7Cu32, 0xFFD27171u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD1797Au32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFC75050u32, 0xFFE6CACDu32, 0u32, 0xFFD9989Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFD1797Au32, 0xFFE8D4D8u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32 } }
 
-type ToolClose = struct { snap: f32 }
-
 fn tool_close_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    let d = mem.cast[*ToolClose](ctx)
     let pixels = tool_close_pixels()
     var i = 0usize
     while i < 506usize {
-        if pixels[i] != 0u32 { try pixel_rect(b, d.snap, area.x + f32(i % 22usize), area.y + f32(i / 22usize), 1.0, 1.0, style.hex(pixels[i] & 0xFFFFFFu32)) }
+        if pixels[i] != 0u32 { try winpx.fill(b, area.x + f32(i % 22usize), area.y + f32(i / 22usize), 1.0, 1.0, style.hex(pixels[i] & 0xFFFFFFu32)) }
         i += 1usize
     }
     ret ok
 }
 
-fn tool_close_node(a: *mem.Arena, snap: f32) -> (widget.Node, err) {
-    let (boxes, boxes_error) = mem.alloc[ToolClose](a, 1usize)
-    if boxes_error != ok { ret (zero, boxes_error) }
-    boxes[0usize] = ToolClose { snap: snap }
+fn tool_close_node() -> widget.Node {
     var s = style.defaults()
     s.width = style.Length { Px: 22.0 }
     s.height = style.Length { Px: 23.0 }
     var none: []const widget.Node = zero
-    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&boxes[0usize]), measure: icon_measure, paint: tool_close_paint, state: widget.bytes_of[ToolClose](&boxes[0usize]) } }, style: s, children: none }, ok)
+    var state: []const u8 = zero
+    ret widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: zero, measure: icon_measure, paint: tool_close_paint, state: state } }, style: s, children: none }
 }
