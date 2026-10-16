@@ -410,6 +410,12 @@ fn setup_main(m: *Main) -> err {
     m.coll_grid = g2
     var look = gl.v3()
     look.footer_band = gl.rgb(0xC0DCC0u32)
+    // the collection grid's frame (live capture): lighter top, darker left, white rows inside
+    look.ring_top_o = gl.rgb(0xBABDC1u32)
+    look.ring_top_i = gl.rgb(0xBFC2C6u32)
+    look.ring_left_o = gl.rgb(0x878B93u32)
+    look.ring_left_i = gl.rgb(0xEAEAECu32)
+    look.ring_bottom = gl.rgb(0xCACCCFu32)
     dg.set_look(&m.coll_grid, look)
     dg.set_row_ink(&m.coll_grid, mem.cast[*void](m), coll_ink)
     dg.set_footer_label(&m.coll_grid, "Rows")
@@ -447,7 +453,13 @@ fn build_main(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     }
     if t.tokens.profile != .Windows {
     }
-    let (upper, upper_error) = boxed(a, t, &m.pool_grid, 497.0, 213.0)
+    var upper_h: f32 = 213.0
+    var gap_h: f32 = 8.0
+    if t.tokens.profile == .Windows {
+        upper_h = 214.0
+        gap_h = 7.0
+    }
+    let (upper, upper_error) = boxed(a, t, &m.pool_grid, 497.0, upper_h)
     if upper_error != ok { ret (0usize, upper_error) }
     let (lower, lower_error) = boxed(a, t, &m.coll_grid, 497.0, 242.0)
     if lower_error != ok { ret (0usize, lower_error) }
@@ -458,7 +470,7 @@ fn build_main(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     var face = looks.size_style(560.0, 520.0)
     face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     face.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    cells[0usize] = looks.Cell { caption: "Pool and collection grids as in the v3 main window", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, face, parts[0usize..2usize]), drive: .None }
+    cells[0usize] = looks.Cell { caption: "Pool and collection grids as in the v3 main window", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap_h }, face, parts[0usize..2usize]), drive: .None }
     ret (1usize, ok)
 }
 

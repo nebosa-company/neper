@@ -50,7 +50,18 @@ type Look = struct {
     // label starts in the first column after the indicator, and carries no "(Count: n)"
     group_flat: bool,
     // looks4-e: no frame of its own (a dialog draws the grid's frame round it)
-    frame_none: bool
+    frame_none: bool,
+    // looks5-e: a dialog grid's lines (one crisp column line, its own row-foot pixels)
+    dialog_lines: bool,
+    // looks5-e: the TcxGrid's own 2 px frame (live capture, top grid of the main window): outer and inner line of the
+    // top and left sides, one line at the bottom and the right; the lines differ a little with the grid's content
+    ring: bool,
+    ring_top_o: paint.Color,
+    ring_top_i: paint.Color,
+    ring_left_o: paint.Color,
+    ring_left_i: paint.Color,
+    ring_bottom: paint.Color,
+    ring_right: paint.Color
 }
 
 // A colour from 0xRRGGBB.
@@ -85,7 +96,15 @@ fn v3() -> Look {
         thumb: rgb(0x858585u32),
         scroll_width: 16.0,
         group_flat: true,
-        frame_none: false
+        frame_none: false,
+        dialog_lines: false,
+        ring: true,
+        ring_top_o: rgb(0x8D9096u32),
+        ring_top_i: rgb(0xC6C8CCu32),
+        ring_left_o: rgb(0x9599A0u32),
+        ring_left_i: rgb(0xDDDEDFu32),
+        ring_bottom: rgb(0xB9BCC0u32),
+        ring_right: rgb(0xB5B8BDu32)
     }
 }
 
