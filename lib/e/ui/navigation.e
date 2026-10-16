@@ -9568,6 +9568,10 @@ fn windows_menu_rule(a: *mem.Arena) -> (widget.Node, err) {
     if pair_error != ok { ret (zero, TooLarge) }
     pair[0usize] = windows_rule(0.0, 1.0, 10526880u32)
     pair[1usize] = windows_rule(0.0, 1.0, 16777215u32)
+    if style.windows_dark_on() {
+        pair[0usize] = windows_rule_raw(0.0, 1.0, 0x454545u32)
+        pair[1usize] = windows_rule_raw(0.0, 1.0, 0x2C2C2Cu32)
+    }
     var line_style = style.defaults()
     line_style.width = style.Length { Percent: 100.0 }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, line_style, pair[0usize..2usize]), ok)
@@ -9651,6 +9655,10 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             if pair_error != ok { ret (zero, TooLarge) }
             pair[0usize] = windows_rule(0.0, 1.0, 10526880u32)
             pair[1usize] = windows_rule(0.0, 1.0, 16777215u32)
+            if dark {
+                pair[0usize] = windows_rule_raw(0.0, 1.0, 0x454545u32)
+                pair[1usize] = windows_rule_raw(0.0, 1.0, 0x2C2C2Cu32)
+            }
             var line_style = style.defaults()
             line_style.width = style.Length { Percent: 100.0 }
             let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
@@ -9894,10 +9902,20 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if body_error != ok { ret (zero, TooLarge) }
     body_held[0usize] = body
     padded_column[0usize] = widget.padded(0u64, 1.0, 1.0, 1.0, tail, windows_menu_flat(), body_held[0usize..1usize])
-    let (inner_ring, inner_ring_error) = windows_bevel(a, 16777215u32, 10526880u32, padded_column[0usize], 0.0, 0.0)
-    if inner_ring_error != ok { ret (zero, inner_ring_error) }
-    let (framed, framed_error) = windows_bevel(a, 15790320u32, 6908265u32, inner_ring, 0.0, 0.0)
-    if framed_error != ok { ret (zero, framed_error) }
+    var framed: widget.Node = zero
+    if dark {
+        // (round 7) Windows 11 dark flyout: one #454545 line round the #2C2C2C face
+        let (ring_held, ring_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if ring_held_error != ok { ret (zero, TooLarge) }
+        ring_held[0usize] = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, windows_menu_flat(), padded_column[0usize..1usize])
+        framed = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, windows_flat_raw(0x454545u32), ring_held[0usize..1usize])
+    } else {
+        let (inner_ring, inner_ring_error) = windows_bevel(a, 16777215u32, 10526880u32, padded_column[0usize], 0.0, 0.0)
+        if inner_ring_error != ok { ret (zero, inner_ring_error) }
+        let (outer, outer_error) = windows_bevel(a, 15790320u32, 6908265u32, inner_ring, 0.0, 0.0)
+        if outer_error != ok { ret (zero, outer_error) }
+        framed = outer
+    }
     var shadowed = style.defaults()
     // (looks4-f) no drop shadow: the captures are the popup window alone and show none.
     let (shadow_held, shadow_error) = mem.alloc[widget.Node](a, 1usize)
@@ -9924,6 +9942,13 @@ fn windows_status_panel(a: *mem.Arena, content: widget.Node, width: f32, tone: u
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
+    if style.windows_dark_on() {
+        // (round 7) a flat panel: the bar's face, a #3D3D3D line at its left (none on the first)
+        if !first {
+            parts[n] = windows_rect_raw(0.0, 2.0, 1.0, 13.0, 0x4A4A4Au32)
+            n += 1usize
+        }
+    } else {
     parts[n] = windows_rect(0.0, 0.0, width, 17.0, 15790320u32)
     n += 1usize
     parts[n] = windows_rect(1.0, 0.0, width - 1.0, 1.0, 12303291u32)
@@ -9943,6 +9968,7 @@ fn windows_status_panel(a: *mem.Arena, content: widget.Node, width: f32, tone: u
     n += 1usize
     parts[n] = windows_rect(width - 1.0, 1.0, 1.0, 15.0, 15987699u32)
     n += 1usize
+    }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = content
@@ -9966,6 +9992,25 @@ fn windows_status_panel(a: *mem.Arena, content: widget.Node, width: f32, tone: u
 // the live capture (bar rows 6 to 17). One row of pixels per stack (a node holds at most 64
 // children), the rows in one 13 x 12 stack to place at the corner.
 fn windows_status_grip(a: *mem.Arena) -> (widget.Node, err) {
+    if style.windows_dark_on() {
+        // (round 7) three diagonal strokes of 2 px dots, #6E6E6E to #4A4A4A, climbing from the corner
+        let (dots, dots_error) = mem.alloc[widget.Node](a, 6usize)
+        if dots_error != ok { ret (zero, TooLarge) }
+        var n = 0usize
+        var r = 0usize
+        while r < 3usize {
+            var c = 0usize
+            while c <= r {
+                if n < 6usize {
+                    dots[n] = windows_rect_raw(10.0 - 4.0 * f32(c), 10.0 - 4.0 * f32(r - c), 2.0, 2.0, 0x6E6E6Eu32)
+                    n += 1usize
+                }
+                c += 1usize
+            }
+            r += 1usize
+        }
+        ret (widget.stack(0u64, control.sized_style(13.0, 12.0), dots[0usize..n]), ok)
+    }
     let tones = [4]u32{ 15329769u32, 12434877u32, 11447982u32, 14342874u32 }
     let last = [4]u32{ 16448250u32, 14540253u32, 12632256u32, 14474460u32 }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 12usize)
@@ -10008,6 +10053,8 @@ fn windows_status_grip(a: *mem.Arena) -> (widget.Node, err) {
 // Tahoma 11, the panels one px apart, in order and then the end group at the right, a panel
 // with `fills` takes the rest, and the size grip at the far corner.
 fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, width: f32) -> (widget.Node, err) {
+    style.windows_dark_enter(t.tokens)
+    let dark = style.windows_dark_on()
     let (bt, bt_error) = control.windows_bar_theme(a, t)
     if bt_error != ok { ret (zero, bt_error) }
     let (contents, contents_error) = mem.alloc[widget.Node](a, items.len)
@@ -10137,7 +10184,7 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                 if panel_error != ok { ret (zero, panel_error) }
                 row[made] = panel
                 made += 1usize
-                if left >= 1.0 && pass == 0usize && joint_no < 2usize {
+                if left >= 1.0 && pass == 0usize && joint_no < 2usize && !dark {
                     var c = 0usize
                     while c < 5usize {
                         let x = left - 3.0 + f32(c)
@@ -10172,12 +10219,20 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     let (parts, parts_error) = mem.alloc[widget.Node](a, 220usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
-    parts[n] = windows_rect(0.0, 0.0, width, 19.0, 15790320u32)
-    n += 1usize
-    parts[n] = windows_rect(0.0, 0.0, width, 1.0, 13948116u32)
-    n += 1usize
-    parts[n] = windows_rect(0.0, 18.0, width, 1.0, 16777215u32)
-    n += 1usize
+    if dark {
+        // (round 7) a flat #2B2B2B bar under a #3D3D3D line
+        parts[n] = windows_rect_raw(0.0, 0.0, width, 19.0, 0x2B2B2Bu32)
+        n += 1usize
+        parts[n] = windows_rect_raw(0.0, 0.0, width, 1.0, 0x3D3D3Du32)
+        n += 1usize
+    } else {
+        parts[n] = windows_rect(0.0, 0.0, width, 19.0, 15790320u32)
+        n += 1usize
+        parts[n] = windows_rect(0.0, 0.0, width, 1.0, 13948116u32)
+        n += 1usize
+        parts[n] = windows_rect(0.0, 18.0, width, 1.0, 16777215u32)
+        n += 1usize
+    }
     parts[n] = widget.positioned(0u64, 0.0, 1.0, line, panels[0usize..1usize])
     n += 1usize
     if jn > 0usize {
@@ -10191,6 +10246,7 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     grip_held[0usize] = grip
     parts[n] = widget.positioned(0u64, width - 13.0, 6.0, control.sized_style(13.0, 12.0), grip_held[0usize..1usize])
     n += 1usize
+    if !dark {
     // (looks4-f) The last two columns above and beside the grip, as the live bar ends (v3 has no
     // right-hand pair on the last panel and a shaded last column).
     let edge = [19]u32{ 230u32, 224u32, 248u32, 248u32, 248u32, 250u32, 240u32, 211u32, 223u32, 250u32, 240u32, 211u32, 223u32, 250u32, 240u32, 211u32, 223u32, 250u32, 255u32 }
@@ -10212,6 +10268,7 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     en += 1usize
     parts[n] = widget.stack(0u64, control.sized_style(width, 19.0), ends_nodes[0usize..en])
     n += 1usize
+    }
     ret (widget.stack(0u64, control.sized_style(width, 19.0), parts[0usize..n]), ok)
 }
 
@@ -10465,6 +10522,7 @@ fn windows_gdi_regular_11() -> str { ret "34486;72446844446666666666448885:76776
 // and 3 down, a two pixel separator (#D9D9D9, #EEEEEE) at the end of each panel but the last. An item whose `drop_order` is
 // 77 in first place selects it; `panel_width` is the width up to the separator's first pixel.
 fn windows_status_bar_report(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, width: f32) -> (widget.Node, err) {
+    style.windows_dark_enter(t.tokens)
     let (bt, bt_error) = control.windows_bar_theme(a, t)
     if bt_error != ok { ret (zero, bt_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize * items.len + 6usize)

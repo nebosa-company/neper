@@ -9779,7 +9779,18 @@ fn reveal_current(grid: *Grid) {
 // The grid as a node of `height`: its parts, in the context menu target (and chooser) of v3.
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     // The Windows look (docs/ui/looks) is the measured v3 grid, unless the application set its own.
-    if theme.tokens.profile == .Windows && !grid.look.on { set_look(grid, gl.v3()) }
+    style.windows_dark_enter(theme.tokens)
+    if theme.tokens.profile == .Windows {
+        // The preset follows the palette: a grid that still carries the other palette's preset is switched (an application's
+        // own look is left alone). The presets are told apart by their header: white (light) or #333333 (dark).
+        let on_light = grid.look.on && grid.look.header.red > 0.99 && grid.look.selected.red > 0.6 && grid.look.selected.red < 0.7
+        let on_dark = grid.look.on && grid.look.header.red > 0.19 && grid.look.header.red < 0.21 && grid.look.selected.red > 0.13 && grid.look.selected.red < 0.16
+        if style.windows_dark_on() {
+            if !grid.look.on || on_light { set_look(grid, gl.v3_dark()) }
+        } else if !grid.look.on || on_dark {
+            set_look(grid, gl.v3())
+        }
+    }
     // looks4-e: v3's grids draw Tahoma 8 pt (11 px), as its dialogs do
     var drawn_with = theme
     if theme.tokens.profile == .Windows && grid.look.on {

@@ -54,12 +54,30 @@ type Look = struct {
     frame_none: bool
 }
 
-// A colour from 0xRRGGBB.
+// A colour from 0xRRGGBB; under the Windows dark map (`style.set_windark`) the dark counterpart of a light literal.
 fn rgb(value: u32) -> paint.Color {
-    let r = f32((value >> 16u32) & 255u32) / 255.0
-    let g = f32((value >> 8u32) & 255u32) / 255.0
-    let b = f32(value & 255u32) / 255.0
-    ret paint.rgba(r, g, b, 1.0)
+    let r = (value >> 16u32) & 255u32
+    let g = (value >> 8u32) & 255u32
+    let b = value & 255u32
+    if !style.windark_active() { ret style.hex_raw(value) }
+    if r == g && g == b { ret style.hex(value) }
+    if value == 0x0078D7u32 || value == 0xA6D2FFu32 { ret style.hex_raw(0x264F78u32) }
+    if value == 0xD9EBF9u32 { ret style.hex_raw(0x3A3A3Au32) }
+    if value == 0x99D1FFu32 { ret style.hex_raw(0x1F4668u32) }
+    let mean = (r + g + b) / 3u32
+    // a light tint (footer band, hover blues): the face's dark with a trace of the hue; a dark ink hue (blue, red, green
+    // of a card's colour): the same hue lifted towards white so that it reads on #2B2B2B
+    if mean >= 200u32 { ret style.hex_raw(((24u32 + r / 8u32) * 65536u32) + ((24u32 + g / 8u32) * 256u32) + (24u32 + b / 8u32)) }
+    if mean <= 110u32 {
+        let lift = 128u32
+        ret style.hex_raw(((r + lift * 2u32) / 3u32) * 65536u32 + ((g + lift * 2u32) / 3u32) * 256u32 + (b + lift * 2u32) / 3u32)
+    }
+    ret style.hex_raw(value)
+}
+
+// A colour from 0xRRGGBB, exactly (a Windows dark value).
+fn raw(value: u32) -> paint.Color {
+    ret style.hex_raw(value)
 }
 
 // MTG Studio v3's grid.
@@ -88,6 +106,27 @@ fn v3() -> Look {
         group_flat: true,
         frame_none: false
     }
+}
+
+// (round 7) The Windows 11 dark grid: the same metrics, rows #2B2B2B / #262626, header #333333, selection #264F78,
+// group rows #2F2F2F, a footer of dark panels, the scroll bar's #2B2B2B track with a #8A8A8A thumb.
+fn v3_dark() -> Look {
+    var look = v3()
+    look.header = raw(0x333333u32)
+    look.header_hover = raw(0x3D3D3Du32)
+    look.header_line = raw(0x454545u32)
+    look.even = raw(0x2B2B2Bu32)
+    look.odd = raw(0x262626u32)
+    look.selected = raw(0x264F78u32)
+    look.selected_line = raw(0x4C8EC4u32)
+    look.line = raw(0x3A3A3Au32)
+    look.group_row = raw(0x2F2F2Fu32)
+    look.footer_band = raw(0x2F2F2Fu32)
+    look.footer_cell = raw(0x383838u32)
+    look.frame = raw(0x5A5A5Au32)
+    look.track = raw(0x2B2B2Bu32)
+    look.thumb = raw(0x8A8A8Au32)
+    ret look
 }
 
 // The ink v3 draws a card's row in, by the card's colour letter (`card_color.pas`, GetForegroundColor):
@@ -826,12 +865,14 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
     var at = 0usize
     var n = 0usize
     while at + 6usize <= m.pix.len {
-        let r = (pix_digit(m.pix[at]) * 16.0 + pix_digit(m.pix[at + 1usize])) / 255.0
-        let g = (pix_digit(m.pix[at + 2usize]) * 16.0 + pix_digit(m.pix[at + 3usize])) / 255.0
-        let bl = (pix_digit(m.pix[at + 4usize]) * 16.0 + pix_digit(m.pix[at + 5usize])) / 255.0
+        let ri = u32(pix_digit(m.pix[at]) * 16.0 + pix_digit(m.pix[at + 1usize]))
+        let gi = u32(pix_digit(m.pix[at + 2usize]) * 16.0 + pix_digit(m.pix[at + 3usize]))
+        let bi = u32(pix_digit(m.pix[at + 4usize]) * 16.0 + pix_digit(m.pix[at + 5usize]))
+        // (round 7) under the Windows dark map the bitmap's pixels take their dark counterpart (a no-op in light)
+        let shown = rgb(ri * 65536u32 + gi * 256u32 + bi)
         let px = f32(n % m.cols)
         let py = f32(n / m.cols)
-        try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, 1.0, 1.0, paint.rgba(r, g, bl, 1.0))
+        try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, 1.0, 1.0, shown)
         at += 6usize
         n += 1usize
     }
