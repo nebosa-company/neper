@@ -109,3 +109,17 @@ throwaway; never point a script at the repo or installed exe.
 `scripts/cup_run.sh [name[:arg] ...]` compiles and runs them one at a time (a modal overlay renders one per process:
 `popup:open`, `menu:hover`, `alert:open`). Controls branch on `t.tokens.profile == .CupertinoLike`; the drawing helpers
 (`cup_*`, `cupertino_*`) are appended at the end of `lib/e/ui/control.e`, a few in `overlay.e` and `navigation.e`.
+
+## Scales (1.25, 1.5, 2.0)
+
+- A baked tile (check and radio marks, button ring, edit chrome, focus dots, glyph pixels, the menu's dither) is
+  painted with `e.ui.winpx.fill`, never a bare 1 px `FillRect`: it moves each edge to a whole device pixel, so the
+  tile is a nearest-neighbour scaled block with no seams. At scale 1 it is the plain rectangle, so the 100 %
+  PNGs do not change. The scale comes from `scene.builder_scale(b)`, set from the runtime's snap, which the
+  application sets from the window (`widget.set_snap`) and `looks.open` sets for a rig of scale other than 1.
+- `NEPER_LOOKS_SCALE=1.25|1.5|2` makes a sheet app render that one scale, and `NEPER_LOOKS_OUT=<dir>` writes
+  under `<dir>` instead of `docs/ui/looks` (scale files are `@1.25x`, `@1.5x`, `@2x`); `NEPER_LOOKS_NOTEXT=1`
+  leaves text out. `python scripts/looks_scale_check.py` renders the Windows sheets at 1.0 and 2.0 this way and fails
+  when a run of pixels of the 1.0 render is not twice as long in the 2.0 render.
+- `examples/looks/scale_tiles.e` (`scale_button`, `scale_marks`, `scale_edits`, one per process) puts the controls
+  on fractional positions: review its `@1.5x` PNGs by eye after touching a tile painter.

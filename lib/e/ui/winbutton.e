@@ -14,6 +14,7 @@ use e.mem
 use e.str as strs
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 
 // Generated from the v3 captures in docs/ui/looks/ref/windows/dialogs (the crisp 96 DPI buttons of Search for Card,
@@ -42,7 +43,7 @@ fn ring_pressed_edges() -> [8]u32 { ret [8]u32{ 0xFF5088B6u32, 0xFF88B4D8u32, 0x
 type Ring = struct { kind: u32, face: u32, tint: u32 }
 
 fn ring_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: style.hex(value & 0xFFFFFFu32) } } })
+    ret winpx.fill(b, x, y, w, h, style.hex(value & 0xFFFFFFu32))
 }
 
 // One channel of a corner cell for another face: the cell is a blend of the ring colour `edge` and the captured face
