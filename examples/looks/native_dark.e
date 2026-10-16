@@ -17,7 +17,7 @@ fn noop_value(ctx: *void, value: i64) -> err { ret ok }
 fn noop_submit(ctx: *void) -> err { ret ok }
 
 fn cell_w() -> f32 { ret 200.0 }
-fn cell_h() -> f32 { ret 60.0 }
+fn cell_h() -> f32 { ret 100.0 }
 
 fn sized(w: f32, h: f32) -> style.Style {
     var s = style.defaults()
@@ -220,7 +220,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var drive: looks.Drive = .None
         if b == 2usize || b == 3usize { drive = .Focus }
         if b == 4usize || b == 5usize { drive = .Press }
-        let (boxed, boxed_error) = placed(a, node, 45.0, 14.0)
+        let (boxed, boxed_error) = placed(a, node, 45.0, 34.0)
         if boxed_error != ok { ret (0usize, boxed_error) }
         cells[at] = looks.Cell { caption: "button", node: boxed, drive: drive }
         at += 1usize
@@ -253,7 +253,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
                 var drive: looks.Drive = .None
                 if col == 1usize { drive = .Focus }
                 if col == 2usize { drive = .Press }
-                let (boxed, boxed_error) = placed(a, node, 40.0, 19.0)
+                let (boxed, boxed_error) = placed(a, node, 40.0, 39.0)
                 if boxed_error != ok { ret (0usize, boxed_error) }
                 cells[at] = looks.Cell { caption: "choice", node: boxed, drive: drive }
                 at += 1usize
@@ -263,12 +263,28 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         kind2 += 1usize
     }
+    // multi-line edit with a vertical scroll bar (native 168 x 90, six lines, the bar is the light unthemed one: compared left of it)
+    if at < 1000usize {
+        let (buffer, buffer_error) = mem.alloc[u8](a, 128usize)
+        if buffer_error != ok { ret (0usize, buffer_error) }
+        let n = control.copy_text(buffer, "Line one\nLine two\nLine three\nLine four\nLine five\nLine six")
+        var options = control.field_options()
+        options.width = 167.0
+        options.height = 90.0
+        options.rows = 5u32
+        let (memo, memo_error) = control.text_area(a, 4000u64, t, "Notes", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, options)
+        if memo_error != ok { ret (0usize, memo_error) }
+        let (boxed, boxed_error) = placed(a, memo, 15.0, 5.0)
+        if boxed_error != ok { ret (0usize, boxed_error) }
+        cells[at] = looks.Cell { caption: "memo", node: boxed, drive: .None }
+        at += 1usize
+    }
     // labels: label-rest and label-disabled (native static text, white Segoe UI 9 pt; the disabled capture is white too: the app colours it)
     var l = 0usize
     while l < 2usize {
         let (word, word_error) = control.windows_label_faced(a, t, "Static text label", 12.0, 400u32, style.hex_raw(0xFFFFFFu32), false, 0.0, 7u32, 0.0, 0.0, false)
         if word_error != ok { ret (0usize, word_error) }
-        let (boxed, boxed_error) = placed(a, word, 40.0, 19.0)
+        let (boxed, boxed_error) = placed(a, word, 40.0, 39.0)
         if boxed_error != ok { ret (0usize, boxed_error) }
         cells[at] = looks.Cell { caption: "label", node: boxed, drive: .None }
         at += 1usize
@@ -278,6 +294,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark", cells: 53usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark", cells: 54usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

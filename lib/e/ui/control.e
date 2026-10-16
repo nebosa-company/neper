@@ -6082,6 +6082,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         }
         var first_line = 0usize
         if caret_line + 1usize > usize(options.rows) { first_line = caret_line + 1usize - usize(options.rows) }
+        // round 12: an unfocused native dark multi-line edit shows its first line (edit-multiline-vscroll), whatever the caret
+        if t.tokens.palette == .Dark && !focused { first_line = 0usize }
         // The viewport and the editor inside it take the field's inner width, as
         // a scroll lays its content out unbounded along its axis only.
         let inner = max_zero(options.width - 2.0 * pad_x - options.start_space - options.end_space)
@@ -6339,7 +6341,9 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     // An edit element takes no hover of its own: a hover-only region round the frame (`key + 1048650`) tells when the pointer is over it.
     let hovered = (state.hovered || control_state(t, key + 1048650u64, options.enabled, false).hovered) && options.enabled
     let multiline = options.rows > 1u32
-    let line: f32 = 13.0
+    var line: f32 = 13.0
+    // round 12: the native dark multi-line edit sets Segoe UI 9 pt on a 15 px line
+    if t.tokens.palette == .Dark { line = 15.0 }
     var h = t.tokens.metrics.control_height
     if options.height > 0.0 { h = options.height }
     if multiline { h = max_of(h, f32(options.rows) * line + 8.0) }
@@ -6396,6 +6400,8 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     if style_error != ok { ret (zero, style_error) }
     var pad: f32 = 3.0
     if t.tokens.palette == .Dark { pad = 6.0 }
+    // the native multi-line edit sets its text one pixel further in (edit-multiline-vscroll: ink from x 7)
+    if t.tokens.palette == .Dark && multiline { pad = 6.0 }
     let inner = max_zero(options.width - 2.0 - 2.0 * pad - options.start_space - options.end_space)
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
@@ -6481,6 +6487,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         var viewport = style.defaults()
         viewport.width = style.Length { Px: inner }
         viewport.height = style.Length { Px: max_zero(h - 8.0) }
+        if t.tokens.palette == .Dark { viewport.height = style.Length { Px: max_zero(h - 4.0) } }
         viewport.overflow = .Clip
         layers[at] = widget.scroll(key + 1048612u64, widget.Scroll { axis: .Vertical, offset: f32(first_line) * line, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, viewport, scrolled[0usize..1usize])
     } else {
@@ -6504,6 +6511,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var pad_y: f32 = 3.384
     if t.tokens.palette == .Dark { pad_y = 3.0 }
     if multiline { pad_y = 3.0 }
+    if multiline && t.tokens.palette == .Dark { pad_y = 2.0 }
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: pad + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: pad + options.end_space }, bottom: style.Length { Px: pad_y } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }

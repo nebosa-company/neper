@@ -145,10 +145,10 @@ for _kind, _states in (("checkbox", ("unchecked", "checked", "indeterminate")), 
             _i += 1
 
 
-NATIVE_DARK += [("label-rest", 51, 0), ("label-disabled", 52, 0)]
+NATIVE_DARK += [("edit-multiline-vscroll", 51, 0), ("label-rest", 52, 0), ("label-disabled", 53, 0)]
 
 
-def table(sheet="native_dark", spec=None, cols=7, cw=200, ch=60, only=None):
+def table(sheet="native_dark", spec=None, cols=7, cw=200, ch=100, only=None):
     sh = load(OURS + sheet + ".png")
     tot = 0
     for stem, idx, rect in (spec or NATIVE_DARK):
@@ -160,8 +160,14 @@ def table(sheet="native_dark", spec=None, cols=7, cw=200, ch=60, only=None):
         x, y = 12 + col * (cw + 10), 12 + row * (16 + 4 + ch + 10) + 20
         ZONE[:] = [0, 0, 0] if stem.startswith('label') else [3, 3, 22]
         _CACHE.clear()
-        anchor = (40, 19) if stem.startswith(("checkbox", "radio", "label")) else None
-        anchor = (40, 19) if stem.startswith(("checkbox", "radio", "label")) else None
+        anchor = (40, 39) if stem.startswith(("checkbox", "radio", "label")) else ((45, 34) if stem.startswith("button") else ((15, 5) if stem.startswith("edit-multiline") else None))
+        if stem.startswith("edit-multiline"):
+            rw = 148  # left of the (light, unthemed) scroll bar of the capture
+            ref = img[ry:ry + rh, rx:rx + rw]
+        anchor = (40, 39) if stem.startswith(("checkbox", "radio", "label")) else ((45, 34) if stem.startswith("button") else ((15, 5) if stem.startswith("edit-multiline") else None))
+        if stem.startswith("edit-multiline"):
+            rw = 148  # left of the (light, unthemed) scroll bar of the capture
+            ref = img[ry:ry + rh, rx:rx + rw]
         r, at = best(ref, sh, x, y, cw, ch, 0 if stem.startswith('label') else 4, 0 if anchor else (40 if any(k in stem for k in ('hover-up', 'hover-down', 'pressed', 'arrow')) else 0), anchor)
         tot += r[5] + r[0]
         o = sh[at[1]:at[1] + rh, at[0]:at[0] + rw]
