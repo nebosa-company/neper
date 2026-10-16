@@ -2048,7 +2048,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let flat = style.Length { Px: 0.0 }
         head_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
         // looks4-e: the live capture's header captions stand a pixel lower
-        if look.on && look.soft_lines { head_style.padding = style.EdgeLengths { left: sides, top: style.Length { Px: 2.0 }, right: sides, bottom: flat } }
+        if look.on && look.soft_lines && !look.dialog_lines { head_style.padding = style.EdgeLengths { left: sides, top: style.Length { Px: 2.0 }, right: sides, bottom: flat } }
+        if look.on && look.dialog_lines { head_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: style.Length { Px: 2.0 } } }
         if glyph_header { head_style.padding = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat } }
         head_style.overflow = .Clip
         let (tapped, tapped_error) = mem.alloc[widget.Node](a, 1usize)
@@ -2154,9 +2155,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if look.on && look.soft_lines && !active && !lands_here {
             // looks4-e: the header's column line is two pixels wide (#EBEBEB, #F8F8F8), as the grid's
             var first_line = control.sized_style(1.0, inner)
-            first_line.background = paint.Brush { Solid: gl.rgb(0xEBEBEBu32) }
+            first_line.background = paint.Brush { Solid: gl.rgb(0xEAEAEAu32) }
+            if look.dialog_lines { first_line.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
             var second_line = control.sized_style(1.0, inner)
-            second_line.background = paint.Brush { Solid: gl.rgb(0xF8F8F8u32) }
+            second_line.background = paint.Brush { Solid: gl.rgb(0xFAFAFAu32) }
             let (two_lines, two_lines_error) = mem.alloc[widget.Node](a, 2usize)
             if two_lines_error != ok { ret (zero, TooLarge) }
             two_lines[0usize] = widget.box(0u64, first_line, zero)
@@ -2416,7 +2418,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         let is_group_row = look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8
         if (grid || look.on) && !(look.soft_lines && is_group_row) { width -= t.tokens.sizes.divider }
         // looks4-e: v3 draws its grid lines two pixels wide: a line and a lighter one beside it
-        if look.on && look.soft_lines && !look.vertical_off && !is_group_row { width -= 1.0 }
+        if look.on && look.soft_lines && !look.vertical_off && !is_group_row && !look.dialog_lines { width -= 1.0 }
         var cell_style = control.sized_style(control.max_zero(width), extent)
         cell_style.overflow = .Clip
         // a group row's label runs on over the cells beside it, with no column lines
@@ -2425,6 +2427,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         var group_top = flat
         if group_row && look.soft_lines { group_top = style.Length { Px: 2.0 } }
         cell_style.padding = style.EdgeLengths { left: sides, top: group_top, right: sides, bottom: flat }
+        // looks5-e: a dialog grid's captions stand a pixel higher than the centre (measured, Sort dialog)
+        if look.on && look.dialog_lines { cell_style.padding = style.EdgeLengths { left: sides, top: group_top, right: sides, bottom: style.Length { Px: 2.0 } } }
         // a picture column's cells have no side padding
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, c) != 0u8 {
             cell_style.padding = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat }
@@ -2451,11 +2455,36 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             var line = control.sized_style(t.tokens.sizes.divider, extent)
             line.background = paint.Brush { Solid: rule }
             if look.on { line.background = paint.Brush { Solid: look.line } }
+            // looks5-e: a dialog's grid draws one crisp #DCDCDC column line
+            if look.on && look.dialog_lines { line.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) } }
+            // looks5-e: the main window's column lines grow lighter to the right (live capture: #E3E3E3 and #F8F8F8 at x 36 to
+            // #ECECEC and #EFEFEF at x 486), a linear ramp over the row
+            var ramp: f32 = 0.0
+            if look.on && look.soft_lines && !look.dialog_lines {
+                var line_x: f32 = 0.0
+                var before = 0usize
+                while before <= c && before < columns.len {
+                    line_x += columns[before].width
+                    before += 1usize
+                }
+                ramp = (line_x - 36.0) / 450.0
+                if ramp < 0.0 { ramp = 0.0 }
+                if ramp > 1.0 { ramp = 1.0 }
+                var first_level = (227.0 + ramp * 9.0) / 255.0
+                // the indicator column's line is #EAEAEA over #FAFAFA
+                if c == 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 {
+                    first_level = 234.0 / 255.0
+                    ramp = 0.0 - 2.0 / 9.0
+                }
+                line.background = paint.Brush { Solid: paint.rgba(first_level, first_level, first_level, 1.0) }
+            }
             boxed[n] = widget.box(0u64, line, zero)
             n += 1usize
-            if look.on && look.soft_lines {
+            if look.on && look.soft_lines && !look.dialog_lines {
                 var soft = control.sized_style(1.0, extent)
                 soft.background = paint.Brush { Solid: gl.rgb(0xF8F8F8u32) }
+                let second_level = (248.0 - ramp * 9.0) / 255.0
+                soft.background = paint.Brush { Solid: paint.rgba(second_level, second_level, second_level, 1.0) }
                 boxed[n] = widget.box(0u64, soft, zero)
                 n += 1usize
             }
@@ -2495,6 +2524,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     if look.on && look.soft_lines && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) == 1u8 {
         soft_group = true
         row_style.height = style.Length { Px: extent - 1.0 }
+        // looks5-e: directly under the header (no filter row) the first group row has no two-pixel top and is 16 tall (live capture)
+        if index == 0usize && !look.has_head_extra { row_style.height = style.Length { Px: extent - 3.0 } }
     }
     row_style.background = paint.Brush { Solid: fill }
     let tree_selected = look.on && selected && look.tree_dots
@@ -2508,7 +2539,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     var lined_row = selected
     if look.focus_on { lined_row = row_key == look.focus_key }
     let dotted_row = look.on && lined_row && look.soft_lines && look.dotted_focus
-    if look.on && lined_row && !dotted_row { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
+    // looks5-e: the idle selected row has no frame: its top edge is the line above it and its foot pair the edge colour and #F1F1F1
+    if look.on && lined_row && !dotted_row && !look.top_edge_on { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
     if lined_error != ok { ret (zero, TooLarge) }
     var content_look = style.defaults()
@@ -2534,6 +2566,34 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                 first_px = gl.rgb(0xF0F0F0u32)
                 second_px = gl.rgb(0xE5E5E5u32)
             }
+            // looks5-e: a grid with its own row-foot pixels (measured: the Sort and Missing Set Cards dialogs, the Options grids)
+            if look.top_edge_on && selected {
+                first_px = look.selected_line
+                second_px = gl.rgb(0xF1F1F1u32)
+            } else if look.foot_set {
+                first_px = look.foot_g1
+                second_px = look.foot_g2
+                if fill_is_light(look, index) {
+                    first_px = look.foot_w1
+                    second_px = look.foot_w2
+                }
+                if look.foot_drift != 0.0 {
+                    // the capture's pixels drift: white rows #EA/#E7 to #F1/#E4, grey rows #E4/#F0 to #E7/#EA over 250 px
+                    let place = f32(index) * extent * 0.01 * look.foot_drift
+                    var drift_first = look.foot_g1
+                    var drift_second = look.foot_g2
+                    var first_rate: f32 = 1.19
+                    var second_rate: f32 = 0.0 - 2.38
+                    if fill_is_light(look, index) {
+                        drift_first = look.foot_w1
+                        drift_second = look.foot_w2
+                        first_rate = 2.8
+                        second_rate = 0.0 - 1.2
+                    }
+                    first_px = paint.rgba(drift_first.red + place * first_rate / 255.0, drift_first.green + place * first_rate / 255.0, drift_first.blue + place * first_rate / 255.0, 1.0)
+                    second_px = paint.rgba(drift_second.red + place * second_rate / 255.0, drift_second.green + place * second_rate / 255.0, drift_second.blue + place * second_rate / 255.0, 1.0)
+                }
+            }
             var one_style = control.sized_style(4000.0, 1.0)
             one_style.background = paint.Brush { Solid: first_px }
             var two_style = control.sized_style(4000.0, 1.0)
@@ -2549,6 +2609,28 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         var stacked_count = 2usize
         if look.soft_lines { stacked_count = 3usize }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
+    }
+    if look.on && !selected && look.tree_dots {
+        // looks5-e: one pixel at the foot of a tree row, #FAFAFA under a grey one and #F4F4F4 under a white one (live captures)
+        var foot_px = gl.rgb(0xF4F4F4u32)
+        if index % 2usize == 0usize { foot_px = gl.rgb(0xFAFAFAu32) }
+        var foot_box = control.sized_style(4000.0, 1.0)
+        foot_box.background = paint.Brush { Solid: foot_px }
+        let (with_foot, with_foot_error) = mem.alloc[widget.Node](a, 2usize)
+        if with_foot_error != ok { ret (zero, TooLarge) }
+        with_foot[0usize] = lined[0usize]
+        with_foot[1usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, foot_box, zero)))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_foot[0usize..2usize])
+    }
+    if look.on && selected && look.top_edge_on {
+        // looks5-e: the idle selected row's top edge lies one pixel above its row, over the foot of the one before (live capture)
+        var edge_box = control.sized_style(4000.0, 1.0)
+        edge_box.background = paint.Brush { Solid: look.top_edge }
+        let (with_edge, with_edge_error) = mem.alloc[widget.Node](a, 2usize)
+        if with_edge_error != ok { ret (zero, TooLarge) }
+        with_edge[0usize] = lined[0usize]
+        with_edge[1usize] = widget.positioned(0u64, 0.0, 0.0 - 1.0, style.defaults(), one_node(a, widget.box(0u64, edge_box, zero)))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_edge[0usize..2usize])
     }
     if look.on && selected && look.tree_dots {
         // looks4-e: the tree list's selected row has a dotted rectangle from x = 32 (measured, tree_list.png)
@@ -2594,7 +2676,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         with_dots[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one_node(a, dotted))
         lined[0usize] = widget.stack(0u64, style.defaults(), with_dots[0usize..2usize])
     }
-    if soft_group {
+    if soft_group && !(index == 0usize && !look.has_head_extra) {
         // two pixels at the top of a group row (measured: #E5E5E5 then #E7E7E7), the cells below them
         let (with_top, with_top_error) = mem.alloc[widget.Node](a, 3usize)
         if with_top_error != ok { ret (zero, TooLarge) }
@@ -2683,7 +2765,8 @@ fn windows_table_look() -> TableLook {
     var look: TableLook = zero
     let lk = gl.v3()
     look.on = true
-    look.header_height = 19.0
+    // looks5-e: 20 rows with the #F4F4F4 line last (live captures of the Filter dialog's list)
+    look.header_height = 20.0
     look.pad = 2.0
     look.text_size = lk.text_size
     look.header = lk.header
@@ -2716,7 +2799,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4500,23 +4583,94 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         if lk.soft_lines {
             // looks4-e: 2 wide, 0.4 right of the track's middle (measured), a pill 6 wide when pressed
             thumb_w = 2.0
-            thumb_nudge = 0.4
+            thumb_nudge = 0.5
             if control.control_state(t, track_key, true, false).pressed { thumb_w = 6.0 }
         }
-        if control.control_state(t, track_key, true, false).hovered { thumb_w = 6.0 }
+        // looks5-e: the main window's bar widens its thumb only under the pointer, and shows the arrow the pointer is on
+        var arrow_hot: u8 = 0
+        if lk.soft_lines {
+            if control.control_state(t, track_key, true, false).hovered && mem.address_of(t.runtime) != 0usize {
+                let (hot_box, has_hot_box) = control.keyed_bounds(t.runtime, track_key)
+                let hot_pointer = widget.pointer_position(t.runtime)
+                if has_hot_box {
+                    let hot_y = hot_pointer.y - hot_box.y
+                    if hot_y < 16.0 { arrow_hot = 1u8 } else if hot_y > track_h - 16.0 { arrow_hot = 2u8 } else if hot_y >= 16.0 + thumb_y && hot_y <= 16.0 + thumb_y + thumb_h { thumb_w = 6.0 }
+                }
+            }
+        } else if control.control_state(t, track_key, true, false).hovered { thumb_w = 6.0 }
+        // looks5-e: a dialog's bar: a white first pixel, then a crisp 2 px thumb 8 px in (measured, Sort dialog)
+        var track_w = lk.scroll_width
+        var thumb_left = (lk.scroll_width - thumb_w) * 0.5 + thumb_nudge
+        // the main window's bar likewise starts with a #F7F7F7 pixel (live capture)
+        if lk.soft_lines && !lk.dialog_lines {
+            track_w = lk.scroll_width - 1.0
+            thumb_left -= 1.0
+        }
+        if lk.dialog_lines {
+            // pressed or under the pointer: a 6 px pill (live captures, Sort and Shortcuts)
+            let widened = thumb_w > 5.0
+            thumb_w = 2.0
+            track_w = lk.scroll_width - 1.0
+            thumb_left = 7.0
+            if widened || control.control_state(t, track_key, true, false).pressed {
+                thumb_w = 6.0
+                thumb_left = 5.0
+            }
+        }
         var thumb_style = control.sized_style(thumb_w, thumb_h)
         thumb_style.background = paint.Brush { Solid: lk.thumb }
         thumb_style.radius = thumb_w * 0.5
-        thumb_style.margin = style.EdgeLengths { left: style.Length { Px: (lk.scroll_width - thumb_w) * 0.5 + thumb_nudge }, top: style.Length { Px: 16.0 + thumb_y }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        thumb_style.margin = style.EdgeLengths { left: style.Length { Px: thumb_left }, top: style.Length { Px: 16.0 + thumb_y }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         let (thumb_holder, thumb_error) = mem.alloc[widget.Node](a, 1usize)
         if thumb_error != ok { ret (zero, TooLarge) }
         thumb_holder[0usize] = widget.box(0u64, thumb_style, zero)
-        var track_style = control.sized_style(lk.scroll_width, track_h)
+        // looks5-e: the lower end of the track pressed shows the down arrow (live capture, main window)
+        if lk.soft_lines && control.control_state(t, track_key, true, false).pressed && mem.address_of(t.runtime) != 0usize {
+            let (track_box, has_track_box) = control.keyed_bounds(t.runtime, track_key)
+            let pointer_now = widget.pointer_position(t.runtime)
+            if has_track_box && pointer_now.y > track_box.y + track_box.height * 0.5 {
+                let (arrow, arrow_error) = gl.pixels(a, gl.gx_arrow_down(), gl.gx_arrow_down_w(), gl.gx_arrow_down_h())
+                if arrow_error != ok { ret (zero, arrow_error) }
+                let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+                if pair_error != ok { ret (zero, TooLarge) }
+                pair[0usize] = thumb_holder[0usize]
+                pair[1usize] = widget.positioned(0u64, 4.0, track_h - 12.0, style.defaults(), one_node(a, arrow))
+                thumb_holder[0usize] = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
+            }
+        }
+        if arrow_hot != 0u8 && !control.control_state(t, track_key, true, false).pressed {
+            var hot_pix = gl.gx_arrow_hot_up()
+            var hot_top: f32 = 4.0
+            if arrow_hot == 2u8 {
+                hot_pix = gl.gx_arrow_hot_down()
+                hot_top = track_h - 13.0
+            }
+            let (hot, hot_error) = gl.pixels(a, hot_pix, gl.gx_arrow_hot_w(), gl.gx_arrow_hot_h())
+            if hot_error != ok { ret (zero, hot_error) }
+            let (hot_pair, hot_pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if hot_pair_error != ok { ret (zero, TooLarge) }
+            hot_pair[0usize] = thumb_holder[0usize]
+            var hot_left: f32 = 3.0
+            if lk.dialog_lines { hot_left = 2.0 }
+            hot_pair[1usize] = widget.positioned(0u64, hot_left, hot_top, style.defaults(), one_node(a, hot))
+            thumb_holder[0usize] = widget.stack(0u64, style.defaults(), hot_pair[0usize..2usize])
+        }
+        var track_style = control.sized_style(track_w, track_h)
         track_style.background = paint.Brush { Solid: lk.track }
-        let (bar_parts, bar_error) = mem.alloc[widget.Node](a, 2usize)
+        let (bar_parts, bar_error) = mem.alloc[widget.Node](a, 3usize)
         if bar_error != ok { ret (zero, TooLarge) }
         bar_parts[0usize] = column_node[0usize]
-        bar_parts[1usize] = widget.region(track_key, widget.Region { gesture: zero, gestures: 4u8, enabled: true, focusable: false }, track_style, thumb_holder[0usize..1usize])
+        bar_parts[1usize] = widget.region(track_key, widget.Region { gesture: widget.GestureAction { ctx: zero, invoke: control.scroll_bar_gesture }, gestures: 5u8, enabled: true, focusable: false }, track_style, thumb_holder[0usize..1usize])
+        if lk.soft_lines && !lk.dialog_lines {
+            // the main window's bar: its first pixel is #F7F7F7 (live capture), then the track
+            var edge_strip = control.sized_style(1.0, track_h)
+            edge_strip.background = paint.Brush { Solid: gl.rgb(0xF7F7F7u32) }
+            let (edged, edged_error) = mem.alloc[widget.Node](a, 2usize)
+            if edged_error != ok { ret (zero, TooLarge) }
+            edged[0usize] = widget.box(0u64, edge_strip, zero)
+            edged[1usize] = bar_parts[1usize]
+            bar_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), edged[0usize..2usize])
+        }
         if lk.bar_margin != 0.0 {
             // a table shifted sideways keeps its bar at the view's right edge: the track stands over the
             // table (out of the row, which would be shortened by a negative margin) at the offset's place
@@ -4527,6 +4681,12 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             var over_style = style.defaults()
             over_style.width = style.Length { Px: width + lk.scroll_width + 18.0 }
             column_node[0usize] = widget.stack(0u64, over_style, bar_parts[0usize..2usize])
+        } else if lk.dialog_lines {
+            var strip = control.sized_style(1.0, track_h)
+            strip.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            bar_parts[2usize] = bar_parts[1usize]
+            bar_parts[1usize] = widget.box(0u64, strip, zero)
+            column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bar_parts[0usize..3usize])
         } else {
             column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bar_parts[0usize..2usize])
         }
@@ -5071,6 +5231,8 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     let win = tabled && t.tokens.profile == .Windows
     var win_look = zero_look()
     if win { win_look = windows_table_look() }
+    // looks5-e: a list with rows has the #F4F4F4 line under its header, an empty one none (live captures)
+    if win && count > 0usize { win_look.header_line = gl.rgb(0xF4F4F4u32) }
     // (D1372) Moving: the row a drag carries, and the gestures a row takes.
     let moving = widget.change_set[TreeMove](options.move.invoke)
     let (lifted_row, has_lifted_row) = tree_lifted(t, count)
@@ -5734,6 +5896,8 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var row_height_of = extent
     if t.tokens.profile == .Windows {
         head_look = windows_table_look()
+        // looks5-e: the #F4F4F4 line under the header of a list with rows (live captures); an empty list has none
+        if source.count(source.ctx, 0u64) > 0usize { head_look.header_line = gl.rgb(0xF4F4F4u32) }
         head_height = head_look.header_height
         head_pad = head_look.pad
         if !(row_height_of > 0.0) { row_height_of = gl.v3().row_height }
@@ -5794,7 +5958,9 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         // looks3-e: v3's 16 wide bar beside header and rows, as tall as both
         var row_pitch = row_height_of
         if !(row_pitch > 0.0) { row_pitch = gl.v3().row_height }
+        control.set_scroll_bar_crisp(true)
         let (bar, bar_error) = control.windows_scroll_bar(a, key + 3300u64, t, true, head_height + 1.0 + options.height - 1.0, options.height, f32(table_total) * row_pitch, options.offset)
+        control.set_scroll_bar_crisp(false)
         if bar_error != ok { ret (zero, bar_error) }
         let (beside, beside_error) = mem.alloc[widget.Node](a, 2usize)
         if beside_error != ok { ret (zero, TooLarge) }
@@ -10715,6 +10881,24 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // source returns are laid over the painted cells (a plain text node draws the idle v3 cell). The
 // selected row is the grid's focused one: blue header, white name, a dotted rectangle round its
 // value cell. `options.height` (when larger than the content) is the grid's whole height.
+// looks5-e: the shape of a row of the Windows property grid when it is not the plain 17 px one: its content height, up to two extra
+// lines in its header cell and in its value cell (x from the grid's left edge, 0 for none) and the captions of its header cells
+// (centred between the lines). An application sets the shapes before it builds the grid (Deck Properties' Computed rows).
+type PropertyShape = struct { height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str }
+var property_shapes: [64]PropertyShape = zero
+
+fn property_row_shape(index: usize, height: f32, hs1: f32, hs2: f32, vs1: f32, vs2: f32, l1: str, l2: str, l3: str) {
+    if index < 64usize { property_shapes[index] = PropertyShape { height: height, hs1: hs1, hs2: hs2, vs1: vs1, vs2: vs2, l1: l1, l2: l2, l3: l3 } }
+}
+
+fn property_shapes_clear() {
+    var at = 0usize
+    while at < 64usize {
+        property_shapes[at] = PropertyShape { height: 0.0, hs1: 0.0, hs2: 0.0, vs1: 0.0, vs2: 0.0, l1: "", l2: "", l3: "" }
+        at += 1usize
+    }
+}
+
 fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32, options: PropertyGridOptions) -> (widget.Node, err) {
     let total = source.count(source.ctx)
     if total > 256usize { ret (zero, TooLarge) }
@@ -10730,7 +10914,13 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     let (row_last, row_last_error) = mem.alloc[bool](a, total + 1usize)
     let (toggles, toggles_error) = mem.alloc[GroupToggle](a, total + 1usize)
     let (actions, actions_error) = mem.alloc[widget.Submit](a, total + 1usize)
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize * total + 2usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize * total + 2usize)
+    let (row_h, row_h_error) = mem.alloc[f32](a, total + 1usize)
+    let (row_hs1, row_hs1_error) = mem.alloc[f32](a, total + 1usize)
+    let (row_hs2, row_hs2_error) = mem.alloc[f32](a, total + 1usize)
+    let (row_vs1, row_vs1_error) = mem.alloc[f32](a, total + 1usize)
+    let (row_vs2, row_vs2_error) = mem.alloc[f32](a, total + 1usize)
+    if row_h_error != ok || row_hs1_error != ok || row_hs2_error != ok || row_vs1_error != ok || row_vs2_error != ok { ret (zero, TooLarge) }
     if band_y_error != ok || band_first_error != ok || band_open_error != ok || row_y_error != ok || row_sel_error != ok || row_top_error != ok || row_last_error != ok || toggles_error != ok || actions_error != ok || parts_error != ok { ret (zero, TooLarge) }
     var bands = 0usize
     var rows = 0usize
@@ -10810,6 +11000,17 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     }
                     let chosen = options.selected != 0u64 && p.key == options.selected
                     row_y[rows] = cursor
+                    var rh: f32 = 17.0
+                    var shape: PropertyShape = zero
+                    if k < 64usize {
+                        shape = property_shapes[k]
+                        if shape.height > 0.0 { rh = shape.height }
+                    }
+                    row_h[rows] = rh
+                    row_hs1[rows] = shape.hs1
+                    row_hs2[rows] = shape.hs2
+                    row_vs1[rows] = shape.vs1
+                    row_vs2[rows] = shape.vs2
                     row_sel[rows] = chosen
                     row_top[rows] = first_row
                     row_last[rows] = last
@@ -10834,7 +11035,7 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     name_sem.label = p.name
                     name_sem.row = u32(k + 1usize)
                     name_sem.column = 1u32
-                    var name_box = control.sized_style(name_width - 17.0, 17.0)
+                    var name_box = control.sized_style(name_width - 17.0, rh)
                     name_box.overflow = .Clip
                     let (name_flex, name_flex_error) = mem.alloc[widget.Node](a, 1usize)
                     if name_flex_error != ok { ret (zero, TooLarge) }
@@ -10855,7 +11056,7 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     value_sem.label = p.name
                     value_sem.row = u32(k + 1usize)
                     value_sem.column = 2u32
-                    var value_box = control.sized_style(control.max_zero(width - value_x - 2.0), 17.0)
+                    var value_box = control.sized_style(control.max_zero(width - value_x - 2.0), rh)
                     value_box.overflow = .Clip
                     let (value_flex, value_flex_error) = mem.alloc[widget.Node](a, 1usize)
                     if value_flex_error != ok { ret (zero, TooLarge) }
@@ -10865,8 +11066,34 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     value_holder[0usize] = widget.semantics(0u64, value_sem, style.defaults(), value_flex[0usize..1usize])
                     parts[n] = widget.positioned(0u64, value_x + 2.0, cursor - 1.0, style.defaults(), value_holder[0usize..1usize])
                     n += 1usize
+                    // the captions of the header cells, each centred between the lines
+                    var seg_from: f32 = 15.0
+                    var seg_at = 0usize
+                    while seg_at < 3usize {
+                        var seg_to: f32 = name_width + 1.0
+                        var seg_text = shape.l1
+                        if seg_at == 0usize && shape.hs1 > 0.0 { seg_to = shape.hs1 }
+                        if seg_at == 1usize {
+                            seg_text = shape.l2
+                            if shape.hs2 > 0.0 { seg_to = shape.hs2 }
+                        }
+                        if seg_at == 2usize { seg_text = shape.l3 }
+                        if seg_text.len > 0usize {
+                            let (seg_node, seg_error) = control.colored_text(a, 0u64, seg_text, &tahoma, line, ink)
+                            if seg_error != ok { ret (zero, seg_error) }
+                            let (seg_held, seg_held_error) = mem.alloc[widget.Node](a, 1usize)
+                            if seg_held_error != ok { ret (zero, TooLarge) }
+                            seg_held[0usize] = seg_node
+                            var seg_box = control.sized_style(seg_to - seg_from, rh)
+                            seg_box.overflow = .Clip
+                            parts[n] = widget.positioned(0u64, seg_from, cursor, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, seg_box, seg_held[0usize..1usize])))
+                            n += 1usize
+                        }
+                        seg_from = seg_to + 2.0
+                        seg_at += 1usize
+                    }
                     rows += 1usize
-                    cursor += 19.0
+                    cursor += rh + 2.0
                     first_row = false
                 }
                 k += 1usize
@@ -10877,7 +11104,7 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     }
     var height = cursor + 1.0
     if options.height > height { height = options.height }
-    let (frame, frame_error) = vg.node(a, vg.Frame { width: width, height: height, bands: band_y[0usize..bands], firsts: band_first[0usize..bands], opens: band_open[0usize..bands], rows: row_y[0usize..rows], selected: row_sel[0usize..rows], tops: row_top[0usize..rows], lasts: row_last[0usize..rows], name_width: name_width, stops: zero })
+    let (frame, frame_error) = vg.node(a, vg.Frame { width: width, height: height, bands: band_y[0usize..bands], firsts: band_first[0usize..bands], opens: band_open[0usize..bands], rows: row_y[0usize..rows], selected: row_sel[0usize..rows], tops: row_top[0usize..rows], lasts: row_last[0usize..rows], name_width: name_width, stops: zero, heights: row_h[0usize..rows], hs1: row_hs1[0usize..rows], hs2: row_hs2[0usize..rows], vs1: row_vs1[0usize..rows], vs2: row_vs2[0usize..rows] })
     if frame_error != ok { ret (zero, frame_error) }
     parts[0usize] = frame
     let (root, root_error) = mem.alloc[widget.Node](a, 1usize)

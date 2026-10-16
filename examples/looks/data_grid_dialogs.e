@@ -22,7 +22,7 @@ use e.ui.style
 use e.ui.widget
 
 const SORT_ROWS: usize = 20usize
-const MISSING_ROWS: usize = 14usize
+const MISSING_ROWS: usize = 13usize
 
 type App = struct {
     a: *mem.Arena,
@@ -95,6 +95,25 @@ fn miss_ink(ctx: *void, row: usize) -> (paint.Color, bool) {
     ret (gl.rgb(rgb), true)
 }
 
+// looks5-e: the Sort Order cell of a column that is sorted carries v3's picture (artwork, not in this repo), so its
+// cell is white and the caption starts 29 px in; the others are plain.
+fn sort_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err {
+    var caption = "None"
+    if row == 4usize { caption = "Descending" }
+    if row == 7usize { caption = "Ascending" }
+    let (label, label_error) = control.text(a, 0u64, caption, t, control.text_options())
+    if label_error != ok { ret label_error }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret held_error }
+    held[0usize] = label
+    var cell = looks.size_style(155.0, 19.0)
+    let app = mem.cast[*App](ctx)
+    if (row == 4usize || row == 7usize) && !app.sort_grid.has_selection { cell.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
+    cell.padding = style.EdgeLengths { left: style.Length { Px: 29.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 2.0 } }
+    *out = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell, held[0usize..1usize])
+    ret ok
+}
+
 fn load(a: *mem.Arena, app: *App) -> err {
     var spec: [2]table.Spec = zero
     spec[0usize] = table.Spec { name: "Column", kind: table.Kind.Dict, heap_bytes: 512usize, dict_cap: 32usize }
@@ -129,7 +148,7 @@ fn load(a: *mem.Arena, app: *App) -> err {
     ret ok
 }
 
-fn plain_grid(windows: bool, row_height: f32, a: *mem.Arena, tbl: *table.Table, v: *view.View, g: *grp.Grouping, scratch: *mem.Arena, specs: []const dg.ColumnSpec, id: u64) -> (dg.Grid, err) {
+fn plain_grid(windows: bool, events: dg.Events, row_height: f32, a: *mem.Arena, tbl: *table.Table, v: *view.View, g: *grp.Grouping, scratch: *mem.Arena, specs: []const dg.ColumnSpec, id: u64) -> (dg.Grid, err) {
     let (vv, vv_error) = view.create(a, tbl)
     if vv_error != ok { ret (zero, vv_error) }
     *v = vv
@@ -140,7 +159,7 @@ fn plain_grid(windows: bool, row_height: f32, a: *mem.Arena, tbl: *table.Table, 
     var order: [1]view.Key = zero
     order[0usize] = view.column_key(0usize, false, true)
     try grp.group_by(g, none[0usize..0usize], order[0usize..0usize], scratch)
-    let (made, made_error) = dg.create(a, tbl, g, specs, dg.no_events(), id)
+    let (made, made_error) = dg.create(a, tbl, g, specs, events, id)
     if made_error != ok { ret (zero, made_error) }
     var grid = made
     if !windows { ret (grid, ok) }
@@ -149,9 +168,16 @@ fn plain_grid(windows: bool, row_height: f32, a: *mem.Arena, tbl: *table.Table, 
     look.header_height = 19.0
     look.header_line = gl.rgb(0xF4F4F4u32)
     look.frame_none = true
+    look.dialog_lines = true
+    look.foot_set = true
+    look.foot_g1 = gl.rgb(0xE2E2E2u32)
+    look.foot_g2 = gl.rgb(0xF3F3F3u32)
+    look.foot_w1 = gl.rgb(0xE8E8E8u32)
+    look.foot_w2 = gl.rgb(0xE9E9E9u32)
     look.row_height = row_height
     dg.set_look(&grid, look)
     dg.show_indicator(&grid, false)
+    dg.set_grid_lines(&grid, dg.GridLines.Both)
     ret (grid, ok)
 }
 
@@ -165,15 +191,20 @@ fn setup(app: *App) -> err {
     let (sort_specs, sort_specs_error) = mem.alloc[dg.ColumnSpec](a, 2usize)
     if sort_specs_error != ok { ret sort_specs_error }
     sort_specs[0usize] = dg.ColumnSpec { title: "Column", width: 156.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    sort_specs[1usize] = dg.ColumnSpec { title: "Sort Order", width: 159.0, column: 1usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    let (sg, sg_error) = plain_grid(app.windows, 19.0, a, &app.sort_table, &app.sort_view, &app.sort_group, &app.scratch, sort_specs[0usize..2usize], 100u64)
+    var order_kind = dg.CellKind.Text
+    if app.windows { order_kind = dg.CellKind.Picture }
+    sort_specs[1usize] = dg.ColumnSpec { title: "Sort Order", width: 156.0, column: 1usize, kind: order_kind, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    var sort_events = dg.no_events()
+    sort_events.custom_cell = sort_cell
+    sort_events.ctx = mem.cast[*void](app)
+    let (sg, sg_error) = plain_grid(app.windows, sort_events, 19.0, a, &app.sort_table, &app.sort_view, &app.sort_group, &app.scratch, sort_specs[0usize..2usize], 100u64)
     if sg_error != ok { ret sg_error }
     app.sort_grid = sg
     if app.windows { dg.set_cell_select(&app.sort_grid, 1usize) }
     let (miss_specs, miss_specs_error) = mem.alloc[dg.ColumnSpec](a, 1usize)
     if miss_specs_error != ok { ret miss_specs_error }
-    miss_specs[0usize] = dg.ColumnSpec { title: "Edition", width: 214.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    let (mg, mg_error) = plain_grid(app.windows, 18.0, a, &app.miss_table, &app.miss_view, &app.miss_group, &app.scratch, miss_specs[0usize..1usize], 200u64)
+    miss_specs[0usize] = dg.ColumnSpec { title: "Edition", width: 215.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    let (mg, mg_error) = plain_grid(app.windows, dg.no_events(), 18.0, a, &app.miss_table, &app.miss_view, &app.miss_group, &app.scratch, miss_specs[0usize..1usize], 200u64)
     if mg_error != ok { ret mg_error }
     app.miss_grid = mg
     dg.set_row_ink(&app.miss_grid, zero, miss_ink)
@@ -216,8 +247,19 @@ fn boxed(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid, w: f32, h: f32)
     var wrap = looks.size_style(w, h)
     wrap.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     if t.tokens.profile == .Windows { wrap.background = paint.Brush { Solid: gl.rgb(0x828790u32) } }
-    wrap.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, wrap, column[0usize..1usize]), ok)
+    wrap.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 0.0 } }
+    if t.tokens.profile != .Windows { wrap.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } } }
+    let (sides, sides_error) = mem.alloc[widget.Node](a, 1usize)
+    if sides_error != ok { ret (zero, sides_error) }
+    sides[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, wrap, column[0usize..1usize])
+    if t.tokens.profile != .Windows { ret (sides[0usize], ok) }
+    // looks5-e: the last pixel row is the lighter #A6AAB0 (measured, Sort dialog)
+    var foot = looks.size_style(w, h)
+    foot.background = paint.Brush { Solid: gl.rgb(0xA6AAB0u32) }
+    foot.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 1.0 } }
+    wrap.height = style.Length { Px: h - 1.0 }
+    sides[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, wrap, column[0usize..1usize])
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, foot, sides[0usize..1usize]), ok)
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {

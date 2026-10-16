@@ -28,7 +28,7 @@ use e.ui.widget
 
 // What to paint: band tops, whether each is the first band and open; row content tops, whether
 // each is selected, first in its group, last in its group; the overall size.
-type Frame = struct { width: f32, height: f32, bands: []const f32, firsts: []const bool, opens: []const bool, rows: []const f32, selected: []const bool, tops: []const bool, lasts: []const bool, name_width: f32, stops: []const paint.Stop }
+type Frame = struct { width: f32, height: f32, bands: []const f32, firsts: []const bool, opens: []const bool, rows: []const f32, selected: []const bool, tops: []const bool, lasts: []const bool, name_width: f32, stops: []const paint.Stop, heights: []const f32, hs1: []const f32, hs2: []const f32, vs1: []const f32, vs2: []const f32 }
 
 fn measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -111,32 +111,54 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         let top = y + f.rows[r]
         let dark_x = x + value_x
         // the capture's hairlines drift 0.013 px a row (fractional layout): dark C6 -> CE, light D9 -> D2
-        if f.tops[r] { k = 0u32 }
-        if k > 8u32 { k = 8u32 }
+        // looks5-e: the drift follows the row's place down the grid, not the category (live capture: #C5C5C8 over #DADADB
+        // at the first row, #D1D1D3 over #CECED0 at y 234, #D8D8D9 over #C7C7CA at y 337)
+        var drift = (f.rows[r] - 51.0) * 0.065
+        if drift < 0.0 { drift = 0.0 }
+        k = u32(drift + 0.5)
         let dark = 0xC5C5C8u32 + k * 0x010101u32
         let light = 0xDADADBu32 - k * 0x010101u32
-        k += 1u32
+        // looks5-e: a row may be taller than 17 (Deck Properties' Computed rows), with extra cell lines in its header and value
+        var rh: f32 = 17.0
+        if r < f.heights.len { rh = f.heights[r] }
+        let tall = rh + 3.0
         // the gutter and its line, over the whole row (hairline row included)
-        try fill(b, x + 1.0, top - 1.0, 13.0, 20.0, 0xF0F0F0u32)
-        try fill(b, x + 1.0, top - 1.0, 1.0, 20.0, 0xEFEFEFu32)
-        try fill(b, x + 14.0, top - 1.0, 1.0, 20.0, 0xA1A1A5u32)
+        try fill(b, x + 1.0, top - 1.0, 13.0, tall, 0xF0F0F0u32)
+        try fill(b, x + 1.0, top - 1.0, 1.0, tall, 0xEFEFEFu32)
+        try fill(b, x + 14.0, top - 1.0, 1.0, tall, 0xA1A1A5u32)
         // the line between the header and the value cell
-        try fill(b, dark_x, top - 1.0, 1.0, 20.0, 0xABABAEu32)
-        try fill(b, dark_x + 1.0, top - 1.0, 1.0, 20.0, 0xF4F4F5u32)
+        try fill(b, dark_x, top - 1.0, 1.0, tall, 0xABABAEu32)
+        try fill(b, dark_x + 1.0, top - 1.0, 1.0, tall, 0xF4F4F5u32)
+        if r < f.hs1.len && f.hs1[r] > 0.0 {
+            try fill(b, x + f.hs1[r], top, 1.0, rh, 0xA6A6AAu32)
+            try fill(b, x + f.hs1[r] + 1.0, top, 1.0, rh, 0xF8F8F9u32)
+        }
+        if r < f.hs2.len && f.hs2[r] > 0.0 {
+            try fill(b, x + f.hs2[r], top, 1.0, rh, 0xA8A8ABu32)
+            try fill(b, x + f.hs2[r] + 1.0, top, 1.0, rh, 0xF7F7F8u32)
+        }
+        if r < f.vs1.len && f.vs1[r] > 0.0 {
+            try fill(b, x + f.vs1[r], top, 1.0, rh, 0xB0B0B3u32)
+            try fill(b, x + f.vs1[r] + 1.0, top, 1.0, rh, 0xEFEFF0u32)
+        }
+        if r < f.vs2.len && f.vs2[r] > 0.0 {
+            try fill(b, x + f.vs2[r], top, 1.0, rh, 0xB3B3B6u32)
+            try fill(b, x + f.vs2[r] + 1.0, top, 1.0, rh, 0xEEEEEFu32)
+        }
         if f.tops[r] { try fill(b, x + 15.0, top - 1.0, w - 16.0, 1.0, 0xCFCFD1u32) }
         if f.selected[r] {
             try fill(b, x + 15.0, top - 1.0, value_x - 15.0, 1.0, 0x3D87C4u32)
-            try fill(b, x + 15.0, top, value_x - 15.0, 17.0, 0x0078D7u32)
-            try fill(b, x + 15.0, top + 17.0, value_x - 15.0, 1.0, 0x6190B8u32)
+            try fill(b, x + 15.0, top, value_x - 15.0, rh, 0x0078D7u32)
+            try fill(b, x + 15.0, top + rh, value_x - 15.0, 1.0, 0x6190B8u32)
         }
         // the hairlines under the row; the last row's light one is the next band's top line
         if f.selected[r] {
-            try fill(b, dark_x + 2.0, top + 17.0, w - value_x - 3.0, 1.0, 0xB7B7BAu32)
+            try fill(b, dark_x + 2.0, top + rh, w - value_x - 3.0, 1.0, 0xB7B7BAu32)
         } else {
-            try fill(b, x + 15.0, top + 17.0, w - 16.0, 1.0, dark)
+            try fill(b, x + 15.0, top + rh, w - 16.0, 1.0, dark)
         }
-        if f.lasts[r] { try fill(b, x + 1.0, top + 17.0, 13.0, 1.0, 0xC7C7C9u32) }
-        if !f.lasts[r] { try fill(b, x + 15.0, top + 18.0, w - 16.0, 1.0, light) }
+        if f.lasts[r] { try fill(b, x + 1.0, top + rh, 13.0, 1.0, 0xC7C7C9u32) }
+        if !f.lasts[r] { try fill(b, x + 15.0, top + rh + 1.0, w - 16.0, 1.0, light) }
         r += 1usize
     }
     // the frame: classic edit-control bevel colours, measured
@@ -167,7 +189,11 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     // the focus rectangle of the selected row: dots round its value cell, over the frame's edge
     r = 0usize
     while r < f.rows.len {
-        if f.selected[r] { try dotted(b, x + value_x + 1.0, y + f.rows[r] - 1.0, w - value_x - 1.0, 18.0, 0x6A6A6Au32) }
+        if f.selected[r] {
+            var dh: f32 = 17.0
+            if r < f.heights.len { dh = f.heights[r] }
+            try dotted(b, x + value_x + 1.0, y + f.rows[r] - 1.0, w - value_x - 1.0, dh + 1.0, 0x6A6A6Au32)
+        }
         r += 1usize
     }
     ret ok

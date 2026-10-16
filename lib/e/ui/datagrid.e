@@ -1094,7 +1094,11 @@ fn preview_detail_height(grid: *const Grid) -> f32 {
 fn extra_of(grid: *const Grid, at: usize) -> f32 {
     if grid.g.group_footers && grp.visible_is_footer(grid.g, at) { ret footer_extra() }
     // looks4-e: a group row is 18 px tall in the live capture, a data row 19
-    if grid.look.on && grid.look.group_flat && grp.visible_is_group(grid.g, at) && !grp.visible_is_footer(grid.g, at) { ret -1.0 }
+    if grid.look.on && grid.look.group_flat && grp.visible_is_group(grid.g, at) && !grp.visible_is_footer(grid.g, at) {
+        // looks5-e: directly under the header (no filter row) the first group row is 16 tall (live capture)
+        if at == 0usize && !grid.filter_visible { ret -3.0 }
+        ret -1.0
+    }
     if grid.preview_on && grid.look.on && !grp.visible_is_group(grid.g, at) { ret preview_extra() }
     ret 0.0
 }
@@ -7632,7 +7636,7 @@ fn group_cell_plain(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: 
                 if str.push_i64(&sb, i64(key_row)) != ok { ret control.TooLarge }
             }
         }
-        if grid.look.on && !grid.look.group_flat {
+        if grid.look.on && (!grid.look.group_flat || grid.look.group_counts) {
             if str.push(&sb, " (Count: ") != ok || str.push_usize(&sb, grp.group_count(grid.g, group)) != ok || str.push(&sb, ")") != ok { ret control.TooLarge }
         } else if !grid.look.on {
             if str.push(&sb, "  (") != ok || str.push_usize(&sb, grp.group_count(grid.g, group)) != ok || str.push(&sb, ")") != ok { ret control.TooLarge }
@@ -8753,7 +8757,10 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
         if kind == Nav.NextPage { slot = 4usize }
         if kind == Nav.Last { slot = 5usize }
         live_w = gl.gx_nav_w(slot, enabled)
-        let (live_mark, live_error) = gl.pixels(a, gl.gx_nav(slot, enabled), live_w, gl.gx_nav_h())
+        // looks5-e: under the pointer v3 draws the button on a blue frame over #E0EEF9 (live hover captures)
+        var live_pix = gl.gx_nav(slot, enabled)
+        if enabled && (slot == 3usize || slot == 4usize) && mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, key, true, false).hovered { live_pix = gl.gx_nav_hot(slot) }
+        let (live_mark, live_error) = gl.pixels(a, live_pix, live_w, gl.gx_nav_h())
         if live_error != ok { ret (zero, live_error) }
         mark = live_mark
         live_nav = true
@@ -8854,7 +8861,8 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var live_band = style.defaults()
         live_band.height = style.Length { Px: 23.0 }
         live_band.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
-        info = widget.padded(0u64, 5.0, 5.0, 4.0, 0.0, live_band, one(a, info_text))
+        // looks5-e: v3's hinted text is wider than ours: the box follows the capture (the next buttons stand 3 px further)
+        info = widget.padded(0u64, 5.0, 5.0, 7.0, 0.0, live_band, one(a, info_text))
     } else if grid.has_nav_icons {
         // v3 sets the position on a white band as wide as the gap between its buttons
         var band = control.sized_style(115.0, 30.0)
@@ -8867,7 +8875,9 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let funnel_key = navigator_key(grid) + 7u64
     var funnel_mark: widget.Node = zero
     if live_row {
-        let (live_funnel, live_funnel_error) = gl.pixels(a, gl.gx_nav(7usize, true), gl.gx_nav_w(7usize, true), gl.gx_nav_h())
+        var funnel_pix = gl.gx_nav(7usize, true)
+        if mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, funnel_key, true, false).hovered { funnel_pix = gl.gx_nav_hot(7usize) }
+        let (live_funnel, live_funnel_error) = gl.pixels(a, funnel_pix, gl.gx_nav_w(7usize, true), gl.gx_nav_h())
         if live_funnel_error != ok { ret (zero, live_funnel_error) }
         funnel_mark = live_funnel
     } else if grid.has_nav_icons {
@@ -8915,9 +8925,17 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         thumb.background = paint.Brush { Solid: gl.rgb(0x808080u32) }
         if live_row {
             // looks4-e: v3's thumb is #858585 with a 1 px lighter rim (#BABABA) all round
+            // looks5-e: under the pointer or pressed it is 12 thick (live hover and pressed captures), the ends rounded
+            var hot_thumb = false
+            if mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
+                let hot_state = control.control_state(grid.theme, navigator_key(grid) + 9u64, true, false)
+                hot_thumb = hot_state.hovered || hot_state.pressed
+            }
+            if hot_thumb { thumb_h = 12.0 }
             thumb = control.sized_style(hthumb_width(grid) + 2.0, thumb_h + 2.0)
             thumb.background = paint.Brush { Solid: gl.rgb(0x858585u32) }
             thumb.border = style.Border { width: 1.0, color: gl.rgb(0xBABABAu32) }
+            if hot_thumb { thumb.radius = 4.0 }
         }
         var room = htrack(grid) - hthumb_width(grid)
         var left: f32 = 0.0
@@ -8925,9 +8943,9 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var thumb_start: f32 = 14.0
         var thumb_top: f32 = 0.0
         if live_row { thumb_top = 1.0 }
-        if live_row { thumb_start = 19.5 }
+        if live_row { thumb_start = 17.5 }
         thumb.margin = style.EdgeLengths { left: style.Length { Px: thumb_start + left }, top: style.Length { Px: thumb_top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-        cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 35u8, enabled: true, focusable: false }, thumb, zero)
+        cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 39u8, enabled: true, focusable: false }, thumb, zero)
         shown = 9usize
     }
     if live_row {
@@ -9350,7 +9368,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var top_one = gl.rgb(0xF2F4F6u32)
         var top_two = gl.rgb(0xFAFBECu32)
         var bottom_one = gl.rgb(0xD9D9C8u32)
-        var bottom_two = gl.rgb(0xD2D2D2u32)
+        var bottom_two = gl.rgb(0xDADADAu32)
         if green {
             top_one = gl.rgb(0xEBE9E9u32)
             top_two = gl.rgb(0xE1EDE6u32)
@@ -9881,6 +9899,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     if grid.filter_visible && !grid.look.on { body_height = body_height - 44.0 }
     if grid.bands.len != 0usize { body_height = body_height - 36.0 }
     if grid.navigator_visible { body_height = body_height - 52.0 }
+    if grid.look.on && grid.look.group_flat && !grid.footer_visible && grid.navigator_visible { body_height = body_height - 2.0 }
     if grid.group_box_visible { body_height = body_height - 35.0 }
     grid.page_rows = usize(body_height / grid.row_height)
     follow_row_after_reorder(grid)
@@ -9948,10 +9967,9 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         var dotted_focus = true
         if !grid.editing && !grid.chooser_active && mem.address_of(theme.runtime) != 0usize {
             let (held, has_held) = widget.focused_key(theme.runtime)
-            if !grid.force_focus && (!has_held || !grid.has_selection || held != row_key(grid, grid.selected_row)) {
-                selected_fill = gl.rgb(0xD5E4EEu32)
-                // v3 frames the current row of a grid without the focus in near black
-                selected_edge = gl.rgb(0x212121u32)
+            if lk.idle_on && !grid.force_focus && (!has_held || !grid.has_selection || held != row_key(grid, grid.selected_row)) {
+                selected_fill = lk.idle_fill
+                selected_edge = lk.idle_edge
                 dotted_focus = false
             }
         }
@@ -9961,7 +9979,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             if made_filter_error != ok { ret (zero, made_filter_error) }
             v3_filter = made_filter
         }
-        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select }
+        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select, dialog_lines: grid.look.dialog_lines, foot_set: grid.look.foot_set, foot_drift: grid.look.foot_drift, foot_g1: grid.look.foot_g1, foot_g2: grid.look.foot_g2, foot_w1: grid.look.foot_w1, foot_w2: grid.look.foot_w2, top_edge_on: !dotted_focus && grid.look.idle_on, top_edge: lk.idle_top }
     }
     // group footers are taller: the list of the entries that are
     if has_extras(grid) && grid.look.on {
@@ -10067,6 +10085,13 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             let (filter_panel, filter_panel_error) = filter_panel_row(a, grid)
             if filter_panel_error != ok { ret (zero, filter_panel_error) }
             parts[at] = filter_panel
+        } else if grid.look.group_flat && !grid.footer_visible && grid.navigator_visible {
+            // looks5-e: with no summary footer the navigator's top has two #F7F7F7 pixel rows (live capture, states grids)
+            var rule = style.defaults()
+            rule.width = style.Length { Percent: 100.0 }
+            rule.height = style.Length { Px: 2.0 }
+            rule.background = paint.Brush { Solid: gl.rgb(0xF7F7F7u32) }
+            parts[at] = widget.box(0u64, rule, zero)
         } else {
             parts[at] = widget.box(0u64, style.defaults(), zero)
         }
@@ -10091,9 +10116,31 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     var inner_style = style.defaults()
     if grid.look.on && !grid.look.frame_none { inner_style.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) } }
     var stacked = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap }, inner_style, parts[0usize..part_count])
-    if grid.look.on && !grid.look.frame_none { stacked = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, frame, one(a, stacked)) }
+    if grid.look.on && !grid.look.frame_none && grid.look.ring {
+        let (ringed, ring_error) = ring_wrap(a, grid, stacked)
+        if ring_error != ok { ret (zero, ring_error) }
+        stacked = ringed
+    } else if grid.look.on && !grid.look.frame_none { stacked = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, frame, one(a, stacked)) }
     let (keyed, keyed_error) = with_keys(a, grid, stacked)
     ret (keyed, keyed_error)
+}
+
+// looks5-e: the grid's frame as the live capture draws it: two lines on the top and the left, one at the bottom and the right
+fn ring_side(a: *mem.Arena, color: paint.Color, left: f32, top: f32, right: f32, bottom: f32, inner: widget.Node) -> widget.Node {
+    var s = style.defaults()
+    s.background = paint.Brush { Solid: color }
+    ret widget.padded(0u64, left, top, right, bottom, s, one(a, inner))
+}
+
+fn ring_wrap(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (widget.Node, err) {
+    let lk = grid.look
+    var node = ring_side(a, lk.ring_right, 0.0, 0.0, 1.0, 0.0, inner)
+    node = ring_side(a, lk.ring_bottom, 0.0, 0.0, 0.0, 1.0, node)
+    node = ring_side(a, lk.ring_left_i, 1.0, 0.0, 0.0, 0.0, node)
+    node = ring_side(a, lk.ring_top_i, 0.0, 1.0, 0.0, 0.0, node)
+    node = ring_side(a, lk.ring_left_o, 1.0, 0.0, 0.0, 0.0, node)
+    node = ring_side(a, lk.ring_top_o, 0.0, 1.0, 0.0, 0.0, node)
+    ret (node, ok)
 }
 
 // looks4-e: the live capture's vertical bar starts at the grid's top, above the group box

@@ -20,6 +20,7 @@ use e.text.layout
 use e.text.shape
 use e.ui.accessibility
 use e.ui.animation
+use e.ui.gridlook as gl
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
@@ -14030,6 +14031,10 @@ fn scroll_arrows_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> er
 
 // The bar alone: `length` long along `vertical`, for a viewport of `view` px over `content`
 // px scrolled to `offset`. Keyed `key` (its hover and press state).
+// looks5-e: a dialog's list bar (the Filter tree): a white first pixel and the thumb on whole pixels, as the grids of the dialogs
+var scroll_bar_crisp: bool = false
+fn set_scroll_bar_crisp(on: bool) { scroll_bar_crisp = on }
+
 fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, view: f32, content: f32, offset: f32) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
     // Measured at 100 % in the v3 main window (ref/windows/main-window@1x.png): the vertical bar's
@@ -14047,6 +14052,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     let room = length - 32.0
     var thick = style.defaults()
     var track = sized_style(16.0, length)
+    if scroll_bar_crisp { track = sized_style(17.0, length) }
     if !vertical { track = sized_style(length, 16.0) }
     track.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
@@ -14056,6 +14062,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     var edge = sized_style(1.0, length)
     if !vertical { edge = sized_style(length, 1.0) }
     edge.background = paint.Brush { Solid: style.hex(16250871u32) }
+    if scroll_bar_crisp { edge.background = paint.Brush { Solid: style.hex(16777215u32) } }
     layers[count] = widget.box(0u64, edge, zero)
     count += 1usize
     if content > view && room > 0.0 {
@@ -14067,8 +14074,19 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         if share > 1.0 { share = 1.0 }
         let at = 17.0 + (room - thumb_len) * share
         var side = (16.0 - w) * 0.5 + 0.46
+        // looks5-e: pressed, the pill stands on whole pixels (live captures: 6 px, #858585, 294 to 299 on a bar that starts at 289)
+        var lift: f32 = 0.47
+        if scroll_bar_crisp {
+            side = 8.0
+            if state.pressed || state.hovered { side = 6.0 }
+            lift = 0.0
+        }
+        if state.pressed && vertical && !scroll_bar_crisp {
+            side = (16.0 - w) * 0.5
+            lift = 0.0
+        }
         thick = sized_style(w, thumb_len)
-        thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at + 0.47 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at + lift }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         thick.radius = w * 0.5
         if !vertical {
             side = (16.0 - (w + 2.0)) * 0.5
@@ -14082,7 +14100,33 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         layers[count] = widget.box(0u64, thick, zero)
         count += 1usize
     }
-    if state.hovered && !state.pressed {
+    // looks5-e: a vertical bar shows only the arrow the pointer is on (live captures; the thumb widens over the bar)
+    var arrow_done = false
+    if state.hovered && !state.pressed && vertical && mem.address_of(t.runtime) != 0usize {
+        arrow_done = true
+        let (bar_box, has_bar_box) = keyed_bounds(t.runtime, key)
+        let bar_pointer = widget.pointer_position(t.runtime)
+        if has_bar_box {
+            let bar_y = bar_pointer.y - bar_box.y
+            var hot_pix = ""
+            var hot_top: f32 = 4.0
+            if bar_y < 16.0 { hot_pix = gl.gx_arrow_hot_up() }
+            if bar_y > length - 16.0 {
+                hot_pix = gl.gx_arrow_hot_down()
+                hot_top = length - 13.0
+            }
+            if hot_pix.len > 0usize {
+                let (hot, hot_error) = gl.pixels(a, hot_pix, gl.gx_arrow_hot_w(), gl.gx_arrow_hot_h())
+                if hot_error != ok { ret (zero, hot_error) }
+                let (hot_held, hot_held_error) = mem.alloc[widget.Node](a, 1usize)
+                if hot_held_error != ok { ret (zero, TooLarge) }
+                hot_held[0usize] = hot
+                layers[count] = widget.positioned(0u64, 3.0, hot_top, style.defaults(), hot_held[0usize..1usize])
+                count += 1usize
+            }
+        }
+    }
+    if state.hovered && !state.pressed && !arrow_done {
         let (arrows, arrows_error) = mem.alloc[ScrollArrows](a, 1usize)
         if arrows_error != ok { ret (zero, TooLarge) }
         arrows[0usize] = ScrollArrows { vertical: vertical, ink: style.hex(6316128u32) }

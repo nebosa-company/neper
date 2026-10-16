@@ -48,6 +48,17 @@ type Sheet = struct { name: str, cells: usize, columns: usize, cell_w: f32, cell
 type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, width: f32, height: f32, scale: f32, material_fonts: []shape.Font }
 error Failed
 
+// looks5-e: where a driven cell's pointer goes, as an offset from the cell's centre (default none): an app sets it
+// from `build` for the cells it needs (a button of a large control that is not at the centre).
+var aim_x: [64]f32 = zero
+var aim_y: [64]f32 = zero
+fn aim(i: usize, dx: f32, dy: f32) {
+    if i < 64usize {
+        aim_x[i] = dx
+        aim_y[i] = dy
+    }
+}
+
 fn margin() -> f32 { ret 12.0 }
 fn spacing() -> f32 { ret 10.0 }
 fn caption_h() -> f32 { ret 16.0 }
@@ -430,8 +441,12 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
         let drive = cells[i].drive
         if drive != .None {
             let origin = cell_origin(s, i)
-            let cx = origin.x + s.cell_w * 0.5
-            let cy = origin.y + s.cell_h * 0.5
+            var cx = origin.x + s.cell_w * 0.5
+            var cy = origin.y + s.cell_h * 0.5
+            if i < 64usize {
+                cx += aim_x[i]
+                cy += aim_y[i]
+            }
             try drive_cell(rig, drive, cx, cy)
             // Rebuild: a control reads the interaction state when it is built.
             step += 1i64
