@@ -22,7 +22,7 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATES = os.path.join(ROOT, "docs/ui/looks/ref/windows/states")
 
-# kinds: 0 check box off rest, 1 off pressed, 2 on rest, 3 on pressed, 4 radio off rest, 5 off pressed, 6 on rest, 7 on pressed.
+# kinds: 8 to 11 are the hover looks (check box off, on; radio off, on); 0 check box off rest, 1 off pressed, 2 on rest, 3 on pressed, 4 radio off rest, 5 off pressed, 6 on rest, 7 on pressed.
 # contexts: 0 Options pages' check boxes, 1 Filter tab's check boxes, 2 Missing Set Cards' radios, 3 Search for Card's
 # radio group, 4 Filter's Blocks / Formats / Editions row, 5 Filter's Match group, 6 Options Grids' radio groups,
 # 7 Options Rules and Prices check lists, 8 Options Card Art check list.
@@ -33,6 +33,11 @@ FAMILIES = {
     (0, 1): (240, ("checkbox-pressed-options-hide-splash@1x.png", 217, 78), ("checkbox-pressed-options-show-filter-row@1x.png", 226, 136)),
     (0, 2): (240, ("dialog-options-morph-rest@1x.png", 217, 75), ("dialog-options-morph-rest@1x.png", 217, 251)),
     (0, 3): (240, ("checkbox-pressed-options-morph-use@1x.png", 217, 75), ("checkbox-pressed-options-show-tooltips@1x.png", 217, 159)),
+    # hover (kinds 8 to 11: check box off, on, radio off, on): the pointer over a check box lightens or darkens its face;
+    # over a radio there is no visible change (the captures are rest's, so a radio has no hover family but the Search
+    # window's and Options groups' selected discs that the captures show differ by a level)
+    (0, 8): (240, ("hover-checkbox-options-hide-splash@1x.png", 217, 78), ("hover-checkbox-options-show-filter-row@1x.png", 226, 136)),
+    (0, 9): (240, ("hover-checkbox-options-morph-use@1x.png", 217, 75), ("hover-checkbox-options-card-preview-label@1x.png", 217, 132)),
     (1, 0): (249, ("tab-selected-filter-cards@1x.png", 55, 304), None),
     (2, 4): (240, ("dialog-missing-set-cards-rest@1x.png", 24, 398), ("dialog-missing-set-cards-rest@1x.png", 24, 422)),
     (2, 5): (240, ("radio-pressed-missing-set-cards-available@1x.png", 24, 398), None),
@@ -107,7 +112,7 @@ HEAD = """// The Windows look's check box and radio marks: v3's TcxCheckBox and 
 // edit the script, not this file. A value is 0xAARRGGBB, alpha 0 not painted; the edge pixels outside the
 // shape carry the edge colour with their coverage so any dialog face shows through. Tables are 14 x 14.
 // Kinds: 0 check box off rest, 1 off pressed, 2 on rest, 3 on pressed, 4 radio off rest, 5 off pressed,
-// 6 on rest, 7 on pressed. A family is (context * 8 + kind); a context is one window's set of marks (see the
+// 6 on rest, 7 on pressed, 8 to 11 the hover looks (check box off, on, radio off, on). A family is (context * 16 + kind); a context is one window's set of marks (see the
 // generator). The theme bitmap's sub-pixel phase follows the control's y in its window: a family holds a table A
 // baked at window y `ya` and a table B at `yb`, painted as their blend for the y asked.
 
@@ -123,18 +128,23 @@ use e.ui.widget
 
 TAIL = """
 // The family to paint for (context, kind): the context's own when it has one, else the default context of the shape
-// (0 for a check box; for a radio 3 for the pressed disc, 2 for the others).
+// (0 for a check box; for a radio 3 for the pressed disc, 2 for the others). A hover (kinds 8 to 11) with no capture of
+// its own is the rest look.
 fn mark_resolve(context: u32, kind: u32) -> u32 {
-    let own = context * 8u32 + kind
+    let own = context * 16u32 + kind
     if mark_has(own) { ret own }
-    if kind < 4u32 { ret kind }
-    if kind == 7u32 { ret 3u32 * 8u32 + 7u32 }
-    ret 2u32 * 8u32 + kind
+    var base = kind
+    if kind >= 8u32 { base = (kind - 8u32) * 2u32 }
+    let rest = context * 16u32 + base
+    if mark_has(rest) { ret rest }
+    if base < 4u32 { ret base }
+    if base == 7u32 { ret 3u32 * 16u32 + 7u32 }
+    ret 2u32 * 16u32 + base
 }
 
 // The mark's width in px (14 for a check box, 13 for a radio) and its height.
 fn mark_width(kind: u32) -> f32 {
-    if kind >= 4u32 { ret 13.0 }
+    if (kind >= 4u32 && kind < 8u32) || kind >= 10u32 { ret 13.0 }
     ret 14.0
 }
 
@@ -240,18 +250,18 @@ def main():
     for tag in ("a", "b"):
         disp.append("fn mark_%s(id: u32) -> [196]u32 {" % tag)
         for (ctx, kind) in ids:
-            disp.append("    if id == %du32 { ret mark_%d_%d_%s() }" % (ctx * 8 + kind, ctx, kind, tag))
+            disp.append("    if id == %du32 { ret mark_%d_%d_%s() }" % (ctx * 16 + kind, ctx, kind, tag))
         disp.append("    ret mark_0_0_a()\n}\n")
     for tag, idx in (("ya", 1), ("yb", 2)):
         disp.append("fn mark_%s(id: u32) -> f32 {" % tag)
         for (ctx, kind) in ids:
             bg, a, b = FAMILIES[(ctx, kind)]
             inst = a if idx == 1 else (b if b else a)
-            disp.append("    if id == %du32 { ret %d.0 }" % (ctx * 8 + kind, inst[2]))
+            disp.append("    if id == %du32 { ret %d.0 }" % (ctx * 16 + kind, inst[2]))
         disp.append("    ret 0.0\n}\n")
     disp.append("fn mark_has(id: u32) -> bool {")
     for (ctx, kind) in ids:
-        disp.append("    if id == %du32 { ret true }" % (ctx * 8 + kind))
+        disp.append("    if id == %du32 { ret true }" % (ctx * 16 + kind))
     disp.append("    ret false\n}\n")
     out = HEAD + "\n" + "\n".join(lines) + "\n\n" + "\n".join(disp) + TAIL
     with open(os.path.join(ROOT, "lib/e/ui/winmark.e"), "w", encoding="utf-8", newline="\n") as f:

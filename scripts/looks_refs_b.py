@@ -266,6 +266,41 @@ SHEETS["choices_filter"] = (4, 220, 190, [
     (T, 598, 188, 84, 21)])
 
 
+# Check box hover (the fake-pointer grabs): rect (x, y, w, h) of each box in its Options page.
+H = "states/hover-"
+SHEETS["checkbox_hover"] = (3, 160, 29, [
+    (H + "checkbox-options-hide-splash@1x.png", 215, 74, 152, 21),
+    (H + "checkbox-options-hide-splash-label@1x.png", 215, 74, 152, 21),
+    (H + "checkbox-options-card-preview-label@1x.png", 215, 128, 146, 21),
+    (H + "checkbox-options-show-tooltips@1x.png", 215, 155, 90, 21),
+    (H + "checkbox-options-show-filter-row@1x.png", 224, 132, 106, 21),
+    (H + "checkbox-options-show-foil@1x.png", 224, 102, 106, 21),
+    (H + "checkbox-options-morph-use@1x.png", 215, 71, 108, 21)])
+
+
+# Radio hover (the fake-pointer grabs). Short items stand at x 136 of their cell (the pointer is at the cell centre); the
+# crops of the 42 tall items stop 4 rows short of the group's bottom line.
+SHEETS["radio_hover"] = (2, 340, 50, [
+    (H + "radio-filter-blocks@1x.png", 21, 65, 84, 17, 4, 136, 0),
+    (H + "radio-filter-formats@1x.png", 109, 65, 90, 17, 4, 136, 0),
+    (H + "radio-missing-set-cards-available@1x.png", 24, 396, 112, 17, 4, 136, 0),
+    (H + "radio-missing-set-cards-missing@1x.png", 24, 372, 112, 17, 4, 136, 0),
+    (H + "radio-options-move-next-row@1x.png", 232, 365, 330, 38, 4, 136, 0),
+    (H + "radio-options-search-from-start@1x.png", 232, 212, 330, 42, 4, 0, 0),
+    (H + "radio-options-search-within-label@1x.png", 232, 254, 330, 38, 4, 0, 0),
+    (H + "radio-options-search-within@1x.png", 232, 254, 330, 38, 4, 0, 0),
+    (H + "radio-search-cards@1x.png", 28, 120, 100, 42, 4, 136, 0),
+    (H + "radio-search-collection@1x.png", 28, 162, 100, 38, 4, 136, 0)])
+
+# Check list box hover: every grab is its rest look (the list shows no hover).
+SHEETS["check_list_box_hover"] = (1, 500, 90, [
+    (H + "check-list-box-checkbox-options-rules@1x.png", 213, 92, 500, 62, 0),
+    (H + "check-list-box-row-options-rules@1x.png", 213, 92, 500, 62, 0),
+    (H + "check-list-box-empty-options-rules@1x.png", 213, 92, 500, 62, 0),
+    (H + "check-list-box-row-options-prices@1x.png", 213, 92, 500, 62, 0),
+    (H + "check-list-box-row-options-cardart@1x.png", 213, 69, 468, 62, 0)])
+
+
 def gdi_table():
     """Prints control.choices_advances: GDI's whole-pixel Tahoma 11 px advances for bytes 32 to 126 (Windows only)."""
     import ctypes

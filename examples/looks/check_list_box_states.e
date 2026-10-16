@@ -24,11 +24,11 @@ fn list(a: *mem.Arena, t: *const control.Theme, key: u64, labels: []const str, c
     }
     var made: widget.Node = zero
     if t.tokens.profile == .Windows && art {
-        let (drawn, drawn_error) = control.windows_check_list_art(a, key, t, "list", labels, picked, toggles, 464.0, 80.0, current, 71.0)
+        let (drawn, drawn_error) = control.windows_check_list_art(a, key, t, "list", labels, picked, toggles, 464.0, 80.0, current, 215.0, 71.0)
         if drawn_error != ok { ret (zero, drawn_error) }
         made = drawn
     } else if t.tokens.profile == .Windows {
-        let (drawn, drawn_error) = control.windows_check_list_at(a, key, t, "list", labels, picked, toggles, 495.0, 80.0, current, 94.0)
+        let (drawn, drawn_error) = control.windows_check_list_at(a, key, t, "list", labels, picked, toggles, 495.0, 80.0, current, 215.0, 94.0)
         if drawn_error != ok { ret (zero, drawn_error) }
         made = drawn
     } else {

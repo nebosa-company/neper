@@ -53,7 +53,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let art = [2]str{ "C:\\Users\\gaddl\\AppData\\Roaming\\MTG Studio\\Card Art", "MTG Studio Download (all editions + promos)" }
     var art_list: widget.Node = zero
     if t.tokens.profile == .Windows {
-        let (drawn, drawn_error) = control.windows_check_list_art(a, 2u64, t, "Card Art", art[0usize..2usize], picked[0usize..2usize], toggles[0usize..2usize], 464.0, 308.0, 1usize, 71.0)
+        let (drawn, drawn_error) = control.windows_check_list_art(a, 2u64, t, "Card Art", art[0usize..2usize], picked[0usize..2usize], toggles[0usize..2usize], 464.0, 308.0, 0usize, 215.0, 71.0)
         if drawn_error != ok { ret (0usize, drawn_error) }
         art_list = drawn
     } else {
@@ -66,13 +66,13 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let (layer_three, layer_three_error) = mem.alloc[widget.Node](a, 1usize)
     if layer_three_error != ok { ret (0usize, layer_three_error) }
     layer_three[0usize] = art_placed
-    cells[2usize] = looks.Cell { caption: "Options, Card Art page (second row current)", node: widget.stack(0u64, looks.size_style(500.0, 348.0), layer_three[0usize..1usize]), drive: .None }
+    cells[2usize] = looks.Cell { caption: "Options, Card Art page (first row current)", node: widget.stack(0u64, looks.size_style(500.0, 348.0), layer_three[0usize..1usize]), drive: .None }
     ret (3usize, ok)
 }
 
 fn windows_or_other(a: *mem.Arena, t: *const control.Theme, labels: []const str, picked: []const bool, toggles: []const widget.Submit) -> (widget.Node, err) {
     if t.tokens.profile == .Windows {
-        let (list, list_error) = control.windows_check_list_at(a, 1u64, t, "Card details", labels, picked, toggles, 495.0, 343.0, 0usize, 94.0)
+        let (list, list_error) = control.windows_check_list_at(a, 1u64, t, "Card details", labels, picked, toggles, 495.0, 343.0, 0usize, 215.0, 94.0)
         ret (list, list_error)
     }
     let (list, list_error) = control.multi_select_list(a, 1u64, t, "Card details", labels, picked, toggles, 18u32, 495.0)
