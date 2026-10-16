@@ -19,6 +19,8 @@ if SHEET=='states':
 N=len(cells)
 PH={}
 if os.path.exists(os.path.join(HERE,'phases.json')): PH=json.load(open(os.path.join(HERE,'phases.json')))
+RP=json.load(open(os.path.join(HERE,'ringphases.json'))) if os.path.exists(os.path.join(HERE,'ringphases.json')) else {}
+def rp(c,k): return '%.3f'%max(0.0,(RP.get(c['stem'],[0,0,0,0])+[0,0,0,0])[k])
 def arr(name,ty,vals):
     return 'fn %s() -> [%d]%s { ret [%d]%s{ %s } }'%(name,len(vals),ty,len(vals),ty,', '.join(vals))
 def q(s): return '"'+s+'"'
@@ -40,5 +42,9 @@ open(os.path.join(HERE,'bs_tables.txt'),'w',newline=chr(10)).write('\n'.join([
  arr('t_glyphs','bool',['true' if c['glyph'] else 'false' for c in cells]),
  arr('t_shift_x','f32',[ph(c,0) for c in cells]),
  arr('t_shift_y','f32',[ph(c,1) for c in cells]),
+ arr('t_ring_x','f32',[rp(c,0) for c in cells]),
+ arr('t_ring_y','f32',[rp(c,1) for c in cells]),
+ arr('t_ring_x2','f32',[rp(c,2) for c in cells]),
+ arr('t_ring_y2','f32',[rp(c,3) for c in cells]),
 ]))
 print(N)

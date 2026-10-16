@@ -4,7 +4,8 @@
 // with the dialog shows the same pixels. Pressed and focused cells are driven (Drive.Press, Drive.Focus), the rest are plain; the last five cells have no capture (the ring at 75x32 and 125x40). The tables below are generated from the capture list by
 // scripts/looks_ref_a/genbs.py and mkbs.py: caption, caption word, control rect size, drive, default, enabled, dialog face, picture,
 // focused, and the sub-pixel shift (dx, dy) of the four DPI-scaled forms (Options, Deck Properties, Deck Legality, About), whose
-// buttons v3 draws resampled by that offset: the phase fitted to each capture (scripts/looks_ref_a/fitshift.py), a crisp button moved by it.
+// buttons v3 draws with the native ring at a fractional position: `shift` moves the caption (scripts/looks_ref_a/fitshift.py), `ring` is the exact phase of the
+// ring (scripts/looks_ref_a/fitring.py: the ring's soft and line rows are area coverage of a one pixel line, not a resampling).
 // Run from the repository root; see docs/ui/looks-howto.md.
 
 use e.gfx.paint
@@ -30,6 +31,10 @@ fn t_focused() -> [38]bool { ret [38]bool{ false, false, false, false, false, fa
 fn t_glyphs() -> [38]bool { ret [38]bool{ false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false } }
 fn t_shift_x() -> [38]f32 { ret [38]f32{ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.38, 0.36, 0.42, 0.48, 0.44, 0.48, 0.18, 0.18, 0.42, 0.48, 0.36, 0.14, 0.36, 0.04, 0.10, 0.00, 0.42, 0.00, 0.00, 0.00, 0.00, 0.00 } }
 fn t_shift_y() -> [38]f32 { ret [38]f32{ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.46, 0.48, 0.48, 0.48, 0.50, 0.50, 0.26, 0.26, 0.44, 0.46, 0.44, 0.48, 0.48, 0.06, 0.06, 0.00, 0.48, 0.00, 0.00, 0.00, 0.00, 0.00 } }
+fn t_ring_x() -> [38]f32 { ret [38]f32{ 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.356, 0.341, 0.402, 0.463, 0.402, 0.463, 0.152, 0.152, 0.400, 0.460, 0.331, 0.116, 0.341, 0.027, 0.085, 0.000, 0.402, 0.000, 0.000, 0.000, 0.000, 0.000 } }
+fn t_ring_y() -> [38]f32 { ret [38]f32{ 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.305, 0.314, 0.314, 0.314, 0.315, 0.315, 0.146, 0.148, 0.279, 0.279, 0.284, 0.314, 0.313, 0.025, 0.026, 0.000, 0.317, 0.000, 0.000, 0.000, 0.000, 0.000 } }
+fn t_ring_x2() -> [38]f32 { ret [38]f32{ 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.424, 0.389, 0.451, 0.514, 0.451, 0.514, 0.205, 0.205, 0.451, 0.514, 0.384, 0.165, 0.389, 0.076, 0.139, 0.000, 0.451, 0.000, 0.000, 0.000, 0.000, 0.000 } }
+fn t_ring_y2() -> [38]f32 { ret [38]f32{ 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.326, 0.326, 0.326, 0.326, 0.326, 0.326, 0.162, 0.164, 0.295, 0.295, 0.299, 0.329, 0.326, 0.042, 0.042, 0.000, 0.325, 0.000, 0.000, 0.000, 0.000, 0.000 } }
 
 // The holder of a cell: odd wide and even tall (so the cell centres it on whole pixels in 133 x 40), the dialog face
 // behind, the visible box (the control rect less 2 wide, 1 tall) at (margin, margin).
@@ -63,6 +68,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let focused = t_focused()
     let shift_x = t_shift_x()
     let shift_y = t_shift_y()
+    let ring_x = t_ring_x()
+    let ring_y = t_ring_y()
+    let ring_x2 = t_ring_x2()
+    let ring_y2 = t_ring_y2()
     var i = 0usize
     while i < 38 {
         var options = control.button_options()
@@ -71,6 +80,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         options.enabled = enabled[i]
         options.shift_x = shift_x[i]
         options.shift_y = shift_y[i]
+        options.ring_x = ring_x[i]
+        options.ring_y = ring_y[i]
+        options.ring_x2 = ring_x2[i]
+        options.ring_y2 = ring_y2[i]
         options.focused = focused[i]
         if defaults[i] { options.variant = .Default }
         var node: widget.Node = zero

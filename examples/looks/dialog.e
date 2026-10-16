@@ -27,8 +27,9 @@ type Item = struct { kind: u32, x: f32, y: f32, w: f32, h: f32, text: str, flag:
 // `tkind` the caption: 0 dialog (close only), 1 resizable with minimise disabled, 2 all three, 3 light, 4 tool window;
 // `bottom` the #F5F5F5 row the captured Deck Legality, Deck Properties, About, Options and Customization windows end with
 // `kx`, `ky`, `cx`, `cy` (looks5): the DPI-scaled forms (Deck Properties, About, Options, Deck Legality) draw every button moved by a
-// sub-pixel offset (cx + x * kx, cy + y * ky) that grows with its position: fitted to the captured buttons (see e.ui.winbutton)
-type Form = struct { title: str, width: f32, height: f32, active: bool, tkind: u32, bottom: bool, kx: f32, ky: f32, cx: f32, cy: f32, items: [24]Item, count: usize }
+// sub-pixel offset (cx + x * kx, cy + y * ky) that grows with its position: fitted to the captured buttons (see e.ui.winbutton); the ring has
+// its own exact phase (rcx + x * rkx, rcy + y * rky, looks9: scripts/looks_ref_a/fitring.py), the caption the old one
+type Form = struct { title: str, width: f32, height: f32, active: bool, tkind: u32, bottom: bool, kx: f32, ky: f32, cx: f32, cy: f32, rkx: f32, rky: f32, rcx: f32, rcy: f32, items: [24]Item, count: usize }
 
 fn item(kind: u32, x: f32, y: f32, w: f32, h: f32, text: str, flag: bool) -> Item {
     ret Item { kind: kind, x: x, y: y, w: w, h: h, text: text, flag: flag, bg: 0u32 }
@@ -51,7 +52,7 @@ fn pad6(six: [6]Item) -> [24]Item {
 
 fn form(i: usize) -> Form {
     let none = item(0u32, 0.0, 0.0, 0.0, 0.0, "", false)
-    var f = Form { title: "", width: 0.0, height: 0.0, active: true, tkind: 0u32, bottom: false, kx: 0.0, ky: 0.0, cx: 0.0, cy: 0.0, items: pad6([6]Item{ none, none, none, none, none, none }), count: 0usize }
+    var f = Form { title: "", width: 0.0, height: 0.0, active: true, tkind: 0u32, bottom: false, kx: 0.0, ky: 0.0, cx: 0.0, cy: 0.0, rkx: 0.0, rky: 0.0, rcx: 0.0, rcy: 0.0, items: pad6([6]Item{ none, none, none, none, none, none }), count: 0usize }
     if i == 0usize {
         f.title = "Search for Card"
         f.width = 309.0
@@ -78,6 +79,10 @@ fn form(i: usize) -> Form {
         f.ky = 0.000935
         f.cx = 0.00
         f.cy = 0.00
+        f.rkx = 0.000628
+        f.rcx = 0.0
+        f.rky = 0.000613
+        f.rcy = 0.0
         f.bottom = true
         f.title = "Deck Properties"
         f.width = 348.0
@@ -90,6 +95,10 @@ fn form(i: usize) -> Form {
         f.ky = 0.001377
         f.cx = 0.00
         f.cy = 0.00
+        f.rkx = 0.000995
+        f.rcx = 0.0
+        f.rky = 0.000928
+        f.rcy = 0.0
         f.bottom = true
         f.title = "About MTG Studio"
         f.width = 436.0
@@ -103,6 +112,10 @@ fn form(i: usize) -> Form {
         f.ky = 0.000990
         f.cx = 0.03
         f.cy = 0.03
+        f.rkx = 0.000738
+        f.rcx = -0.005
+        f.rky = 0.000742
+        f.rcy = -0.0243
         f.bottom = true
         f.title = "Options"
         f.width = 712.0
@@ -118,6 +131,10 @@ fn form(i: usize) -> Form {
         f.ky = 0.001377
         f.cx = 0.00
         f.cy = 0.00
+        f.rkx = 0.000995
+        f.rcx = 0.0
+        f.rky = 0.000928
+        f.rcy = 0.0
         f.bottom = true
         f.title = "About MTG Studio"
         f.width = 436.0
@@ -130,6 +147,10 @@ fn form(i: usize) -> Form {
         f.ky = 0.000990
         f.cx = 0.03
         f.cy = 0.03
+        f.rkx = 0.000738
+        f.rcx = -0.005
+        f.rky = 0.000742
+        f.rcy = -0.0243
         f.bottom = true
         f.title = "Options"
         f.width = 712.0
@@ -173,6 +194,10 @@ fn form(i: usize) -> Form {
         f.ky = 0.001099
         f.cx = 0.01
         f.cy = 0.00
+        f.rkx = 0.000745
+        f.rcx = -0.0027
+        f.rky = 0.000748
+        f.rcy = -0.0221
         f.title = "Deck Legality"
         f.width = 539.0
         f.height = 479.0
@@ -238,6 +263,11 @@ fn window(a: *mem.Arena, t: *const control.Theme, i: usize, action: *const widge
             bo.height = it.h
             bo.shift_x = f.cx + it.x * f.kx
             bo.shift_y = f.cy + it.y * f.ky
+            // the ring's exact phase (looks9): the buttons of the scaled forms only
+            if f.rkx != 0.0 {
+                bo.ring_x = f.rcx + it.x * f.rkx
+                bo.ring_y = f.rcy + it.y * f.rky
+            }
             let (b, b_error) = control.button(a, key, t, it.text, action, bo)
             if b_error != ok { ret (zero, b_error) }
             if it.bg != 0u32 {

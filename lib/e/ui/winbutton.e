@@ -42,7 +42,8 @@ fn ring_pressed_edges() -> [8]u32 { ret [8]u32{ 0xAA005499u32, 0xFF88B4D8u32, 0x
 // Which ring: 0 rest, 1 default (accent), 2 disabled, 3 pressed.
 // `dx`, `dy` (looks5): the sub-pixel shift of v3's DPI-scaled forms, `dots` the focus rectangle drawn with the ring (0 none, 1
 // normal, 2 pressed) when it is shifted too.
-type Ring = struct { kind: u32, face: u32, tint: u32, dx: f32, dy: f32, dots: u32, dark: bool }
+// looks9: `dx2`, `dy2` the phase at the right and bottom edge (both zero: the phase grows by `ring_eps` per pixel).
+type Ring = struct { kind: u32, face: u32, tint: u32, dx: f32, dy: f32, dots: u32, dark: bool, dx2: f32, dy2: f32 }
 
 // `value` is 0xAARRGGBB; an alpha byte of 0 (a plain 0xRRGGBB) is opaque. looks5: the outer rows and corner cells of a
 // ring carry the share of ring over the dialog face they sit on (v3's Filter dialog is #F9F9F9, the others #F0F0F0).
@@ -346,15 +347,176 @@ fn channel_of(v: u32, shift: u32) -> f32 {
     ret f32((v >> shift) & 255u32)
 }
 
-fn ring_paint_shifted(d: *const Ring, b: *scene.Builder, area: geometry.Rect) -> err {
-    let w = i32(area.width + 0.5)
-    let h = i32(area.height + 0.5)
-    let fx = d.dx
-    let fy = d.dy
+// looks9: the pixel (ox, oy) of the sub-pixel shifted raster as the crisp ring and focus rectangle bilinearly mixed (0 where
+// nothing is painted). Used for the corner cells and the focus dots; the straight rails are exact (`rail_value`).
+fn bilinear_value(d: *const Ring, ox: i32, oy: i32, w: i32, h: i32) -> u32 {
+    let fx = phase_x(d, ox, w)
+    let fy = phase_y(d, oy, h)
     let w00 = (1.0 - fx) * (1.0 - fy)
     let w10 = fx * (1.0 - fy)
     let w01 = (1.0 - fx) * fy
     let w11 = fx * fy
+    let s00 = raster_value(d, ox, oy, w, h)
+    let s10 = raster_value(d, ox - 1, oy, w, h)
+    let s01 = raster_value(d, ox, oy - 1, w, h)
+    let s11 = raster_value(d, ox - 1, oy - 1, w, h)
+    var alpha: f32 = 0.0
+    var red: f32 = 0.0
+    var green: f32 = 0.0
+    var blue: f32 = 0.0
+    var k = 0usize
+    while k < 4usize {
+        var v = s00
+        var weight = w00
+        if k == 1usize {
+            v = s10
+            weight = w10
+        }
+        if k == 2usize {
+            v = s01
+            weight = w01
+        }
+        if k == 3usize {
+            v = s11
+            weight = w11
+        }
+        if v != 0u32 && weight > 0.0 {
+            var a = v / 16777216u32
+            if a == 0u32 { a = 255u32 }
+            let covered = weight * f32(a) / 255.0
+            alpha += covered
+            red += covered * channel_of(v, 16u32)
+            green += covered * channel_of(v, 8u32)
+            blue += covered * channel_of(v, 0u32)
+        }
+        k += 1usize
+    }
+    if alpha > 0.004 {
+        let q = u32(alpha * 255.0 + 0.5)
+        ret (q << 24u32) | (u32(red / alpha + 0.5) << 16u32) | (u32(green / alpha + 0.5) << 8u32) | u32(blue / alpha + 0.5)
+    }
+    ret 0u32
+}
+
+// looks9: `base` (0xAARRGGBB) with the focus rectangle's dots over it, the dots bilinearly mixed by the phase as v3 resamples them
+// (a dot is one pixel of an opaque colour; the share of the pixel the dots take is the sum of the weights of the taps that hold one).
+fn dots_over(d: *const Ring, ox: i32, oy: i32, w: i32, h: i32, base: u32) -> u32 {
+    let fx = phase_x(d, ox, w)
+    let fy = phase_y(d, oy, h)
+    var share: f32 = 0.0
+    var red: f32 = 0.0
+    var green: f32 = 0.0
+    var blue: f32 = 0.0
+    var k = 0usize
+    while k < 4usize {
+        var weight = (1.0 - fx) * (1.0 - fy)
+        var tx = ox
+        var ty = oy
+        if k == 1usize {
+            weight = fx * (1.0 - fy)
+            tx = ox - 1
+        }
+        if k == 2usize {
+            weight = (1.0 - fx) * fy
+            ty = oy - 1
+        }
+        if k == 3usize {
+            weight = fx * fy
+            tx = ox - 1
+            ty = oy - 1
+        }
+        let v = dot_value(d, tx, ty, w, h)
+        if v != 0u32 && weight > 0.0 {
+            share += weight
+            red += weight * channel_of(v, 16u32)
+            green += weight * channel_of(v, 8u32)
+            blue += weight * channel_of(v, 0u32)
+        }
+        k += 1usize
+    }
+    if share < 0.004 { ret base }
+    var base_alpha: f32 = 0.0
+    if base != 0u32 { base_alpha = f32(base / 16777216u32) / 255.0 }
+    let keep = (1.0 - share) * base_alpha
+    let alpha = keep + share
+    let r = (red + keep * channel_of(base, 16u32)) / alpha
+    let g = (green + keep * channel_of(base, 8u32)) / alpha
+    let bl = (blue + keep * channel_of(base, 0u32)) / alpha
+    ret (u32(alpha * 255.0 + 0.5) << 24u32) | (u32(r + 0.5) << 16u32) | (u32(g + 0.5) << 8u32) | u32(bl + 0.5)
+}
+
+// looks9: the phase grows with the position in the form: v3's DPI-scaled forms are the crisp bitmap stretched by 1.00074 (measured on
+// every Options, Deck Properties, Deck Legality and About button: top and bottom rails differ by 0.0145 over 21 rows, left and right
+// by 0.050 over 72 columns). `dx`, `dy` of a ring are the phase at its top left pixel.
+fn ring_eps() -> f32 { ret 0.00074 }
+
+// The phase along x at column `ox` and along y at row `oy` of a box `w` x `h`.
+fn phase_x(d: *const Ring, ox: i32, w: i32) -> f32 {
+    if d.dx2 != 0.0 { ret d.dx + (d.dx2 - d.dx) * f32(ox) / f32(w - 1) }
+    ret d.dx + ring_eps() * f32(ox)
+}
+
+fn phase_y(d: *const Ring, oy: i32, h: i32) -> f32 {
+    if d.dy2 != 0.0 { ret d.dy + (d.dy2 - d.dy) * f32(oy) / f32(h - 1) }
+    ret d.dy + ring_eps() * f32(oy)
+}
+
+// looks9: the overlap of [lo, lo + 1) with [a, b).
+fn overlap1(lo: f32, a: f32, b: f32) -> f32 {
+    var l = lo
+    if a > l { l = a }
+    var u = lo + 1.0
+    if b < u { u = b }
+    if u > l { ret u - l }
+    ret 0.0
+}
+
+// looks9: one pixel of a straight rail of the ring moved by a sub-pixel phase. v3's DPI-scaled forms draw the native ring at a
+// fractional position, and the ring is a one pixel line at a third of a pixel (measured: the soft row and the line row of a
+// pressed Options button are 35 / 65 % of a pixel, 156 and 72 on the red channel, and shift with the button's position). The
+// pixel [lo, lo + 1) along the rail's axis crosses three bands: page (alpha 0, `c0` = 0), `c1` the line and `c2` the face
+// (or page for a bottom or right rail), at the edges e0 and e1; a colour is 0xFFRRGGBB, 0 is the page. Returns 0xAARRGGBB.
+fn band3(lo: f32, e0: f32, e1: f32, c0: u32, c1: u32, c2: u32) -> u32 {
+    var page: f32 = 0.0
+    var red: f32 = 0.0
+    var green: f32 = 0.0
+    var blue: f32 = 0.0
+    var k = 0usize
+    while k < 3usize {
+        var c = c0
+        var s = overlap1(lo, -100000.0, e0)
+        if k == 1usize {
+            c = c1
+            s = overlap1(lo, e0, e1)
+        }
+        if k == 2usize {
+            c = c2
+            s = overlap1(lo, e1, 100000.0)
+        }
+        if c == 0u32 {
+            page += s
+        } else {
+            red += s * channel_of(c, 16u32)
+            green += s * channel_of(c, 8u32)
+            blue += s * channel_of(c, 0u32)
+        }
+        k += 1usize
+    }
+    let covered = 1.0 - page
+    if covered < 0.004 { ret 0u32 }
+    var q = u32(covered * 255.0 + 0.5)
+    if q > 255u32 { q = 255u32 }
+    ret (q << 24u32) | (u32(red / covered + 0.5) << 16u32) | (u32(green / covered + 0.5) << 8u32) | u32(blue / covered + 0.5)
+}
+
+fn ring_paint_shifted(d: *const Ring, b: *scene.Builder, area: geometry.Rect) -> err {
+    let w = i32(area.width + 0.5)
+    let h = i32(area.height + 0.5)
+    let top_line = 0xFF000000u32 | (ring_edge_c(d, 0usize) & 0xFFFFFFu32)
+    let bottom_line = 0xFF000000u32 | (ring_edge_c(d, 3usize) & 0xFFFFFFu32)
+    let side_line = 0xFF000000u32 | (ring_edge_c(d, 4usize) & 0xFFFFFFu32)
+    let face = 0xFF000000u32 | d.face
+    let exact = d.kind != 2u32
     var oy: i32 = 0
     while oy <= h {
         var run_from: i32 = 0
@@ -363,45 +525,27 @@ fn ring_paint_shifted(d: *const Ring, b: *scene.Builder, area: geometry.Rect) ->
         while ox <= w + 1 {
             var value = 0u32
             if ox <= w {
-                let s00 = raster_value(d, ox, oy, w, h)
-                let s10 = raster_value(d, ox - 1, oy, w, h)
-                let s01 = raster_value(d, ox, oy - 1, w, h)
-                let s11 = raster_value(d, ox - 1, oy - 1, w, h)
-                var alpha: f32 = 0.0
-                var red: f32 = 0.0
-                var green: f32 = 0.0
-                var blue: f32 = 0.0
-                var k = 0usize
-                while k < 4usize {
-                    var v = s00
-                    var weight = w00
-                    if k == 1usize {
-                        v = s10
-                        weight = w10
-                    }
-                    if k == 2usize {
-                        v = s01
-                        weight = w01
-                    }
-                    if k == 3usize {
-                        v = s11
-                        weight = w11
-                    }
-                    if v != 0u32 && weight > 0.0 {
-                        var a = v / 16777216u32
-                        if a == 0u32 { a = 255u32 }
-                        let covered = weight * f32(a) / 255.0
-                        alpha += covered
-                        red += covered * channel_of(v, 16u32)
-                        green += covered * channel_of(v, 8u32)
-                        blue += covered * channel_of(v, 0u32)
-                    }
-                    k += 1usize
+                // the arc of a corner cell takes 4 of its 6 pixels (the rest is rail): 5 with the phase
+                let corner = (ox < 5 || ox >= w - 5) && (oy < 5 || oy >= h - 5)
+                var dotted = false
+                if d.dots != 0u32 {
+                    dotted = dot_value(d, ox, oy, w, h) != 0u32 || dot_value(d, ox - 1, oy, w, h) != 0u32 || dot_value(d, ox, oy - 1, w, h) != 0u32 || dot_value(d, ox - 1, oy - 1, w, h) != 0u32
                 }
-                if alpha > 0.004 {
-                    let q = u32(alpha * 255.0 + 0.5)
-                    value = (q << 24u32) | (u32(red / alpha + 0.5) << 16u32) | (u32(green / alpha + 0.5) << 8u32) | u32(blue / alpha + 0.5)
+                if corner || !exact {
+                    value = bilinear_value(d, ox, oy, w, h)
+                } else if oy < 6 {
+                    value = band3(f32(oy) - phase_y(d, oy, h), 1.0 / 3.0, 4.0 / 3.0, 0u32, top_line, face)
+                } else if oy >= h - 6 {
+                    value = band3(f32(oy) - phase_y(d, oy, h), f32(h) - 5.0 / 3.0, f32(h) - 2.0 / 3.0, face, bottom_line, 0u32)
+                } else if ox < 6 {
+                    value = band3(f32(ox) - phase_x(d, ox, w), 0.0, 1.0, 0u32, side_line, face)
+                } else if ox >= w - 6 {
+                    value = band3(f32(ox) - phase_x(d, ox, w), f32(w) - 1.0, f32(w), face, side_line, 0u32)
+                } else {
+                    value = face
                 }
+                // the dots stay inside the rails: v3's rail rows show no spill of the dotted rows next to them
+                if dotted && !corner && exact && oy > 1 && oy < h - 2 && ox > 1 && ox < w - 2 { value = dots_over(d, ox, oy, w, h, value) }
             }
             // a run of equal pixels ends here
             if ox > 0 && value != run_value {
@@ -419,10 +563,10 @@ fn ring_paint_shifted(d: *const Ring, b: *scene.Builder, area: geometry.Rect) ->
 }
 
 // The ring, `width` x `height` (the visible box), over a face 0xRRGGBB; `kind` as in `Ring`. A node to put under a button's label.
-fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32, dx: f32, dy: f32, dots: u32, dark: bool) -> (widget.Node, err) {
+fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32, dx: f32, dy: f32, dx2: f32, dy2: f32, dots: u32, dark: bool) -> (widget.Node, err) {
     let (rings, rings_error) = mem.alloc[Ring](a, 1usize)
     if rings_error != ok { ret (zero, rings_error) }
-    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32, dx: dx, dy: dy, dots: dots, dark: dark }
+    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32, dx: dx, dy: dy, dots: dots, dark: dark, dx2: dx2, dy2: dy2 }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: height }

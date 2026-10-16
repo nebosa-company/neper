@@ -4,7 +4,8 @@
 // with the dialog shows the same pixels. Every cell is driven with the pointer on it (Drive.Hover; a pressed one with the button held). The tables below are generated from the capture list by
 // scripts/looks_ref_a/genbs.py and mkbs.py: caption, caption word, control rect size, drive, default, enabled, dialog face, picture,
 // focused, and the sub-pixel shift (dx, dy) of the four DPI-scaled forms (Options, Deck Properties, Deck Legality, About), whose
-// buttons v3 draws resampled by that offset: the phase fitted to each capture (scripts/looks_ref_a/fitshift.py), a crisp button moved by it.
+// buttons v3 draws with the native ring at a fractional position: `shift` moves the caption (scripts/looks_ref_a/fitshift.py), `ring` is the exact phase of the
+// ring (scripts/looks_ref_a/fitring.py: the ring's soft and line rows are area coverage of a one pixel line, not a resampling).
 // Run from the repository root; see docs/ui/looks-howto.md.
 
 use e.gfx.paint
@@ -30,6 +31,10 @@ fn t_focused() -> [28]bool { ret [28]bool{ false, false, false, false, false, fa
 fn t_glyphs() -> [28]bool { ret [28]bool{ false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false } }
 fn t_shift_x() -> [28]f32 { ret [28]f32{ 0.36, 0.42, 0.48, 0.18, 0.42, 0.48, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.38, 0.34, 0.14, 0.36, 0.04, 0.12 } }
 fn t_shift_y() -> [28]f32 { ret [28]f32{ 0.48, 0.48, 0.48, 0.20, 0.42, 0.42, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.50, 0.42, 0.48, 0.46, 0.04, 0.04 } }
+fn t_ring_x() -> [28]f32 { ret [28]f32{ 0.341, 0.402, 0.463, 0.152, 0.400, 0.460, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.356, 0.331, 0.116, 0.341, 0.027, 0.085 } }
+fn t_ring_y() -> [28]f32 { ret [28]f32{ 0.316, 0.316, 0.316, 0.149, 0.279, 0.279, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.309, 0.283, 0.316, 0.313, 0.025, 0.025 } }
+fn t_ring_x2() -> [28]f32 { ret [28]f32{ 0.389, 0.451, 0.514, 0.205, 0.451, 0.514, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.424, 0.384, 0.165, 0.389, 0.076, 0.139 } }
+fn t_ring_y2() -> [28]f32 { ret [28]f32{ 0.325, 0.325, 0.325, 0.162, 0.296, 0.296, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.325, 0.300, 0.329, 0.325, 0.042, 0.042 } }
 
 // The holder of a cell: odd wide and even tall (so the cell centres it on whole pixels in 133 x 40), the dialog face
 // behind, the visible box (the control rect less 2 wide, 1 tall) at (margin, margin).
@@ -63,6 +68,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let focused = t_focused()
     let shift_x = t_shift_x()
     let shift_y = t_shift_y()
+    let ring_x = t_ring_x()
+    let ring_y = t_ring_y()
+    let ring_x2 = t_ring_x2()
+    let ring_y2 = t_ring_y2()
     var i = 0usize
     while i < 28 {
         var options = control.button_options()
@@ -71,6 +80,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         options.enabled = enabled[i]
         options.shift_x = shift_x[i]
         options.shift_y = shift_y[i]
+        options.ring_x = ring_x[i]
+        options.ring_y = ring_y[i]
+        options.ring_x2 = ring_x2[i]
+        options.ring_y2 = ring_y2[i]
         options.focused = focused[i]
         if defaults[i] { options.variant = .Default }
         var node: widget.Node = zero

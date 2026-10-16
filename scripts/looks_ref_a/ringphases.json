@@ -1,0 +1,170 @@
+{
+"button-pressed-about-ok": [
+0.356,
+0.305,
+0.424,
+0.326
+],
+"button-pressed-options-ok": [
+0.341,
+0.314,
+0.389,
+0.326
+],
+"button-pressed-options-cancel": [
+0.402,
+0.314,
+0.451,
+0.326
+],
+"button-pressed-options-apply": [
+0.463,
+0.314,
+0.514,
+0.326
+],
+"button-focused-options-cancel": [
+0.402,
+0.315,
+0.451,
+0.326
+],
+"button-focused-options-apply": [
+0.463,
+0.315,
+0.514,
+0.326
+],
+"button-pressed-options-password-change": [
+0.152,
+0.146,
+0.205,
+0.162
+],
+"button-focused-options-password-change": [
+0.152,
+0.148,
+0.205,
+0.164
+],
+"button-pressed-options-shortcut-set": [
+0.4,
+0.279,
+0.451,
+0.295
+],
+"button-pressed-options-shortcut-reset": [
+0.46,
+0.279,
+0.514,
+0.295
+],
+"button-pressed-options-cardart-validate": [
+0.331,
+0.284,
+0.384,
+0.299
+],
+"button-pressed-deck-properties-ok": [
+0.116,
+0.314,
+0.165,
+0.329
+],
+"button-pressed-deck-legality-close": [
+0.341,
+0.313,
+0.389,
+0.326
+],
+"button-pressed-deck-legality-standard": [
+0.027,
+0.025,
+0.076,
+0.042
+],
+"button-focused-deck-legality-modern": [
+0.085,
+0.026,
+0.139,
+0.042
+],
+"hover-button-options-ok": [
+0.341,
+0.316,
+0.389,
+0.325
+],
+"hover-button-options-cancel": [
+0.402,
+0.316,
+0.451,
+0.325
+],
+"hover-button-options-apply": [
+0.463,
+0.316,
+0.514,
+0.325
+],
+"hover-button-options-password-change": [
+0.152,
+0.149,
+0.205,
+0.162
+],
+"hover-button-options-shortcut-set": [
+0.4,
+0.279,
+0.451,
+0.296
+],
+"hover-button-options-shortcut-reset": [
+0.46,
+0.279,
+0.514,
+0.296
+],
+"hover-button-about-ok": [
+0.356,
+0.309,
+0.424,
+0.325
+],
+"hover-button-options-cardart-validate": [
+0.331,
+0.283,
+0.384,
+0.3
+],
+"hover-button-options-cancel-pressed": [
+0.402,
+0.317,
+0.451,
+0.325
+],
+"hover-button-deck-properties-ok": [
+0.116,
+0.316,
+0.165,
+0.329
+],
+"hover-button-deck-legality-close": [
+0.341,
+0.313,
+0.389,
+0.325
+],
+"hover-button-deck-legality-standard": [
+0.027,
+0.025,
+0.076,
+0.042
+],
+"hover-button-deck-legality-modern": [
+0.085,
+0.025,
+0.139,
+0.042
+]
+}
