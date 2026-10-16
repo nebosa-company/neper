@@ -1,0 +1,111 @@
+{
+ "button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_states.png",
+    "notes": "Round 9: the DPI-scaled forms' ring is now the exact area coverage of the native ring at a fractional position (one pixel line at a third of a pixel; phases fitted per button: scripts/looks_ref_a/fitring.py), so every captured pressed, hover and focus cell of Options, Deck Properties, Deck Legality and About, and every crisp dialog button, shows 0 structural px off at 2 levels (max 1 level; button_states 38 cells, button_hover 28). Remaining: caption ink boxes of 3 hover cells (Open... 2 px wide, v3 hinted widths) and the disabled Edit Rule button's v3 glyph.",
+    "gaps": [
+     "Mismatch: caption ink of the hover cells Open..., OK and Apply of Advanced Filter / Conditional Formatting (left edge 2 px, text only); Edit Rule picture is v3 artwork",
+     "Corner arcs and focus dots of the scaled forms are a bilinear mix of the crisp tile (not structural); dots measured 13 levels mean error",
+     "Unverified: toggle, split, loading and plain kinds (no capture); disabled has one capture",
+     "Scale: 1.5x ring tile is uneven (informational)"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/toolbar_button_row.png",
+    "notes": "Round 9: the toolbar reference crops had the grid's top border (#8D9096) in their last row from x=287 on; that row is restored to the bar's own edge (#D2D2D2) (tbclean.py) and the refs are laid at our sheets' size (padref.py). toolbar_button_row 57 -> 0 non-artwork px, toolbar_button_hot 9 strips 464 -> 0 outside v3's icon bitmaps (34 to 39 px per strip are v3 artwork: gray disabled pictures, the blue hot icon). Frames, grips, separators, hot and pressed boxes match at 2 levels.",
+    "gaps": [
+     "v3 icon artwork (34 to 39 flat-run px per strip) is a drawn glyph here and excluded",
+     "Reference edit: last row of the three toolbar ref crops (foreign grid border) replaced",
+     "Unverified: checked, focus, dropdown, disabled (hover grabs identical to rest)"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "Round 9: rest, 10 hot-title cells and 9 open-title cells compared in place (refs laid on our sheet size): 0 structural px off, ink boxes within 1 px (menu_bar_hot bar is now the 782 px v3 bar instead of the cell width, which the audit read as an end-of-bar mismatch).",
+    "gaps": [
+     "Unverified: disabled item, Alt-key focus",
+     "ClearType text edges not compared"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Round 9: 39 new cells (popup_menu_sel_<menu>_h<n>) cover every mouse-hot row of the live hover grabs (Help, Online, Reports included); each has the same error profile as its menu's rest cell: only v3 icon artwork, ClearType stems and a few arrow/mnemonic pixels (max 7 levels at 4 px in Cards, 1 px in Tools/File) differ. The grid-lines sub-menu popup is compared (icons are v3 art).",
+    "gaps": [
+     "Remaining non-artwork: Cards Print arrow row 4 px up to 7 levels, File 2 px, Tools 1 px (5 levels), Search/Cardart text stems up to 139 levels at 1 to 2 px (ClearType)",
+     "Placeholder icons (v3 artwork excluded)",
+     "Unverified: disabled items beyond the captured menus",
+     "Scale: popup_menu_file 2.0 100 %; 1.5 79.2 % (informational)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/page_control_stats_1-vs-ref.png",
+    "notes": "Round 9: all five native strips (cards, options, held, filter, custom) 0 structural px off; bottom strips and About 0; Statistics strips differ only in v3's tab pictures (6 to 14 px). Captions are set on hinted advances with the mnemonic underlined; tab edges, the cropped last Options tab and the focus rectangle follow the captures.",
+    "gaps": [
+     "v3 tab picture artwork (Statistics strips) excluded",
+     "Unverified: disabled tab, scroll buttons (hover grabs identical to rest)",
+     "The Statistics strips pass text ink within 1 px but use unhinted widths"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog.png",
+    "notes": "Round 9: title bars: 13 of 16 cells and all hover cells 0 structural px off outside the title text and 2 icon edge pixels (hover washes of minimise and maximise now start at the live fractional pixel); title ink boxes within 1 px; dialog buttons of the four scaled forms exact (see button). Dialog bodies are other controls' content and are not composed here.",
+    "gaps": [
+     "Dialog body areas are app content (not a control mismatch)",
+     "Unverified: caption pressed (not capturable), resize, disabled; inactive caption only for the main window"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/hint_toolbar_cards_f-vs-ref.png",
+    "notes": "Round 9: the hint text is set on GDI whole pixel advances: the five toolbar hints are 0 structural px off (were 11 to 26), the grid header hint 5 px (antialiased ascender tips, up to 36 levels).",
+    "gaps": [
+     "Grid header hint: 5 px at ascender tips (AA)",
+     "Unverified: multi-line hints, other placements"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Round 9: unchanged. The v3 progress bar was never on screen in any capture; the native Windows 11 progress bar is captured under ref/windows-native but is a different control from v3's, so nothing is compared and the look stays started.",
+    "gaps": [
+     "Unverified: every state"
+    ]
+   }
+  }
+ }
+}
