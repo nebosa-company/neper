@@ -2754,4 +2754,5 @@ D5118	559	Paint is a display list lowered to `scene.Builder` in viewport tiles (
 D5119	689	Vaper is frozen as a test oracle before it is retired (browser K6)
 D5120	393	What is not ported from Vaper (browser K7)
 D5121	550	The control is one browsing context; the shell is an app layer (browser K8)
-D5122	669	`docs/browser-progress.html` is a hand-maintained exception; milestones are queue items L166 to L171 (browser K9)
+D5122	670	`docs/browser-progress.html` is a hand-maintained exception; milestones are queue items L166 to L171 (browser K9)
+D5123	1606	Reusable browser parts go into the general-purpose library, not into the control (refines D5114)
