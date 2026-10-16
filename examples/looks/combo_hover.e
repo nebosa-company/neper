@@ -71,6 +71,8 @@ fn imaged(a: *mem.Arena, t: *const control.Theme, key: widget.Key, value: str, w
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // the captures show the Search combo's caret in its blink-off phase
+    if t.tokens.profile == .Windows { control.set_caret_hidden(true) }
     let captions = [9]str{ "Combo box, hover over the drop button (Options Grids, Row Color)", "Combo box, hover over the text (Options Grids, Row Color)", "Combo box, hover over the drop button (Conditional Formatting, Show, focused as in the dialog)", "Image combo box, hover over the drop button (Options Internet, Authentication)", "Image combo box, hover over the text: the capture is PIXEL-IDENTICAL to rest (Authentication)", "Image combo box, hover over the drop button (Options Defaults, Condition)", "Image combo box, hover over the drop button (Options Morph, Card Art Position)", "Editable combo box, hover over the drop button (Search for Card)", "Editable combo box, hover over the text: the capture is PIXEL-IDENTICAL to rest (Search for Card)" }
     let widths = [9]f32{ 389.0, 389.0, 143.0, 189.0, 189.0, 335.0, 151.0, 289.0, 289.0 }
     let xs = [9]f32{ 321.0, 321.0, 149.0, 371.0, 371.0, 371.0, 406.0, 20.0, 20.0 }
@@ -101,7 +103,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             node = made
         }
         if i >= 7usize {
-            let (made, made_error) = plain(a, t, key, "", false, widths[i], xs[i], ys[i])
+            var typed = ""
+            if t.tokens.profile == .Windows { typed = " " }
+            let (made, made_error) = plain(a, t, key, typed, false, widths[i], xs[i], ys[i])
             if made_error != ok { ret (0usize, made_error) }
             node = made
         }

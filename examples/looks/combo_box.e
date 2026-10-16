@@ -231,7 +231,7 @@ fn build_flat_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, var
     }
     let (combo, combo_error) = one(a, t, 100u64, value, colors[0usize..4usize], 0usize, false, options, 0.0, 0.0, 17.0, options.width)
     if combo_error != ok { ret (0usize, combo_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 12usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 16usize)
     if parts_error != ok { ret (0usize, parts_error) }
     parts[0usize] = bar_line(0.0, 0.0, cw, 14606046u32)
     parts[1usize] = bar_line(0.0, 1.0, cw, 16119285u32)
@@ -253,6 +253,21 @@ fn build_flat_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, var
         parts[8usize] = grip(3.0, 2.0, 22.0, 10526880u32)
         parts[9usize] = grip(4.0, 2.0, 22.0, 15724527u32)
         count = 10usize
+        if t.tokens.profile == .Windows {
+            // looks9: the live crop's grip is 25 rows from the top (the bar's two top lines start 5 in) with its foot pixels.
+            parts[0usize] = bar_line(5.0, 0.0, cw - 5.0, 14606046u32)
+            parts[1usize] = bar_line(5.0, 1.0, cw - 5.0, 16119285u32)
+            parts[6usize] = grip(0.0, 0.0, 25.0, 10526880u32)
+            parts[7usize] = grip(1.0, 0.0, 25.0, 16777215u32)
+            parts[8usize] = grip(3.0, 0.0, 25.0, 10526880u32)
+            parts[9usize] = grip(4.0, 0.0, 25.0, 15724527u32)
+            parts[10usize] = grip(2.0, 24.0, 1.0, 12434877u32)
+            parts[11usize] = grip(0.0, 25.0, 1.0, 13882323u32)
+            parts[12usize] = grip(1.0, 25.0, 1.0, 16119285u32)
+            parts[13usize] = grip(2.0, 25.0, 1.0, 13882323u32)
+            parts[14usize] = grip(3.0, 25.0, 1.0, 13882323u32)
+            count = 15usize
+        }
     }
     var strip = looks.size_style(cw, 28.0)
     strip.background = paint.Brush { Solid: style.hex(15790320u32) }
@@ -364,6 +379,12 @@ fn build_dialog_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: [
             options.width = 289.0
             value = ""
             drive = .Focus
+            // the capture shows the caret in its blink-off phase
+            // (an empty editor draws its caret apart from the edit's caret colour, so the value is one space)
+            if t.tokens.profile == .Windows {
+                control.set_caret_hidden(true)
+                value = " "
+            }
         }
         if which == 2usize {
             options.width = 143.0

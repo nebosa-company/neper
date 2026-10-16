@@ -1,0 +1,13662 @@
+{
+ "light/button-rest@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-default@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-default-hover@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-default-pressed@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-hover@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-pressed@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-hover-pressed@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-focus@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-default-focus@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-disabled@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-icon@1.5x.png": {
+  "size": [
+   255,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 30,
+    "y": 18,
+    "w": 195,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-icon-hover@1.5x.png": {
+  "size": [
+   255,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 30,
+    "y": 18,
+    "w": 195,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-icon-disabled@1.5x.png": {
+  "size": [
+   255,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 30,
+    "y": 18,
+    "w": 195,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-split@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-split-hover-main@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-split-hover-arrow@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-split-pressed@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "light/button-split-disabled@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "light/checkbox-unchecked-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-unchecked-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-unchecked-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-unchecked-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-unchecked-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-checked-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-checked-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-checked-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-checked-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-checked-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-unchecked-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-unchecked-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-unchecked-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-unchecked-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-unchecked-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-checked-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-checked-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-checked-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-checked-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/radio-checked-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "light/groupbox-rest@1.5x.png": {
+  "size": [
+   300,
+   135
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Group",
+    "x": 18,
+    "y": 12,
+    "w": 264,
+    "h": 108
+   },
+   {
+    "class": "Static",
+    "text": "Inside the group",
+    "x": 42,
+    "y": 54,
+    "w": 195,
+    "h": 30
+   }
+  ]
+ },
+ "light/groupbox-disabled@1.5x.png": {
+  "size": [
+   300,
+   135
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Group",
+    "x": 18,
+    "y": 12,
+    "w": 264,
+    "h": 108
+   },
+   {
+    "class": "Static",
+    "text": "Inside the group",
+    "x": 42,
+    "y": 54,
+    "w": 195,
+    "h": 30
+   }
+  ]
+ },
+ "light/edit-rest@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "light/edit-hover@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "light/edit-focus@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "light/edit-selected@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "light/edit-readonly@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "light/edit-disabled@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "light/edit-password@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "secret",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "light/edit-multiline-vscroll@1.5x.png": {
+  "size": [
+   300,
+   165
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three  Line four  Line five  Line six ",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 135
+   }
+  ]
+ },
+ "light/label-rest@1.5x.png": {
+  "size": [
+   285,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Static text label",
+    "x": 30,
+    "y": 15,
+    "w": 225,
+    "h": 30
+   }
+  ]
+ },
+ "light/label-disabled@1.5x.png": {
+  "size": [
+   285,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Static text label",
+    "x": 30,
+    "y": 15,
+    "w": 225,
+    "h": 30
+   }
+  ]
+ },
+ "light/spin-rest@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "light/spin-hover-up@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "light/spin-hover-down@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "light/spin-pressed-up@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "6",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "light/spin-pressed-down@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "light/spin-focus@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "light/spin-disabled@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "light/combo-list-rest@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/combo-list-hover@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/combo-list-hover-arrow@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/combo-list-focus@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/combo-list-open@1.5x.png": {
+  "size": [
+   285,
+   256
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 30,
+    "y": 54,
+    "w": 225,
+    "h": 202
+   }
+  ]
+ },
+ "light/combo-list-open-hover-row@1.5x.png": {
+  "size": [
+   285,
+   256
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Echo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 30,
+    "y": 54,
+    "w": 225,
+    "h": 202
+   }
+  ]
+ },
+ "light/combo-list-disabled@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/combo-edit-rest@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/combo-edit-hover@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/combo-edit-hover-arrow@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/combo-edit-focus@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/combo-edit-open@1.5x.png": {
+  "size": [
+   285,
+   256
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 30,
+    "y": 54,
+    "w": 225,
+    "h": 202
+   }
+  ]
+ },
+ "light/combo-edit-open-hover-row@1.5x.png": {
+  "size": [
+   285,
+   256
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 30,
+    "y": 54,
+    "w": 225,
+    "h": 202
+   }
+  ]
+ },
+ "light/combo-edit-disabled@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "light/listbox-rest@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "light/listbox-selected-focused@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "light/listbox-selected-unfocused@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "light/listbox-hover@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "light/listbox-disabled@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "light/checklist-rest@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "light/checklist-hover@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "light/checklist-selected-focused@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "light/checklist-selected-unfocused@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "light/checklist-disabled@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "light/tab-rest@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "light/tab-hot@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "light/tab-selected-second@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "light/tab-selected-hot@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "light/tab-focus@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "light/tab-disabled@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "light/progress-empty@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/progress-determinate@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/progress-paused@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/progress-error@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/progress-full@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/progress-disabled@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/progress-marquee@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/progress-marquee-later@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/progress-vertical@1.5x.png": {
+  "size": [
+   90,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 33,
+    "y": 15,
+    "w": 24,
+    "h": 195
+   }
+  ]
+ },
+ "light/trackbar-rest@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "light/trackbar-hover-thumb@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "light/trackbar-hover-track@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "light/trackbar-pressed-thumb@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "light/trackbar-focus@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "light/trackbar-disabled@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "light/trackbar-vertical@1.5x.png": {
+  "size": [
+   120,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 60,
+    "h": 195
+   }
+  ]
+ },
+ "light/vscroll-rest@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "light/vscroll-hover-thumb@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "light/vscroll-hover-arrow@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "light/vscroll-hover-track@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "light/vscroll-pressed-thumb@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "light/vscroll-pressed-arrow@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "light/vscroll-disabled@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "light/hscroll-rest@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "light/hscroll-hover-thumb@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "light/hscroll-hover-arrow@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "light/hscroll-hover-track@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "light/hscroll-pressed-thumb@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "light/hscroll-pressed-arrow@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "light/hscroll-disabled@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "light/statusbar-panels@1.5x.png": {
+  "size": [
+   450,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Ready",
+    "x": 0,
+    "y": 54,
+    "w": 450,
+    "h": 36
+   }
+  ]
+ },
+ "light/statusbar-nogrip@1.5x.png": {
+  "size": [
+   450,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Simple status text",
+    "x": 0,
+    "y": 54,
+    "w": 450,
+    "h": 36
+   }
+  ]
+ },
+ "light/toolbar-rest@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "light/toolbar-hot@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "light/toolbar-pressed@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "light/toolbar-checked@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "light/toolbar-checked-hot@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "light/toolbar-dropdown-hot@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "light/toolbar-disabled@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "light/menu-popup-rest@1.5x.png": {
+  "size": [
+   390,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "light/menu-popup-keyboard-first@1.5x.png": {
+  "size": [
+   390,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "light/menu-popup-keyboard-checked@1.5x.png": {
+  "size": [
+   390,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "light/menu-popup-keyboard-disabled@1.5x.png": {
+  "size": [
+   390,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "light/menu-popup-submenu@1.5x.png": {
+  "size": [
+   531,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 310,
+    "y": 146,
+    "w": 221,
+    "h": 76
+   },
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "light/menu-popup-submenu-keyboard-item@1.5x.png": {
+  "size": [
+   531,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 310,
+    "y": 146,
+    "w": 221,
+    "h": 76
+   },
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "light/menubar-rest@1.5x.png": {
+  "size": [
+   454,
+   257
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "light/menubar-hot-first@1.5x.png": {
+  "size": [
+   454,
+   257
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "light/menubar-open@1.5x.png": {
+  "size": [
+   454,
+   277
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 2,
+    "y": 74,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "light/menubar-open-hover-item@1.5x.png": {
+  "size": [
+   454,
+   277
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 2,
+    "y": 74,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "light/menubar-hot-after-close@1.5x.png": {
+  "size": [
+   454,
+   257
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "light/menubar-hot-second@1.5x.png": {
+  "size": [
+   454,
+   257
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "light/tooltip-rest@1.5x.png": {
+  "size": [
+   390,
+   165
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 30,
+    "y": 21,
+    "w": 150,
+    "h": 42
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "This is the tooltip text",
+    "x": 45,
+    "y": 78,
+    "w": 183,
+    "h": 30
+   }
+  ]
+ },
+ "light/tooltip-balloon@1.5x.png": {
+  "size": [
+   390,
+   175
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 30,
+    "y": 21,
+    "w": 150,
+    "h": 42
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "This is the tooltip text",
+    "x": 45,
+    "y": 78,
+    "w": 236,
+    "h": 97
+   }
+  ]
+ },
+ "light/tree-rest@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/tree-hover-row@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/tree-hover-expander@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/tree-selected-focused@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/tree-selected-unfocused@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/tree-collapsed@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/tree-disabled@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/tree-classic-lines@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-rest@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-header-hot@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-header-pressed@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-sort-up@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-sort-down@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-hover-row@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-selected-focused@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-selected-unfocused@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-selected-hover@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-gridlines@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-alternating-notify-customdraw@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/listview-disabled@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/syslink-rest@1.5x.png": {
+  "size": [
+   390,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 24,
+    "y": 21,
+    "w": 345,
+    "h": 33
+   }
+  ]
+ },
+ "light/syslink-hover@1.5x.png": {
+  "size": [
+   390,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 24,
+    "y": 21,
+    "w": 345,
+    "h": 33
+   }
+  ]
+ },
+ "light/syslink-focus@1.5x.png": {
+  "size": [
+   390,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 24,
+    "y": 21,
+    "w": 345,
+    "h": 33
+   }
+  ]
+ },
+ "light/syslink-disabled@1.5x.png": {
+  "size": [
+   390,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 24,
+    "y": 21,
+    "w": 345,
+    "h": 33
+   }
+  ]
+ },
+ "light/datepicker-rest@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "light/datepicker-hover@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "light/datepicker-hover-arrow@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "light/datepicker-focus@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "light/datepicker-disabled@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "light/datepicker-open@1.5x.png": {
+  "size": [
+   345,
+   360
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   },
+   {
+    "class": "DropDown",
+    "text": "",
+    "x": 30,
+    "y": 60,
+    "w": 307,
+    "h": 248
+   }
+  ]
+ },
+ "light/monthcal-rest@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "light/monthcal-hover-day@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "light/monthcal-hover-next@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "light/monthcal-focus@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "light/monthcal-disabled@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "light/window-active@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "light/window-inactive@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "light/window-caption-min-hot@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "light/window-caption-max-hot@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "light/window-caption-close-hot@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "light/dialog-active@1.5x.png": {
+  "size": [
+   442,
+   191
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Plain dialog window.",
+    "x": 41,
+    "y": 66,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 296,
+    "y": 120,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "light/dialog-inactive@1.5x.png": {
+  "size": [
+   442,
+   191
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Plain dialog window.",
+    "x": 41,
+    "y": 66,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 296,
+    "y": 120,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "light/messagebox-active@1.5x.png": {
+  "size": [
+   526,
+   260
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "light/messagebox-inactive@1.5x.png": {
+  "size": [
+   526,
+   260
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "light/taskdialog-active@1.5x.png": {
+  "size": [
+   680,
+   494
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "light/taskdialog-inactive@1.5x.png": {
+  "size": [
+   680,
+   494
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "light/button-rest@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-default@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-default-hover@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-default-pressed@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-hover@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-pressed@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-hover-pressed@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-focus@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-default-focus@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-disabled@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-icon@1x.png": {
+  "size": [
+   170,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 20,
+    "y": 12,
+    "w": 130,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-icon-hover@1x.png": {
+  "size": [
+   170,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 20,
+    "y": 12,
+    "w": 130,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-icon-disabled@1x.png": {
+  "size": [
+   170,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 20,
+    "y": 12,
+    "w": 130,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-split@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-split-hover-main@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-split-hover-arrow@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-split-pressed@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "light/button-split-disabled@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "light/checkbox-unchecked-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-unchecked-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-unchecked-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-unchecked-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-unchecked-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-checked-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-checked-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-checked-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-checked-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-checked-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/checkbox-indeterminate-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-unchecked-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-unchecked-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-unchecked-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-unchecked-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-unchecked-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-checked-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-checked-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-checked-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-checked-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/radio-checked-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "light/groupbox-rest@1x.png": {
+  "size": [
+   200,
+   90
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Group",
+    "x": 12,
+    "y": 8,
+    "w": 176,
+    "h": 72
+   },
+   {
+    "class": "Static",
+    "text": "Inside the group",
+    "x": 28,
+    "y": 36,
+    "w": 130,
+    "h": 20
+   }
+  ]
+ },
+ "light/groupbox-disabled@1x.png": {
+  "size": [
+   200,
+   90
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Group",
+    "x": 12,
+    "y": 8,
+    "w": 176,
+    "h": 72
+   },
+   {
+    "class": "Static",
+    "text": "Inside the group",
+    "x": 28,
+    "y": 36,
+    "w": 130,
+    "h": 20
+   }
+  ]
+ },
+ "light/edit-rest@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "light/edit-hover@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "light/edit-focus@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "light/edit-selected@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "light/edit-readonly@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "light/edit-disabled@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "light/edit-password@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "secret",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "light/edit-multiline-vscroll@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three  Line four  Line five  Line six ",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "light/label-rest@1x.png": {
+  "size": [
+   190,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Static text label",
+    "x": 20,
+    "y": 10,
+    "w": 150,
+    "h": 20
+   }
+  ]
+ },
+ "light/label-disabled@1x.png": {
+  "size": [
+   190,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Static text label",
+    "x": 20,
+    "y": 10,
+    "w": 150,
+    "h": 20
+   }
+  ]
+ },
+ "light/spin-rest@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "light/spin-hover-up@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "light/spin-hover-down@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "light/spin-pressed-up@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "6",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "light/spin-pressed-down@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "light/spin-focus@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "light/spin-disabled@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "light/combo-list-rest@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/combo-list-hover@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/combo-list-hover-arrow@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/combo-list-focus@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/combo-list-open@1x.png": {
+  "size": [
+   190,
+   159
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 20,
+    "y": 37,
+    "w": 150,
+    "h": 122
+   }
+  ]
+ },
+ "light/combo-list-open-hover-row@1x.png": {
+  "size": [
+   190,
+   159
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Echo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 20,
+    "y": 37,
+    "w": 150,
+    "h": 122
+   }
+  ]
+ },
+ "light/combo-list-disabled@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/combo-edit-rest@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/combo-edit-hover@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/combo-edit-hover-arrow@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/combo-edit-focus@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/combo-edit-open@1x.png": {
+  "size": [
+   190,
+   159
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 20,
+    "y": 37,
+    "w": 150,
+    "h": 122
+   }
+  ]
+ },
+ "light/combo-edit-open-hover-row@1x.png": {
+  "size": [
+   190,
+   159
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 20,
+    "y": 37,
+    "w": 150,
+    "h": 122
+   }
+  ]
+ },
+ "light/combo-edit-disabled@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "light/listbox-rest@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "light/listbox-selected-focused@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "light/listbox-selected-unfocused@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "light/listbox-hover@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "light/listbox-disabled@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "light/checklist-rest@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "light/checklist-hover@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "light/checklist-selected-focused@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "light/checklist-selected-unfocused@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "light/checklist-disabled@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "light/tab-rest@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "light/tab-hot@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "light/tab-selected-second@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "light/tab-selected-hot@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "light/tab-focus@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "light/tab-disabled@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "light/progress-empty@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/progress-determinate@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/progress-paused@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/progress-error@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/progress-full@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/progress-disabled@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/progress-marquee@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/progress-marquee-later@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/progress-vertical@1x.png": {
+  "size": [
+   60,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 22,
+    "y": 10,
+    "w": 16,
+    "h": 130
+   }
+  ]
+ },
+ "light/trackbar-rest@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "light/trackbar-hover-thumb@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "light/trackbar-hover-track@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "light/trackbar-pressed-thumb@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "light/trackbar-focus@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "light/trackbar-disabled@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "light/trackbar-vertical@1x.png": {
+  "size": [
+   80,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 40,
+    "h": 130
+   }
+  ]
+ },
+ "light/vscroll-rest@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "light/vscroll-hover-thumb@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "light/vscroll-hover-arrow@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "light/vscroll-hover-track@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "light/vscroll-pressed-thumb@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "light/vscroll-pressed-arrow@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "light/vscroll-disabled@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "light/hscroll-rest@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "light/hscroll-hover-thumb@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "light/hscroll-hover-arrow@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "light/hscroll-hover-track@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "light/hscroll-pressed-thumb@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "light/hscroll-pressed-arrow@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "light/hscroll-disabled@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "light/statusbar-panels@1x.png": {
+  "size": [
+   300,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Ready",
+    "x": 0,
+    "y": 37,
+    "w": 300,
+    "h": 23
+   }
+  ]
+ },
+ "light/statusbar-nogrip@1x.png": {
+  "size": [
+   300,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Simple status text",
+    "x": 0,
+    "y": 37,
+    "w": 300,
+    "h": 23
+   }
+  ]
+ },
+ "light/toolbar-rest@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "light/toolbar-hot@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "light/toolbar-pressed@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "light/toolbar-checked@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "light/toolbar-checked-hot@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "light/toolbar-dropdown-hot@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "light/toolbar-disabled@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "light/menu-popup-rest@1x.png": {
+  "size": [
+   260,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "light/menu-popup-keyboard-first@1x.png": {
+  "size": [
+   260,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "light/menu-popup-keyboard-checked@1x.png": {
+  "size": [
+   260,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "light/menu-popup-keyboard-disabled@1x.png": {
+  "size": [
+   260,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "light/menu-popup-submenu@1x.png": {
+  "size": [
+   374,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 216,
+    "y": 95,
+    "w": 158,
+    "h": 50
+   },
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "light/menu-popup-submenu-keyboard-item@1x.png": {
+  "size": [
+   374,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 216,
+    "y": 95,
+    "w": 158,
+    "h": 50
+   },
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "light/menubar-rest@1x.png": {
+  "size": [
+   302,
+   172
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "light/menubar-hot-first@1x.png": {
+  "size": [
+   302,
+   172
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "light/menubar-open@1x.png": {
+  "size": [
+   302,
+   184
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 1,
+    "y": 50,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "light/menubar-open-hover-item@1x.png": {
+  "size": [
+   302,
+   184
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 1,
+    "y": 50,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "light/menubar-hot-after-close@1x.png": {
+  "size": [
+   302,
+   172
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "light/menubar-hot-second@1x.png": {
+  "size": [
+   302,
+   172
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "light/tooltip-rest@1x.png": {
+  "size": [
+   260,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 20,
+    "y": 14,
+    "w": 100,
+    "h": 28
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "This is the tooltip text",
+    "x": 30,
+    "y": 52,
+    "w": 126,
+    "h": 20
+   }
+  ]
+ },
+ "light/tooltip-balloon@1x.png": {
+  "size": [
+   260,
+   126
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 20,
+    "y": 14,
+    "w": 100,
+    "h": 28
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "This is the tooltip text",
+    "x": 30,
+    "y": 52,
+    "w": 159,
+    "h": 74
+   }
+  ]
+ },
+ "light/tree-rest@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/tree-hover-row@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/tree-hover-expander@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/tree-selected-focused@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/tree-selected-unfocused@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/tree-collapsed@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/tree-disabled@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/tree-classic-lines@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-rest@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-header-hot@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-header-pressed@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-sort-up@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-sort-down@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-hover-row@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-selected-focused@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-selected-unfocused@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-selected-hover@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-gridlines@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-alternating-notify-customdraw@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/listview-disabled@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/syslink-rest@1x.png": {
+  "size": [
+   260,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 16,
+    "y": 14,
+    "w": 230,
+    "h": 22
+   }
+  ]
+ },
+ "light/syslink-hover@1x.png": {
+  "size": [
+   260,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 16,
+    "y": 14,
+    "w": 230,
+    "h": 22
+   }
+  ]
+ },
+ "light/syslink-focus@1x.png": {
+  "size": [
+   260,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 16,
+    "y": 14,
+    "w": 230,
+    "h": 22
+   }
+  ]
+ },
+ "light/syslink-disabled@1x.png": {
+  "size": [
+   260,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 16,
+    "y": 14,
+    "w": 230,
+    "h": 22
+   }
+  ]
+ },
+ "light/datepicker-rest@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "light/datepicker-hover@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "light/datepicker-hover-arrow@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "light/datepicker-focus@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "light/datepicker-disabled@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "light/datepicker-open@1x.png": {
+  "size": [
+   243,
+   240
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   },
+   {
+    "class": "DropDown",
+    "text": "",
+    "x": 20,
+    "y": 40,
+    "w": 223,
+    "h": 158
+   }
+  ]
+ },
+ "light/monthcal-rest@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "light/monthcal-hover-day@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "light/monthcal-hover-next@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "light/monthcal-focus@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "light/monthcal-disabled@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "light/window-active@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "light/window-inactive@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "light/window-caption-min-hot@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "light/window-caption-max-hot@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "light/window-caption-close-hot@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "light/dialog-active@1x.png": {
+  "size": [
+   296,
+   129
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Plain dialog window.",
+    "x": 28,
+    "y": 45,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 198,
+    "y": 81,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "light/dialog-inactive@1x.png": {
+  "size": [
+   296,
+   129
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Plain dialog window.",
+    "x": 28,
+    "y": 45,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 198,
+    "y": 81,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "light/messagebox-active@1x.png": {
+  "size": [
+   354,
+   159
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "light/messagebox-inactive@1x.png": {
+  "size": [
+   354,
+   159
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "light/taskdialog-active@1x.png": {
+  "size": [
+   454,
+   334
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "light/taskdialog-inactive@1x.png": {
+  "size": [
+   454,
+   334
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "dark/button-rest@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-default@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-default-hover@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-default-pressed@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-hover@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-pressed@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-hover-pressed@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-focus@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-default-focus@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-disabled@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 30,
+    "y": 18,
+    "w": 165,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-icon@1.5x.png": {
+  "size": [
+   255,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 30,
+    "y": 18,
+    "w": 195,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-icon-hover@1.5x.png": {
+  "size": [
+   255,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 30,
+    "y": 18,
+    "w": 195,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-icon-disabled@1.5x.png": {
+  "size": [
+   255,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 30,
+    "y": 18,
+    "w": 195,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-split@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-split-hover-main@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-split-hover-arrow@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-split-pressed@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "dark/button-split-disabled@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 30,
+    "y": 18,
+    "w": 225,
+    "h": 48
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-checked-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-checked-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-checked-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-checked-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-checked-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-unchecked-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-unchecked-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-unchecked-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-unchecked-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-unchecked-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-checked-rest@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-checked-hover@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-checked-pressed@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-checked-focus@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/radio-checked-disabled@1.5x.png": {
+  "size": [
+   255,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 24,
+    "y": 14,
+    "w": 210,
+    "h": 33
+   }
+  ]
+ },
+ "dark/groupbox-rest@1.5x.png": {
+  "size": [
+   300,
+   135
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Group",
+    "x": 18,
+    "y": 12,
+    "w": 264,
+    "h": 108
+   },
+   {
+    "class": "Static",
+    "text": "Inside the group",
+    "x": 42,
+    "y": 54,
+    "w": 195,
+    "h": 30
+   }
+  ]
+ },
+ "dark/groupbox-disabled@1.5x.png": {
+  "size": [
+   300,
+   135
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Group",
+    "x": 18,
+    "y": 12,
+    "w": 264,
+    "h": 108
+   },
+   {
+    "class": "Static",
+    "text": "Inside the group",
+    "x": 42,
+    "y": 54,
+    "w": 195,
+    "h": 30
+   }
+  ]
+ },
+ "dark/edit-rest@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "dark/edit-hover@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "dark/edit-focus@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "dark/edit-selected@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "dark/edit-readonly@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "dark/edit-disabled@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "dark/edit-password@1.5x.png": {
+  "size": [
+   285,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "secret",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 36
+   }
+  ]
+ },
+ "dark/edit-multiline-vscroll@1.5x.png": {
+  "size": [
+   300,
+   165
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three  Line four  Line five  Line six ",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 135
+   }
+  ]
+ },
+ "dark/label-rest@1.5x.png": {
+  "size": [
+   285,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Static text label",
+    "x": 30,
+    "y": 15,
+    "w": 225,
+    "h": 30
+   }
+  ]
+ },
+ "dark/label-disabled@1.5x.png": {
+  "size": [
+   285,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Static text label",
+    "x": 30,
+    "y": 15,
+    "w": 225,
+    "h": 30
+   }
+  ]
+ },
+ "dark/spin-rest@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "dark/spin-hover-up@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "dark/spin-hover-down@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "dark/spin-pressed-up@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "6",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "dark/spin-pressed-down@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "dark/spin-focus@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "dark/spin-disabled@1.5x.png": {
+  "size": [
+   225,
+   84
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 30,
+    "y": 21,
+    "w": 85,
+    "h": 36
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 113,
+    "y": 21,
+    "w": 27,
+    "h": 36
+   }
+  ]
+ },
+ "dark/combo-list-rest@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/combo-list-hover@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/combo-list-hover-arrow@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/combo-list-focus@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/combo-list-open@1.5x.png": {
+  "size": [
+   285,
+   256
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 30,
+    "y": 54,
+    "w": 225,
+    "h": 202
+   }
+  ]
+ },
+ "dark/combo-list-open-hover-row@1.5x.png": {
+  "size": [
+   285,
+   256
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Echo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 30,
+    "y": 54,
+    "w": 225,
+    "h": 202
+   }
+  ]
+ },
+ "dark/combo-list-disabled@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/combo-edit-rest@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/combo-edit-hover@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/combo-edit-hover-arrow@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/combo-edit-focus@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/combo-edit-open@1.5x.png": {
+  "size": [
+   285,
+   256
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 30,
+    "y": 54,
+    "w": 225,
+    "h": 202
+   }
+  ]
+ },
+ "dark/combo-edit-open-hover-row@1.5x.png": {
+  "size": [
+   285,
+   256
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 30,
+    "y": 54,
+    "w": 225,
+    "h": 202
+   }
+  ]
+ },
+ "dark/combo-edit-disabled@1.5x.png": {
+  "size": [
+   285,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 30,
+    "y": 21,
+    "w": 225,
+    "h": 33
+   }
+  ]
+ },
+ "dark/listbox-rest@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "dark/listbox-selected-focused@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "dark/listbox-selected-unfocused@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "dark/listbox-hover@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "dark/listbox-disabled@1.5x.png": {
+  "size": [
+   225,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 177,
+    "h": 165
+   }
+  ]
+ },
+ "dark/checklist-rest@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "dark/checklist-hover@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "dark/checklist-selected-focused@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "dark/checklist-selected-unfocused@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "dark/checklist-disabled@1.5x.png": {
+  "size": [
+   285,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 237,
+    "h": 165
+   }
+  ]
+ },
+ "dark/tab-rest@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "dark/tab-hot@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "dark/tab-selected-second@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "dark/tab-selected-hot@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "dark/tab-focus@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "dark/tab-disabled@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "dark/progress-empty@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/progress-determinate@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/progress-paused@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/progress-error@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/progress-full@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/progress-disabled@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/progress-marquee@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/progress-marquee-later@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/progress-vertical@1.5x.png": {
+  "size": [
+   90,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 33,
+    "y": 15,
+    "w": 24,
+    "h": 195
+   }
+  ]
+ },
+ "dark/trackbar-rest@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "dark/trackbar-hover-thumb@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "dark/trackbar-hover-track@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "dark/trackbar-pressed-thumb@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "dark/trackbar-focus@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "dark/trackbar-disabled@1.5x.png": {
+  "size": [
+   345,
+   120
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 297,
+    "h": 60
+   }
+  ]
+ },
+ "dark/trackbar-vertical@1.5x.png": {
+  "size": [
+   120,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 60,
+    "h": 195
+   }
+  ]
+ },
+ "dark/vscroll-rest@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "dark/vscroll-hover-thumb@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "dark/vscroll-hover-arrow@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "dark/vscroll-hover-track@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "dark/vscroll-pressed-thumb@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "dark/vscroll-pressed-arrow@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "dark/vscroll-disabled@1.5x.png": {
+  "size": [
+   90,
+   285
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 30,
+    "y": 15,
+    "w": 26,
+    "h": 255
+   }
+  ]
+ },
+ "dark/hscroll-rest@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "dark/hscroll-hover-thumb@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "dark/hscroll-hover-arrow@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "dark/hscroll-hover-track@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "dark/hscroll-pressed-thumb@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "dark/hscroll-pressed-arrow@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "dark/hscroll-disabled@1.5x.png": {
+  "size": [
+   315,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 24,
+    "y": 30,
+    "w": 267,
+    "h": 26
+   }
+  ]
+ },
+ "dark/statusbar-panels@1.5x.png": {
+  "size": [
+   450,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Ready",
+    "x": 0,
+    "y": 54,
+    "w": 450,
+    "h": 36
+   }
+  ]
+ },
+ "dark/statusbar-nogrip@1.5x.png": {
+  "size": [
+   450,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Simple status text",
+    "x": 0,
+    "y": 54,
+    "w": 450,
+    "h": 36
+   }
+  ]
+ },
+ "dark/toolbar-rest@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "dark/toolbar-hot@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "dark/toolbar-pressed@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "dark/toolbar-checked@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "dark/toolbar-checked-hot@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "dark/toolbar-dropdown-hot@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "dark/toolbar-disabled@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 43
+   }
+  ]
+ },
+ "dark/menu-popup-rest@1.5x.png": {
+  "size": [
+   390,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "dark/menu-popup-keyboard-first@1.5x.png": {
+  "size": [
+   390,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "dark/menu-popup-keyboard-checked@1.5x.png": {
+  "size": [
+   390,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "dark/menu-popup-keyboard-disabled@1.5x.png": {
+  "size": [
+   390,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "dark/menu-popup-submenu@1.5x.png": {
+  "size": [
+   531,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 310,
+    "y": 146,
+    "w": 221,
+    "h": 76
+   },
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "dark/menu-popup-submenu-keyboard-item@1.5x.png": {
+  "size": [
+   531,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 310,
+    "y": 146,
+    "w": 221,
+    "h": 76
+   },
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 30,
+    "y": 30,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "dark/menubar-rest@1.5x.png": {
+  "size": [
+   454,
+   257
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "dark/menubar-hot-first@1.5x.png": {
+  "size": [
+   454,
+   257
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "dark/menubar-open@1.5x.png": {
+  "size": [
+   454,
+   277
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 2,
+    "y": 74,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "dark/menubar-open-hover-item@1.5x.png": {
+  "size": [
+   454,
+   277
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 2,
+    "y": 74,
+    "w": 286,
+    "h": 203
+   }
+  ]
+ },
+ "dark/menubar-hot-after-close@1.5x.png": {
+  "size": [
+   454,
+   257
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "dark/menubar-hot-second@1.5x.png": {
+  "size": [
+   454,
+   257
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "dark/tooltip-rest@1.5x.png": {
+  "size": [
+   390,
+   165
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 30,
+    "y": 21,
+    "w": 150,
+    "h": 42
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "This is the tooltip text",
+    "x": 45,
+    "y": 78,
+    "w": 183,
+    "h": 30
+   }
+  ]
+ },
+ "dark/tooltip-balloon@1.5x.png": {
+  "size": [
+   390,
+   175
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 30,
+    "y": 21,
+    "w": 150,
+    "h": 42
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "This is the tooltip text",
+    "x": 45,
+    "y": 78,
+    "w": 236,
+    "h": 97
+   }
+  ]
+ },
+ "dark/tree-rest@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/tree-hover-row@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/tree-hover-expander@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/tree-selected-focused@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/tree-selected-unfocused@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/tree-collapsed@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/tree-disabled@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/tree-classic-lines@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-rest@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-header-hot@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-header-pressed@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-sort-up@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-sort-down@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-hover-row@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-selected-focused@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-selected-unfocused@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-selected-hover@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-gridlines@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-alternating-notify-customdraw@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/listview-disabled@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/syslink-rest@1.5x.png": {
+  "size": [
+   390,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 24,
+    "y": 21,
+    "w": 345,
+    "h": 33
+   }
+  ]
+ },
+ "dark/syslink-hover@1.5x.png": {
+  "size": [
+   390,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 24,
+    "y": 21,
+    "w": 345,
+    "h": 33
+   }
+  ]
+ },
+ "dark/syslink-focus@1.5x.png": {
+  "size": [
+   390,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 24,
+    "y": 21,
+    "w": 345,
+    "h": 33
+   }
+  ]
+ },
+ "dark/syslink-disabled@1.5x.png": {
+  "size": [
+   390,
+   105
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 24,
+    "y": 21,
+    "w": 345,
+    "h": 33
+   }
+  ]
+ },
+ "dark/datepicker-rest@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "dark/datepicker-hover@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "dark/datepicker-hover-arrow@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "dark/datepicker-focus@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "dark/datepicker-disabled@1.5x.png": {
+  "size": [
+   345,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   }
+  ]
+ },
+ "dark/datepicker-open@1.5x.png": {
+  "size": [
+   345,
+   360
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 30,
+    "y": 21,
+    "w": 240,
+    "h": 39
+   },
+   {
+    "class": "DropDown",
+    "text": "",
+    "x": 30,
+    "y": 60,
+    "w": 307,
+    "h": 248
+   }
+  ]
+ },
+ "dark/monthcal-rest@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "dark/monthcal-hover-day@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "dark/monthcal-hover-next@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "dark/monthcal-focus@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "dark/monthcal-disabled@1.5x.png": {
+  "size": [
+   405,
+   300
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 24,
+    "y": 18,
+    "w": 357,
+    "h": 264
+   }
+  ]
+ },
+ "dark/window-active@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "dark/window-inactive@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "dark/window-caption-min-hot@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "dark/window-caption-max-hot@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "dark/window-caption-close-hot@1.5x.png": {
+  "size": [
+   454,
+   212
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 32,
+    "y": 75,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 182,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 314,
+    "y": 144,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "dark/dialog-active@1.5x.png": {
+  "size": [
+   442,
+   191
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Plain dialog window.",
+    "x": 41,
+    "y": 66,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 296,
+    "y": 120,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "dark/dialog-inactive@1.5x.png": {
+  "size": [
+   442,
+   191
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Plain dialog window.",
+    "x": 41,
+    "y": 66,
+    "w": 300,
+    "h": 30
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 296,
+    "y": 120,
+    "w": 120,
+    "h": 42
+   }
+  ]
+ },
+ "dark/messagebox-active@1.5x.png": {
+  "size": [
+   526,
+   260
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "dark/messagebox-inactive@1.5x.png": {
+  "size": [
+   526,
+   260
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "dark/taskdialog-active@1.5x.png": {
+  "size": [
+   680,
+   494
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "dark/taskdialog-inactive@1.5x.png": {
+  "size": [
+   680,
+   494
+  ],
+  "dpi": 144,
+  "controls": []
+ },
+ "dark/button-rest@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-default@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-default-hover@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-default-pressed@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-hover@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-pressed@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-hover-pressed@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-focus@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-default-focus@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-disabled@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Button",
+    "x": 20,
+    "y": 12,
+    "w": 110,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-icon@1x.png": {
+  "size": [
+   170,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 20,
+    "y": 12,
+    "w": 130,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-icon-hover@1x.png": {
+  "size": [
+   170,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 20,
+    "y": 12,
+    "w": 130,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-icon-disabled@1x.png": {
+  "size": [
+   170,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Open",
+    "x": 20,
+    "y": 12,
+    "w": 130,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-split@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-split-hover-main@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-split-hover-arrow@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-split-pressed@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "dark/button-split-disabled@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Save",
+    "x": 20,
+    "y": 12,
+    "w": 150,
+    "h": 32
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-unchecked-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-checked-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-checked-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-checked-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-checked-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-checked-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/checkbox-indeterminate-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-unchecked-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-unchecked-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-unchecked-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-unchecked-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-unchecked-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-checked-rest@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-checked-hover@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-checked-pressed@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-checked-focus@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/radio-checked-disabled@1x.png": {
+  "size": [
+   170,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Sample label",
+    "x": 16,
+    "y": 9,
+    "w": 140,
+    "h": 22
+   }
+  ]
+ },
+ "dark/groupbox-rest@1x.png": {
+  "size": [
+   200,
+   90
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Group",
+    "x": 12,
+    "y": 8,
+    "w": 176,
+    "h": 72
+   },
+   {
+    "class": "Static",
+    "text": "Inside the group",
+    "x": 28,
+    "y": 36,
+    "w": 130,
+    "h": 20
+   }
+  ]
+ },
+ "dark/groupbox-disabled@1x.png": {
+  "size": [
+   200,
+   90
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Group",
+    "x": 12,
+    "y": 8,
+    "w": 176,
+    "h": 72
+   },
+   {
+    "class": "Static",
+    "text": "Inside the group",
+    "x": 28,
+    "y": 36,
+    "w": 130,
+    "h": 20
+   }
+  ]
+ },
+ "dark/edit-rest@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "dark/edit-hover@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "dark/edit-focus@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "dark/edit-selected@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "dark/edit-readonly@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "dark/edit-disabled@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Text value",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "dark/edit-password@1x.png": {
+  "size": [
+   190,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "secret",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 24
+   }
+  ]
+ },
+ "dark/edit-multiline-vscroll@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three  Line four  Line five  Line six ",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "dark/label-rest@1x.png": {
+  "size": [
+   190,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Static text label",
+    "x": 20,
+    "y": 10,
+    "w": 150,
+    "h": 20
+   }
+  ]
+ },
+ "dark/label-disabled@1x.png": {
+  "size": [
+   190,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Static text label",
+    "x": 20,
+    "y": 10,
+    "w": 150,
+    "h": 20
+   }
+  ]
+ },
+ "dark/spin-rest@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "dark/spin-hover-up@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "dark/spin-hover-down@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "dark/spin-pressed-up@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "6",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "dark/spin-pressed-down@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "dark/spin-focus@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "dark/spin-disabled@1x.png": {
+  "size": [
+   150,
+   56
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "5",
+    "x": 20,
+    "y": 14,
+    "w": 58,
+    "h": 24
+   },
+   {
+    "class": "msctls_updown32",
+    "text": "",
+    "x": 76,
+    "y": 14,
+    "w": 18,
+    "h": 24
+   }
+  ]
+ },
+ "dark/combo-list-rest@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/combo-list-hover@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/combo-list-hover-arrow@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/combo-list-focus@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/combo-list-open@1x.png": {
+  "size": [
+   190,
+   159
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 20,
+    "y": 37,
+    "w": 150,
+    "h": 122
+   }
+  ]
+ },
+ "dark/combo-list-open-hover-row@1x.png": {
+  "size": [
+   190,
+   159
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Echo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 20,
+    "y": 37,
+    "w": 150,
+    "h": 122
+   }
+  ]
+ },
+ "dark/combo-list-disabled@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/combo-edit-rest@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/combo-edit-hover@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/combo-edit-hover-arrow@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/combo-edit-focus@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/combo-edit-open@1x.png": {
+  "size": [
+   190,
+   159
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 20,
+    "y": 37,
+    "w": 150,
+    "h": 122
+   }
+  ]
+ },
+ "dark/combo-edit-open-hover-row@1x.png": {
+  "size": [
+   190,
+   159
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   },
+   {
+    "class": "ComboLBox",
+    "text": "",
+    "x": 20,
+    "y": 37,
+    "w": 150,
+    "h": 122
+   }
+  ]
+ },
+ "dark/combo-edit-disabled@1x.png": {
+  "size": [
+   190,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ComboBox",
+    "text": "Bravo",
+    "x": 20,
+    "y": 14,
+    "w": 150,
+    "h": 23
+   }
+  ]
+ },
+ "dark/listbox-rest@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "dark/listbox-selected-focused@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "dark/listbox-selected-unfocused@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "dark/listbox-hover@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "dark/listbox-disabled@1x.png": {
+  "size": [
+   150,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ListBox",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 118,
+    "h": 110
+   }
+  ]
+ },
+ "dark/checklist-rest@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "dark/checklist-hover@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "dark/checklist-selected-focused@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "dark/checklist-selected-unfocused@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "dark/checklist-disabled@1x.png": {
+  "size": [
+   190,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 158,
+    "h": 110
+   }
+  ]
+ },
+ "dark/tab-rest@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "dark/tab-hot@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "dark/tab-selected-second@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "dark/tab-selected-hot@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "dark/tab-focus@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "dark/tab-disabled@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "dark/progress-empty@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/progress-determinate@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/progress-paused@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/progress-error@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/progress-full@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/progress-disabled@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/progress-marquee@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/progress-marquee-later@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/progress-vertical@1x.png": {
+  "size": [
+   60,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 22,
+    "y": 10,
+    "w": 16,
+    "h": 130
+   }
+  ]
+ },
+ "dark/trackbar-rest@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "dark/trackbar-hover-thumb@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "dark/trackbar-hover-track@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "dark/trackbar-pressed-thumb@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "dark/trackbar-focus@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "dark/trackbar-disabled@1x.png": {
+  "size": [
+   230,
+   80
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 198,
+    "h": 40
+   }
+  ]
+ },
+ "dark/trackbar-vertical@1x.png": {
+  "size": [
+   80,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_trackbar32",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 40,
+    "h": 130
+   }
+  ]
+ },
+ "dark/vscroll-rest@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "dark/vscroll-hover-thumb@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "dark/vscroll-hover-arrow@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "dark/vscroll-hover-track@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "dark/vscroll-pressed-thumb@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "dark/vscroll-pressed-arrow@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "dark/vscroll-disabled@1x.png": {
+  "size": [
+   60,
+   190
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 20,
+    "y": 10,
+    "w": 17,
+    "h": 170
+   }
+  ]
+ },
+ "dark/hscroll-rest@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "dark/hscroll-hover-thumb@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "dark/hscroll-hover-arrow@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "dark/hscroll-hover-track@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "dark/hscroll-pressed-thumb@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "dark/hscroll-pressed-arrow@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "dark/hscroll-disabled@1x.png": {
+  "size": [
+   210,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ScrollBar",
+    "text": "",
+    "x": 16,
+    "y": 20,
+    "w": 178,
+    "h": 17
+   }
+  ]
+ },
+ "dark/statusbar-panels@1x.png": {
+  "size": [
+   300,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Ready",
+    "x": 0,
+    "y": 37,
+    "w": 300,
+    "h": 23
+   }
+  ]
+ },
+ "dark/statusbar-nogrip@1x.png": {
+  "size": [
+   300,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Simple status text",
+    "x": 0,
+    "y": 37,
+    "w": 300,
+    "h": 23
+   }
+  ]
+ },
+ "dark/toolbar-rest@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "dark/toolbar-hot@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "dark/toolbar-pressed@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "dark/toolbar-checked@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "dark/toolbar-checked-hot@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "dark/toolbar-dropdown-hot@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "dark/toolbar-disabled@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 34
+   }
+  ]
+ },
+ "dark/menu-popup-rest@1x.png": {
+  "size": [
+   260,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "dark/menu-popup-keyboard-first@1x.png": {
+  "size": [
+   260,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "dark/menu-popup-keyboard-checked@1x.png": {
+  "size": [
+   260,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "dark/menu-popup-keyboard-disabled@1x.png": {
+  "size": [
+   260,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "dark/menu-popup-submenu@1x.png": {
+  "size": [
+   374,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 216,
+    "y": 95,
+    "w": 158,
+    "h": 50
+   },
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "dark/menu-popup-submenu-keyboard-item@1x.png": {
+  "size": [
+   374,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 216,
+    "y": 95,
+    "w": 158,
+    "h": 50
+   },
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 20,
+    "y": 20,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "dark/menubar-rest@1x.png": {
+  "size": [
+   302,
+   172
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "dark/menubar-hot-first@1x.png": {
+  "size": [
+   302,
+   172
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "dark/menubar-open@1x.png": {
+  "size": [
+   302,
+   184
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 1,
+    "y": 50,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "dark/menubar-open-hover-item@1x.png": {
+  "size": [
+   302,
+   184
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "#32768",
+    "text": "",
+    "x": 1,
+    "y": 50,
+    "w": 202,
+    "h": 134
+   }
+  ]
+ },
+ "dark/menubar-hot-after-close@1x.png": {
+  "size": [
+   302,
+   172
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "dark/menubar-hot-second@1x.png": {
+  "size": [
+   302,
+   172
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "dark/tooltip-rest@1x.png": {
+  "size": [
+   260,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 20,
+    "y": 14,
+    "w": 100,
+    "h": 28
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "This is the tooltip text",
+    "x": 30,
+    "y": 52,
+    "w": 126,
+    "h": 20
+   }
+  ]
+ },
+ "dark/tooltip-balloon@1x.png": {
+  "size": [
+   260,
+   126
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 20,
+    "y": 14,
+    "w": 100,
+    "h": 28
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "This is the tooltip text",
+    "x": 30,
+    "y": 52,
+    "w": 159,
+    "h": 74
+   }
+  ]
+ },
+ "dark/tree-rest@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "dark/tree-hover-row@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "dark/tree-hover-expander@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "dark/tree-selected-focused@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "dark/tree-selected-unfocused@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "dark/tree-collapsed@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "dark/tree-disabled@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "dark/tree-classic-lines@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-rest@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-header-hot@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-header-pressed@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-sort-up@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-sort-down@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-hover-row@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-selected-focused@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-selected-unfocused@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-selected-hover@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-gridlines@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-alternating-notify-customdraw@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/listview-disabled@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/syslink-rest@1x.png": {
+  "size": [
+   260,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 16,
+    "y": 14,
+    "w": 230,
+    "h": 22
+   }
+  ]
+ },
+ "dark/syslink-hover@1x.png": {
+  "size": [
+   260,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 16,
+    "y": 14,
+    "w": 230,
+    "h": 22
+   }
+  ]
+ },
+ "dark/syslink-focus@1x.png": {
+  "size": [
+   260,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 16,
+    "y": 14,
+    "w": 230,
+    "h": 22
+   }
+  ]
+ },
+ "dark/syslink-disabled@1x.png": {
+  "size": [
+   260,
+   70
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysLink",
+    "text": "Text with <a href= a >a link</a> and <a href= b >another</a>.",
+    "x": 16,
+    "y": 14,
+    "w": 230,
+    "h": 22
+   }
+  ]
+ },
+ "dark/datepicker-rest@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "dark/datepicker-hover@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "dark/datepicker-hover-arrow@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "dark/datepicker-focus@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "dark/datepicker-disabled@1x.png": {
+  "size": [
+   230,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   }
+  ]
+ },
+ "dark/datepicker-open@1x.png": {
+  "size": [
+   243,
+   240
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysDateTimePick32",
+    "text": "10/16/2026",
+    "x": 20,
+    "y": 14,
+    "w": 160,
+    "h": 26
+   },
+   {
+    "class": "DropDown",
+    "text": "",
+    "x": 20,
+    "y": 40,
+    "w": 223,
+    "h": 158
+   }
+  ]
+ },
+ "dark/monthcal-rest@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "dark/monthcal-hover-day@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "dark/monthcal-hover-next@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "dark/monthcal-focus@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "dark/monthcal-disabled@1x.png": {
+  "size": [
+   270,
+   200
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysMonthCal32",
+    "text": "",
+    "x": 16,
+    "y": 12,
+    "w": 238,
+    "h": 176
+   }
+  ]
+ },
+ "dark/window-active@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "dark/window-inactive@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "dark/window-caption-min-hot@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "dark/window-caption-max-hot@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "dark/window-caption-close-hot@1x.png": {
+  "size": [
+   302,
+   142
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Window content.",
+    "x": 21,
+    "y": 51,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 121,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   },
+   {
+    "class": "Button",
+    "text": "Cancel",
+    "x": 209,
+    "y": 97,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "dark/dialog-active@1x.png": {
+  "size": [
+   296,
+   129
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Plain dialog window.",
+    "x": 28,
+    "y": 45,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 198,
+    "y": 81,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "dark/dialog-inactive@1x.png": {
+  "size": [
+   296,
+   129
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Static",
+    "text": "Plain dialog window.",
+    "x": 28,
+    "y": 45,
+    "w": 200,
+    "h": 20
+   },
+   {
+    "class": "Button",
+    "text": "OK",
+    "x": 198,
+    "y": 81,
+    "w": 80,
+    "h": 28
+   }
+  ]
+ },
+ "dark/messagebox-active@1x.png": {
+  "size": [
+   354,
+   159
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "dark/messagebox-inactive@1x.png": {
+  "size": [
+   354,
+   159
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "dark/taskdialog-active@1x.png": {
+  "size": [
+   454,
+   334
+  ],
+  "dpi": 96,
+  "controls": []
+ },
+ "dark/taskdialog-inactive@1x.png": {
+  "size": [
+   454,
+   334
+  ],
+  "dpi": 96,
+  "controls": []
+ }
+}

@@ -143,9 +143,9 @@ type States = struct { hover: f32, focus: f32, pressed: f32, dragged: f32, disab
 type Sizes = struct { control_xs: f32, control_sm: f32, control_md: f32, control_lg: f32, control_xl: f32, target_touch: f32, target_pointer: f32, icon_xs: f32, icon_sm: f32, icon_md: f32, icon_lg: f32, divider: f32, outline_focused: f32 }
 type Metrics = struct { hit_target: f32, control_height: f32, density: f32, focus_ring: f32, focus_offset: f32 }
 type Palette = enum u8 { Light, Dark, HighContrast, Custom, HighContrastDark }
-// `Windows` is the MTG Studio v3 look (`windows`): the native-style Windows face of the
+// `Linux` is the GNOME / libadwaita look (`adwaita`). `Windows` is the MTG Studio v3 look (`windows`): the native-style Windows face of the
 // DevExpress controls; a control branches on it only where its shape differs.
-type Profile = enum u8 { Neper, DesktopDense, Touch, MaterialLike, CupertinoLike, Windows }
+type Profile = enum u8 { Neper, DesktopDense, Touch, MaterialLike, CupertinoLike, Windows, Linux }
 type Direction = enum u8 { LeftToRight, RightToLeft }
 // ---- GENERATED from docs/ux/tokens.json by scripts/render_ux_theme.py; do not edit ----
 
@@ -1569,8 +1569,223 @@ fn material(palette: Palette) -> ThemeTokens {
     ret t
 }
 // ---- end Android look ---------------------------------------------------------------------------
+
+// ---- Linux look (docs/ui/looks, profile Linux) ---------------------------------------------------
+// GNOME as libadwaita 1.5 / GTK 4.14 draws it, measured by rendering the real library headlessly
+// (docs/ui/looks/ref/linux/adwaita-tokens.md, scripts/linux). Colours are the named libadwaita
+// colours: window #fafafa / #242424, view #ffffff / #1e1e1e, header bar #ffffff / #303030, card
+// #ffffff / white 8 %, accent_bg #3584e4 (accent_color #1c71d8 / #78aeed for text and rings),
+// destructive_bg #e01b24 / #c01c28, text black 80 % / white. Metrics: 34 high controls, radius 6,
+// focus ring 2 px, drawn by each control inside its own edge (GTK's offset -2), so the runtime's
+// ring is off. Font: Cantarell 11 pt (14.67 px), regular and bold (looks.e registers them from
+// docs/ui/looks/ref/linux/fonts). Only Light and Dark exist; the contrast palettes keep the
+// Neper colours with these metrics.
+fn adwaita_fill_light(t: *ThemeTokens) {
+    put(t, .Background, 0xFAFAFAu32)
+    put(t, .Surface, 0xFFFFFFu32)
+    put(t, .SurfaceVariant, 0xEBEBEBu32)
+    put(t, .Primary, 0x3584E4u32)
+    put(t, .OnPrimary, 0xFFFFFFu32)
+    put(t, .Secondary, 0x1C71D8u32)
+    put(t, .OnSecondary, 0xFFFFFFu32)
+    puta(t, .Text, 0x000000u32, 0.8)
+    puta(t, .OnSurface, 0x000000u32, 0.8)
+    puta(t, .TextMuted, 0x000000u32, 0.55)
+    puta(t, .OnSurfaceVariant, 0x000000u32, 0.55)
+    puta(t, .Border, 0x000000u32, 0.12)
+    puta(t, .Outline, 0x000000u32, 0.12)
+    puta(t, .OutlineVariant, 0x000000u32, 0.07)
+    put(t, .Focus, 0x1C71D8u32)
+    puta(t, .FocusRing, 0x1C71D8u32, 0.5)
+    put(t, .Error, 0xC01C28u32)
+    put(t, .OnError, 0xFFFFFFu32)
+    put(t, .ErrorContainer, 0xE01B24u32)
+    put(t, .OnErrorContainer, 0xFFFFFFu32)
+    put(t, .Success, 0x1B8553u32)
+    put(t, .OnSuccess, 0xFFFFFFu32)
+    put(t, .SuccessContainer, 0x2EC27Eu32)
+    put(t, .OnSuccessContainer, 0xFFFFFFu32)
+    put(t, .Warning, 0x9C6E03u32)
+    put(t, .OnWarning, 0xFFFFFFu32)
+    put(t, .WarningContainer, 0xE5A50Au32)
+    put(t, .OnWarningContainer, 0x000000u32)
+    put(t, .Selection, 0xC2DAF7u32)
+    put(t, .TextSelection, 0xC2DAF7u32)
+    put(t, .SurfaceDim, 0xEBEBEBu32)
+    put(t, .SurfaceBright, 0xFFFFFFu32)
+    put(t, .SurfaceContainerLowest, 0xFFFFFFu32)
+    put(t, .SurfaceContainerLow, 0xFAFAFAu32)
+    put(t, .SurfaceContainer, 0xFFFFFFu32)
+    put(t, .SurfaceContainerHigh, 0xFFFFFFu32)
+    put(t, .SurfaceContainerHighest, 0xFAFAFAu32)
+}
+
+fn adwaita_fill_dark(t: *ThemeTokens) {
+    put(t, .Background, 0x242424u32)
+    put(t, .Surface, 0x1E1E1Eu32)
+    put(t, .SurfaceVariant, 0x303030u32)
+    put(t, .Primary, 0x3584E4u32)
+    put(t, .OnPrimary, 0xFFFFFFu32)
+    put(t, .Secondary, 0x78AEEDu32)
+    put(t, .OnSecondary, 0x000000u32)
+    put(t, .Text, 0xFFFFFFu32)
+    put(t, .OnSurface, 0xFFFFFFu32)
+    puta(t, .TextMuted, 0xFFFFFFu32, 0.55)
+    puta(t, .OnSurfaceVariant, 0xFFFFFFu32, 0.55)
+    puta(t, .Border, 0xFFFFFFu32, 0.15)
+    puta(t, .Outline, 0xFFFFFFu32, 0.15)
+    puta(t, .OutlineVariant, 0xFFFFFFu32, 0.08)
+    put(t, .Focus, 0x78AEEDu32)
+    puta(t, .FocusRing, 0x78AEEDu32, 0.5)
+    put(t, .Error, 0xFF7B63u32)
+    put(t, .OnError, 0x000000u32)
+    put(t, .ErrorContainer, 0xC01C28u32)
+    put(t, .OnErrorContainer, 0xFFFFFFu32)
+    put(t, .Success, 0x8FF0A4u32)
+    put(t, .OnSuccess, 0x000000u32)
+    put(t, .SuccessContainer, 0x26A269u32)
+    put(t, .OnSuccessContainer, 0xFFFFFFu32)
+    put(t, .Warning, 0xF8E45Cu32)
+    put(t, .OnWarning, 0x000000u32)
+    put(t, .WarningContainer, 0xCD9309u32)
+    put(t, .OnWarningContainer, 0x000000u32)
+    put(t, .Selection, 0x253D59u32)
+    put(t, .TextSelection, 0x253D59u32)
+    put(t, .SurfaceDim, 0x303030u32)
+    put(t, .SurfaceBright, 0x383838u32)
+    put(t, .SurfaceContainerLowest, 0x1E1E1Eu32)
+    put(t, .SurfaceContainerLow, 0x242424u32)
+    put(t, .SurfaceContainer, 0x353535u32)
+    put(t, .SurfaceContainerHigh, 0x303030u32)
+    put(t, .SurfaceContainerHighest, 0x383838u32)
+}
+
+fn adwaita(palette: Palette) -> ThemeTokens {
+    var t = reference(palette)
+    t.profile = .Linux
+    if palette == .Light { adwaita_fill_light(&t) }
+    if palette == .Dark { adwaita_fill_dark(&t) }
+    // Radii: check 4, button / entry 6 (GTK's 6 px), popover 12, dialog 18.
+    t.radii = Radii { xs: 4.0, sm: 6.0, md: 6.0, lg: 12.0, xl: 18.0, full: 9999.0 }
+    t.borders = Borders { hairline: 1.0, regular: 1.0, thick: 2.0 }
+    // Text: Cantarell 11 pt = 14.67 px at weight 400 (buttons, labels, body), headings bold; .caption is 82 %.
+    var i = 0usize
+    while i < 21usize {
+        if t.text[i].weight == 600u16 { t.text[i].weight = 400u16 }
+        i += 1usize
+    }
+    let body = TextStyle { size: 14.667, line_height: 19.0, weight: 400u16, italic: false }
+    let label_style = TextStyle { size: 14.667, line_height: 19.0, weight: 700u16, italic: false }
+    t.text[0] = body
+    t.text[4] = label_style
+    t.text[17] = body
+    t.text[18] = body
+    t.text[19] = body
+    t.text[1] = TextStyle { size: 12.0, line_height: 16.0, weight: 400u16, italic: false }
+    t.text[5] = t.text[1]
+    t.text[3] = TextStyle { size: 14.667, line_height: 19.0, weight: 700u16, italic: false }
+    t.states = States { hover: 0.08, focus: 0.0, pressed: 0.16, dragged: 0.16, disabled_container: 0.12, disabled_content: 0.5, scrim: 0.5 }
+    t.sizes = Sizes { control_xs: 24.0, control_sm: 28.0, control_md: 34.0, control_lg: 40.0, control_xl: 50.0, target_touch: 44.0, target_pointer: 34.0, icon_xs: 12.0, icon_sm: 16.0, icon_md: 16.0, icon_lg: 32.0, divider: 1.0, outline_focused: 2.0 }
+    // 34 high controls; the focus ring is drawn by the control inside its edge (offset -2), not by the runtime.
+    t.metrics = Metrics { hit_target: 34.0, control_height: 34.0, density: 1.0, focus_ring: 0.0, focus_offset: 0.0 }
+    ret t
+}
+
+// The accent colour for text and rings (libadwaita's accent_color), which differs from the accent_bg a
+// suggested button fills with (`Primary`): #1c71d8 Light, #78aeed Dark.
+fn adwaita_accent(t: *const ThemeTokens) -> paint.Color {
+    if t.palette == .Dark { ret hex_raw(0x78AEEDu32) }
+    ret hex_raw(0x1C71D8u32)
+}
+
+// The Linux button (libadwaita 1.5), measured on the live library: Tonal (and Outlined, Elevated, Container) is
+// the default button, black 8 % over what it sits on (white 10 % Dark), 11.6 % hovered, 23.6 % pressed; Filled
+// and Default are `suggested-action` (accent_bg #3584e4, white label, hover white 10 %, pressed black 19 %),
+// Danger is `destructive-action` (#e01b24 Light, #c01c28 Dark); Plain is `flat`: no face until hovered
+// (black 5.6 %, pressed 12.4 %). A disabled button is the whole thing at 50 % opacity. A keyboard-focused button
+// wears a 2 px ring of the accent at 50 % inside its edge (the face's own colour on a coloured button, so none
+// shows): `border` is that ring, 1.86 px wide (the measured coverage of the second pixel); the border is inside the
+// padding box here, so the box does not grow. Corners 6, padding 5 10 (17 for a caption alone, set by the control),
+// 34 high. The caption is 14.67 px Cantarell Bold: libadwaita draws button labels bold.
+fn adwaita_resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) -> ResolvedControl {
+    let dark = t.palette == .Dark
+    let suggested = variant == .Filled || variant == .Default
+    let destructive = variant == .Danger
+    let flat = variant == .Plain
+    var ink = color(t, .Text)
+    var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+    var rest: f32 = 0.08
+    var hover: f32 = 0.116
+    var press: f32 = 0.236
+    if dark {
+        tint = paint.rgba(1.0, 1.0, 1.0, 1.0)
+        rest = 0.096
+        hover = 0.146
+        press = 0.292
+    }
+    if flat {
+        rest = 0.0
+        hover = 0.056
+        press = 0.124
+        if dark {
+            hover = 0.068
+            press = 0.151
+        }
+    }
+    var alpha = rest
+    if state.hovered && !state.pressed { alpha = hover }
+    if state.pressed || state.selected { alpha = press }
+    var face = paint.Color { red: tint.red, green: tint.green, blue: tint.blue, alpha: alpha }
+    if suggested || destructive {
+        ink = hex_raw(0xFFFFFFu32)
+        var base = 0x3584E4u32
+        var up = 0x4990E7u32
+        var down = 0x2B6AB7u32
+        if destructive {
+            base = 0xE01B24u32
+            up = 0xE33039u32
+            down = 0xB5161Du32
+            if dark {
+                base = 0xC01C28u32
+                up = 0xC6313Cu32
+                down = 0x9B1720u32
+            }
+        } else if dark {
+            up = 0x4890E7u32
+            down = 0x2B6BB8u32
+        }
+        face = hex_raw(base)
+        if state.hovered && !state.pressed { face = hex_raw(up) }
+        if state.pressed || state.selected { face = hex_raw(down) }
+    }
+    var ring = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var stroke: f32 = 0.0
+    if state.focus_visible && !state.disabled {
+        // On a coloured button the ring is the face's own colour, so nothing shows: none is drawn.
+        if !suggested && !destructive {
+            ring = color(t, .FocusRing)
+            stroke = 1.86
+        }
+    }
+    var opacity: f32 = 1.0
+    if state.disabled { opacity = 0.5 }
+    ret ResolvedControl { background: face, foreground: ink, border: ring, border_width: stroke, focus_ring: 0.0, opacity: opacity, radius: t.radii.sm, elevation: 0u8, padding: 10.0, padding_start: 0.0, padding_y: 7.5, custom_padding: true, min_width: 0.0, min_height: 34.0, corners: zero }
+}
+// ---- end Linux look -----------------------------------------------------------------------------
 // looks5: the hovered minimise or maximise button's wash over the dark caption (states/hover-caption-minimize-main, -maximize-main).
 fn windows_caption_hot() -> paint.Color {
     if windark_on { ret hex_raw(0x3C3C3Cu32) }
     ret hex_raw(0x2C2D2Fu32)
+}
+
+// ---- round 10 (group d): the light caption of an inactive window, from the native Windows 11 capture
+// (ref/windows-native/light/window-inactive: face #F3F3F3, title and glyphs about #939393; derived from the darkest ink pixels). v3
+// showed no inactive light caption.
+fn windows_caption_light_face_inactive() -> paint.Color {
+    if windark_on { ret hex_raw(0x202020u32) }
+    ret hex_raw(0xF3F3F3u32)
+}
+fn windows_caption_light_ink_inactive() -> paint.Color {
+    if windark_on { ret hex_raw(0x787878u32) }
+    ret hex_raw(0x939393u32)
 }

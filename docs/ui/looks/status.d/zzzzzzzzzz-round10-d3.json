@@ -1,0 +1,115 @@
+{
+ "progress_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Round 10 (group d): the native Windows 11 light capture (ref/windows-native/light/progress-*@1x) is the first real reference. Colours now match it exactly: 1 px #BCBCBC frame, #E6E6E6 track, #0F7B0F fill (was a guessed #06B025), paused #9D5D00, error #C42B1C. Sheet row of progress_bar.png against the native determinate row: every flat run equal (0 levels), fill 88.8 of 148 px for 60 percent. Height kept at the v3 DFM 21 (the native gallery bar is 16); the marquee segment is now 0.6 of the track (the native shows a segment wider than 126 of 176 px; exact width unknown).",
+    "gaps": [
+     "Native vertical bar has no Neper cell (v3 never uses one)",
+     "Marquee: native sweeps a green block with a lighter shine in its lower half; the shine is not drawn and the segment width (0.6) is a guess",
+     "Native disabled progress is drawn identical to enabled (green); we do the same",
+     "Percent text (v3 cxtsText) has no native counterpart",
+     "v3's own bar was never captured, so the 21 px height and the text style stay unverified against v3"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/progress_bar.png",
+    "notes": "The native dark capture is not dark: uxtheme has no dark progress bar, so ref/windows-native/dark/progress-* shows the light #E6E6E6 track and #0F7B0F fill on a #202020 ground. The dark look therefore stays the derived Windows 11 settings look (#3A3A3A track, #5A5A5A rim, #60CDFF fill; paused #FCE100 and error #FF99A4 added this round from the Windows 11 dark system colours, unmeasured).",
+    "gaps": [
+     "No native dark reference exists (the control has no dark theme)",
+     "Paused and error tones are from memory of the Windows 11 dark system colours"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/hint_toolbar_cards_f-vs-ref.png",
+    "notes": "Unchanged from audit 3 for light: v3's cxHint (Tahoma, square, 1 px #767676 frame) stays authoritative. The native light tooltip (ref/windows-native/light/tooltip-rest: #F9F9F9 face, #E5E5E5 rounded frame, 126 x 20) is a different, uxtheme-drawn window that v3 never shows, so it was not adopted.",
+    "gaps": [
+     "Mismatch: hint_toolbar_cards_expand 26 px, hint_grid_header_name 14 px (ink 3 px), hint_toolbar_search_filter 11 px (audit 3)",
+     "Native light tooltip look (rounded, flat) and balloon are not drawn in the light look",
+     "Unverified: multi-line hints, other placements"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/hint_native.png",
+    "notes": "Round 10: compared with ref/windows-native/dark/tooltip-rest@1x using hint_native.png (126 x 20 cell, run `hint.exe T7`): the frame ring is exact (0 levels on every frame pixel), face #2B2B2B, border #767676 (was #5A5A5A), text Segoe UI 12 px white (was Tahoma 12.3); ink box 5..118 by 5..16 against the capture's 6..118 by 5..16 (within 1 px; the capture is ClearType, ours greyscale). The grid header hint variant keeps its mapped v3 bevel.",
+    "gaps": [
+     "tooltip-balloon (rounded 8, icon, title) has no Neper cell, so not every native dark state is covered",
+     "Native tooltip is ClearType; ours greyscale",
+     "The grid header hint variant keeps the mapped v3 bevel"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog_message.png",
+    "notes": "Round 10 light, native captures as reference for states v3 never showed. title_bar_native.png (4 cells: window and dialog, active and inactive, 302 and 296 wide) against ref/windows-native/light/window-*, dialog-*: flat pixels (3 px halo round ink excluded) 0 off by more than 2 levels on both window cells (max 1); the light caption is #F0F4F8 against the native #F1F4F7; the inactive light caption is new (#F3F3F3, ink about #939393 derived from the capture). A caption without an icon starts its title at 16 as the native dialog does. dialog_message.png now reproduces the native message box (messagebox-active, 338 x 151): 0 of 8521 flat pixels off by more than 2 levels (max 1): light caption 31 tall, white body 78, #F5F5F5 row, footer 41, buttons 10 below the footer top and 16 from the right edge, 11 apart, icon at (21, 23) with the text 9 after it. Title ink, text and button labels are ClearType in the capture.",
+    "gaps": [
+     "Dialog close button: v3's 33 wide one kept; the native dialog's is 46 wide (56 flat px off in the dialog cells)",
+     "Caption buttons are 1 px right of the native window's (v3 geometry kept)",
+     "The message box icon is the Info glyph; the native question-mark bubble is bitmap artwork",
+     "Task dialog (command links, footer, verification box) is captured natively but has no Neper control: not built",
+     "Message box width is fixed at 338; Windows sizes it to the text",
+     "Caption hot and pressed: the native hot captures equal rest; pressed is not capturable",
+     "Message box body text is 11.2 px, the native 12 px"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/title_bar_native.png",
+    "notes": "Round 10: title_bar_native.png against ref/windows-native/dark/window-active, window-inactive, dialog-active, dialog-inactive. Window cells: 0 of about 7300 flat pixels off by more than 2 levels (max 0); caption #1F2022 active and #202020 inactive, glyph ink extremes within 1 level of the capture. The invented #484848 caption edge was removed (the native caption sits straight on the #202020 ground). Dialog cells: 25 flat px off, all from v3's 33 wide close button against the native 46 wide. The message box and task dialog stay light natively (no dark theme), so the dark message box is the derived dark app look and unverified.",
+    "gaps": [
+     "Dialog close button 33 wide (v3) against the native 46",
+     "Glyphs and title 1 px right of the native window's (v3 geometry kept)",
+     "Dark message box and task dialog: no native dark reference (the native ones stay light)",
+     "The dialog window keeps its derived #484848 window edge (the native dark dialog capture has a #6A6A6A rule under the caption that v3 never shows)",
+     "Hot and pressed caption buttons: the native hot captures equal rest"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control_stats_1-vs-ref.png",
+    "notes": "Unchanged. Round 10 checked the native Windows 11 tab control (ref/windows-native/light/tab-*): its tabs are flat (unselected #F3F3F3 with a #E5E5E5 top, chosen #F9F9F9 outlined #E5E5E5, 22 tall against 20), whereas v3's DevExpress lfOffice11 tabs, the authoritative captures, carry a #E9E9E9 / #EEEEEE / #F3F3F3 gradient; the chosen face #F9F9F9 and the 22 / 20 heights agree. Native widths come from comctl32 text metrics and cannot be compared with DevExpress widths, so no native state was adopted.",
+    "gaps": [
+     "Native tab-disabled shows no disabled look; tab-hot equals rest",
+     "Mismatch: statistics tab strips and the Options, Cards and Filter strips (audit 3)",
+     "Unverified: disabled tab, scroll buttons"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/page_control.png",
+    "notes": "The native tab control has no dark theme (ref/windows-native/dark/tab-* is the light tab on a #202020 ground), so the dark look stays the derived Windows 11 dark look and nothing was compared.",
+    "gaps": [
+     "No native dark reference exists"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/splitter.png",
+    "notes": "Round 10: the Win32 gallery has no splitter, so the dark look stays the derived mapping of v3's DevExpress splitter; nothing was compared.",
+    "gaps": [
+     "No native or live dark reference exists"
+    ]
+   }
+  }
+ }
+}

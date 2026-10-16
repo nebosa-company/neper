@@ -8679,7 +8679,10 @@ fn windows_caption_v3(c: win.Caption, width: f32) -> win.Caption {
             out.slots[i].rect = geometry.rect(0.0, 0.0, 0.0, 0.0)
         }
     }
-    out.drag = geometry.rect(30.0, 0.0, right - 30.0, h)
+    // v3's captions carry the program icon and start the title at 30; a caption with no icon (the native Windows 11 dialog) starts it at 16
+    var title_x: f32 = 30.0
+    if out.icon.width == 0.0 { title_x = 16.0 }
+    out.drag = geometry.rect(title_x, 0.0, right - title_x, h)
     out.title = out.drag
     if out.icon.width > 0.0 { out.icon = geometry.rect(10.0, 7.0, 16.0, 16.0) }
     ret out
@@ -8700,6 +8703,7 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     if windows {
         ink = style.windows_caption_ink(options.active)
         if options.light || options.tool { ink = style.windows_caption_light_ink() }
+        if options.light && !options.tool && !options.active { ink = style.windows_caption_light_ink_inactive() }
         // 12 px Segoe UI, 0.4% smaller: the captions' ink is up to 2 px narrower than the shaped run over a long title
         words.size = 11.95
         words.weight = 400u32
@@ -8863,8 +8867,9 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     if !options.active { bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) } }
     if windows { bar.background = paint.Brush { Solid: style.windows_caption_face(options.active) } }
     if windows && (options.light || options.tool) { bar.background = paint.Brush { Solid: style.windows_caption_light_face() } }
+    if windows && options.light && !options.tool && !options.active { bar.background = paint.Brush { Solid: style.windows_caption_light_face_inactive() } }
     // Windows 11 dark: a thin #484848 edge keeps the #1F2022 caption apart from the #202020 window ground.
-    if windows && t.tokens.palette == .Dark { bar.border = style.Border { width: 1.0, color: style.hex_raw(0x484848u32) } }
+    // (round 10: removed. The native dark window and dialog captions, ref/windows-native/dark/window-active, are #1F2022 straight against the #202020 ground, no edge.)
     let (bar_cell, bar_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if bar_cell_error != ok { ret (zero, TooLarge) }
     bar_cell[0usize] = widget.stack(0u64, bar, parts[0usize..n])
@@ -9686,7 +9691,7 @@ fn windows_menu_rule(a: *mem.Arena) -> (widget.Node, err) {
     pair[0usize] = windows_rule(0.0, 1.0, 10526880u32)
     pair[1usize] = windows_rule(0.0, 1.0, 16777215u32)
     if style.windows_dark_on() {
-        pair[0usize] = windows_rule_raw(0.0, 1.0, 0x454545u32)
+        pair[0usize] = windows_rule_raw(0.0, 1.0, 0x3E3E3Eu32)
         pair[1usize] = windows_rule_raw(0.0, 1.0, 0x2C2C2Cu32)
     }
     var line_style = style.defaults()
@@ -9773,7 +9778,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             pair[0usize] = windows_rule(0.0, 1.0, 10526880u32)
             pair[1usize] = windows_rule(0.0, 1.0, 16777215u32)
             if dark {
-                pair[0usize] = windows_rule_raw(0.0, 1.0, 0x454545u32)
+                pair[0usize] = windows_rule_raw(0.0, 1.0, 0x3E3E3Eu32)
                 pair[1usize] = windows_rule_raw(0.0, 1.0, 0x2C2C2Cu32)
             }
             var line_style = style.defaults()
@@ -10021,11 +10026,11 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     padded_column[0usize] = widget.padded(0u64, 1.0, 1.0, 1.0, tail, windows_menu_flat(), body_held[0usize..1usize])
     var framed: widget.Node = zero
     if dark {
-        // (round 7) Windows 11 dark flyout: one #454545 line round the #2C2C2C face
+        // (round 7) Windows 11 dark flyout: one #808080 line (native dark #32768) round the #2C2C2C face
         let (ring_held, ring_held_error) = mem.alloc[widget.Node](a, 1usize)
         if ring_held_error != ok { ret (zero, TooLarge) }
         ring_held[0usize] = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, windows_menu_flat(), padded_column[0usize..1usize])
-        framed = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, windows_flat_raw(0x454545u32), ring_held[0usize..1usize])
+        framed = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, windows_flat_raw(0x808080u32), ring_held[0usize..1usize])
     } else {
         let (inner_ring, inner_ring_error) = windows_bevel(a, 16777215u32, 10526880u32, padded_column[0usize], 0.0, 0.0)
         if inner_ring_error != ok { ret (zero, inner_ring_error) }
