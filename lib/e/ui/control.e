@@ -15380,7 +15380,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         count = 4usize
     }
     if focused && options.read_only && (edge_look == 0u32 || edge_look == 4u32) {
-        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(options.width - 22.0), 16.0)
+        let (dots, dots_error) = win_combo_dots(a, max_zero(options.width - 22.0), 16.0)
         if dots_error != ok { ret (zero, dots_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
@@ -16412,7 +16412,8 @@ fn win4_track(a: *mem.Arena, high: f32, rows: usize) -> (widget.Node, err) {
 // A list-style (read-only) combo shows no text caret in v3: the runtime draws a caret in the text
 // colour when none is given, so a read-only one gets the face colour (it sits in blank space after the text).
 fn win4_caret(read_only: bool, face: paint.Color) -> paint.Color {
-    if read_only { ret face }
+    // looks9: invisible, not the face colour: the 2 px caret would otherwise paint over the first glyph column.
+    if looks_caret_hidden || read_only { ret with_alpha(face, 0.001) }
     ret zero
 }
 
@@ -18590,5 +18591,66 @@ fn win_list_dots(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
     cells[0usize] = Win3Dots { ink: style.hex(0u32) }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_list_dots_paint, state: widget.bytes_of[Win3Dots](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
+}
+// ---- end looks9 -------------------------------------------------------------------------------------------------
+
+// ---- looks9: the caret in its blink-off phase ------------------------------------------------------------------
+// The live captures of a focused edit show no caret (it blinks); a looks sheet that compares with one calls this before
+// it builds, and the Windows edits then draw the caret in the face colour. Default off.
+var looks_caret_hidden: bool = false
+
+fn set_caret_hidden(hidden: bool) { looks_caret_hidden = hidden }
+// ---- end looks9 --------------------------------------------------------------------------------------------------
+
+// ---- looks9: the list-style combo's focus rectangle on its white face ------------------------------------------
+// As `win3_dots`, but with the live grab's greys (ref/windows/states/combo-box-focused-options-row-color): the dots blur into
+// their gaps, so the top and bottom rows alternate #838383 / #D8D8D8 (second row #B7B7B7 / #E8E8E8; at the foot #858585 /
+// #D8D8D8 and #B5B5B5 / #E7E7E7) and the sides #838383 / #B6B6B6.
+fn win_combo_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let top_dot = style.hex(8618883u32)
+    let top_gap = style.hex(14211288u32)
+    let top2_dot = style.hex(12040119u32)
+    let top2_gap = style.hex(15263976u32)
+    let low_dot = style.hex(8750469u32)
+    let low2_dot = style.hex(11908533u32)
+    let low2_gap = style.hex(15198183u32)
+    let side_dark = style.hex(8618883u32)
+    let side_light = style.hex(11974326u32)
+    var x: f32 = 1.0
+    while x < area.width - 1.0 {
+        var odd = (u32(x) & 1u32) == 1u32
+        var c0 = top_gap
+        var c1 = top2_gap
+        var c2 = top_gap
+        var c3 = low2_gap
+        if odd {
+            c0 = top_dot
+            c1 = top2_dot
+            c2 = low_dot
+            c3 = low2_dot
+        }
+        try win3_rect(b, area.x + x, area.y, 1.0, 1.0, c0)
+        try win3_rect(b, area.x + x, area.y + 1.0, 1.0, 1.0, c1)
+        try win3_rect(b, area.x + x, area.y + area.height - 2.0, 1.0, 1.0, c2)
+        try win3_rect(b, area.x + x, area.y + area.height - 1.0, 1.0, 1.0, c3)
+        x += 1.0
+    }
+    var y: f32 = 1.0
+    while y < area.height - 1.0 {
+        var edge = side_light
+        if (u32(y) & 1u32) == 1u32 { edge = side_dark }
+        try win3_rect(b, area.x, area.y + y, 1.0, 1.0, edge)
+        try win3_rect(b, area.x + area.width - 1.0, area.y + y, 1.0, 1.0, edge)
+        y += 1.0
+    }
+    ret ok
+}
+
+fn win_combo_dots(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win3Dots](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win3Dots { ink: style.hex(0u32) }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_combo_dots_paint, state: widget.bytes_of[Win3Dots](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
 }
 // ---- end looks9 -------------------------------------------------------------------------------------------------
