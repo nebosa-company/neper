@@ -179,7 +179,26 @@ def table(sheet="native_dark", spec=None, cols=7, cw=200, ch=100, only=None):
     print("total (flat + chrome) off", tot)
 
 
+def open_table():
+    """combo-*-open captures (150 x 23 head + 150 x 122 list) against native_dark_open<n> (head at (20, 8) of its cell, 214 x 244 sheet)."""
+    for n, stem in enumerate(("combo-edit-open", "combo-edit-open-hover-row", "combo-list-open", "combo-list-open-hover-row")):
+        sh = load(OURS + "native_dark_open%d.png" % n)
+        key = "dark/%s@1x.png" % stem
+        img = load(NATIVE + key)
+        cs = json.load(open(NATIVE + "controls.json"))[key]["controls"]
+        x0, y0 = cs[0]["x"], cs[0]["y"]
+        h = cs[0]["h"] + cs[1]["h"]
+        ref = img[y0:y0 + h, x0:x0 + 150]
+        ZONE[:] = [3, 3, 22]
+        _CACHE.clear()
+        r, at = best(ref, sh, 12, 32, 190, 200, 2, 0, (20, 8))  # cell origin (12, 32), the head at (20, 8) in it
+        print("%-28s flat off %4d / %4d (max %3d)  chrome off %4d  at %s" % (stem, r[5], r[4], r[6], r[0], at))
+
+
 def main():
+    if "--open" in sys.argv:
+        open_table()
+        return
     if "--table" in sys.argv:
         table(only=([a for a in sys.argv[1:] if not a.startswith("--")] or [None])[0])
         return

@@ -11352,9 +11352,20 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
         if t.tokens.profile == .Windows {
-            let (flat, flat_error) = win_sheet(a, t, key + 1048701u64, items[0usize..suggestions.len], 13.0, win_drop_rows(), lit, 0u32)
+            var sheet_row: f32 = 13.0
+            if t.tokens.palette == .Dark { sheet_row = 15.0 }
+            let (flat, flat_error) = win_sheet(a, t, key + 1048701u64, items[0usize..suggestions.len], sheet_row, win_drop_rows(), lit, 0u32)
             if flat_error != ok { ret (zero, flat_error) }
             column[0usize] = flat
+            // round 12: the native dark drop list is one pixel wider than the combo's layout box (150 for DFM 149)
+            if t.tokens.palette == .Dark && menu_w > 0.0 {
+                var wide = style.defaults()
+                wide.width = style.Length { Px: menu_w }
+                let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+                if held_error != ok { ret (zero, TooLarge) }
+                held[0usize] = flat
+                column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, wide, held[0usize..1usize])
+            }
         }
         var list_sem: widget.Semantics = zero
         list_sem.role = accessibility.ROLE_LISTBOX
@@ -11365,9 +11376,12 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         popup[0usize] = widget.semantics(0u64, list_sem, style.defaults(), column[0usize..1usize])
         var below: f32 = 4.0
         if t.tokens.profile == .Windows { below = 0.0 }
+        // round 12: the native dark combo head paints one row past its layout box (23 for 22): the list starts under it
+        if t.tokens.profile == .Windows && t.tokens.palette == .Dark { below = 1.0 }
         // Android: the anchor is the editor, 16 dp inside the 56 dp field: the menu opens at the field's bottom edge.
         var placed_at: widget.Placement = .BelowMatch
         var shift: f32 = 0.0
+        if t.tokens.profile == .Windows && t.tokens.palette == .Dark && menu_w > 0.0 { placed_at = .Below }
         if t.tokens.profile == .MaterialLike {
             below = 20.0
             if menu_w > 0.0 {
@@ -15182,6 +15196,9 @@ fn win_lit_row(t: *const Theme, first: widget.Key, count: usize, active: usize) 
 
 // A drop-down row: `label` (after an optional pic) 4 in, 15 tall (18 with an pic);
 // lit, #0078D7 under white text.
+// round 12: whether the lit row of a drop list wears the XOR focus rectangle: the native dark list-style combo does, the editable one does not.
+var win_drop_dots: bool = true
+
 fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: bool, action: *const widget.Submit, pic: []const widget.Node, focusable: bool, line: f32) -> (widget.Node, err) {
     var ink = style.color(t.tokens, .Text)
     var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -15196,8 +15213,15 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
     var words = text_options()
     words.role = .BodyMedium
     words.wrap = .None
-    let (dialog_t, dialog_error) = win3_dialog_theme(a, t)
+    var (dialog_t, dialog_error) = win3_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
+    // round 12: the native dark drop list rows are 15 high Segoe UI 9 pt (combo-*-open), text origin x 3
+    let native_row = t.tokens.palette == .Dark && t.tokens.profile == .Windows && line >= 15.0
+    if native_row {
+        let (dark_t, dark_error) = windows_edit_theme(a, t, 15.0)
+        if dark_error != ok { ret (zero, dark_error) }
+        dialog_t = dark_t
+    }
     let (label_node, label_error) = colored_text(a, 0u64, label, &dialog_t, words, ink)
     if label_error != ok { ret (zero, label_error) }
     let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
@@ -15219,11 +15243,12 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
         pad_left = 2.0
         pad_under = 2.0
     }
+    if native_row { pad_left = 2.0 }
     line_style.padding = style.EdgeLengths { left: style.Length { Px: pad_left }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: pad_under } }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, line_style, bits[0usize..used])
-    if lit {
+    if lit && win_drop_dots {
         // looks4 group d: the lit row carries v3's XOR focus rectangle (orange on the blue).
         let (dots, dots_error) = win4_xor_dots(a)
         if dots_error != ok { ret (zero, dots_error) }
@@ -15246,7 +15271,9 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
 
 fn win_drop_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: bool, action: *const widget.Submit) -> (widget.Node, err) {
     var none: []const widget.Node = zero
-    let (made, made_error) = win_row(a, key, t, label, lit, action, none, false, 13.0)
+    var row_line: f32 = 13.0
+    if t.tokens.palette == .Dark { row_line = 15.0 }
+    let (made, made_error) = win_row(a, key, t, label, lit, action, none, false, row_line)
     ret (made, made_error)
 }
 
@@ -15265,6 +15292,12 @@ fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []co
         frame_style.border = style.Border { width: 1.0, color: style.hex_raw(0x7A7A7Au32) }
     }
     frame_style.padding = edges(1.0, 1.0, 1.0, 1.0)
+    if t.tokens.palette == .Dark {
+        // the native dark drop list: the rows and its 1 px line, nothing more (combo-*-open: 8 rows of 15 in 122)
+        var shown_rows = items.len
+        if shown_rows > max_rows { shown_rows = max_rows }
+        frame_style.height = style.Length { Px: f32(shown_rows) * row_h + 2.0 }
+    }
     frame_style.min_width = style.Length { Px: 40.0 }
     frame_style.overflow = .Clip
     var shown: []const widget.Node = items
@@ -15550,7 +15583,13 @@ fn win_combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     let (frame_node, frame_error) = win_edit_frame(a, key, t, label, buffer, len, typed, open, toggle, options)
     if frame_error != ok { ret (zero, frame_error) }
     var none: []const widget.Node = zero
-    let (made, made_error) = suggesting(a, key + 1048701u64, t, label, frame_node, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle)
+    var popup_w: f32 = 0.0
+    win_drop_dots = true
+    if t.tokens.palette == .Dark {
+        popup_w = options.width + 1.0
+        win_drop_dots = options.read_only
+    }
+    let (made, made_error) = suggesting_wide(a, key + 1048701u64, t, label, frame_node, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle, popup_w)
     ret (made, made_error)
 }
 

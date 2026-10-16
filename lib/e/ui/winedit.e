@@ -939,13 +939,14 @@ fn ncombo_paint(ctx: *void, b: *scene.Builder, raw: geometry.Rect) -> err {
     if d.kind == 0u32 {
         var ring = 0x383838u32
         if d.state == 2u32 { ring = 0x333333u32 }
-        var button = ring
-        if d.state == 3u32 { button = 0x666666u32 }
         try nrect(b, x, y, w, h, outer)
         try nrect(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, ring)
         try nrect(b, x + 3.0, y + 3.0, w - 23.0, h - 6.0, 0x202020u32)
-        try nrect(b, x + w - 20.0, y + 1.0, 18.0, h - 2.0, button)
-        if d.state == 3u32 { try nrect(b, x + w - 20.0, y + 3.0, 17.0, h - 7.0, button) }
+        // round 12: open (combo-edit-open): a white line at w - 17 and the held button, a #666666 face of 15 columns, full height
+        if d.state == 3u32 {
+            try nrect(b, x + w - 17.0, y + 1.0, 1.0, h - 2.0, 0xFFFFFFu32)
+            try nrect(b, x + w - 16.0, y + 1.0, 15.0, h - 2.0, 0x666666u32)
+        }
         ret ncombo_chevron(b, x + w - 14.0, y + 9.0 + top, chev)
     }
     var face = 0x333333u32
