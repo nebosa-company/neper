@@ -183,7 +183,8 @@ SHEETS["checkbox_states"] = (3, 160, 29,
          "checkbox-focused-options-hide-splash@1x.png", 215, 74, 152, 21)
     + [(D + "dialog-options-grids-rest@1x.png", 224, 132, 106, 21),
        (S + "checkbox-pressed-options-show-filter-row@1x.png", 224, 132, 106, 21), None]
-    + [(D + "dialog-options-grids-rest@1x.png", 224, 102, 106, 21), None,
+    + [(D + "dialog-options-grids-rest@1x.png", 224, 102, 106, 21),
+       (S + "checkbox-pressed-options-show-foil@1x.png", 224, 102, 106, 21),
        (S + "checkbox-focused-options-show-foil@1x.png", 224, 102, 106, 21)]
     + trio("dialog-options-morph-rest@1x.png", "checkbox-pressed-options-morph-use@1x.png",
            "checkbox-focused-options-morph-use@1x.png", 215, 71, 108, 21)
@@ -207,7 +208,7 @@ SHEETS["radio_states"] = (3, 150, 25, [
     None,
     (D + "dialog-filter-rest@1x.png", 21, 65, 84, 17, 4, 36, 0),
     (S + "radio-pressed-filter-blocks@1x.png", 21, 65, 84, 17, 4, 36, 0),
-    None,
+    (S + "radio-focused-filter-blocks@1x.png", 21, 65, 84, 17, 4, 36, 0),
     (D + "dialog-filter-rest@1x.png", 109, 65, 90, 17, 4, 36, 0),
     (S + "radio-pressed-filter-formats@1x.png", 109, 65, 90, 17, 4, 36, 0),
     None])
@@ -215,15 +216,22 @@ SHEETS["radio_states"] = (3, 150, 25, [
 # Radio group items (42 tall rows): the Search for Card dialog (flat group, crisp discs) and the Options Grids
 # page (resampled discs). The short items sit at x 140 of their 340 wide cell so that the harness's pointer, at
 # the cell centre, lands on them. The focused grabs show stale pressed discs and are left out.
-SHEETS["radio_group_states"] = (2, 340, 50, [
+SHEETS["radio_group_states"] = (3, 340, 50, [
     (D + "dialog-search-rest@1x.png", 28, 120, 100, 42, 4, 136, 0),
     (S + "radio-pressed-search-cards@1x.png", 28, 120, 100, 42, 4, 136, 0),
+    (S + "radio-focused-search-cards@1x.png", 28, 120, 100, 42, 4, 136, 0),
     (D + "dialog-search-rest@1x.png", 28, 162, 100, 38, 4, 136, 0),
     (S + "radio-pressed-search-collection@1x.png", 28, 162, 100, 38, 4, 136, 0),
+    (S + "radio-focused-search-collection@1x.png", 28, 162, 100, 38, 4, 136, 0),
     (D + "dialog-options-grids-rest@1x.png", 232, 212, 330, 42, 4, 0, 0),
     (S + "radio-pressed-options-search-from-start@1x.png", 232, 212, 330, 42, 4, 0, 0),
+    (S + "radio-focused-options-search-from-start@1x.png", 232, 212, 330, 42, 4, 0, 0),
     (D + "dialog-options-grids-rest@1x.png", 232, 254, 330, 38, 4, 0, 0),
-    (S + "radio-pressed-options-search-within@1x.png", 232, 254, 330, 38, 4, 0, 0)])
+    (S + "radio-pressed-options-search-within@1x.png", 232, 254, 330, 38, 4, 0, 0),
+    (S + "radio-focused-options-search-within@1x.png", 232, 254, 330, 38, 4, 0, 0),
+    (D + "dialog-options-grids-rest@1x.png", 232, 365, 330, 38, 4, 136, 0),
+    (S + "radio-pressed-options-move-next-row@1x.png", 232, 365, 330, 38, 4, 136, 0),
+    None])
 
 # Check list box (TcxCheckListBox): the top four rows of the Options Rules and Prices lists with the current row
 # moved (the unfocused and focused grabs, and the pressed check box grab, are identical to these: the highlight
@@ -233,7 +241,24 @@ SHEETS["check_list_box_states"] = (1, 500, 90, [
     (S + "check-list-box-row-selected-focused-options-rules@1x.png", 213, 92, 500, 62, 0),
     (S + "check-list-box-row-selected-unfocused-options-rules@1x.png", 213, 92, 500, 62, 0),
     (S + "check-list-box-focused-options-rules@1x.png", 213, 92, 500, 62, 0),
-    (S + "check-list-box-row-selected-focused-options-prices@1x.png", 213, 92, 500, 62, 0)])
+    (S + "check-list-box-row-selected-focused-options-prices@1x.png", 213, 92, 500, 62, 0),
+    (S + "check-list-box-row-selected-focused-options-cardart@1x.png", 213, 69, 468, 62, 0),
+    (S + "check-list-box-checkbox-pressed-options-rules@1x.png", 213, 92, 500, 62, 0)])
+
+# The Filter window's Cards tab (tab-selected-filter-cards): check boxes, radios and group boxes on the #F9F9F9 page.
+# Cells are 220 x 190; every control is placed at its rectangle of the capture (pad 4). The two big groups show their top
+# left corner only (the rest holds edits, tabs and icons).
+T = S + "tab-selected-filter-cards@1x.png"
+SHEETS["choices_filter"] = (4, 220, 190, [
+    (T, 24, 67, 175, 174),
+    (T, 468, 302, 203, 100),
+    (T, 53, 300, 60, 122),
+    (T, 221, 300, 110, 46),
+    (T, 598, 87, 84, 21),
+    (T, 598, 135, 84, 21),
+    (T, 210, 67, 182, 24),
+    (T, 21, 247, 182, 20)])
+
 
 def gdi_table():
     """Prints control.choices_advances: GDI's whole-pixel Tahoma 11 px advances for bytes 32 to 126 (Windows only)."""

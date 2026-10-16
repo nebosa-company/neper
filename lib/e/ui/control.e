@@ -3808,15 +3808,22 @@ fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, cris
 }
 
 // The 13 unit mark: a box (round for a radio) with its tick, dash or dot.
-fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, variant: u32) -> (widget.Node, err) {
+// looks5: which window's marks to paint and the control's y in it (negative: unknown, the family's first table):
+// the theme bitmap's sub-pixel phase follows the y of the row (the mark stands (high - 14) / 2 below it; see
+// scripts/gen_winmark.py for the contexts).
+type Phase = struct { context: u32, y: f32 }
+
+fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
     // looks4: rest and pressed are painted pixel for pixel from the live captures (e.ui.winmark); hover,
     // disabled and mixed have no capture and keep the drawn mark below.
     if t.tokens.palette == .Light && !state.disabled && !mixed && (!state.hovered || state.pressed) {
         var kind: u32 = 0u32
-        if round { kind = 4u32 + 4u32 * variant }
+        if round { kind = 4u32 }
         if chosen { kind += 2u32 }
         if state.pressed { kind += 1u32 }
-        let (baked, baked_error) = winmark.mark_node(a, kind, 0.0)
+        var at_y = phase.y
+        if at_y >= 0.0 { at_y += f32(i32((high - 14.0) * 0.5 + 0.5)) }
+        let (baked, baked_error) = winmark.mark_node(a, phase.context, kind, at_y)
         if baked_error != ok { ret (zero, baked_error) }
         let (cell, cell_error) = mem.alloc[widget.Node](a, 1usize)
         if cell_error != ok { ret (zero, TooLarge) }
@@ -3996,15 +4003,15 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
 // A check box or radio button row: the mark, then the caption, as a tap-and-hover region at
 // least 21 tall (TcxCheckBox's default height). `role` 4 is a checkbox, 5 a radio.
 fn windows_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, role, label, chosen, mixed, round, action, enabled, 21.0, false, 0u32)
+    let (row, row_error) = windows_choice_high(a, key, t, role, label, chosen, mixed, round, action, enabled, 21.0, false, Phase { context: 0u32, y: 0.0 - 1.0 })
     ret (row, row_error)
 }
 
 // `windows_choice` in a row `high` tall (a TcxCheckBox is 21, 17 without its transparent border; a
 // radio group's rows are 42). A check box has 2 units of transparent border at its left, a radio none.
-fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, variant: u32) -> (widget.Node, err) {
+fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, phase: Phase) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, high, variant)
+    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, high, phase)
     if mark_error != ok { ret (zero, mark_error) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
@@ -4118,9 +4125,11 @@ fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // One row of the check list, `width` wide, 15 tall: the native check box mark 1.15 in, the caption
 // from 17, and, for the current row (the list's item index), the system highlight
 // (#0078D7) behind the caption only, from 16.16, the caption white.
-fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: *const Theme, label: str, chosen: bool, current: bool, below: bool, action: *const widget.Submit, width: f32) -> (widget.Node, err) {
+// looks5: `art` is the Card Art list (item images): rows 18 tall, a 16 px image 3 in, the mark at 19, the
+// highlight from 34.16, 18 tall from 0.4, the caption from 36.
+fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: *const Theme, label: str, chosen: bool, current: bool, below: bool, action: *const widget.Submit, width: f32, art: bool, mark_y: f32) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0, 0u32)
+    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0, Phase { context: 7u32, y: mark_y })
     if mark_error != ok { ret (zero, mark_error) }
     var caption = text_options()
     caption.role = .BodyMedium
@@ -4130,31 +4139,64 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     if current { ink = style.hex(16777215u32) }
     let (words, words_width, words_error) = choices_words(a, dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
-    if current {
+    var row_h: f32 = 15.0
+    if art {
+        // The image's placeholder (v3's own bitmaps are artwork: a folder, a hand): a flat tile.
+        row_h = 18.0
+        var tile = sized_style(16.0, 16.0)
+        tile.background = paint.Brush { Solid: style.hex(0xD9C9A0u32) }
+        parts[n] = widget.positioned(0u64, 3.0, 2.0, tile, zero)
+        n += 1usize
+        // The highlight is the row's 18 from 0.4 (the capture's soft edges: 62 % above, 82 % left, 49 % right), 18 further in
+        // than the Rules list's, its last 0.4 spilling into the next row.
+        if current {
+            var bar = sized_style(width - 34.64, 18.0)
+            bar.background = paint.Brush { Solid: style.hex(30935u32) }
+            parts[n] = widget.positioned(0u64, 34.16, 0.4, bar, zero)
+            n += 1usize
+        }
+        if below {
+            var tail = sized_style(width - 34.64, 0.4)
+            tail.background = paint.Brush { Solid: style.hex(30935u32) }
+            parts[n] = widget.positioned(0u64, 34.16, 0.0, tail, zero)
+            n += 1usize
+        }
+        let (art_mark, art_mark_error) = windows_mark(a, t, state, chosen, false, false, 18.0, Phase { context: 8u32, y: mark_y })
+        if art_mark_error != ok { ret (zero, art_mark_error) }
+        parts[n] = widget.positioned(0u64, 19.0, 0.0, style.defaults(), widget_one_of(a, art_mark))
+        n += 1usize
+        var art_line = style.defaults()
+        art_line.height = style.Length { Px: 18.0 }
+        parts[n] = widget.positioned(0u64, 36.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, art_line, widget_one_of(a, words))))
+        n += 1usize
+    }
+    if current && !art {
         var bar = sized_style(width - 16.64, 15.0)
         bar.background = paint.Brush { Solid: style.hex(30935u32) }
         parts[n] = widget.positioned(0u64, 16.16, 0.4, bar, zero)
         n += 1usize
     }
-    if below {
+    if below && !art {
         // The current row's highlight is 15 tall from 0.4: its last 0.4 spills into this row's first line.
         var tail = sized_style(width - 16.64, 0.4)
         tail.background = paint.Brush { Solid: style.hex(30935u32) }
         parts[n] = widget.positioned(0u64, 16.16, 0.0, tail, zero)
         n += 1usize
     }
-    parts[n] = widget.positioned(0u64, 1.15, 0.0, style.defaults(), widget_one_of(a, mark_node))
-    n += 1usize
-    var line = style.defaults()
-    line.height = style.Length { Px: 15.0 }
-    parts[n] = widget.positioned(0u64, 17.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, widget_one_of(a, words))))
-    n += 1usize
+    if !art {
+        parts[n] = widget.positioned(0u64, 1.15, 0.0, style.defaults(), widget_one_of(a, mark_node))
+        n += 1usize
+        var line = style.defaults()
+        line.height = style.Length { Px: 15.0 }
+        parts[n] = widget.positioned(0u64, 17.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, widget_one_of(a, words))))
+        n += 1usize
+    }
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
-    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, 15.0), parts[0usize..n])))
+    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, row_h), parts[0usize..n])))
     var sem: widget.Semantics = zero
     sem.role = 4u8
     sem.label = label
@@ -4167,6 +4209,23 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
 // page): a 2 unit edge, a white viewport, 15 unit rows. No item images (the Card Art page's list
 // has them), no column of check marks for a state other than checked and unchecked.
 fn windows_check_list_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rect_width: f32, rect_height: f32, current: usize) -> (widget.Node, err) {
+    let (list, list_error) = windows_check_list_at(a, key, t, label, options, chosen, picks, rect_width, rect_height, current, 0.0 - 1.0)
+    ret (list, list_error)
+}
+
+// looks5: the list `window_y` px down its window (the marks' sub-pixel phase follows it, see e.ui.winmark).
+fn windows_check_list_at(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rect_width: f32, rect_height: f32, current: usize, window_y: f32) -> (widget.Node, err) {
+    let (list, list_error) = windows_check_list_rows(a, key, t, label, options, chosen, picks, rect_width, rect_height, current, false, window_y)
+    ret (list, list_error)
+}
+
+// looks5: the Card Art page's list, whose items carry a 16 px image (rows 18 tall).
+fn windows_check_list_art(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rect_width: f32, rect_height: f32, current: usize, window_y: f32) -> (widget.Node, err) {
+    let (list, list_error) = windows_check_list_rows(a, key, t, label, options, chosen, picks, rect_width, rect_height, current, true, window_y)
+    ret (list, list_error)
+}
+
+fn windows_check_list_rows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rect_width: f32, rect_height: f32, current: usize, art: bool, window_y: f32) -> (widget.Node, err) {
     // looks4: the native frame bleeds 1 px right and down of the control's rectangle (as the button's does).
     let width = rect_width + 1.0
     let height = rect_height + 1.0
@@ -4177,7 +4236,12 @@ fn windows_check_list_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, lab
     if items_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < options.len {
-        let (row, row_error) = windows_check_row(a, key + 1u64 + u64(i), t, &dialog_t, options[i], chosen[i], i == current, i == current + 1usize, &picks[i], width - 4.0)
+        var mark_y: f32 = 0.0 - 1.0
+        if window_y >= 0.0 {
+            mark_y = window_y + 2.0 + 15.0 * f32(i)
+            if art { mark_y = window_y + 2.0 + 18.0 * f32(i) }
+        }
+        let (row, row_error) = windows_check_row(a, key + 1u64 + u64(i), t, &dialog_t, options[i], chosen[i], i == current, i == current + 1usize, &picks[i], width - 4.0, art, mark_y)
         if row_error != ok { ret (zero, row_error) }
         items[i] = row
         i += 1usize
@@ -14305,19 +14369,33 @@ fn widget_one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
 // A check box in a row `high` tall; `flush` drops the 2 unit transparent border at its left
 // (TcxCheckBox with Style.TransparentBorder = False is 17 tall and flush). Windows look only.
 fn windows_checkbox_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, 0u32)
+    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, Phase { context: 0u32, y: 0.0 - 1.0 })
+    ret (row, row_error)
+}
+
+// looks5: `windows_checkbox_sized` as the window `context` of the live captures draws it, the control `window_y` px down
+// its window (context 0 the Options pages, 1 the Filter window's Cards tab; see scripts/gen_winmark.py).
+fn windows_checkbox_phase(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, context: u32, window_y: f32) -> (widget.Node, err) {
+    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, Phase { context: context, y: window_y })
     ret (row, row_error)
 }
 
 // A radio button in a row `high` tall (TcxRadioButton is 17, a TcxRadioGroup's rows 42). Windows only.
 fn windows_radio_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, 0u32)
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: 2u32, y: 0.0 - 1.0 })
     ret (row, row_error)
 }
 
 // `windows_radio_sized` for a radio of the Options pages' groups (their discs are resampled, see e.ui.winmark).
 fn windows_radio_options(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, 1u32)
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: 6u32, y: 0.0 - 1.0 })
+    ret (row, row_error)
+}
+
+// looks5: a radio of the window `context` (2 Missing Set Cards, 3 Search for Card, 4 the Filter window's Blocks row,
+// 5 its Match group, 6 the Options pages' groups), `window_y` px down its window.
+fn windows_radio_phase(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32, context: u32, window_y: f32) -> (widget.Node, err) {
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: context, y: window_y })
     ret (row, row_error)
 }
 
@@ -14363,7 +14441,13 @@ fn group_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
 // `windows_group_sized` with the frame's outer extents given: (`left`, `top`) to (`right`, `bottom`) in
 // the group's units (fractional: the captures place some frames between pixels).
 fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, enabled: bool, width: f32, height: f32, left: f32, top: f32, right: f32, bottom: f32, body: []const widget.Node) -> (widget.Node, err) {
-    let face = style.color(t.tokens, .Background)
+    let (made, made_error) = windows_group_on(a, key, t, label, enabled, width, height, left, top, right, bottom, style.color(t.tokens, .Background), body)
+    ret (made, made_error)
+}
+
+// looks5: `windows_group_exact` on a surface of `face` (the Filter window's tab page is #F9F9F9, not the dialog's
+// #F0F0F0: the caption's cut-out takes its colour).
+fn windows_group_on(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, enabled: bool, width: f32, height: f32, left: f32, top: f32, right: f32, bottom: f32, face: paint.Color, body: []const widget.Node) -> (widget.Node, err) {
     var ink = style.color(t.tokens, .Text)
     if !enabled { ink = style.mix(ink, face, 0.55) }
     let (frames, frames_error) = mem.alloc[GroupFrame](a, 1usize)
@@ -14380,8 +14464,23 @@ fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     caption.wrap = .None
     caption.role = .BodyMedium
     caption.size = 11.0
-    let (heading, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, label)
+    // looks5: a '&' in the caption marks its mnemonic (the Filter window's "&Match"), underlined at the baseline.
+    let (shown, mark_at, mark_error) = winbutton.mnemonic(a, label)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (words, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, shown)
     if heading_error != ok { ret (zero, heading_error) }
+    var heading = words
+    if mark_at < shown.len {
+        let (metric, metric_fit, heading_base, metric_error) = run_metrics_faced(a, &dialog_t, caption, shown)
+        if metric_error != ok { ret (zero, metric_error) }
+        var line = sized_style(choices_hinted_width(shown[mark_at..mark_at + 1usize]), 1.0)
+        line.background = paint.Brush { Solid: ink }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = words
+        pair[1usize] = widget.positioned(0u64, choices_hinted_width(shown[0usize..mark_at]), heading_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+        heading = widget.stack(0u64, sized_style(heading_width, 15.0), pair[0usize..2usize])
+    }
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: face }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize + body.len)
@@ -14395,7 +14494,7 @@ fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     }
     var sem: widget.Semantics = zero
     sem.role = 2u8
-    sem.label = label
+    sem.label = shown
     ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, widget.stack(0u64, sized_style(width, height), parts[0usize..2usize + body.len]))), ok)
 }
 
@@ -14403,33 +14502,37 @@ fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
 // each 42 tall (v3's items fill the group), the mark flush at the left and the caption centred
 // beside it. `selected` is the chosen index (past the end: none). Windows look only.
 fn windows_radio_group_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32) -> (widget.Node, err) {
-    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, false)
+    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, false, 0.0 - 1.0)
     ret (made, made_error)
 }
 
 // A TcxRadioGroup with Style.BorderStyle = ebsFlat (the Search for Card dialog's): the square frame of a
 // TcxGroupBox in place of the Options pages' fractional one.
 fn windows_radio_group_flat(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32) -> (widget.Node, err) {
-    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, true)
+    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, true, 0.0 - 1.0)
     ret (made, made_error)
 }
 
-fn windows_radio_group_kind(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool) -> (widget.Node, err) {
+// looks5: either group `window_y` px down its window (the discs' sub-pixel phase follows it).
+fn windows_radio_group_at(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool, window_y: f32) -> (widget.Node, err) {
+    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, flat, window_y)
+    ret (made, made_error)
+}
+
+fn windows_radio_group_kind(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool, window_y: f32) -> (widget.Node, err) {
     if actions.len != labels.len { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
     if items_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < labels.len {
         var item: widget.Node = zero
-        if flat {
-            let (made, made_error) = windows_radio_sized(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, 42.0)
-            if made_error != ok { ret (zero, made_error) }
-            item = made
-        } else {
-            let (made, made_error) = windows_radio_options(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, 42.0)
-            if made_error != ok { ret (zero, made_error) }
-            item = made
-        }
+        var item_y: f32 = 0.0 - 1.0
+        if window_y >= 0.0 { item_y = window_y + 18.0 + 42.0 * f32(i) }
+        var context = 6u32
+        if flat { context = 3u32 }
+        let (made, made_error) = windows_radio_phase(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, 42.0, context, item_y)
+        if made_error != ok { ret (zero, made_error) }
+        item = made
         items[i] = widget.positioned(0u64, 8.0, 18.0 + 42.0 * f32(i), style.defaults(), widget_one_of(a, item))
         i += 1usize
     }

@@ -44,7 +44,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 
 fn windows_or_other(a: *mem.Arena, t: *const control.Theme, labels: []const str, picked: []const bool, toggles: []const widget.Submit) -> (widget.Node, err) {
     if t.tokens.profile == .Windows {
-        let (list, list_error) = control.windows_check_list_sized(a, 1u64, t, "Card details", labels, picked, toggles, 495.0, 343.0, 0usize)
+        let (list, list_error) = control.windows_check_list_at(a, 1u64, t, "Card details", labels, picked, toggles, 495.0, 343.0, 0usize, 94.0)
         ret (list, list_error)
     }
     let (list, list_error) = control.multi_select_list(a, 1u64, t, "Card details", labels, picked, toggles, 18u32, 495.0)
