@@ -9,9 +9,16 @@ Decided 2026-10-15 with the maintainer; decisions D5108 to D5113. Progress is tr
 | Look | Profile | State |
 |---|---|---|
 | Neper | `Neper` | the existing default; every control is the baseline |
-| Windows | `Windows` (+ a dark palette for the button) | the MTG Studio v3 look: DevExpress VCL controls on a flat, native-style Windows face. Replaces the working name MtgStudioV3 |
-| macOS / iOS | `CupertinoLike` | later; column kept in the matrix, marked planned |
-| Android | `MaterialLike` | later; column kept in the matrix, marked planned |
+| Windows | `Windows` | the MTG Studio v3 look: DevExpress VCL controls on a flat, native-style Windows face. Replaces the working name MtgStudioV3 |
+| macOS / iOS | `CupertinoLike` | Apple HIG look (`style.cupertino`), sheets `cup_*`; started |
+| Android | `MaterialLike` | Material 3 look (`style.material`), sheets `material_*`; started |
+
+Every flavor has a Light and a Dark look (`looks.Look`: Neper, Windows, Cupertino, Material, WindowsDark, CupertinoDark,
+MaterialDark, NeperDark), so the matrix has eight look columns, shown as four flavor columns with Light and Dark side by
+side (`docs/ui/looks-progress.html`). Dark has no live reference (v3 has no dark mode; Apple and Android are not captured):
+it is derived from the platform's published dark palette and stays `started` (rendered, unverified against a real screen).
+Controls the platforms have and Delphi does not (switch, slider, stepper, segmented control, chip, fab, snackbar, app bar,
+date picker, navigation bar) are extra rows below the 30 Delphi-equivalent controls. How: `docs/ui/looks-howto.md`.
 
 ## Mechanism
 
