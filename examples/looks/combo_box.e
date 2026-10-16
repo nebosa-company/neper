@@ -244,6 +244,18 @@ fn build_flat_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, var
         // the toolbar's separator right of the Mode combo
         parts[6usize] = grip(187.0, 6.0, 17.0, 12961221u32)
         count = 7usize
+        if t.tokens.profile == .Windows {
+            // looks11: the toolbar's "Mode:" caption (a bar item, Tahoma 12 at GDI's advances) left of the combo; the live crop has it
+            let (bar_t, bar_error) = control.windows_bar_theme(a, t)
+            if bar_error != ok { ret (0usize, bar_error) }
+            var caption = control.text_options()
+            caption.role = .BodyMedium
+            caption.wrap = .None
+            let (mode, _, mode_error) = control.win_gdi_glyphs(a, &bar_t, caption, style.hex(0u32), "Mode:")
+            if mode_error != ok { ret (0usize, mode_error) }
+            parts[7usize] = widget.positioned(0u64, 19.5, 6.0, style.defaults(), widget_one(a, mode))
+            count = 8usize
+        }
     } else {
         // the toolbar's grip at the left of the card name combo and the foot row of that bar
         parts[3usize] = bar_line(0.0, 27.0, cw, 14474460u32)
@@ -542,6 +554,13 @@ fn listed_spec(n: usize) -> Listed {
     if n == 3usize { ret Listed { name: "combo_box_list_size", width: 389.0, high: 54.0, active: 1usize, set: 1usize } }
     if n == 4usize { ret Listed { name: "combo_box_list_size2", width: 389.0, high: 54.0, active: 3usize, set: 1usize } }
     if n == 5usize { ret Listed { name: "combo_box_list_show", width: 143.0, high: 106.0, active: 1usize, set: 2usize } }
+    // looks11: the other highlighted rows of the hover grabs (states/hover-combo-list-*-row1..3): `combo_box.exe L7` .. `L12`
+    if n == 7usize { ret Listed { name: "combo_box_list_color3", width: 389.0, high: 41.0, active: 0usize, set: 0usize } }
+    if n == 8usize { ret Listed { name: "combo_box_list_size3", width: 389.0, high: 54.0, active: 0usize, set: 1usize } }
+    if n == 9usize { ret Listed { name: "combo_box_list_size5", width: 389.0, high: 54.0, active: 2usize, set: 1usize } }
+    if n == 10usize { ret Listed { name: "combo_box_list_show3", width: 143.0, high: 106.0, active: 0usize, set: 2usize } }
+    if n == 11usize { ret Listed { name: "combo_box_list_show4", width: 143.0, high: 106.0, active: 4usize, set: 2usize } }
+    if n == 12usize { ret Listed { name: "combo_box_list_show5", width: 143.0, high: 106.0, active: 7usize, set: 2usize } }
     ret Listed { name: "combo_box_list_show2", width: 143.0, high: 106.0, active: 2usize, set: 2usize }
 }
 
@@ -587,8 +606,23 @@ fn build_l6(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.C
     ret (m, e)
 }
 
+type ListedPick = struct { n: usize }
+
+fn build_lx(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let pick = mem.cast[*ListedPick](ctx)
+    let (m, e) = build_listed_n(a, t, cells, pick.n)
+    ret (m, e)
+}
+
 fn run_listed(a: *mem.Arena, n: usize) -> err {
     let o = listed_spec(n)
+    if n >= 7usize {
+        let (picked, picked_error) = mem.alloc[ListedPick](a, 1usize)
+        if picked_error != ok { ret picked_error }
+        picked[0usize] = ListedPick { n: n }
+        let extra = looks.Sheet { name: o.name, cells: 1usize, columns: 1usize, cell_w: o.width, cell_h: o.high, ctx: mem.cast[*void](&picked[0usize]), build: build_lx }
+        ret looks.run_all(a, &extra)
+    }
     var build: looks.Build = build_l1
     if n == 2usize { build = build_l2 }
     if n == 3usize { build = build_l3 }
@@ -701,6 +735,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         if first == 69u8 { ret run_head(a, usize(args[1usize][1usize]) - 48usize) }
         if first == 76u8 { ret run_listed(a, usize(args[1usize][1usize]) - 48usize) }
+        // `N1` .. `N3` are lists 10 to 12 (looks11)
+        if first == 78u8 { ret run_listed(a, usize(args[1usize][1usize]) - 48usize + 9usize) }
         if first == 100u8 {
             let dialog = looks.Sheet { name: "combo_box_dialog", cells: 2usize, columns: 2usize, cell_w: 397.0, cell_h: 29.0, ctx: zero, build: build_dialog }
             ret looks.run_all(a, &dialog)

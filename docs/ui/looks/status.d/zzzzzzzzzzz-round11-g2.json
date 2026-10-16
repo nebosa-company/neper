@@ -1,0 +1,108 @@
+{
+ "combo_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/combo_box_focus.png",
+    "notes": "Round 11. scripts/looks_cells.py (ref sheet against our render in place: structural pixels within 2 levels, ink boxes of the text lines within 1 px at the 60 level and one other, ClearType colour fringes and v3 artwork excluded): 36 cells in 28 combo_box ref sheets (closed dialog 2, edit, focus, held, search held, pick, the open sheets with their head crops, the popup lists with every captured lit row incl. 6 new lit-row sheets combo_box_list_color3, size3, size5, show3, show4, show5 built from the hover grabs, 4 toolbar flat sheets) plus combo_hover 9 of 9: 0 structural px off in every cell (worst 2 levels at the pick cell's text edge); 32 of 36 pass the unchanged gate and the 4 flat toolbar cells pass once the v3 toolbar artwork in their crop (the card toolbar's icons at x 166 to 198, a neighbour pixel column at 197 to 200) is painted out of both images. Fixed this round: the combo text is laid out at GDI's whole-pixel Tahoma advances (11 px, the toolbar's 12 px) over the transparent edit, so the ink boxes agree within 1 px (the focus cell was 1 to 2 px off, Medium 2 px); the focus rectangle of the two captured focused list combos is drawn with the grabs' sub-pixel greys (black dots on a pitch of 2 shifted 0.37 / 0.336 px down and 0 to 0.27 px across; the Row Color grab beats from #838383 / #D8D8D8 at the left to a flat #ADADAD at the right end) instead of a fixed pair of greys; the Row Color focus grab keeps the 11 column rest chevron (the Show grab has the 10 column one); the one 3 level pixel at the popup's top right in the Row Color and Card Art Position lists was the tint row under the top line that stops one column short (it now runs to the last column where the right line is absent). The ClearType edges were decided per pixel: the colour fringes left and right of the glyph stems (up to 94 levels, e.g. x 4 of the hot key edit) are text and excluded, the dotted focus rectangle, chevron and popup frame are chrome and now match; the --lum switch of looks_cells.py (ink boxes on the luminance) reports 36 of 36 with the same artwork masks. Round 10's native light disabled combo comparison stands (disabled keeps the v3 frame).",
+    "gaps": [
+     "Unverified: disabled and read-only closed combos (v3 never showed them; the native Win32 combo is a different frame family: face #FAFAFA, chevron #BDBDBD against ours #F7F7F7 and #E0E0E0)",
+     "Sub-pixel focus rectangle: the two captured focused list combos only (Row Color at window x 321, Show at x 149); any other focused list combo keeps the old fixed greys",
+     "The top-right and bottom-right corner pixels of the Row Color focus rectangle are 13 levels lighter than the grab (dots that share a pixel compound instead of adding)",
+     "Text: v3's ClearType colour fringes are not reproduced (grayscale); ink boxes at the 150 level are 1 to 3 px short of the ClearType stems on a few lines",
+     "Composite references: each open-list sheet joins an exact head crop and an exact popup crop (no single capture holds both windows)",
+     "The in-place combo editor of the vertical grid (Deck Properties, Archetype) has no cell here: it is the vertical grid's editor look (no frame, dotted rectangle in the cell)",
+     "Hover over the combo edit of Auth Type and Search is identical to rest (no distinct look)",
+     "Scale (looks_scale_check): 2.0 100.0 % of runs hold"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/combo_box.png",
+    "notes": "Round 10: the editable and list combos are painted from windows-native/dark/combo-edit-* and combo-list-* (e.ui.winedit native_combo): outer line, #383838 band, #202020 field and #383838 button for the editable one, one #333333 face for the list one, the 10 x 6 chevron tile and the one pixel dotted focus rectangle; rest, focus and disabled frames and the chevron are exact (the only px off against the 150 x 23 captures after normalising to 22 rows are the chevron px shifted by the row cut); open: #666666 button, white frame, drop list #202020 in a #7A7A7A line with the #0078D7 row (read, not measured). Round 11: the toolbar (flat) combos carry the 'Mode:' caption and take the same Tahoma 12 px GDI-advance text as light (no native dark reference for the flat combo; viewed).",
+    "gaps": [
+     "Open popup geometry (row height 13 vs native 15, popup offset) not compared numerically",
+     "Hover arrow is the rest look (the native hover capture is identical to rest)",
+     "The native drop list scroll bar is light-themed and not copied",
+     "Flat (toolbar) combo keeps the mapped v3 look: no native counterpart"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/image_combo_box_open_condition.png",
+    "notes": "Round 11. scripts/looks_cells.py (ref sheet against our render in place: structural pixels within 2 levels, ink boxes of the text lines within 1 px at the 60 level and one other, ClearType colour fringes and v3 artwork excluded): 23 cells of the 21 image_combo_box ref sheets (dialog 3, cell editor, cell held, hover drop and edit, 8 popup lists with their lit rows: Auth Type, Card Art Position x3, Condition x4 incl. 3 new lit-row sheets image_combo_box_list_art3, condition3 and condition4 from the hover grabs, Sort, and the 6 open sheets with their heads): 23 of 23 pass, 0 structural px off in every cell. The two cells that differed in one 3 level pixel (art2 list and open) were the popup's top-right tint row (now runs to the last column where the right line is absent). Every captured state has a cell: rest, hover over the edit and over the drop button, open with each lit row, the cell editor and its held drop-down.",
+    "gaps": [
+     "Unverified: disabled",
+     "Composite references: each open sheet joins an exact head crop and an exact popup crop (no single capture holds both windows)",
+     "Pictures are v3's coloured bitmaps drawn as placeholders where the sheet has them (artwork excluded)",
+     "Scale (looks_scale_check): 2.0 94.9 % of runs hold"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Round 11. scripts/looks_cells.py (ref sheet against our render in place: structural pixels within 2 levels, ink boxes of the text lines within 1 px at the 60 level and one other, ClearType colour fringes and v3 artwork excluded): edits_dialog 8 of 8 and edits_states 16 of 16 cells pass (the button edit cells are the Deck Path edit at rest, focused, selected, with the ellipsis pressed, and the disabled Card Art path), 0 structural px off; scripts/looks_edits_states_eval.py: frame px off 0 (max 2 levels) in btn focus, selected, pressed and disabled, and edits_hover 3 button cells (edit, ellipsis, Card Art ellipsis) frame 0 off (max 2). The disabled cell failed because our text was 4 px wider (217 against 213): the disabled edit takes no input, so its text is laid out at GDI's whole-pixel Tahoma advances (the table of choices_advances, sum 214 for 'MTG Studio Download (all editions + promos)', ink 213) and the cell now passes (ink boxes within 1 px). The one frame pixel 4 levels off in the ellipsis button of the three focused or pressed cells was the left rim column's foot rows (r 120 and 61 against 115 and 56): the focused rim's slope with the window y was a fit over captures that are not linear (r 115, 115, 123, 125 at y 89, 94, 144, 159); corrected in scripts/looks_winedit_gen.py and regenerated, now within 2 levels. The remaining struct pixel the eval prints at (166, 8) is the antialiasing of our text on a flat selection pixel, not chrome.",
+    "gaps": [
+     "Unverified: read-only (native light #F0F0F0 face, no v3 capture), invalid (red outline guess), placeholder, long text",
+     "The ellipsis button geometry in hover over the button is v3's (captured); the pressed look of the dark twin is a guess (see windows_dark)",
+     "edits_hover cell layout differs from the ref composite (ours 994 px tall against 924: the numbers come from looks_edits_hover_eval.py per cell)",
+     "Text: ClearType colour fringes not reproduced (grayscale), ink boxes within 1 px",
+     "Scale (looks_scale_check): 2.0 96.6 % of runs hold; edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Round 11. scripts/looks_cells.py (ref sheet against our render in place: structural pixels within 2 levels, ink boxes of the text lines within 1 px at the 60 level and one other, ClearType colour fringes and v3 artwork excluded): the shared edit chrome and the captured edits that stand for it are exact: edits_dialog 8 of 8 and edits_states 16 of 16 cells pass (the Mask edit password fields rest, hover and focused, the Shortcut hot key edit at rest and focused with its text ink boxes, the earlier 3 px hot key error is gone), 0 structural px off in every cell (frame px off 0 in scripts/looks_edits_states_eval.py, 0 in the mask hover cell of looks_edits_hover_eval.py). The focused rim corner (column 0, foot rows) is now within 2 levels. The disabled edit lays its text out at GDI's advances. It stays review because no TcxTextEdit exists in any v3 capture: the cells compare the TcxMaskEdit and the hot key edit.",
+    "gaps": [
+     "No TcxTextEdit capture: v3 shows only the TcxMaskEdit password fields and a hot key edit (same chrome, different class)",
+     "Unverified: selection, disabled (v3's captured disabled edit is the button edit's: white face, #A0A0A0 text; the native Win32 edit has a #F0F0F0 face and #6D6D6D text), invalid (no native state)",
+     "Read-only: face #F0F0F0 from the native light capture; the frame is v3's tile (the native Win32 edit draws a crisper 1 px border, 8 levels apart in the foot)",
+     "Text: ClearType colour fringes not reproduced (grayscale); the hot key cell's fringe 3 px left of the C is up to 94 levels (text, excluded)",
+     "Scale (looks_scale_check): 2.0 93.1 % of runs hold; edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/memo.png",
+    "notes": "Round 11. v3 has two TcxMemo (DFMs: memConfirm in the Import wizard, a disabled read-only memo with NativeStyle, and memText of the Notes window, lfFlat with a vertical scroll bar); neither window is in any capture, so there is no v3 pixel of a memo. The memo draws the same TcxMaskEdit chrome as the matched mask edit (winedit.chrome, multi-line height), whose native Windows 11 counterpart is the multi-line Edit (windows-native/light/edit-multiline-vscroll: 168 x 90 Edit, white face, #ECECEC rim, #838383 foot); compared by sampling: face 255 in both, rim 236 to 238, foot 131 native against 187 and 190 in ours at this position (the foot value drifts with the control's y in v3's windows, a v3 artefact the chrome models; the native capture is a different Windows build). Not compared pixel for pixel because the native memo has Segoe UI 9 text and a light scroll bar while v3's is Tahoma. The disabled and scroll-bar cells and the wrapped text are unverified. Marked review on the native multi-line evidence as asked.",
+    "gaps": [
+     "No v3 capture of any memo (Import wizard Confirm page and the Notes window are not captured)",
+     "Unverified: every state (rest, hover, focus, selection, disabled, read-only #F0F0F0 from the native edit, invalid, placeholder, scroll bar)",
+     "Wrapping is the outline font's, not GDI's whole-pixel advances (the memo is multi-line, so the GDI text path is not used)",
+     "Scroll bar: ours is the Neper thin scroll bar; the native multi-line edit and v3 (NativeStyle) draw the system scroll bar"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Round 11. No TcxDateEdit with a visible editor or drop button appears in any v3 capture. The only date edits in v3 are the Created and Modified rows of the Deck Properties vertical grid (DFM erCreated, erModified: TcxDateEditProperties, ReadOnly, Options.Editing False), which the grid draws as plain cell text ('10/11/2026', ref/windows/dialogs/deck-properties): no frame, no button. A TcxDateEdit is a TcxButtonEdit-style edit with a drop button and a DevExpress calendar, not the native date-time picker, so the native light captures (datepicker-*, monthcal-*) are not evidence for it and stay unused. The editable field keeps the combo frame (now with the GDI-advance text of the combo) and the calendar its generic layout.",
+    "gaps": [
+     "Unverified: every state (no v3 capture of an editing date edit; its drop button, calendar popup, Today and Clear buttons are DevExpress-drawn and never shown)",
+     "Native DTP (160 x 26, #8D8D8D line, calendar icon and arrow glyph, #0078D4 focus frame) and MonthCal (Sun to Sat, right-aligned days, #979797 frame, Today row) are a different control and are not reproduced",
+     "No disabled cell: the date picker has no enabled option"
+    ]
+   }
+  }
+ }
+}

@@ -246,6 +246,16 @@ for _n, _src, _w, _h in [
     ("image_combo_box_list_condition", "combo-box-open-list-options-condition", 335, 227),
     ("image_combo_box_list_condition2", "combo-box-open-list-options-condition-row2", 335, 227),
     ("image_combo_box_list_sort", "image-combo-box-open-list-sort", 153, 56),
+    # looks11: the other highlighted rows of the open lists (the hover grabs: the pointer rests on one row)
+    ("combo_box_list_color3", "hover-combo-list-options-row-color-row1", 389, 41),
+    ("combo_box_list_size3", "hover-combo-list-options-font-size-row1", 389, 54),
+    ("combo_box_list_size5", "hover-combo-list-options-font-size-row2", 389, 54),
+    ("combo_box_list_show3", "hover-combo-list-conditional-formatting-show-row1", 143, 106),
+    ("combo_box_list_show4", "hover-combo-list-conditional-formatting-show-row2", 143, 106),
+    ("combo_box_list_show5", "hover-combo-list-conditional-formatting-show-row3", 143, 106),
+    ("image_combo_box_list_art3", "hover-combo-list-options-card-art-position-row2", 151, 47),
+    ("image_combo_box_list_condition3", "hover-combo-list-options-condition-row2", 335, 227),
+    ("image_combo_box_list_condition4", "hover-combo-list-options-condition-row3", 335, 227),
 ]:
     PARTS[_n] = (_w, _h, [(_src, 0, 0, _w, _h, 0, 0)])
 PARTS["image_combo_box_cell"] = (155, 21, [("image-combo-box-cell-editor-sort", 175, 98, 155, 21, 0, 0)])

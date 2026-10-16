@@ -203,6 +203,14 @@ def main():
         lines.append("fn wedit_left_%d() -> [%d]u32 { ret [%d]u32{ %s } }" % (state, LEFT_K * H, LEFT_K * H, fmt_u32(cells)))
         lines.append("fn wedit_left_%d_y() -> f32 { ret %d.0 }" % (state, y))
         sl = slopes(STATES[state], LEFT_K, False)
+        if sl and state == 1:
+            # looks11: the focused left rim's column 0 on foot rows 19 and 20 does not drift linearly with y (the captures at y 89, 94,
+            # 144, 159 read r 115, 115, 123, 125 and 56, 56, 55, 55): the all-instance fit was 5 levels off at y 89 and 94. Slopes
+            # (r, g, b) fitted through y 94 to 159: row 19 column 0, row 20 column 0.
+            for ch, v in enumerate((0.16, 0.092, 0.03)):
+                sl[(19 * LEFT_K + 0) * 3 + ch] = v
+            for ch, v in enumerate((-0.02, -0.02, 0.0)):
+                sl[(20 * LEFT_K + 0) * 3 + ch] = v
         if sl:
             LSLOPED.add(state)
             lines.append("fn wedit_left_slope_%d() -> [%d]f32 { ret [%d]f32{ %s } }" % (state, len(sl), len(sl), ", ".join("%.4f" % v for v in sl)))

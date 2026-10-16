@@ -21,8 +21,15 @@ import looks_struct  # noqa: E402
 ROOT = os.path.join(HERE, "..", "docs", "ui", "looks") + os.sep
 
 
+LUM = False  # --lum: ink boxes on the Rec.601 luminance, so ClearType colour fringes (a text artefact) do not count as ink
+
+
 def lines(a, bg, t):
-    d = np.abs(a.astype(int) - np.array(bg)).max(axis=2) > t
+    if LUM:
+        w = np.array([0.299, 0.587, 0.114])
+        d = np.abs((a.astype(float) * w).sum(axis=2) - float((np.array(bg, float) * w).sum())) > t
+    else:
+        d = np.abs(a.astype(int) - np.array(bg)).max(axis=2) > t
     rows = d.any(axis=1)
     out = []
     y = 0
@@ -68,15 +75,24 @@ def cellkey(ref, box):
     return ((k >> 16) & 255, (k >> 8) & 255, k & 255)
 
 
+MASKS = []  # --mask x0,y0,x1,y1 (repeatable): v3 artwork (toolbar icons, neighbours) painted out of both images before comparing
+
+
 def audit(name, look="windows", verbose=False, refname=None):
     ref = np.array(Image.open(ROOT + "ref/windows/%s.png" % (refname or name)).convert("RGB"))
     if not os.path.exists(ROOT + "%s/%s.png" % (look, name)):
         print("%s: no render of ours" % name)
         return
     ours = np.array(Image.open(ROOT + "%s/%s.png" % (look, name)).convert("RGB"))
+    if ref.shape[0] == ours.shape[0] and ref.shape[1] < ours.shape[1]:
+        ours = ours[:, :ref.shape[1]]  # a held-down sheet is rendered wide so the harness pointer lands on the button: compare the left part
     if ref.shape != ours.shape:
         print("%s: SIZE ref %s ours %s" % (name, ref.shape, ours.shape))
         return
+    for (mx0, my0, mx1, my1) in MASKS:
+        bgc = ref[0, 0].copy()
+        ref[my0:my1, mx0:mx1] = bgc
+        ours[my0:my1, mx0:mx1] = bgc
     smask = looks_struct.struct_mask(ref)
     omask = looks_struct.struct_mask(ours)  # text antialiasing of ours leaking into a ref flat pixel is text, not chrome
     npass = 0
@@ -108,7 +124,13 @@ def audit(name, look="windows", verbose=False, refname=None):
 
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    for a_ in list(args):
+        if a_.count(",") == 3 and a_.replace(",", "").isdigit():
+            MASKS.append(tuple(int(v) for v in a_.split(",")))
+            args.remove(a_)
     look = "windows"
+    if "--lum" in sys.argv:
+        LUM = True
     if "--dir" in sys.argv:
         i = sys.argv.index("--dir")
         look = sys.argv[i + 1]
