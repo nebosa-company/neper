@@ -237,6 +237,7 @@ fn first_stmt_node(c: *const Ctx, first: u32, count: u32) -> u32 {
 // `binding` patterns bind names (no member targets); assignment patterns accept references.
 fn check_pattern(c: *Ctx, id: u32, binding: bool, allow_cover: bool) -> err {
     let n = node(c, id)
+    if (n.kind == ast.N_ARRAY || n.kind == ast.N_OBJECT) && n.op == 1u8 { ret fail(c, id, "Invalid destructuring assignment target") }
     if n.kind == ast.N_IDENT {
         if is_reserved_word(n.text) { ret fail(c, id, "Unexpected reserved word") }
         ret check_ident(c, id, true)
@@ -321,7 +322,7 @@ fn check_assign_target(c: *Ctx, id: u32, allow_pattern: bool) -> err {
     if n.kind == ast.N_MEMBER {
         ret check_expr(c, id)
     }
-    if allow_pattern && (n.kind == ast.N_ARRAY || n.kind == ast.N_OBJECT) { ret check_pattern(c, id, false, true) }
+    if allow_pattern && (n.kind == ast.N_ARRAY || n.kind == ast.N_OBJECT) && n.op != 1u8 { ret check_pattern(c, id, false, true) }
     ret fail(c, id, "Invalid left-hand side in assignment")
 }
 

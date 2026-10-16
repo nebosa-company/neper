@@ -17,7 +17,7 @@ use e.str
 use e.thread
 
 fn skipped_feature(meta: str) -> bool {
-    let feats = "Proxy|Reflect.construct|BigInt|SharedArrayBuffer|Atomics|WeakRef|FinalizationRegistry|Intl|Temporal|IsHTMLDDA|resizable-arraybuffer|ShadowRealm|import-attributes|source-phase-imports|decorators|explicit-resource-management|json-modules|tail-call-optimization|Array.fromAsync|uint8array-base64|iterator-helpers|set-methods|regexp-v-flag|regexp-duplicate-named-groups|regexp-modifiers|Float16Array|Math.sumPrecise|RegExp.escape|await-dictionary|canonical-tz|upsert|joint-iteration|immutable-arraybuffer|Error.isError|promise-try|import-defer|cross-realm|"
+    let feats = "Proxy|Reflect.construct|BigInt|SharedArrayBuffer|Atomics|WeakRef|FinalizationRegistry|Intl|Temporal|IsHTMLDDA|resizable-arraybuffer|ShadowRealm|import-attributes|source-phase-imports|decorators|explicit-resource-management|json-modules|tail-call-optimization|Array.fromAsync|uint8array-base64|iterator-helpers|set-methods|regexp-v-flag|regexp-duplicate-named-groups|regexp-modifiers|Float16Array|Math.sumPrecise|RegExp.escape|await-dictionary|canonical-tz|upsert|joint-iteration|immutable-arraybuffer|Error.isError|promise-try|import-defer|cross-realm|regexp-unicode-property-escapes|"
     var start = 0usize
     var i = 0usize
     while i < feats.len {

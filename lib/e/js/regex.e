@@ -298,6 +298,163 @@ fn parse_escape_value(p: *Parse, in_class: bool) -> (u32, bool, u8, err) {
     ret (c, false, 0u8, ok)
 }
 
+// --- Unicode property escapes: general categories and a few binary properties (scripts are not available).
+
+fn gc_mask_of(name: str) -> (u32, bool) {
+    // Bit i is category i of `unicode.Category` (Lu Ll Lt Lm Lo Mn Mc Me Nd Nl No Pc Pd Ps Pe Pi Pf Po Sm Sc Sk So Zs Zl Zp Cc Cf Cs Co Cn).
+    if str.eq(name, "Lu") || str.eq(name, "Uppercase_Letter") { ret (1u32, true) }
+    if str.eq(name, "Ll") || str.eq(name, "Lowercase_Letter") { ret (2u32, true) }
+    if str.eq(name, "Lt") || str.eq(name, "Titlecase_Letter") { ret (4u32, true) }
+    if str.eq(name, "LC") || str.eq(name, "Cased_Letter") { ret (7u32, true) }
+    if str.eq(name, "Lm") || str.eq(name, "Modifier_Letter") { ret (8u32, true) }
+    if str.eq(name, "Lo") || str.eq(name, "Other_Letter") { ret (16u32, true) }
+    if str.eq(name, "L") || str.eq(name, "Letter") { ret (31u32, true) }
+    if str.eq(name, "Mn") || str.eq(name, "Nonspacing_Mark") { ret (32u32, true) }
+    if str.eq(name, "Mc") || str.eq(name, "Spacing_Mark") { ret (64u32, true) }
+    if str.eq(name, "Me") || str.eq(name, "Enclosing_Mark") { ret (128u32, true) }
+    if str.eq(name, "M") || str.eq(name, "Mark") || str.eq(name, "Combining_Mark") { ret (224u32, true) }
+    if str.eq(name, "Nd") || str.eq(name, "Decimal_Number") || str.eq(name, "digit") { ret (256u32, true) }
+    if str.eq(name, "Nl") || str.eq(name, "Letter_Number") { ret (512u32, true) }
+    if str.eq(name, "No") || str.eq(name, "Other_Number") { ret (1024u32, true) }
+    if str.eq(name, "N") || str.eq(name, "Number") { ret (1792u32, true) }
+    if str.eq(name, "Pc") || str.eq(name, "Connector_Punctuation") { ret (2048u32, true) }
+    if str.eq(name, "Pd") || str.eq(name, "Dash_Punctuation") { ret (4096u32, true) }
+    if str.eq(name, "Ps") || str.eq(name, "Open_Punctuation") { ret (8192u32, true) }
+    if str.eq(name, "Pe") || str.eq(name, "Close_Punctuation") { ret (16384u32, true) }
+    if str.eq(name, "Pi") || str.eq(name, "Initial_Punctuation") { ret (32768u32, true) }
+    if str.eq(name, "Pf") || str.eq(name, "Final_Punctuation") { ret (65536u32, true) }
+    if str.eq(name, "Po") || str.eq(name, "Other_Punctuation") { ret (131072u32, true) }
+    if str.eq(name, "P") || str.eq(name, "Punctuation") || str.eq(name, "punct") { ret (260096u32, true) }
+    if str.eq(name, "Sm") || str.eq(name, "Math_Symbol") { ret (262144u32, true) }
+    if str.eq(name, "Sc") || str.eq(name, "Currency_Symbol") { ret (524288u32, true) }
+    if str.eq(name, "Sk") || str.eq(name, "Modifier_Symbol") { ret (1048576u32, true) }
+    if str.eq(name, "So") || str.eq(name, "Other_Symbol") { ret (2097152u32, true) }
+    if str.eq(name, "S") || str.eq(name, "Symbol") { ret (3932160u32, true) }
+    if str.eq(name, "Zs") || str.eq(name, "Space_Separator") { ret (4194304u32, true) }
+    if str.eq(name, "Zl") || str.eq(name, "Line_Separator") { ret (8388608u32, true) }
+    if str.eq(name, "Zp") || str.eq(name, "Paragraph_Separator") { ret (16777216u32, true) }
+    if str.eq(name, "Z") || str.eq(name, "Separator") { ret (29360128u32, true) }
+    if str.eq(name, "Cc") || str.eq(name, "Control") || str.eq(name, "cntrl") { ret (33554432u32, true) }
+    if str.eq(name, "Cf") || str.eq(name, "Format") { ret (67108864u32, true) }
+    if str.eq(name, "Cs") || str.eq(name, "Surrogate") { ret (134217728u32, true) }
+    if str.eq(name, "Co") || str.eq(name, "Private_Use") { ret (268435456u32, true) }
+    if str.eq(name, "Cn") || str.eq(name, "Unassigned") { ret (536870912u32, true) }
+    if str.eq(name, "C") || str.eq(name, "Other") { ret (1040187392u32, true) }
+    ret (0u32, false)
+}
+
+// Special (binary) properties: 1 Any, 2 ASCII, 3 Assigned, 4 Alphabetic, 5 White_Space, 6 ASCII_Hex_Digit, 7 Uppercase, 8 Lowercase.
+fn binary_prop_of(name: str) -> u32 {
+    if str.eq(name, "Any") { ret 1u32 }
+    if str.eq(name, "ASCII") { ret 2u32 }
+    if str.eq(name, "Assigned") { ret 3u32 }
+    if str.eq(name, "Alphabetic") || str.eq(name, "Alpha") { ret 4u32 }
+    if str.eq(name, "White_Space") || str.eq(name, "space") { ret 5u32 }
+    if str.eq(name, "ASCII_Hex_Digit") || str.eq(name, "AHex") { ret 6u32 }
+    if str.eq(name, "Uppercase") || str.eq(name, "Upper") { ret 7u32 }
+    if str.eq(name, "Lowercase") || str.eq(name, "Lower") { ret 8u32 }
+    ret 0u32
+}
+
+// Parses `{Name}` or `{Name=Value}` after the property escape letter; answers the encoded (lo, hi) range entry: lo has the top
+// bit set, bit 30 negates, bits 24-29 pick a binary property (0 = general category mask in `hi`).
+fn parse_property(p: *Parse, negated: bool) -> (u32, u32, err) {
+    if !eat(p, 123u8) { ret (0u32, 0u32, fail(p, "Invalid property name")) }
+    let start = p.i
+    while p.i < p.src.len && p.src[p.i] != 125u16 { p.i += 1usize }
+    if p.i >= p.src.len { ret (0u32, 0u32, fail(p, "Invalid property name")) }
+    let (b, be) = str.builder(p.a, p.i - start + 2usize)
+    if be != ok { ret (0u32, 0u32, be) }
+    var out = b
+    var k = start
+    while k < p.i {
+        let c = u32(p.src[k])
+        if c >= 128u32 { ret (0u32, 0u32, fail(p, "Invalid property name")) }
+        let pe = str.push_byte(&out, u8(c))
+        k += 1usize
+    }
+    let text = str.done(&out)
+    p.i += 1usize
+    var neg_bit = 0u32
+    if negated { neg_bit = 1073741824u32 }
+    let (eq_at, has_eq) = str.find(text, "=")
+    if has_eq {
+        let key = text[0usize..eq_at]
+        let val = text[eq_at + 1usize..]
+        if str.eq(key, "General_Category") || str.eq(key, "gc") {
+            let (mask, good) = gc_mask_of(val)
+            if !good { ret (0u32, 0u32, fail(p, "Invalid property name")) }
+            ret (2147483648u32 | neg_bit, mask, ok)
+        }
+        ret (0u32, 0u32, fail(p, "Invalid property name"))
+    }
+    let (mask2, good2) = gc_mask_of(text)
+    if good2 { ret (2147483648u32 | neg_bit, mask2, ok) }
+    let bp = binary_prop_of(text)
+    if bp == 0u32 { ret (0u32, 0u32, fail(p, "Invalid property name")) }
+    ret (2147483648u32 | neg_bit | (bp << 24u32), 0u32, ok)
+}
+
+fn property_matches(lo: u32, hi: u32, c: u32) -> bool {
+    var result = false
+    let kind = (lo >> 24u32) & 63u32
+    if kind == 0u32 {
+        let idx = category_index(unicode.category(c))
+        result = ((hi >> idx) & 1u32) != 0u32
+    } else if kind == 1u32 {
+        result = true
+    } else if kind == 2u32 {
+        result = c < 128u32
+    } else if kind == 3u32 {
+        result = category_index(unicode.category(c)) != 29u32
+    } else if kind == 4u32 {
+        result = unicode.is_alphabetic(c)
+    } else if kind == 5u32 {
+        result = unicode.is_whitespace(c)
+    } else if kind == 6u32 {
+        result = (c >= 48u32 && c <= 57u32) || (c >= 65u32 && c <= 70u32) || (c >= 97u32 && c <= 102u32)
+    } else if kind == 7u32 {
+        result = category_index(unicode.category(c)) == 0u32
+    } else if kind == 8u32 {
+        result = category_index(unicode.category(c)) == 1u32
+    }
+    if (lo & 1073741824u32) != 0u32 { ret !result }
+    ret result
+}
+
+fn category_index(cat: unicode.Category) -> u32 {
+    if cat == .Lu { ret 0u32 }
+    if cat == .Ll { ret 1u32 }
+    if cat == .Lt { ret 2u32 }
+    if cat == .Lm { ret 3u32 }
+    if cat == .Lo { ret 4u32 }
+    if cat == .Mn { ret 5u32 }
+    if cat == .Mc { ret 6u32 }
+    if cat == .Me { ret 7u32 }
+    if cat == .Nd { ret 8u32 }
+    if cat == .Nl { ret 9u32 }
+    if cat == .No { ret 10u32 }
+    if cat == .Pc { ret 11u32 }
+    if cat == .Pd { ret 12u32 }
+    if cat == .Ps { ret 13u32 }
+    if cat == .Pe { ret 14u32 }
+    if cat == .Pi { ret 15u32 }
+    if cat == .Pf { ret 16u32 }
+    if cat == .Po { ret 17u32 }
+    if cat == .Sm { ret 18u32 }
+    if cat == .Sc { ret 19u32 }
+    if cat == .Sk { ret 20u32 }
+    if cat == .So { ret 21u32 }
+    if cat == .Zs { ret 22u32 }
+    if cat == .Zl { ret 23u32 }
+    if cat == .Zp { ret 24u32 }
+    if cat == .Cc { ret 25u32 }
+    if cat == .Cf { ret 26u32 }
+    if cat == .Cs { ret 27u32 }
+    if cat == .Co { ret 28u32 }
+    ret 29u32
+}
+
 fn parse_class(p: *Parse) -> (u32, err) {
     // The `[` is consumed.
     let first = u32(p.ranges.len)
@@ -314,6 +471,14 @@ fn parse_class(p: *Parse) -> (u32, err) {
         // One atom: a character or a class escape.
         var lo = 0u32
         var is_set = false
+        if c == 92u32 && p.unicode && (peek_at(p, 1usize) == 112i64 || peek_at(p, 1usize) == 80i64) {
+            let neg_p = peek_at(p, 1usize) == 80i64
+            p.i += 2usize
+            let (plo, phi, pe0) = parse_property(p, neg_p)
+            if pe0 != ok { ret (NONE, pe0) }
+            try add_range(p, plo, phi)
+            continue
+        }
         if c == 92u32 {
             p.i += 1usize
             let (v, cls, letter, ee) = parse_escape_value(p, true)
@@ -690,7 +855,18 @@ fn parse_term(p: *Parse) -> (u32, err) {
             try list.push[str](&p.refs, name2)
             atom = id11
         } else if (d == 112i64 || d == 80i64) && p.unicode {
-            ret (NONE, fail(p, "property escapes are not supported"))
+            let neg_t = d == 80i64
+            p.i += 1usize
+            let (tlo, thi, te0) = parse_property(p, neg_t)
+            if te0 != ok { ret (NONE, te0) }
+            let first_t = u32(p.ranges.len)
+            try add_range(p, tlo, thi)
+            let cid_t = u32(p.classes.len)
+            try list.push[Class](&p.classes, Class { first: first_t, count: 1u32, neg: false })
+            let (id_t, me_t) = mk(p, R_CLASS)
+            if me_t != ok { ret (NONE, me_t) }
+            nd(p, id_t).a = cid_t
+            atom = id_t
         } else {
             let (v2, cls, letter, ee) = parse_escape_value(p, false)
             if ee != ok { ret (NONE, ee) }
@@ -994,7 +1170,12 @@ fn class_has(m: *const M, cid: u32, c: u32) -> bool {
     var i = 0usize
     while i < usize(cls.count) {
         let r = m.re.ranges[usize(cls.first) + i]
-        if c >= r.lo && c <= r.hi {
+        if r.lo >= 2147483648u32 {
+            if property_matches(r.lo, r.hi, c) {
+                hit = true
+                break
+            }
+        } else if c >= r.lo && c <= r.hi {
             hit = true
             break
         }
@@ -1006,6 +1187,11 @@ fn class_has(m: *const M, cid: u32, c: u32) -> bool {
         var j = 0usize
         while j < usize(cls.count) && !hit {
             let r2 = m.re.ranges[usize(cls.first) + j]
+            if r2.lo >= 2147483648u32 {
+                if property_matches(r2.lo, r2.hi, cc) || property_matches(r2.lo, r2.hi, unicode.to_lower_simple(c)) || property_matches(r2.lo, r2.hi, unicode.to_upper_simple(c)) { hit = true }
+                j += 1usize
+                continue
+            }
             if cc >= r2.lo && cc <= r2.hi { hit = true }
             let lo = unicode.to_lower_simple(c)
             let up = unicode.to_upper_simple(c)

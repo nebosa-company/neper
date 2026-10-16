@@ -863,8 +863,10 @@ fn parse_primary(p: *Parser) -> (u32, err) {
             let e = try parse_expression(p)
             p.no_in = saved
             try expect_p(p, ")")
-            // A parenthesised expression is wrapped so `(a) = 1` and `(a, b)` keep their meaning: only a name or member
-            // stays assignable, which needs no node of its own.
+            // A parenthesised object or array literal is no longer a destructuring pattern; `op` = 1 marks it for the early
+            // error pass (a name or member stays assignable and needs no mark).
+            let ek = node(p, e).kind
+            if ek == ast.N_ARRAY || ek == ast.N_OBJECT { node(p, e).op = 1u8 }
             ret (e, ok)
         }
         if str.eq(t.text, "[") {
