@@ -24419,6 +24419,117 @@ fn to_csr(a: *mem.Arena, d: Document, index: usize) -> (graph.Graph[f64], err)
 Graph interchange (L155): GraphML, GEXF and GML read and written over one model, and `to_csr` into `e.data.graph`. A `Document` is a list of `Graph`s, the first the root and the rest nested ones, each `Node` naming its subgraph by index (`NONE` for none); nodes and edges carry string identifiers and typed `Attr`s (name, `AttrKind` of String, Boolean, Int, Long, Float or Double, text), which is what round-trips: GraphML `key`/`data` with key defaults on read, GEXF `attributes`/`attvalues` with `label`, `weight` and the graph `name`, and the scalar key-value pairs of GML. `read_graphml`, `read_gexf` and `read_gml` take text and return the document (`Malformed`, `Dangling` for an edge naming no node or a duplicate id found by `validate`, `Unsupported` for hyperedges and ports, `TooLarge`); `write_graphml`, `write_gexf` and `write_gml` write it (`BadName` for a key GML cannot spell or a control character, `Unsupported` for edges in a GEXF hierarchy subgraph). GraphML keeps nested graphs in nodes and per-edge `directed`; GEXF keeps hierarchy as `nodes` nested in a node and a per-edge `type`; GML keeps a `graph` list nested in a node, writes a node's `id` as its index over all graphs and its identifier as `label` (the NetworkX and Gephi convention, so a node attribute called `label` is not written) and non-ASCII text as `&#N;`. `to_csr(a, d, i)` builds graph `i` as `e.data.graph.Graph[f64]` with node `n` the graph's n-th node and the `weight` attribute (default 1) as the edge value, an undirected edge becoming two directed ones. Not here: hypergraphs, ports, GEXF dynamics and viz data, layout and style, and a typed GML beyond integer, real and string. Checked on files written by NetworkX (types and values derived from the NetworkX graph), the GraphML primer's nested example, a GEXF hierarchy and a GML nested graph, and on writers compared byte for byte with independent ones that NetworkX read back (`scripts/gen_graph_test.py`).
 
 
+### `e.fmt.dom`
+
+```neper
+type NodeId = html.NodeId
+const NONE: NodeId = 4294967295u32
+error HierarchyRequest
+error NotChild
+error Full
+error SyntaxError
+type Dom = struct { a: *mem.Arena, nodes: []html.Node, used: usize, root: NodeId, quirks: u8, version: u64 }
+fn from_document(a: *mem.Arena, doc: *const html.Document, spare: usize) -> (Dom, err)
+fn parse(a: *mem.Arena, source: str, options: html.Options, spare: usize) -> (Dom, err)
+fn new_document(a: *mem.Arena, capacity: usize) -> (Dom, err)
+fn view(d: *const Dom) -> html.Document
+fn new_node(d: *Dom, kind: html.NodeKind, ns: html.Namespace, name: str, value: str) -> (NodeId, err)
+fn create_element_ns(d: *Dom, ns: html.Namespace, name: str) -> (NodeId, err)
+fn create_element(d: *Dom, name: str) -> (NodeId, err)
+fn create_text(d: *Dom, data: str) -> (NodeId, err)
+fn create_comment(d: *Dom, data: str) -> (NodeId, err)
+fn create_fragment(d: *Dom) -> (NodeId, err)
+fn lower_copy(a: *mem.Arena, s: str) -> (str, err)
+fn kind_of(d: *const Dom, id: NodeId) -> html.NodeKind
+fn name_of(d: *const Dom, id: NodeId) -> str
+fn value_of(d: *const Dom, id: NodeId) -> str
+fn parent_of(d: *const Dom, id: NodeId) -> NodeId
+fn first_child(d: *const Dom, id: NodeId) -> NodeId
+fn last_child(d: *const Dom, id: NodeId) -> NodeId
+fn next_sibling(d: *const Dom, id: NodeId) -> NodeId
+fn previous_sibling(d: *const Dom, id: NodeId) -> NodeId
+fn is_element(d: *const Dom, id: NodeId) -> bool
+fn is_html_named(d: *const Dom, id: NodeId, name: str) -> bool
+fn first_element_child(d: *const Dom, id: NodeId) -> NodeId
+fn last_element_child(d: *const Dom, id: NodeId) -> NodeId
+fn next_element_sibling(d: *const Dom, id: NodeId) -> NodeId
+fn previous_element_sibling(d: *const Dom, id: NodeId) -> NodeId
+fn child_count(d: *const Dom, id: NodeId) -> usize
+fn child_index(d: *const Dom, id: NodeId) -> usize
+fn contains(d: *const Dom, ancestor: NodeId, id: NodeId) -> bool
+fn root_of(d: *const Dom, id: NodeId) -> NodeId
+fn is_connected(d: *const Dom, id: NodeId) -> bool
+fn next_in_tree(d: *const Dom, root: NodeId, id: NodeId) -> NodeId
+fn previous_in_tree(d: *const Dom, root: NodeId, id: NodeId) -> NodeId
+fn unlink(d: *Dom, id: NodeId)
+fn link(d: *Dom, parent: NodeId, id: NodeId, before: NodeId)
+fn is_fragment(d: *const Dom, id: NodeId) -> bool
+fn check_insert(d: *const Dom, parent: NodeId, child: NodeId, before: NodeId) -> err
+fn insert_before(d: *Dom, parent: NodeId, child: NodeId, before: NodeId) -> err
+fn append_child(d: *Dom, parent: NodeId, child: NodeId) -> err
+fn remove_child(d: *Dom, parent: NodeId, child: NodeId) -> err
+fn remove(d: *Dom, id: NodeId)
+fn replace_child(d: *Dom, parent: NodeId, new_child: NodeId, old_child: NodeId) -> err
+fn remove_children(d: *Dom, id: NodeId)
+fn clone_node(d: *Dom, id: NodeId, deep: bool) -> (NodeId, err)
+fn import_node(d: *Dom, from: *const html.Document, id: NodeId) -> (NodeId, err)
+fn normalize(d: *Dom, id: NodeId) -> err
+fn text_content(a: *mem.Arena, d: *const Dom, id: NodeId) -> (str, err)
+fn set_text_content(d: *Dom, id: NodeId, data: str) -> err
+fn builder_write(ctx: *void, src: []const u8) -> (usize, err)
+fn outer_html(a: *mem.Arena, d: *const Dom, id: NodeId) -> (str, err)
+fn inner_html(a: *mem.Arena, d: *const Dom, id: NodeId) -> (str, err)
+fn set_inner_html(d: *Dom, id: NodeId, markup: str, options: html.Options) -> err
+fn find_attr(d: *const Dom, id: NodeId, name: str) -> (usize, bool)
+fn get_attribute(d: *const Dom, id: NodeId, name: str) -> (str, bool)
+fn has_attribute(d: *const Dom, id: NodeId, name: str) -> bool
+fn attribute_count(d: *const Dom, id: NodeId) -> usize
+fn set_attribute(d: *Dom, id: NodeId, name: str, value: str) -> err
+fn remove_attribute(d: *Dom, id: NodeId, name: str) -> err
+fn is_class_space(c: u8) -> bool
+fn class_contains(d: *const Dom, id: NodeId, token: str) -> bool
+fn class_add(d: *Dom, id: NodeId, token: str) -> err
+fn class_remove(d: *Dom, id: NodeId, token: str) -> err
+fn class_toggle(d: *Dom, id: NodeId, token: str) -> (bool, err)
+fn dataset_name(a: *mem.Arena, key: str) -> (str, err)
+fn dataset_get(a: *mem.Arena, d: *const Dom, id: NodeId, key: str) -> (str, bool, err)
+fn dataset_set(d: *Dom, id: NodeId, key: str, value: str) -> err
+fn dataset_remove(d: *Dom, id: NodeId, key: str) -> err
+fn get_element_by_id(d: *const Dom, root: NodeId, wanted: str) -> NodeId
+fn tag_matches(d: *const Dom, id: NodeId, name: str) -> bool
+fn classes_match(d: *const Dom, id: NodeId, classes: str) -> bool
+fn elements_by_tag(d: *const Dom, root: NodeId, name: str, out: []NodeId) -> usize
+fn elements_by_class(d: *const Dom, root: NodeId, classes: str, out: []NodeId) -> usize
+const CollectionTag: u8 = 0u8
+const CollectionClass: u8 = 1u8
+const CollectionChildren: u8 = 2u8
+type Collection = struct { kind: u8, root: NodeId, key: str }
+fn collection_next(d: *const Dom, c: Collection, after: NodeId) -> NodeId
+fn collection_len(d: *const Dom, c: Collection) -> usize
+fn collection_item(d: *const Dom, c: Collection, index: usize) -> NodeId
+fn compile_selectors(a: *mem.Arena, text: str) -> ([]const selector.RuleSelector, err)
+fn any_selector(m: *const cssm.Matcher, chosen: []const selector.RuleSelector, el: NodeId) -> bool
+fn scoped_matcher(a: *mem.Arena, doc: *const html.Document, scope: NodeId) -> cssm.Matcher
+fn query_selector(a: *mem.Arena, d: *const Dom, root: NodeId, text: str) -> (NodeId, err)
+fn query_selector_all(a: *mem.Arena, d: *const Dom, root: NodeId, text: str, out: []NodeId) -> (usize, err)
+fn matches(a: *mem.Arena, d: *const Dom, id: NodeId, text: str) -> (bool, err)
+fn closest(a: *mem.Arena, d: *const Dom, id: NodeId, text: str) -> (NodeId, err)
+const ShowAll: u32 = 4294967295u32
+const ShowElement: u32 = 1u32
+const ShowText: u32 = 4u32
+const ShowComment: u32 = 128u32
+const ShowDocument: u32 = 256u32
+const ShowDoctype: u32 = 512u32
+type Walker = struct { root: NodeId, current: NodeId, mask: u32 }
+fn walker(root: NodeId, mask: u32) -> Walker
+fn shown(d: *const Dom, w: *const Walker, id: NodeId) -> bool
+fn walker_parent(d: *const Dom, w: *Walker) -> NodeId
+fn walker_child(d: *const Dom, w: *Walker, from_end: bool) -> NodeId
+fn walker_sibling(d: *const Dom, w: *Walker, backwards: bool) -> NodeId
+fn walker_next(d: *const Dom, w: *Walker) -> NodeId
+fn walker_previous(d: *const Dom, w: *Walker) -> NodeId
+```
+
 ### `e.fmt.html.template`
 
 ```neper

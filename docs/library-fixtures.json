@@ -424,10 +424,11 @@
    "module": "e.fmt.html",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 76,
-   "delivered": 76,
+   "catalogue": 53,
+   "delivered": 53,
    "pending": [],
    "fixtures": [
+    "fmt_dom",
     "fmt_gaps_a",
     "fmt_html",
     "html_accessible",

@@ -193,7 +193,7 @@ const ITEMS=[
 ["1.4","P1","mig","Encoding sniffing and decoding (BOM, meta charset, HTTP header)","partial","dart:convert","e.text.encoding present; wire to loader","S"],
 ["1.5","P1","mig","URL parsing, origin, site_for_url","partial","site_for_url (110), idna (89)","e.fmt.uri + e.net.idna (superset); verify WHATWG URL cases","M"],
 ["1.6","P1","gap","Public suffix list and registrable-domain logic","todo","none","e.net.psl; also needed by cookies","M"],
-["1.7","P1","mig","DOM core: arena node tables, tree mutation, attributes, classList, dataset, namespaces, live collections, TreeWalker","todo","package:html + curated JS bridge","e.fmt.dom","L"],
+["1.7","P1","mig","DOM core: arena node tables, tree mutation, attributes, classList, dataset, namespaces, live collections, TreeWalker","done","package:html + curated JS bridge","lib/e/fmt/dom.e (e.fmt.dom, D5125): mutable node table over e.fmt.html, tree ops with pre-insert checks, attributes, classList, dataset, live collections, querySelector via e.fmt.css.match, TreeWalker; fixture fmt_dom","L"],
 ["1.8","P1","mig","Event dispatch model (capture/bubble, composed path, passive/once)","todo","JS prelude in C shim","e.fmt.dom","M"],
 ["1.9","P1","mig","CSS tokenizer and parser (Syntax L3, never aborts)","partial","css_tokenizer/css_syntax/css_parser ~2k lines","e.fmt.css.syntax (L038 landed); run Dart vectors","M"],
 ["1.10","P1","mig","Selectors L4 parser and matcher (is/where/not/has, An+B, specificity)","partial","selector_* ~1.2k lines","e.fmt.css.selector + e.fmt.css.match","M"],

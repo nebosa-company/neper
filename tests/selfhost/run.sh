@@ -2278,6 +2278,11 @@ chmod +x "$test_build/fmt-json-schema-selfhost"
 fmt_css_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_css/src/main.e" "$repo" x64 linux "$test_build/fmt-css-selfhost")
 [ "$fmt_css_written" = 'executable written' ]
 chmod +x "$test_build/fmt-css-selfhost"
+# `e.fmt.dom`: a parsed tree mutated through creation, insertion before a reference, fragment insertion, removal, replacement, cloning and normalising, the refusals (a cycle, a non-child), attributes, the class list, the dataset, text and markup in and out, id, tag, class, selector and live-collection queries, and a TreeWalker (tracker 1.7).
+fmt_dom_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_dom/src/main.e" "$repo" x64 linux "$test_build/fmt-dom-selfhost")
+[ "$fmt_dom_written" = 'executable written' ]
+chmod +x "$test_build/fmt-dom-selfhost"
+"$test_build/fmt-dom-selfhost"
 "$test_build/fmt-css-selfhost"
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 dist_consensus_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_consensus/src/main.e" "$repo" x64 linux "$test_build/dist-consensus-selfhost")
