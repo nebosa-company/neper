@@ -47,7 +47,7 @@ type Ring = struct { kind: u32, face: u32, tint: u32, dx: f32, dy: f32, dots: u3
 // `value` is 0xAARRGGBB; an alpha byte of 0 (a plain 0xRRGGBB) is opaque. looks5: the outer rows and corner cells of a
 // ring carry the share of ring over the dialog face they sit on (v3's Filter dialog is #F9F9F9, the others #F0F0F0).
 fn ring_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
-    var color = style.hex(value & 0xFFFFFFu32)
+    var color = style.hex_raw(value & 0xFFFFFFu32)
     let alpha = value / 16777216u32
     if alpha != 0u32 && alpha < 255u32 { color.alpha = f32(alpha) / 255.0 }
     ret winpx.fill(b, x, y, w, h, color)

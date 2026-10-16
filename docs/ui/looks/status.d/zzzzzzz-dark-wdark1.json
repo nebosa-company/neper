@@ -1,0 +1,142 @@
+{
+ "button": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/button.png",
+    "notes": "Ring tiles of rest, default (accent #4CC2FF), pressed and disabled are the light ring tables mapped; hover is a #3C3C3C face with the grey ring (Windows 11 dark has no accent ring on hover); pressed is #323232 with the grey ring, accent ring when default; dotted focus rectangle inverted to light dots. Sheets: windows-dark/button.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Hover and pressed faces and the stroke greys are Windows 11 palette values, not measured; the pressed default keeps the light table's bevel. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/label.png",
+    "notes": "Text takes the dark ink tokens; v3's dark author colours (#33486C, #336CCC) are lifted 55 % toward white so they read on #202020; hot-link colours follow the same lift. Sheets: windows-dark/label.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "The lift is a rule of thumb, not a Windows value; gray and disabled label tints are the token greys. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/checkbox.png",
+    "notes": "Check box tiles (rest, pressed, hover, checked, pressed checked) are the light 14 x 14 tiles mapped: dark box face, light stroke, #4CC2FF fill with a black tick when checked; dotted focus rectangle is light. Sheets: windows-dark/checkbox_states.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Disabled and indeterminate are the drawn (not baked) marks from windows_choice_resolve; pressed fills are the light bevel mapped, not Windows 11 values. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/radio.png",
+    "notes": "Radio disc tiles mapped like the check box: dark disc, light ring, #4CC2FF disc with a black dot when selected. Sheets: windows-dark/radio_states.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Disabled is the drawn mark; hover has no capture (rest look). No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/radio_group.png",
+    "notes": "Group frame uses OutlineVariant #454545, caption on the #202020 ground, radio tiles as the radio. Sheets: windows-dark/radio_group_states.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Frame colour is a token guess. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/text_edit.png",
+    "notes": "Edit chrome tile mapped: #2B2B2B face, #323232 rim, #9A9A9A foot line at rest, #4CC2FF underline when focused (the light 2 px blue foot mapped), hover veil is white 3 %, selection #264F78 under white text. Sheets: windows-dark/text_edit.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Read-only and invalid use the token paths (invalid is a red outline, a guess); disabled foot is the mapped light disabled tile. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/spin_edit.png",
+    "notes": "Spin buttons and arrows are the light tiles mapped (button faces to #323232 region, arrows to light ink); hot buttons keep the mapped accent outline; focus underline #4CC2FF. Sheets: windows-dark/spin_edit.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Hot and pressed spin buttons show the light capture's blue outline mapped to #4CC2FF, not a Windows 11 dark value. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/date_edit.png",
+    "notes": "Edit chrome as the button edit with the drop arrow; the open calendar uses the token surfaces (#2B2B2B, selected day #4CC2FF with black text, hot day #3C3C3C). Sheets: windows-dark/date_edit.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "The calendar popup is token-driven and unmeasured in light too. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/mask_edit.png",
+    "notes": "As the text edit: mapped chrome, #4CC2FF underline when focused. Sheets: windows-dark/mask_edit.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Hot key edit variant (Options Shortcuts) is a plain 1 px frame without an accent underline when focused. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/memo.png",
+    "notes": "Frame as the text edit on a taller field; scrollbar thumb the muted ink at 50 %; selection #264F78. Sheets: windows-dark/memo.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "The 150 % sheet is stale: the memo sheet app crashes with an access violation on the 150 % dark render (also on unmodified master), so memo@1.5x.png in windows-dark was not refreshed. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/button_edit.png",
+    "notes": "Chrome tile with the ellipsis button mapped; hover and pressed ellipsis use the mapped light capture (accent outline #4CC2FF); disabled mapped. Sheets: windows-dark/button_edit.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Pressed ellipsis face is the light capture mapped (a pale blue-grey), not a Windows 11 dark value. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/token_edit.png",
+    "notes": "The token edit frame rows (rest and focused) mapped with the same family: #2B2B2B face, grey foot, #4CC2FF focused foot. Sheets: windows-dark/token_edit_dialog.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Tokens (chips) themselves keep the light guess colours through the style.hex map; focused foot is a guess in light too. No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/check_list_box.png",
+    "notes": "Rows use the check box tiles mapped; the list frame is the mapped 2 unit edge; highlighted row #264F78 with white text (focused or not), card-art tile placeholder tan unchanged. Sheets: windows-dark/check_list_box_states.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Unfocused current-row look is the same as focused (as in the light capture). No live reference exists for a Windows dark v3."
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/group_box.png",
+    "notes": "Frame #454545 on the #202020 ground; the Options page header gradient runs #4A4A4A to #2B2B2B under a white bold title and a #C5C5C5 aside. Sheets: windows-dark/group_box_dialog.png (and @1.5x). Palette mapping: Derived, not captured: v3 has no dark mode. The baked light tiles are painted through winpx.dark_argb: each pixel's grey goes through a per-family curve (check/radio mark: face #F3 to #2B2B2B, rest border #78 to #9A9A9A, pressed border #C8 to about #686868; edit chrome: face to #2B2B2B, rim to #323232..#3A3A3A, foot line #AB to #9A9A9A; button ring: line #D0 to #6B6B6B, disabled line to #3A3A3A), an accent blue is read as a mix of the light accent and white or the face and painted as the same mix of #4CC2FF and black (tick) or the face (underline), alpha kept, so the antialiasing structure is the capture's. Tokens: #202020 ground, button #333333 / hover #3C3C3C / pressed #323232 / disabled #2B2B2B with #787878 text, edit #2B2B2B, selection #264F78, focus dots light.",
+    "gaps": "Header gradient and frame greys are Windows 11 palette guesses, not captures. No live reference exists for a Windows dark v3."
+   }
+  }
+ }
+}

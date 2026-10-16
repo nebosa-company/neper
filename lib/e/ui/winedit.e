@@ -329,7 +329,7 @@ fn wedit_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
 fn wedit_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, argb: u32, dark: bool) -> err {
     var v = argb
     if dark { v = winpx.dark_argb(argb, 1u32, 0x2B2B2Bu32) }
-    ret winpx.fill(b, x, y, w, h, style.hex(v & 0xFFFFFFu32))
+    ret winpx.fill(b, x, y, w, h, style.hex_raw(v & 0xFFFFFFu32))
 }
 
 // The row's place in the models (0, 1, 19, 20, 21 -> 0..4) or 99 for a row that is plain face.
