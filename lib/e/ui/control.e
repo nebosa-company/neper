@@ -159,7 +159,7 @@ fn text_node(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, option
 fn colored_text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions, color: paint.Color) -> (widget.Node, err) {
     let (text_look, style_error) = text_style_faced(a, t, options)
     if style_error != ok { ret (zero, style_error) }
-    ret (widget.text(key, widget.Text { value: value, style: text_look, color: color, wrap: options.wrap, align: options.align, max_lines: options.max_lines, ellipsis: options.ellipsis }, style.defaults()), ok)
+    ret (widget.text(key, widget.Text { value: value, style: text_look, color: style.lift_ink(t.tokens, color), wrap: options.wrap, align: options.align, max_lines: options.max_lines, ellipsis: options.ellipsis }, style.defaults()), ok)
 }
 
 // A text: shaped, wrapped and aligned by its options, in the role's style.

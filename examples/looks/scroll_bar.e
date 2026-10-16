@@ -10,11 +10,13 @@ use e.ui.style
 use e.ui.widget
 
 // The scrolled content: a white box `extent` long along the axis, 40 across.
-fn content(a: *mem.Arena, vertical: bool, extent: f32) -> ([]widget.Node, err) {
+fn content(a: *mem.Arena, t: *const control.Theme, vertical: bool, extent: f32) -> ([]widget.Node, err) {
     let (nodes, nodes_error) = mem.alloc[widget.Node](a, 1usize)
     if nodes_error != ok { ret (zero, nodes_error) }
     var s = style.defaults()
     s.background = paint.Brush { Solid: style.hex(16777215u32) }
+    // Neper dark: the page's own surface instead of white (the light pictures keep white)
+    if t.tokens.palette == .Dark && t.tokens.profile == .Neper { s.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) } }
     s.width = style.Length { Px: 40.0 }
     s.height = style.Length { Px: extent }
     if !vertical {
@@ -53,7 +55,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             if t.tokens.profile != .Windows { height = 40.0 }
             width = 120.0
         }
-        let (kids, kids_error) = content(a, vertical, extent)
+        let (kids, kids_error) = content(a, t, vertical, extent)
         if kids_error != ok { ret (0usize, kids_error) }
         let (bar, bar_error) = control.scroll_area(a, u64(10000usize * (i + 1usize)), t, axis, width, height, offset, extent, kids[0usize..1usize])
         if bar_error != ok { ret (0usize, bar_error) }
@@ -94,7 +96,7 @@ fn build_live(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
             width = 150.0
             height = 40.0
         }
-        let (kids, kids_error) = content(a, vertical, 300.0)
+        let (kids, kids_error) = content(a, t, vertical, 300.0)
         if kids_error != ok { ret (0usize, kids_error) }
         let (bar, bar_error) = control.scroll_area(a, u64(10000usize * (i + 1usize)), t, axis, width, height, 0.0, 300.0, kids[0usize..1usize])
         if bar_error != ok { ret (0usize, bar_error) }

@@ -153,20 +153,29 @@ fn has_children(ctx: *void, node: widget.Key) -> bool {
 // The first column: the node's check box, 3 px in (the plus box takes the first 14).
 fn build_row(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> err {
     // v3's check box, cut from the live capture (the Windows look; the others keep the drawn box); node 2 is checked in the check sheet
+    let t = mem.cast[*const control.Theme](ctx)
     var pic = gl.gx_tree_check()
     if node == 2u64 && checked_two() { pic = gl.gx_tree_check_on() }
     let (box, box_error) = gl.pixels(a, pic, gl.gx_tree_check_w(), gl.gx_tree_check_h())
     if box_error != ok { ret box_error }
+    var shown = box
+    // Neper dark: the capture's check box is light-only pixels; draw a box in the theme's colours instead
+    if t.tokens.palette == .Dark && t.tokens.profile == .Neper {
+        var face = control.sized_style(13.0, 13.0)
+        face.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+        face.border = style.Border { width: 1.0, color: style.color(t.tokens, .Border) }
+        face.radius = 2.0
+        shown = widget.box(0u64, face, zero)
+    }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret held_error }
-    held[0usize] = box
+    held[0usize] = shown
     let boxed = widget.padded(0u64, 2.0, 3.0, 0.0, 0.0, control.sized_style(17.0, 17.0), held[0usize..1usize])
     if node < 200u64 {
         *out = boxed
         ret ok
     }
     // an edition: the checked box, then its abbreviation
-    let t = mem.cast[*const control.Theme](ctx)
     let (checked, checked_error) = gl.pixels(a, gl.gx_tree_check_on(), gl.gx_tree_check_on_w(), gl.gx_tree_check_h())
     if checked_error != ok { ret checked_error }
     let (label, label_error) = control.text(a, 0u64, child_abbr(usize(node - 200u64)), t, control.text_options())

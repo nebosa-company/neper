@@ -135,6 +135,33 @@ fn v3() -> Look {
     }
 }
 
+// The v3 grid under the Neper look's Dark palette: the same metrics, the surfaces and lines in the Neper dark
+// tokens (page #12131A, header #1E2027, selection #34435F with the accent #B3C5FF as its edge, text from the theme).
+// A footer band the application coloured itself keeps its hue, darkened; the stock yellow becomes a dark olive.
+fn neper_dark_of(current: Look, base: Look) -> Look {
+    var look = current
+    look.header = rgb(0x1E2027u32)
+    look.header_hover = rgb(0x2C3A4Fu32)
+    look.header_line = rgb(0x32343Bu32)
+    look.even = rgb(0x12131Au32)
+    look.odd = rgb(0x1A1C23u32)
+    look.selected = rgb(0x34435Fu32)
+    look.selected_line = rgb(0xB3C5FFu32)
+    look.line = rgb(0x363840u32)
+    look.group_row = rgb(0x22242Bu32)
+    look.footer_cell = rgb(0x24262Du32)
+    look.frame = rgb(0x6B6F7Au32)
+    look.track = rgb(0x1E2027u32)
+    look.thumb = rgb(0x7D818Cu32)
+    look.footer_band = rgb(0x3A3920u32)
+    let stock = rgb(0xFFFFDDu32)
+    let off = base.footer_band.red - stock.red + base.footer_band.green - stock.green + base.footer_band.blue - stock.blue
+    if off > 0.01 || off < 0.0 - 0.01 {
+        look.footer_band = style.mix(base.footer_band, rgb(0x12131Au32), 0.65)
+    }
+    ret look
+}
+
 // The ink v3 draws a card's row in, by the card's colour letter (`card_color.pas`, GetForegroundColor):
 // W dirty white, U blue, B black, R red, G green, M multicolour orange, N colourless grey.
 fn card_ink(letter: u8) -> (paint.Color, bool) {

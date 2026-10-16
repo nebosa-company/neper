@@ -6,6 +6,7 @@
 // cascade, selector or inheritance: a style is what its fields say.
 
 use e.gfx.geometry
+use e.math
 use e.gfx.paint
 
 type Length = union enum u8 { Auto, Px: f32, Percent: f32, Flex: f32 }
@@ -1145,6 +1146,42 @@ fn layer(container: paint.Color, content: paint.Color, opacity: f32) -> paint.Co
 
 fn mix(a: paint.Color, b: paint.Color, share: f32) -> paint.Color {
     ret paint.Color { red: a.red + (b.red - a.red) * share, green: a.green + (b.green - a.green) * share, blue: a.blue + (b.blue - a.blue) * share, alpha: a.alpha + (b.alpha - a.alpha) * share }
+}
+
+// ---- Neper dark: ink an application chose for a light page (a card colour, a link blue, a rule's colour) --------
+// The sRGB relative luminance of a colour (WCAG 2).
+fn rel_channel(c: f32) -> f32 {
+    if c <= 0.03928 { ret c / 12.92 }
+    ret math.pow[f32]((c + 0.055) / 1.055, 2.4)
+}
+
+fn rel_luminance(c: paint.Color) -> f32 {
+    ret 0.2126 * rel_channel(c.red) + 0.7152 * rel_channel(c.green) + 0.0722 * rel_channel(c.blue)
+}
+
+// The WCAG contrast ratio of two colours.
+fn contrast_ratio(a: paint.Color, b: paint.Color) -> f32 {
+    let la = rel_luminance(a)
+    let lb = rel_luminance(b)
+    if la > lb { ret (la + 0.05) / (lb + 0.05) }
+    ret (lb + 0.05) / (la + 0.05)
+}
+
+// Under the Neper look in its Dark palette an ink that reads below 4.5:1 on the lightest dark surface (the page,
+// a selected row) is lifted toward white until it does, keeping its hue; every other look and palette gets the ink
+// back unchanged, so the light pictures do not move.
+fn lift_ink(t: *const ThemeTokens, ink: paint.Color) -> paint.Color {
+    if t.palette != .Dark || t.profile != .Neper { ret ink }
+    var ground = color(t, .SurfaceVariant)
+    let selection = color(t, .Selection)
+    if rel_luminance(selection) > rel_luminance(ground) { ground = selection }
+    var share: f32 = 0.0
+    var out = ink
+    while contrast_ratio(out, ground) < 4.6 && share < 1.0 {
+        share += 0.05
+        out = mix(ink, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: ink.alpha }, share)
+    }
+    ret out
 }
 
 // A control's look under its state, resolved once at build: pressed darkens toward
