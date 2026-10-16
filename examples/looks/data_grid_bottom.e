@@ -28,11 +28,13 @@ type Bottom = struct {
     ready: bool,
     windows: bool,
     coll: table.Table,
-    coll_view: view.View,
-    coll_group: grp.Grouping,
+    views: [5]view.View,
+    groups: [5]grp.Grouping,
+    grids: [5]dg.Grid,
     scratch: mem.Arena,
     store: mem.Arena,
-    coll_grid: dg.Grid
+    first: usize,
+    count: usize
 }
 
 fn coll_name(row: usize) -> str {
@@ -126,28 +128,30 @@ fn setup(m: *Bottom) -> err {
     let (store_bytes, store_error) = mem.alloc[u8](a, 65536usize)
     if store_error != ok { ret store_error }
     m.store = mem.arena_from(store_bytes)
+    var k = m.first
+    while k < m.first + m.count {
     let (cv, cv_error) = view.create(a, &m.coll)
     if cv_error != ok { ret cv_error }
-    m.coll_view = cv
-    let (cg, cg_error) = grp.create(a, &m.coll_view, 8usize)
+    m.views[k] = cv
+    let (cg, cg_error) = grp.create(a, &m.views[k], 8usize)
     if cg_error != ok { ret cg_error }
-    m.coll_group = cg
+    m.groups[k] = cg
     var none: [1]grp.GroupLevel = zero
     var order: [1]view.Key = zero
     order[0usize] = view.column_key(CC_QTY, false, true)
-    try grp.group_by(&m.coll_group, none[0usize..0usize], order[0usize..0usize], &m.scratch)
+    try grp.group_by(&m.groups[k], none[0usize..0usize], order[0usize..0usize], &m.scratch)
     var sums: [3]grp.SummarySpec = zero
     sums[0usize] = grp.SummarySpec { column: CC_QTY }
     sums[1usize] = grp.SummarySpec { column: CC_USED }
     sums[2usize] = grp.SummarySpec { column: CC_BUY }
-    try grp.apply_summaries(&m.coll_group, sums[0usize..3usize], &m.store)
+    try grp.apply_summaries(&m.groups[k], sums[0usize..3usize], &m.store)
     let (cs, cs_error) = coll_specs(a)
     if cs_error != ok { ret cs_error }
     var events = dg.no_events()
     events.custom_cell = coll_cell
-    let (g2, g2_error) = dg.create(a, &m.coll, &m.coll_group, cs, events, 20000u64)
+    let (g2, g2_error) = dg.create(a, &m.coll, &m.groups[k], cs, events, u64(20000 + k * 1000000))
     if g2_error != ok { ret g2_error }
-    m.coll_grid = g2
+    m.grids[k] = g2
     var look = gl.v3()
     look.footer_band = gl.rgb(0xC0DCC0u32)
     look.ring_top_o = gl.rgb(0xBABDC1u32)
@@ -155,23 +159,27 @@ fn setup(m: *Bottom) -> err {
     look.ring_left_o = gl.rgb(0x878B93u32)
     look.ring_left_i = gl.rgb(0xEAEAECu32)
     look.ring_bottom = gl.rgb(0xCACCCFu32)
-    dg.set_look(&m.coll_grid, look)
-    dg.set_row_ink(&m.coll_grid, mem.cast[*void](m), coll_ink)
-    dg.set_footer_label(&m.coll_grid, "Rows")
-    dg.set_grid_lines(&m.coll_grid, dg.GridLines.Both)
-    dg.set_immediate_edit(&m.coll_grid, true)
-    dg.show_navigator(&m.coll_grid, true)
-    dg.set_pane_hint(&m.coll_grid, 573.0)
-    dg.show_sort(&m.coll_grid, 1usize, true)
-    m.coll_grid.aligns[3usize] = 2u8
-    m.coll_grid.aligns[4usize] = 2u8
-    m.coll_grid.aligns[5usize] = 2u8
-    // the third row (Tangle) is current and selected, the grid has the focus
-    m.coll_grid.has_selection = true
-    m.coll_grid.selected_row = 2usize
-    m.coll_grid.has_position = true
-    m.coll_grid.position = 2usize
-    dg.set_forced_focus(&m.coll_grid, true)
+    dg.set_look(&m.grids[k], look)
+    dg.set_row_ink(&m.grids[k], mem.cast[*void](m), coll_ink)
+    dg.set_footer_label(&m.grids[k], "Rows")
+    dg.set_grid_lines(&m.grids[k], dg.GridLines.Both)
+    dg.set_immediate_edit(&m.grids[k], true)
+    dg.show_navigator(&m.grids[k], true)
+    dg.set_pane_hint(&m.grids[k], 573.0)
+    dg.show_sort(&m.grids[k], 1usize, true)
+    m.grids[k].aligns[3usize] = 2u8
+    m.grids[k].aligns[4usize] = 2u8
+    m.grids[k].aligns[5usize] = 2u8
+    // cell 0: the third row (Tangle) current and selected, the grid focused; the others start from the grid at rest (0 of 8)
+    if k == 0usize {
+        m.grids[k].has_selection = true
+        m.grids[k].selected_row = 2usize
+        m.grids[k].has_position = true
+        m.grids[k].position = 2usize
+        dg.set_forced_focus(&m.grids[k], true)
+    }
+    k += 1usize
+    }
     ret ok
 }
 
@@ -183,15 +191,36 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         try setup(m)
         m.ready = true
     }
-    let (body, body_error) = dg.build(a, &m.coll_grid, t, 267.0)
-    if body_error != ok { ret (0usize, body_error) }
-    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
-    if held_error != ok { ret (0usize, held_error) }
-    held[0usize] = body
-    var face = looks.size_style(576.0, 242.0)
-    face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-    cells[0usize] = looks.Cell { caption: "Collection grid: Tangle selected, grid focused", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize]), drive: .None }
-    ret (1usize, ok)
+    let captions = [5]str{ "Tangle selected, grid focused", "At rest (0 of 8)", "Hover: Name header", "Hover: next button", "Hover: funnel" }
+    var k = m.first
+    while k < m.first + m.count {
+        let (body, body_error) = dg.build(a, &m.grids[k], t, 267.0)
+        if body_error != ok { ret (0usize, body_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (0usize, held_error) }
+        held[0usize] = body
+        var face = looks.size_style(576.0, 242.0)
+        face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        var drive: looks.Drive = .None
+        // the pointer over the Name header, the next button, the funnel (cell coordinates)
+        if k >= 2usize {
+            drive = .Hover
+            var px: f32 = 109.0
+            var py: f32 = 10.0
+            if k == 3usize {
+                px = 119.0
+                py = 229.0
+            }
+            if k == 4usize {
+                px = 203.0
+                py = 229.0
+            }
+            looks.aim(k - m.first, px - 288.0, py - 121.0)
+        }
+        cells[k - m.first] = looks.Cell { caption: captions[k], node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize]), drive: drive }
+        k += 1usize
+    }
+    ret (m.count, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -199,7 +228,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bottoms_error != ok { ret bottoms_error }
     var seed: Bottom = zero
     seed.a = a
+    seed.first = 0usize
+    seed.count = 2usize
+    var name = "data_grid_bottom"
+    if args.len > 1usize {
+        let part = usize(args[1usize][0usize] - 48u8)
+        seed.first = part * 2usize
+        seed.count = 2usize
+        if seed.first + 2usize > 5usize { seed.count = 5usize - seed.first }
+        if part == 1usize { name = "data_grid_bottom2" }
+        if part == 2usize { name = "data_grid_bottom3" }
+    }
     bottoms[0usize] = seed
-    let sheet = looks.Sheet { name: "data_grid_bottom", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 242.0, ctx: mem.cast[*void](&bottoms[0usize]), build: build }
+    let sheet = looks.Sheet { name: name, cells: seed.count, columns: 2usize, cell_w: 576.0, cell_h: 242.0, ctx: mem.cast[*void](&bottoms[0usize]), build: build }
     ret looks.run_all(a, &sheet)
 }

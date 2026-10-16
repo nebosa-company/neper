@@ -7632,7 +7632,7 @@ fn group_cell_plain(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: 
                 if str.push_i64(&sb, i64(key_row)) != ok { ret control.TooLarge }
             }
         }
-        if grid.look.on && !grid.look.group_flat {
+        if grid.look.on && (!grid.look.group_flat || grid.look.group_counts) {
             if str.push(&sb, " (Count: ") != ok || str.push_usize(&sb, grp.group_count(grid.g, group)) != ok || str.push(&sb, ")") != ok { ret control.TooLarge }
         } else if !grid.look.on {
             if str.push(&sb, "  (") != ok || str.push_usize(&sb, grp.group_count(grid.g, group)) != ok || str.push(&sb, ")") != ok { ret control.TooLarge }
@@ -8753,7 +8753,10 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
         if kind == Nav.NextPage { slot = 4usize }
         if kind == Nav.Last { slot = 5usize }
         live_w = gl.gx_nav_w(slot, enabled)
-        let (live_mark, live_error) = gl.pixels(a, gl.gx_nav(slot, enabled), live_w, gl.gx_nav_h())
+        // looks5-e: under the pointer v3 draws the button on a blue frame over #E0EEF9 (live hover captures)
+        var live_pix = gl.gx_nav(slot, enabled)
+        if enabled && (slot == 3usize || slot == 4usize) && mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, key, true, false).hovered { live_pix = gl.gx_nav_hot(slot) }
+        let (live_mark, live_error) = gl.pixels(a, live_pix, live_w, gl.gx_nav_h())
         if live_error != ok { ret (zero, live_error) }
         mark = live_mark
         live_nav = true
@@ -8854,7 +8857,8 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var live_band = style.defaults()
         live_band.height = style.Length { Px: 23.0 }
         live_band.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
-        info = widget.padded(0u64, 5.0, 5.0, 4.0, 0.0, live_band, one(a, info_text))
+        // looks5-e: v3's hinted text is wider than ours: the box follows the capture (the next buttons stand 3 px further)
+        info = widget.padded(0u64, 5.0, 5.0, 7.0, 0.0, live_band, one(a, info_text))
     } else if grid.has_nav_icons {
         // v3 sets the position on a white band as wide as the gap between its buttons
         var band = control.sized_style(115.0, 30.0)
@@ -8867,7 +8871,9 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let funnel_key = navigator_key(grid) + 7u64
     var funnel_mark: widget.Node = zero
     if live_row {
-        let (live_funnel, live_funnel_error) = gl.pixels(a, gl.gx_nav(7usize, true), gl.gx_nav_w(7usize, true), gl.gx_nav_h())
+        var funnel_pix = gl.gx_nav(7usize, true)
+        if mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, funnel_key, true, false).hovered { funnel_pix = gl.gx_nav_hot(7usize) }
+        let (live_funnel, live_funnel_error) = gl.pixels(a, funnel_pix, gl.gx_nav_w(7usize, true), gl.gx_nav_h())
         if live_funnel_error != ok { ret (zero, live_funnel_error) }
         funnel_mark = live_funnel
     } else if grid.has_nav_icons {

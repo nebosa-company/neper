@@ -19,7 +19,7 @@ use e.ui.gridlook as gl
 use e.ui.looks
 use e.ui.widget
 
-type Flags = struct { checked: bool, expanded: bool }
+type Flags = struct { checked: bool, expanded: bool, part: usize }
 var flags: Flags = zero
 fn checked_two() -> bool { ret flags.checked }
 
@@ -326,7 +326,60 @@ fn build_expanded(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []l
     ret (2usize, ok)
 }
 
+// looks5-e: the hover captures of the Filter tree (states/hover-scroll-bar-thumb-filter-tree, -track-filter-tree,
+// hover-tree-list-checkbox-filter, -expander-filter, -row-filter; the last three are pixel-identical to rest in v3): the pointer
+// over the bar's thumb, the bar's track, a node's check box, its expander and a row. `tree_list.exe h0` and `h1` (two sheets).
+fn build_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    var k = 0usize
+    while k < 3usize {
+        let which = flags.part * 3usize + k
+        if which >= 5usize { break }
+        let (node, node_error) = filter_list(a, t, u64(1000 + k * 10000), false)
+        if node_error != ok { ret (0usize, node_error) }
+        var px: f32 = 297.0
+        var py: f32 = 100.0
+        var caption = "Hover: scroll thumb"
+        if which == 1usize {
+            py = 270.0
+            caption = "Hover: scroll track"
+        }
+        if which == 2usize {
+            px = 23.0
+            py = 28.0
+            caption = "Hover: check box"
+        }
+        if which == 3usize {
+            px = 7.0
+            py = 28.0
+            caption = "Hover: expander"
+        }
+        if which == 4usize {
+            px = 150.0
+            py = 100.0
+            caption = "Hover: a row"
+        }
+        looks.aim(k, px - 152.5, py - 159.5)
+        cells[k] = looks.Cell { caption: caption, node: node, drive: .Hover }
+        k += 1usize
+    }
+    var count = 3usize
+    if flags.part == 1usize { count = 2usize }
+    ret (count, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize && args[1usize][0usize] == 104u8 {
+        // `tree_list.exe h0` / `h1`: the hover sheets
+        flags.part = usize(args[1usize][1usize] - 48u8)
+        var name = "tree_list_hover"
+        var count = 3usize
+        if flags.part == 1usize {
+            name = "tree_list_hover2"
+            count = 2usize
+        }
+        let hover = looks.Sheet { name: name, cells: count, columns: 3usize, cell_w: 305.0, cell_h: 319.0, ctx: zero, build: build_hover }
+        ret looks.run_all(a, &hover)
+    }
     // `tree_list.exe states` renders the two state sheets (the arena holds only so many sheets)
     if args.len > 1usize && args[1usize][0usize] == 101u8 {
         flags.checked = true

@@ -19,7 +19,7 @@ use e.ui.style
 use e.ui.widget
 
 const ROWS: usize = 120283usize
-const CELLS: usize = 10usize
+const CELLS: usize = 31usize
 const C_NAME: usize = 0usize
 const C_ED: usize = 1usize
 const C_COLOR: usize = 2usize
@@ -80,11 +80,25 @@ fn color_of(row: usize) -> str {
     ret "N"
 }
 
+// the editions of the grouped captures (hover-grid-grouped-rest): MBC holds the first 80 cards, the others follow
+fn ed_of(row: usize) -> str {
+    if row < 80usize { ret "MBC" }
+    if row < 626usize { ret "MSH" }
+    if row < 784usize { ret "HOC" }
+    if row < 1120usize { ret "HOB" }
+    if row < 1483usize { ret "SLZ" }
+    if row < 1603usize { ret "FRC" }
+    if row < 2173usize { ret "FRA" }
+    let k = (row / 1200usize) % 90usize
+    if k < 10usize { ret "Z0" }
+    ret "Z1"
+}
+
 fn load(a: *mem.Arena, app: *App) -> err {
     var spec: [6]table.Spec = zero
     spec[C_FAV] = table.Spec { name: "Fav", kind: table.Kind.Bool, heap_bytes: 0usize, dict_cap: 0usize }
     spec[C_NAME] = table.Spec { name: "Name", kind: table.Kind.Dict, heap_bytes: 1024usize, dict_cap: 16usize }
-    spec[C_ED] = table.Spec { name: "Edition", kind: table.Kind.Dict, heap_bytes: 64usize, dict_cap: 4usize }
+    spec[C_ED] = table.Spec { name: "Edition", kind: table.Kind.Dict, heap_bytes: 256usize, dict_cap: 16usize }
     spec[C_COLOR] = table.Spec { name: "Color", kind: table.Kind.Dict, heap_bytes: 64usize, dict_cap: 4usize }
     spec[C_TYPE] = table.Spec { name: "Type", kind: table.Kind.Dict, heap_bytes: 256usize, dict_cap: 8usize }
     spec[C_RARITY] = table.Spec { name: "Rarity", kind: table.Kind.Dict, heap_bytes: 64usize, dict_cap: 4usize }
@@ -97,7 +111,7 @@ fn load(a: *mem.Arena, app: *App) -> err {
         let (got, append_error) = table.append_row(&app.tbl)
         if append_error != ok { ret append_error }
         try table.set_str(&app.tbl, C_NAME, got, name_of(row))
-        try table.set_str(&app.tbl, C_ED, got, "MBC")
+        try table.set_str(&app.tbl, C_ED, got, ed_of(row))
         try table.set_str(&app.tbl, C_COLOR, got, color_of(row))
         try table.set_str(&app.tbl, C_TYPE, got, type_of(row))
         try table.set_str(&app.tbl, C_RARITY, got, rarity_of(row))
@@ -158,11 +172,17 @@ fn setup(app: *App) -> err {
         let (v, v_error) = view.create(a, &app.tbl)
         if v_error != ok { ret v_error }
         app.views[k] = v
-        let (g, g_error) = grp.create(a, &app.views[k], 8usize)
+        let (g, g_error) = grp.create(a, &app.views[k], 16usize)
         if g_error != ok { ret g_error }
         app.groups[k] = g
         // the rows stay in load order: no key
-        try grp.group_by(&app.groups[k], none[0usize..0usize], order[0usize..0usize], &app.scratch)
+        var levels: [1]grp.GroupLevel = zero
+        levels[0usize] = grp.GroupLevel { column: C_ED, descending: false, fold: true }
+        if k >= 25usize && k != 26usize {
+            try grp.group_by(&app.groups[k], levels[0usize..1usize], order[0usize..1usize], &app.scratch)
+        } else {
+            try grp.group_by(&app.groups[k], none[0usize..0usize], order[0usize..0usize], &app.scratch)
+        }
         let (specs, specs_error) = specs_of(a)
         if specs_error != ok { ret specs_error }
         let (made, made_error) = dg.create(a, &app.tbl, &app.groups[k], specs, dg.no_events(), u64(1000000 + k * 1000000))
@@ -179,7 +199,10 @@ fn setup(app: *App) -> err {
         look.foot_g2 = gl.rgb(0xF0F0F0u32)
         look.foot_w1 = gl.rgb(0xEBEBEBu32)
         look.foot_w2 = gl.rgb(0xE7E7E7u32)
+        // the View > Group by captures: group rows carry their counts, the group box is shown
+        if k >= 25usize { look.group_counts = true }
         dg.set_look(&app.grids[k], look)
+        if k >= 25usize { dg.show_group_box(&app.grids[k], true) }
         dg.set_row_ink(&app.grids[k], zero, ink)
         dg.set_grid_lines(&app.grids[k], dg.GridLines.Horizontal)
         dg.show_navigator(&app.grids[k], true)
@@ -191,9 +214,19 @@ fn setup(app: *App) -> err {
         app.grids[k].position = 3usize
         app.grids[k].has_selection = true
         app.grids[k].selected_row = 3usize
+        // the hover grabs start from the grid at rest with its first row current (hover-main-rest: 1 of 120283)
+        if k >= 10usize {
+            app.grids[k].position = 0usize
+            app.grids[k].selected_row = 0usize
+        }
+        if k >= 25usize && k != 26usize {
+            // grouped: the current entry is the seventh group row, no card is selected
+            app.grids[k].position = 6usize
+            app.grids[k].has_selection = false
+        }
         // focused: the cells 0 to 5 (the capture's grid had the focus: dotted row rectangle); the last one is not
         dg.set_forced_focus(&app.grids[k], k != 6usize)
-        if k == 0usize { dg.show_sort(&app.grids[k], 3usize, false) }
+        if k >= 25usize && k != 26usize { dg.show_sort(&app.grids[k], 4usize, false) } else { dg.show_sort(&app.grids[k], 3usize, false) }
         // the lower arrow held down scrolls the rows (the capture shows two rows gone)
         if k == 9usize { app.grids[k].offset = 38.0 }
         k += 1usize
@@ -221,7 +254,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         try setup(app)
         app.ready = true
     }
-    let captions = [CELLS]str{ "Header pressed (Name)", "Navigator at rest", "First pressed", "Next pressed", "Last pressed", "Row selected, grid focused", "Row selected, grid not focused", "Vertical thumb pressed", "Horizontal thumb pressed", "Lower arrow pressed" }
+    let captions = [CELLS]str{ "Header pressed (Name)", "Navigator at rest", "First pressed", "Next pressed", "Last pressed", "Row selected, grid focused", "Row selected, grid not focused", "Vertical thumb pressed", "Horizontal thumb pressed", "Lower arrow pressed", "Hover: Name header", "Hover: Edition header", "Hover: Color header", "Hover: Type header", "Hover: Rarity header", "Hover: star header", "Hover: next button", "Hover: last button", "Hover: filter button", "Hover: vertical thumb", "Hover: upper arrow", "Hover: lower arrow", "Hover: horizontal thumb", "Rest, first row selected", "Hover: a row", "Grouped by Edition, at rest", "Group box shown, not grouped", "Hover: Edition header, grouped", "Hover: Name header, grouped", "Edition chip pressed", "Hover: a group row" }
     var i = app.first
     while i < app.first + app.count {
         let (node, node_error) = cell_of(a, t, &app.grids[i])
@@ -256,6 +289,67 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             drive = .Press
             looks.aim(i - app.first, 783.0 - 216.0 - 288.0, 187.0 - 106.5)
         }
+        if i >= 10usize && i < 23usize {
+            // the pointer over: the header cells, the navigator buttons, the bar's thumb and arrows (cell coordinates)
+            drive = .Hover
+            var px: f32 = 100.0
+            var py: f32 = 11.0
+            if i == 11usize { px = 242.0 }
+            if i == 12usize { px = 307.0 }
+            if i == 13usize { px = 412.0 }
+            if i == 14usize { px = 512.0 }
+            if i == 15usize { px = 24.0 }
+            if i == 16usize {
+                px = 148.0
+                py = 199.0
+            }
+            if i == 17usize {
+                px = 170.0
+                py = 199.0
+            }
+            if i == 18usize {
+                px = 214.0
+                py = 199.0
+            }
+            if i == 19usize {
+                px = 567.0
+                py = 26.0
+            }
+            if i == 20usize {
+                px = 567.0
+                py = 10.0
+            }
+            if i == 21usize {
+                px = 567.0
+                py = 180.0
+            }
+            if i == 22usize {
+                px = 323.0
+                py = 201.0
+            }
+            looks.aim(i - app.first, px - 288.0, py - 106.5)
+        }
+        if i == 24usize {
+            drive = .Hover
+            looks.aim(i - app.first, 300.0 - 288.0, 60.0 - 106.5)
+        }
+        if i >= 27usize {
+            // the grouped grids: the pointer over a header (the group box takes 34 px more at the top)
+            drive = .Hover
+            var gx: f32 = 242.0
+            var gy: f32 = 46.0
+            if i == 28usize { gx = 100.0 }
+            if i == 29usize {
+                drive = .Press
+                gx = 35.0
+                gy = 17.0
+            }
+            if i == 30usize {
+                gx = 150.0
+                gy = 80.0
+            }
+            looks.aim(i - app.first, gx - 288.0, gy - 106.5)
+        }
         cells[i - app.first] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
@@ -272,14 +366,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     seed.first = 0usize
     seed.count = 2usize
     if args.len > 1usize {
-        let part = usize(args[1usize][0usize] - 48u8)
+        // the part number: one or two digits
+        var part = usize(args[1usize][0usize] - 48u8)
+        if args[1usize].len > 1usize { part = part * 10usize + usize(args[1usize][1usize] - 48u8) }
         seed.first = part * 2usize
         seed.count = 2usize
         if seed.first + 2usize > CELLS { seed.count = CELLS - seed.first }
-        if part == 1usize { name = "data_grid_top2" }
-        if part == 2usize { name = "data_grid_top3" }
-        if part == 3usize { name = "data_grid_top4" }
-        if part == 4usize { name = "data_grid_top5" }
+        let names = [16]str{ "data_grid_top", "data_grid_top2", "data_grid_top3", "data_grid_top4", "data_grid_top5", "data_grid_hover", "data_grid_hover2", "data_grid_hover3", "data_grid_hover4", "data_grid_hover5", "data_grid_hover6", "data_grid_hover7", "data_grid_hover8", "data_grid_group", "data_grid_group2", "data_grid_group3" }
+        name = names[part]
     }
     apps[0usize] = seed
     let sheet = looks.Sheet { name: name, cells: seed.count, columns: 2usize, cell_w: 576.0, cell_h: 213.0, ctx: mem.cast[*void](&apps[0usize]), build: build }

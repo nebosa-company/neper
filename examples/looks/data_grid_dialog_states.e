@@ -30,7 +30,9 @@ type App = struct {
     views: [MAX]view.View,
     groups: [MAX]grp.Grouping,
     grids: [MAX]dg.Grid,
-    scratch: mem.Arena
+    scratch: mem.Arena,
+    hover: bool,
+    first: usize
 }
 
 fn sort_name(row: usize) -> str {
@@ -277,14 +279,17 @@ fn arrange(app: *App, k: usize) {
     // the clicked row (focused / not focused), 1 presses a header, 4 the scroll thumb
     var selected = 0usize
     var focused = false
+    // the hover grabs start from the grid at rest (hover-sort-rest, hover-options-shortcuts-rest: the same as the rest grabs)
+    var kk = k
+    if app.hover { kk = 0usize }
     if app.family == 0usize { selected = 2usize }
     if app.family == 1usize { selected = 1usize }
     app.grids[k].has_selection = true
-    if app.family == 0usize && (k == 0usize || k == 4usize) { app.grids[k].has_selection = false }
-    if app.family == 1usize && k == 0usize { selected = 0usize }
-    if app.family == 2usize { focused = k == 1usize || k == 0usize }
-    if k == 2usize { focused = true }
-    if app.family == 0usize && k >= 1usize { focused = true }
+    if app.family == 0usize && (kk == 0usize || kk == 4usize) { app.grids[k].has_selection = false }
+    if app.family == 1usize && kk == 0usize { selected = 0usize }
+    if app.family == 2usize { focused = kk == 1usize || kk == 0usize }
+    if kk == 2usize { focused = true }
+    if app.family == 0usize && kk >= 1usize { focused = true }
     app.grids[k].selected_row = selected
     app.grids[k].has_position = true
     app.grids[k].position = selected
@@ -370,21 +375,57 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if k == 3usize { caption = "Row selected, grid not focused" }
         if k == 4usize { caption = "Scroll thumb pressed" }
         if app.family == 2usize && k == 1usize { caption = "Row selected, grid focused" }
+        if app.hover { caption = "Hover" }
         if app.family == 0usize && k == 2usize { caption = "Name selected, grid focused" }
-        // the pointer: the pressed header (cell 1), the pressed thumb (cell 4); the centre of a cell is (w / 2, h / 2)
-        if app.family == 0usize && k == 1usize {
+        // the hover cells: the pointer over a header, the bar's thumb, arrows or track (the cell's coordinates)
+        if app.hover {
+            drive = .Hover
+            var hx: f32 = 80.0
+            var hy: f32 = 10.0
+            if app.family == 0usize {
+                if k == 1usize { hx = 235.0 }
+                if k == 2usize {
+                    hx = 321.5
+                    hy = 88.0
+                }
+            } else {
+                // part 0: Command, Shortcut, a row, the thumb; part 1: the arrows and the track
+                let which = app.first + k
+                hx = 250.0
+                if which == 1usize { hx = 413.0 }
+                if which == 2usize { hy = 100.0 }
+                if which == 3usize {
+                    hx = 487.0
+                    hy = 35.0
+                }
+                if which == 4usize {
+                    hx = 487.0
+                    hy = 8.0
+                }
+                if which == 5usize {
+                    hx = 487.0
+                    hy = 326.0
+                }
+                if which == 6usize {
+                    hx = 487.0
+                    hy = 300.0
+                }
+            }
+            looks.aim(k, hx - w * 0.5, hy - h * 0.5)
+        }
+        if !app.hover && app.family == 0usize && k == 1usize {
             drive = .Press
             looks.aim(k, 235.0 - w * 0.5, 10.0 - h * 0.5)
         }
-        if app.family == 0usize && k == 4usize {
+        if !app.hover && app.family == 0usize && k == 4usize {
             drive = .Press
             looks.aim(k, 321.5 - w * 0.5, 88.0 - h * 0.5)
         }
-        if app.family == 1usize && k == 1usize {
+        if !app.hover && app.family == 1usize && k == 1usize {
             drive = .Press
             looks.aim(k, 250.0 - w * 0.5, 10.0 - h * 0.5)
         }
-        if app.family == 1usize && k == 4usize {
+        if !app.hover && app.family == 1usize && k == 4usize {
             drive = .Press
             looks.aim(k, 487.0 - w * 0.5, 35.0 - h * 0.5)
         }
@@ -412,13 +453,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
             w = 496.0
             h = 334.0
             cols = 2usize
-        } else {
+        } else if args[1usize][0usize] == 109u8 {
             name = "data_grid_missing_states"
             seed.family = 2usize
             seed.cells = 2usize
             w = 234.0
             h = 256.0
             cols = 2usize
+        }
+        // `sorth`: the Sort grid under the pointer; `h0` and `h1` the Shortcuts grid (two sheets)
+        if args[1usize][0usize] == 115u8 && args[1usize][1usize] == 111u8 && args[1usize].len > 4usize {
+            name = "data_grid_sort_hover"
+            seed.family = 0usize
+            seed.hover = true
+            seed.cells = 3usize
+            w = 331.0
+            h = 259.0
+            cols = 3usize
+        }
+        if args[1usize][0usize] == 104u8 {
+            seed.family = 1usize
+            seed.hover = true
+            w = 496.0
+            h = 334.0
+            cols = 2usize
+            seed.cells = 4usize
+            name = "data_grid_shortcuts_hover"
+            if args[1usize][1usize] == 49u8 {
+                name = "data_grid_shortcuts_hover2"
+                seed.first = 4usize
+                seed.cells = 3usize
+            }
         }
     }
     apps[0usize] = seed

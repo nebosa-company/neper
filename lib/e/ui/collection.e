@@ -4554,7 +4554,18 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             thumb_nudge = 0.4
             if control.control_state(t, track_key, true, false).pressed { thumb_w = 6.0 }
         }
-        if control.control_state(t, track_key, true, false).hovered { thumb_w = 6.0 }
+        // looks5-e: the main window's bar widens its thumb only under the pointer, and shows the arrow the pointer is on
+        var arrow_hot: u8 = 0
+        if lk.soft_lines {
+            if control.control_state(t, track_key, true, false).hovered && mem.address_of(t.runtime) != 0usize {
+                let (hot_box, has_hot_box) = control.keyed_bounds(t.runtime, track_key)
+                let hot_pointer = widget.pointer_position(t.runtime)
+                if has_hot_box {
+                    let hot_y = hot_pointer.y - hot_box.y
+                    if hot_y < 16.0 { arrow_hot = 1u8 } else if hot_y > track_h - 16.0 { arrow_hot = 2u8 } else if hot_y >= 16.0 + thumb_y && hot_y <= 16.0 + thumb_y + thumb_h { thumb_w = 6.0 }
+                }
+            }
+        } else if control.control_state(t, track_key, true, false).hovered { thumb_w = 6.0 }
         // looks5-e: a dialog's bar: a white first pixel, then a crisp 2 px thumb 8 px in (measured, Sort dialog)
         var track_w = lk.scroll_width
         var thumb_left = (lk.scroll_width - thumb_w) * 0.5 + thumb_nudge
@@ -4588,6 +4599,21 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 pair[1usize] = widget.positioned(0u64, 4.0, track_h - 12.0, style.defaults(), one_node(a, arrow))
                 thumb_holder[0usize] = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
             }
+        }
+        if arrow_hot != 0u8 && !control.control_state(t, track_key, true, false).pressed {
+            var hot_pix = gl.gx_arrow_hot_up()
+            var hot_top: f32 = 4.0
+            if arrow_hot == 2u8 {
+                hot_pix = gl.gx_arrow_hot_down()
+                hot_top = track_h - 13.0
+            }
+            let (hot, hot_error) = gl.pixels(a, hot_pix, gl.gx_arrow_hot_w(), gl.gx_arrow_hot_h())
+            if hot_error != ok { ret (zero, hot_error) }
+            let (hot_pair, hot_pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if hot_pair_error != ok { ret (zero, TooLarge) }
+            hot_pair[0usize] = thumb_holder[0usize]
+            hot_pair[1usize] = widget.positioned(0u64, 3.0, hot_top, style.defaults(), one_node(a, hot))
+            thumb_holder[0usize] = widget.stack(0u64, style.defaults(), hot_pair[0usize..2usize])
         }
         var track_style = control.sized_style(track_w, track_h)
         track_style.background = paint.Brush { Solid: lk.track }

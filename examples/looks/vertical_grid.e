@@ -224,7 +224,48 @@ fn main_states(a: *mem.Arena) -> err {
     ret looks.run_all(a, &shutg)
 }
 
+// looks5-e: the five hover captures of Deck Properties (states/hover-vertical-grid-*: caption of Author, the General category's
+// collapse button, the Archetype value cell, the Description value cell, the Name value cell); v3 shows no hover look on any of
+// them (all five are pixel-identical to the rest grab), so the grid at rest with the pointer over those places must not change.
+fn build_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let captions = [5]str{ "Hover: caption of Author", "Hover: General category button", "Hover: Archetype value", "Hover: Description value", "Hover: Name value" }
+    var k = 0usize
+    while k < 5usize {
+        let (shut, shut_error) = mem.alloc[widget.Key](a, 1usize)
+        if shut_error != ok { ret (0usize, shut_error) }
+        shut[0usize] = collection.property_group_key("General")
+        let (node, node_error) = grid(a, t, u64(1000 + k * 1000), shut[0usize..0usize])
+        if node_error != ok { ret (0usize, node_error) }
+        var px: f32 = 80.0
+        var py: f32 = 50.0
+        if k == 1usize {
+            px = 318.0
+            py = 11.0
+        }
+        if k == 2usize {
+            px = 250.0
+            py = 283.0
+        }
+        if k == 3usize {
+            px = 250.0
+            py = 145.0
+        }
+        if k == 4usize {
+            px = 250.0
+            py = 31.0
+        }
+        looks.aim(k, px - 165.0, py - 212.5)
+        cells[k] = looks.Cell { caption: captions[k], node: node, drive: .Hover }
+        k += 1usize
+    }
+    ret (5usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize && args[1usize][0usize] == 104u8 {
+        let hover = looks.Sheet { name: "vertical_grid_hover", cells: 5usize, columns: 3usize, cell_w: 330.0, cell_h: 425.0, ctx: zero, build: build_hover }
+        ret looks.run_all(a, &hover)
+    }
     if args.len > 1usize { ret main_states(a) }
     if args.len > 1usize {
         // `vertical_grid.exe states`: the states sheet alone
