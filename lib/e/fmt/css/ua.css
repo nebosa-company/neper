@@ -1,0 +1,87 @@
+/* The user agent style sheet of e.fmt.css.ua, after the HTML Standard's rendering section (15) and Vaper's ua_stylesheet.
+   Edit this file, then run: python scripts/gen_css_ua.py (it writes lib/e/fmt/css/ua.e). */
+
+/* Display */
+html, body, address, blockquote, center, dialog, div, figure, figcaption, footer, form, header, hr, legend, listing, main, p, plaintext, pre, search, xmp,
+article, aside, h1, h2, h3, h4, h5, h6, hgroup, nav, section, dir, dd, dl, dt, menu, ol, ul, details, summary, fieldset, optgroup { display: block; }
+li { display: list-item; }
+table { display: table; }
+caption { display: table-caption; }
+colgroup { display: table-column-group; }
+col { display: table-column; }
+thead { display: table-header-group; }
+tbody { display: table-row-group; }
+tfoot { display: table-footer-group; }
+tr { display: table-row; }
+td, th { display: table-cell; }
+input, select, button, textarea, meter, progress { display: inline-block; }
+ruby { display: ruby; }
+rt { display: ruby-text; }
+slot { display: contents; }
+area, base, basefont, datalist, head, link, meta, noembed, noframes, param, rp, script, style, template, title, source, track { display: none; }
+[hidden], dialog:not([open]), input[type=hidden] { display: none; }
+
+/* Blocks */
+body { margin: 8px; }
+p, dl { margin-top: 1em; margin-bottom: 1em; }
+blockquote, figure { margin: 1em 40px; }
+center { text-align: center; }
+address { font-style: italic; }
+dd { margin-left: 40px; }
+h1 { font-size: 2em; margin-top: 0.67em; margin-bottom: 0.67em; font-weight: bold; }
+h2 { font-size: 1.5em; margin-top: 0.83em; margin-bottom: 0.83em; font-weight: bold; }
+h3 { font-size: 1.17em; margin-top: 1em; margin-bottom: 1em; font-weight: bold; }
+h4 { font-size: 1em; margin-top: 1.33em; margin-bottom: 1.33em; font-weight: bold; }
+h5 { font-size: 0.83em; margin-top: 1.67em; margin-bottom: 1.67em; font-weight: bold; }
+h6 { font-size: 0.67em; margin-top: 2.33em; margin-bottom: 2.33em; font-weight: bold; }
+hr { margin: 0.5em auto; border: 1px inset; color: gray; overflow: hidden; }
+pre, listing, xmp, plaintext { white-space: pre; margin-top: 1em; margin-bottom: 1em; font-family: monospace; }
+legend { padding-left: 2px; padding-right: 2px; }
+fieldset { margin-left: 2px; margin-right: 2px; padding: 0.35em 0.75em 0.625em; border: 2px groove #c0c0c0; min-width: min-content; }
+summary { cursor: default; }
+details > summary:first-of-type { display: list-item; }
+
+/* Lists */
+dir, menu, ol, ul { margin-top: 1em; margin-bottom: 1em; padding-left: 40px; }
+ul, menu, dir { list-style-type: disc; }
+ol { list-style-type: decimal; }
+ul ul, ol ul, menu ul, dir ul, ul menu, ol menu, menu menu, dir menu { list-style-type: circle; }
+ul ul ul, ol ul ul, ul ol ul, ol ol ul, ul ul menu, ol ul menu { list-style-type: square; }
+dir dir, dir menu, dir ol, dir ul, menu dir, menu menu, menu ol, menu ul, ol dir, ol menu, ol ol, ol ul, ul dir, ul menu, ul ol, ul ul { margin-top: 0; margin-bottom: 0; }
+
+/* Inline text */
+b, strong { font-weight: bold; }
+i, cite, em, var, dfn { font-style: italic; }
+u, ins { text-decoration: underline; }
+s, strike, del { text-decoration: line-through; }
+code, kbd, samp, tt { font-family: monospace; }
+big { font-size: larger; }
+small { font-size: smaller; }
+sub { vertical-align: sub; font-size: smaller; }
+sup { vertical-align: super; font-size: smaller; }
+mark { background-color: yellow; color: black; }
+abbr[title], acronym[title] { text-decoration: underline dotted; }
+nobr { white-space: nowrap; }
+rt { font-size: 50%; }
+a:any-link { color: #0000ee; text-decoration: underline; cursor: pointer; }
+:focus-visible { outline: 2px solid #4d90fe; }
+
+/* Tables */
+table { box-sizing: border-box; border-spacing: 2px; border-collapse: separate; text-indent: 0; }
+td, th { padding: 1px; vertical-align: inherit; }
+th { font-weight: bold; text-align: center; }
+caption { text-align: center; }
+thead, tbody, tfoot, tr { vertical-align: middle; }
+table[rules=none] > tr, table[rules=none] > thead, table[rules=none] > tbody, table[rules=none] > tfoot { border-style: none; }
+
+/* Forms and replaced content */
+input, textarea, select, button { margin: 0; font-size: 13.3333px; font-family: system-ui, sans-serif; color: #000000; text-indent: 0; letter-spacing: normal; word-spacing: normal; text-transform: none; text-align: start; }
+input, textarea, select { background-color: #ffffff; border: 2px inset #767676; padding: 1px 2px; cursor: text; }
+select { cursor: default; padding: 0; border-width: 1px; border-style: solid; }
+button, input[type=button], input[type=submit], input[type=reset] { background-color: #efefef; border: 2px outset #767676; padding: 1px 6px; text-align: center; cursor: default; }
+input[type=checkbox], input[type=radio] { margin: 3px 3px 3px 4px; padding: 0; width: 13px; height: 13px; border-width: 0; cursor: default; }
+textarea { white-space: pre-wrap; font-family: monospace; overflow: auto; }
+iframe { border: 2px inset; }
+img, video, audio, canvas, embed, object { overflow: clip; }
+video { object-fit: contain; }
+img:is([alt]) { }

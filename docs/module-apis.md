@@ -24689,7 +24689,7 @@ fn builder_text(t: *Text, s: str)
 fn builder_done(t: *Text) -> str
 type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, author: bool }
 fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet
-fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], sheet: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox)
+fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox)
 fn consider(best: *list.List[cascade.Declared], entry: cascade.Declared)
 fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -> []const cascade.Declared
 fn declared_direction(declared: []const cascade.Declared, fallback: bool) -> bool
@@ -24700,6 +24700,96 @@ fn parse_rules(a: *mem.Arena, source: str, order_start: i64) -> ([]const cascade
 fn compute_below(c: *Context, m: *const cssm.Matcher, d: *const dom.Dom, ua: *const Sheet, author: *const Sheet, id: html.NodeId, parent: *const Style, out: []Style) -> err
 fn first_root_element(d: *const dom.Dom) -> html.NodeId
 fn compute_tree(c: *Context, d: *const dom.Dom, ua: []const cascade.Rule, author: []const cascade.Rule, out: []Style) -> err
+fn media_env_of(c: *const Context) -> sheet.MediaEnv
+fn load_style_elements(l: *sheet.Loader, d: *const dom.Dom) -> err
+fn compute_document(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err
+```
+
+### `e.fmt.css.sheet`
+
+```neper
+type MediaEnv = struct { width: f64, height: f64, dark: bool, reduced_motion: bool, high_contrast: bool, print: bool, dppx: f64, hover: bool, fine_pointer: bool, scripting: bool }
+fn media_env(width: f64, height: f64) -> MediaEnv
+type FontFace = struct { family: str, url: str, weight: str, style: str, unicode_range: str, display: str }
+type Stop = struct { offset: f64, declarations: []const cascade.Declaration }
+type Keyframes = struct { name: str, stops: []const Stop }
+type PropertyRule = struct { name: str, syntax: str, inherits: bool, initial: str }
+type Loaded = struct { rules: []const cascade.Rule, fonts: []const FontFace, keyframes: []const Keyframes, properties: []const PropertyRule, imports: []const str, layers: []const str, next_order: i64 }
+fn lower_trim(a: *mem.Arena, s: str) -> str
+fn nm(set: str, name: str) -> bool
+fn skip_group(s: str, open: usize) -> usize
+fn inner_of(group: str) -> str
+fn strip_quotes(s: str) -> str
+fn px_of(env: *const MediaEnv, a: *mem.Arena, text: str) -> (f64, bool)
+fn near(x: f64, y: f64) -> bool
+fn number_of(a: *mem.Arena, s: str) -> (f64, bool)
+fn resolution_of(a: *mem.Arena, s: str) -> (f64, bool)
+fn feature_colon(env: *const MediaEnv, a: *mem.Arena, name: str, value: str) -> bool
+fn ratio_of(a: *mem.Arena, s: str) -> f64
+fn is_cmp(t: str) -> bool
+fn spread_ops(a: *mem.Arena, s: str) -> str
+fn range_actual(env: *const MediaEnv, name: str) -> (f64, bool)
+fn range_value(env: *const MediaEnv, a: *mem.Arena, name: str, text: str) -> (f64, bool)
+fn compare_op(op: str, x: f64, y: f64) -> bool
+fn flip_op(op: str) -> str
+fn feature_range(env: *const MediaEnv, a: *mem.Arena, text: str) -> bool
+fn feature_true(env: *const MediaEnv, a: *mem.Arena, inner_text: str) -> bool
+fn cond_true(env: *const MediaEnv, a: *mem.Arena, text: str) -> bool
+fn query_true(env: *const MediaEnv, a: *mem.Arena, query: str) -> bool
+fn media_matches(env: *const MediaEnv, a: *mem.Arena, prelude: str) -> bool
+fn declaration_supported(a: *mem.Arena, inner: str) -> bool
+fn supports_true(a: *mem.Arena, source: str, text: str) -> bool
+fn selector_parses(a: *mem.Arena, text: str) -> bool
+fn unknown_cond() -> container.Condition
+fn feature_cond(kind: container.FeatureKind, op: container.Op, value: f64) -> container.Condition
+fn parts_cond(a: *mem.Arena, kind: container.CondKind, parts: []const container.Condition) -> container.Condition
+fn axis_of(name: str) -> (container.FeatureKind, bool)
+fn op_of(text: str) -> container.Op
+fn flip_container_op(op: container.Op) -> container.Op
+fn container_value(a: *mem.Arena, kind: container.FeatureKind, text: str) -> (f64, bool)
+fn container_feature(a: *mem.Arena, text: str) -> (container.Condition, bool)
+fn container_cond(a: *mem.Arena, text: str) -> (container.Condition, bool)
+fn container_query(a: *mem.Arena, prelude: str) -> (cascade.ContainerQuery, bool)
+fn first_word_end(t: str) -> usize
+fn scope_selectors(a: *mem.Arena, text: str) -> []const selector.Selector
+fn scope_rule(a: *mem.Arena, prelude: str) -> cascade.Scope
+fn url_in(a: *mem.Arena, entry: str) -> (str, bool)
+fn format_in(a: *mem.Arena, entry: str, url: str) -> str
+fn select_font_src(a: *mem.Arena, value: str) -> str
+type Ctx = struct { has_layer: bool, layer: i64, path: str, containers: []const cascade.ContainerQuery, scopes: []const cascade.Scope }
+type Loader = struct
+fn new_loader(a: *mem.Arena, env: MediaEnv) -> Loader
+fn layer_index(l: *Loader, name: str) -> i64
+fn decls_of(l: *Loader, src: str, tokens: []const syntax.Token) -> []const cascade.Declaration
+fn decl_value(decls: []const cascade.Declaration, name: str) -> (str, bool)
+fn style_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx)
+fn with_container(l: *Loader, ctx: Ctx, q: cascade.ContainerQuery) -> Ctx
+fn with_scope(l: *Loader, ctx: Ctx, sc: cascade.Scope) -> Ctx
+fn add_font_face(l: *Loader, src: str, tokens: []const syntax.Token)
+fn stop_offset(a: *mem.Arena, s: str) -> (f64, bool)
+fn add_keyframes(l: *Loader, src: str, one: syntax.Rule)
+fn add_property(l: *Loader, src: str, one: syntax.Rule)
+fn add_import(l: *Loader, src: str, one: syntax.Rule)
+fn layer_names(l: *Loader, ctx: Ctx, prelude: str) -> []const str
+fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx)
+fn cat3(a: *mem.Arena, x: str, y: str, z: str) -> str
+type Text = struct { b: str.Builder, bad: bool }
+fn try_text(a: *mem.Arena, cap: usize) -> Text
+fn text_push(t: *Text, s: str)
+fn text_push_usize(t: *Text, v: usize)
+fn text_done(t: *Text) -> str
+fn walk_block(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx)
+fn walk(l: *Loader, src: str, rules: []const syntax.Rule, ctx: Ctx)
+fn load(l: *Loader, source: str) -> err
+fn finish(l: *Loader) -> Loaded
+fn parse_sheet(a: *mem.Arena, env: MediaEnv, source: str) -> (Loaded, err)
+```
+
+### `e.fmt.css.ua`
+
+```neper
+fn source(a: *mem.Arena) -> (str, err)
+fn rules(a: *mem.Arena, env: sheet.MediaEnv) -> (sheet.Loaded, err)
 ```
 
 ### `e.fmt.html.template`

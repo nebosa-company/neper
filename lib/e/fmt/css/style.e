@@ -19,8 +19,7 @@
 // filters, masks, background layers, `content`, counters, ...) keep their declared text in `extras` (inherited ones
 // carried down) for the consumers that parse them.
 //
-// Not here yet: stylesheet at-rules (`@media`, `@layer`, `@container`, `@scope`, `@supports`), pseudo-elements, the
-// user agent stylesheet, `revert`, logical properties for vertical writing modes, `attr()`/`counter()` in values.
+// Not here yet: pseudo-elements, `revert`, logical properties for vertical writing modes, `attr()`/`counter()` in values.
 //
 // Memory: the arena is retained; every string and list lives in it.
 
@@ -29,7 +28,9 @@ use e.fmt.css.cascade as cascade
 use e.fmt.css.expand as expand
 use e.fmt.css.match as cssm
 use e.fmt.css.selector as selector
+use e.fmt.css.sheet as sheet
 use e.fmt.css.syntax as syntax
+use e.fmt.css.ua as uacss
 use e.fmt.dom as dom
 use e.fmt.html as html
 use e.gfx.cssvalue as cv
@@ -1227,11 +1228,11 @@ fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet 
     ret Sheet { rules: rules, index: cascade.build_index(a, rules), author: author }
 }
 
-fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], sheet: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox) {
-    let visit = cascade.candidates(m, &sheet.index, el)
+fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox) {
+    let visit = cascade.candidates(m, &rs.index, el)
     var v = 0usize
     while v < visit.len {
-        let rule = sheet.rules[visit[v]]
+        let rule = rs.rules[visit[v]]
         v += 1usize
         if !cascade.containers_match(stack, rule.containers) { continue }
         var proximity = cascade.UNSCOPED
@@ -1245,7 +1246,7 @@ fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], sheet: *con
         let spec = selector.ordinal(selector.specificity(rule.selector))
         var d = 0usize
         while d < rule.declarations.len {
-            let pushed = list.push[cascade.Declared](out, cascade.Declared { declaration: rule.declarations[d], author: sheet.author, hint: false, specificity: spec, source: rule.source, has_layer: rule.has_layer, layer: rule.layer, proximity: proximity })
+            let pushed = list.push[cascade.Declared](out, cascade.Declared { declaration: rule.declarations[d], author: rs.author, hint: false, specificity: spec, source: rule.source, has_layer: rule.has_layer, layer: rule.layer, proximity: proximity })
             d += 1usize
         }
     }
@@ -1420,40 +1421,13 @@ fn compute(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: 
     ret (s, ok)
 }
 
-// --- Style sheets: plain qualified rules (at-rules are skipped for now).
+// --- Style sheets: the rules of one sheet's text (see `e.fmt.css.sheet` for the at-rules it resolves).
 
 fn parse_rules(a: *mem.Arena, source: str, order_start: i64) -> ([]const cascade.Rule, err) {
-    let (made, made_error) = list.init[cascade.Rule](a, 16usize)
-    if made_error != ok { ret (zero, made_error) }
-    var out = made
-    let tokens = try syntax.tokenize(a, source)
-    let rules = try syntax.parse_rules(a, tokens, true)
-    var order = order_start
-    var r = 0usize
-    while r < rules.len {
-        let one = rules[r]
-        r += 1usize
-        if one.at || !one.has_block { continue }
-        let (chosen, chosen_error) = selector.parse_selector_list_for_rule(a, source, one.prelude)
-        if chosen_error != ok { continue }
-        let (parsed, parsed_error) = syntax.parse_declarations(a, one.block.inner)
-        if parsed_error != ok { continue }
-        let decls = try mem.alloc[cascade.Declaration](a, parsed.len + 1usize)
-        var d = 0usize
-        while d < parsed.len {
-            decls[d] = cascade.Declaration { property: cv.lower(a, parsed[d].name), value: cv.trim_ws(syntax.raw_text(source, parsed[d].value)), important: parsed[d].important }
-            d += 1usize
-        }
-        var q = 0usize
-        while q < chosen.len {
-            if !chosen[q].has_pseudo {
-                let pushed = list.push[cascade.Rule](&out, cascade.Rule { selector: chosen[q].selector, declarations: decls[0usize..parsed.len], source: order, has_layer: false, layer: 0i64, containers: zero, scopes: zero })
-                order += 1i64
-            }
-            q += 1usize
-        }
-    }
-    ret (list.slice_const[cascade.Rule](&out), ok)
+    var l = sheet.new_loader(a, sheet.media_env(1280.0f64, 720.0f64))
+    l.order = order_start
+    try sheet.load(&l, source)
+    ret (sheet.finish(&l).rules, ok)
 }
 
 // --- The whole tree.
@@ -1495,4 +1469,44 @@ fn compute_tree(c: *Context, d: *const dom.Dom, ua: []const cascade.Rule, author
     let root_style = initial_style()
     try compute_below(c, &m, d, &ua_sheet, &author_sheet, d.root, &root_style, out)
     ret ok
+}
+
+// --- A document with its own style sheets.
+
+fn media_env_of(c: *const Context) -> sheet.MediaEnv {
+    var env = sheet.media_env(c.viewport_width, c.viewport_height)
+    env.dark = c.dark
+    ret env
+}
+
+// Loads the text of every `<style>` element of the tree (in tree order) into `l`, skipping one whose `media` does not match.
+fn load_style_elements(l: *sheet.Loader, d: *const dom.Dom) -> err {
+    var cur = dom.next_in_tree(d, d.root, d.root)
+    while cur != html.NONE {
+        if dom.is_html_named(d, cur, "style") {
+            let (media, has_media) = dom.get_attribute(d, cur, "media")
+            if !has_media || sheet.media_matches(&l.env, l.a, media) {
+                let text = try dom.text_content(l.a, d, cur)
+                try sheet.load(l, text)
+            }
+        }
+        cur = dom.next_in_tree(d, d.root, cur)
+    }
+    ret ok
+}
+
+// Every element's computed style with the user agent sheet, the document's `<style>` elements and `sheets` (author
+// style sheets the caller fetched, as text, in cascade order: `<link>`s and `@import`s are the caller's to place).
+fn compute_document(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err {
+    let env = media_env_of(c)
+    let ua_loaded = try uacss.rules(c.a, env)
+    var l = sheet.new_loader(c.a, env)
+    var i = 0usize
+    while i < sheets.len {
+        try sheet.load(&l, sheets[i])
+        i += 1usize
+    }
+    try load_style_elements(&l, d)
+    let author_loaded = sheet.finish(&l)
+    ret compute_tree(c, d, ua_loaded.rules, author_loaded.rules, out)
 }

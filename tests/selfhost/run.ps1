@@ -2590,6 +2590,18 @@ $cssStyleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $cssStyleWritten -ne 'executable written') { throw 'css_style emission failed' }
 & $cssStylePath
 if ($LASTEXITCODE -ne 0) { throw "a css_style check failed: exit $LASTEXITCODE" }
+# `e.fmt.css.sheet`: @media (types, min/max, range syntax, not/only, colour scheme), @supports, @layer, @container, @scope, @font-face source choice, @keyframes, @property, @import (tracker 1.13e).
+$cssSheetPath = Join-Path $testBuild 'css-sheet-selfhost.exe'
+$cssSheetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\css_sheet\src\main.e') $repo 'x64' 'windows' $cssSheetPath
+if ($LASTEXITCODE -ne 0 -or $cssSheetWritten -ne 'executable written') { throw 'css_sheet emission failed' }
+& $cssSheetPath
+if ($LASTEXITCODE -ne 0) { throw "a css_sheet check failed: exit $LASTEXITCODE" }
+# The user agent style sheet and `<style>` elements through `e.fmt.css.style.compute_document`: display, heading em margins, nested list markers, tables, links, forms, hidden (tracker 1.13f).
+$cssUaPath = Join-Path $testBuild 'css-ua-selfhost.exe'
+$cssUaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\css_ua\src\main.e') $repo 'x64' 'windows' $cssUaPath
+if ($LASTEXITCODE -ne 0 -or $cssUaWritten -ne 'executable written') { throw 'css_ua emission failed' }
+& $cssUaPath
+if ($LASTEXITCODE -ne 0) { throw "a css_ua check failed: exit $LASTEXITCODE" }
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 $distConsensusPath = Join-Path $testBuild 'dist-consensus-selfhost.exe'
 $distConsensusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_consensus\src\main.e') $repo 'x64' 'windows' $distConsensusPath

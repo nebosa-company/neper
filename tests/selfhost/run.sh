@@ -2286,6 +2286,16 @@ chmod +x "$test_build/fmt-dom-selfhost"
 css_style_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_style/src/main.e" "$repo" x64 linux "$test_build/css-style-selfhost")
 [ "$css_style_written" = 'executable written' ]
 chmod +x "$test_build/css-style-selfhost"
+# `e.fmt.css.sheet`: @media (types, min/max, range syntax, not/only, colour scheme), @supports, @layer, @container, @scope, @font-face source choice, @keyframes, @property, @import (tracker 1.13e).
+css_sheet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_sheet/src/main.e" "$repo" x64 linux "$test_build/css-sheet-selfhost")
+[ "$css_sheet_written" = 'executable written' ]
+chmod +x "$test_build/css-sheet-selfhost"
+# The user agent style sheet and `<style>` elements through `e.fmt.css.style.compute_document`: display, heading em margins, nested list markers, tables, links, forms, hidden (tracker 1.13f).
+css_ua_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_ua/src/main.e" "$repo" x64 linux "$test_build/css-ua-selfhost")
+[ "$css_ua_written" = 'executable written' ]
+chmod +x "$test_build/css-ua-selfhost"
+"$test_build/css-ua-selfhost"
+"$test_build/css-sheet-selfhost"
 "$test_build/css-style-selfhost"
 "$test_build/fmt-dom-selfhost"
 "$test_build/fmt-css-selfhost"
