@@ -1,0 +1,862 @@
+{
+ "radio": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/radio_states-vs-ref.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). radio_states 8 of 8, radio_hover 10 of 10, radio_dialog 5 of 5 cells pass with 0 structural px off (max 1 level); the ring and dot columns of every selected and unselected radio differ by at most 1 level from the live crops. The audit 3 finding (ring and dot up to 9 levels, 100 to 304 px) was not reproducible: the only 9-level differences in these crops are ClearType fringes of the unselected caption text after the dialog repaints. All 24 radio captures were re-checked per control rectangle with scripts/looks_rects.py (5 changed-control states compared, non-text pixels off 0, max 1 level). The 10 hover grabs are pixel-identical to rest apart from a caret blink (Search Cards).",
+    "gaps": [
+     "Unverified: disabled (no capture)",
+     "Hover: all 10 hover grabs are identical to rest (no distinct look)",
+     "Text ink compared at ClearType-excluded thresholds only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/radio.png",
+    "notes": "Audit 3: 20 cells measured on radio.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.014, 199 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "Disabled is the drawn mark; hover has no capture (rest look). No live reference exists for a Windows dark v3.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/radio.png",
+    "notes": "Audit 3: 24 cells measured on radio.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.1:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "Dot size and off-state edge approximated",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/radio.png",
+    "notes": "Audit 3: 24 cells measured on radio.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.7:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "Dot size and off-state edge approximated",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/radio.png",
+    "notes": "Audit 3: 30 cells measured on radio.png: text at least 4.5:1 and other parts at least 3:1, except 4 cells at 2.3:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/radio.png",
+    "notes": "Audit 3: 30 cells measured on radio.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 3.0:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 223 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/edits_states.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). No TcxTextEdit is captured; the captured plain edits are the TcxMaskEdit password fields and the hot key edit: edits_states cells 0 to 1 and 14 to 15 (0 structural px, ink boxes within 1 px) and edits_dialog 8 of 8 pass. The audit 3 hot key focused mismatch did not reproduce (ink boxes agree).",
+    "gaps": [
+     "Unverified: selection, read-only, disabled, invalid of a plain text edit (no capture)",
+     "edits_hover has a different row count than its ref sheet and is not compared cell by cell"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/text_edit.png",
+    "notes": "Audit 3: 20 cells measured on text_edit.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 3.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.014, 202 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "Read-only and invalid use the token paths (invalid is a red outline, a guess); disabled foot is the mapped light disabled tile. No live reference exists for a Windows dark v3.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/text_edit.png",
+    "notes": "Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "34 height and radius 8 approximate UITextField / SwiftUI roundedBorder; search 36 / 10 are closer to UIKit",
+     "text_field has no clear action: the clear mark only reports an empty change",
+     "Suffix overflows the right padding when prefix and suffix are both set",
+     "Multi-row field has no scrolling viewport",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/text_edit.png",
+    "notes": "Audit 3: 24 cells measured on text_edit.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 207 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "34 height and radius 8 approximate UITextField / SwiftUI roundedBorder; search 36 / 10 are closer to UIKit",
+     "text_field has no clear action: the clear mark only reports an empty change",
+     "Suffix overflows the right padding when prefix and suffix are both set",
+     "Multi-row field has no scrolling viewport",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/text_field.png",
+    "notes": "Audit 3: 26 cells measured on text_field.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.3:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No leading/trailing icon forms in this sheet (button_edit.png and search_bar.png have trailing/leading icons)",
+     "The outlined label notch is cut from the outline by the layout, not animated",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/text_field.png",
+    "notes": "Audit 3: 26 cells measured on text_field.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 3.0:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 214 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No leading/trailing icon forms in this sheet (button_edit.png and search_bar.png have trailing/leading icons)",
+     "The outlined label notch is cut from the outline by the layout, not animated",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_edit-vs-ref.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). 24 of 34 cells pass: combo_hover 9 of 9 (the editable Search combo is compared with the caret in its blink-off phase), combo_box_edit, combo_box_pick, the popup lists and heads pass; the list-style focus rectangle now uses the live blurred greys and the toolbar grip crop is exact. Remaining: combo_box_dialog (Medium) text ink 2 px at the 60 level (ClearType halo), combo_box_focus (a glyph ascender 1 px taller than the capture splits an ink line at 100), the 4 flat toolbar crops hold v3 toolbar artwork in the ref, and the 4 list and open colour cells differ by one 3-level pixel at the popup top right.",
+    "gaps": [
+     "Mismatch: one antialiased pixel (3 levels) at the top right of the popup list in combo_box_list_color(2) and combo_box_open_color(2)",
+     "Mismatch: text ink 1 to 2 px (ClearType) in combo_box_dialog cell 1 and combo_box_focus",
+     "Composite references (head capture + popup capture): the 6 combo_box_open_* sheets",
+     "Unverified: disabled, read-only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/combo_box.png",
+    "notes": "Audit 3: 16 cells measured on combo_box.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 4.4:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.014, 203 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "Rest/hover/pressed/focus/open/disabled all render; hover and pressed drop-button tints and the focus underline shade (about #0A84E6, not #4CC2FF) are map results, not Windows 11 values; flat card variants and combo_box_pick unreviewed.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/combo_box.png",
+    "notes": "Audit 3: 12 cells measured on combo_box.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 3.4:1 or better that is equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "Chip size and colours approximated",
+     "Editable combo box and image combo box not styled",
+     "iOS pull-down menu button idiom not drawn",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/combo_box.png",
+    "notes": "Audit 3: 12 cells measured on combo_box.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 3.2:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.012, 201 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "Chip size and colours approximated",
+     "Editable combo box and image combo box not styled",
+     "iOS pull-down menu button idiom not drawn",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/combo_box.png",
+    "notes": "Audit 3: 26 cells measured on combo_box.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 2.3:1 or better that is equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "Menu elevation is a hard shadow",
+     "No menu open/close animation is shown",
+     "The filled field keeps its idle indicator while open",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/combo_box.png",
+    "notes": "Audit 3: 26 cells measured on combo_box.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 3.0:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.006, 224 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "Menu elevation is a hard shadow",
+     "No menu open/close animation is shown",
+     "The filled field keeps its idle indicator while open",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image_combo_box_open_condition.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). 18 of 20 cells pass (closed, cell editor, hover, open lists and condition lists); the 2 remaining cells (art2 list and open) differ in one antialiased pixel (3 levels) at the popup top right. Audit 3 reported up to 245 levels in the art list: not reproducible, the cells compare in place with no other structural pixel off.",
+    "gaps": [
+     "Mismatch: one antialiased pixel (3 levels) at the top right of image_combo_box_list_art2 and image_combo_box_open_art2",
+     "Composite references: the 6 image_combo_box_open_* sheets",
+     "Unverified: disabled, row hover"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/image_combo_box.png",
+    "notes": "Audit 3: not verified: 2 words fall under 4.5:1 that pass in the light twin (lowest 3.0:1). Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "Open-head blue (#1B5A9A) is the mapped light tint; the item pictures are the light art unchanged.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/image_combo_box.png",
+    "notes": "Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.8:1).",
+    "gaps": [
+     "Pictures are the drawn glyph stand-ins of the sheet, not a real image list",
+     "The menu is not widened to its longest row (long names clip)",
+     "Hover on the closed button is the faint bezel change only",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/image_combo_box.png",
+    "notes": "Audit 3: 16 cells measured on image_combo_box.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.2:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 208 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "Pictures are the drawn glyph stand-ins of the sheet, not a real image list",
+     "The menu is not widened to its longest row (long names clip)",
+     "Hover on the closed button is the faint bezel change only",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "started",
+    "screenshot": "material/image_combo_box.png",
+    "notes": "Audit 3: not verified: 2 cells under the floor (text 4.5:1, other UI 3:1; lowest 2.0:1).",
+    "gaps": [
+     "Disabled is the whole field at 38 % opacity, not the M3 12 % outline / 38 % text split",
+     "The icons are generic glyphs standing in for the image list's bitmaps",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/image_combo_box.png",
+    "notes": "Audit 3: 28 cells measured on image_combo_box.png: text at least 4.5:1 and other parts at least 3:1, except 4 cells at 2.6:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 228 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "Disabled is the whole field at 38 % opacity, not the M3 12 % outline / 38 % text split",
+     "The icons are generic glyphs standing in for the image list's bitmaps",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/check_list_box_states-vs-ref.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). 12 of 15 cells pass: every captured state (rest, selected focused, selected unfocused, pressed check box, focused list, hover rows) shows 0 structural px off (max 1 level), check boxes exact, item pitch equal, ink boxes within 1 px. The 3 other cells are the Card Art list whose 26 px at up to 95 levels are v3 item image artwork (excluded). The audit 3 figure (893 to 956 px off) was not reproducible.",
+    "gaps": [
+     "Excluded: v3 coloured item images in the Card Art cells",
+     "Hover: the 5 hover grabs are identical to rest",
+     "Unverified: disabled, multi-select, indeterminate rows",
+     "At 2.0 the check glyphs render blocky (viewed in audit 3)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/check_list_box.png",
+    "notes": "Audit 3: 8 cells measured on check_list_box.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.014, 198 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "Unfocused current-row look is the same as focused (as in the light capture). No live reference exists for a Windows dark v3.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/check_list_box.png",
+    "notes": "Audit 3: 7 cells measured on check_list_box.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The keyboard focus is the runtime's rectangular ring (iOS shows none, macOS a rounded one)",
+     "The scroll indicator is the shared thin grey thumb",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/check_list_box.png",
+    "notes": "Audit 3: 7 cells measured on check_list_box.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.025, 204 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The keyboard focus is the runtime's rectangular ring (iOS shows none, macOS a rounded one)",
+     "The scroll indicator is the shared thin grey thumb",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "started",
+    "screenshot": "material/check_list_box.png",
+    "notes": "Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.6:1).",
+    "gaps": [
+     "No disabled or error row is drawn",
+     "The frame has no scrollbar in the sheet (three rows fit)",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/check_list_box.png",
+    "notes": "Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 2.0:1).",
+    "gaps": [
+     "No disabled or error row is drawn",
+     "The frame has no scrollbar in the sheet (three rows fit)",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/list_box_focus-vs-ref.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). list_box_focus, list_box_blur and list_box_dialog all pass (3 of 3): 0 structural px off (max 1 level), ink boxes within 1 px. Fixed this round: rows lay out at Tahoma GDI advances (62 px for Edition Name as captured) and the chosen row carries the live 20 row focus rectangle in the fill-tinted greys.",
+    "gaps": [
+     "Hover: the 2 hover grabs are identical to rest",
+     "Unverified: disabled, multi-select"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/list_box.png",
+    "notes": "Audit 3: 1 cells measured on list_box.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.024, 203 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "Selected row is the mapped v3 selection tint, not #264F78; hover row has no fill in v3 either.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/list_box.png",
+    "notes": "Audit 3: 8 cells measured on list_box.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "Section headers and footers not drawn",
+     "Multi-select list keeps its Neper check boxes",
+     "Selection is a tick only (macOS sidebar accent fill not drawn)",
+     "Row hover colour approximated; the scroll thumb is the runtime's",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/list_box.png",
+    "notes": "Audit 3: 8 cells measured on list_box.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 206 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "Section headers and footers not drawn",
+     "Multi-select list keeps its Neper check boxes",
+     "Selection is a tick only (macOS sidebar accent fill not drawn)",
+     "Row hover colour approximated; the scroll thumb is the runtime's",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/list.png",
+    "notes": "Audit 3: 27 cells measured on list.png: text at least 4.5:1 and other parts at least 3:1, except 4 cells at 2.3:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No swipe actions or drag handles",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/list.png",
+    "notes": "Audit 3: 27 cells measured on list.png: text at least 4.5:1 and other parts at least 3:1, except 4 cells at 3.0:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 216 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No swipe actions or drag handles",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/splitter_live_across_held-vs-ref.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). All 9 cells pass (splitter_dialog and its pressed grab, live vertical and lying strips at rest, held and hot): 0 structural px off (max 2 levels). Fixed this round: the 574 px lying zone starts at 200 and its first column is the plain face. The 3 pressed grabs (Filter, horizontal, vertical) have cells (splitter_dialog_held, splitter_live_across_held, splitter_live_held).",
+    "gaps": [
+     "Hover: the horizontal hover grab is identical to rest",
+     "Unverified: drag, disabled"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/splitter.png",
+    "notes": "Audit 3: 1 cells measured on splitter.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.024, 204 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "Hover and dragged tints are the map of the light ones, unverified.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/splitter.png",
+    "notes": "Audit 3: 1 cells measured on splitter.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The harness hover and press do not reach the divider (the same in the Neper sheet), so the dimple and the accent line of a held divider are drawn by code but not shown in a PNG",
+     "The thick-divider dimple is the existing 4 x 44 rounded grip, not Apple's pane splitter grip",
+     "The pane keeps its own focus ring while the divider is focused (a second line above)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/splitter.png",
+    "notes": "Audit 3: 1 cells measured on splitter.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.025, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The harness hover and press do not reach the divider (the same in the Neper sheet), so the dimple and the accent line of a held divider are drawn by code but not shown in a PNG",
+     "The thick-divider dimple is the existing 4 x 44 rounded grip, not Apple's pane splitter grip",
+     "The pane keeps its own focus ring while the divider is focused (a second line above)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/splitter.png",
+    "notes": "Audit 3: 16 cells measured on splitter.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "M3 has no splitter: the resizable-pane sash of the base look is the divider plus handle",
+     "The handle is always visible (touch density), hover and focus only change its colour",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/splitter.png",
+    "notes": "Audit 3: 16 cells measured on splitter.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.006, 220 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "M3 has no splitter: the resizable-pane sash of the base look is the divider plus handle",
+     "The handle is always visible (touch density), hover and focus only change its colour",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/token_edit_dialog-vs-ref.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). The 3 token edits of the Filter dialog Cards tab (TdxTokenEdit teAnd, teOr, teNot; 315 x 46, 46, 27) are real captures: the reference crops are exact sub-images of states/tab-selected-filter-cards at (275,84) and (275,186) (the audit 3 stand-in claim does not hold). The sheet now stands the edit on the #F9F9F9 Search for Text group face, which removed the 1748 px background mismatch: 3 of 3 cells, 0 px off at any level.",
+    "gaps": [
+     "Unverified: focus, hover, disabled, tokens present (only the empty rest state is captured)",
+     "Dark twin stands on a #272727 face (unmeasured)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/token_edit.png",
+    "notes": "Audit 3: 16 cells measured on token_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 4.4:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.014, 203 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "Tokens (chips) themselves keep the light guess colours through the style.hex map; focused foot is a guess in light too. No live reference exists for a Windows dark v3.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/token_edit.png",
+    "notes": "Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/token_edit.png",
+    "notes": "Audit 3: 16 cells measured on token_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 2.4:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.012, 211 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/token_edit.png",
+    "notes": "Audit 3: 18 cells measured on token_edit.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "M3 has no token field: this is the input-chip pattern in an outlined box",
+     "The close icon has no separate hover layer; hover shows on the chip",
+     "A field with three chips wraps the input to a second row at 360 dp wide",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/token_edit.png",
+    "notes": "Audit 3: 18 cells measured on token_edit.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.006, 228 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "M3 has no token field: this is the input-chip pattern in an outlined box",
+     "The close icon has no separate hover layer; hover shows on the chip",
+     "A field with three chips wraps the input to a second row at 360 dp wide",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/edits_states.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). edits_states cells 10 to 13 (focused, selected, ellipsis pressed, disabled) show 0 structural px off once antialiasing of our text leaking into a flat reference pixel is excluded (the one pixel at 4 levels is a glyph tail of the path text, not the ellipsis frame as audit 3 reported). The disabled cell still fails the ink box: our disabled text is 4 px wider (217 vs 213) than GDI in the capture.",
+    "gaps": [
+     "Mismatch: disabled Card Art text ink 4 px wider at the 60 level (the editor has no GDI advances)",
+     "Unverified: read-only (no capture)",
+     "edits_hover has a different row count than its ref sheet"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/button_edit.png",
+    "notes": "Audit 3: 20 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 3.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.014, 204 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "Pressed ellipsis face is the light capture mapped (a pale blue-grey), not a Windows 11 dark value. No live reference exists for a Windows dark v3.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/button_edit.png",
+    "notes": "Audit 3: 21 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.1:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/button_edit.png",
+    "notes": "Audit 3: 21 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.6:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/button_edit.png",
+    "notes": "Audit 3: 33 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 4 cells at 2.3:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The icon is three dots (the v3 ellipsis), not a task icon such as a folder",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/button_edit.png",
+    "notes": "Audit 3: 33 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 3.0:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 226 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The icon is three dots (the v3 ellipsis), not a task icon such as a folder",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). No date edit exists in any v3 capture (none is reachable without printing), so nothing is compared; the native Windows 11 date picker captures in ref/windows-native are not v3.",
+    "gaps": [
+     "Unverified: every state"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/date_edit.png",
+    "notes": "Audit 3: 16 cells measured on date_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 3.8:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.014, 206 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "The calendar popup is token-driven and unmeasured in light too. No live reference exists for a Windows dark v3.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/date_edit.png",
+    "notes": "Audit 3: 14 cells measured on date_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 4.0:1 or better that is equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The iOS compact picker (a grey date capsule) and the macOS stepper date field are not drawn: this is the DevExpress edit-plus-drop-button idiom in Apple colours",
+     "Today is not marked with an accent ring",
+     "The chosen-day disc is the shared 34 squircle stand-in (circular arcs)",
+     "Month and year picking (wheels) not drawn",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/date_edit.png",
+    "notes": "Audit 3: 14 cells measured on date_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 3.8:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.012, 212 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The iOS compact picker (a grey date capsule) and the macOS stepper date field are not drawn: this is the DevExpress edit-plus-drop-button idiom in Apple colours",
+     "Today is not marked with an accent ring",
+     "The chosen-day disc is the shared 34 squircle stand-in (circular arcs)",
+     "Month and year picking (wheels) not drawn",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "started",
+    "screenshot": "material/date_picker.png",
+    "notes": "Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.2:1).",
+    "gaps": [
+     "Range pickers and the docked picker are not drawn",
+     "The picker is a static sheet cell, not an open overlay",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.2:1).",
+    "gaps": [
+     "Range pickers and the docked picker are not drawn",
+     "The picker is a static sheet cell, not an open overlay",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/memo.png",
+    "notes": "Round 9 (scripts/looks_cells.py: ref sheet vs ours in place, structural pixels tolerance 2 levels, text antialiasing of ours leaking into a flat ref pixel excluded, ClearType excluded, ink boxes within 1 px at the 60 level and one other). No memo exists in any v3 capture, so nothing is compared.",
+    "gaps": [
+     "Unverified: every state"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/memo.png",
+    "notes": "Audit 3: 16 cells measured on memo.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 3.7:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.014, 202 levels mean difference from the light twin, no light-only chrome. Round 9: re-rendered after the light changes of this round (dark twins consistent, viewed).",
+    "gaps": [
+     "The 150 % sheet is stale: the memo sheet app crashes with an access violation on the 150 % dark render (also on unmodified master), so memo@1.5x.png in windows-dark was not refreshed. No live reference exists for a Windows dark v3.",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Native Windows 11 dark captures exist for this control in ref/windows-native/dark; compared by eye and by sampled colours for the radio only (native: accent disc #60CDFF with a black dot, unchecked ring #AAAAAA on #242424), not matched pixel by pixel"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/memo.png",
+    "notes": "Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/memo.png",
+    "notes": "Audit 3: 15 cells measured on memo.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 204 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/memo.png",
+    "notes": "Audit 3: 28 cells measured on memo.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.3:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The hover outline of the multi-line field is not drawn in the sheet (the pointer lands on its scrolling viewport)",
+     "The scroll thumb is the Neper 4 dp thumb 8 dp from the end, not the Android overlay scrollbar",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/memo.png",
+    "notes": "Audit 3: 28 cells measured on memo.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 3.0:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 214 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The hover outline of the multi-line field is not drawn in the sheet (the pointer lands on its scrolling viewport)",
+     "The scroll thumb is the Neper 4 dp thumb 8 dp from the end, not the Android overlay scrollbar",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}
