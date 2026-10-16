@@ -1,0 +1,80 @@
+{
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "The baseline: v2 menu (navigation.bar_menu); the menu fades in so the static sheet shows little."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Round 5 (group f). Every captured menu and sub-menu has a cell: the 10 menus at rest (file, cards, search, view, cardart, online, reports, tools, admin, help), reports deck mode, the 17 keyboard-selected rows (sel_*) and the 8 sub-menu parents and children (sub_cards_export, sub_cards_print, sub_view_show_grid_lines, sub_view_toolbars), plus the Cards | View composite popup_menu_dialog: 36 sheets, all at scale 1.0 against the live 1x grabs. Numbers (flat runs of 11 or more equal pixels away from ink, tolerance 2 levels per channel, scripts in the worker's scratch): 0 px off in 31 sheets and 1 px off (6 levels, one text anti-aliasing pixel at 43,241) in the View family (view, sel_view_1/5, sub_view_show_grid_lines_parent, sub_view_toolbars_parent); the other diffs are all inside the 16 x 16 picture squares (v3's coloured bitmaps, artwork excluded: ours are stand-in glyphs; the slots' frames, checks, dither and highlight outside the bitmaps match). Fixed this round: the audit's 12 px runs at 63 to 240 levels were mnemonic underlines drawn at a fractional row (a 0.74 grey beside the missing 1.00 one): windows_gdi_run now rounds the underline to a whole row (it is #000000 in the captures); and the sheet specs now follow the captures' mnemonics (CSV has none, P&rint Preview, &Extended). Text: ClearType in the captures, grayscale unhinted here: ink boxes within 1 px (2 px on a few long runs).",
+    "gaps": [
+     "Placeholder pictures: v3's coloured icon bitmaps are not available, drawn stand-in glyphs fill the 16 x 16 squares (artwork excluded from every comparison)",
+     "Unverified: hover of a popup menu row (no hover capture of a menu row exists; the keyboard-selected rows stand in and match)",
+     "Unverified: a disabled picture's greyed bitmap (only the stand-in glyph is drawn)",
+     "Text is grayscale and unhinted where the captures are ClearType: pixels on glyph edges differ by design"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/menu_bar.png",
+    "notes": "The baseline: v2 menu bar (the open-menu sheet shows no menu because the menu fades in)."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "Round 5 (group f). Compared at scale 1.0 against the live 1x grabs, 21 cells: the bar at rest (menu_bar), nine open titles (menu_bar_open_file, cards, search, view, cardart, online, reports, tools, help), the hot View of the rest grab (menu_bar_hot_view) and the ten hot titles of the new hover grabs (menu_bar_hot: file, cards, search, view, cardart, online, reports, tools, admin, help; states/hover-menubar-title-*). Numbers (pixels off by more than 2 levels outside text, text masked 2 px round ink): 0 on menu_bar_hot_view and 13 on every other sheet, all of them the same 13 anti-aliasing pixels of the T stem of Tools (13 px at x 334 to 337: ClearType colour fringe against our grayscale stem); the open and hot boxes are exact. Fixed this round: the open title's box now drifts its corner pixels (top left #BB to #C8, the line below the top #D5 to #C8, the foot pixels, the top right #F9 to #E9) and draws the faint column past its right edge (#F0 to #F4), both by the title's position along the bar (windows_open_drift: nine measured anchors, interpolated: the audit's 16-level edge greys), and the hot box is the same drift model read from the ten hot grabs (it was a single View sample). Title text: ink x extents within 1 px of the captures on all ten titles (Card Art 2 px short, ClearType) and rows within 1 px.",
+    "gaps": [
+     "Unverified: the open Admin title (no capture of Admin open exists; its hot box matches, its open box is interpolated between Tools and Help)",
+     "Unverified: a disabled menu item or title, pressed-then-dragged states",
+     "Title text is grayscale and unhinted where the captures are ClearType: glyph edge pixels differ by design (13 px on the T of Tools, ink boxes within 1 px)"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/toolbar_button.png",
+    "notes": "The baseline: round glyph buttons (control.glyph_toggle); the sheet's first cell is one row of them."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/toolbar_button_row.png",
+    "notes": "Round 5 (group f). Three sheets against the live 1x grabs: toolbar_button (the Standard and Cards bars of the second toolbar row, as before), toolbar_button_row (all four bars: Standard, Cards, Search and Help, 657 x 26) and toolbar_button_hot (nine cells: hot Cards expand, Cards F, Search filter, filter plus, binoculars, Help home and discord, and pressed filter and binoculars; states/hover-toolbar-button-*, the whole row with the pointer on the button). Numbers: the row has 0 px off by more than 2 levels outside the 23 x 23 button cells (grips, separators with their soft first row and faint column, both bar edges, bottom corners, the foot line: all exact); the hot and pressed boxes are exact: 0 of 172 px off (max 0) on all nine grabs, the glyph squares excluded (the pressed picture shifts 1 px right and down as in v3). The 4925 px that differ inside the cells are v3's coloured bitmaps, artwork excluded (stand-in glyphs here). Fixed this round: the audit's 62 px were the missing fade row and faint column of the separators, the toolbar grip's bottom and top pixels (drifting per bar, measured on all four), the bar end columns and corner pixels, and the guessed blue hot and pressed faces, now v3's raised and sunken 2 px boxes whose greys drift along the window (windows_tool_box, interpolated between the measured buttons). The 11 greyed buttons' hover grabs are pixel-identical to rest, and ours draws no box on a disabled button.",
+    "gaps": [
+     "Placeholder pictures: v3's bitmaps are not available, drawn stand-in glyphs (artwork excluded); the Cards bar's last three and the Search and Help bars' buttons are enabled stand-ins",
+     "Unverified (not captured): checked, keyboard focus, drop-down buttons (the checked look is a guessed blue)",
+     "Unverified: a captioned button (TdxBarButton with a caption; v3's toolbars have none, the look is a guess)",
+     "The hot box's greys between the measured buttons (x 384 to 640 of the window) are interpolated; the pressed greys are measured at two buttons only (x 466 and 512) and held outside them"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/status_bar.png",
+    "notes": "The baseline: v2 status bar."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/status_bar.png",
+    "notes": "Round 5 (group f). Compared at scale 1.0 against the live 1x grabs: the main window's bar at rest (status_bar, 784 x 19; the states/dialogs main-window grabs are identical to it but for the digit of Sel), the report preview windows' flat bar (status_bar_report: Page 1 of 1 in Card Quantities, Combos from Collection and Scorepad; status_bar_report_11: Edition Availability; status_bar_report_167: Game Rules help; all 1280 x 19) and the four hover grabs (status_bar_hover: the pointer on each panel, which v3 draws exactly as at rest). Numbers (flat runs, tolerance 2): 0 px off on status_bar, 0 on the three report sheets and 0 on all four hover cells outside the text rows. Fixed this round: the report bar's separator ends were wrong (a hex typo gave the first separator's top pixel #E800E6 instead of #E8E8E8, and the second separator's end pixels differ from the first's: #EA/#ED above, #E5/#EA below, measured on five windows); the report bar's text is Segoe UI 9 pt (12 px: 57 px of ink for Page 1 of 1, x 2 to 58 as captured, rows 5 to 16 against 5 to 17) not Tahoma; a pressable panel no longer shows a hover blue (v3's panels have no hover look).",
+    "gaps": [
+     "Unverified (not captured): the progress panel (the container panel is empty in every grab; the fill, track and the text over it are guesses), the error tone, a disabled bar",
+     "The pressable panel of the Neper bar has no v3 counterpart (v3's panels do nothing on hover or click)",
+     "Text is grayscale and unhinted where the captures are ClearType: ink boxes within 1 px (the report bar's descender row ends 1 px short)"
+    ]
+   }
+  }
+ }
+}
