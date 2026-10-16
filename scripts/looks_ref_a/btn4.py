@@ -21,6 +21,16 @@ NAMES=['normal','default','mnemonic','disabled','hover','pressed','focus Invert'
 ref=new_ref(12,cols,cw,ch)
 rects={}
 for i,(src,(x,y,w,h)) in SPEC.items():
+    if i==6:
+        # looks5: the Filter dialog's face is #F9F9F9: crop 5 px of it around the box (an 83 x 32 holder in the cell)
+        m=5; hw,hh=w-2+2*m,h-1+2*m
+        hw+=1 if hw%2==0 else 0
+        hh+=1 if hh%2==1 else 0
+        c=Image.open(src if os.path.isabs(src) else D+src).convert('RGB').crop((x+1-m,y+1-m,x+1-m+hw,y+1-m+hh))
+        ox,oy=origin(i%cols,i//cols,cw,ch)
+        px,py=ox+(cw-hw)//2,oy+(ch-hh)//2
+        ref.paste(c,(px,py)); rects[i]=(px+m,py+m,w-2,h-1)
+        continue
     rects[i]=place(ref,i,cols,cw,ch,src,(x+1,y+1,w-2,h-1))
 ref.save(R+'ref/windows/button.png')
 def cmp(ours,ref,rect):

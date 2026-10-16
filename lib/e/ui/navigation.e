@@ -8424,6 +8424,8 @@ fn ribbon_key_budget(tab: *const RibbonTab) -> usize {
 type TitleBarOptions = struct {
     platform: win.Platform, mode: win.Mode, frameless: bool, minimizable: bool, maximizable: bool, resizable: bool,
     icon: bool, rtl: bool, active: bool, glyph: control.GlyphKind,
+    // looks5 (Windows look): the light caption of v3's DevExpress dialogs, and the tool window's (no icon, title at 8, red close box)
+    light: bool, tool: bool,
     minimize: widget.Submit, maximize: widget.Submit, close: widget.Submit, move: widget.Submit, toggle: widget.Submit,
 }
 
@@ -8501,7 +8503,10 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
         if slot.kind == .Maximize { which = 1u32 }
         if slot.kind == .Close { which = 2u32 }
         // a dialog's 33 wide close button on an odd pixel draws its X half a pixel left (winchrome.cross_cover_odd)
-        if slot.kind == .Close && slot.rect.width < 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 { which = 3u32 }
+        if slot.kind == .Close && slot.rect.width < 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 {
+            which = 3u32
+            if active { which = 7u32 }
+        }
         // the 46 wide buttons of a window of odd width start on an odd pixel and draw all three glyphs half a pixel right
         if slot.rect.width > 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 {
             if slot.kind == .Minimize { which = 4u32 }
@@ -8591,13 +8596,26 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     let windows = t.tokens.profile == .Windows && options.platform == .Windows
     if windows {
         ink = style.windows_caption_ink(options.active)
-        words.size = 12.0
+        if options.light || options.tool { ink = style.windows_caption_light_ink() }
+        // 12 px Segoe UI, 0.4% smaller: the captions' ink is up to 2 px narrower than the shaped run over a long title
+        words.size = 11.95
         words.weight = 400u32
     }
     let (advance, _, _, metrics_error) = control.run_metrics(a, t, .LabelLarge, title)
     if metrics_error != ok { ret (zero, metrics_error) }
     var caption = win.caption_layout(width, caption_options, advance)
     if windows { caption = windows_caption_v3(caption, width) }
+    if windows && options.tool {
+        // the tool window: the title from x = 8, no icon, no caption buttons (the red close box is drawn below)
+        var k = 0usize
+        while k < caption.count {
+            caption.slots[k].rect = geometry.rect(0.0, 0.0, 0.0, 0.0)
+            k += 1usize
+        }
+        caption.drag = geometry.rect(8.0, 0.0, width - 8.0 - 22.0, caption.bar.height)
+        caption.title = caption.drag
+        caption.icon = geometry.rect(0.0, 0.0, 0.0, 0.0)
+    }
     if caption.bar.height == 0.0 {
         var sem: widget.Semantics = zero
         sem.role = 2u8
@@ -8668,6 +8686,11 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
                     glyph_ink = style.hex(16777215u32)
                 }
             }
+            // looks5: v3's hovered minimise and maximise buttons wash #2C2D2F over the dark caption (states/hover-caption-*)
+            if windows && slot.kind != .Close && !options.light && !options.tool {
+                fill = style.windows_caption_hot()
+                if state.pressed { fill = style.mix(fill, style.hex(16777215u32), 0.06) }
+            }
         }
         let (face, face_error) = caption_face(a, t, slot, options.platform, glyph_ink, options.active, state.hovered)
         if face_error != ok { ret (zero, face_error) }
@@ -8685,17 +8708,44 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
         let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
         if centred_error != ok { ret (zero, TooLarge) }
         centred[0usize] = face
-        let cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(slot.rect.width, slot.rect.height), centred[0usize..1usize])
+        var cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(slot.rect.width, slot.rect.height), centred[0usize..1usize])
+        if windows && fill.alpha > 0.0 {
+            // the hover wash of the capture is 29 rows (1 to 29): on a three button caption each button's wash is 46 wide, the minimise and
+            // maximise ones a pixel left of their slot; on a dialog's lone X it covers the slot, its first column three quarters blended
+            var hot_x: f32 = 0.0
+            var hot_w = slot.rect.width
+            if slot.rect.width > 40.0 && slot.kind != .Close { hot_x = -1.0 }
+            look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+            if layers_error != ok { ret (zero, TooLarge) }
+            var count = 0usize
+            if slot.rect.width < 40.0 {
+                layers[count] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), mem_one(a, widget.box(0u64, windows_flat_sized(1.0, 29.0, control.with_alpha(fill, 0.75)), zero)))
+                count += 1usize
+                hot_x = 1.0
+                hot_w = slot.rect.width - 1.0
+            }
+            layers[count] = widget.positioned(0u64, hot_x, 1.0, style.defaults(), mem_one(a, widget.box(0u64, windows_flat_sized(hot_w, 29.0, fill), zero)))
+            count += 1usize
+            layers[count] = cell
+            count += 1usize
+            cell = widget.stack(0u64, control.sized_style(slot.rect.width, slot.rect.height), layers[0usize..count])
+        }
         let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, caption_name(slot), look, slot.enabled, false, &presses[index], cell)
         if pressed_error != ok { ret (zero, pressed_error) }
         parts[n] = widget.positioned(0u64, slot.rect.x, slot.rect.y, style.defaults(), mem_one(a, pressed))
         n += 1usize
         i += 1usize
     }
+    if windows && options.tool {
+        parts[n] = widget.positioned(0u64, width - 22.0, 7.0, style.defaults(), mem_one(a, winchrome.tool_close_node()))
+        n += 1usize
+    }
     var bar = control.sized_style(width, caption.bar.height)
     bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
     if !options.active { bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) } }
     if windows { bar.background = paint.Brush { Solid: style.windows_caption_face(options.active) } }
+    if windows && (options.light || options.tool) { bar.background = paint.Brush { Solid: style.windows_caption_light_face() } }
     let (bar_cell, bar_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if bar_cell_error != ok { ret (zero, TooLarge) }
     bar_cell[0usize] = widget.stack(0u64, bar, parts[0usize..n])
@@ -8703,6 +8753,13 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     sem.role = 2u8
     sem.label = "Title bar"
     ret (widget.semantics(key, sem, style.defaults(), bar_cell[0usize..1usize]), ok)
+}
+
+// A box `w` x `h` filled `color` (the caption's hover wash).
+fn windows_flat_sized(w: f32, h: f32, color: paint.Color) -> style.Style {
+    var look = control.sized_style(w, h)
+    look.background = paint.Brush { Solid: color }
+    ret look
 }
 
 // ---- The Windows look, bars (docs/ui/looks, group `bars`): the dxBar strip, the main menu,
