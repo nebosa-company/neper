@@ -557,7 +557,9 @@ fn reflect_delete_property(it: *js.Interp, this_val: js.Value, args: []const js.
     if oe != ok { ret (js.undefv(), oe) }
     let (k, ke) = js.to_property_key(it, arg(args, 1usize))
     if ke != ok { ret (js.undefv(), ke) }
-    ret (js.bool_value(js.delete_prop(it, o, k)), ok)
+    let (done, de) = js.delete_prop_e(it, o, k)
+    if de != ok { ret (js.undefv(), de) }
+    ret (js.bool_value(done), ok)
 }
 
 fn reflect_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -588,7 +590,8 @@ fn reflect_get_own_property_descriptor(it: *js.Interp, this_val: js.Value, args:
     if oe != ok { ret (js.undefv(), oe) }
     let (k, ke) = js.to_property_key(it, arg(args, 1usize))
     if ke != ok { ret (js.undefv(), ke) }
-    let (p, found) = js.get_own(it, o, k)
+    let (p, found, ge) = js.get_own_e(it, o, k)
+    if ge != ok { ret (js.undefv(), ge) }
     if !found { ret (js.undefv(), ok) }
     let d = js.prop_to_desc(p)
     let out = js.new_plain(it)
@@ -604,8 +607,8 @@ fn reflect_get_own_property_descriptor(it: *js.Interp, this_val: js.Value, args:
 fn reflect_get_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, oe) = reflect_target(it, args)
     if oe != ok { ret (js.undefv(), oe) }
-    if !o.has_proto { ret (js.null_value(), ok) }
-    ret (js.obj_value(o.proto), ok)
+    let (pv, pe) = js.proto_get(it, o)
+    ret (pv, pe)
 }
 
 fn reflect_set_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -613,26 +616,9 @@ fn reflect_set_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js
     if oe != ok { ret (js.undefv(), oe) }
     let p = arg(args, 1usize)
     if !js.is_object(p) && !js.is_null(p) { ret (js.undefv(), js.throw_type(it, "Object prototype may only be an Object or null")) }
-    if js.is_null(p) {
-        if !o.extensible && o.has_proto { ret (js.bool_value(false), ok) }
-        o.has_proto = false
-        o.proto = js.null_obj()
-        ret (js.bool_value(true), ok)
-    }
-    let np = js.as_object(p)
-    if o.has_proto && o.proto == np { ret (js.bool_value(true), ok) }
-    if !o.extensible { ret (js.bool_value(false), ok) }
-    var cur = np
-    var guard = 0u32
-    while guard < 100000u32 {
-        guard += 1u32
-        if cur == o { ret (js.bool_value(false), ok) }
-        if !cur.has_proto { break }
-        cur = cur.proto
-    }
-    o.proto = np
-    o.has_proto = true
-    ret (js.bool_value(true), ok)
+    let (done, de) = js.proto_set(it, o, p)
+    if de != ok { ret (js.undefv(), de) }
+    ret (js.bool_value(done), ok)
 }
 
 fn reflect_has(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -640,20 +626,25 @@ fn reflect_has(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
     if oe != ok { ret (js.undefv(), oe) }
     let (k, ke) = js.to_property_key(it, arg(args, 1usize))
     if ke != ok { ret (js.undefv(), ke) }
-    ret (js.bool_value(js.has_property(it, o, k)), ok)
+    let (has, he) = js.has_property_e(it, o, k)
+    if he != ok { ret (js.undefv(), he) }
+    ret (js.bool_value(has), ok)
 }
 
 fn reflect_is_extensible(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, oe) = reflect_target(it, args)
     if oe != ok { ret (js.undefv(), oe) }
-    ret (js.bool_value(o.extensible), ok)
+    let (ext, xe) = js.is_extensible(it, o)
+    if xe != ok { ret (js.undefv(), xe) }
+    ret (js.bool_value(ext), ok)
 }
 
 fn reflect_prevent_extensions(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, oe) = reflect_target(it, args)
     if oe != ok { ret (js.undefv(), oe) }
-    o.extensible = false
-    ret (js.bool_value(true), ok)
+    let (done, pe) = js.prevent_extensions(it, o)
+    if pe != ok { ret (js.undefv(), pe) }
+    ret (js.bool_value(done), ok)
 }
 
 fn reflect_own_keys(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {

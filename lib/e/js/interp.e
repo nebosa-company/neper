@@ -70,6 +70,9 @@ type Prop = struct { key: Key, value: Value, getter: *Obj, setter: *Obj, flags: 
 
 type NativeFn = fn(*Interp, Value, []const Value) -> (Value, err)
 
+// The Proxy internal methods live in b_proxy.e; `op` is one of PX_* (see the end of this file).
+type ProxyHook = fn(*Interp, u8, *Obj, Key, Value, Value) -> (Value, err)
+
 type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool, is_var: bool }
 
 // Binding flags.
@@ -107,7 +110,7 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err
 }
 
 fn null_interp() -> *Interp {
@@ -1037,6 +1040,20 @@ fn array_set_length(it: *Interp, o: *Obj, len: f64) {
 // The own property `key` of `o`, with exotic objects (arrays, strings, arguments) synthesised.
 fn get_own(it: *Interp, o: *Obj, key: Key) -> (Prop, bool) {
     let z = null_obj()
+    if o.class == C_PROXY {
+        let (gv, ge) = px_call(it, PX_GETOWN, o, key, undefv(), undefv())
+        if ge != ok {
+            it.px_err = ge
+            ret (zero, false)
+        }
+        if !is_object(gv) { ret (zero, false) }
+        let (gd, gde) = to_descriptor(it, gv)
+        if gde != ok {
+            it.px_err = gde
+            ret (zero, false)
+        }
+        ret (desc_to_prop(key, gd), true)
+    }
     if o.class == C_ARRAY || o.class == C_ARGUMENTS {
         if key.idx >= 0i64 && key.idx < i64(o.elems.len) {
             let ev = o.elems.items[usize(key.idx)]
@@ -1100,6 +1117,10 @@ fn get_prop(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err) {
     var guard = 0u32
     while guard < 100000u32 {
         guard += 1u32
+        if cur.class == C_PROXY {
+            let (pr, pe) = px_call(it, PX_GET, cur, key, receiver, undefv())
+            ret (pr, pe)
+        }
         let (p, found) = get_own(it, cur, key)
         if found {
             if (p.flags & P_ACCESSOR) != 0u8 {
@@ -1109,10 +1130,6 @@ fn get_prop(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err) {
                 ret (r, re)
             }
             ret (p.value, ok)
-        }
-        if cur.class == C_PROXY {
-            let (pr, pe) = proxy_get(it, cur, key, receiver)
-            ret (pr, pe)
         }
         if cur.class == C_TYPEDARRAY && !is_symbol_key(key) {
             let (is_num, nv) = numeric_index(it, key.name)
@@ -1132,10 +1149,6 @@ fn zero_args() -> []const Value {
 fn get_named(it: *Interp, o: *Obj, name: str) -> (Value, err) {
     let (v, e) = get_prop(it, o, key_of(name), obj_value(o))
     ret (v, e)
-}
-
-fn proxy_get(it: *Interp, p: *Obj, key: Key, receiver: Value) -> (Value, err) {
-    ret (undefv(), throw_type(it, "Proxy is not supported"))
 }
 
 // The object a primitive's property lookups start from.
@@ -1211,6 +1224,11 @@ fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (boo
     var guard = 0u32
     while guard < 100000u32 {
         guard += 1u32
+        if cur.class == C_PROXY {
+            let (sv, se) = px_call(it, PX_SET, cur, key, val, receiver)
+            if se != ok { ret (false, se) }
+            ret (to_boolean(sv), ok)
+        }
         let (p, found) = get_own(it, cur, key)
         if found {
             if (p.flags & P_ACCESSOR) != 0u8 {
@@ -1230,6 +1248,21 @@ fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (boo
     }
     switch receiver {
     case .Obj as ro:
+        if ro.class == C_PROXY {
+            let (cur_p, has_cur, ce0) = get_own_e(it, ro, key)
+            if ce0 != ok { ret (false, ce0) }
+            if has_cur {
+                if (cur_p.flags & P_ACCESSOR) != 0u8 { ret (false, ok) }
+                if (cur_p.flags & P_WRITABLE) == 0u8 { ret (false, ok) }
+                var vd = empty_desc()
+                vd.value = val
+                vd.has_value = true
+                let (dr, de) = define_own(it, ro, key, vd)
+                ret (dr, de)
+            }
+            let (dr2, de2) = define_own(it, ro, key, data_desc(val, P_DEFAULT))
+            ret (dr2, de2)
+        }
         if ro.class == C_TYPEDARRAY && !is_symbol_key(key) {
             let (is_num2, nv2) = numeric_index(it, key.name)
             if is_num2 {
@@ -1355,6 +1388,14 @@ fn has_property(it: *Interp, o: *Obj, key: Key) -> bool {
     var guard = 0u32
     while guard < 100000u32 {
         guard += 1u32
+        if cur.class == C_PROXY {
+            let (hv, he) = px_call(it, PX_HAS, cur, key, undefv(), undefv())
+            if he != ok {
+                it.px_err = he
+                ret false
+            }
+            ret to_boolean(hv)
+        }
         let (p, found) = get_own(it, cur, key)
         if found { ret true }
         if cur.class == C_TYPEDARRAY && !is_symbol_key(key) {
@@ -1368,6 +1409,14 @@ fn has_property(it: *Interp, o: *Obj, key: Key) -> bool {
 }
 
 fn delete_prop(it: *Interp, o: *Obj, key: Key) -> bool {
+    if o.class == C_PROXY {
+        let (dv, de) = px_call(it, PX_DELETE, o, key, undefv(), undefv())
+        if de != ok {
+            it.px_err = de
+            ret false
+        }
+        ret to_boolean(dv)
+    }
     if o.class == C_TYPEDARRAY && !is_symbol_key(key) {
         let (is_num, nv) = numeric_index(it, key.name)
         if is_num { ret !ta_valid_index(o, nv) }
@@ -1444,6 +1493,11 @@ fn prop_to_desc(p: Prop) -> Desc {
 // ValidateAndApplyPropertyDescriptor over an ordinary or array object. Answers false when the change is not allowed.
 fn define_own(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err) {
     let z = null_obj()
+    if o.class == C_PROXY {
+        let (pv, pe) = px_call(it, PX_DEFINE, o, key, from_descriptor(it, d), undefv())
+        if pe != ok { ret (false, pe) }
+        ret (to_boolean(pv), ok)
+    }
     if o.class == C_TYPEDARRAY && !is_symbol_key(key) {
         let (is_num, nv) = numeric_index(it, key.name)
         if is_num {
@@ -1830,8 +1884,10 @@ fn ordinary_has_instance(it: *Interp, ctor: Value, v: Value) -> (bool, err) {
     var guard = 0u32
     while guard < 100000u32 {
         guard += 1u32
-        if !cur.has_proto { ret (false, ok) }
-        cur = cur.proto
+        let (pv2, pe2) = proto_get(it, cur)
+        if pe2 != ok { ret (false, pe2) }
+        if !is_object(pv2) { ret (false, ok) }
+        cur = as_object(pv2)
         if cur == tgt { ret (true, ok) }
     }
     ret (false, ok)
@@ -1979,26 +2035,52 @@ type Completion = struct { kind: u8, value: Value, label: str }
 
 fn normal() -> Completion { ret Completion { kind: CK_NORMAL, value: undefv(), label: "" } }
 
-// Finds the binding of `name` along the scope chain: (environment, index) or a `with` object or the global object.
-fn lookup_value(it: *Interp, f: *Frame, name: str) -> (Value, err) {
+// Whether the `with` object of `e` binds `name` (own or inherited, minus @@unscopables).
+fn with_has(it: *Interp, e: *Env, name: str) -> (bool, err) {
+    let key = key_of(name)
+    if !has_property(it, e.with_obj, key) { ret (false, ok) }
+    let (u, ue) = get_prop(it, e.with_obj, key_of_symbol(it.sym_unscopables), obj_value(e.with_obj))
+    if ue != ok { ret (false, ue) }
+    if is_object(u) {
+        let (b, be) = get_prop(it, as_object(u), key, u)
+        if be != ok { ret (false, be) }
+        if to_boolean(b) { ret (false, ok) }
+    }
+    ret (true, ok)
+}
+
+// Resolves `name` to the scope that binds it (a declarative or `with` environment) or null for the global object;
+// the reference stays valid even if the binding disappears before it is written.
+fn resolve_scope(it: *Interp, f: *Frame, name: str) -> (*Env, err) {
     var e = f.env
     let z = null_env()
     while e != z {
         if e.has_with {
-            let key = key_of(name)
-            if has_property(it, e.with_obj, key) {
-                let (wv, we) = get_prop(it, e.with_obj, key, obj_value(e.with_obj))
-                ret (wv, we)
-            }
+            let (has, he) = with_has(it, e, name)
+            if he != ok { ret (z, he) }
+            if has { ret (e, ok) }
         } else {
             let (at, found) = env_index(e, name)
-            if found {
-                let fl = e.vars.items[at].flags
-                if (fl & B_TDZ) != 0u8 { ret (undefv(), throw_reference(it, str_concat3(it, "Cannot access '", name, "' before initialization"))) }
-                ret (e.vars.items[at].value, ok)
-            }
+            if found { ret (e, ok) }
         }
         e = e.parent
+    }
+    ret (z, ok)
+}
+
+fn get_in_scope(it: *Interp, holder: *Env, name: str) -> (Value, err) {
+    if holder != null_env() {
+        if holder.has_with {
+            let key = key_of(name)
+            if !has_property(it, holder.with_obj, key) { ret (undefv(), ok) }
+            let (wv, we) = get_prop(it, holder.with_obj, key, obj_value(holder.with_obj))
+            ret (wv, we)
+        }
+        let (at, found) = env_index(holder, name)
+        if found {
+            if (holder.vars.items[at].flags & B_TDZ) != 0u8 { ret (undefv(), throw_reference(it, str_concat3(it, "Cannot access '", name, "' before initialization"))) }
+            ret (holder.vars.items[at].value, ok)
+        }
     }
     let key2 = key_of(name)
     if has_property(it, it.global, key2) {
@@ -2008,30 +2090,23 @@ fn lookup_value(it: *Interp, f: *Frame, name: str) -> (Value, err) {
     ret (undefv(), throw_reference(it, str_concat(it, name, " is not defined")))
 }
 
-fn assign_name(it: *Interp, f: *Frame, name: str, val: Value) -> err {
-    var e = f.env
-    let z = null_env()
-    while e != z {
-        if e.has_with {
-            let key = key_of(name)
-            if has_property(it, e.with_obj, key) {
-                let (done, se) = set_prop(it, e.with_obj, key, val, obj_value(e.with_obj))
-                ret se
-            }
-        } else {
-            let (at, found) = env_index(e, name)
-            if found {
-                let fl = e.vars.items[at].flags
-                if (fl & B_TDZ) != 0u8 { ret throw_reference(it, str_concat3(it, "Cannot access '", name, "' before initialization")) }
-                if (fl & B_CONST) != 0u8 {
-                    if (fl & B_STRICT_CONST) != 0u8 || f.strict { ret throw_type(it, "Assignment to constant variable.") }
-                    ret ok
-                }
-                e.vars.items[at].value = val
+fn put_in_scope(it: *Interp, f: *Frame, holder: *Env, name: str, val: Value) -> err {
+    if holder != null_env() {
+        if holder.has_with {
+            let (done, se) = set_prop(it, holder.with_obj, key_of(name), val, obj_value(holder.with_obj))
+            ret se
+        }
+        let (at, found) = env_index(holder, name)
+        if found {
+            let fl = holder.vars.items[at].flags
+            if (fl & B_TDZ) != 0u8 { ret throw_reference(it, str_concat3(it, "Cannot access '", name, "' before initialization")) }
+            if (fl & B_CONST) != 0u8 {
+                if (fl & B_STRICT_CONST) != 0u8 || f.strict { ret throw_type(it, "Assignment to constant variable.") }
                 ret ok
             }
+            holder.vars.items[at].value = val
+            ret ok
         }
-        e = e.parent
     }
     let key2 = key_of(name)
     if has_property(it, it.global, key2) {
@@ -2043,6 +2118,19 @@ fn assign_name(it: *Interp, f: *Frame, name: str, val: Value) -> err {
     if f.strict { ret throw_reference(it, str_concat(it, name, " is not defined")) }
     let (cr, ce) = create_data(it, it.global, key2, val)
     ret ce
+}
+
+fn lookup_value(it: *Interp, f: *Frame, name: str) -> (Value, err) {
+    let (h, he) = resolve_scope(it, f, name)
+    if he != ok { ret (undefv(), he) }
+    let (gv, ge) = get_in_scope(it, h, name)
+    ret (gv, ge)
+}
+
+fn assign_name(it: *Interp, f: *Frame, name: str, val: Value) -> err {
+    let (h, he) = resolve_scope(it, f, name)
+    if he != ok { ret he }
+    ret put_in_scope(it, f, h, name, val)
 }
 
 // Initialises a binding declared earlier (clears its TDZ).
@@ -2167,6 +2255,12 @@ fn call_function(it: *Interp, fv: Value, this_val: Value, args: []const Value) -
             let (r, re) = call_function(it, obj_value(fo.bound_target), fo.bound_this, cell[0usize..total])
             ret (r, re)
         }
+        if fo.class == C_PROXY {
+            let (parr, pae) = args_array(it, args)
+            if pae != ok { ret (undefv(), pae) }
+            let (pr, pe) = px_call(it, PX_CALL, fo, key_of(""), this_val, obj_value(parr))
+            ret (pr, pe)
+        }
         if fo.class != C_FUNCTION { ret (undefv(), throw_type(it, "not a function")) }
         it.depth += 1u32
         if it.depth > it.max_depth {
@@ -2185,6 +2279,7 @@ fn call_function(it: *Interp, fv: Value, this_val: Value, args: []const Value) -
             it.new_target = saved_nt
             it.has_new_target = saved_has
             it.depth -= 1u32
+            if re2 == ok && it.px_err != ok { ret (undefv(), take_px_err(it)) }
             ret (r2, re2)
         }
         let (r3, re3) = call_js(it, fo, this_val, args, undefv(), false)
@@ -2200,6 +2295,7 @@ fn is_constructor(v: Value) -> bool {
     switch v {
     case .Obj as o:
         if o.class == C_BOUND { ret is_constructor(obj_value(o.bound_target)) }
+        if o.class == C_PROXY { ret o.ctor_kind != K_NONE }
         if o.class != C_FUNCTION { ret false }
         if o.has_native { ret o.ctor_kind != K_NONE }
         ret o.ctor_kind != K_NONE
@@ -2211,6 +2307,12 @@ fn is_constructor(v: Value) -> bool {
 fn construct(it: *Interp, fv: Value, args: []const Value, new_target: Value) -> (Value, err) {
     if !is_constructor(fv) { ret (undefv(), throw_type(it, "not a constructor")) }
     let fo = as_object(fv)
+    if fo.class == C_PROXY {
+        let (carr, cae) = args_array(it, args)
+        if cae != ok { ret (undefv(), cae) }
+        let (cr, ce0) = px_call(it, PX_CONSTRUCT, fo, key_of(""), obj_value(carr), new_target)
+        ret (cr, ce0)
+    }
     if fo.class == C_BOUND {
         let total = fo.bound_args.len + args.len
         let (cell, ce) = mem.alloc[Value](it.a, total + 1usize)
@@ -2684,6 +2786,23 @@ fn own_keys(it: *Interp, o: *Obj) -> ([]const Key, err) {
     let (l, le) = list.init[Key](it.a, o.props.len + o.elems.len + 4usize)
     var out = l
     if le != ok { ret (zero, le) }
+    if o.class == C_PROXY {
+        let (kv, ke) = px_call(it, PX_KEYS, o, key_of(""), undefv(), undefv())
+        if ke != ok { ret (zero, ke) }
+        let ko = as_object(kv)
+        var q = 0usize
+        while q < ko.elems.len {
+            let ev = ko.elems.items[q]
+            switch ev {
+            case .Sym as qs:
+                try list.push[Key](&out, key_of_symbol(qs))
+            default:
+                try list.push[Key](&out, key_of(value_str(ev)))
+            }
+            q += 1usize
+        }
+        ret (list.slice_const[Key](&out), ok)
+    }
     if o.class == C_TYPEDARRAY {
         let tn = ta_length(o)
         var t = 0usize
@@ -2776,6 +2895,19 @@ fn member_key(it: *Interp, f: *Frame, n: ast.Node) -> (Key, err) {
         }
     }
     ret (key_of(n.text), ok)
+}
+
+// As `member_key`, but a null or undefined `base` throws before the key is converted (RequireObjectCoercible comes first).
+fn member_key_b(it: *Interp, f: *Frame, n: ast.Node, base: Value) -> (Key, err) {
+    if (n.flags & ast.F_COMPUTED) != 0u16 {
+        let (kv, ke) = eval(it, f, n.b)
+        if ke != ok { ret (key_of(""), ke) }
+        if is_nullish(base) { ret (key_of(""), throw_type(it, "Cannot read properties of null or undefined")) }
+        let (k, e) = to_property_key(it, kv)
+        ret (k, e)
+    }
+    let (k2, e2) = member_key(it, f, n)
+    ret (k2, e2)
 }
 
 // --- operators
@@ -2969,7 +3101,9 @@ fn binary_op(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err) {
         if !is_object(y) { ret (undefv(), throw_type(it, "Cannot use 'in' operator to search for a key in a non-object")) }
         let (k, ke) = to_property_key(it, x)
         if ke != ok { ret (undefv(), ke) }
-        ret (bool_value(has_property(it, as_object(y), k)), ok)
+        let (hr, hre) = has_property_e(it, as_object(y), k)
+        if hre != ok { ret (undefv(), hre) }
+        ret (bool_value(hr), ok)
     }
     // Arithmetic and bitwise.
     let (nx3, e7) = to_number(it, x)
@@ -3443,7 +3577,8 @@ fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
             if ke != ok { ret (undefv(), ke) }
             let (bo, oe) = to_object(it, base)
             if oe != ok { ret (undefv(), oe) }
-            let done = delete_prop(it, bo, key)
+            let (done, dpe) = delete_prop_e(it, bo, key)
+            if dpe != ok { ret (undefv(), dpe) }
             if !done && f.strict { ret (undefv(), throw_type(it, "Cannot delete property")) }
             ret (bool_value(done), ok)
         }
@@ -3453,13 +3588,12 @@ fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
             ret (bool_value(true), re)
         }
         if an2.kind == ast.N_IDENT {
-            // Variables are not deletable; globals created by assignment are.
-            var e3 = f.env
-            let z = null_env()
-            while e3 != z {
-                let (at, found) = env_index(e3, an2.text)
-                if found { ret (bool_value(false), ok) }
-                e3 = e3.parent
+            // Variables are not deletable; properties of a `with` object and of the global object are.
+            let (holder, he) = resolve_scope(it, f, an2.text)
+            if he != ok { ret (undefv(), he) }
+            if holder != null_env() {
+                if holder.has_with { ret (bool_value(delete_prop(it, holder.with_obj, key_of(an2.text))), ok) }
+                ret (bool_value(false), ok)
             }
             let done2 = delete_prop(it, it.global, key_of(an2.text))
             ret (bool_value(done2), ok)
@@ -3487,12 +3621,14 @@ fn eval_update(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
     if n.op == ast.O_DEC { delta = -1.0f64 }
     let prefix = (n.flags & ast.F_PREFIX) != 0u16
     if tn.kind == ast.N_IDENT {
-        let (old, oe) = lookup_value(it, f, tn.text)
+        let (holder, he) = resolve_scope(it, f, tn.text)
+        if he != ok { ret (undefv(), he) }
+        let (old, oe) = get_in_scope(it, holder, tn.text)
         if oe != ok { ret (undefv(), oe) }
         let (num, ne) = to_number(it, old)
         if ne != ok { ret (undefv(), ne) }
         let nv = num + delta
-        let ae = assign_name(it, f, tn.text, num_value(nv))
+        let ae = put_in_scope(it, f, holder, tn.text, num_value(nv))
         if ae != ok { ret (undefv(), ae) }
         if prefix { ret (num_value(nv), ok) }
         ret (num_value(num), ok)
@@ -3501,14 +3637,14 @@ fn eval_update(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         var base = f.this_val
         var key = key_of("")
         if f.prog.nodes[usize(tn.a)].kind == ast.N_SUPER {
-            let (kk, kke) = member_key(it, f, tn)
+            let (kk, kke) = member_key_b(it, f, tn, base)
             if kke != ok { ret (undefv(), kke) }
             key = kk
         } else {
             let (b, be) = eval(it, f, tn.a)
             if be != ok { ret (undefv(), be) }
             base = b
-            let (k2, ke) = member_key(it, f, tn)
+            let (k2, ke) = member_key_b(it, f, tn, base)
             if ke != ok { ret (undefv(), ke) }
             key = k2
         }
@@ -3530,9 +3666,11 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
     let logical = (n.flags & ast.F_OPTIONAL) != 0u16
     if n.op == ast.O_ASSIGN && !logical {
         if tn.kind == ast.N_IDENT {
+            let (holder, he) = resolve_scope(it, f, tn.text)
+            if he != ok { ret (undefv(), he) }
             let (v, e) = eval_named(it, f, n.b, tn.text)
             if e != ok { ret (undefv(), e) }
-            let ae = assign_name(it, f, tn.text, v)
+            let ae = put_in_scope(it, f, holder, tn.text, v)
             if ae != ok { ret (undefv(), ae) }
             ret (v, ok)
         }
@@ -3568,7 +3706,9 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
     }
     // Compound and logical assignment: read, combine, write.
     if tn.kind == ast.N_IDENT {
-        let (old, oe) = lookup_value(it, f, tn.text)
+        let (holder, he) = resolve_scope(it, f, tn.text)
+        if he != ok { ret (undefv(), he) }
+        let (old, oe) = get_in_scope(it, holder, tn.text)
         if oe != ok { ret (undefv(), oe) }
         if logical {
             if n.op == ast.O_AND && !to_boolean(old) { ret (old, ok) }
@@ -3576,7 +3716,7 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
             if n.op == ast.O_NULLISH && !is_nullish(old) { ret (old, ok) }
             let (rv, re) = eval_named(it, f, n.b, tn.text)
             if re != ok { ret (undefv(), re) }
-            let ae2 = assign_name(it, f, tn.text, rv)
+            let ae2 = put_in_scope(it, f, holder, tn.text, rv)
             if ae2 != ok { ret (undefv(), ae2) }
             ret (rv, ok)
         }
@@ -3584,7 +3724,7 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         if rhe != ok { ret (undefv(), rhe) }
         let (res, ce) = binary_op(it, n.op, old, rhs)
         if ce != ok { ret (undefv(), ce) }
-        let ae3 = assign_name(it, f, tn.text, res)
+        let ae3 = put_in_scope(it, f, holder, tn.text, res)
         if ae3 != ok { ret (undefv(), ae3) }
         ret (res, ok)
     }
@@ -3592,14 +3732,14 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         var base = f.this_val
         var key = key_of("")
         if f.prog.nodes[usize(tn.a)].kind == ast.N_SUPER {
-            let (kk2, kke2) = member_key(it, f, tn)
+            let (kk2, kke2) = member_key_b(it, f, tn, base)
             if kke2 != ok { ret (undefv(), kke2) }
             key = kk2
         } else {
             let (b2, be3) = eval(it, f, tn.a)
             if be3 != ok { ret (undefv(), be3) }
             base = b2
-            let (k3, ke3) = member_key(it, f, tn)
+            let (k3, ke3) = member_key_b(it, f, tn, base)
             if ke3 != ok { ret (undefv(), ke3) }
             key = k3
         }
@@ -5878,4 +6018,215 @@ fn ta_valid_index(o: *Obj, n: f64) -> bool {
     if is_neg_zero(n) { ret false }
     if n < 0.0f64 || n >= f64(ta_length(o)) { ret false }
     ret true
+}
+
+fn to_descriptor(it: *Interp, v: Value) -> (Desc, err) {
+    var d = empty_desc()
+    if !is_object(v) { ret (d, throw_type(it, "Property description must be an object")) }
+    let o = as_object(v)
+    if has_property(it, o, key_of("enumerable")) {
+        let (x, xe) = get_prop(it, o, key_of("enumerable"), v)
+        if xe != ok { ret (d, xe) }
+        d.has_enumerable = true
+        d.enumerable = to_boolean(x)
+    }
+    if has_property(it, o, key_of("configurable")) {
+        let (x2, xe2) = get_prop(it, o, key_of("configurable"), v)
+        if xe2 != ok { ret (d, xe2) }
+        d.has_configurable = true
+        d.configurable = to_boolean(x2)
+    }
+    if has_property(it, o, key_of("value")) {
+        let (x3, xe3) = get_prop(it, o, key_of("value"), v)
+        if xe3 != ok { ret (d, xe3) }
+        d.has_value = true
+        d.value = x3
+    }
+    if has_property(it, o, key_of("writable")) {
+        let (x4, xe4) = get_prop(it, o, key_of("writable"), v)
+        if xe4 != ok { ret (d, xe4) }
+        d.has_writable = true
+        d.writable = to_boolean(x4)
+    }
+    if has_property(it, o, key_of("get")) {
+        let (x5, xe5) = get_prop(it, o, key_of("get"), v)
+        if xe5 != ok { ret (d, xe5) }
+        if !is_undefined(x5) && !is_callable(x5) { ret (d, throw_type(it, "Getter must be a function")) }
+        d.has_get = true
+        d.getter = x5
+    }
+    if has_property(it, o, key_of("set")) {
+        let (x6, xe6) = get_prop(it, o, key_of("set"), v)
+        if xe6 != ok { ret (d, xe6) }
+        if !is_undefined(x6) && !is_callable(x6) { ret (d, throw_type(it, "Setter must be a function")) }
+        d.has_set = true
+        d.setter = x6
+    }
+    if (d.has_get || d.has_set) && (d.has_value || d.has_writable) { ret (d, throw_type(it, "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute")) }
+    ret (d, ok)
+}
+
+fn from_descriptor(it: *Interp, d: Desc) -> Value {
+    let o = new_plain(it)
+    if d.has_value { let e1 = set_named(it, o, "value", d.value) }
+    if d.has_writable { let e2 = set_named(it, o, "writable", bool_value(d.writable)) }
+    if d.has_get { let e3 = set_named(it, o, "get", d.getter) }
+    if d.has_set { let e4 = set_named(it, o, "set", d.setter) }
+    if d.has_enumerable { let e5 = set_named(it, o, "enumerable", bool_value(d.enumerable)) }
+    if d.has_configurable { let e6 = set_named(it, o, "configurable", bool_value(d.configurable)) }
+    ret obj_value(o)
+}
+
+
+// --- Proxy plumbing (the traps themselves are in b_proxy.e)
+
+const PX_GET: u8 = 1u8
+const PX_SET: u8 = 2u8
+const PX_HAS: u8 = 3u8
+const PX_DELETE: u8 = 4u8
+const PX_GETOWN: u8 = 5u8
+const PX_DEFINE: u8 = 6u8
+const PX_KEYS: u8 = 7u8
+const PX_GETPROTO: u8 = 8u8
+const PX_SETPROTO: u8 = 9u8
+const PX_PREVENT: u8 = 10u8
+const PX_ISEXT: u8 = 11u8
+const PX_CALL: u8 = 12u8
+const PX_CONSTRUCT: u8 = 13u8
+
+fn px_call(it: *Interp, op: u8, p: *Obj, key: Key, a: Value, b: Value) -> (Value, err) {
+    let (v, e) = it.px_hook(it, op, p, key, a, b)
+    ret (v, e)
+}
+
+fn args_array(it: *Interp, args: []const Value) -> (*Obj, err) {
+    let arr = new_array(it)
+    var i = 0usize
+    while i < args.len {
+        try array_push(it, arr, args[i])
+        i += 1usize
+    }
+    ret (arr, ok)
+}
+
+fn take_px_err(it: *Interp) -> err {
+    let e = it.px_err
+    it.px_err = ok
+    ret e
+}
+
+fn has_property_e(it: *Interp, o: *Obj, key: Key) -> (bool, err) {
+    it.px_err = ok
+    let r = has_property(it, o, key)
+    let e = take_px_err(it)
+    if e != ok { ret (false, e) }
+    ret (r, ok)
+}
+
+fn delete_prop_e(it: *Interp, o: *Obj, key: Key) -> (bool, err) {
+    it.px_err = ok
+    let r = delete_prop(it, o, key)
+    let e = take_px_err(it)
+    if e != ok { ret (false, e) }
+    ret (r, ok)
+}
+
+fn get_own_e(it: *Interp, o: *Obj, key: Key) -> (Prop, bool, err) {
+    it.px_err = ok
+    let (p, found) = get_own(it, o, key)
+    let e = take_px_err(it)
+    if e != ok { ret (zero, false, e) }
+    ret (p, found, ok)
+}
+
+fn desc_to_prop(key: Key, d: Desc) -> Prop {
+    let z = null_obj()
+    var flags = 0u8
+    if d.has_enumerable && d.enumerable { flags = flags | P_ENUMERABLE }
+    if d.has_configurable && d.configurable { flags = flags | P_CONFIGURABLE }
+    var p = Prop { key: key, value: undefv(), getter: z, setter: z, flags: flags }
+    if d.has_get || d.has_set {
+        p.flags = p.flags | P_ACCESSOR
+        if is_object(d.getter) { p.getter = as_object(d.getter) }
+        if is_object(d.setter) { p.setter = as_object(d.setter) }
+    } else {
+        if d.has_writable && d.writable { p.flags = p.flags | P_WRITABLE }
+        p.value = d.value
+    }
+    ret p
+}
+
+// [[GetPrototypeOf]]: (prototype or null, error).
+fn proto_get(it: *Interp, o: *Obj) -> (Value, err) {
+    if o.class == C_PROXY {
+        let (v, e) = px_call(it, PX_GETPROTO, o, key_of(""), undefv(), undefv())
+        ret (v, e)
+    }
+    if !o.has_proto { ret (null_value(), ok) }
+    ret (obj_value(o.proto), ok)
+}
+
+// [[SetPrototypeOf]]: false when the change is not allowed.
+fn proto_set(it: *Interp, o: *Obj, v: Value) -> (bool, err) {
+    if o.class == C_PROXY {
+        let (r, e) = px_call(it, PX_SETPROTO, o, key_of(""), v, undefv())
+        if e != ok { ret (false, e) }
+        ret (to_boolean(r), ok)
+    }
+    if is_null(v) {
+        if !o.extensible && o.has_proto { ret (false, ok) }
+        o.has_proto = false
+        o.proto = null_obj()
+        ret (true, ok)
+    }
+    let np = as_object(v)
+    if o.has_proto && o.proto == np { ret (true, ok) }
+    if !o.extensible { ret (false, ok) }
+    var cur = np
+    var guard = 0u32
+    while guard < 100000u32 {
+        guard += 1u32
+        if cur == o { ret (false, ok) }
+        if cur.class == C_PROXY { break }
+        if !cur.has_proto { break }
+        cur = cur.proto
+    }
+    o.proto = np
+    o.has_proto = true
+    ret (true, ok)
+}
+
+fn prevent_extensions(it: *Interp, o: *Obj) -> (bool, err) {
+    if o.class == C_PROXY {
+        let (r, e) = px_call(it, PX_PREVENT, o, key_of(""), undefv(), undefv())
+        if e != ok { ret (false, e) }
+        ret (to_boolean(r), ok)
+    }
+    o.extensible = false
+    ret (true, ok)
+}
+
+fn is_extensible(it: *Interp, o: *Obj) -> (bool, err) {
+    if o.class == C_PROXY {
+        let (r, e) = px_call(it, PX_ISEXT, o, key_of(""), undefv(), undefv())
+        if e != ok { ret (false, e) }
+        ret (to_boolean(r), ok)
+    }
+    ret (o.extensible, ok)
+}
+
+// IsArray: sees through proxies.
+fn is_array_e(it: *Interp, v: Value) -> (bool, err) {
+    switch v {
+    case .Obj as o:
+        if o.class == C_PROXY {
+            if o.aux == null_obj() { ret (false, throw_type(it, "Cannot perform 'IsArray' on a proxy that has been revoked")) }
+            let (r, e) = is_array_e(it, obj_value(o.aux))
+            ret (r, e)
+        }
+        ret (o.class == C_ARRAY, ok)
+    default:
+        ret (false, ok)
+    }
+    ret (false, ok)
 }

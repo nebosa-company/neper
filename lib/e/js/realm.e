@@ -14,11 +14,13 @@ use e.js.b_date as b_date
 use e.js.b_json as b_json
 use e.js.b_misc as b_misc
 use e.js.b_number as b_number
+use e.js.b_proxy as b_proxy
 use e.js.b_regexp as b_regexp
 use e.js.b_string as b_string
 use e.js.b_typed as b_typed
 use e.js.interp as js
 use e.js.parser as jsparse
+use e.js.prelude as prelude
 use e.math
 use e.mem
 use e.str
@@ -116,8 +118,8 @@ fn object_proto_property_is_enumerable(it: *js.Interp, this_val: js.Value, args:
 fn object_get_proto(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, oe) = js.to_object(it, this_val)
     if oe != ok { ret (js.undefv(), oe) }
-    if !o.has_proto { ret (js.null_value(), ok) }
-    ret (js.obj_value(o.proto), ok)
+    let (pv, pe) = js.proto_get(it, o)
+    ret (pv, pe)
 }
 
 fn object_set_proto(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -132,6 +134,12 @@ fn object_set_proto(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 }
 
 fn set_prototype(it: *js.Interp, o: *js.Obj, v: js.Value) -> err {
+    if o.class == js.C_PROXY {
+        let (done, de) = js.proto_set(it, o, v)
+        if de != ok { ret de }
+        if !done { ret js.throw_type(it, "Cannot set prototype of this object") }
+        ret ok
+    }
     if js.is_null(v) {
         if !o.extensible && o.has_proto { ret js.throw_type(it, "Cannot set prototype of non-extensible object") }
         o.has_proto = false
@@ -154,69 +162,12 @@ fn set_prototype(it: *js.Interp, o: *js.Obj, v: js.Value) -> err {
     ret ok
 }
 
-fn to_descriptor(it: *js.Interp, v: js.Value) -> (js.Desc, err) {
-    var d = js.empty_desc()
-    if !js.is_object(v) { ret (d, js.throw_type(it, "Property description must be an object")) }
-    let o = js.as_object(v)
-    if js.has_property(it, o, js.key_of("enumerable")) {
-        let (x, xe) = js.get_prop(it, o, js.key_of("enumerable"), v)
-        if xe != ok { ret (d, xe) }
-        d.has_enumerable = true
-        d.enumerable = js.to_boolean(x)
-    }
-    if js.has_property(it, o, js.key_of("configurable")) {
-        let (x2, xe2) = js.get_prop(it, o, js.key_of("configurable"), v)
-        if xe2 != ok { ret (d, xe2) }
-        d.has_configurable = true
-        d.configurable = js.to_boolean(x2)
-    }
-    if js.has_property(it, o, js.key_of("value")) {
-        let (x3, xe3) = js.get_prop(it, o, js.key_of("value"), v)
-        if xe3 != ok { ret (d, xe3) }
-        d.has_value = true
-        d.value = x3
-    }
-    if js.has_property(it, o, js.key_of("writable")) {
-        let (x4, xe4) = js.get_prop(it, o, js.key_of("writable"), v)
-        if xe4 != ok { ret (d, xe4) }
-        d.has_writable = true
-        d.writable = js.to_boolean(x4)
-    }
-    if js.has_property(it, o, js.key_of("get")) {
-        let (x5, xe5) = js.get_prop(it, o, js.key_of("get"), v)
-        if xe5 != ok { ret (d, xe5) }
-        if !js.is_undefined(x5) && !js.is_callable(x5) { ret (d, js.throw_type(it, "Getter must be a function")) }
-        d.has_get = true
-        d.getter = x5
-    }
-    if js.has_property(it, o, js.key_of("set")) {
-        let (x6, xe6) = js.get_prop(it, o, js.key_of("set"), v)
-        if xe6 != ok { ret (d, xe6) }
-        if !js.is_undefined(x6) && !js.is_callable(x6) { ret (d, js.throw_type(it, "Setter must be a function")) }
-        d.has_set = true
-        d.setter = x6
-    }
-    if (d.has_get || d.has_set) && (d.has_value || d.has_writable) { ret (d, js.throw_type(it, "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute")) }
-    ret (d, ok)
-}
-
-fn from_descriptor(it: *js.Interp, d: js.Desc) -> js.Value {
-    let o = js.new_plain(it)
-    if d.has_value { let e1 = js.set_named(it, o, "value", d.value) }
-    if d.has_writable { let e2 = js.set_named(it, o, "writable", js.bool_value(d.writable)) }
-    if d.has_get { let e3 = js.set_named(it, o, "get", d.getter) }
-    if d.has_set { let e4 = js.set_named(it, o, "set", d.setter) }
-    if d.has_enumerable { let e5 = js.set_named(it, o, "enumerable", js.bool_value(d.enumerable)) }
-    if d.has_configurable { let e6 = js.set_named(it, o, "configurable", js.bool_value(d.configurable)) }
-    ret js.obj_value(o)
-}
-
 fn object_define_property(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let tgt = arg(args, 0usize)
     if !js.is_object(tgt) { ret (js.undefv(), js.throw_type(it, "Object.defineProperty called on non-object")) }
     let (k, ke) = js.to_property_key(it, arg(args, 1usize))
     if ke != ok { ret (js.undefv(), ke) }
-    let (d, de) = to_descriptor(it, arg(args, 2usize))
+    let (d, de) = js.to_descriptor(it, arg(args, 2usize))
     if de != ok { ret (js.undefv(), de) }
     let (done, e) = js.define_own(it, js.as_object(tgt), k, d)
     if e != ok { ret (js.undefv(), e) }
@@ -240,7 +191,7 @@ fn define_properties_from(it: *js.Interp, o: *js.Obj, props: js.Value) -> err {
         if found && (p.flags & js.P_ENUMERABLE) != 0u8 {
             let (dv, dve) = js.get_prop(it, po, keys[i], props)
             if dve != ok { ret dve }
-            let (d, de) = to_descriptor(it, dv)
+            let (d, de) = js.to_descriptor(it, dv)
             if de != ok { ret de }
             try list.push[js.Desc](&descs, d)
             try list.push[js.Key](&used, keys[i])
@@ -282,8 +233,8 @@ fn object_create(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
 fn object_get_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, oe) = js.to_object(it, arg(args, 0usize))
     if oe != ok { ret (js.undefv(), oe) }
-    if !o.has_proto { ret (js.null_value(), ok) }
-    ret (js.obj_value(o.proto), ok)
+    let (pv, pe) = js.proto_get(it, o)
+    ret (pv, pe)
 }
 
 fn object_set_prototype_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -304,7 +255,7 @@ fn object_get_own_property_descriptor(it: *js.Interp, this_val: js.Value, args: 
     if ke != ok { ret (js.undefv(), ke) }
     let (p, found) = js.get_own(it, o, k)
     if !found { ret (js.undefv(), ok) }
-    ret (from_descriptor(it, js.prop_to_desc(p)), ok)
+    ret (js.from_descriptor(it, js.prop_to_desc(p)), ok)
 }
 
 fn object_get_own_property_descriptors(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -317,7 +268,7 @@ fn object_get_own_property_descriptors(it: *js.Interp, this_val: js.Value, args:
     while i < keys.len {
         let (p, found) = js.get_own(it, o, keys[i])
         if found {
-            let (cr, ce) = js.create_data(it, out, keys[i], from_descriptor(it, js.prop_to_desc(p)))
+            let (cr, ce) = js.create_data(it, out, keys[i], js.from_descriptor(it, js.prop_to_desc(p)))
             if ce != ok { ret (js.undefv(), ce) }
         }
         i += 1usize
@@ -444,14 +395,20 @@ fn object_seal(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
 
 fn object_prevent_extensions(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let v = arg(args, 0usize)
-    if js.is_object(v) { js.as_object(v).extensible = false }
+    if js.is_object(v) {
+        let (done, pe) = js.prevent_extensions(it, js.as_object(v))
+        if pe != ok { ret (js.undefv(), pe) }
+        if !done { ret (js.undefv(), js.throw_type(it, "Cannot prevent extensions")) }
+    }
     ret (v, ok)
 }
 
 fn object_is_extensible(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let v = arg(args, 0usize)
     if !js.is_object(v) { ret (js.bool_value(false), ok) }
-    ret (js.bool_value(js.as_object(v).extensible), ok)
+    let (ext, xe) = js.is_extensible(it, js.as_object(v))
+    if xe != ok { ret (js.undefv(), xe) }
+    ret (js.bool_value(ext), ok)
 }
 
 fn object_is_frozen_or_sealed(it: *js.Interp, v: js.Value, frozen: bool) -> bool {
@@ -1092,10 +1049,15 @@ fn new_realm(a: *mem.Arena) -> (*js.Interp, err) {
     b_typed.install_typed_arrays(it)
     b_typed.install_data_view(it)
     b_misc.install_misc(it)
+    b_proxy.install_proxy(it)
     js.add_method(it, it.global, "print", 1u32, global_print)
     let ev = js.make_native(it, "eval", 1u32, global_eval)
     it.eval_fn = ev
     let e5 = js.define_data(it, it.global, js.key_of("eval"), js.obj_value(ev), js.P_HIDDEN)
+    let (psrc, pse) = prelude.source(a)
+    if pse != ok { ret (it, pse) }
+    let (pv, pe) = js.eval_source(it, psrc)
+    if pe != ok { ret (it, pe) }
     ret (it, ok)
 }
 

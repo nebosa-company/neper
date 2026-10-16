@@ -65,7 +65,9 @@ fn array_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
 }
 
 fn array_is_array(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    ret (js.bool_value(js.is_array(arg(args, 0usize))), ok)
+    let (r, e) = js.is_array_e(it, arg(args, 0usize))
+    if e != ok { ret (js.undefv(), e) }
+    ret (js.bool_value(r), ok)
 }
 
 fn array_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
