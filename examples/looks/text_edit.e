@@ -20,10 +20,10 @@ fn select_all(t: *const control.Theme, key: widget.Key, len: usize) {
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let captions = [10]str{ "Rest", "Hover", "Focused", "Disabled", "Read-only", "Invalid", "Empty, placeholder", "Selected text", "Long text", "Empty, focused" }
-    let texts = [10]str{ "Terminate", "Terminate", "Terminate", "Terminate", "Terminate", "Terminate", "", "Terminate", "Heroic Intervention of the Marvel Universe", "" }
+    let captions = [11]str{ "Rest", "Hover", "Focused", "Disabled", "Read-only", "Invalid", "Empty, placeholder", "Selected text", "Long text", "Empty, focused", "Password" }
+    let texts = [11]str{ "Terminate", "Terminate", "Terminate", "Terminate", "Terminate", "Terminate", "", "Terminate", "Heroic Intervention of the Marvel Universe", "", "Terminate" }
     var i = 0usize
-    while i < 10usize {
+    while i < 11usize {
         let (buffer, buffer_error) = mem.alloc[u8](a, 128usize)
         if buffer_error != ok { ret (0usize, buffer_error) }
         var n = 0usize
@@ -39,7 +39,18 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 5usize { options.invalid = true }
         if i != 6usize && i != 9usize { options.placeholder = "" }
         let key = u64(i + 1usize)
-        let (node, node_error) = control.text_field(a, key, t, "Card name", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, widget.Submit { ctx: zero, invoke: noop_submit }, options)
+        var node: widget.Node = zero
+        var node_error: err = ok
+        if i == 10usize {
+            // the native edit-password capture (round 10): a password edit shows a bullet per character
+            let (word, word_error) = control.password_field(a, key, t, "Card name", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, widget.Submit { ctx: zero, invoke: noop_submit }, options)
+            node = word
+            node_error = word_error
+        } else {
+            let (word, word_error) = control.text_field(a, key, t, "Card name", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, widget.Submit { ctx: zero, invoke: noop_submit }, options)
+            node = word
+            node_error = word_error
+        }
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 1usize { drive = .Hover }
@@ -48,10 +59,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
-    ret (10usize, ok)
+    ret (11usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "text_edit", cells: 10usize, columns: 5usize, cell_w: 160.0, cell_h: 56.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "text_edit", cells: 11usize, columns: 5usize, cell_w: 160.0, cell_h: 56.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

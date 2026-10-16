@@ -1,0 +1,384 @@
+{
+ "checkbox": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/checkbox_states-vs-ref.png",
+    "notes": "Audit 3: all 29 cells in 3 sheets match the live crops (0 structural px off, ink boxes within 1 px) and all 16 captured states (7 hover, 5 pressed, 4 focus) match. Round 10: the disabled and indeterminate marks (rest, pressed) are the native Windows 11 light 13 x 13 tiles (windows-native/light/checkbox-*): box pixels 0 levels off for disabled (3 kinds) and at most 1 level for indeterminate rest and pressed; the v3 captures still decide every state they show.",
+    "gaps": [
+     "Not compared (antialiasing): text is grayscale against ClearType captures; ink boxes within 1 px",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 96.9 %; 1.5 89.0 % of runs hold (informational)",
+     "Disabled and indeterminate: native light captures only (box tiles exact, caption #6D6D6D as captured; v3 never showed them); hover of indeterminate is its rest look (native hover is identical to rest)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/checkbox.png",
+    "notes": "Round 10: the marks are the native dark 13 x 13 tiles (windows-native/dark/checkbox-*, e.ui.winnative nmark): all 15 states (unchecked, checked, indeterminate x rest, hover, pressed, focus, disabled) have the box pixel for pixel, 0 levels off at rest, focus and disabled and at most 1 level on pressed (accent #60CDFF, pressed #55ACD4, disabled #4A4A4A); hover and focus draw the rest tile as the native captures do (identical to rest).",
+    "gaps": [
+     "Caption is v3's Tahoma 11 px with v3's dotted focus rectangle (native: Segoe UI 9 pt, DrawFocusRect): ink boxes and the rectangle differ",
+     "Disabled caption #CCCCCC as captured; the native radio and check captions at rest are black on the dark page in the capture (app colour not set), not copied"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_states-vs-ref.png",
+    "notes": "Audit 3: 14 of 20 cells match; the selected radio ring and dot are up to 9 levels off (tolerance 2) over 100 to 304 px in radio_states and radio_hover, so 3 captured states fail and the hover over Search Cards has no cell. Round 10: the disabled radio (off, on) is the native light 13 x 13 tile (windows-native/light/radio-*-disabled), 0 levels off; v3 captures still decide the rest.",
+    "gaps": [
+     "Mismatch: radio_states cells 4 to 7 (100 px each) and radio_hover cells 0 and 1 (292 and 304 px): ring and dot colour up to 9 levels off",
+     "Failing states: focused Filter Blocks, pressed Filter Blocks and Formats; no cell: hover Search Cards",
+     "Captured but identical to rest: 9 hover grabs and 1 pressed grab show no distinct look",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 100 %; 1.5 87.2 % of runs hold (informational)",
+     "Disabled: native light capture only (the dot and ring tile exact); the native light radio-checked-pressed capture is blank, so pressed stays v3's"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/radio.png",
+    "notes": "Round 10: the dot and ring tiles are the native dark ones (windows-native/dark/radio-*): all 10 sheet states have the 13 x 13 mark exact (0 levels off; 1 level on pressed).",
+    "gaps": [
+     "Caption: v3 Tahoma 11 px and focus rectangle, not the native Segoe UI 9 pt",
+     "Native radio captions render black in the dark captures (app colour not set): not copied"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/radio_group_states-vs-ref.png",
+    "notes": "Audit 3: all 17 cells (radio_group_dialog 3, radio_group_states 14, hover crops included) match the live crops with 0 structural px off (max 2 levels) and ink boxes within 1 px. Round 10: the disabled group draws its radios from the native light disabled tiles.",
+    "gaps": [
+     "The radio buttons inside the group are judged under radio (the standalone radio cells fail on the selected ring)",
+     "Not compared (antialiasing): text is grayscale against ClearType captures",
+     "Disabled: radios from the native light capture (windows-native/light/radio-*-disabled); the native group box has no distinct disabled look (groupbox-disabled is pixel-identical to rest), so the frame and caption dimming stay a guess"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/radio_group.png",
+    "notes": "Round 10: the radios are the native dark tiles; the group frame has no native dark theme (the native group box keeps its classic light #DCDCDC frame and a black caption), so the frame and caption stay the mapped colours.",
+    "gaps": [
+     "No native dark reference for the group frame (windows-native README: group box frame stays light)",
+     "The radios are judged under radio"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/label.png",
+    "notes": "Audit 3: all 11 label cells match the live crops, 10 with 0 structural px off and 1 with a single px (a descender row of text, 191 levels); ink boxes within 1 px on all 11; the link hover and pressed grabs are pixel-identical to rest. Round 10: the disabled label is the native static control's #A0A0A0 (windows-native/light/label-disabled).",
+    "gaps": [
+     "Not compared (antialiasing): the text is grayscale and the captures are ClearType; ink boxes agree within 1 px, glyph pixels do not within 2 levels",
+     "The Options page title bars (bold white on grey gradient) are a panel, not a TcxLabel",
+     "Disabled: #A0A0A0 from the native light static capture (a TcxLabel may differ: v3 never showed one disabled)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/label.png",
+    "notes": "Round 10: windows-native/dark/label-rest is white Segoe UI text on #202020; the dark labels are white (#FFFFFF family), v3's Tahoma and colours kept.",
+    "gaps": [
+     "label-disabled in the dark capture is the same white (the app colours static text): no native disabled look, ours is the mapped #A0A0A0",
+     "Link colours (syslink) are #0067C0-ish blue in the capture; ours map v3's #336CCC"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Audit 3: the shared password-edit chrome is exact (0 px over 2 levels on 496x22) but the hot key edit focused cell has ink boxes 3 px off, so 2 of 3 own cells and 4 of 5 captured states match. Round 10: the read-only edit takes the native light capture's #F0F0F0 face (windows-native/light/edit-readonly); a Password cell (native edit-password) joins the sheet.",
+    "gaps": [
+     "Mismatch: edit-focused-options-shortcut-hotkey: text ink 3 px off at every threshold",
+     "No TcxTextEdit capture: v3 shows only the TcxMaskEdit password fields and a hot key edit",
+     "edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 93.2 %; 1.5 93.6 % of runs hold",
+     "Read-only: face #F0F0F0 from the native light capture; the frame is v3's tile (the native Win32 edit draws a crisper 1 px border, 8 levels apart in the foot)",
+     "Unverified: selection, disabled (v3 shows the white face and #A0A0A0 text, the native Win32 edit a #F0F0F0 face and #6D6D6D text), invalid (no native state)"
+    ]
+   },
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/text_edit.png",
+    "notes": "Round 10: the edit frame is the native DarkMode edit (windows-native/dark/edit-*): #9B9B9B outer line, white when focused, #404040 disabled, #383838 inner ring, #202020 face, white text (#6D6D6D disabled) and the #0078D7 selection. Every captured state has a cell (rest, hover, focus, disabled, read-only, selected, password): the 141 x 22 frame, normalised to the native 150 x 24 by cutting two plain rows, is 0 levels off on all 942 structural px except the two text stem px at x = 2 (text masked).",
+    "gaps": [
+     "Unverified: invalid (no native state; a red outline guess), long text, placeholder colour",
+     "Control height stays v3's 22 (native 24) and the text origin v3's 3 px (native 6 px)",
+     "Multi-line is the memo; the native multi-line capture has a light unthemed scroll bar"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "Audit 3: all 19 cells match the live crops (0 structural px off, max 1 level, ink boxes within 1 px) and all 16 captured states (8 hover, 6 pressed, 2 focus) match. Round 10: a Disabled cell (11th) shows the native light capture's look (windows-native/light/spin-disabled): dialog face, #838383 text, dimmed arrows.",
+    "gaps": [
+     "Pressed arrows auto-repeat in the v3 grabs (the number changes 5, 1, 11): compared outside the number",
+     "edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 94.7 %; 1.5 94.4 % of runs hold",
+     "Disabled: native light capture only (face #F0F0F0, text #838383, arrows dimmed from the rest tile); read-only unverified"
+    ]
+   },
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/spin_edit.png",
+    "notes": "Round 10: the spin edit is the native dark one (windows-native/dark/spin-*, up-down tables in e.ui.winnative nspin): all 7 captured states (rest, focus, hover up, hover down, pressed up, pressed down, disabled) have a cell and are 0 levels off on all 1274 structural px (digit masked) after cutting the 2 plain rows the shorter v3 height needs; the native up-down keeps its light #ABADB3 outer edge, copied.",
+    "gaps": [
+     "Unverified: arrows dimmed at the bounds (greyed from the disabled capture's glyph, no native single-arrow capture)",
+     "The fast (four-arrow) v3 spin edit draws the native up-down only",
+     "Control height v3's 22 and text origin 3 px (native 24 and 6 px)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "Audit 3: all 6 cells exact against the live password mask edit (0 px over 2 levels on 496x22 at rest, hover, focused with caret) and all 3 captured states match. Round 10: the read-only mask edit takes the native light #F0F0F0 face.",
+    "gaps": [
+     "Baked edit chrome: the captures are the only reference; 1.0 is exact",
+     "edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 92.0 % (below the 93 % threshold, clean on view); 1.5 92.8 % of runs hold",
+     "Read-only: face #F0F0F0 from the native light edit capture",
+     "Unverified: text (non-password) content, invalid mask, disabled (v3 shows white face and #A0A0A0 text)"
+    ]
+   },
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/mask_edit.png",
+    "notes": "Round 10: the mask edit uses the native dark edit frame; all 7 native states (rest, hover, focus, selected, disabled, read-only, password) have a cell and the frame is 0 levels off on 942 structural px (selection highlight and text masked).",
+    "gaps": [
+     "Unverified: invalid mask (no native state), long text",
+     "Control height v3's 22 and text origin 3 px (native 24 and 6)"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Audit 3: 8 of 9 cells are exact apart from one frame pixel 4 levels off (tolerance 2) in the ellipsis button, and the disabled cell is 27 px off by up to 84 levels and 2 px shifted, so all 7 captured states fail on that pixel. Round 10: the read-only button edit takes the native light #F0F0F0 face.",
+    "gaps": [
+     "Mismatch: one px of the ellipsis button frame 4 levels off in each state cell",
+     "Mismatch: edits_states cell 13 (disabled Card Art) 27 px up to 84 levels, shifted 2 px",
+     "edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 96.7 %; 1.5 93.3 % of runs hold",
+     "Read-only: face #F0F0F0 from the native light edit capture",
+     "Unverified: disabled beyond the one Card Art capture"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/button_edit.png",
+    "notes": "Round 10: the edit frame is native dark (exact); the ellipsis button is a small native-styled button (#9B9B9B line, #333333 face, #666666 pressed): no native capture has an edit with an ellipsis button.",
+    "gaps": [
+     "The ellipsis button geometry and dots are guesses",
+     "Invalid: red outline guess"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/memo.png",
+    "notes": "Audit 3: no memo exists in any v3 capture, so nothing is compared. Round 10: the read-only memo takes the native light capture's #F0F0F0 face (windows-native/light/edit-multiline-vscroll shows the same edit); nothing else of the memo has a reference.",
+    "gaps": [
+     "Unverified: every state",
+     "Read-only: face #F0F0F0 from the native light edit capture"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/memo.png",
+    "notes": "Round 10: the memo frame is the native dark edit frame (windows-native/dark/edit-multiline-vscroll: the same #9B9B9B / #383838 lines) with #202020 face and white text.",
+    "gaps": [
+     "The native multi-line capture has a light unthemed vertical scroll bar (not copied: ours is the dark one)",
+     "Unverified: invalid, placeholder"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Audit 3: no date edit exists in any v3 capture (none is reachable without printing), so nothing is compared. Round 10: the native light date-time picker and month calendar were measured (windows-native/light/datepicker-*, monthcal-*) but are a different control from v3's TcxDateEdit (a DevExpress edit with a drop button and calendar), so the field keeps the combo frame and the calendar its generic layout.",
+    "gaps": [
+     "Unverified: every state",
+     "Native DTP (160 x 26, #8D8D8D line, calendar icon and arrow glyph, #0078D4 focus frame) and MonthCal (Sun to Sat, right-aligned days, #979797 frame, Today row) are not reproduced",
+     "No disabled cell: the date picker has no enabled option"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/date_edit.png",
+    "notes": "Round 10: the field is the native dark editable combo frame (exact); the native date-time picker and month calendar stay light under DarkMode (README), so the calendar keeps the mapped look.",
+    "gaps": [
+     "No native dark reference for the calendar popup (README: date picker and month calendar stay light)",
+     "Native DTP and MonthCal glyph and layout not reproduced (see the light entry)"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/check_list_box_states-vs-ref.png",
+    "notes": "Audit 3: 1 of 15 cells match; rows and check boxes are 893 to 956 px off (up to 95 levels) in every state sheet, 6 of 11 captured states fail and the 5 hover grabs are identical to rest. Round 10: no light state was added; the native light checklist-disabled capture (a #F0F0F0 list view with dimmed rows) has no cell because the check list has no disabled option.",
+    "gaps": [
+     "Mismatch: item pitch and check boxes (895 px, up to 93 levels, 14 cells); check_list_box_dialog 26 px",
+     "Failing states: pressed check box, focused list, 4 selected focused or unfocused rows",
+     "Unverified: disabled, multi-select, indeterminate rows",
+     "At 2.0 the check glyphs render blocky (checked on view)",
+     "Unverified: disabled (native light capture exists, #F0F0F0 fill and #6D6D6D text; no sheet cell)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/check_list_box.png",
+    "notes": "Round 10: face #202020 and the selected row #1A364D come from windows-native/dark/checklist-*; the native check boxes in a dark list view are the light theme's (white boxes, #005EB8 checks), so ours keep the native dark check box tiles.",
+    "gaps": [
+     "Check marks: native dark list view shows light-theme boxes; ours use the native dark check box (mismatch by design)",
+     "Disabled and unfocused selected rows have no cell (the native disabled list view stays light)",
+     "The native list scroll bar is light-themed and not copied"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/list_box_focus-vs-ref.png",
+    "notes": "Audit 3: 1 of 3 cells match; the frame is exact (0 structural px, max 1 level) but the blur and dialog cells have text ink boxes 2 to 3 px off, so 1 of 4 captured states fails. Round 10: no light state was added; the native light listbox-disabled capture is the classic Win32 list (v3 has none of its own).",
+    "gaps": [
+     "Mismatch: list_box_blur and list_box_dialog ink boxes 2 to 3 px",
+     "Captured but identical to rest: 2 hover grabs",
+     "Unverified: disabled, multi-select",
+     "Unverified: disabled (native listbox-disabled keeps the white face with a dimmed row text; no sheet cell)"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/list_box.png",
+    "notes": "Round 10: windows-native/dark/listbox-* is the unthemed Win32 list box (classic #828790 / white client edge, a light scroll bar); only its face #202020, white text and the #0078D7 selected row are used.",
+    "gaps": [
+     "No native dark reference for the frame and scroll bar (README: list box stays light under DarkMode)",
+     "The native listbox keeps the #0078D7 selection when the list loses focus; v3's list hides it (kept)"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "Audit 3: all 4 cells match (the frame is exact against the Deck Legality crop with its interior blanked; the 3 Options page headers are 0 px off with ink boxes exact at the 60-level threshold outside v3's icon art). Round 10: windows-native/light/groupbox-disabled is pixel-identical to groupbox-rest (frame #DCDCDC, black caption), so no distinct disabled look exists in either reference.",
+    "gaps": [
+     "Unverified: disabled, focus (no capture)",
+     "The reference frame is the live crop with the dialog interior blanked, not an untouched crop; the header icons (v3 artwork) are excluded",
+     "Disabled: native has no distinct look; the dimmed caption is a guess"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/group_box.png",
+    "notes": "Round 10: windows-native/dark/groupbox-* keeps the classic light #DCDCDC frame with a black caption (no dark theme); the dark group box stays the mapped v3 frame (#4A4A4A tone) and light caption.",
+    "gaps": [
+     "No native dark reference: the capture is the unthemed light frame",
+     "Disabled has no distinct native look (groupbox-disabled is pixel-identical to rest)"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_open_color.png",
+    "notes": "Audit 3: 13 of 38 cells and 10 of 64 captured states match; the open-list sheets are composite references with no exact source (6 cells, 17 to 21 px up to 139 levels off), the editable focus is 15 px off (255 levels) and 30 hover and open rows have no cell. Round 10: the native light disabled combos (windows-native/light/combo-*-disabled: face #FAFAFA or #F0F0F0, chevron #BDBDBD, text #6D6D6D) were compared with the disabled cell: the native Win32 combo is a different frame family from the DevExpress bitmap frame of v3, so the v3 frame mixed 50 % to the ground stays.",
+    "gaps": [
+     "Mismatch: open lists (list_size, open_size) 17 to 21 px up to 139 levels; hover over the Conditional Formatting drop button 40 px up to 29 levels; editable focus 15 px up to 255 levels; flat card 7 to 10 px up to 85 levels",
+     "Composite references (no exact crop of one capture): the 6 combo_box_open_* sheets",
+     "Captured but not compared: 30 rows (open-list, mouse-hot row and open-dialog grabs for Auth Type, Card Art Position, Condition, Font Size, Row Color)",
+     "Unverified: disabled, read-only",
+     "Disabled: v3 never showed one; native Win32 combo has face #FAFAFA, chevron #BDBDBD (ours #F7F7F7 and #E0E0E0)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/combo_box.png",
+    "notes": "Round 10: the editable and list combos are painted from windows-native/dark/combo-edit-* and combo-list-* (e.ui.winedit native_combo): outer line, #383838 band, #202020 field and #383838 button for the editable one, one #333333 face for the list one, the 10 x 6 chevron tile and the one pixel dotted focus rectangle; rest, focus and disabled frames and the chevron are exact (the only px off against the 150 x 23 captures after normalising to 22 rows are the chevron px shifted by the row cut); open: #666666 button, white frame, drop list #202020 in a #7A7A7A line with the #0078D7 row (read, not measured).",
+    "gaps": [
+     "Open popup geometry (row height 13 vs native 15, popup offset) not compared numerically",
+     "Hover arrow is the rest look (the native hover capture is identical to rest)",
+     "The native drop list scroll bar is light-themed and not copied",
+     "Flat (toolbar) combo keeps the mapped v3 look: no native counterpart"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/button.png",
+    "notes": "Round 10: the dark ring, face and focus rectangle are the native DarkMode button read from windows-native/dark/button-* (e.ui.winnative nring_*, baked by scripts/gen_winnative.py): rest, default (white ring), disabled (#404040 ring, #333333 face, #CCCCCC label) and pressed (#666666 face, #9B9B9B ring) match in all four 6 x 6 corner cells (0 levels off on cells 0, 1 and 3 of button.png), the line, shadow row and faces; the focus rectangle is the native one pixel dotted line (#CCCCCC / #131313 by (x + y) parity, 2 px inside the box) and a focused plain button keeps its grey ring.",
+    "gaps": [
+     "Unverified: hover: the native hover capture is pixel-identical to rest, so the #3C3C3C hover face is a guess",
+     "Not native-drawn: split, picture-only, picture + caption, toggle, loading and plain buttons keep the older drawing (native button-split-* and button-icon-* exist, not matched)",
+     "Label font stays v3's Tahoma 11 px (native: Segoe UI 9 pt), so ink boxes differ",
+     "The right edge of the dotted rectangle alternates by the screen x of the button (native 108 wide even, ours odd): parity may differ"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/image_combo_box.png",
+    "notes": "Round 10: the list-style head, the drop list and the selected row are the native combo-list ones (see combo_box); the pictures are v3's bitmaps drawn as glyphs.",
+    "gaps": [
+     "Pictures are not native (drawn glyphs for v3's image list)",
+     "Open popup geometry not compared numerically"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/token_edit.png",
+    "notes": "Round 10: the token edit frame is the native dark edit frame (focus white); no native control has tokens, so the chips keep the mapped v3 guess.",
+    "gaps": [
+     "No native or v3 reference for the chips"
+    ]
+   }
+  }
+ }
+}

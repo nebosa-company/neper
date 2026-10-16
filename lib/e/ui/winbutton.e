@@ -14,6 +14,7 @@ use e.mem
 use e.str as strs
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winnative
 use e.ui.winpx
 use e.ui.widget
 
@@ -199,6 +200,7 @@ fn ring_edge_faced(d: *const Ring, which: usize) -> u32 {
 
 fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Ring](ctx)
+    if d.dark { ret ring_paint_native(d, b, area) }
     if d.dx != 0.0 || d.dy != 0.0 {
         ret ring_paint_shifted(d, b, area)
     }
@@ -608,6 +610,7 @@ fn focus_px(b: *scene.Builder, area: geometry.Rect, rx: f32, ry: f32, value: u32
 
 fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*FocusDots](ctx)
+    if d.dark { ret focus_paint_native(d, b, area) }
     let w = f32(u32(area.width + 0.5)) + 2.0
     let h = f32(u32(area.height + 0.5)) + 1.0
     var dark = 0x555555u32
@@ -668,4 +671,106 @@ fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32, dark: bool)
     s.height = style.Length { Px: height }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: focus_measure, paint: focus_paint, state: widget.bytes_of[FocusDots](&dots[0usize]) } }, style: s, children: none }, ok)
+}
+
+// ---- round 10: the native dark ring ---------------------------------------------------------------------------------------
+// The dark button is the Windows 11 DarkMode ring read from the native captures (docs/ui/looks/ref/windows-native/dark/button-*,
+// tables in e.ui.winnative): the grey line, the bottom shadow row, the corner cells; the face is the control's own.
+fn native_corners(kind: u32) -> [72]u32 {
+    if kind == 1u32 { ret winnative.nring_corners_1() }
+    if kind == 2u32 { ret winnative.nring_corners_2() }
+    if kind == 3u32 { ret winnative.nring_corners_3() }
+    ret winnative.nring_corners_0()
+}
+
+fn native_line(kind: u32) -> u32 {
+    if kind == 1u32 { ret winnative.nring_line_1() }
+    if kind == 2u32 { ret winnative.nring_line_2() }
+    if kind == 3u32 { ret winnative.nring_line_3() }
+    ret winnative.nring_line_0()
+}
+
+fn native_shadow(kind: u32) -> u32 {
+    if kind == 1u32 { ret winnative.nring_shadow_1() }
+    if kind == 2u32 { ret winnative.nring_shadow_2() }
+    if kind == 3u32 { ret winnative.nring_shadow_3() }
+    ret winnative.nring_shadow_0()
+}
+
+fn native_face(kind: u32) -> u32 {
+    if kind == 1u32 { ret winnative.nring_face_1() }
+    if kind == 2u32 { ret winnative.nring_face_2() }
+    if kind == 3u32 { ret winnative.nring_face_3() }
+    ret winnative.nring_face_0()
+}
+
+fn ring_paint_native(d: *const Ring, b: *scene.Builder, area: geometry.Rect) -> err {
+    let w = f32(u32(area.width + 0.5))
+    let h = f32(u32(area.height + 0.5))
+    let x0 = area.x
+    let y0 = area.y
+    let line = native_line(d.kind)
+    let baked = native_face(d.kind)
+    try ring_rect(b, x0 + 1.0, y0 + 1.0, w - 2.0, h - 2.0, d.face)
+    try ring_rect(b, x0 + 6.0, y0, w - 12.0, 1.0, line)
+    try ring_rect(b, x0 + 6.0, y0 + h - 1.0, w - 12.0, 1.0, native_shadow(d.kind))
+    try ring_rect(b, x0, y0 + 6.0, 1.0, h - 12.0, line)
+    try ring_rect(b, x0 + w - 1.0, y0 + 6.0, 1.0, h - 12.0, line)
+    let cells = native_corners(d.kind)
+    var c = 0usize
+    while c < 4usize {
+        let right = c == 1usize || c == 3usize
+        let low = c >= 2usize
+        var ox: f32 = 0.0
+        var oy: f32 = 0.0
+        if right { ox = w - 6.0 }
+        if low { oy = h - 6.0 }
+        var k = 0usize
+        while k < 36usize {
+            var at = k
+            if low { at = 36usize + k }
+            var v = cells[at]
+            let i = k % 6usize
+            let j = k / 6usize
+            var px = f32(i)
+            if right { px = f32(5usize - i) }
+            if v == baked { v = d.face }
+            if v != 0xFF202020u32 { try ring_rect(b, x0 + ox + px, y0 + oy + f32(j), 1.0, 1.0, v) }
+            k += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// The native dark focus rectangle: a one pixel dotted line two pixels inside the box, the pixels alternating between the face
+// inverted (#CCCCCC on #333333) and the face xor #20 (#131313), by (x + y) parity (button-focus, button-hover-pressed).
+fn focus_paint_native(d: *const FocusDots, b: *scene.Builder, area: geometry.Rect) -> err {
+    let w = i32(area.width + 0.5)
+    let h = i32(area.height + 0.5)
+    var face = 0x333333u32
+    if d.pressed { face = 0x666666u32 }
+    let on = (face ^ 0xFFFFFFu32) & 0xFFFFFFu32
+    let off = (face ^ 0x202020u32) & 0xFFFFFFu32
+    var x: i32 = 2
+    while x <= w - 3 {
+        var top = off
+        if (x + 2) % 2 == 0 { top = on }
+        var low = off
+        if (x + h - 3) % 2 == 0 { low = on }
+        try ring_rect(b, area.x + f32(x), area.y + 2.0, 1.0, 1.0, top)
+        try ring_rect(b, area.x + f32(x), area.y + f32(h - 3), 1.0, 1.0, low)
+        x += 1
+    }
+    var y: i32 = 3
+    while y <= h - 4 {
+        var left = off
+        if (2 + y) % 2 == 0 { left = on }
+        var right = off
+        if (w - 3 + y) % 2 == 0 { right = on }
+        try ring_rect(b, area.x + 2.0, area.y + f32(y), 1.0, 1.0, left)
+        try ring_rect(b, area.x + f32(w - 3), area.y + f32(y), 1.0, 1.0, right)
+        y += 1
+    }
+    ret ok
 }

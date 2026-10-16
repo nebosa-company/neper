@@ -14,6 +14,7 @@ use e.gfx.scene
 use e.mem
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winnative
 use e.ui.winpx
 use e.ui.widget
 
@@ -549,6 +550,12 @@ fn wtoken_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*TokenChrome](ctx)
     let w = d.width
     let h = d.height
+    // round 10: dark, the token edit's frame is the native dark edit's (no capture of the TdxTokenEdit; the edit is the nearest native look)
+    if d.dark {
+        var st = 0u32
+        if d.focused { st = 1u32 }
+        ret nedit_frame(b, f32(i32(area.x + 0.5)), f32(i32(area.y + 0.5)), w, h, st)
+    }
     let g = wtoken_gray
     try wtoken_row(b, area.x, area.y, 1.0, w, [5]u32{ g(246u32), g(241u32), g(240u32), g(237u32), g(242u32) }, d.dark)
     try wtoken_row(b, area.x, area.y + 1.0, 1.0, w, [5]u32{ g(240u32), g(246u32), g(248u32), g(239u32), g(233u32) }, d.dark)
@@ -723,4 +730,264 @@ fn hover_chrome(a: *mem.Arena, kind: u32, zone: u32, width: f32, height: f32, wi
     s.height = style.Length { Px: height }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: wedit_measure, paint: whover_paint, state: widget.bytes_of[HoverChrome](&made[0usize]) } }, style: s, children: none }, ok)
+}
+
+// ---- round 10: the native dark edit chrome ------------------------------------------------------------------------------
+// The Windows 11 DarkMode edit as docs/ui/looks/ref/windows-native/dark captures it (edit-*, spin-*): a one pixel outer line
+// (#9B9B9B rest, #FFFFFF focused, #404040 disabled), a one pixel #383838 ring, the face (#202020) inside; a square frame. The spin
+// edit's up-down is read from the capture (e.ui.winnative nspin: the 3 left columns, the middle column and the 18 right columns
+// of each of its 24 rows; the rows are cut or doubled at the plain ones to fit the control's height). A button edit's ellipsis is a
+// small native-style button (no capture of that composite). kind: 0 plain, 1 and 2 spin, 3 button edit. state: 0 rest, 1 focused,
+// 2 disabled, 3 ellipsis pressed. `hover` and `press` name the spin button under the pointer or held (1 up, 2 down, 3 left, 4 right
+// of the fast spin; 5 ellipsis). `dim` bit 0 greys the up arrow, bit 1 the down arrow.
+type NChrome = struct { kind: u32, state: u32, hover: u32, press: u32, dim: u32, width: f32, height: f32 }
+
+fn nedit_outer(state: u32) -> u32 {
+    if state == 1u32 { ret 0xFFFFFFu32 }
+    if state == 2u32 { ret 0x404040u32 }
+    ret 0x9B9B9Bu32
+}
+
+fn nrect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, rgb: u32) -> err {
+    ret winpx.fill(b, x, y, w, h, style.hex_raw(rgb & 0xFFFFFFu32))
+}
+
+// The two line frame of a plain edit over `w` x `h` at (x, y).
+fn nedit_frame(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, state: u32) -> err {
+    let outer = nedit_outer(state)
+    let ring = 0x383838u32
+    try nrect(b, x, y, w, 1.0, outer)
+    try nrect(b, x, y + h - 1.0, w, 1.0, outer)
+    try nrect(b, x, y + 1.0, 1.0, h - 2.0, outer)
+    try nrect(b, x + w - 1.0, y + 1.0, 1.0, h - 2.0, outer)
+    try nrect(b, x + 1.0, y + 1.0, w - 2.0, 1.0, ring)
+    try nrect(b, x + 1.0, y + h - 2.0, w - 2.0, 1.0, ring)
+    try nrect(b, x + 1.0, y + 2.0, 1.0, h - 4.0, ring)
+    ret nrect(b, x + w - 2.0, y + 2.0, 1.0, h - 4.0, ring)
+}
+
+// The source row (0..23) of the spin capture that target row `r` of `h` rows shows: rows cut (shorter) or doubled (taller) at
+// the plain ones between and below the arrows.
+fn nspin_row(r: usize, h: usize) -> usize {
+    if h == 24usize { ret r }
+    let cuts = [6]usize{ 9usize, 14usize, 8usize, 19usize, 10usize, 13usize }
+    var src: [64]usize = zero
+    var n = 0usize
+    var k = 0usize
+    if h < 24usize {
+        k = 24usize - h
+    } else {
+        k = h - 24usize
+    }
+    if k > 6usize { k = 6usize }
+    var i = 0usize
+    while i < 24usize {
+        var cut = false
+        var c = 0usize
+        while c < k {
+            if cuts[c] == i { cut = true }
+            c += 1usize
+        }
+        if h < 24usize {
+            if !cut {
+                src[n] = i
+                n += 1usize
+            }
+        } else {
+            src[n] = i
+            n += 1usize
+            if cut {
+                src[n] = i
+                n += 1usize
+            }
+        }
+        i += 1usize
+    }
+    if r >= n { ret src[n - 1usize] }
+    ret src[r]
+}
+
+// Pixel `c` (0..21) of source row `src`: 3 left, the middle, 18 right; a greyed arrow takes its glyph box from the disabled capture.
+fn nspin_pixel(table: []const u32, dim_table: []const u32, dim_up: bool, dim_down: bool, src: usize, c: usize) -> u32 {
+    let at = src * 22usize + c
+    if c >= 7usize && c <= 19usize {
+        if dim_up && src >= 3usize && src <= 10usize { ret dim_table[at] }
+        if dim_down && src >= 13usize && src <= 20usize { ret dim_table[at] }
+    }
+    ret table[at]
+}
+
+// One row of the spin capture at `src`, over `w` px starting at (x, y).
+fn nspin_row_paint(b: *scene.Builder, table: []const u32, dim_table: []const u32, dim_up: bool, dim_down: bool, src: usize, x: f32, y: f32, w: f32) -> err {
+    var i = 0usize
+    // the face (#202020) of the left and middle pixels is the edit's own, so the text under the chrome stays
+    while i < 3usize {
+        let v = nspin_pixel(table, dim_table, dim_up, dim_down, src, i)
+        if (v & 0xFFFFFFu32) != 0x202020u32 { try nrect(b, x + f32(i), y, 1.0, 1.0, v) }
+        i += 1usize
+    }
+    let mid = nspin_pixel(table, dim_table, dim_up, dim_down, src, 3usize)
+    if (mid & 0xFFFFFFu32) != 0x202020u32 { try nrect(b, x + 3.0, y, w - 21.0, 1.0, mid) }
+    var c = 0usize
+    while c < 18usize {
+        let v = nspin_pixel(table, dim_table, dim_up, dim_down, src, 4usize + c)
+        var run = 1usize
+        while c + run < 18usize && nspin_pixel(table, dim_table, dim_up, dim_down, src, 4usize + c + run) == v { run += 1usize }
+        try nrect(b, x + w - 18.0 + f32(c), y, f32(run), 1.0, v)
+        c += run
+    }
+    ret ok
+}
+
+// The ellipsis button of a button edit: 16 wide, the edit's height less 5, 1 px from its end (rect (W - 17, 2)).
+fn nedit_ellipsis(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, state: u32, pressed: bool) -> err {
+    var line = 0x9B9B9Bu32
+    var face = 0x333333u32
+    if pressed { face = 0x666666u32 }
+    if state == 2u32 { line = 0x404040u32 }
+    try nrect(b, x, y, w, h, line)
+    try nrect(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, face)
+    var ink = 0xFFFFFFu32
+    if state == 2u32 { ink = 0x7A7A7Au32 }
+    let cx = x + f32(i32(w * 0.5))
+    let cy = y + f32(i32(h * 0.5)) + 1.0
+    try nrect(b, cx - 4.0, cy, 2.0, 2.0, ink)
+    try nrect(b, cx - 1.0, cy, 2.0, 2.0, ink)
+    ret nrect(b, cx + 2.0, cy, 2.0, 2.0, ink)
+}
+
+fn nedit_paint(ctx: *void, b: *scene.Builder, raw: geometry.Rect) -> err {
+    let d = mem.cast[*NChrome](ctx)
+    let w = d.width + 1.0
+    let h = d.height
+    // on whole pixels: a control centred in an odd cell would otherwise blur its one pixel lines over two columns
+    let area = geometry.Rect { x: f32(i32(raw.x + 0.5)), y: f32(i32(raw.y + 0.5)), width: raw.width, height: raw.height }
+    if d.kind == 1u32 || d.kind == 2u32 {
+        var st = 0u32
+        if d.state == 1u32 || d.state == 3u32 { st = 1u32 }
+        if d.hover == 2u32 { st = 2u32 }
+        if d.hover == 3u32 { st = 3u32 }
+        if d.press == 1u32 { st = 4u32 }
+        if d.press == 2u32 { st = 5u32 }
+        if d.state == 2u32 { st = 6u32 }
+        let table = winnative.nspin(st)
+        let dim_table = winnative.nspin(6u32)
+        let rows = usize(h + 0.5)
+        var r = 0usize
+        while r < rows {
+            try nspin_row_paint(b, table[0usize..528usize], dim_table[0usize..528usize], (d.dim & 1u32) != 0u32, (d.dim & 2u32) != 0u32, nspin_row(r, rows), area.x, area.y + f32(r), w)
+            r += 1usize
+        }
+        ret ok
+    }
+    try nedit_frame(b, area.x, area.y, w, h, d.state)
+    if d.kind == 3u32 {
+        try nedit_ellipsis(b, area.x + w - 17.0, area.y + 2.0, 16.0, h - 5.0, d.state, d.state == 3u32 || d.press == 5u32)
+    }
+    ret ok
+}
+
+// The native dark chrome node for an edit of DFM width `width` (it paints `width + 1` x `height`).
+fn native_chrome(a: *mem.Arena, kind: u32, state: u32, hover: u32, press: u32, dim: u32, width: f32, height: f32) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[NChrome](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    made[0usize] = NChrome { kind: kind, state: state, hover: hover, press: press, dim: dim, width: width, height: height }
+    var s = style.defaults()
+    s.width = style.Length { Px: width + 1.0 }
+    s.height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: wedit_measure, paint: nedit_paint, state: widget.bytes_of[NChrome](&made[0usize]) } }, style: s, children: none }, ok)
+}
+
+// ---- round 10: the native dark combo box ----------------------------------------------------------------------------------
+// combo-edit-* (CBS_DROPDOWN) and combo-list-* (CBS_DROPDOWNLIST) of docs/ui/looks/ref/windows-native/dark, painted from their
+// measurements: an editable combo is the edit frame (outer line, a 2 px #383838 band) with the field (#202020) from x 3 to w - 21 and a
+// 19 px button (#383838) at the end; a list combo is one #333333 face inside a 1 px #9B9B9B line, its focus a one pixel dotted rectangle
+// (x 3 to w - 21, y 3 to h - 4, alternating #CCCCCC and #131313). The chevron is a 10 x 6 tile at (w - 14, 9) (e.ui.winnative nchev).
+// kind 0 editable, 1 list. state: 0 rest, 1 focused, 2 disabled, 3 open or the button held. The frame paints w + 1 x h + 1.
+type NCombo = struct { kind: u32, state: u32, width: f32, height: f32 }
+
+fn ncombo_chevron(b: *scene.Builder, x: f32, y: f32, id: u32) -> err {
+    let tile = winnative.nchev(id)
+    var j = 0usize
+    while j < 6usize {
+        var i = 0usize
+        while i < 10usize {
+            try nrect(b, x + f32(i), y + f32(j), 1.0, 1.0, tile[j * 10usize + i])
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+fn ncombo_paint(ctx: *void, b: *scene.Builder, raw: geometry.Rect) -> err {
+    let d = mem.cast[*NCombo](ctx)
+    let x = f32(i32(raw.x + 0.5))
+    let y = f32(i32(raw.y + 0.5))
+    let w = d.width + 1.0
+    let h = d.height + 1.0
+    var outer = 0x9B9B9Bu32
+    if d.state == 1u32 && d.kind == 0u32 { outer = 0xFFFFFFu32 }
+    if d.state == 3u32 && d.kind == 0u32 { outer = 0xFFFFFFu32 }
+    if d.state == 2u32 { outer = 0x404040u32 }
+    var chev = 1u32
+    if d.kind == 0u32 { chev = 0u32 }
+    if d.state == 2u32 { chev = 2u32 }
+    if d.state == 3u32 { chev = 3u32 }
+    let top = f32(i32((h - 23.0) * 0.5 - 0.5))
+    if d.kind == 0u32 {
+        var ring = 0x383838u32
+        if d.state == 2u32 { ring = 0x333333u32 }
+        var button = ring
+        if d.state == 3u32 { button = 0x666666u32 }
+        try nrect(b, x, y, w, h, outer)
+        try nrect(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, ring)
+        try nrect(b, x + 3.0, y + 3.0, w - 23.0, h - 7.0, 0x202020u32)
+        try nrect(b, x + w - 20.0, y + 1.0, 18.0, h - 2.0, button)
+        if d.state == 3u32 { try nrect(b, x + w - 20.0, y + 3.0, 17.0, h - 7.0, button) }
+        ret ncombo_chevron(b, x + w - 14.0, y + 9.0 + top, chev)
+    }
+    var face = 0x333333u32
+    if d.state == 3u32 { face = 0x666666u32 }
+    try nrect(b, x, y, w, h, outer)
+    try nrect(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, face)
+    try ncombo_chevron(b, x + w - 14.0, y + 9.0 + top, chev)
+    if d.state == 1u32 {
+        var px: i32 = 3
+        let right = i32(w) - 21
+        let low = i32(h) - 4
+        while px <= right {
+            var up = 0x131313u32
+            if (px + 3) % 2 == 0 { up = 0xCCCCCCu32 }
+            var down = 0x131313u32
+            if (px + low) % 2 == 0 { down = 0xCCCCCCu32 }
+            try nrect(b, x + f32(px), y + 3.0, 1.0, 1.0, up)
+            try nrect(b, x + f32(px), y + f32(low), 1.0, 1.0, down)
+            px += 1
+        }
+        var py: i32 = 4
+        while py < low {
+            var left = 0x131313u32
+            if (3 + py) % 2 == 0 { left = 0xCCCCCCu32 }
+            var edge = 0x131313u32
+            if (right + py) % 2 == 0 { edge = 0xCCCCCCu32 }
+            try nrect(b, x + 3.0, y + f32(py), 1.0, 1.0, left)
+            try nrect(b, x + f32(right), y + f32(py), 1.0, 1.0, edge)
+            py += 1
+        }
+    }
+    ret ok
+}
+
+// The native dark combo frame node for a control of DFM width `width` and height `height` (it paints `width + 1` x `height + 1`).
+fn native_combo(a: *mem.Arena, kind: u32, state: u32, width: f32, height: f32) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[NCombo](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    made[0usize] = NCombo { kind: kind, state: state, width: width, height: height }
+    var s = style.defaults()
+    s.width = style.Length { Px: width }
+    s.height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: wedit_measure, paint: ncombo_paint, state: widget.bytes_of[NCombo](&made[0usize]) } }, style: s, children: none }, ok)
 }
