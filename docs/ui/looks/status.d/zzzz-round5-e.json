@@ -1,0 +1,111 @@
+{
+ "data_grid": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/data_grid.png",
+    "notes": "The baseline: the theme's own data grid. The sheets build their grids afresh per look, so the Windows look no longer leaks into the Neper passes (the earlier 1.5x Neper render showed the Windows grid)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_top.png",
+    "notes": "Round 5 (group e). Every captured grid state has a cell (cell for cell against the grab; the 576 x 213 cells are the top grid of the 800 x 600 main window at (216, 109)). Measure (scripts in the worker's scratch, D:/Temp/claude/looks5-e): bad = pixels of the reference that lie in a flat fill or a straight run of 11 or more equal pixels (the colour occurring at least 30 times) and differ from our render by more than 2 levels in any channel, at scale 1.0, cell for cell against the live 1x grabs in ref/windows/states and dialogs. Text anti-aliasing and v3's picture artwork are mostly outside that measure (glyph pixels are not flat runs); the picture artwork (card pictures and row icons, the backdrop picture behind the collection rows, the sort and shortcut icons, the Land, Crea and Spell icons and colour discs of Deck Properties) is stood in for or left out and its flat pixels are inside the counts. Numbers (bad, of about 101,000 to 107,000 flat pixels per top cell, 78,000 per Sort cell, 144,000 per Shortcuts cell, 108,000 to 139,000 per bottom cell): TOP GRID (data_grid_top .. top5): header pressed (Name) 6190, navigator at rest 5814, first button pressed 5814, next pressed 5952, last pressed 5814, row selected focused 5814, row selected not focused 5814 (v3's 100 % grab is identical to the focused one), vertical thumb pressed 5788, horizontal thumb pressed 5834, lower arrow pressed 5825. HOVER (data_grid_hover .. hover8, group .. group3): Name header 4932, Edition 4930, Color 4901, Type 4958, Rarity 4816, star header 4784, next button 4637, next-page button 4637, funnel 4675, vertical thumb 4661, upper arrow 4690, lower arrow 4694, horizontal thumb 4687, rest with the first row current 4687, a row 4687 (v3 shows no hover look on a row: ours does not change), bar track 4687 (no look in v3). GROUPED (View > Group by Edition): grouped at rest 7039, group box shown and ungrouped 5758, hot Edition header 9765, hot Name header 10002, Edition chip pressed 8688, a group row hovered 9200 (no look in v3). SORT DIALOG (data_grid_sort_states, sort_hover, dialogs_sort, data_grid_sort_rest): at rest 997, header pressed 1829, Name selected focused 1400, not focused 1400 (identical grabs), scroll thumb pressed 1003; hover Column header 1488, Sort Order header 1447, thumb 1003, a row 997, a Sort Order cell 997 (no look); 1663 for the older focused sheet and 1312 for the Edition-descending rest sheet. SHORTCUTS GRID (data_grid_shortcuts_states 1 to 3, shortcuts_hover 1 to 4): rest 4251, header pressed (Command) 9369, Open selected focused 5217, not focused 10250, thumb pressed 9002; hover Command header 3307, Shortcut header 3224, a row 2884, thumb 2890, lower arrow 2896, bar track 2884. MISSING SET CARDS (data_grid_missing_states, missing_hover, data_grid_missing): rest 1593, row selected 1593, row hovered 1593 (no look). BOTTOM (collection) GRID (data_grid_bottom 1 to 3): Tangle selected focused 13468, rest 10965, Name header hot 11422, next button hot 10906, funnel hot 10987 (about 1,800 of each is the card-picture backdrop). MAIN WINDOW REST (data_grid_main, the reference trimmed to the two grids: the dock edge, the splitter between and the status line are other controls and painted as the form face): 11,827 of 199,227. Older sheets: data_grid_states (selected row crop) 12,035, states_pressed (header strip) 1,801. Fixed this round: the dialog grids' lines, row feet, white bar pixel and 2 px thumb (Sort 12.4k to 1.3k, Missing 8.4k to 1.6k), the frame ring (two lines on top and left, one at the foot and right), the foot pixels that drift down the list, the column lines that lighten to the right, the first group row under a header (16 tall, no top pair), the bar's #F7F7F7 pixel, the thumb's half pixel, hot arrows (0 px off), the navigator's blue hot buttons, its 12 px thumb under the pointer or pressed, the position box width (next buttons 3 px further, as the capture), the thumb length and start, the pressed lower arrow glyph.",
+    "gaps": [
+     "Mismatch (largest first): the selected row's drawing stands one pixel too low (v3's selection and its dotted rectangle start on the foot pair of the row above, 500 to 600 px per state)",
+     "Mismatch: the frame's inner lines are one colour per side in ours; v3's are the content blended through (left inner #DDDEDF over #F0F0F0 but #EAEAEC over white and #E0E4E9 over the yellow footer), the top edge is #8D9096 for 450 px then #ACAFB4 (about 130 px per grid)",
+     "Mismatch: the row-foot and column-line pixels are matched at the top of each list and drift by up to 4 levels down it; the pressed header, the Edition column header while grouped and the group chip are different shades by a few levels",
+     "Mismatch: the in-place editors of the bottom grid's selected row (spin arrows on Qty and Used, '...' buttons) are not drawn even with immediate edit on (about 1,100 px)",
+     "Mismatch: grouped by Edition, v3's groups are listed MSH, HOC, HOB, SLZ, FRC, FRA, MBC (an order the table's own sort does not give): our rows hold the right counts in alphabetical order, so the labels differ (ink only) and the focus row is another group",
+     "Mismatch: footer cell edges (a 1 px blend and border ring round each summary cell), the group footer, the filter row's operator buttons",
+     "Mismatch: text anti-aliasing (v3 ClearType, hinted Tahoma; ours grey, unhinted) on every caption, ink boxes within about 1 px, advances up to 4 px narrower on long captions",
+     "Artwork excluded and stood in for: the card pictures and row icons in the Name column (grey and gold shields), the orange card-back disc and black ninja of the collection rows, the backdrop picture behind the collection rows, the sort-order icons of the Sort dialog, the shortcut icons of the Options grid, the pictures of the Missing Set Cards list",
+     "Not captured: the Last button's hover (the capture script's 'last' hovers the next-page button), disabled grid, edit mode, the sort and filter popups, hover of the filter row's buttons, the unfocused selected row of the main grids (the 100 % grab shows the focused look; the Options Shortcuts grid's unfocused row is the pale #D5E4EE one and is reproduced)",
+     "Unverified at 150 %: the 100 % bitmaps are drawn pixel for pixel scaled by the harness (v3 is DPI unaware)",
+     "Pixel-identical-to-rest hover grabs (v3 draws no hover look; our cells show the rest look with the pointer over): group row, group row caption, expand button, empty group box, first and previous navigator buttons, rows of every grid, a Sort Order cell, bar track of the main grid"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/scroll_bar.png",
+    "notes": "The baseline: the theme's overlay thumb, unchanged by round 4."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_top5.png",
+    "notes": "Round 5 (group e). All 6 captured pressed states and all 12 captured hover states have a cell, inside the grid or tree they belong to (the bars are drawn by the grid, the navigator and the tree): Measure (scripts in the worker's scratch, D:/Temp/claude/looks5-e): bad = pixels of the reference that lie in a flat fill or a straight run of 11 or more equal pixels (the colour occurring at least 30 times) and differ from our render by more than 2 levels in any channel, at scale 1.0, cell for cell against the live 1x grabs in ref/windows/states and dialogs. Text anti-aliasing and v3's picture artwork are mostly outside that measure (glyph pixels are not flat runs); the picture artwork (card pictures and row icons, the backdrop picture behind the collection rows, the sort and shortcut icons, the Land, Crea and Spell icons and colour discs of Deck Properties) is stood in for or left out and its flat pixels are inside the counts. Numbers are the pixels outside 2 levels (all pixels, not only flat runs) inside the bar's own rectangle (18 x 187 px for the main grid's vertical bar, 170 x 22 for the navigator's thumb, 19 px wide for the dialog bars): MAIN GRID vertical bar: rest 134 of 3,366, thumb pressed 168 (max 94), lower arrow pressed 262, thumb hover 151, upper arrow hover 191 and lower arrow hover 190 (the glyph itself 0 px off), track hover 134 (v3: no look); navigator horizontal thumb: rest 58 of 3,740, hover 72, pressed 122. SORT dialog bar (19 x 259): rest 73, thumb pressed 95, thumb hover 95. SHORTCUTS bar (18 x 334): rest 254, thumb pressed 118, thumb hover 118, lower arrow hover 166, track hover 90. FILTER tree bar (19 x 319): rest 65, thumb pressed 96, thumb and track hover 83. Fixed this round: the main bar's #F7F7F7 first pixel and half-pixel thumb, the 6 px pill pressed or under the pointer (whole pixels in dialogs), the arrow glyph the pointer is on (hot up and down, 11 x 9, and the pressed lower arrow 9 x 7), the navigator thumb (rim, 12 thick with rounded ends hot or pressed, its length 161 and start 243 as the capture), the dialogs' bar (white first pixel, thumb 8 px in, 17 px wide in the tree).",
+    "gaps": [
+     "Mismatch: the thumb's rounded end pixels differ by up to 100 levels on the first and last rows of a pill (the capture's pill ends are anti-aliased differently), 60 to 260 px per state",
+     "Mismatch: the lower arrow pressed leaves 262 px off in the main grid's bar (the thumb under it is drawn as at rest; the capture also moves the track highlight)",
+     "Mismatch: the tree's bar hover on the track widens the thumb as on the thumb (v3 does the same, both grabs are identical); the bar's arrow buttons of the tree and the dialogs were not captured pressed",
+     "Mismatch: the standalone sheets scroll_bar, scroll_bar_live and scroll_bar_states are synthetic bars (no v3 control of that shape is on screen); scroll_bar_live compares a grid crop with a bar alone and is superseded by the grid cells above",
+     "Not captured: the horizontal bar of a plain scroll area (only the navigator's is on screen), disabled bars, the bar's arrow buttons as real buttons (v3 draws them only under the pointer), 150 %"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/tree_list.png",
+    "notes": "The baseline: v2 tree table, unchanged by round 4."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list_expanded.png",
+    "notes": "Round 5 (group e). Every captured tree state has a cell (the Filter dialog's Blocks tree, 305 x 319 at (21, 88); the Conditional Formatting rule list 664 x 257 at (18, 115)). Measure (scripts in the worker's scratch, D:/Temp/claude/looks5-e): bad = pixels of the reference that lie in a flat fill or a straight run of 11 or more equal pixels (the colour occurring at least 30 times) and differ from our render by more than 2 levels in any channel, at scale 1.0, cell for cell against the live 1x grabs in ref/windows/states and dialogs. Text anti-aliasing and v3's picture artwork are mostly outside that measure (glyph pixels are not flat runs); the picture artwork (card pictures and row icons, the backdrop picture behind the collection rows, the sort and shortcut icons, the Land, Crea and Spell icons and colour discs of Deck Properties) is stood in for or left out and its flat pixels are inside the counts. Numbers: rest (the first row selected, tree not focused) 1579; checkbox pressed 798 (the 305 x 90 crop of the top rows), row selected focused or not focused 790 (the 100 % grabs are identical); Conditional Formatting list focused 1601 (the grab is identical to its rest grab); Core Sets open (its 24 editions, checked) with the expander pressed 2775 and with the bar's thumb pressed 2787; hover: thumb 1581, track 1581, check box 1579, expander 1579, a row 1579 (v3 shows no hover look on the check box, the expander, a row or the empty list: ours does not change). Fixed this round: the header is 20 rows with a #F4F4F4 line when the list has rows, one pixel at the foot of every row (#FAFAFA under a grey, #F4F4F4 under a white row), the edition rows with their check box and abbreviation, the bar as a dialog bar (white first pixel, whole-pixel thumb, 17 wide, table 288), the position of the open branch (check 14 px in per level, as the capture; the tree indents 20).",
+    "gaps": [
+     "Mismatch: text anti-aliasing (ClearType against our grey scale) on every caption, ink boxes within 1 px; the abbreviation ink is 6 px narrower than the hinted one",
+     "Mismatch: the dotted tree guide line (x = 7) between plus boxes and from each child to its parent is not drawn",
+     "Mismatch: the pressed expander cell shows the open branch but no pressed look (the capture shows none either: DevExpress toggles on the button going down)",
+     "Artwork excluded: the ES column's pictures (the set symbols of the editions), the plus boxes' bitmaps",
+     "Not captured: disabled tree, edit-in-place of a node, drag, the Last edition rows below Sixth Edition (only 16 of the 24 children are in the grab), 150 %"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/vertical_grid.png",
+    "notes": "The baseline: collection.property_grid_of, the existing v2 property grid with group headings, same two sheets."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Round 5 (group e). Every captured Deck Properties state has a cell (330 x 425 at (16, 79) of the 364 x 552 dialog): the rest sheet vertical_grid, vertical_grid_states (Name focused with its text selected, Author selected, Description selected with the editor's ellipsis button, Archetype selected, General pressed) and vertical_grid_hover (the five hover grabs: all pixel-identical to rest in v3). Measure (scripts in the worker's scratch, D:/Temp/claude/looks5-e): bad = pixels of the reference that lie in a flat fill or a straight run of 11 or more equal pixels (the colour occurring at least 30 times) and differ from our render by more than 2 levels in any channel, at scale 1.0, cell for cell against the live 1x grabs in ref/windows/states and dialogs. Text anti-aliasing and v3's picture artwork are mostly outside that measure (glyph pixels are not flat runs); the picture artwork (card pictures and row icons, the backdrop picture behind the collection rows, the sort and shortcut icons, the Land, Crea and Spell icons and colour discs of Deck Properties) is stood in for or left out and its flat pixels are inside the counts. Numbers: rest 2553 (of 120,803 flat px, was 5,527); Name focused 2698, Author selected 2872, Description selected 3188, Archetype selected 3168, General pressed 3013 (was 5,586 to 9,814 and 4,585, the sheet had not been re-run since the audit: the states sheet total was 25,140); hover (caption of Author, General category button, Archetype value, Description value, Name value) 2562, 2561, 2561, 2562, 2561 (no hover look: identical to the rest cell). Fixed this round: the Computed category has v3's six rows (Deck | Sideboard, Land | Crea | Spell, Colors, Archetype, Strategy, Legality) with their own heights (17, 17, 17, 18, 24, 17) and the extra header and value cell lines at x 96 and 247, 73 and 119, 220 and 275 (collection.property_row_shape, the painter follows), and the hairline pair drifts with the row's place down the grid (it had been reset per category).",
+    "gaps": [
+     "Mismatch (artwork stood in for): the Land, Crea and Spell icons, the four colour discs (plain discs here), the Strategy bar's triangle marker, the Legality tags' gradients and bold letters; the Strategy bar is a 32-step ramp, not v3's gradient",
+     "Mismatch: the File Name value differs from the state grabs (they show a path under D:/Temp/claude/v3run/Probe...) and the Name row's selection text box is 1 px off",
+     "Mismatch: frame colours on the right and bottom edges are one value (v3's drift by a few levels), the dotted focus rectangle's corner pixels on the pressed General category (about 100 px)",
+     "Mismatch: text anti-aliasing (ClearType, hinted Tahoma against ours), ink boxes within 1 px",
+     "Not captured: edit mode of the combo editor's drop-down (the Archetype grab shows no drop button at rest), disabled and read-only rows, hover of an editor's button, 150 %"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/progress_bar.png",
+    "notes": "The baseline: v2 progress bar."
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Round 5 (group e). Still no capture of a visible v3 progress bar: the live grabs never catch one (TcxProgressBar exists in main.vcl.form.dfm as pbProgress in the status bar, invisible at rest; the report previews open in under 120 ms; the Import dialog and the Statistics dialog's ten vertical bars are on pages no grab shows). What the DFMs say: the status bar bar is 148 x 14, Align alClient, BarStyle cxbsGradient from #005982 to #003E5B (BeginColor 8542464, EndColor 5979648, as BGR integers), PeakValue 100, ShowText False, Office11 look, transparent, border none; the Import dialog's is 405 wide, NativeStyle True, ShowTextStyle cxtsText, Tahoma 8 pt (11 px), with a marquee twin; the Statistics bars are 25 x 82, vertical, BeginColor clRed, PeakValue 50, ShowText False, flat native. Our look keeps the native one (a #E6E6E6 track, #BCBCBC border, #06B025 fill) that the NativeStyle bars would draw on Windows 10 and 11; nothing could be compared, so the status stays started.",
+    "gaps": [
+     "Nothing to compare: no grab of a progress bar exists; track, border and #06B025 fill are the Windows 10 native colours (a guess for v3's lfOffice11 bars)",
+     "Not drawn: the status bar's gradient bar (#005982 to #003E5B, DFM only), the vertical Statistics bars with a peak marker, the red BeginColor",
+     "Unverified (no capture): every state, the marquee, the text style, disabled, 150 %"
+    ]
+   }
+  }
+ }
+}
