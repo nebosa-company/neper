@@ -1,0 +1,177 @@
+"""Strict comparison of our Windows dark sheets against the native Windows 11 dark captures (round 12).
+
+`python -I scripts/looks_strict_dark.py <capture> <sheet.png> <x> <y> <w> <h> [--rect i] [--search N] [--dump out.png]`
+
+<capture>: stem under docs/ui/looks/ref/windows-native/dark/ (e.g. edit-rest, taken at @1x).
+<sheet>: our dark sheet (docs/ui/looks/windows-dark/<name>.png), <x> <y> <w> <h> the region of it to search (a cell).
+The reference rectangle is the capture's control rect `--rect i` of controls.json (default 0), grown by --pad (default 0).
+Headline (`flat off`): reference pixels equal to all eight neighbours (text anti-aliasing is never flat) where any channel of ours
+differs by more than 2 levels, over the whole rect, nothing cut. Secondary: a reference pixel is OFF when any channel of ours differs by more than 2 levels.
+Pixels within 2 px of text ink (interior of the control, more than 40 levels from the interior's most common colour, found on the
+reference) are counted apart as `text`, since ClearType fringes cannot be reproduced by greyscale text; every other pixel is
+`chrome` and the number that has to be zero for matched. Nothing is cut: the whole rect counts. The best offset in the search
+window (fewest chrome off) is reported with it: the offset is a free parameter, size and inner geometry are tested.
+"""
+import json
+import os
+import sys
+import numpy as np
+from PIL import Image
+from scipy import ndimage
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+NATIVE = os.path.join(HERE, "..", "docs", "ui", "looks", "ref", "windows-native") + os.sep
+OURS = os.path.join(HERE, "..", "docs", "ui", "looks", "windows-dark") + os.sep
+
+
+def load(p):
+    return np.array(Image.open(p).convert("RGB")).astype(int)
+
+
+def native(stem, scale="1x", rect=0, pad=0):
+    key = "dark/%s@%s.png" % (stem, scale)
+    img = load(NATIVE + key)
+    cs = json.load(open(NATIVE + "controls.json"))[key]["controls"]
+    if rect < 0:  # the union of the control rects (a spin edit: the edit and its up-down), without popups
+        cs = [c for c in cs if c["class"] not in ("ComboLBox", "tooltips_class32")]
+        x0, y0 = min(c["x"] for c in cs), min(c["y"] for c in cs)
+        x1, y1 = max(c["x"] + c["w"] for c in cs), max(c["y"] + c["h"] for c in cs)
+        c = {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0}
+    else:
+        c = cs[rect]
+    x, y, w, h = c["x"] - pad, c["y"] - pad, c["w"] + 2 * pad, c["h"] + 2 * pad
+    return img, (x, y, w, h)
+
+
+def text_mask(ref):
+    h, w, _ = ref.shape
+    inner = ref[3:h - 3, 3:w - 3].reshape(-1, 3)
+    vals, counts = np.unique(inner, axis=0, return_counts=True)
+    bg = vals[counts.argmax()]
+    ink = np.zeros((h, w), bool)
+    ink[3:h - 3, 3:w - 3] = np.abs(ref[3:h - 3, 3:w - 3] - bg).max(axis=2) > 12
+    return ndimage.binary_dilation(ink, structure=np.ones((3, 3), bool), iterations=2)
+
+
+def flat_mask(ref):
+    """Reference pixels equal to all eight neighbours (the rect's own edge pixels count against the outside as non-flat)."""
+    h, w, _ = ref.shape
+    m = np.zeros((h, w), bool)
+    c = ref[1:h - 1, 1:w - 1]
+    ok = np.ones(c.shape[:2], bool)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            if dy or dx:
+                ok &= (ref[1 + dy:h - 1 + dy, 1 + dx:w - 1 + dx] == c).all(axis=2)
+    m[1:h - 1, 1:w - 1] = ok
+    return m
+
+
+def glyph_mask(img):
+    """Text glyph pixels: luminance above 90 inside the text zone (3 px in from the rect, 22 px short of the right end, where the
+    button or chevron tile starts), grown by 1. Text is excluded from the flat count (ClearType against greyscale cannot agree)."""
+    h, w, _ = img.shape
+    lum = (img * np.array([0.299, 0.587, 0.114])).sum(axis=2)
+    m = np.zeros((h, w), bool)
+    m[3:h - 3, 3:max(4, w - 22)] = lum[3:h - 3, 3:max(4, w - 22)] > 70
+    return ndimage.binary_dilation(m, structure=np.ones((3, 3), bool))
+
+
+FLAT = [0, 0, 0]
+_CACHE = {}
+
+
+def compare(ref, ours, tol=2):
+    """-> (chrome off, text off, chrome px, max level over chrome); FLAT gets (flat px, flat off, max level over flat off)"""
+    d = np.abs(ref - ours).max(axis=2)
+    key = ref.tobytes()
+    if key not in _CACHE:
+        _CACHE.clear()
+        _CACHE[key] = (flat_mask(ref) & ~glyph_mask(ref), glyph_mask(ref), text_mask(ref))
+    fr, gr, tr = _CACHE[key]
+    fm = fr & ~glyph_mask(ours)
+    FLAT[0], FLAT[1], FLAT[2] = int(fm.sum()), int(((d > tol) & fm).sum()), int(d[fm].max())
+    tm = tr | text_mask(ours)
+    off = d > tol
+    chrome = ~tm
+    return int((off & chrome).sum()), int((off & tm).sum()), int(chrome.sum()), int(d[chrome].max())
+
+
+def ink_box(img):
+    """Bounding box (x0, y0, x1, y1) of glyph pixels (luminance above 50, text zone), None without any."""
+    m = glyph_mask(img)
+    lum = (img * np.array([0.299, 0.587, 0.114])).sum(axis=2)
+    h, w, _ = img.shape
+    z = np.zeros((h, w), bool)
+    z[3:h - 3, 3:max(4, w - 22)] = lum[3:h - 3, 3:max(4, w - 22)] > 70
+    ys, xs = np.where(z)
+    return None if len(xs) == 0 else (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max()))
+
+
+def best(ref, sheet, x, y, w, h, search, wide=0):
+    rh, rw, _ = ref.shape
+    top = None
+    for dy in range(-search - wide // 2, search + wide // 2 + 1):
+        for dx in range(-search - wide, search + wide + 1):
+            px, py = x + (w - rw) // 2 + dx, y + (h - rh) // 2 + dy
+            if px < 0 or py < 0 or px + rw > sheet.shape[1] or py + rh > sheet.shape[0]:
+                continue
+            r = compare(ref, sheet[py:py + rh, px:px + rw])
+            r = r + tuple(FLAT)
+            if top is None or r[5] + r[0] < top[0][5] + top[0][0]:
+                top = (r, (px, py))
+    return top
+
+
+# native_dark sheet (examples/looks/native_dark.e): capture stem -> cell index, rect (-1 the union)
+NATIVE_DARK = [("edit-rest", 0, 0), ("edit-hover", 1, 0), ("edit-focus", 2, 0), ("edit-selected", 3, 0), ("edit-readonly", 4, 0),
+               ("edit-disabled", 5, 0), ("edit-password", 6, 0),
+               ("spin-rest", 7, -1), ("spin-hover-up", 8, -1), ("spin-hover-down", 9, -1), ("spin-pressed-up", 10, -1),
+               ("spin-pressed-down", 11, -1), ("spin-focus", 12, -1), ("spin-disabled", 13, -1),
+               ("combo-edit-rest", 14, 0), ("combo-edit-hover", 15, 0), ("combo-edit-hover-arrow", 16, 0), ("combo-edit-focus", 17, 0),
+               ("combo-edit-disabled", 18, 0),
+               ("combo-list-rest", 19, 0), ("combo-list-hover", 20, 0), ("combo-list-hover-arrow", 21, 0), ("combo-list-focus", 22, 0),
+               ("combo-list-disabled", 23, 0)]
+
+
+def table(sheet="native_dark", spec=None, cols=7, cw=200, ch=60, only=None):
+    sh = load(OURS + sheet + ".png")
+    tot = 0
+    for stem, idx, rect in (spec or NATIVE_DARK):
+        if only and not stem.startswith(only):
+            continue
+        img, (rx, ry, rw, rh) = native(stem, rect=rect)
+        ref = img[ry:ry + rh, rx:rx + rw]
+        col, row = idx % cols, idx // cols
+        x, y = 12 + col * (cw + 10), 12 + row * (16 + 4 + ch + 10) + 20
+        r, at = best(ref, sh, x, y, cw, ch, 4, 40 if any(k in stem for k in ('hover-up', 'hover-down', 'pressed', 'arrow')) else 0)
+        tot += r[5] + r[0]
+        o = sh[at[1]:at[1] + rh, at[0]:at[0] + rw]
+        bb_r, bb_o = ink_box(ref), ink_box(o)
+        agree = bb_r is not None and bb_o is not None and max(abs(p - q) for p, q in zip(bb_r, bb_o)) <= 1
+        print("ink %s %s %s" % (bb_r, bb_o, "ok" if agree else "DIFF"), end="  ")
+        print("%-24s %3dx%-3d flat off %4d / %4d (max %3d)  chrome off %4d (text-adjacent %4d)  at %s" % (stem, rw, rh, r[5], r[4], r[6], r[0], r[1], at))
+    print("total (flat + chrome) off", tot)
+
+
+def main():
+    if "--table" in sys.argv:
+        table(only=([a for a in sys.argv[1:] if not a.startswith("--")] or [None])[0])
+        return
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    opt = {a.split("=")[0]: a.split("=")[1] for a in sys.argv[1:] if a.startswith("--") and "=" in a}
+    stem, sheetp = args[0], args[1]
+    x, y, w, h = (int(v) for v in args[2:6])
+    img, (rx, ry, rw, rh) = native(stem, rect=int(opt.get("--rect", 0)), pad=int(opt.get("--pad", 0)))
+    ref = img[ry:ry + rh, rx:rx + rw]
+    sheet = load(sheetp if os.path.exists(sheetp) else OURS + sheetp + ".png")
+    r, at = best(ref, sheet, x, y, w, h, int(opt.get("--search", 4)))
+    print("%s: ref %dx%d at ours %s: flat off %d of %d (max %d), chrome off %d, text-adjacent off %d" % (stem, rw, rh, at, r[5], r[4], r[6], r[0], r[1]))
+    if "--dump" in opt:
+        o = sheet[at[1]:at[1] + rh, at[0]:at[0] + rw]
+        im = np.concatenate([ref, np.full((rh, 3, 3), 255), o, np.full((rh, 3, 3), 255), np.minimum(255, np.abs(ref - o) * 20)], axis=1)
+        Image.fromarray(im.astype(np.uint8)).resize((im.shape[1] * 4, im.shape[0] * 4), Image.NEAREST).save(opt["--dump"])
+
+
+if __name__ == "__main__":
+    main()

@@ -943,7 +943,7 @@ fn ncombo_paint(ctx: *void, b: *scene.Builder, raw: geometry.Rect) -> err {
         if d.state == 3u32 { button = 0x666666u32 }
         try nrect(b, x, y, w, h, outer)
         try nrect(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, ring)
-        try nrect(b, x + 3.0, y + 3.0, w - 23.0, h - 7.0, 0x202020u32)
+        try nrect(b, x + 3.0, y + 3.0, w - 23.0, h - 6.0, 0x202020u32)
         try nrect(b, x + w - 20.0, y + 1.0, 18.0, h - 2.0, button)
         if d.state == 3u32 { try nrect(b, x + w - 20.0, y + 3.0, 17.0, h - 7.0, button) }
         ret ncombo_chevron(b, x + w - 14.0, y + 9.0 + top, chev)

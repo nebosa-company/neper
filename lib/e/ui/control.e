@@ -6183,10 +6183,13 @@ fn windows_edit_theme(a: *mem.Arena, t: *const Theme, line_height: f32) -> (Them
     let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
     if copies_error != ok { ret (*t, TooLarge) }
     copies[0usize] = *t.tokens
-    let small = style.TextStyle { size: 10.8, line_height: line_height, weight: 400u16, italic: false }
+    var small = style.TextStyle { size: 10.8, line_height: line_height, weight: 400u16, italic: false }
+    // round 12: the dark edits follow the native Windows 11 dark ones: Segoe UI 9 pt (12 px), no Tahoma swap.
+    let dark_native = t.tokens.palette == .Dark
+    if dark_native { small = style.TextStyle { size: 12.0, line_height: 15.0, weight: 400u16, italic: false } }
     copies[0usize].text[17usize] = small
     var fonts = t.fonts
-    if t.fonts.len >= 2usize {
+    if t.fonts.len >= 2usize && !dark_native {
         let (swapped, swapped_error) = mem.alloc[shape.Font](a, t.fonts.len)
         if swapped_error != ok { ret (*t, TooLarge) }
         var i = 0usize
@@ -6214,6 +6217,8 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var h = t.tokens.metrics.control_height
     if options.height > 0.0 { h = options.height }
     if multiline { h = max_of(h, f32(options.rows) * line + 8.0) }
+    // round 12: a native Windows 11 dark edit is 24 high (Segoe UI 9 pt); v3's DevExpress sizes are light only.
+    if t.tokens.palette == .Dark && !multiline { h = 24.0 }
     var face = style.color(t.tokens, .Surface)
     var side = win_rgb(237u32, 237u32, 237u32)
     var foot = win_rgb(146u32, 146u32, 146u32)
@@ -6251,6 +6256,11 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var highlighted = win_rgb(255u32, 255u32, 255u32)
     // looks9: the dark map would turn the selected text dark; it stays white.
     if t.tokens.palette == .Dark { highlighted = style.hex_raw(0xFFFFFFu32) }
+    // round 12: the native dark password edit shows U+25CF bullets (7 px apart); the engine masks with one asterisk per byte, so the edit's
+    // own text is made transparent (caret and selection stay) and the bullets are laid over it.
+    let bullets = secret && t.tokens.palette == .Dark && len > 0usize
+    var edit_ink = ink
+    if bullets { edit_ink = with_alpha(ink, 0.0) }
     var value_options = text_options()
     value_options.role = .BodyMedium
     value_options.mono = options.mono
@@ -6258,12 +6268,13 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     if ft_error != ok { ret (zero, ft_error) }
     let (text_look, style_error) = text_style_faced(a, &ft, value_options)
     if style_error != ok { ret (zero, style_error) }
-    let pad: f32 = 3.0
+    var pad: f32 = 3.0
+    if t.tokens.palette == .Dark { pad = 6.0 }
     let inner = max_zero(options.width - 2.0 - 2.0 * pad - options.start_space - options.end_space)
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: f32(options.rows) * line }
-    let edit_node = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let edit_node = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: edit_ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: zero, untabbed: false, ringed: false }, editor_style)
     var (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, edit_node)
     if named_error != ok { ret (zero, named_error) }
     // looks11: a disabled single-line edit takes no input, so its text is laid out at GDI's whole-pixel Tahoma advances (v3's
@@ -6276,6 +6287,35 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         let (gdi_node, _, gdi_error) = choices_words(a, &ft, gdi, ink, buffer[0usize..len])
         if gdi_error != ok { ret (zero, gdi_error) }
         named = gdi_node
+    }
+    if bullets {
+        var dots = text_options()
+        dots.role = .BodyMedium
+        dots.wrap = .None
+        var shown: [64]u8 = zero
+        var made = 0usize
+        var d = 0usize
+        while d < len && made + 3usize <= 64usize {
+            shown[made] = 226u8
+            shown[made + 1usize] = 151u8
+            shown[made + 2usize] = 143u8
+            made += 3usize
+            d += 1usize
+        }
+        let (kept, kept_error) = mem.alloc[u8](a, made)
+        if kept_error != ok { ret (zero, TooLarge) }
+        var c = 0usize
+        while c < made {
+            kept[c] = shown[c]
+            c += 1usize
+        }
+        let (bullet_node, bullet_error) = colored_text(a, 0u64, kept, &ft, dots, ink)
+        if bullet_error != ok { ret (zero, bullet_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = named
+        pair[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, bullet_node))
+        named = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
     }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
@@ -6336,6 +6376,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     frame_style.radius = 0.0
     frame_style.overflow = .Clip
     var pad_y: f32 = 3.384
+    if t.tokens.palette == .Dark { pad_y = 3.0 }
     if multiline { pad_y = 3.0 }
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: pad + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: pad + options.end_space }, bottom: style.Length { Px: pad_y } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
@@ -15605,8 +15646,16 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     var value_options = text_options()
     value_options.role = .BodyMedium
     // v3's dialogs set Tahoma 11 px (DFM Font.Name = 'Tahoma', Height = -11) on their edits.
-    let (bar_t, bar_error) = win3_dialog_theme(a, t)
+    var (bar_t, bar_error) = win3_dialog_theme(a, t)
     if bar_error != ok { ret (zero, bar_error) }
+    // round 12: the native dark combo is Segoe UI 9 pt, 23 high (DFM 22); v3's 21 high Tahoma belongs to the light look.
+    var ch: f32 = 21.0
+    if dark {
+        ch = 22.0
+        let (dark_t, dark_error) = windows_edit_theme(a, t, 15.0)
+        if dark_error != ok { ret (zero, dark_error) }
+        bar_t = dark_t
+    }
     let (text_look, style_error) = text_style_faced(a, &bar_t, value_options)
     if style_error != ok { ret (zero, style_error) }
     var editor_style = style.defaults()
@@ -15655,8 +15704,9 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     row_parts[0usize] = widget.stack(0u64, grow, stack_parts[0usize..at])
     var text_box = style.defaults()
     text_box.width = style.Length { Px: max_zero(options.width - 20.0) }
-    text_box.height = style.Length { Px: 21.0 }
+    text_box.height = style.Length { Px: ch }
     text_box.padding = edges(0.0, 0.0, 0.0, 2.0)
+    if dark { text_box.padding = edges(0.0, 0.0, 0.0, 0.0) }
     let text_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, text_box, row_parts[0usize..1usize])
     var chevron_scale: f32 = 1.0
     // (the chevron keeps its rest strength under the pointer)
@@ -15666,7 +15716,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     // looks11: the Row Color combo's focus grab (window x 321) keeps the rest chevron (11 columns); the Show combo's (x 149) has the 10 column one.
     let (chevron, chevron_error) = win3_chevron(a, c.ink, focused && !square && edge_look == 0u32 && options.edge_x != 321.0, square, chevron_scale)
     if chevron_error != ok { ret (zero, chevron_error) }
-    var bare = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 17.0, min_height: 21.0, corners: zero }
+    var bare = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: 17.0, min_height: ch, corners: zero }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
     let (opener, opener_error) = pressable_states(a, key + 1u64, t, 3u8, "Choices", bare, enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
@@ -15685,7 +15735,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         if focused { native_state = 1u32 }
         if open || state_button.pressed { native_state = 3u32 }
         if !enabled { native_state = 2u32 }
-        let (made_frame, made_error) = winedit.native_combo(a, native_kind, native_state, options.width, 21.0)
+        let (made_frame, made_error) = winedit.native_combo(a, native_kind, native_state, options.width, ch)
         frame = made_frame
         frame_error = made_error
     } else {
@@ -15700,7 +15750,14 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     let (held_text, held_text_error) = mem.alloc[widget.Node](a, 1usize)
     if held_text_error != ok { ret (zero, TooLarge) }
     held_text[0usize] = text_row
-    layers[1usize] = widget.positioned(0u64, 3.0, 0.0, style.defaults(), held_text[0usize..1usize])
+    var text_x: f32 = 3.0
+    var text_y: f32 = 0.0
+    if dark {
+        text_x = 7.0
+        if options.read_only { text_x = 4.0 }
+        if options.read_only { text_y = 1.0 }
+    }
+    layers[1usize] = widget.positioned(0u64, text_x, text_y, style.defaults(), held_text[0usize..1usize])
     layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), row_parts[1usize..2usize])
     var count = 3usize
     if square && state_button.hovered && !state_button.pressed && !dark {
@@ -15744,13 +15801,13 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         layers[count] = widget.positioned(0u64, 3.0, 3.0, style.defaults(), held[0usize..1usize])
         count += 1usize
     }
-    let framed = widget.stack(key + 1048701u64, sized_style(options.width, 21.0), layers[0usize..count])
+    let framed = widget.stack(key + 1048701u64, sized_style(options.width, ch), layers[0usize..count])
     if !options.read_only { ret (framed, ok) }
     var no_gesture: widget.GestureAction = zero
     let (over, over_error) = mem.alloc[widget.Node](a, 1usize)
     if over_error != ok { ret (zero, TooLarge) }
     over[0usize] = framed
-    ret (widget.region(key + 1048650u64, widget.Region { gesture: no_gesture, gestures: 4u8, enabled: enabled, focusable: false }, sized_style(options.width, 21.0), over[0usize..1usize]), ok)
+    ret (widget.region(key + 1048650u64, widget.Region { gesture: no_gesture, gestures: 4u8, enabled: enabled, focusable: false }, sized_style(options.width, ch), over[0usize..1usize]), ok)
 }
 // A list box (TcxListBox): v3 has none of its own, so this is the list its customization window
 // shows (TcxCustomGridItemsInnerListBox, measured on ref/windows/dialogs/view-show-columns at
