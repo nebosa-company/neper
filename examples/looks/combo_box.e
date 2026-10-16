@@ -443,6 +443,144 @@ fn build_search_held(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: 
     ret (1usize, ok)
 }
 
+// The popup windows of the captures on their own (ref/windows/states/combo-box-open-list-*), one cell the size of
+// the window: `combo_box.exe L<n>`: 1 Row Color (row 1 lit), 2 Row Color (row 2), 3 Font Size (1), 4 Font Size (3),
+// 5 Show rules (1), 6 Show rules (2). The heads are the sheets above (combo_box_open_*).
+type Listed = struct { name: str, width: f32, high: f32, active: usize, set: usize }
+
+fn listed_spec(n: usize) -> Listed {
+    if n == 1usize { ret Listed { name: "combo_box_list_color", width: 389.0, high: 41.0, active: 1usize, set: 0usize } }
+    if n == 2usize { ret Listed { name: "combo_box_list_color2", width: 389.0, high: 41.0, active: 2usize, set: 0usize } }
+    if n == 3usize { ret Listed { name: "combo_box_list_size", width: 389.0, high: 54.0, active: 1usize, set: 1usize } }
+    if n == 4usize { ret Listed { name: "combo_box_list_size2", width: 389.0, high: 54.0, active: 3usize, set: 1usize } }
+    if n == 5usize { ret Listed { name: "combo_box_list_show", width: 143.0, high: 106.0, active: 1usize, set: 2usize } }
+    ret Listed { name: "combo_box_list_show2", width: 143.0, high: 106.0, active: 2usize, set: 2usize }
+}
+
+fn build_listed_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n: usize) -> (usize, err) {
+    let o = listed_spec(n)
+    let colors = [3]str{ "Not Colored", "Against Card Color", "Against Card Rarity" }
+    let sizes = [4]str{ "Small", "Medium", "Large", "Extra Large" }
+    let shows = [21]str{ "Current Selection", "All", "Favorite", "ES", "Name", "Legal", "Edition", "Color", "Rarity", "Type", "Cost", "Power", "Toughness", "Artist", "Block", "Set", "Price", "Quantity", "Foil", "Note", "Tag" }
+    var choices: []const str = colors[0usize..3usize]
+    if o.set == 1usize { choices = sizes[0usize..4usize] }
+    if o.set == 2usize { choices = shows[0usize..21usize] }
+    let (picks, picks_error) = pick_actions(a, choices.len)
+    if picks_error != ok { ret (0usize, picks_error) }
+    var none: []const widget.Node = zero
+    let (node, node_error) = control.win_list_standalone(a, 100u64, t, "List", choices, none, o.active, picks, o.width, 13.0, 8usize, 0u32)
+    if node_error != ok { ret (0usize, node_error) }
+    cells[0usize] = looks.Cell { caption: "", node: node, drive: .None }
+    ret (1usize, ok)
+}
+
+fn build_l1(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_listed_n(a, t, cells, 1usize)
+    ret (m, e)
+}
+fn build_l2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_listed_n(a, t, cells, 2usize)
+    ret (m, e)
+}
+fn build_l3(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_listed_n(a, t, cells, 3usize)
+    ret (m, e)
+}
+fn build_l4(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_listed_n(a, t, cells, 4usize)
+    ret (m, e)
+}
+fn build_l5(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_listed_n(a, t, cells, 5usize)
+    ret (m, e)
+}
+fn build_l6(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_listed_n(a, t, cells, 6usize)
+    ret (m, e)
+}
+
+fn run_listed(a: *mem.Arena, n: usize) -> err {
+    let o = listed_spec(n)
+    var build: looks.Build = build_l1
+    if n == 2usize { build = build_l2 }
+    if n == 3usize { build = build_l3 }
+    if n == 4usize { build = build_l4 }
+    if n == 5usize { build = build_l5 }
+    if n == 6usize { build = build_l6 }
+    let sheet = looks.Sheet { name: o.name, cells: 1usize, columns: 1usize, cell_w: o.width, cell_h: o.high, ctx: zero, build: build }
+    ret looks.run_all(a, &sheet)
+}
+
+// The open heads of the captures on their own (exact crops of ref/windows/states/combo-box-open-dialog-*, the
+// control's rectangle plus its bleed row and column): `combo_box.exe E<n>` as `o<n>`, written <open name>_head.
+fn build_head_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n: usize) -> (usize, err) {
+    let o = open_spec(n)
+    let (buffer, buffer_error) = mem.alloc[u8](a, 64usize)
+    if buffer_error != ok { ret (0usize, buffer_error) }
+    let value = "Against Card Color"
+    var shown = value
+    if n >= 3usize && n <= 4usize { shown = "Medium" }
+    if n >= 5usize { shown = "All" }
+    let len = control.copy_text(buffer, shown)
+    var options = control.field_options()
+    options.width = o.width
+    options.read_only = true
+    options.edge_x = o.edge_x
+    options.edge_y = o.edge_y
+    let (toggle, toggle_error) = pick_actions(a, 1usize)
+    if toggle_error != ok { ret (0usize, toggle_error) }
+    let (frame, frame_error) = control.win_edit_frame(a, 100u64, t, "Head", buffer, len, zero, true, &toggle[0usize], options)
+    if frame_error != ok { ret (0usize, frame_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (0usize, held_error) }
+    held[0usize] = frame
+    cells[0usize] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, looks.size_style(o.width + 1.0, 22.0), held[0usize..1usize]), drive: .None }
+    ret (1usize, ok)
+}
+
+fn build_e1(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_head_n(a, t, cells, 1usize)
+    ret (m, e)
+}
+fn build_e2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_head_n(a, t, cells, 2usize)
+    ret (m, e)
+}
+fn build_e3(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_head_n(a, t, cells, 3usize)
+    ret (m, e)
+}
+fn build_e4(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_head_n(a, t, cells, 4usize)
+    ret (m, e)
+}
+fn build_e5(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_head_n(a, t, cells, 5usize)
+    ret (m, e)
+}
+fn build_e6(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_head_n(a, t, cells, 6usize)
+    ret (m, e)
+}
+
+fn run_head(a: *mem.Arena, n: usize) -> err {
+    let o = open_spec(n)
+    var build: looks.Build = build_e1
+    if n == 2usize { build = build_e2 }
+    if n == 3usize { build = build_e3 }
+    if n == 4usize { build = build_e4 }
+    if n == 5usize { build = build_e5 }
+    if n == 6usize { build = build_e6 }
+    var name = "combo_box_open_color_head"
+    if n == 2usize { name = "combo_box_open_color2_head" }
+    if n == 3usize { name = "combo_box_open_size_head" }
+    if n == 4usize { name = "combo_box_open_size2_head" }
+    if n == 5usize { name = "combo_box_open_show_head" }
+    if n == 6usize { name = "combo_box_open_show2_head" }
+    let sheet = looks.Sheet { name: name, cells: 1usize, columns: 1usize, cell_w: o.width + 1.0, cell_h: 22.0, ctx: zero, build: build }
+    ret looks.run_all(a, &sheet)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 2usize {
         let first = args[1usize][0usize]
@@ -459,6 +597,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret looks.run_all(a, &focus)
         }
         if first == 111u8 { ret run_open(a, usize(args[1usize][1usize]) - 48usize) }
+        if first == 69u8 { ret run_head(a, usize(args[1usize][1usize]) - 48usize) }
+        if first == 76u8 { ret run_listed(a, usize(args[1usize][1usize]) - 48usize) }
         if first == 100u8 {
             let dialog = looks.Sheet { name: "combo_box_dialog", cells: 2usize, columns: 2usize, cell_w: 397.0, cell_h: 29.0, ctx: zero, build: build_dialog }
             ret looks.run_all(a, &dialog)
