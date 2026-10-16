@@ -8830,6 +8830,8 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
         // looks5-e: under the pointer v3 draws the button on a blue frame over #E0EEF9 (live hover captures)
         var live_pix = gl.gx_nav(slot, enabled)
         if win_look(grid) { live_pix = gl.gx_nav_win(slot, enabled) }
+        // round 13: the top grid's buttons (cut from the live main window by scripts/looks_nav_top.py) differ by a few levels from the collection grid's
+        if nav_rule_on(grid) && gl.gx_nav_top(slot, enabled).len != 0usize { live_pix = gl.gx_nav_top(slot, enabled) }
         var live_hot = false
         if enabled && (slot == 3usize || slot == 4usize) && mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, key, true, false).hovered {
             live_pix = gl.gx_nav_hot(slot)
@@ -8973,12 +8975,13 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if live_row {
         var funnel_pix = gl.gx_nav(7usize, true)
         if win_look(grid) { funnel_pix = gl.gx_nav_win(7usize, true) }
+        if nav_rule_on(grid) && gl.gx_nav_top(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_top(7usize, true) }
         if mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, funnel_key, true, false).hovered { funnel_pix = gl.gx_nav_hot(7usize) }
         let (live_funnel, live_funnel_error) = gl.pixels(a, funnel_pix, gl.gx_nav_win_w_if(win_look(grid), 7usize), gl.gx_nav_h())
         if live_funnel_error != ok { ret (zero, live_funnel_error) }
         funnel_mark = live_funnel
         // round 12: the Windows funnel stands one pixel further right (live captures, every state)
-        if win_look(grid) { funnel_mark = widget.padded(0u64, 1.0, 0.0, 0.0, 0.0, style.defaults(), one(a, live_funnel)) }
+        if win_look(grid) && !grid.immediate_edit { funnel_mark = widget.padded(0u64, 1.0, 0.0, 0.0, 0.0, style.defaults(), one(a, live_funnel)) }
     } else if grid.has_nav_icons {
         let (funnel_picture, funnel_picture_error) = control.image(a, 0u64, grid.nav_icons[6usize], 24.0, 30.0, .Contain, "")
         if funnel_picture_error != ok { ret (zero, funnel_picture_error) }
@@ -9653,8 +9656,15 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let (trio, trio_error) = mem.alloc[widget.Node](a, 3usize)
             if trio_error != ok { ret (zero, control.TooLarge) }
             trio[0usize] = cells[at]
-            trio[1usize] = footer_px(a, 0.0, 0.0, 1.0, 20.0, 0xEBEEF2u32)
-            trio[2usize] = footer_px(a, 1.0, 0.0, 1.0, 20.0, 0xC7E0C8u32)
+            // round 13: in the yellow band (the pool grid) the picture column's two edge pixels are white
+            var trio_a: u32 = 0xFFFFFFu32
+            var trio_b: u32 = 0xFFFFFFu32
+            if grid.look.footer_band.red < grid.look.footer_band.green - 0.05 {
+                trio_a = 0xEBEEF2u32
+                trio_b = 0xC7E0C8u32
+            }
+            trio[1usize] = footer_px(a, 0.0, 0.0, 1.0, 20.0, trio_a)
+            trio[2usize] = footer_px(a, 1.0, 0.0, 1.0, 20.0, trio_b)
             cells[at] = widget.stack(0u64, control.sized_style(grid.columns[at].width, 20.0), trio[0usize..3usize])
         }
         at += 1usize

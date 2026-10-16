@@ -289,6 +289,9 @@ fn arrange(app: *App, k: usize) {
         look.foot_w1 = gl.rgb(0xE8E8E8u32)
         look.foot_w2 = gl.rgb(0xE9E9E9u32)
         if app.family == 2usize { look.row_height = 18.0 }
+        look.ring_marks = dialog_marks(app.name, k)
+        // round 13: the Missing list's bar track keeps its white first column while the rows fit (live capture)
+        if app.family == 2usize { look.bar_marks = "216 2 253 ffffff" }
     }
     dg.set_look(&app.grids[k], look)
     dg.show_indicator(&app.grids[k], false)
@@ -365,7 +368,13 @@ fn cell_of(a: *mem.Arena, t: *const control.Theme, app: *App, k: usize, w: f32, 
     var foot = looks.size_style(w, h)
     foot.background = paint.Brush { Solid: gl.rgb(0xA6AAB0u32) }
     foot.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 1.0 } }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, foot, sides[0usize..1usize]), ok)
+    let framed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, foot, sides[0usize..1usize])
+    // round 13: the capture's frame top row, the line under the header and the foot row (the hot header's tint, the notches), as marks
+    if app.grids[k].look.ring_marks.len != 0usize {
+        let (marked, marked_error) = dg.ring_marks_over(a, &app.grids[k], framed)
+        ret (marked, marked_error)
+    }
+    ret (framed, ok)
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -561,6 +570,19 @@ fn dialog_marks(sheet: str, cell: usize) -> str {
     if strs.eq(sheet, "data_grid_shortcuts_states2") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 efefef;347 20 1 e8e8e8;348 20 1 ececec;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
     if strs.eq(sheet, "data_grid_shortcuts_states2") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 efefef;347 20 1 e8e8e8;348 20 1 ececec;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6" }
     if strs.eq(sheet, "data_grid_shortcuts_states3") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 efefef;347 20 1 e8e8e8;348 20 1 ececec;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 4;484 20 1 c6c6c6;485 20 1 909090;486 20 1 858585 3;489 20 1 919191;490 20 1 c6c6c6;491 20 1 f0f0f0 4" }
+    if strs.eq(sheet, "data_grid_sort_states") && cell == 0usize { ret "156 1 1 c4c6c9;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7" }
+    if strs.eq(sheet, "data_grid_sort_states") && cell == 1usize { ret "1 1 1 d5d7da 155;156 1 1 c4c6c9;313 1 1 d5d7da;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 dee9f1 155;312 20 1 d1dce4;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7" }
+    if strs.eq(sheet, "data_grid_sort_states") && cell == 2usize { ret "156 1 1 c4c6c9;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7" }
+    if strs.eq(sheet, "data_grid_sort_states") && cell == 3usize { ret "156 1 1 c4c6c9;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7" }
+    if strs.eq(sheet, "data_grid_sort_states") && cell == 4usize { ret "156 1 1 c4c6c9;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 5;319 20 1 999999;320 20 1 858585 4;324 20 1 9b9b9b;325 20 1 f0f0f0 5" }
+    if strs.eq(sheet, "data_grid_sort_hover") && cell == 0usize { ret "1 1 1 bccad6 156;314 1 1 cbcdd0 16;1 20 1 e8eef2 155;156 20 1 dbe1e6;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7" }
+    if strs.eq(sheet, "data_grid_sort_hover") && cell == 1usize { ret "1 1 1 d5d7da 155;156 1 1 c4c6c9;313 1 1 d5d7da;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 e8eef2 155;312 20 1 dbe1e6;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7" }
+    if strs.eq(sheet, "data_grid_sort_hover") && cell == 2usize { ret "156 1 1 c4c6c9;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 5;319 20 1 999999;320 20 1 858585 4;324 20 1 9b9b9b;325 20 1 f0f0f0 5" }
+    if strs.eq(sheet, "data_grid_sort_hover") && cell == 3usize { ret "156 1 1 c4c6c9;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7" }
+    if strs.eq(sheet, "data_grid_sort_hover") && cell == 4usize { ret "156 1 1 c4c6c9;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7" }
+    if strs.eq(sheet, "data_grid_missing_states") && cell == 0usize { ret "217 1 1 cbcdd0 16;1 255 1 abafb5 214;215 255 1 a0a3a9;216 255 1 abafb5;217 255 1 a7aab0 16" }
+    if strs.eq(sheet, "data_grid_missing_states") && cell == 1usize { ret "217 1 1 cbcdd0 16;1 255 1 abafb5 214;215 255 1 a0a3a9;216 255 1 abafb5;217 255 1 a7aab0 16" }
+    if strs.eq(sheet, "data_grid_missing_hover") && cell == 0usize { ret "217 1 1 cbcdd0 16;1 255 1 abafb5 214;215 255 1 a0a3a9;216 255 1 abafb5;217 255 1 a7aab0 16" }
     ret ""
 }
 // END GENERATED
