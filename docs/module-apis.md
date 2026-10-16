@@ -25151,6 +25151,121 @@ fn region(v: *View) -> widget.Region
 fn take_activated(v: *View) -> (str, bool)
 ```
 
+### `e.fmt.url`
+
+```neper
+type Url = struct
+error Failure
+type State = enum u8 { SchemeStart, Scheme, NoScheme, SpecialRelativeOrAuthority, PathOrAuthority, Relative, RelativeSlash, SpecialAuthoritySlashes, SpecialAuthorityIgnoreSlashes, Authority, Host, Hostname, Port, File, FileSlash, FileHost, PathStart, Path, OpaquePath, Query, Fragment }
+type EncodeSet = enum u8 { C0, Fragment, Query, SpecialQuery, Path, Userinfo, Component }
+const EOF: u32 = 4294967295u32
+type Buf = struct { data: []u8, len: usize }
+fn buf_new(a: *mem.Arena, cap: usize) -> (Buf, err)
+fn buf_byte(b: *Buf, c: u8)
+fn buf_str(b: *Buf, s: str)
+fn buf_text(b: *const Buf) -> str
+fn buf_take(a: *mem.Arena, b: *const Buf) -> str
+fn copy_str(a: *mem.Arena, s: str) -> str
+fn is_alpha(c: u32) -> bool
+fn is_digit(c: u32) -> bool
+fn is_hex(c: u32) -> bool
+fn lower_ascii(c: u32) -> u32
+fn hex_val(c: u32) -> u32
+fn hex_digit(n: u32) -> u8
+fn in_set(c: u32, set: EncodeSet) -> bool
+fn put_pct(b: *Buf, byte: u8)
+fn put_encoded(b: *Buf, c: u32, set: EncodeSet)
+fn put_scalar(b: *Buf, c: u32)
+fn is_special_scheme(s: str) -> bool
+fn default_port(s: str) -> i32
+fn is_special(u: *const Url) -> bool
+fn includes_credentials(u: *const Url) -> bool
+fn forbidden_host(c: u32) -> bool
+fn forbidden_domain(c: u32) -> bool
+fn pct_decode_utf8(a: *mem.Arena, s: str) -> str
+fn lower_ascii_copy(a: *mem.Arena, s: str) -> str
+fn all_ascii(s: str) -> bool
+fn has_xn_label(s: str) -> bool
+fn domain_to_ascii(a: *mem.Arena, domain: str) -> (str, bool)
+fn ipv4_number(s: str) -> (u64, bool)
+fn split_dots(a: *mem.Arena, s: str) -> []const str
+fn list_of_str(a: *mem.Arena) -> list.List[str]
+fn ends_in_number(a: *mem.Arena, domain: str) -> bool
+fn parse_ipv4(a: *mem.Arena, input: str) -> (str, bool)
+fn put_decimal(b: *Buf, v: u64)
+fn put_hex16(b: *Buf, v: u32)
+fn parse_ipv6(a: *mem.Arena, input: str) -> (str, bool)
+fn parse_host(a: *mem.Arena, input: str, opaque: bool) -> (str, bool)
+fn is_windows_drive_letter(s: str) -> bool
+fn is_normalized_drive_letter(s: str) -> bool
+fn starts_with_drive_letter(cps: []const u32, at: usize) -> bool
+fn is_single_dot(s: str) -> bool
+fn is_double_dot(s: str) -> bool
+type Parser = struct
+fn from_parser(p: *const Parser) -> Url
+fn join_path(p: *const Parser) -> str
+fn path_segments(a: *mem.Arena, path: str) -> list.List[str]
+fn to_parser(a: *mem.Arena, u: *const Url) -> Parser
+fn shorten_path(p: *Parser)
+fn push_seg(p: *Parser, s: str)
+fn decode_input(a: *mem.Arena, input: str) -> ([]u32, err)
+fn is_c0_or_space(c: u32) -> bool
+fn is_tab_newline(c: u32) -> bool
+fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Parser, has_override: bool, override: State) -> bool
+fn zero_buf(a: *mem.Arena, cap: usize) -> Buf
+fn new_parser(a: *mem.Arena) -> Parser
+fn parse(a: *mem.Arena, input: str, base: *const Url, has_base: bool) -> (Url, err)
+fn parse_against(a: *mem.Arena, input: str, base_text: str) -> (Url, err)
+fn serialize_authority(buf: *Buf, u: *const Url)
+fn href(a: *mem.Arena, u: *const Url, exclude_fragment: bool) -> str
+fn origin(a: *mem.Arena, u: *const Url) -> str
+fn protocol(a: *mem.Arena, u: *const Url) -> str
+fn join2(a: *mem.Arena, x: str, y: str) -> str
+fn host_port(a: *mem.Arena, u: *const Url) -> str
+fn port_text(a: *mem.Arena, u: *const Url) -> str
+fn search(a: *mem.Arena, u: *const Url) -> str
+fn hash(a: *mem.Arena, u: *const Url) -> str
+fn cannot_have_credentials_or_port(u: *const Url) -> bool
+fn set_protocol(a: *mem.Arena, u: *const Url, value: str) -> Url
+fn set_username(a: *mem.Arena, u: *const Url, value: str) -> Url
+fn set_password(a: *mem.Arena, u: *const Url, value: str) -> Url
+fn set_host(a: *mem.Arena, u: *const Url, value: str) -> Url
+fn set_hostname(a: *mem.Arena, u: *const Url, value: str) -> Url
+fn set_port(a: *mem.Arena, u: *const Url, value: str) -> Url
+fn set_pathname(a: *mem.Arena, u: *const Url, value: str) -> Url
+fn strip_trailing_spaces(u: *Url)
+fn set_search(a: *mem.Arena, u: *const Url, value: str) -> Url
+fn set_hash(a: *mem.Arena, u: *const Url, value: str) -> Url
+```
+
+### `e.net.uts46`
+
+```neper
+const VALID: u8 = 0u8
+const IGNORED: u8 = 1u8
+const MAPPED: u8 = 2u8
+const DEVIATION: u8 = 3u8
+const DISALLOWED: u8 = 4u8
+const STD3_VALID: u8 = 5u8
+const STD3_MAPPED: u8 = 6u8
+type Rec = struct { status: u8, off: usize, len: usize }
+fn rec_start(records: str, i: usize) -> u32
+fn lookup(cp: u32) -> Rec
+fn pool_at(i: usize) -> u32
+fn is_mark(cp: u32) -> bool
+fn nfc_points(a: *mem.Arena, points: []const u32) -> bool
+fn status_ok(status: u8, strict: bool) -> bool
+fn to_ascii(a: *mem.Arena, domain: str, strict: bool) -> (str, bool)
+```
+
+### `e.net.uts46_table`
+
+```neper
+fn uts46_count() -> usize
+fn uts46_records() -> str
+fn uts46_pool() -> str
+```
+
 ### `e.fmt.html.template`
 
 ```neper

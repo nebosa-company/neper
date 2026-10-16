@@ -437,6 +437,7 @@
     "fmt_dom",
     "fmt_gaps_a",
     "fmt_html",
+    "fmt_url",
     "html_accessible",
     "text_css_cascade",
     "text_css_match",

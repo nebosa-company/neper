@@ -2455,6 +2455,49 @@
    "blocked_by": []
   },
   {
+   "name": "e.fmt.url",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.mem",
+    "e.net.uts46",
+    "e.str",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.uts46",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.mem",
+    "e.net.idna",
+    "e.net.uts46_table",
+    "e.text.normalize",
+    "e.text.unicode",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.uts46_table",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.fmt.html.template",
    "layer": 6,
    "surface": "partial",

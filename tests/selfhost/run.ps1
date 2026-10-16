@@ -2626,6 +2626,12 @@ $uiHtmlViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiHtmlViewWritten -ne 'executable written') { throw 'ui_html_view emission failed' }
 & $uiHtmlViewPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_html_view check failed: exit $LASTEXITCODE" }
+# `e.fmt.url`: the WHATWG URL parser on the Standard's cases -- relative resolution, default ports, IPv4 and IPv6 hosts, UTS #46 domains, opaque paths, origin and the setters; the whole WPT corpus (896 + 278 cases) runs in tests/browser/url/run.sh (tracker 1.5).
+$fmtUrlPath = Join-Path $testBuild 'fmt-url-selfhost.exe'
+$fmtUrlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_url\src\main.e') $repo 'x64' 'windows' $fmtUrlPath
+if ($LASTEXITCODE -ne 0 -or $fmtUrlWritten -ne 'executable written') { throw 'fmt_url emission failed' }
+& $fmtUrlPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_url check failed: exit $LASTEXITCODE" }
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 $distConsensusPath = Join-Path $testBuild 'dist-consensus-selfhost.exe'
 $distConsensusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_consensus\src\main.e') $repo 'x64' 'windows' $distConsensusPath

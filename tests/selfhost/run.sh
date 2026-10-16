@@ -2310,6 +2310,11 @@ chmod +x "$test_build/css-paint-selfhost"
 ui_html_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_html_view/src/main.e" "$repo" x64 linux "$test_build/ui-html-view-selfhost")
 [ "$ui_html_view_written" = 'executable written' ]
 chmod +x "$test_build/ui-html-view-selfhost"
+# `e.fmt.url`: the WHATWG URL parser on the Standard's cases -- relative resolution, default ports, IPv4 and IPv6 hosts, UTS #46 domains, opaque paths, origin and the setters; the whole WPT corpus (896 + 278 cases) runs in tests/browser/url/run.sh (tracker 1.5).
+fmt_url_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_url/src/main.e" "$repo" x64 linux "$test_build/fmt-url-selfhost")
+[ "$fmt_url_written" = 'executable written' ]
+chmod +x "$test_build/fmt-url-selfhost"
+"$test_build/fmt-url-selfhost"
 "$test_build/ui-html-view-selfhost"
 "$test_build/css-paint-selfhost"
 "$test_build/css-geom-selfhost"
