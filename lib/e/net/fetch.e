@@ -19,6 +19,7 @@ use e.fmt.gzip as gzip
 use e.fmt.url as url
 use e.fmt.zlib as zlib
 use e.fmt.zstd as zstd
+use e.fs
 use e.io
 use e.mem
 use e.net
@@ -52,15 +53,16 @@ type Response = struct {
     redirected: bool, redirects: usize
 }
 
+// `allow_file` lets `file:` URLs be read from the local disk (for tests and local pages; off by default).
 type Config = struct {
     roots: []const u8, user_agent: str, accept_language: str,
-    body_limit: usize, max_redirects: usize
+    body_limit: usize, max_redirects: usize, allow_file: bool
 }
 
 type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar }
 
 fn default_config(roots: []const u8) -> Config {
-    ret Config { roots: roots, user_agent: "Mozilla/5.0 (compatible; Neper/1.0)", accept_language: "en-US,en;q=0.9", body_limit: 67108864usize, max_redirects: 20usize }
+    ret Config { roots: roots, user_agent: "Mozilla/5.0 (compatible; Neper/1.0)", accept_language: "en-US,en;q=0.9", body_limit: 67108864usize, max_redirects: 20usize, allow_file: false }
 }
 
 // A client with a jar of up to `max_cookies` cookies.
@@ -222,6 +224,49 @@ fn data_response(c: *Client, u: *const url.Url, full: str) -> (Response, err) {
     if he != ok { ret (zero, he) }
     hs[0usize] = http.Header { name: "Content-Type", value: mime }
     ret (Response { url: full, status: 200u16, status_text: "OK", headers: hs[0usize..1usize], body: body, redirected: false, redirects: 0usize }, ok)
+}
+
+// --- file: URLs.
+
+fn mime_of_extension(path: str) -> str {
+    var dot = path.len
+    while dot > 0usize && path[dot - 1usize] != 46u8 && path[dot - 1usize] != 47u8 { dot -= 1usize }
+    if dot == 0usize || path[dot - 1usize] != 46u8 { ret "application/octet-stream" }
+    let ext = path[dot..]
+    if eq_fold(ext, "html") || eq_fold(ext, "htm") || eq_fold(ext, "xht") || eq_fold(ext, "xhtml") { ret "text/html" }
+    if eq_fold(ext, "css") { ret "text/css" }
+    if eq_fold(ext, "js") { ret "text/javascript" }
+    if eq_fold(ext, "json") { ret "application/json" }
+    if eq_fold(ext, "txt") { ret "text/plain" }
+    if eq_fold(ext, "png") { ret "image/png" }
+    if eq_fold(ext, "jpg") || eq_fold(ext, "jpeg") { ret "image/jpeg" }
+    if eq_fold(ext, "gif") { ret "image/gif" }
+    if eq_fold(ext, "webp") { ret "image/webp" }
+    if eq_fold(ext, "svg") { ret "image/svg+xml" }
+    if eq_fold(ext, "ttf") { ret "font/ttf" }
+    if eq_fold(ext, "woff") { ret "font/woff" }
+    if eq_fold(ext, "woff2") { ret "font/woff2" }
+    ret "application/octet-stream"
+}
+
+// The local file a `file:` URL names, read whole (the path is percent-decoded; `/C:/x` becomes `C:/x`).
+fn file_response(c: *Client, u: *const url.Url) -> (Response, err) {
+    if !c.cfg.allow_file { ret (zero, UnsupportedScheme) }
+    let decoded = pct_decode(c.a, u.path)
+    var from = 0usize
+    if decoded.len >= 3usize && decoded[0usize] == 47u8 && decoded[2usize] == 58u8 { from = 1usize }
+    let path = decoded[from..]
+    let (bytes, re) = fs.read_file(c.a, path, c.cfg.body_limit)
+    if re != ok {
+        let (none, he) = mem.alloc[http.Header](c.a, 1usize)
+        if he != ok { ret (zero, he) }
+        none[0usize] = http.Header { name: "Content-Type", value: "text/plain" }
+        ret (Response { url: url.href(c.a, u, true), status: 404u16, status_text: "Not Found", headers: none[0usize..1usize], body: "", redirected: false, redirects: 0usize }, ok)
+    }
+    let (hs, hse) = mem.alloc[http.Header](c.a, 1usize)
+    if hse != ok { ret (zero, hse) }
+    hs[0usize] = http.Header { name: "Content-Type", value: mime_of_extension(path) }
+    ret (Response { url: url.href(c.a, u, true), status: 200u16, status_text: "OK", headers: hs[0usize..1usize], body: bytes, redirected: false, redirects: 0usize }, ok)
 }
 
 // --- Content decoding.
@@ -415,6 +460,10 @@ fn fetch(c: *Client, req: Request) -> (Response, err) {
         if str.eq(cur.scheme, "data") {
             let (dr, de) = data_response(c, &cur, url.href(c.a, &cur, true))
             ret (dr, de)
+        }
+        if str.eq(cur.scheme, "file") {
+            let (fr, fe) = file_response(c, &cur)
+            ret (fr, fe)
         }
         if !str.eq(cur.scheme, "http") && !str.eq(cur.scheme, "https") { ret (zero, UnsupportedScheme) }
         if bad_port(cur.port) { ret (zero, BlockedPort) }

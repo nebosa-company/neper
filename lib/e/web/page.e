@@ -203,6 +203,26 @@ fn is_ident_byte(c: u8) -> bool {
     ret (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 45u8 || c == 95u8 || c >= 128u8
 }
 
+// XHTML style sheets wrap their text in CDATA markers, which an HTML parse leaves in it: blank them out.
+fn strip_cdata(a: *mem.Arena, text: str) -> str {
+    let (out, e) = mem.alloc[u8](a, text.len + 1usize)
+    if e != ok { ret text }
+    var n = 0usize
+    var i = 0usize
+    while i < text.len {
+        if i + 9usize <= text.len && text[i] == 60u8 && text[i + 1usize] == 33u8 && text[i + 2usize] == 91u8 && eq_fold(text[i + 3usize..i + 9usize], "cdata[") {
+            i += 9usize
+        } else if i + 3usize <= text.len && text[i] == 93u8 && text[i + 1usize] == 93u8 && text[i + 2usize] == 62u8 {
+            i += 3usize
+        } else {
+            out[n] = text[i]
+            n += 1usize
+            i += 1usize
+        }
+    }
+    ret out[0usize..n]
+}
+
 // The `@import` URLs a style sheet text lists, in order.
 fn imports_of(a: *mem.Arena, text: str) -> []const str {
     var l = sheet.new_loader(a, sheet.media_env(1280.0f64, 720.0f64))
@@ -241,7 +261,7 @@ fn collect_sheets(p: *Page) -> []const str {
             let (media, has_media) = dom.get_attribute(d, cur, "media")
             if !has_media || sheet.media_matches(&env, p.pa, media) {
                 let (text, te) = dom.text_content(p.pa, d, cur)
-                if te == ok { push_sheet(p, &out, absolutize_css(p.pa, text, &p.base), &p.base, 0usize) }
+                if te == ok { push_sheet(p, &out, absolutize_css(p.pa, strip_cdata(p.pa, text), &p.base), &p.base, 0usize) }
             }
         } else if dom.is_html_named(d, cur, "link") {
             let (rel, has_rel) = dom.get_attribute(d, cur, "rel")

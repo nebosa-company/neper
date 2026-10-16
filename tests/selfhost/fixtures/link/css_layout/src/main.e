@@ -374,5 +374,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (p61, ok61) = build(a, "<p id=p>Hello</p><p id=q>\"Hi\"</p>", "p { font-size: 10px; } p::first-letter { font-size: 20px; }")
     if !ok61 || p61.lay.lines.len != 2usize || !near(p61.lay.lines.items[0usize].w, 60.0f64) { os.exit(95) }
     if !frag_has(p61, "H") || !frag_has(p61, "ello") || !frag_has(p61, "\"H") || !frag_has(p61, "i\"") { os.exit(96) }
+    // 62. The lines of an inline-block do not count as lines of the container around it.
+    let (p62, ok62) = build(a, "<div id=d style=\"font-size:10px\"><span id=i style=\"display:inline-block;padding:4px 8px\">aa</span></div>", "")
+    if !ok62 { os.exit(97) }
+    let db = &p62.lay.boxes.items[usize(box_of(p62, "d"))]
+    let ib = &p62.lay.boxes.items[usize(box_of(p62, "i"))]
+    if db.line_count != 1u32 || ib.line_count != 1u32 { os.exit(98) }
+    if p62.lay.frags.items[usize(p62.lay.lines.items[usize(db.line_first)].frag_first)].kind != layout.FragKind.Atomic { os.exit(99) }
     ret ok
 }

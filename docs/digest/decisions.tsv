@@ -2773,4 +2773,5 @@ D5137	1305	Pseudo-element rules are kept in the sheet and styled per element; la
 D5138	1116	Background layers are read from the declared text and tiled by the painter (browser 3.4, 3.5)
 D5139	1314	â€” The Encoding Standard is a library module; HTML sniffing sits on top of it (browser 1.4)
 D5140	800	fetch is a library client with browser semantics; the page loader sits above it (browser 4.1, 1.14)
-D5141	1490	A page load assembles the document, its style sheets and its images for an html_view (browser 1.14, M2)
+D5141	1491	A page load assembles the document, its style sheets and its images for an html_view (browser 1.14, M2)
+D5142	1061	The WPT reftests run through the real stack from disk (browser 0.6, 9.2)

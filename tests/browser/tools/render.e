@@ -10,6 +10,8 @@
 use e.data.list as list
 use e.algo.deflate as deflate
 use e.fs
+use e.fmt.css.layout as layout
+use e.fmt.dom as dom
 use e.fmt.png as png
 use e.gfx.geometry as geo
 use e.gfx.image as image
@@ -50,6 +52,120 @@ fn parse_number(s: str, fallback: usize) -> usize {
     ret usize(n)
 }
 
+// Writes the box tree (one box a line: depth, kind, element, class, position and size, text) for debugging layout.
+fn dump_tree(a: *mem.Arena, pg: *page.Page, path: str) {
+    let l = &pg.view.lay
+    var out = zero_buf(a, 4194304usize)
+    dump_box(a, &pg.view.tree, l, l.root, 0usize, &out)
+    let w = fs.write_file(a, path, out.data[0usize..out.len])
+}
+
+type Buf = struct { data: []u8, len: usize }
+
+fn zero_buf(a: *mem.Arena, cap: usize) -> Buf {
+    let (d, e) = mem.alloc[u8](a, cap)
+    if e != ok { ret zero }
+    ret Buf { data: d, len: 0usize }
+}
+
+fn put(b: *Buf, s: str) {
+    var i = 0usize
+    while i < s.len && b.len < b.data.len {
+        b.data[b.len] = s[i]
+        b.len += 1usize
+        i += 1usize
+    }
+}
+
+fn put_num(a: *mem.Arena, b: *Buf, v: f64) {
+    var n = v
+    if n < 0.0 {
+        put(b, "-")
+        n = -n
+    }
+    let whole = u64(n)
+    let frac = u64((n - f64(whole)) * 10.0)
+    put(b, number_text(a, usize(whole)))
+    put(b, ".")
+    put(b, number_text(a, usize(frac)))
+}
+
+fn number_text(a: *mem.Arena, n: usize) -> str {
+    let (out, e) = mem.alloc[u8](a, 24usize)
+    if e != ok { ret "?" }
+    var digits: [24]u8 = zero
+    var k = 0usize
+    var v = n
+    if v == 0usize {
+        digits[0usize] = 48u8
+        k = 1usize
+    }
+    while v > 0usize {
+        digits[k] = u8(48usize + v % 10usize)
+        v = v / 10usize
+        k += 1usize
+    }
+    var j = 0usize
+    while j < k {
+        out[j] = digits[k - 1usize - j]
+        j += 1usize
+    }
+    ret out[0usize..k]
+}
+
+fn dump_box(a: *mem.Arena, d: *const dom.Dom, l: *const layout.Layout, id: u32, depth: usize, out: *Buf) {
+    let bb = &l.boxes.items[usize(id)]
+    var k = 0usize
+    while k < depth && k < 40usize {
+        put(out, " ")
+        k += 1usize
+    }
+    if bb.inner == layout.Inner.Text {
+        put(out, "T \"")
+        put(out, bb.text)
+        put(out, "\" ")
+    } else {
+        put(out, "B")
+        put(out, number_text(a, usize(id)))
+        put(out, " ")
+        if bb.node != layout.NONE {
+            put(out, d.nodes[usize(bb.node)].name)
+            let (cls, has) = dom.get_attribute(d, bb.node, "class")
+            if has {
+                put(out, ".")
+                put(out, cls)
+            }
+        } else {
+            put(out, "(anon)")
+        }
+        put(out, " ")
+        if bb.inline_level { put(out, "[inline] ") }
+        if bb.inner == layout.Inner.FlowRoot { put(out, "[flowroot] ") }
+        if bb.inner == layout.Inner.Flex { put(out, "[flex] ") }
+        if bb.inner == layout.Inner.Grid { put(out, "[grid] ") }
+        if bb.inner == layout.Inner.Table { put(out, "[table] ") }
+        if bb.inner == layout.Inner.Replaced { put(out, "[replaced] ") }
+    }
+    put(out, "x")
+    put_num(a, out, bb.x)
+    put(out, " y")
+    put_num(a, out, bb.y)
+    put(out, " w")
+    put_num(a, out, bb.w)
+    put(out, " h")
+    put_num(a, out, bb.h)
+    if bb.line_count > 0u32 {
+        put(out, " lines")
+        put(out, number_text(a, usize(bb.line_count)))
+    }
+    put(out, "\n")
+    var kid = bb.first
+    while kid != layout.NONE {
+        dump_box(a, d, l, kid, depth + 1usize, out)
+        kid = l.boxes.items[usize(kid)].next
+    }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var address = ""
     var out_path = ""
@@ -57,6 +173,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var height = 800usize
     var full = false
     var scroll = 0usize
+    var dump_path = ""
     var i = 1usize
     while i < args.len {
         if str.eq(args[i], "--width") {
@@ -68,6 +185,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if str.eq(args[i], "--scroll") {
             i += 1usize
             scroll = parse_number(args[i], 0usize)
+        } else if str.eq(args[i], "--dump") {
+            i += 1usize
+            dump_path = args[i]
         } else if str.eq(args[i], "--full") {
             full = true
         } else if address.len == 0usize {
@@ -126,6 +246,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if height > 16384usize { height = 16384usize }
         if view.resize(pg.view, f32(width), f32(height)) != ok { os.exit(8i32) }
     }
+    if dump_path.len > 0usize { dump_tree(a, pg, dump_path) }
     view.scroll_to(pg.view, 0.0, f32(scroll))
     // Renderer.
     let (device, device_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)

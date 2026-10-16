@@ -961,12 +961,19 @@ fn clamp_width(l: *const Layout, b: u32, w: f64, cbw: f64) -> f64 {
 }
 
 fn clamp_height(l: *const Layout, b: u32, h: f64, cbh: f64) -> f64 {
+    ret clamp_height_auto(l, b, h, cbh, -1.0f64)
+}
+
+// As `clamp_height`, with the content height `auto_h` (negative: unknown) for the content keywords of min/max-height.
+fn clamp_height_auto(l: *const Layout, b: u32, h: f64, cbh: f64, auto_h: f64) -> f64 {
     let s = bstyle(l, b)
     var out = h
     let (mx, has_max) = resolve_len(s.max_height, cbh)
     if s.max_height.kind == .Px && has_max { out = minf(out, to_content_h(l, b, mx)) }
+    if auto_h >= 0.0f64 && (s.max_height.kind == .MinContent || s.max_height.kind == .MaxContent || s.max_height.kind == .FitContent) { out = minf(out, auto_h) }
     let (mn, has_min) = resolve_len(s.min_height, cbh)
     if s.min_height.kind == .Px && has_min { out = maxf(out, to_content_h(l, b, mn)) }
+    if auto_h >= 0.0f64 && (s.min_height.kind == .MinContent || s.min_height.kind == .MaxContent || s.min_height.kind == .FitContent) { out = maxf(out, auto_h) }
     ret out
 }
 
@@ -1045,7 +1052,7 @@ type PieceKind = enum u8 { Text, Space, Hard, Atomic, Open, Close, Float, Abs, M
 // line may end after the piece. Text pieces point into the processed text of their box.
 type Piece = struct { kind: PieceKind, box: u32, text: str, w: f64, trail: f64, soft: bool, ink: bool, start: usize, clen: usize }
 
-type Builder = struct { l: *Layout, pieces: list.List[Piece], last_space: bool, ws_pending: bool, cbw: f64 }
+type Builder = struct { l: *Layout, pieces: list.List[Piece], last_space: bool, ws_pending: bool, cbw: f64, cbh: f64 }
 
 fn push_piece(bd: *Builder, p: Piece) {
     let pushed = list.push[Piece](&bd.pieces, p)
@@ -1293,7 +1300,7 @@ fn collect_inline(bd: *Builder, b: u32, ends_space: *Flag) {
         ret
     }
     // An atomic inline: laid out now, as a block of its own, to learn its size.
-    layout_atomic(l, b, bd.cbw)
+    layout_atomic(l, b, bd.cbw, bd.cbh)
     let am = &l.boxes.items[usize(b)]
     let outer_w = am.w + am.margin[1usize] + am.margin[3usize]
     // A break may precede it.
@@ -1503,7 +1510,8 @@ fn place_float(l: *Layout, fc: *Flow, f: u32, cbx: f64, cbw: f64, y_min: f64, pa
 
 type Ifc = struct {
     l: *Layout, bd: Builder, cont: u32, cs: *const style.Style, cbw: f64, fc: *Flow,
-    y: f64, first_line: bool, open: [64]u32, open_count: usize, sa: f64, sd: f64
+    y: f64, first_line: bool, open: [64]u32, open_count: usize, sa: f64, sd: f64,
+    own: list.List[u32]
 }
 
 type Scan = struct { restart: bool, end: usize, lead: usize, forced: bool, line_x: f64, avail: f64 }
@@ -1562,7 +1570,7 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
         let p = x.bd.pieces.items[j]
         if p.kind == .Float {
             if l.boxes.items[usize(p.box)].aux != 1u32 {
-                layout_atomic(l, p.box, x.cbw)
+                layout_atomic(l, p.box, x.cbw, x.bd.cbh)
                 let fb = &l.boxes.items[usize(p.box)]
                 let fw = fb.w + fb.margin[1usize] + fb.margin[3usize]
                 if has_content && fw > out.avail - pos + 0.01f64 {
@@ -1639,11 +1647,11 @@ fn emit_segment(l: *Layout, ob: u32, x0: f64, x1: f64, baseline: f64, shift: f64
 }
 
 // Lays out the pieces of an inline formatting context into lines of `cont`. Returns the content height.
-fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, fc: *Flow) -> f64 {
+fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -> f64 {
     let cs = bstyle(l, cont)
     let (made, me) = list.init[Piece](l.a, 32usize)
     if me != ok { ret 0.0f64 }
-    var bd = Builder { l: l, pieces: made, last_space: true, ws_pending: false, cbw: cbw }
+    var bd = Builder { l: l, pieces: made, last_space: true, ws_pending: false, cbw: cbw, cbh: cbh }
     var ends = Flag { v: true }
     var kid = l.boxes.items[usize(cont)].first
     while kid != NONE {
@@ -1655,9 +1663,13 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, fc: *Flow) -> f64 {
         collect_inline(&bd, kid, &ends)
         kid = l.boxes.items[usize(kid)].next
     }
+    l.boxes.items[usize(cont)].line_first = NONE
+    l.boxes.items[usize(cont)].line_count = 0u32
     if bd.pieces.len == 0usize { ret 0.0f64 }
     let (sa, sd) = font_ad(l, cs)
-    var x = Ifc { l: l, bd: bd, cont: cont, cs: cs, cbw: cbw, fc: fc, y: 0.0f64, first_line: true, open: zero, open_count: 0usize, sa: sa, sd: sd }
+    let (own_made, own_error) = list.init[u32](l.a, 16usize)
+    if own_error != ok { ret 0.0f64 }
+    var x = Ifc { l: l, bd: bd, cont: cont, cs: cs, cbw: cbw, fc: fc, y: 0.0f64, first_line: true, open: zero, open_count: 0usize, sa: sa, sd: sd, own: own_made }
     var i = 0usize
     var guard = 0usize
     while i < x.bd.pieces.len && guard < 400000usize {
@@ -1681,6 +1693,24 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, fc: *Flow) -> f64 {
             x.first_line = false
         }
         i = end
+    }
+    // The container's own lines, contiguous: lines of inline-blocks laid out in between are not part of its range.
+    let n_own = x.own.len
+    if n_own > 0usize {
+        let first_own = usize(x.own.items[0usize])
+        if usize(x.own.items[n_own - 1usize]) - first_own + 1usize == n_own {
+            l.boxes.items[usize(cont)].line_first = u32(first_own)
+        } else {
+            let start = l.lines.len
+            var q = 0usize
+            while q < n_own {
+                let copy = l.lines.items[usize(x.own.items[q])]
+                let pushed = list.push[Line](&l.lines, copy)
+                q += 1usize
+            }
+            l.boxes.items[usize(cont)].line_first = u32(start)
+        }
+        l.boxes.items[usize(cont)].line_count = u32(n_own)
     }
     ret x.y
 }
@@ -1951,6 +1981,8 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
         fi += 1usize
     }
     let overflow = used_w > scan.avail + 0.5f64 && cs.text_overflow == .Ellipsis && cs.overflow_x != .Visible
+    let own_index = u32(l.lines.len)
+    let own_pushed = list.push[u32](&x.own, own_index)
     let pushed = list.push[Line](&l.lines, Line { x: ax, y: x.y, w: used_w, h: line_h, baseline: x.y + baseline, frag_first: first_frag, frag_count: u32(l.frags.len) - first_frag, overflow_ellipsis: overflow })
     ret line_h
 }
@@ -2058,7 +2090,7 @@ fn has_inline_content(l: *const Layout, b: u32) -> bool {
 fn inline_widths(l: *Layout, cont: u32) -> (f64, f64) {
     let (made, me) = list.init[Piece](l.a, 32usize)
     if me != ok { ret (0.0f64, 0.0f64) }
-    var bd = Builder { l: l, pieces: made, last_space: true, ws_pending: false, cbw: -1.0f64 }
+    var bd = Builder { l: l, pieces: made, last_space: true, ws_pending: false, cbw: -1.0f64, cbh: -1.0f64 }
     var ends = Flag { v: true }
     var kid = l.boxes.items[usize(cont)].first
     while kid != NONE {
@@ -2406,7 +2438,7 @@ fn set_baseline(l: *Layout, b: u32) {
 
 // Lays out `b` on its own: an inline-level atomic, a float, an absolutely positioned or replaced box. `cbw` is the
 // width its containing block offers (negative: unknown). Sets `w`, `h`, the margins and the baseline.
-fn layout_atomic(l: *Layout, b: u32, cbw: f64) {
+fn layout_atomic(l: *Layout, b: u32, cbw: f64, cbh: f64) {
     let s = bstyle(l, b)
     let bb = bx(l, b)
     var base = cbw
@@ -2437,7 +2469,7 @@ fn layout_atomic(l: *Layout, b: u32, cbw: f64) {
     }
     cw = maxf(0.0f64, clamp_width(l, b, cw, base))
     bb.w = cw + extras_h
-    layout_contents_height(l, b, cw, -1.0f64)
+    layout_contents_height(l, b, cw, cbh)
 }
 
 // Lays out the contents of `b` (content width `cw`) as a formatting context root and sets its height from the style.
@@ -2451,7 +2483,7 @@ fn layout_contents_height(l: *Layout, b: u32, cw: f64, cbh: f64) {
     let auto_h = layout_in_new_bfc(l, b, cw, spec)
     var h = auto_h
     if spec >= 0.0f64 { h = spec }
-    h = maxf(0.0f64, clamp_height(l, b, h, cbh))
+    h = maxf(0.0f64, clamp_height_auto(l, b, h, cbh, auto_h))
     bb.overflow_w = maxf(bb.overflow_w, cw)
     bb.overflow_h = maxf(bb.overflow_h, auto_h)
     bb.h = h + vertical_extras(bb)
@@ -2466,11 +2498,7 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
     let bb = bx(l, b)
     // Inline content: one inline formatting context.
     if has_inline_content(l, b) {
-        let first_line = l.lines.len
-        let h = layout_inline_content(l, b, cw, fc)
-        let bb2 = bx(l, b)
-        bb2.line_first = u32(first_line)
-        bb2.line_count = u32(l.lines.len - first_line)
+        let h = layout_inline_content(l, b, cw, ch, fc)
         position_markers(l, b)
         ret (h, no_margin())
     }
@@ -2494,7 +2522,7 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
         }
         if is_out_of_flow(ks) {
             if ks.floating != .None {
-                layout_atomic(l, kid, cw)
+                layout_atomic(l, kid, cw, ch)
                 place_float(l, fc, kid, fc.ox, cw, fc.oy + y + margin_value(acc), b)
             } else {
                 let ab = bx(l, kid)
@@ -2630,7 +2658,7 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     }
     var ch_used = auto_h
     if spec_h >= 0.0f64 { ch_used = spec_h }
-    ch_used = maxf(0.0f64, clamp_height(l, c, ch_used, ch))
+    ch_used = maxf(0.0f64, clamp_height_auto(l, c, ch_used, ch, auto_h))
     let cb5 = bx(l, c)
     cb5.h = ch_used + vertical_extras(cb5)
     cb5.overflow_w = maxf(cb5.overflow_w, content_w)
@@ -3511,7 +3539,7 @@ fn flex_place_item(l: *Layout, id: u32, w: f64, hspec: f64) {
     let auto_h = layout_in_new_bfc(l, id, w, hspec)
     var h = auto_h
     if hspec >= 0.0f64 { h = hspec }
-    h = maxf(0.0f64, clamp_height(l, id, h, -1.0f64))
+    h = maxf(0.0f64, clamp_height_auto(l, id, h, -1.0f64, auto_h))
     let nb = bx(l, id)
     nb.overflow_w = maxf(nb.overflow_w, w)
     nb.overflow_h = maxf(nb.overflow_h, auto_h)
@@ -5059,7 +5087,7 @@ fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let cs = bstyle(l, b)
     let (g, built) = grid_build(l, b, cw, ch)
-    if !built || g.n == 0usize { ret 0.0f64 }
+    if !built { ret 0.0f64 }
     let stretch_cols = cs.justify_content == .Normal || cs.justify_content == .Stretch
     let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
     size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
@@ -5419,7 +5447,7 @@ fn layout_abs(l: *Layout, b: u32) {
     }
     var h = content_h
     if spec_h >= 0.0f64 { h = spec_h }
-    h = maxf(0.0f64, clamp_height(l, b, h, cb_h))
+    h = maxf(0.0f64, clamp_height_auto(l, b, h, cb_h, content_h))
     let bbh = bx(l, b)
     bbh.h = h + extras_v
     set_baseline(l, b)

@@ -770,10 +770,23 @@ fn push_overflow_clip(p: *Painter, b: u32, ax: f64, ay: f64) -> bool {
     if bb.inner == .Table || bb.inner == .Row || bb.inner == .RowGroup { ret false }
     if bb.first == layout.NONE && bb.line_count == 0u32 { ret false }
     save(p)
-    if has_radius(s) {
+    if has_radius(s) && s.overflow_x != .Visible && s.overflow_y != .Visible {
         emit(p, scene.Command { Clip: scene.Clip { Rounded: region_rrect(s, ax, ay, bb.w, bb.h, bb.border[0usize], bb.border[1usize], bb.border[2usize], bb.border[3usize]) } })
     } else {
-        emit(p, scene.Command { Clip: scene.Clip { Rect: grect(ax + bb.border[3usize], ay + bb.border[0usize], bb.w - bb.border[1usize] - bb.border[3usize], bb.h - bb.border[0usize] - bb.border[2usize]) } })
+        // An axis that does not clip stays open (overflow-x: clip with overflow-y: visible).
+        var cx = ax + bb.border[3usize]
+        var cw = bb.w - bb.border[1usize] - bb.border[3usize]
+        var cy = ay + bb.border[0usize]
+        var ch = bb.h - bb.border[0usize] - bb.border[2usize]
+        if s.overflow_x == .Visible {
+            cx = -1000000.0f64
+            cw = 2000000.0f64
+        }
+        if s.overflow_y == .Visible {
+            cy = -1000000.0f64
+            ch = 2000000.0f64
+        }
+        emit(p, scene.Command { Clip: scene.Clip { Rect: grect(cx, cy, cw, ch) } })
     }
     ret true
 }
