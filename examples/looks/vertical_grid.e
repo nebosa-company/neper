@@ -75,7 +75,7 @@ fn values(index: usize) -> str {
     if index == 1usize { ret "gaddl" }
     if index == 3usize || index == 4usize { ret "10/11/2026" }
     if index == 5usize { ret "1.0" }
-    if index == 7usize { ret "C:\\Users\\gaddl\\Desktop\\New..." }
+    if index == 7usize { ret "D:\\Temp\\claude\\v3run\\Probe ..." }
     if index == 8usize { ret "MTG Studio (Xml)" }
     if windows_rows {
         if index == 12usize { ret "Unspecified" }

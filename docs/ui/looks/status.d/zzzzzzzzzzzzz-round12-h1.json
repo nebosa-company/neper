@@ -1,0 +1,54 @@
+{
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_top.png",
+    "notes": "Round 12 (metric: reference flat pixels off by more than 2 levels in ours, ours flat or not; scripts/looks_cells2.py; union of cells, text included): data_grid_group 6942 -> 1032, group2 10942 -> 1204, group3 6040 -> 948, hover8 3857 -> 944, data_grid_main 2757 -> 2499, top 1423 -> 925, hover 1219 -> 741. Still review: no crop passes every state.",
+    "gaps": [
+     "Reproduced: live data and group order (MSH, HOC, HOB, SLZ, FRC, FRA, MBC last, 120204 of 120283), whole-row scroll with the strip under the last row, group indent, row-wide group focus rectangle (dotted or solid), chip with ring/hot/pressed/filter, hot header fills with tinted rows, header glyph slots, picture column header, navigator disabled buttons, GDI position and hint text",
+     "Remaining: ClearType text (ours is grayscale), v3 artwork (navigator bitmaps, card pictures, the backdrop band under the last row at y 216-219 and its #F2F1F1 pixels), group row text 3 px narrower than the capture",
+     "data_grid_main: pool grid vertical thumb 61 px against 88 and its top (pool bar not re-fitted), footer cell edges drawn inside the yellow band, filter row offsets",
+     "Not done this round: captured states with no cell (data grid 2), data_grid_sort and data_grid_missing sheets, other data_grid sheets (shortcuts, sort, missing, bottom) unchanged",
+     "Group sheets: the first column indent is 15 px and the last column is widened so the thumb is 145 px (fitted, not measured from the real column widths)"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list_rules.png",
+    "notes": "Round 12: not worked (time spent on the data grid); numbers unchanged from audit 4.",
+    "gaps": [
+     "Uncaptured tree list state still without a cell"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Round 12: only the file name of the sample deck corrected to the capture (vertical_grid_hover 7357 -> 7272, states 7733 -> 7665); the remaining mismatch is mostly computed-section artwork (icons, colour dots, legality bar) and ClearType text.",
+    "gaps": [
+     "Not done: the two category hover states with no cell, focused band"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar_live.png",
+    "notes": "Round 12: not worked; unchanged from audit 4.",
+    "gaps": [
+     "Uncaptured scroll bar state still without a cell"
+    ]
+   }
+  }
+ }
+}

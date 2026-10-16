@@ -393,6 +393,8 @@ fn setup_main(m: *Main) -> err {
     var pool_look = gl.v3()
     // looks9-w1 (Windows only, in the grid): the live footer cells' edge pixels and the frame ring's colours along the left side
     pool_look.footer_edges = true
+    pool_look.group_rect = true
+    pool_look.nav_rule = true
     pool_look.ring_marks = "0 1 1 999ca0;0 2 161 9599a0;0 163 1 8e9299;0 164 49 878b93;1 1 1 8d9096;1 2 1 bbbdc1;1 3 34 dddedf;1 37 1 e5e5e7;1 38 128 eaeaec;1 166 1 e5e7eb;1 167 21 e0e4e9;1 188 1 c5c8cb;1 189 1 c5c5c7;1 190 23 dddedf"
     dg.set_look(&m.pool_grid, pool_look)
     dg.show_filter_row(&m.pool_grid, true)
@@ -472,13 +474,15 @@ fn build_main(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     if upper_error != ok { ret (0usize, upper_error) }
     var lower_h: f32 = 242.0
     if t.tokens.profile == .Windows { lower_h = 243.0 }
-    let (lower, lower_error) = boxed(a, t, &m.coll_grid, 497.0, lower_h)
+    let (lower, lower_error) = boxed(a, t, &m.coll_grid, 576.0, lower_h)
     if lower_error != ok { ret (0usize, lower_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (0usize, parts_error) }
     parts[0usize] = upper
     parts[1usize] = lower
-    var face = looks.size_style(560.0, 520.0)
+    var face = looks.size_style(500.0, 468.0)
+    // round 12: the live panes are 576 wide and the reference is their left 500 px
+    face.overflow = .Clip
     face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     face.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     cells[0usize] = looks.Cell { caption: "Pool and collection grids as in the v3 main window", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap_h }, face, parts[0usize..2usize]), drive: .None }
@@ -694,6 +698,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var mseed: Main = zero
     mseed.a = a
     mains[0usize] = mseed
-    let second = looks.Sheet { name: "data_grid_main", cells: 1usize, columns: 1usize, cell_w: 560.0, cell_h: 520.0, ctx: mem.cast[*void](&mains[0usize]), build: build_main }
+    let second = looks.Sheet { name: "data_grid_main", cells: 1usize, columns: 1usize, cell_w: 500.0, cell_h: 468.0, ctx: mem.cast[*void](&mains[0usize]), build: build_main }
     ret looks.run_all(a, &second)
 }
