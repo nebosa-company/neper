@@ -106,15 +106,34 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if check_cell_error != ok { ret (0usize, check_cell_error) }
         let names = [2]str{ "checklist-rest", "checklist-selected-focused" }
         var drive: looks.Drive = .None
-        if c == 1usize { drive = .Focus }
+        if c == 1usize {
+            drive = .Focus
+            looks.aim(at, 0.0 - 70.0, 0.0 - 66.0)
+        }
         cells[at] = looks.Cell { caption: names[c], node: check_cell, drive: drive }
         at += 1usize
         c += 1usize
     }
+    // 5: checklist-selected-unfocused (Bravo current, no keyboard focus in the list)
+    let (toggles5, toggles5_error) = pick_actions(a, 9usize)
+    if toggles5_error != ok { ret (0usize, toggles5_error) }
+    let (chosen5, chosen5_error) = mem.alloc[bool](a, 9usize)
+    if chosen5_error != ok { ret (0usize, chosen5_error) }
+    var k5 = 0usize
+    while k5 < 9usize {
+        chosen5[k5] = k5 == 1usize || k5 == 3usize
+        k5 += 1usize
+    }
+    let (check5, check5_error) = control.windows_check_list_sized(a, 9400u64, t, "Check", words[0usize..9usize], chosen5, toggles5, 158.0, 110.0, 1usize)
+    if check5_error != ok { ret (0usize, check5_error) }
+    let (check5_cell, check5_cell_error) = placed(a, check5, 16.0, 10.0)
+    if check5_cell_error != ok { ret (0usize, check5_cell_error) }
+    cells[at] = looks.Cell { caption: "checklist-selected-unfocused", node: check5_cell, drive: .None }
+    at += 1usize
     ret (at, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark4", cells: 5usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark4", cells: 6usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

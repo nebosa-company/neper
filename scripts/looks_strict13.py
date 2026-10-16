@@ -254,9 +254,103 @@ SHEET3 = [("button-split", 0, 0, (20, 20), None), ("button-split-pressed", 1, 0,
 
 # native_dark4 (examples/looks/native_dark4.e): list box (16, 10), check list (16, 10) and the popup menu (20, 20) in 260 x 200 cells
 SHEET4 = [("listbox-rest", 0, 0, (16, 10), (99, 110)), ("listbox-selected-focused", 1, 0, (16, 10), (99, 110)),
-          ("listbox-selected-unfocused", 2, 0, (16, 10), (99, 110)), ("listbox-hover", 2, 0, (16, 10), (99, 110)),
-          ("checklist-rest", 3, 0, (16, 10), None), ("checklist-selected-focused", 4, 0, (16, 10), None)]
+          ("listbox-selected-unfocused", 2, 0, (16, 10), (99, 110)), ("listbox-hover", 2, 0, (16, 10), (99, 110))]
+# (the check list keeps v3's 15 px rows, so it is compared by element: check_list_elements)
 # listbox: only the 99 columns left of the scroll column are compared (the capture's scroll column is the light unthemed one)
+
+
+def check_list_elements():
+    """Element comparison of the dark check list (v3's 15 px rows kept, so no whole-control diff): the two check box tiles pixel for pixel,
+    the face, border and chosen-row colours (focused and unfocused) against checklist-* of the native dark captures."""
+    sh = sd.load(sd.OURS + "native_dark4.png")
+    cl = sd.load(sd.NATIVE + "dark/checklist-rest@1x.png")[10:120, 16:174]
+    fo = sd.load(sd.NATIVE + "dark/checklist-selected-focused@1x.png")[10:120, 16:174]
+    un = sd.load(sd.NATIVE + "dark/checklist-selected-unfocused@1x.png")[10:120, 16:174]
+    # cell 3 (rest) at (822, 32) and cell 4 (focused) at (12, 262), the list at (16, 10) in its cell
+    rest = sh[32 + 10:32 + 120, 822 + 16:822 + 16 + 158]
+    foc = sh[262 + 10:262 + 120, 12 + 16:12 + 16 + 158]
+    unf = sh[262 + 10:262 + 120, 282 + 16:282 + 16 + 158]  # cell 5
+    res = []
+
+    def tile(name, ref, ours, rx, ry):
+        best = None
+        for dy in range(-3, 4):
+            for dx in range(-3, 4):
+                o = ours[ry + dy:ry + dy + 13, rx + dx:rx + dx + 13]
+                if o.shape[:2] != (13, 13):
+                    continue
+                d = int((np.abs(o - ref).max(axis=2) > TOL).sum())
+                if best is None or d < best[0]:
+                    best = (d, dx, dy)
+        print("%-34s %-4s px off %3d of 169 at offset %s" % (name, "PASS" if best[0] == 0 else "FAIL", best[0], best[1:]))
+        res.append(best[0] == 0)
+
+    tile("check tile unchecked (row 1)", cl[5:18, 6:19], rest, 3, 3)
+    tile("check tile checked (row 2, rest)", cl[24:37, 6:19], rest, 3, 18)
+    # the chosen row of the focused cell: fill and outline colours at a fill pixel and an outline pixel of the bar (ours: row 2 = rows 17..31)
+    def colour(name, ref_px, ours_px):
+        d = max(abs(a - b) for a, b in zip(ref_px, ours_px))
+        print("%-34s %-4s ref %s ours %s (max %d)" % (name, "PASS" if d <= TOL else "FAIL", ref_px, ours_px, d))
+        res.append(d <= TOL)
+
+    colour("face", cl[8, 100].tolist(), rest[8, 100].tolist())
+    colour("border line", cl[50, 0].tolist(), rest[50, 0].tolist())
+    colour("chosen row fill (focused)", fo[30, 100].tolist(), foc[24, 100].tolist())
+    colour("chosen row fill (unfocused)", un[30, 100].tolist(), unf[24, 100].tolist())
+    colour("chosen row line (unfocused)", un[30, 2].tolist(), unf[24, 2].tolist())
+    colour("chosen row line (focused)", fo[30, 2].tolist(), foc[24, 2].tolist())
+    return res
+
+
+def menu_elements():
+    """Element comparison of the dark popup menu (v3's Tahoma rows kept): border, face, divider lines and the text peaks against menu-popup-rest."""
+    ref_full = sd.load(sd.NATIVE + "dark/menu-popup-rest@1x.png")
+    ours_full = sd.load(sd.OURS + "native_dark5.png")
+
+    def rect_of(img):
+        m = (img == np.array([128, 128, 128])).all(axis=2)
+        rows = np.where(m.sum(axis=1) >= 60)[0]
+        cols = np.where(m.sum(axis=0) >= 60)[0]
+        return cols.min(), rows.min(), cols.max(), rows.max()
+
+    res = []
+    out = []
+    for nm, img in (("ref", ref_full), ("ours", ours_full)):
+        x0, y0, x1, y1 = rect_of(img)
+        r = img[y0:y1 + 1, x0:x1 + 1]
+        lum = r.sum(axis=2) / 3
+        flat_rows = set()
+        for y in range(2, r.shape[0] - 2):
+            row = r[y, 2:r.shape[1] - 2]
+            other = [tuple(p) for p in row.tolist() if tuple(p) not in ((43, 43, 43), (44, 44, 44))]
+            if len(other) > 60 and len(set(other)) == 1:
+                flat_rows.add(other[0])
+        flat_rows = sorted(flat_rows)
+        peaks = []
+        runs, start, prev = [], None, None
+        for y in range(r.shape[0]):
+            on = (lum[y, 30:100] > 70).any()
+            if on and start is None:
+                start = y
+            if not on and start is not None:
+                runs.append((start, y - 1))
+                start = None
+        for a_, b_ in runs:
+            peaks.append(int(lum[a_:b_ + 1, 30:100].max()))
+        out.append((nm, (x1 - x0 + 1, y1 - y0 + 1), tuple(r[0, 5].tolist()), flat_rows, peaks))
+    print("ref  size %s border %s flat rows %s text peaks %s" % out[0][1:])
+    print("ours size %s border %s flat rows %s text peaks %s" % out[1][1:])
+    ok_border = out[0][2] == out[1][2]
+    ref_flat, our_flat = set(out[0][3]), set(out[1][3])
+    # face rows differ by one level at most (#2B2B2B and #2C2C2C are both the face); the divider line colour must agree
+    ref_div = {c for c in ref_flat if c != (43, 43, 43) and c != (44, 44, 44)}
+    our_div = {c for c in our_flat if c != (43, 43, 43) and c != (44, 44, 44)}
+    print("border %s, divider colours %s / %s, disabled text peak %s / %s" % ("PASS" if ok_border else "FAIL", ref_div, our_div, min(out[0][4]), min(out[1][4])))
+    res.append(ok_border)
+    res.append(ref_div == our_div)
+    res.append(abs(min(out[0][4]) - min(out[1][4])) <= TOL)
+    res.append(max(out[0][4]) == max(out[1][4]))
+    return res
 
 
 def open_table(outdir):
@@ -290,6 +384,14 @@ if __name__ == "__main__":
         sys.exit(0)
     if "--four" in sys.argv:
         r = sheet_table("native_dark4", 4, 260, 200, SHEET4, ([a.split("=", 1)[1] for a in sys.argv if a.startswith("--dump=")] or [None])[0], search=4)
+        print("PASS %d / %d" % (sum(r), len(r)))
+        sys.exit(0)
+    if "--checklist" in sys.argv:
+        r = check_list_elements()
+        print("PASS %d / %d" % (sum(r), len(r)))
+        sys.exit(0)
+    if "--menu" in sys.argv:
+        r = menu_elements()
         print("PASS %d / %d" % (sum(r), len(r)))
         sys.exit(0)
     if "--mask" in sys.argv:

@@ -4655,6 +4655,43 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
 // A TcxCheckListBox in the Windows look (the Options Rules, Prices and Card Art pages), `rows` 15 unit
 // rows tall; see `windows_check_list_sized`.
 // The highlighted row of a check list: the system highlight #0078D7 (Windows 11 dark: the native list view selection #1A364D).
+// round 13: the native Windows 11 dark list view check boxes (checklist-rest of docs/ui/looks/ref/windows-native/dark: 13 x 13, a light
+// #F3F3F3 face in a #616161 line unchecked, #005EB8 with a light tick checked), as the captured pixels, R G B of each row.
+type ListTile = struct { checked: bool }
+
+fn list_tile_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*ListTile](ctx)
+    let unchecked = [507]u8{ 32,32,32,40,40,40,87,87,87,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,87,87,87,44,44,44,32,32,32,44,44,44,153,153,153,234,234,234,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,225,225,225,152,152,152,40,40,40,87,87,87,225,225,225,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,234,234,234,87,87,87,97,97,97,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,97,97,97,97,97,97,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,97,97,97,97,97,97,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,97,97,97,97,97,97,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,97,97,97,97,97,97,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,97,97,97,97,97,97,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,97,97,97,97,97,97,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,97,97,97,87,87,87,234,234,234,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,225,225,225,87,87,87,40,40,40,152,152,152,225,225,225,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,243,234,234,234,152,152,152,44,44,44,32,32,32,44,44,44,86,86,86,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,97,86,86,86,39,39,39,32,32,32 }
+    let checked = [507]u8{ 32,32,32,16,40,62,2,85,164,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,2,85,164,14,44,72,32,32,32,14,44,72,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,16,39,61,2,85,164,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,2,85,163,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,94,155,211,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,160,195,229,94,155,210,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,79,145,206,0,94,184,0,94,184,0,94,184,160,195,229,94,155,210,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,95,155,211,159,195,228,0,94,184,160,195,229,94,155,210,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,95,155,211,223,235,246,94,155,210,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,15,104,188,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,2,85,164,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,2,85,163,16,39,61,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,14,43,71,32,32,32,14,43,72,2,85,164,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,0,94,184,2,85,164,16,39,61,32,32,32 }
+    var r = 0usize
+    while r < 13usize {
+        var c = 0usize
+        while c < 13usize {
+            let at = (r * 13usize + c) * 3usize
+            var red = unchecked[at]
+            var green = unchecked[at + 1usize]
+            var blue = unchecked[at + 2usize]
+            if m.checked {
+                red = checked[at]
+                green = checked[at + 1usize]
+                blue = checked[at + 2usize]
+            }
+            try winpx.fill(b, area.x + f32(c), area.y + f32(r), 1.0, 1.0, style.hex_raw((u32(red) << 16u32) | (u32(green) << 8u32) | u32(blue)))
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+fn list_tile(a: *mem.Arena, checked: bool) -> (widget.Node, err) {
+    let (tiles, tiles_error) = mem.alloc[ListTile](a, 1usize)
+    if tiles_error != ok { ret (zero, TooLarge) }
+    tiles[0usize] = ListTile { checked: checked }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&tiles[0usize]), measure: mark_measure, paint: list_tile_paint, state: widget.bytes_of[ListTile](&tiles[0usize]) } }, style: sized_style(13.0, 13.0), children: none }, ok)
+}
+
 fn check_highlight(t: *const Theme) -> paint.Color {
     if t.tokens.palette == .Dark { ret style.hex_raw(0x1A364Du32) }
     ret style.hex(30935u32)
@@ -4675,6 +4712,14 @@ fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let y = area.y
     let w = area.width
     let h = area.height
+    // round 13: the native dark list view has one #828790 line round its #202020 face (checklist-*)
+    if style.windark_active() {
+        let line = style.hex_raw(0x828790u32)
+        try winpx.fill(b, x, y, w, 1.0, line)
+        try winpx.fill(b, x, y + h - 1.0, w, 1.0, line)
+        try winpx.fill(b, x, y + 1.0, 1.0, h - 2.0, line)
+        ret winpx.fill(b, x + w - 1.0, y + 1.0, 1.0, h - 2.0, line)
+    }
     // looks5: the Card Art list's frame is the same eight lines measured on its own capture (the theme's bitmap is
     // resampled at another phase: right and bottom lines 3 to 5 levels off the Rules list's).
     var top_outer = 11317172u32
@@ -4735,8 +4780,15 @@ fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // highlight from 34.16, 18 tall from 0.4, the caption from 36.
 fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: *const Theme, label: str, chosen: bool, current: bool, below: bool, action: *const widget.Submit, width: f32, art: bool, mark_y: f32, row_x: f32, row_y: f32, last: bool) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0, Phase { context: 7u32, x: 0.0 - 1.0, y: mark_y })
+    var (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0, Phase { context: 7u32, x: 0.0 - 1.0, y: mark_y })
     if mark_error != ok { ret (zero, mark_error) }
+    let dark_list = t.tokens.palette == .Dark && t.tokens.profile == .Windows && !art
+    if dark_list {
+        // round 13: the native dark list view's own check box, 13 x 13 on whole pixels
+        let (tile, tile_error) = list_tile(a, chosen)
+        if tile_error != ok { ret (zero, tile_error) }
+        mark_node = widget.stack(0u64, sized_style(15.0, 15.0), widget_one_of(a, widget.positioned(0u64, 0.0, 1.0, style.defaults(), widget_one_of(a, tile))))
+    }
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
@@ -4801,10 +4853,25 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     if current && !art {
         var bar = sized_style(light_w, light_tall)
         bar.background = paint.Brush { Solid: check_highlight(t) }
-        parts[n] = widget.positioned(0u64, light_left, light_top, bar, zero)
+        if dark_list {
+            // round 13: the native dark list view's chosen row: #1A364D in a #0078D4 line while the list has the focus, #1B1B1B in a
+            // #131313 line without it (checklist-selected-focused, -selected-unfocused)
+            var fill_color = style.hex_raw(0x1B1B1Bu32)
+            var line_color = style.hex_raw(0x131313u32)
+            if state.focused {
+                fill_color = style.hex_raw(0x1A364Du32)
+                line_color = style.hex_raw(0x0078D4u32)
+            }
+            bar = sized_style(width - 4.0, 15.0)
+            bar.background = paint.Brush { Solid: fill_color }
+            bar.border = style.Border { width: 1.0, color: line_color }
+            parts[n] = widget.positioned(0u64, 0.0, 0.0, bar, zero)
+        } else {
+            parts[n] = widget.positioned(0u64, light_left, light_top, bar, zero)
+        }
         n += 1usize
     }
-    if below && !art {
+    if below && !art && !dark_list {
         // The current row's highlight spills into this row's first line.
         var tail = sized_style(light_w, light_top)
         tail.background = paint.Brush { Solid: check_highlight(t) }
@@ -4812,7 +4879,9 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         n += 1usize
     }
     if !art {
-        parts[n] = widget.positioned(0u64, 1.15, 0.0, style.defaults(), widget_one_of(a, mark_node))
+        var mark_at: f32 = 1.15
+        if dark_list { mark_at = 1.0 }
+        parts[n] = widget.positioned(0u64, mark_at, 0.0, style.defaults(), widget_one_of(a, mark_node))
         n += 1usize
         var line = style.defaults()
         line.height = style.Length { Px: 15.0 }
