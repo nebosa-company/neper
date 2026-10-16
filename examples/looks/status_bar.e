@@ -69,6 +69,38 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (5usize, ok)
 }
 
+// The four hover grabs (ref/windows/states/hover-status-bar-panel-*): the main window's status bar with the pointer on each of its
+// panels, which v3 draws exactly as at rest (no hover look). Every text panel here has an action, so a hover look would show; the
+// bar is shifted so that the panel under the pointer sits at the cell's centre.
+fn build_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
+    if actions_error != ok { ret (0usize, actions_error) }
+    actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    let names = [4]str{ "Hover panel 1 (counts)", "Hover panel 2 (progress container)", "Hover panel 3 (Idle)", "Hover panel 4 (grip)" }
+    let centres = [4]f32{ 141.0, 359.0, 600.0, 775.0 }
+    var i = 0usize
+    while i < 4usize {
+        let (items, items_error) = mem.alloc[navigation.StatusItem](a, 3usize)
+        if items_error != ok { ret (0usize, items_error) }
+        items[0usize] = navigation.status_item("Sel: 0 Fil: 120 283 Shown: 120 283 All: 120 283 Rec: 1")
+        items[1usize] = navigation.status_item("")
+        items[2usize] = navigation.status_item("Idle")
+        items[0usize].action = actions[0usize]
+        items[2usize].action = actions[0usize]
+        items[0usize].panel_width = 282.0
+        items[0usize].centered = true
+        items[1usize].panel_width = 153.0
+        items[2usize].fills = true
+        let (bar, bar_error) = navigation.status_bar_of(a, 1000u64 * u64(i + 1usize), t, items[0usize..3usize], false, 784.0)
+        if bar_error != ok { ret (0usize, bar_error) }
+        let (shown, shown_error) = placed(a, bar, 784.0 - centres[i], 0.0, 1568.0, 19.0)
+        if shown_error != ok { ret (0usize, shown_error) }
+        cells[i] = looks.Cell { caption: names[i], node: shown, drive: .Hover }
+        i += 1usize
+    }
+    ret (4usize, ok)
+}
+
 // The report preview window's status bar (ref/windows/status_bar_report.png: 1280 x 19 at (8, 742) of
 // dialogs/reports-combos-from-collection@1x.png): "Page 1 of 1" in a first panel, one panel for the rest.
 fn build_report(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -101,6 +133,10 @@ fn run_report(a: *mem.Arena, name: str, text: str) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize && strs.eq(args[1usize], "status_bar_hover") {
+        let hover = looks.Sheet { name: "status_bar_hover", cells: 4usize, columns: 1usize, cell_w: 1568.0, cell_h: 19.0, ctx: zero, build: build_hover }
+        ret looks.run_all(a, &hover)
+    }
     if args.len > 1usize {
         if strs.eq(args[1usize], "status_bar_report_11") { ret run_report(a, "status_bar_report_11", "Page 1 of 11") }
         if strs.eq(args[1usize], "status_bar_report_167") { ret run_report(a, "status_bar_report_167", "Page 1 of 167") }

@@ -13264,18 +13264,184 @@ fn windows_bar_look(state: style.ControlState, ink: paint.Color) -> style.Resolv
     ret style.ResolvedControl { background: face, foreground: face_ink, border: edge, border_width: 1.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 2.0, padding_start: 0.0, padding_y: 2.0, custom_padding: true, min_width: 23.0, min_height: 22.0, corners: zero }
 }
 
-// A TdxBarButton with a picture: 22 square, the 16 glyph in a dark ink (v3's are bitmaps).
+// (looks5-f) A grey that drifts along the main window: `table` holds one digit per measured toolbar button
+// (x 384, 407, 466, 489, 512, 617, 640 of the 800 px window) as an offset from `base`; between them it
+// interpolates, past them it holds.
+fn windows_tool_drift(along: f32, table: str, base: f32) -> u32 {
+    var k = 0usize
+    var x0: f32 = 384.0
+    var x1: f32 = 407.0
+    if along >= 407.0 {
+        k = 1usize
+        x0 = 407.0
+        x1 = 466.0
+    }
+    if along >= 466.0 {
+        k = 2usize
+        x0 = 466.0
+        x1 = 489.0
+    }
+    if along >= 489.0 {
+        k = 3usize
+        x0 = 489.0
+        x1 = 512.0
+    }
+    if along >= 512.0 {
+        k = 4usize
+        x0 = 512.0
+        x1 = 617.0
+    }
+    if along >= 617.0 {
+        k = 5usize
+        x0 = 617.0
+        x1 = 640.0
+    }
+    var frac = (along - x0) / (x1 - x0)
+    if frac < 0.0 { frac = 0.0 }
+    if frac > 1.0 { frac = 1.0 }
+    let v0 = f32(u32(table[k]) - 48u32)
+    let v1 = f32(u32(table[k + 1usize]) - 48u32)
+    ret u32(base + v0 + (v1 - v0) * frac + 0.5)
+}
+
+fn windows_tool_part(x: f32, y: f32, w: f32, h: f32, grey: u32) -> widget.Node {
+    var s = style.defaults()
+    s.background = paint.Brush { Solid: style.hex(grey * 65793u32) }
+    s.width = style.Length { Px: w }
+    s.height = style.Length { Px: h }
+    ret widget.positioned(0u64, x, y, s, zero)
+}
+
+// (looks5-f) The 2 px box of a hot or pressed toolbar button, 24 x 23 with its top left at the cell's (0, -1) (the
+// pixels of states/hover-toolbar-button-search-*, drifting along the window as the bar greys do; `along` is the
+// button's x in the 800 px window): hot is raised (#FA and #F5 above and left, #BE, #D2 and #B9 below and right),
+// pressed sunken (#BD, #D3 and #B8 dark above and left, #F9, #F6 light below and right, #F0 inside). Parts are
+// placed by the caller at (-2, -3) from the content's origin, which the button's 2 px padding puts at (2, 2) of the cell.
+fn windows_tool_box(a: *mem.Arena, pressed: bool, along: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 24usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let ox: f32 = 0.0
+    let oy: f32 = 0.0
+    var n = 0usize
+    if !pressed {
+        let l0 = windows_tool_drift(along, "3222110", 249.0)
+        let l1 = windows_tool_drift(along, "0111223", 243.0)
+        let l1_top = windows_tool_drift(along, "0000011", 248.0)
+        let corner = windows_tool_drift(along, "1111100", 246.0)
+        let r0_top = windows_tool_drift(along, "013459:", 203.0)
+        let r0_second = windows_tool_drift(along, "01467<=", 180.0)
+        let r0 = windows_tool_drift(along, "01456;<", 179.0)
+        let r0_foot = windows_tool_drift(along, "0122245", 167.0)
+        let r1_top = windows_tool_drift(along, "8755410", 220.0)
+        let r1 = windows_tool_drift(along, "<;87610", 209.0)
+        let r1_foot = windows_tool_drift(along, "5433310", 228.0)
+        let l_foot = windows_tool_drift(along, "0023366", 206.0)
+        let l_last = windows_tool_drift(along, "0122355", 216.0)
+        parts[n] = windows_tool_part(ox, oy, 1.0, 1.0, corner)
+        parts[n + 1usize] = windows_tool_part(ox + 1.0, oy, 21.0, 1.0, 250u32)
+        parts[n + 2usize] = windows_tool_part(ox + 22.0, oy, 1.0, 1.0, r0_top)
+        parts[n + 3usize] = windows_tool_part(ox + 23.0, oy, 1.0, 1.0, r1_top)
+        parts[n + 4usize] = windows_tool_part(ox, oy + 1.0, 1.0, 20.0, l0)
+        parts[n + 5usize] = windows_tool_part(ox + 1.0, oy + 1.0, 1.0, 1.0, l1_top)
+        parts[n + 6usize] = windows_tool_part(ox + 1.0, oy + 2.0, 1.0, 19.0, l1)
+        parts[n + 7usize] = windows_tool_part(ox + 2.0, oy + 1.0, 20.0, 1.0, 245u32)
+        parts[n + 8usize] = windows_tool_part(ox + 22.0, oy + 1.0, 1.0, 1.0, r0_second)
+        parts[n + 9usize] = windows_tool_part(ox + 22.0, oy + 2.0, 1.0, 19.0, r0)
+        parts[n + 10usize] = windows_tool_part(ox + 23.0, oy + 1.0, 1.0, 21.0, r1)
+        parts[n + 11usize] = windows_tool_part(ox, oy + 21.0, 1.0, 1.0, l_foot)
+        parts[n + 12usize] = windows_tool_part(ox + 1.0, oy + 21.0, 1.0, 1.0, 192u32)
+        parts[n + 13usize] = windows_tool_part(ox + 2.0, oy + 21.0, 20.0, 1.0, 190u32)
+        parts[n + 14usize] = windows_tool_part(ox + 22.0, oy + 21.0, 1.0, 1.0, r0_foot)
+        parts[n + 15usize] = windows_tool_part(ox, oy + 22.0, 1.0, 1.0, l_last)
+        parts[n + 16usize] = windows_tool_part(ox + 1.0, oy + 22.0, 22.0, 1.0, 210u32)
+        parts[n + 17usize] = windows_tool_part(ox + 23.0, oy + 22.0, 1.0, 1.0, r1_foot)
+        n += 18usize
+    } else {
+        let corner = windows_tool_drift(along, "0000111", 203.0)
+        let r0_top = windows_tool_drift(along, "1111000", 231.0)
+        let l0 = windows_tool_drift(along, "0001222", 182.0)
+        let l1_top = windows_tool_drift(along, "1111000", 196.0)
+        let r0_second = windows_tool_drift(along, "1111000", 241.0)
+        let r1 = windows_tool_drift(along, "0001111", 244.0)
+        let l1 = windows_tool_drift(along, "2221000", 216.0)
+        let r0 = windows_tool_drift(along, "1111000", 250.0)
+        let l1_foot = windows_tool_drift(along, "1111000", 240.0)
+        parts[n] = windows_tool_part(ox, oy, 1.0, 1.0, corner)
+        parts[n + 1usize] = windows_tool_part(ox + 1.0, oy, 21.0, 1.0, 189u32)
+        parts[n + 2usize] = windows_tool_part(ox + 22.0, oy, 1.0, 1.0, r0_top)
+        parts[n + 3usize] = windows_tool_part(ox + 23.0, oy, 1.0, 1.0, 243u32)
+        parts[n + 4usize] = windows_tool_part(ox, oy + 1.0, 1.0, 20.0, l0)
+        parts[n + 5usize] = windows_tool_part(ox + 1.0, oy + 1.0, 1.0, 1.0, l1_top)
+        parts[n + 6usize] = windows_tool_part(ox + 1.0, oy + 2.0, 1.0, 19.0, l1)
+        parts[n + 7usize] = windows_tool_part(ox + 2.0, oy + 1.0, 20.0, 1.0, 211u32)
+        parts[n + 8usize] = windows_tool_part(ox + 22.0, oy + 1.0, 1.0, 1.0, r0_second)
+        parts[n + 9usize] = windows_tool_part(ox + 22.0, oy + 2.0, 1.0, 19.0, r0)
+        parts[n + 10usize] = windows_tool_part(ox + 23.0, oy + 1.0, 1.0, 21.0, r1)
+        parts[n + 11usize] = windows_tool_part(ox, oy + 21.0, 1.0, 1.0, 225u32)
+        parts[n + 12usize] = windows_tool_part(ox + 1.0, oy + 21.0, 1.0, 1.0, l1_foot)
+        parts[n + 13usize] = windows_tool_part(ox + 2.0, oy + 21.0, 20.0, 1.0, 249u32)
+        parts[n + 14usize] = windows_tool_part(ox + 22.0, oy + 21.0, 1.0, 1.0, 253u32)
+        parts[n + 15usize] = windows_tool_part(ox, oy + 22.0, 1.0, 1.0, 244u32)
+        parts[n + 16usize] = windows_tool_part(ox + 1.0, oy + 22.0, 22.0, 1.0, 246u32)
+        parts[n + 17usize] = windows_tool_part(ox + 23.0, oy + 22.0, 1.0, 1.0, 242u32)
+        n += 18usize
+    }
+    ret (widget.stack(0u64, sized_style(24.0, 23.0), parts[0usize..n]), ok)
+}
+
+// A TdxBarButton with a picture: 22 square, the 16 glyph in a dark ink (v3 draws bitmaps). Hot and pressed draw v3's
+// 2 px box (windows_tool_box); a checked button keeps the guessed deeper blue.
 fn windows_glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool, checked: bool) -> (widget.Node, err) {
+    let (node, node_error) = windows_glyph_toggle_at(a, key, t, kind, label, action, enabled, checked, 466.0)
+    ret (node, node_error)
+}
+
+// The same for a button at x `along` of v3's 800 px window (the greys of the box drift along it).
+fn windows_glyph_toggle_at(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool, checked: bool, along: f32) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, checked)
-    let look = windows_bar_look(state, style.hex(4210752u32))
+    var look = windows_bar_look(state, style.hex(4210752u32))
     // v3's disabled pictures are pale bitmaps (mean #D4D4D4 over the glyph area, measured);
     // a drawn glyph in #C8C8C8 stands in.
     var ink = look.foreground
     if !enabled { ink = style.hex(13158600u32) }
     let (mark, mark_error) = icon_square(a, ink, kind, 16.0)
     if mark_error != ok { ret (zero, mark_error) }
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, checked, action, mark)
-    ret (node, node_error)
+    var content = mark
+    let boxed = enabled && !state.selected && (state.hovered || state.pressed)
+    if boxed {
+        look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        look.border = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        if state.pressed {
+            let (shifted, shifted_error) = mem.alloc[widget.Node](a, 1usize)
+            if shifted_error != ok { ret (zero, TooLarge) }
+            shifted[0usize] = mark
+            content = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, sized_style(16.0, 16.0), shifted[0usize..1usize])
+        }
+    }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, checked, action, content)
+    if node_error != ok { ret (zero, node_error) }
+    // The box lies 1 px above and 1 px right of the 23 x 22 cell, so the cell sits in a 24 x 23 stack that claims
+    // only the cell's room (margins of -1 above and at the right).
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (cell, cell_error) = mem.alloc[widget.Node](a, 1usize)
+    if cell_error != ok { ret (zero, TooLarge) }
+    cell[0usize] = node
+    var n = 0usize
+    if boxed {
+        let (box, box_error) = windows_tool_box(a, state.pressed, along)
+        if box_error != ok { ret (zero, box_error) }
+        let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if box_held_error != ok { ret (zero, TooLarge) }
+        box_held[0usize] = box
+        parts[n] = widget.positioned(0u64, 0.0, 0.0, sized_style(24.0, 23.0), box_held[0usize..1usize])
+        n += 1usize
+    }
+    parts[n] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), cell[0usize..1usize])
+    n += 1usize
+    var wrap = sized_style(24.0, 23.0)
+    wrap.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: -1.0 }, right: style.Length { Px: -1.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.stack(0u64, wrap, parts[0usize..n]), ok)
 }
 
 // A TdxBarButton with a caption: the same flat button, 6 at its sides, Tahoma 11.

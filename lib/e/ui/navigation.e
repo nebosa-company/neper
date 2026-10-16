@@ -9154,7 +9154,7 @@ fn windows_menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         if held_error != ok { ret (zero, TooLarge) }
         var p = 0usize
         if lit {
-            p = windows_title_box_hot(parts, bw)
+            p = windows_title_box_hot(parts, bw, title_x)
         }
         if sunk {
             p = windows_title_box_open(parts, bw, title_x)
@@ -9885,6 +9885,9 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
         if widget.submit_set(item.action.invoke) {
             let state = control.control_state(t, key + 1u64 + u64(i), true, false)
             var look = control.windows_bar_look(state, ink)
+            // (looks5-f) a status panel has no hover look in v3 (the four hover grabs are pixel-identical to rest)
+            look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            look.border = paint.rgba(0.0, 0.0, 0.0, 0.0)
             look.padding = 0.0
             look.padding_y = 0.0
             look.min_width = 0.0
@@ -10120,29 +10123,42 @@ fn windows_menu_under() -> f32 { ret 2.0 }
 // (looks4-f) The box of a hot bar title (raised) and of an open one (sunken), pixel rows read from
 // the live captures (states/main-window-rest, where the pointer rested on View, and
 // states/menu-bar-open-title-*). `bw` is the title's width; each fills `parts` and answers how many.
-fn windows_title_box_hot(parts: []widget.Node, bw: f32) -> usize {
-    parts[0usize] = windows_rect(0.0, 0.0, 1.0, 1.0, 16382457u32)
+fn windows_title_box_hot(parts: []widget.Node, bw: f32, along: f32) -> usize {
+    // (looks5-f) every grey drifts along the bar as the open box's do (windows_open_drift): read from the ten hot-title grabs
+    // (states/hover-menubar-title-*), which also fill the box's right edge and the extra column past it.
+    let l_top = windows_open_drift(along, "222111000", 248.0)
+    let left = windows_open_drift(along, "443322210", 251.0)
+    let c1_top = windows_open_drift(along, "000111222", 245.0)
+    let c1 = windows_open_drift(along, "001122234", 240.0)
+    let l21 = windows_open_drift(along, "01234679;", 193.0)
+    let c1_21 = windows_open_drift(along, "000000011", 188.0)
+    let l22 = windows_open_drift(along, "001223456", 213.0)
+    let r_top = windows_open_drift(along, "024579;<?", 188.0)
+    let r_second = windows_open_drift(along, "02579<>AE", 162.0)
+    let r_mid = windows_open_drift(along, "02469;=?C", 162.0)
+    let r21 = windows_open_drift(along, "001233456", 161.0)
+    let e_top = windows_open_drift(along, "=;:975420", 226.0)
+    let e_mid = windows_open_drift(along, "CA?=:8530", 219.0)
+    let e22 = windows_open_drift(along, "665433210", 233.0)
+    parts[0usize] = windows_rect(0.0, 0.0, 1.0, 1.0, l_top * 65793u32)
     parts[1usize] = windows_rect(1.0, 0.0, bw - 2.0, 1.0, 16448250u32)
-    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 1.0, 12698049u32)
-    parts[3usize] = windows_rect(bw, 0.0, 1.0, 1.0, 15461355u32)
-    parts[4usize] = windows_rect(0.0, 1.0, 1.0, 1.0, 16711422u32)
-    parts[5usize] = windows_rect(1.0, 1.0, 1.0, 1.0, 16185078u32)
+    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 1.0, r_top * 65793u32)
+    parts[3usize] = windows_rect(bw, 0.0, 1.0, 1.0, e_top * 65793u32)
+    parts[4usize] = windows_rect(0.0, 1.0, 1.0, 18.0, left * 65793u32)
+    parts[5usize] = windows_rect(1.0, 1.0, 1.0, 1.0, c1_top * 65793u32)
     parts[6usize] = windows_rect(2.0, 1.0, bw - 3.0, 1.0, 16119285u32)
-    parts[7usize] = windows_rect(bw - 1.0, 1.0, 1.0, 1.0, 11119017u32)
-    parts[8usize] = windows_rect(bw, 1.0, 1.0, 1.0, 15263976u32)
-    parts[9usize] = windows_rect(0.0, 2.0, 1.0, 17.0, 16711422u32)
-    parts[10usize] = windows_rect(1.0, 2.0, 1.0, 17.0, 15856113u32)
-    parts[11usize] = windows_rect(bw - 1.0, 2.0, 1.0, 17.0, 11053224u32)
-    parts[12usize] = windows_rect(bw, 2.0, 1.0, 17.0, 15263976u32)
-    parts[13usize] = windows_rect(0.0, 19.0, 1.0, 1.0, 12895428u32)
-    parts[14usize] = windows_rect(1.0, 19.0, 1.0, 1.0, 12369084u32)
-    parts[15usize] = windows_rect(2.0, 19.0, bw - 3.0, 1.0, 12303291u32)
-    parts[16usize] = windows_rect(bw - 1.0, 19.0, 1.0, 1.0, 10724259u32)
-    parts[17usize] = windows_rect(bw, 19.0, 1.0, 1.0, 15263976u32)
-    parts[18usize] = windows_rect(0.0, 20.0, 1.0, 1.0, 14145495u32)
-    parts[19usize] = windows_rect(1.0, 20.0, bw - 1.0, 1.0, 13948116u32)
-    parts[20usize] = windows_rect(bw, 20.0, 1.0, 1.0, 15592941u32)
-    ret 21usize
+    parts[7usize] = windows_rect(bw - 1.0, 1.0, 1.0, 1.0, r_second * 65793u32)
+    parts[8usize] = windows_rect(bw, 1.0, 1.0, 19.0, e_mid * 65793u32)
+    parts[9usize] = windows_rect(1.0, 2.0, 1.0, 17.0, c1 * 65793u32)
+    parts[10usize] = windows_rect(bw - 1.0, 2.0, 1.0, 17.0, r_mid * 65793u32)
+    parts[11usize] = windows_rect(0.0, 19.0, 1.0, 1.0, l21 * 65793u32)
+    parts[12usize] = windows_rect(1.0, 19.0, 1.0, 1.0, c1_21 * 65793u32)
+    parts[13usize] = windows_rect(2.0, 19.0, bw - 3.0, 1.0, 12303291u32)
+    parts[14usize] = windows_rect(bw - 1.0, 19.0, 1.0, 1.0, r21 * 65793u32)
+    parts[15usize] = windows_rect(0.0, 20.0, 1.0, 1.0, l22 * 65793u32)
+    parts[16usize] = windows_rect(1.0, 20.0, bw - 1.0, 1.0, 13948116u32)
+    parts[17usize] = windows_rect(bw, 20.0, 1.0, 1.0, e22 * 65793u32)
+    ret 18usize
 }
 
 // (looks5-f) A grey that drifts along the bar: `table` holds one digit per measured open title (File, Cards,
