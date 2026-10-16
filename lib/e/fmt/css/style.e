@@ -106,7 +106,9 @@ type Style = struct {
     outline_width: f64, outline_style: BorderStyle, outline_color: u32, outline_current: bool, outline_offset: f64,
     border_collapse: BorderCollapse, border_spacing_h: f64, border_spacing_v: f64, table_layout: TableLayout,
     caption_side: CaptionSide, empty_cells: EmptyCells,
-    custom: []const Custom, extras: []const Extra
+    custom: []const Custom, extras: []const Extra,
+    // The styles of the element's pseudo-elements, by `selector.PseudoElement` (an address of 0: the element has none).
+    pseudo: [8]*const Style
 }
 
 type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool }
@@ -1222,18 +1224,26 @@ fn builder_done(t: *Text) -> str {
 
 // --- Ranking after expansion.
 
-type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, author: bool }
+// `pseudo_kinds` has bit k set when some rule styles pseudo-element k.
+type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, author: bool, pseudo_kinds: u32 }
 
 fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet {
-    ret Sheet { rules: rules, index: cascade.build_index(a, rules), author: author }
+    var kinds = 0u32
+    var i = 0usize
+    while i < rules.len {
+        if rules[i].pseudo >= 0i64 { kinds |= 1u32 << u32(rules[i].pseudo) }
+        i += 1usize
+    }
+    ret Sheet { rules: rules, index: cascade.build_index(a, rules), author: author, pseudo_kinds: kinds }
 }
 
-fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox) {
+fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64) {
     let visit = cascade.candidates(m, &rs.index, el)
     var v = 0usize
     while v < visit.len {
         let rule = rs.rules[visit[v]]
         v += 1usize
+        if rule.pseudo != want { continue }
         if !cascade.containers_match(stack, rule.containers) { continue }
         var proximity = cascade.UNSCOPED
         if rule.scopes.len > 0usize {
@@ -1339,21 +1349,29 @@ fn finish(s: *Style) {
 
 // The computed style of `el` given its parent's. `stack` holds the ancestor query containers (none for now).
 fn compute(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: *const Sheet, el: html.NodeId, parent: *const Style) -> (Style, err) {
+    let (s, _has, e) = compute_for(c, m, ua, author, el, parent, -1i64)
+    ret (s, e)
+}
+
+// The style of element `el` (`want` -1) or of its pseudo-element `want`; `has` is false when nothing styles the
+// pseudo-element (an element always has a style).
+fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: *const Sheet, el: html.NodeId, parent: *const Style, want: i64) -> (Style, bool, err) {
     let a = c.a
     let stack: []const cascade.ContainerBox = zero
     let (made, made_error) = list.init[cascade.Declared](a, 32usize)
-    if made_error != ok { ret (initial_style(), made_error) }
+    if made_error != ok { ret (initial_style(), false, made_error) }
     var declared = made
-    let hints = cascade.presentational_hints(m, el)
+    var hints: []const cascade.Declaration = zero
+    if want < 0i64 { hints = cascade.presentational_hints(m, el) }
     var h = 0usize
     while h < hints.len {
         let pushed = list.push[cascade.Declared](&declared, cascade.Declared { declaration: hints[h], author: false, hint: true, specificity: 0i64, source: -1i64, has_layer: false, layer: 0i64, proximity: cascade.UNSCOPED })
         h += 1usize
     }
-    gather(m, &declared, ua, el, stack)
-    gather(m, &declared, author, el, stack)
+    gather(m, &declared, ua, el, stack, want)
+    gather(m, &declared, author, el, stack, want)
     let (style_text, has_style) = html.attribute(&m.doc.nodes[usize(el)], "style")
-    if has_style {
+    if has_style && want < 0i64 {
         let inline = cascade.inline_declarations(a, style_text)
         var k = 0usize
         while k < inline.len {
@@ -1362,12 +1380,13 @@ fn compute(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: 
         }
     }
     let all = list.slice_const[cascade.Declared](&declared)
+    if want >= 0i64 && all.len == 0usize { ret (initial_style(), false, ok) }
     let rtl = declared_direction(all, parent.direction == .Rtl)
     let winners = rank_expanded(a, all, rtl)
 
     // Custom properties: the parent's, overridden by this element's, each with its own var() resolved.
     let (cmade, cerror) = list.init[Custom](a, parent.custom.len + 8usize)
-    if cerror != ok { ret (initial_style(), cerror) }
+    if cerror != ok { ret (initial_style(), false, cerror) }
     var customs = cmade
     var pc = 0usize
     while pc < parent.custom.len {
@@ -1390,7 +1409,7 @@ fn compute(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: 
     var s = inherit_from(parent)
     s.custom = custom_all
     let (emade, eerror) = list.init[Extra](a, 8usize)
-    if eerror != ok { ret (s, eerror) }
+    if eerror != ok { ret (s, false, eerror) }
     var ap = Ap { c: c, s: &s, parent: parent, a: a, extras: emade }
     // Inherited extras start as the parent's.
     var px = 0usize
@@ -1418,7 +1437,7 @@ fn compute(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: 
     }
     finish(&s)
     s.extras = list.slice_const[Extra](&ap.extras)
-    ret (s, ok)
+    ret (s, true, ok)
 }
 
 // --- Style sheets: the rules of one sheet's text (see `e.fmt.css.sheet` for the at-rules it resolves).
@@ -1439,6 +1458,23 @@ fn compute_below(c: *Context, m: *const cssm.Matcher, d: *const dom.Dom, ua: *co
             let (s, e) = compute(c, m, ua, author, kid, parent)
             if e != ok { ret e }
             out[usize(kid)] = s
+            let kinds = ua.pseudo_kinds | author.pseudo_kinds
+            if kinds != 0u32 {
+                var pk = 0usize
+                while pk < 8usize {
+                    if (kinds & (1u32 << u32(pk))) != 0u32 {
+                        let (ps, has, pe) = compute_for(c, m, ua, author, kid, &out[usize(kid)], i64(pk))
+                        if pe != ok { ret pe }
+                        if has {
+                            let (cell, ce) = mem.alloc[Style](c.a, 1usize)
+                            if ce != ok { ret ce }
+                            cell[0usize] = ps
+                            out[usize(kid)].pseudo[pk] = &cell[0usize]
+                        }
+                    }
+                    pk += 1usize
+                }
+            }
             if kid == first_root_element(d) { c.root_font_size = s.font_size }
             try compute_below(c, m, d, ua, author, kid, &out[usize(kid)], out)
         } else {

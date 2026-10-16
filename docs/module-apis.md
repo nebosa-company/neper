@@ -20243,13 +20243,12 @@ A CSS Syntax Level 3 tokenizer and rule grammar (L038), after Vaper's `css_token
 ```neper
 type SimpleKind = enum u8 { Universal, Type, Klass, Id, PseudoClass, FirstChild, LastChild, OnlyChild, NthChild, NthLastChild, NthOfType, NthLastOfType, FirstOfType, LastOfType, OnlyOfType, Empty, Root, Not, Is, Where, Has, Scope, AttrPresent, AttrEquals, AttrIncludes, AttrDash, AttrPrefix, AttrSuffix, AttrSubstring }
 type Combinator = enum u8 { Descendant, Child, AdjacentSibling, GeneralSibling }
-type PseudoElement = enum u8 { Before, After, Marker, FirstLetter, FirstLine }
+type PseudoElement = enum u8 { Before, After, Marker, FirstLetter, FirstLine, Placeholder, Selection, Backdrop }
 type Simple = struct { kind: SimpleKind, name: str, argument: str, subs: []const Selector, attr_ci: bool }
 type Compound = struct { parts: []const Simple }
 type Selector = struct { compounds: []const Compound, combinators: []const Combinator }
 type RuleSelector = struct { selector: Selector, has_pseudo: bool, pseudo: PseudoElement }
 type Specificity = struct { ids: i64, classes: i64, types: i64 }
-
 fn kind_name(k: SimpleKind) -> str
 fn combinator_name(c: Combinator) -> str
 fn pseudo_element_name(p: PseudoElement) -> str
@@ -20258,11 +20257,9 @@ fn add_spec(x: Specificity, y: Specificity) -> Specificity
 fn zero_spec() -> Specificity
 fn simple_specificity(s: Simple) -> Specificity
 fn specificity(sel: Selector) -> Specificity
-
 type Parser = struct { a: *mem.Arena, src: str }
 type SimpleResult = struct { good: bool, has_selector: bool, selector: Simple, has_pseudo: bool, pseudo: PseudoElement, next: usize }
 type Complex = struct { good: bool, selector: Selector, has_pseudo: bool, pseudo: PseudoElement }
-
 fn new_simple(kind: SimpleKind, name: str) -> Simple
 fn rejected() -> SimpleResult
 fn found_simple(s: Simple, next: usize) -> SimpleResult
@@ -20290,8 +20287,6 @@ fn parse_nth(p: *const Parser, kind: SimpleKind, arg: []const syntax.Token) -> S
 fn functional_pseudo(p: *const Parser, name: str, arg: []const syntax.Token) -> (Simple, bool)
 fn parse_selector_list_for_rule(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err)
 ```
-
-The CSS selector model and parser (L038), after Vaper's `selector.dart` and `selector_parser.dart`: complex selectors as compounds joined by descendant, child, adjacent-sibling and general-sibling combinators; type, universal, class, id and attribute selectors (all six operators and the `i` flag); the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` with relative selectors, and `:nth-*()` with an `of S` list; the legacy pseudo-elements; and specificity as (ids, classes, types) with the functional pseudo-classes recursing. A selector the parser cannot represent is dropped from its list rather than failing it. Checked against Vaper's own Dart parser over 520 random selector lists on both hosts (D2340).
 
 ### `e.ui.interpolate`
 
@@ -20603,12 +20598,11 @@ type ContainerKind = enum u8 { None, InlineSize, Size }
 type ContainerBox = struct { kind: ContainerKind, names: []const str, has_width: bool, width: f64, has_height: bool, height: f64 }
 type ContainerQuery = struct { has_name: bool, name: str, condition: container.Condition }
 type Scope = struct { starts: []const selector.Selector, limits: []const selector.Selector }
-type Rule = struct { selector: selector.Selector, declarations: []const Declaration, source: i64, has_layer: bool, layer: i64, containers: []const ContainerQuery, scopes: []const Scope }
+type Rule = struct { selector: selector.Selector, declarations: []const Declaration, source: i64, has_layer: bool, layer: i64, containers: []const ContainerQuery, scopes: []const Scope, pseudo: i64 }
 type Declared = struct { declaration: Declaration, author: bool, hint: bool, specificity: i64, source: i64, has_layer: bool, layer: i64, proximity: i64 }
 type Winner = struct { property: str, value: str }
 type Bucket = enum u8 { Universal, Id, Klass, Tag }
 type Index = struct { rules: []const Rule, buckets: []Bucket, keys: []str }
-
 fn beats(x: Declared, y: Declared) -> bool
 fn find_property(best: *const list.List[Declared], property: str) -> i64
 fn rank(a: *mem.Arena, declared: []const Declared) -> []const Winner
@@ -20641,9 +20635,6 @@ fn inline_declarations(a: *mem.Arena, source: str) -> []const Declaration
 fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Rule, author: bool, el: html.NodeId, stack: []const ContainerBox)
 fn resolve(m: *const match.Matcher, ua: []const Rule, author: []const Rule, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> []const Winner
 ```
-
-The cascade kernels of a style resolver (L040), after Vaper's `css/style_resolver.dart`, over the matcher, the container model and an `e.fmt.html` document: `beats` ranks one declaration over another (importance, author over user agent, a presentational hint between them, unlayered over layered and a later layer over an earlier, specificity, `@scope` proximity with an unscoped rule infinitely far, then source order with a tie going to the declaration visited later), `build_index` and `candidates` bucket rules by the id, else the first class, else the tag of the key compound and visit an element's id bucket, then its classes, then its tag, then the universal bucket, `containers_match` takes each `@container` query's nearest eligible container on the stack (named, and `size`-typed for a block-axis feature), `scope_proximity` finds the nearest scoping root with donut limits and the hops to it, `presentational_hints` maps the legacy attributes (`bgcolor`, `width`, `align`, `border`, `cellpadding`, `<font size>`, `dir`, `type`, ...) to declarations, `inline_declarations` reads a `style` attribute, and `resolve` runs the whole cascade for one element, a winning shorthand dropping the longhands it outranks. Media queries and value readers are the caller's. Checked against Vaper's own `_cascade`, `_presentationalHints` and `_RuleIndex` (with those private names made reachable and nothing else changed) over 130 documents with rule sets, container stacks and scopes, 1282 elements, tags and parents compared as well (D2920).
-
 
 ### `e.fmt.html.accessible`
 
@@ -24687,15 +24678,16 @@ fn try_builder(a: *mem.Arena, cap: usize) -> Text
 fn builder_byte(t: *Text, c: u8)
 fn builder_text(t: *Text, s: str)
 fn builder_done(t: *Text) -> str
-type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, author: bool }
+type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, author: bool, pseudo_kinds: u32 }
 fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet
-fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox)
+fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64)
 fn consider(best: *list.List[cascade.Declared], entry: cascade.Declared)
 fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -> []const cascade.Declared
 fn declared_direction(declared: []const cascade.Declared, fallback: bool) -> bool
 fn blockify(d: Display) -> Display
 fn finish(s: *Style)
 fn compute(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: *const Sheet, el: html.NodeId, parent: *const Style) -> (Style, err)
+fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: *const Sheet, el: html.NodeId, parent: *const Style, want: i64) -> (Style, bool, err)
 fn parse_rules(a: *mem.Arena, source: str, order_start: i64) -> ([]const cascade.Rule, err)
 fn compute_below(c: *Context, m: *const cssm.Matcher, d: *const dom.Dom, ua: *const Sheet, author: *const Sheet, id: html.NodeId, parent: *const Style, out: []Style) -> err
 fn first_root_element(d: *const dom.Dom) -> html.NodeId
@@ -24813,6 +24805,22 @@ fn new_box(l: *Layout, inner: Inner, inline_level: bool, anonymous: bool, node: 
 fn append(l: *Layout, parent: u32, child: u32)
 fn detach(l: *Layout, child: u32)
 fn anon_style(l: *Layout, parent_style: u32, display: style.Display) -> u32
+fn is_punct(c: u32) -> bool
+fn is_combining(c: u32) -> bool
+fn find_first_text(l: *Layout, b: u32) -> u32
+fn apply_first_letter(l: *Layout, b: u32, ps: *const style.Style)
+type CounterInst = struct { name: str, value: i64, depth: usize }
+fn find_counter(l: *const Layout, name: str) -> i64
+fn counter_instantiate(l: *Layout, name: str, value: i64)
+fn apply_counter_props(l: *Layout, s: *const style.Style)
+fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64)
+fn format_counter(l: *Layout, value: i64, kind: str) -> str
+fn join_parts(a: *mem.Arena, parts: []const str) -> str
+fn quote_pair(l: *Layout, s: *const style.Style, depth: i64, close: bool) -> str
+fn eval_content(l: *Layout, s: *const style.Style, node: u32) -> (str, bool)
+fn push_style(l: *Layout, s: *const style.Style) -> u32
+fn inner_for_display(d: style.Display) -> Inner
+fn gen_pseudo(l: *Layout, node: u32, parent_box: u32, kind: usize)
 fn is_replaced_tag(name: str) -> bool
 fn name_in(set: str, name: str) -> bool
 fn is_block_level(d: style.Display) -> bool

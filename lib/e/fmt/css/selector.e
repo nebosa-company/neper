@@ -20,7 +20,7 @@ type SimpleKind = enum u8 { Universal, Type, Klass, Id, PseudoClass, FirstChild,
 
 type Combinator = enum u8 { Descendant, Child, AdjacentSibling, GeneralSibling }
 
-type PseudoElement = enum u8 { Before, After, Marker, FirstLetter, FirstLine }
+type PseudoElement = enum u8 { Before, After, Marker, FirstLetter, FirstLine, Placeholder, Selection, Backdrop }
 
 // `argument` is the An+B text of an `:nth-*()`, an attribute's expected value, or a functional pseudo-class's raw
 // argument; `subs` are the parsed sub-selectors of `:not/:is/:where/:has` and of the `of S` list of `:nth-*()`.
@@ -123,6 +123,12 @@ fn pseudo_element_name(p: PseudoElement) -> str {
         ret "firstLetter"
     case .FirstLine:
         ret "firstLine"
+    case .Placeholder:
+        ret "placeholder"
+    case .Selection:
+        ret "selection"
+    case .Backdrop:
+        ret "backdrop"
     }
 }
 
@@ -474,6 +480,9 @@ fn pseudo_element_of(name: str, next: usize) -> SimpleResult {
     if str.eq(name, "marker") { ret found_pseudo(.Marker, next) }
     if str.eq(name, "first-letter") { ret found_pseudo(.FirstLetter, next) }
     if str.eq(name, "first-line") { ret found_pseudo(.FirstLine, next) }
+    if str.eq(name, "placeholder") || str.eq(name, "-webkit-input-placeholder") || str.eq(name, "-moz-placeholder") { ret found_pseudo(.Placeholder, next) }
+    if str.eq(name, "selection") || str.eq(name, "-moz-selection") { ret found_pseudo(.Selection, next) }
+    if str.eq(name, "backdrop") { ret found_pseudo(.Backdrop, next) }
     ret rejected()
 }
 

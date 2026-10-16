@@ -124,6 +124,30 @@ fn is_rect(r: Rect, x: f64, y: f64, w: f64, h: f64) -> bool {
     ret r.found && near(r.x, x) && near(r.y, y) && near(r.w, w) && near(r.h, h)
 }
 
+// Whether some text fragment holds exactly `text`.
+fn frag_has(pg: *const Page, text: str) -> bool {
+    var i = 0usize
+    while i < pg.lay.frags.len {
+        if pg.lay.frags.items[i].kind == layout.FragKind.Text && str.eq(pg.lay.frags.items[i].text, text) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// The text of all text fragments, in order.
+fn all_text(a: *mem.Arena, pg: *const Page) -> str {
+    var out: str = ""
+    var i = 0usize
+    while i < pg.lay.frags.len {
+        if pg.lay.frags.items[i].kind == layout.FragKind.Text {
+            let (joined, e) = str.concat(a, out, pg.lay.frags.items[i].text)
+            if e == ok { out = joined }
+        }
+        i += 1usize
+    }
+    ret out
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // 1. Stacking and margin collapsing between siblings.
     let (p1, ok1) = build(a, "<div id=a style=\"height:50px;margin-bottom:10px\"></div><div id=b style=\"height:30px;margin-top:20px\"></div>", "")
@@ -325,5 +349,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 56. An inline-block inside a padded block is offset by the padding.
     let (p56, ok56) = build(a, "<div style=\"padding:10px;font-size:10px\"><span id=i style=\"display:inline-block;width:30px;height:20px\"></span></div>", mcss)
     if !ok56 || !is_rect(rect_of(p56, "i"), 10.0f64, 10.0f64, 30.0f64, 20.0f64) { os.exit(87) }
+    // 57. ::before and ::after produce boxes from `content`.
+    let (p57, ok57) = build(a, "<div id=d style=\"font-size:10px\"></div>", "#d::before { content: \"ab\"; } #d::after { content: \"c\"; }")
+    if !ok57 || p57.lay.lines.len != 1usize || !near(p57.lay.lines.items[0usize].w, 30.0f64) { os.exit(88) }
+    // 58. Counters count in document order, scoped by the resets.
+    let (p58, ok58) = build(a, "<div class=i>x</div><div class=i>y</div><div class=i>z</div>", ".i { font-size: 10px; counter-increment: n; } .i::before { content: counter(n) \". \"; } body { counter-reset: n; }")
+    if !ok58 || !frag_has(p58, "1. ") || !frag_has(p58, "2. ") || !frag_has(p58, "3. ") { os.exit(89) }
+    // 59. attr() and quotes.
+    let (p59, ok59) = build(a, "<div style=\"font-size:10px\"><a href=\"/x\">l</a></div>", "a::after { content: \" (\" attr(href) \")\"; } a::before { content: open-quote; }")
+    if !ok59 { os.exit(90) }
+    let t59 = all_text(a, p59)
+    if !str.eq(t59, "\xe2\x80\x9cl (/x)") { os.exit(93) }
+    // 60. A custom ::marker.
+    let (p60, ok60) = build(a, "<ul><li>a</li></ul>", "li::marker { content: \"* \"; }")
+    if !ok60 { os.exit(91) }
+    var found_marker = false
+    var mi2 = 0usize
+    while mi2 < p60.lay.boxes.len {
+        if p60.lay.boxes.items[mi2].inner == layout.Inner.Marker && str.eq(p60.lay.boxes.items[mi2].text, "* ") { found_marker = true }
+        mi2 += 1usize
+    }
+    if !found_marker { os.exit(92) }
+    // 61. ::first-letter styles the first letter, with the punctuation before it.
+    let (p61, ok61) = build(a, "<p id=p>Hello</p><p id=q>\"Hi\"</p>", "p { font-size: 10px; } p::first-letter { font-size: 20px; }")
+    if !ok61 || p61.lay.lines.len != 2usize || !near(p61.lay.lines.items[0usize].w, 60.0f64) { os.exit(95) }
+    if !frag_has(p61, "H") || !frag_has(p61, "ello") || !frag_has(p61, "\"H") || !frag_has(p61, "i\"") { os.exit(96) }
     ret ok
 }

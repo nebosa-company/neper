@@ -17,11 +17,14 @@
 use e.data.list as list
 use e.gfx.cssvalue as cv
 use e.fmt.css.style as style
+use e.fmt.css.syntax as syntax
 use e.fmt.dom as dom
 use e.fmt.html as html
 use e.mem
 use e.str
 use e.text.segment as segment
+use e.text.unicode as unicode
+use e.text.utf8 as utf8
 
 type FontMetrics = struct { ascent: f64, descent: f64, line_gap: f64, x_height: f64 }
 
@@ -67,7 +70,8 @@ type Layout = struct {
     a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure,
     boxes: list.List[Box], lines: list.List[Line], frags: list.List[Frag], anon: list.List[style.Style],
     root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64,
-    floats: list.List[FloatRec], tables: list.List[TableData]
+    floats: list.List[FloatRec], tables: list.List[TableData],
+    counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize
 }
 
 // A float placed in a block formatting context, in the coordinates of the context's root content box.
@@ -131,6 +135,401 @@ fn anon_style(l: *Layout, parent_style: u32, display: style.Display) -> u32 {
 
 // --- Box generation.
 
+// --- ::first-letter: the first letter of the first line (with the punctuation around it) becomes an inline box of its own.
+
+fn is_punct(c: u32) -> bool {
+    let k = unicode.category(c)
+    ret k == .Pc || k == .Pd || k == .Ps || k == .Pe || k == .Pi || k == .Pf || k == .Po
+}
+
+fn is_combining(c: u32) -> bool {
+    let k = unicode.category(c)
+    ret k == .Mn || k == .Mc || k == .Me
+}
+
+// The text box holding the first letter's line of `b`: the first non-blank text of its inline content, looking into
+// inline boxes and the first block child. NONE when the first thing is a break, a picture or an atomic inline.
+fn find_first_text(l: *Layout, b: u32) -> u32 {
+    var kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        let ks = st(l, kb.style)
+        if kb.inner == .Marker || is_out_of_flow(ks) {
+            kid = kb.next
+            continue
+        }
+        if kb.inner == .Text {
+            if is_ws_only(kb.text) && collapses(l, kid) {
+                kid = kb.next
+                continue
+            }
+            ret kid
+        }
+        if kb.inner == .Break || kb.inner == .Replaced { ret NONE }
+        if kb.inline_level && kb.inner != .Flow { ret NONE }
+        if kb.inner == .Table || kb.inner == .Flex || kb.inner == .Grid { ret NONE }
+        // An inline box or a block: its first text counts.
+        let inner_found = find_first_text(l, kid)
+        ret inner_found
+    }
+    ret NONE
+}
+
+fn apply_first_letter(l: *Layout, b: u32, ps: *const style.Style) {
+    let t = find_first_text(l, b)
+    if t == NONE { ret }
+    let text = l.boxes.items[usize(t)].text
+    // Skip collapsible leading white space, then punctuation, one letter with its marks, then punctuation.
+    var at = 0usize
+    if collapses(l, t) {
+        while at < text.len && is_space_byte(text[at]) { at += 1usize }
+    }
+    let start = at
+    var seen_letter = false
+    var done = false
+    while at < text.len && !done {
+        let (d, de) = utf8.decode(text, at)
+        if de != ok { break }
+        let c = d.scalar
+        if !seen_letter {
+            if is_punct(c) {
+                at += usize(d.width)
+            } else if is_space_byte(u8(c)) && c < 128u32 {
+                done = true
+            } else {
+                seen_letter = true
+                at += usize(d.width)
+                while at < text.len {
+                    let (m, me) = utf8.decode(text, at)
+                    if me != ok || !is_combining(m.scalar) { break }
+                    at += usize(m.width)
+                }
+            }
+        } else {
+            if is_punct(d.scalar) { at += usize(d.width) } else { done = true }
+        }
+    }
+    if !seen_letter || at <= start { ret }
+    let id = push_style(l, ps)
+    let pd = l.anon.items[usize(id) - l.styles.len].display
+    var inline = true
+    if l.anon.items[usize(id) - l.styles.len].floating != .None { inline = false }
+    let fb = new_box(l, .Flow, inline, true, l.boxes.items[usize(t)].node, id)
+    let ft = new_box(l, .Text, true, false, l.boxes.items[usize(t)].node, id)
+    bx(l, ft).text = text[start..at]
+    append(l, fb, ft)
+    // The rest of the run stays where it was; the new box goes in front of it.
+    l.boxes.items[usize(t)].text = text[at..]
+    if collapses(l, t) && start > 0usize {
+        // Keep the skipped white space with the remainder's collapsing context (it collapses away anyway).
+        l.boxes.items[usize(t)].text = text[at..]
+    }
+    let parent = l.boxes.items[usize(t)].parent
+    let prev = l.boxes.items[usize(t)].prev
+    l.boxes.items[usize(fb)].parent = parent
+    l.boxes.items[usize(fb)].prev = prev
+    l.boxes.items[usize(fb)].next = t
+    if prev == NONE { l.boxes.items[usize(parent)].first = fb } else { l.boxes.items[usize(prev)].next = fb }
+    l.boxes.items[usize(t)].prev = fb
+}
+
+// --- Generated content: counters, quotes and the `content` property of ::before, ::after and ::marker.
+
+type CounterInst = struct { name: str, value: i64, depth: usize }
+
+fn find_counter(l: *const Layout, name: str) -> i64 {
+    var i = l.counters.len
+    while i > 0usize {
+        i -= 1usize
+        if str.eq(l.counters.items[i].name, name) { ret i64(i) }
+    }
+    ret -1i64
+}
+
+fn counter_instantiate(l: *Layout, name: str, value: i64) {
+    // A reset by a sibling of the element that made the counter replaces it rather than nesting.
+    var i = l.counters.len
+    while i > 0usize {
+        i -= 1usize
+        if str.eq(l.counters.items[i].name, name) {
+            if l.counters.items[i].depth == l.gen_depth {
+                l.counters.items[i].value = value
+                ret
+            }
+            break
+        }
+    }
+    let pushed = list.push[CounterInst](&l.counters, CounterInst { name: name, value: value, depth: l.gen_depth })
+}
+
+// Applies `counter-reset`, `counter-increment` and `counter-set` (in that order) of an element.
+fn apply_counter_props(l: *Layout, s: *const style.Style) {
+    let (reset, has_reset) = extra_text(s, "counter-reset")
+    let (incr, has_incr) = extra_text(s, "counter-increment")
+    let (set, has_set) = extra_text(s, "counter-set")
+    if has_reset && !str.eq(cv.lower(l.a, cv.trim_ws(reset)), "none") { counter_pairs(l, reset, 0u8, 0i64) }
+    if has_incr && !str.eq(cv.lower(l.a, cv.trim_ws(incr)), "none") { counter_pairs(l, incr, 1u8, 1i64) }
+    if has_set && !str.eq(cv.lower(l.a, cv.trim_ws(set)), "none") { counter_pairs(l, set, 2u8, 0i64) }
+}
+
+// `name [integer]` pairs; op 0 reset, 1 increment, 2 set.
+fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64) {
+    let toks = cv.split_top_level_spaces(l.a, text)
+    var i = 0usize
+    while i < toks.len {
+        let name = toks[i]
+        i += 1usize
+        var v = default_value
+        if i < toks.len {
+            let (n, good) = str.parse_i64(toks[i])
+            if good == ok {
+                v = n
+                i += 1usize
+            }
+        }
+        if op == 0u8 {
+            counter_instantiate(l, name, v)
+        } else {
+            var at = find_counter(l, name)
+            if at < 0i64 {
+                counter_instantiate(l, name, 0i64)
+                at = i64(l.counters.len) - 1i64
+            }
+            if op == 1u8 { l.counters.items[usize(at)].value += v } else { l.counters.items[usize(at)].value = v }
+        }
+    }
+}
+
+fn format_counter(l: *Layout, value: i64, kind: str) -> str {
+    if str.eq(kind, "none") { ret "" }
+    if str.eq(kind, "disc") { ret "\xe2\x80\xa2" }
+    if str.eq(kind, "circle") { ret "\xe2\x97\xa6" }
+    if str.eq(kind, "square") { ret "\xe2\x96\xaa" }
+    if str.eq(kind, "decimal-leading-zero") { ret number_text(l, value, 2usize) }
+    if str.eq(kind, "lower-alpha") || str.eq(kind, "lower-latin") { ret alpha_text(l, value, false) }
+    if str.eq(kind, "upper-alpha") || str.eq(kind, "upper-latin") { ret alpha_text(l, value, true) }
+    if str.eq(kind, "lower-roman") { ret roman_text(l, value, false) }
+    if str.eq(kind, "upper-roman") { ret roman_text(l, value, true) }
+    ret number_text(l, value, 0usize)
+}
+
+fn join_parts(a: *mem.Arena, parts: []const str) -> str {
+    var total = 0usize
+    var i = 0usize
+    while i < parts.len {
+        total += parts[i].len
+        i += 1usize
+    }
+    let (d, e) = mem.alloc[u8](a, total + 1usize)
+    if e != ok { ret "" }
+    var at = 0usize
+    i = 0usize
+    while i < parts.len {
+        var k = 0usize
+        while k < parts[i].len {
+            d[at] = parts[i][k]
+            at += 1usize
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret d[0usize..total]
+}
+
+// The quotation mark pair for nesting `depth` (`quotes` of the style, else the typographic defaults).
+fn quote_pair(l: *Layout, s: *const style.Style, depth: i64, close: bool) -> str {
+    var open0 = "\xe2\x80\x9c"
+    var close0 = "\xe2\x80\x9d"
+    var open1 = "\xe2\x80\x98"
+    var close1 = "\xe2\x80\x99"
+    let (q, has) = extra_text(s, "quotes")
+    if has {
+        let low = cv.lower(l.a, cv.trim_ws(q))
+        if str.eq(low, "none") { ret "" }
+        let (toks, te) = syntax.tokenize(l.a, q)
+        if te == ok {
+            var strings: [8]str = zero
+            var n = 0usize
+            var i = 0usize
+            while i < toks.len && n < 8usize {
+                if toks[i].kind == .String {
+                    strings[n] = toks[i].value
+                    n += 1usize
+                }
+                i += 1usize
+            }
+            if n >= 2usize {
+                open0 = strings[0usize]
+                close0 = strings[1usize]
+                open1 = open0
+                close1 = close0
+                if n >= 4usize {
+                    open1 = strings[2usize]
+                    close1 = strings[3usize]
+                }
+            }
+        }
+    }
+    if depth <= 0i64 {
+        if close { ret close0 }
+        ret open0
+    }
+    if close { ret close1 }
+    ret open1
+}
+
+// The text of a `content` value for the element `node`; `has` is false for `none`, `normal` or no value.
+fn eval_content(l: *Layout, s: *const style.Style, node: u32) -> (str, bool) {
+    let (raw, has) = extra_text(s, "content")
+    if !has { ret ("", false) }
+    let low = cv.lower(l.a, cv.trim_ws(raw))
+    if str.eq(low, "none") || str.eq(low, "normal") || low.len == 0usize { ret ("", false) }
+    let (toks, te) = syntax.tokenize(l.a, raw)
+    if te != ok { ret ("", false) }
+    let (pm, pe) = list.init[str](l.a, 8usize)
+    if pe != ok { ret ("", false) }
+    var parts = pm
+    var any = false
+    var i = 0usize
+    while i < toks.len {
+        let t = toks[i]
+        i += 1usize
+        if t.kind == .Whitespace { continue }
+        if t.kind == .String {
+            let pushed = list.push[str](&parts, t.value)
+            any = true
+        } else if t.kind == .Delim && str.eq(t.value, "/") {
+            break
+        } else if t.kind == .Ident {
+            let name = cv.lower(l.a, t.value)
+            if str.eq(name, "open-quote") {
+                let mark = quote_pair(l, s, l.quote_depth, false)
+                let pushed = list.push[str](&parts, mark)
+                l.quote_depth += 1i64
+                any = true
+            } else if str.eq(name, "close-quote") {
+                if l.quote_depth > 0i64 { l.quote_depth -= 1i64 }
+                let mark2 = quote_pair(l, s, l.quote_depth, true)
+                let pushed = list.push[str](&parts, mark2)
+                any = true
+            } else if str.eq(name, "no-open-quote") {
+                l.quote_depth += 1i64
+            } else if str.eq(name, "no-close-quote") {
+                if l.quote_depth > 0i64 { l.quote_depth -= 1i64 }
+            }
+        } else if t.kind == .Function {
+            // The arguments up to the matching parenthesis, split at commas.
+            var args: [4]str = zero
+            var kinds: [4]syntax.Kind = zero
+            var n = 0usize
+            var depth = 1i64
+            var cur: str = ""
+            var cur_kind = syntax.Kind.Ident
+            var have = false
+            while i < toks.len && depth > 0i64 {
+                let u = toks[i]
+                i += 1usize
+                if u.kind == .LeftParen || u.kind == .Function {
+                    depth += 1i64
+                } else if u.kind == .RightParen {
+                    depth -= 1i64
+                    if depth == 0i64 {
+                        if have && n < 4usize {
+                            args[n] = cur
+                            kinds[n] = cur_kind
+                            n += 1usize
+                        }
+                        break
+                    }
+                } else if u.kind == .Comma && depth == 1i64 {
+                    if have && n < 4usize {
+                        args[n] = cur
+                        kinds[n] = cur_kind
+                        n += 1usize
+                    }
+                    have = false
+                } else if (u.kind == .Ident || u.kind == .String) && !have {
+                    cur = u.value
+                    cur_kind = u.kind
+                    have = true
+                }
+            }
+            let fname = cv.lower(l.a, t.value)
+            if str.eq(fname, "attr") && n >= 1usize {
+                let (v, got) = dom.get_attribute(l.d, node, cv.lower(l.a, args[0usize]))
+                if got {
+                    let pushed = list.push[str](&parts, v)
+                }
+                any = true
+            } else if str.eq(fname, "counter") && n >= 1usize {
+                var kind = "decimal"
+                if n >= 2usize { kind = cv.lower(l.a, args[1usize]) }
+                let at = find_counter(l, args[0usize])
+                var value = 0i64
+                if at >= 0i64 { value = l.counters.items[usize(at)].value }
+                let pushed = list.push[str](&parts, format_counter(l, value, kind))
+                any = true
+            } else if str.eq(fname, "counters") && n >= 2usize {
+                var kind2 = "decimal"
+                if n >= 3usize { kind2 = cv.lower(l.a, args[2usize]) }
+                var first = true
+                var ci = 0usize
+                while ci < l.counters.len {
+                    if str.eq(l.counters.items[ci].name, args[0usize]) {
+                        if !first {
+                            let pushed = list.push[str](&parts, args[1usize])
+                        }
+                        let pushed2 = list.push[str](&parts, format_counter(l, l.counters.items[ci].value, kind2))
+                        first = false
+                    }
+                    ci += 1usize
+                }
+                any = true
+            }
+        }
+    }
+    if !any { ret ("", false) }
+    ret (join_parts(l.a, list.slice_const[str](&parts)), true)
+}
+
+fn push_style(l: *Layout, s: *const style.Style) -> u32 {
+    let pushed = list.push[style.Style](&l.anon, *s)
+    ret u32(l.styles.len) + u32(l.anon.len) - 1u32
+}
+
+fn inner_for_display(d: style.Display) -> Inner {
+    if d == .InlineBlock || d == .FlowRoot { ret .FlowRoot }
+    if d == .Flex || d == .InlineFlex { ret .Flex }
+    if d == .Grid || d == .InlineGrid { ret .Grid }
+    if d == .Table || d == .InlineTable { ret .Table }
+    if d == .TableRow { ret .Row }
+    if d == .TableRowGroup || d == .TableHeaderGroup || d == .TableFooterGroup { ret .RowGroup }
+    if d == .TableCell { ret .Cell }
+    if d == .TableCaption { ret .Caption }
+    ret .Flow
+}
+
+// The box of an element's ::before (kind 0) or ::after (kind 1), if its content produces one.
+fn gen_pseudo(l: *Layout, node: u32, parent_box: u32, kind: usize) {
+    let ps = l.styles[usize(node)].pseudo[kind]
+    if mem.address_of(ps) == 0usize { ret }
+    if ps.display == .None { ret }
+    apply_counter_props(l, ps)
+    let (text, has) = eval_content(l, ps, node)
+    if !has { ret }
+    let id = push_style(l, ps)
+    let pd = l.anon.items[usize(id) - l.styles.len].display
+    let b = new_box(l, inner_for_display(pd), is_inline_level_display(pd), true, node, id)
+    append(l, parent_box, b)
+    // Counters of the pseudo-element itself apply inside it.
+    if text.len > 0usize {
+        let t = new_box(l, .Text, true, false, node, id)
+        bx(l, t).text = text
+        append(l, b, t)
+    }
+    fix_anonymous(l, b)
+}
+
 fn is_replaced_tag(name: str) -> bool {
     ret name_in(",img,video,canvas,iframe,embed,object,audio,svg,input,textarea,select,meter,progress,", name)
 }
@@ -159,11 +558,15 @@ fn is_out_of_flow(s: *const style.Style) -> bool {
 }
 
 fn gen_children(l: *Layout, node: u32, parent_box: u32) {
+    l.gen_depth += 1usize
     var kid = l.d.nodes[usize(node)].first_child
     while kid != html.NONE {
         gen_node(l, kid, parent_box, node)
         kid = l.d.nodes[usize(kid)].next_sibling
     }
+    // The counters the children made go out of scope with their parent's contents.
+    while l.counters.len > 0usize && l.counters.items[l.counters.len - 1usize].depth >= l.gen_depth { l.counters.len -= 1usize }
+    l.gen_depth -= 1usize
 }
 
 fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
@@ -178,6 +581,7 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     if n.kind != .Element { ret }
     let s = &l.styles[usize(node)]
     if s.display == .None { ret }
+    apply_counter_props(l, s)
     if s.display == .Contents {
         gen_children(l, node, parent_box)
         ret
@@ -213,11 +617,25 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     append(l, parent_box, b)
     if replaced { ret }
     if s.display == .ListItem {
-        let m = new_box(l, .Marker, s.list_style_position == .Inside, true, node, node)
+        var marker_style = node
+        let ms = s.pseudo[2usize]
+        if mem.address_of(ms) != 0usize { marker_style = push_style(l, ms) }
+        let m = new_box(l, .Marker, s.list_style_position == .Inside, true, node, marker_style)
         bx(l, m).aux = list_ordinal(l, node)
+        if mem.address_of(ms) != 0usize {
+            let (custom, has_custom) = eval_content(l, ms, node)
+            if has_custom {
+                bx(l, m).text = custom
+                bx(l, m).aux2 = 1u32
+            }
+        }
         append(l, b, m)
     }
+    gen_pseudo(l, node, b, 0usize)
     gen_children(l, node, b)
+    gen_pseudo(l, node, b, 1usize)
+    let fl = s.pseudo[3usize]
+    if mem.address_of(fl) != 0usize && !inline_level { apply_first_letter(l, b, fl) }
     fix_anonymous(l, b)
 }
 
@@ -987,6 +1405,7 @@ fn text_take(t: *TextBuf) -> str {
 
 // The marker text of a list item for its `list-style-type`, including the gap after it.
 fn marker_string(l: *const Layout, b: u32) -> str {
+    if l.boxes.items[usize(b)].aux2 == 1u32 { ret l.boxes.items[usize(b)].text }
     let s = bstyle(l, b)
     let kind = s.list_style_type
     let n = i64(l.boxes.items[usize(b)].aux)
@@ -5063,8 +5482,9 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (anon, e4) = list.init[style.Style](a, 64usize)
     let (floats, e5) = list.init[FloatRec](a, 16usize)
     let (tables, e6) = list.init[TableData](a, 8usize)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables }
+    let (counters, e7) = list.init[CounterInst](a, 16usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret (zero, TooBig) }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))

@@ -40,7 +40,8 @@ type ContainerQuery = struct { has_name: bool, name: str, condition: container.C
 
 type Scope = struct { starts: []const selector.Selector, limits: []const selector.Selector }
 
-type Rule = struct { selector: selector.Selector, declarations: []const Declaration, source: i64, has_layer: bool, layer: i64, containers: []const ContainerQuery, scopes: []const Scope }
+// `pseudo` is -1 for a rule of the element itself, else the `selector.PseudoElement` it styles.
+type Rule = struct { selector: selector.Selector, declarations: []const Declaration, source: i64, has_layer: bool, layer: i64, containers: []const ContainerQuery, scopes: []const Scope, pseudo: i64 }
 
 type Declared = struct { declaration: Declaration, author: bool, hint: bool, specificity: i64, source: i64, has_layer: bool, layer: i64, proximity: i64 }
 

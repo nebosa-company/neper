@@ -887,9 +887,9 @@ fn style_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
     l.order += 1i64
     var q = 0usize
     while q < chosen.len {
-        if !chosen[q].has_pseudo {
-            let pushed = list.push[cascade.Rule](&l.rules, cascade.Rule { selector: chosen[q].selector, declarations: decls, source: order, has_layer: ctx.has_layer, layer: ctx.layer, containers: ctx.containers, scopes: ctx.scopes })
-        }
+        var pseudo = -1i64
+        if chosen[q].has_pseudo { pseudo = i64(mem.bitcast[u8](chosen[q].pseudo)) }
+        let pushed = list.push[cascade.Rule](&l.rules, cascade.Rule { selector: chosen[q].selector, declarations: decls, source: order, has_layer: ctx.has_layer, layer: ctx.layer, containers: ctx.containers, scopes: ctx.scopes, pseudo: pseudo })
         q += 1usize
     }
 }
