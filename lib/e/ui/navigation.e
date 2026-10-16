@@ -8817,11 +8817,25 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
             // maximise ones a pixel left of their slot; on a dialog's lone X it covers the slot, its first column three quarters blended
             var hot_x: f32 = 0.0
             var hot_w = slot.rect.width
-            if slot.rect.width > 40.0 && slot.kind != .Close { hot_x = -1.0 }
             look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
-            let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+            let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
             if layers_error != ok { ret (zero, TooLarge) }
             var count = 0usize
+            if slot.rect.width > 40.0 && slot.kind != .Close {
+                // looks9: the washes start at a fractional pixel (the captured buttons are 46.3 and 45.8 wide): the first column, two pixels (minimise,
+                // 31 %, 46 columns follow) or one (maximise, 77 %, 45 follow) left of the slot, is blended
+                hot_x = 0.0
+                var first_share: f32 = 0.31
+                var first_x: f32 = 0.0 - 2.0
+                if slot.kind == .Minimize { hot_x = 0.0 - 1.0 }
+                if slot.kind == .Maximize {
+                    first_share = 0.77
+                    first_x = 0.0 - 1.0
+                    hot_w = slot.rect.width - 1.0
+                }
+                layers[count] = widget.positioned(0u64, first_x, 1.0, style.defaults(), mem_one(a, widget.box(0u64, windows_flat_sized(1.0, 29.0, control.with_alpha(fill, first_share)), zero)))
+                count += 1usize
+            }
             if slot.rect.width < 40.0 {
                 layers[count] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), mem_one(a, widget.box(0u64, windows_flat_sized(1.0, 29.0, control.with_alpha(fill, 0.75)), zero)))
                 count += 1usize
