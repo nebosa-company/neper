@@ -53,7 +53,7 @@
   {"id": "dialog", "name": "Dialog (form chrome)", "delphi": "TForm / TcxButton row", "neper": "overlay.dialog"}
  ],
  "gaps": [
-  {"item": "Embedded browser", "delphi": "TWebBrowser / TEdgeBrowser", "note": "No Neper control; listed, not built."},
+  {"item": "Embedded browser", "delphi": "TWebBrowser / TEdgeBrowser", "note": "No Neper control; listed, not built, on purpose: the plan is to recode D:\repos\vaper into Neper later and use it as the browser control (maintainer decision 2026-10-16)."},
   {"item": "Chart", "delphi": "TcxChart / TChart", "note": "e.gfx.chart draws charts but there is no chart control with a Windows look."},
   {"item": "Tray icon", "delphi": "TTrayIcon", "note": "No Neper equivalent."},
   {"item": "Native file dialogs", "delphi": "TOpenDialog / TSaveDialog", "note": "No Neper equivalent; the OS dialog is used."}
