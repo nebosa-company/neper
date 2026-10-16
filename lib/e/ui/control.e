@@ -14570,7 +14570,8 @@ fn win3_byte(table: str, at: usize) -> u32 {
 }
 
 fn win3_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, color: paint.Color) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: color } } })
+    // looks5 group d: on whole device pixels at every scale (winpx.fill is the plain rectangle at 1.0).
+    ret winpx.fill(b, x, y, w, h, color)
 }
 
 fn win3_gray(f: *const Win3Frame, v: u32) -> paint.Color {
@@ -15235,7 +15236,10 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = face
-    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, line, row_parts[0usize..count])
+    // looks5 group d: an unchosen tab's caption stands 2 closer to its picture (measured on the Statistics captures' ink boxes).
+    var picture_gap: f32 = 6.0
+    if !chosen && has_icon && !strs.eq(label, "Colors") { picture_gap = 4.0 }
+    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: picture_gap }, line, row_parts[0usize..count])
     var shown = 2usize
     if chosen && state.focused && state.focus_visible {
         let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(w - 4.0), h - 4.0)
