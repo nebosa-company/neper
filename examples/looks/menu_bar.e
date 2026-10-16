@@ -147,7 +147,10 @@ fn build_hot(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
     while i < 10usize {
         let (menu_bar, bar_error) = bar(a, t, *action, 10000u64 * u64(i + 1usize), 99usize, false)
         if bar_error != ok { ret (0usize, bar_error) }
-        let (shifted, shifted_error) = placed(a, menu_bar, 782.0 - centres[i], 0.0, 1564.0, 26.0)
+        // the bar is 782 wide, as v3's window is (it would otherwise fill the 1564 wide cell)
+        let (boxed, boxed_error) = placed(a, menu_bar, 0.0, 0.0, 782.0, 26.0)
+        if boxed_error != ok { ret (0usize, boxed_error) }
+        let (shifted, shifted_error) = placed(a, boxed, 782.0 - centres[i], 0.0, 1564.0, 26.0)
         if shifted_error != ok { ret (0usize, shifted_error) }
         cells[i] = looks.Cell { caption: names[i], node: shifted, drive: .Hover }
         i += 1usize

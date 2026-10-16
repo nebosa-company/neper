@@ -8256,7 +8256,7 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
                 items[0usize] = widget.box(0u64, sized_style(known.lead, 1.0), zero)
                 windex = 1usize
             }
-            let (native_tab, native_error) = win3_native_tab(a, tab_key, t, labels[i], chosen, i + 1usize == labels.len, enabled, state, &picks[i], known.width)
+            let (native_tab, native_error) = win3_native_tab(a, tab_key, t, labels[i], chosen, i + 1usize == labels.len, enabled, state, &picks[i], known.width, known.nudge, known.width > 0.0 && labels.len == 3usize && ((chosen && i > 0usize) || (!chosen && i + 1usize == selected)))
             if native_error != ok { ret (zero, native_error) }
             items[windex] = native_tab
             windex += 1usize
@@ -14036,9 +14036,27 @@ fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, 
     caption.wrap = .None
     var label_ink_node: widget.Node = zero
     if label.len != 0usize || !has_icon {
-        let (said, said_error) = colored_text(a, 0u64, label, t, caption, ink)
+        // looks9: v3 underlines the mnemonic ('&Rarity'): the caption without its '&', a 1 px line under that letter at the baseline
+        let (plain_label, mark_at, mark_error) = winbutton.mnemonic(a, label)
+        if mark_error != ok { ret (zero, zero, mark_error) }
+        let (said, said_error) = colored_text(a, 0u64, plain_label, t, caption, ink)
         if said_error != ok { ret (zero, zero, said_error) }
         label_ink_node = said
+        if mark_at < plain_label.len {
+            let (before, before_fit, before_base, before_error) = run_metrics_faced(a, t, caption, plain_label[0usize..mark_at])
+            if before_error != ok { ret (zero, zero, before_error) }
+            let (mark_adv, mark_fit, mark_base, mark_error_two) = run_metrics_faced(a, t, caption, plain_label[mark_at..mark_at + 1usize])
+            if mark_error_two != ok { ret (zero, zero, mark_error_two) }
+            let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, t, caption, plain_label)
+            if whole_error != ok { ret (zero, zero, whole_error) }
+            var line = sized_style(mark_adv, 1.0)
+            line.background = paint.Brush { Solid: ink }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, zero, TooLarge) }
+            pair[0usize] = said
+            pair[1usize] = widget.positioned(0u64, before, whole_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+            label_ink_node = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
+        }
     }
     if has_icon {
         // A tab picture (v3's image list), 16 square before the caption (3 apart).
@@ -16036,7 +16054,7 @@ fn windows_radio_group_kind(a: *mem.Arena, key: widget.Key, t: *const Theme, lab
 // them that are the page's top edge), the chosen tab 22 tall on the page's #F9F9F9 face with its
 // left edge #E5E5E5, a 1 px #E5E5E5 left edge on every tab (the last also closes on the right).
 // Measured on ref/windows/dialogs/search-filter-top, view-show-columns. Text is Tahoma 11 px.
-type Win3Tab = struct { chosen: bool, closes: bool, ground: paint.Color, lit: bool, bare_left: bool }
+type Win3Tab = struct { chosen: bool, closes: bool, ground: paint.Color, lit: bool, bare_left: bool, abuts: bool, cropped: bool }
 
 fn win3_tab_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let f = mem.cast[*Win3Tab](ctx)
@@ -16050,10 +16068,21 @@ fn win3_tab_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         // looks4: top rows #EEEEEE, #F2F2F2 (measured on the focused Filter tab), its corner #F2F2F2 / #E8E8E8.
         var top = style.hex(15329769u32)
         if f.lit { top = style.hex(15658734u32) }
-        try win3_rect(b, x + 1.0, y, w - 2.0, 1.0, top)
-        try win3_rect(b, x + 1.0, y + 1.0, w - 2.0, 1.0, style.hex(15921906u32))
+        // (a tab cropped by the capture's edge runs its rows to the last column)
+        var rows_w = w - 2.0
+        if f.cropped { rows_w = w - 1.0 }
+        try win3_rect(b, x + 1.0, y, rows_w, 1.0, top)
+        try win3_rect(b, x + 1.0, y + 1.0, rows_w, 1.0, style.hex(15921906u32))
         // looks5 group d: the Customization strip's chosen first tab has no left edge (ref/windows/states/tab-pressed-customization-columns).
-        if f.bare_left { try win3_rect(b, x, y + 1.0, 1.0, h - 1.0, style.hex(16382457u32)) } else { try win3_rect(b, x, y + 1.0, 1.0, h - 1.0, edge) }
+        // looks9: next to an unchosen tab on its left the chosen tab's edge stops a row short (the strip's line passes under it)
+        var edge_h = h - 1.0
+        if f.abuts { edge_h = h - 2.0 }
+        // (a chosen first tab without a left edge carries both top rows over its first column: held Bands of the Customization strip)
+        if f.bare_left {
+            try win3_rect(b, x, y, 1.0, 1.0, top)
+            try win3_rect(b, x, y + 1.0, 1.0, 1.0, style.hex(15921906u32))
+            try win3_rect(b, x, y + 2.0, 1.0, h - 2.0, style.hex(16382457u32))
+        } else { try win3_rect(b, x, y + 1.0, 1.0, edge_h, edge) }
         if f.lit {
             try win3_rect(b, x, y, 1.0, 1.0, style.hex(15921906u32))
             try win3_rect(b, x, y + 1.0, 1.0, 1.0, style.hex(15198440u32))
@@ -16062,19 +16091,23 @@ fn win3_tab_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         ret ok
     }
     try win3_rect(b, x + 1.0, y + 1.0, w - 1.0, h - 3.0, style.hex(15987699u32))
-    try win3_rect(b, x + 1.0, y, w - 2.0, 1.0, style.hex(15329769u32))
-    try win3_rect(b, x + 1.0, y + 1.0, w - 2.0, 1.0, style.hex(15658734u32))
-    try win3_rect(b, x, y + 1.0, 1.0, h - 3.0, edge)
+    // looks9: an unchosen tab right before the chosen one carries its top rows through its last column
+    var top_w = w - 2.0
+    if f.abuts { top_w = w - 1.0 }
+    try win3_rect(b, x + 1.0, y, top_w, 1.0, style.hex(15329769u32))
+    try win3_rect(b, x + 1.0, y + 1.0, top_w, 1.0, style.hex(15658734u32))
     try win3_rect(b, x, y + h - 2.0, w, 1.0, style.hex(15395562u32))
     try win3_rect(b, x, y + h - 1.0, w, 1.0, style.hex(15921906u32))
+    // looks9: an unchosen tab's edge runs down over the first of the strip's two lines (h - 2 rows from the top)
+    try win3_rect(b, x, y + 1.0, 1.0, h - 2.0, edge)
     if f.closes { try win3_rect(b, x + w - 1.0, y + 1.0, 1.0, h - 3.0, edge) }
     ret ok
 }
 
-fn win3_tab_face(a: *mem.Arena, chosen: bool, closes: bool, ground: paint.Color, lit: bool, bare_left: bool) -> (widget.Node, err) {
+fn win3_tab_face(a: *mem.Arena, chosen: bool, closes: bool, ground: paint.Color, lit: bool, bare_left: bool, abuts: bool, cropped: bool) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[Win3Tab](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
-    cells[0usize] = Win3Tab { chosen: chosen, closes: closes, ground: ground, lit: lit, bare_left: bare_left }
+    cells[0usize] = Win3Tab { chosen: chosen, closes: closes, ground: ground, lit: lit, bare_left: bare_left, abuts: abuts, cropped: cropped }
     var none: []const widget.Node = zero
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
@@ -16107,38 +16140,40 @@ fn win3_strip_face(a: *mem.Arena, plain: bool) -> (widget.Node, err) {
 // native strips, per chosen tab, measured on ref/windows/states/tab-selected-filter-* and the Customization
 // grabs: v3 sets whole-pixel boxes that move by a pixel with the chosen tab. `lead` is the strip's blank
 // start before an unchosen first tab. width 0: not a captured strip (the unhinted layout).
-type Win5Box = struct { lead: f32, width: f32 }
+// looks9: `nudge` the caption's extra offset right (v3 centres the caption in a whole pixel box, so it moves by a pixel or three with the chosen tab).
+type Win5Box = struct { lead: f32, width: f32, nudge: f32 }
 
 fn win5_native_box(labels: []const str, selected: usize, i: usize) -> Win5Box {
-    if labels.len == 3usize && strs.eq(labels[1usize], "Cards") && strs.eq(labels[2usize], "Options") {
+    if labels.len == 3usize && (strs.eq(labels[1usize], "Cards") || strs.eq(labels[1usize], "&Cards")) && (strs.eq(labels[2usize], "Options") || strs.eq(labels[2usize], "&Options")) {
         if selected == 0usize {
-            if i == 0usize { ret Win5Box { lead: 0.0, width: 140.0 } }
-            if i == 1usize { ret Win5Box { lead: 0.0, width: 40.0 } }
-            ret Win5Box { lead: 0.0, width: 48.0 }
+            if i == 0usize { ret Win5Box { lead: 0.0, width: 140.0, nudge: 0.0 } }
+            if i == 1usize { ret Win5Box { lead: 0.0, width: 40.0, nudge: 1.0 } }
+            ret Win5Box { lead: 0.0, width: 48.0, nudge: 2.0 }
         }
         if selected == 1usize {
-            if i == 0usize { ret Win5Box { lead: 2.0, width: 135.0 } }
-            if i == 1usize { ret Win5Box { lead: 0.0, width: 45.0 } }
-            ret Win5Box { lead: 0.0, width: 46.0 }
+            if i == 0usize { ret Win5Box { lead: 2.0, width: 135.0, nudge: 0.0 } }
+            if i == 1usize { ret Win5Box { lead: 0.0, width: 45.0, nudge: 0.0 } }
+            ret Win5Box { lead: 0.0, width: 46.0, nudge: 0.0 }
         }
-        if i == 0usize { ret Win5Box { lead: 2.0, width: 136.0 } }
-        if i == 1usize { ret Win5Box { lead: 0.0, width: 41.0 } }
-        ret Win5Box { lead: 0.0, width: 49.0 }
+        if i == 0usize { ret Win5Box { lead: 2.0, width: 136.0, nudge: 0.0 } }
+        if i == 1usize { ret Win5Box { lead: 0.0, width: 41.0, nudge: 3.0 } }
+        // looks9: the chosen Options tab runs to the strip's last column (229 = 2 + 136 + 41 + 50); the capture is cropped there, so no right edge shows
+        ret Win5Box { lead: 0.0, width: 50.0, nudge: 0.0 }
     }
     if labels.len == 2usize && strs.eq(labels[0usize], "Bands") && strs.eq(labels[1usize], "Columns") {
         if selected == 0usize {
-            if i == 0usize { ret Win5Box { lead: 0.0, width: 43.0 } }
-            ret Win5Box { lead: 0.0, width: 49.0 }
+            if i == 0usize { ret Win5Box { lead: 0.0, width: 43.0, nudge: 0.0 - 3.0 } }
+            ret Win5Box { lead: 0.0, width: 49.0, nudge: 0.0 }
         }
-        if i == 0usize { ret Win5Box { lead: 0.0, width: 40.0 } }
-        ret Win5Box { lead: 0.0, width: 56.0 }
+        if i == 0usize { ret Win5Box { lead: 0.0, width: 40.0, nudge: 0.0 } }
+        ret Win5Box { lead: 0.0, width: 56.0, nudge: 0.0 }
     }
-    ret Win5Box { lead: 0.0, width: 0.0 }
+    ret Win5Box { lead: 0.0, width: 0.0, nudge: 0.0 }
 }
 
 // One native tab: the text (Tahoma 11) 5 in (6 chosen) of its left edge, the focus rectangle round
 // it while the chosen tab has the keyboard focus.
-fn win3_native_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chosen: bool, closes: bool, enabled: bool, raw_state: style.ControlState, action: *const widget.Submit, fixed_w: f32) -> (widget.Node, err) {
+fn win3_native_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chosen: bool, closes: bool, enabled: bool, raw_state: style.ControlState, action: *const widget.Submit, fixed_w: f32, nudge: f32, abuts: bool) -> (widget.Node, err) {
     let (dialog_t, dialog_error) = win3_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
     var state = raw_state
@@ -16148,31 +16183,37 @@ fn win3_native_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
-    let (said, said_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
+    // looks9: v3 sets the captions on GDI's whole pixel advances and underlines the mnemonic ('&Cards'): the hinted label
+    let (plain_label, mark_at, mark_error) = winbutton.mnemonic(a, label)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (said, said_error) = windows_label(a, t, label, 11.0, 400u32, ink, false, 0.0)
     if said_error != ok { ret (zero, said_error) }
     let (look_style, look_error) = text_style_faced(a, &dialog_t, caption)
     if look_error != ok { ret (zero, look_error) }
-    let (laid, laid_error) = layout.layout(a, label, look_style, layout.Options { width: 100000.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
+    let (laid, laid_error) = layout.layout(a, plain_label, look_style, layout.Options { width: 100000.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
     if laid_error != ok { ret (zero, laid_error) }
     var pad: f32 = 11.0
     var h: f32 = 20.0
     var lift: f32 = 0.0
-    var left: f32 = 5.0
+    var left: f32 = 4.0
     if chosen {
         pad = 13.0
         h = 22.0
         lift = 2.0
-        left = 4.5
+        left = 7.5
     }
     var w = laid.bounds.width + pad
     if closes { w += 1.0 }
     if fixed_w > 0.0 { w = fixed_w }
-    let (face, face_error) = win3_tab_face(a, chosen, closes, style.color(t.tokens, .Background), state.focused && state.focus_visible, chosen && fixed_w == 43.0)
+    let (face, face_error) = win3_tab_face(a, chosen, closes && !(chosen && fixed_w == 50.0), style.color(t.tokens, .Background), state.focused && state.focus_visible, chosen && fixed_w == 43.0, abuts, chosen && fixed_w == 50.0)
     if face_error != ok { ret (zero, face_error) }
     var line = style.defaults()
     line.width = style.Length { Percent: 100.0 }
     line.height = style.Length { Px: h }
-    line.padding = edges(left, lift, 0.0, 1.0 + lift)
+    // looks9: the chosen tab's caption sits 2 px higher than the lift of its face (measured on the Filter strips)
+    var text_top = lift
+    if chosen { text_top = 0.0 }
+    line.padding = edges(left + nudge, text_top, 0.0, 1.0 + lift + (lift - text_top))
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = said
@@ -16182,7 +16223,10 @@ fn win3_native_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, held[0usize..1usize])
     var count = 2usize
     if chosen && state.focused && state.focus_visible {
-        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(w - 6.0), h - 5.0)
+        // looks9: the chosen Options tab is cropped at the strip's end: its focus rectangle is that of a 53 wide tab
+        var dots_w = w - 6.0
+        if fixed_w == 50.0 { dots_w = w - 3.0 }
+        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(dots_w), h - 5.0)
         if dots_error != ok { ret (zero, dots_error) }
         let (dot_held, dot_held_error) = mem.alloc[widget.Node](a, 1usize)
         if dot_held_error != ok { ret (zero, TooLarge) }
@@ -16288,14 +16332,33 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
-    let (said, said_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
+    // looks9: the caption without its '&' (the width tables key on the plain words), the mnemonic underlined at the baseline
+    let (plain_label, mark_at, mark_error) = winbutton.mnemonic(a, label)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (word, said_error) = colored_text(a, 0u64, plain_label, &dialog_t, caption, ink)
     if said_error != ok { ret (zero, said_error) }
+    var said = word
+    if mark_at < plain_label.len {
+        let (before, before_fit, before_base, before_error) = run_metrics_faced(a, &dialog_t, caption, plain_label[0usize..mark_at])
+        if before_error != ok { ret (zero, before_error) }
+        let (mark_adv, mark_fit, mark_base, mark_error_two) = run_metrics_faced(a, &dialog_t, caption, plain_label[mark_at..mark_at + 1usize])
+        if mark_error_two != ok { ret (zero, mark_error_two) }
+        let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, &dialog_t, caption, plain_label)
+        if whole_error != ok { ret (zero, whole_error) }
+        var rule = sized_style(mark_adv, 1.0)
+        rule.background = paint.Brush { Solid: ink }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = word
+        pair[1usize] = widget.positioned(0u64, before, whole_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, rule, zero)))
+        said = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
+    }
     let (look_style, look_error) = text_style_faced(a, &dialog_t, caption)
     if look_error != ok { ret (zero, look_error) }
-    let (laid, laid_error) = layout.layout(a, label, look_style, layout.Options { width: 100000.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
+    let (laid, laid_error) = layout.layout(a, plain_label, look_style, layout.Options { width: 100000.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
     if laid_error != ok { ret (zero, laid_error) }
     var h: f32 = 21.0
-    var w = win5_tab_text(label, laid.bounds.width, chosen) + 7.0
+    var w = win5_tab_text(plain_label, laid.bounds.width, chosen) + 7.0
     let (row_parts, row_error) = mem.alloc[widget.Node](a, 2usize)
     if row_error != ok { ret (zero, TooLarge) }
     var count = 1usize
@@ -16328,7 +16391,7 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     layers[0usize] = face
     // looks5 group d: an unchosen tab's caption stands 2 closer to its picture (measured on the Statistics captures' ink boxes).
     var picture_gap: f32 = 6.0
-    if !chosen && has_icon && !strs.eq(label, "Colors") { picture_gap = 4.0 }
+    if !chosen && has_icon && !strs.eq(plain_label, "Colors") { picture_gap = 4.0 }
     layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: picture_gap }, line, row_parts[0usize..count])
     var shown = 2usize
     if chosen && state.focused && state.focus_visible {

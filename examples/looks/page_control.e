@@ -107,7 +107,8 @@ fn build_native(a: *mem.Arena, cells: []looks.Cell, t: *const control.Theme, lab
 }
 
 fn build_filter(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
+    var labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
+    if t.tokens.profile == .Windows { labels = [3]str{ "Blocks / Formats / Editions", "&Cards", "&Options" } }
     let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 0usize, 229.0, .Focus, 22.0, 229.0)
     ret (made, made_error)
 }
@@ -146,13 +147,17 @@ fn build_ultra(a: *mem.Arena, cells: []looks.Cell, t: *const control.Theme, labe
 }
 
 fn build_stats(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let labels = [2]str{ "Colors", "Rarity" }
-    let (made, made_error) = build_ultra(a, cells, t, labels[0usize..2usize], 126.0, true, .Focus)
-    ret (made, made_error)
+    // looks9: the whole strip of the Statistics window with Colors chosen and focused (the capture is 905 wide; a 126 wide cut of it
+    // hid the hairline that follows Rarity), as build_stat_n's first strip with the focus on it.
+    let (m, e) = build_stat_n(a, t, cells, 1usize)
+    if e != ok { ret (0usize, e) }
+    cells[0usize].drive = .Focus
+    ret (m, e)
 }
 
 fn build_about(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let labels = [2]str{ "MTG Studio", "Details" }
+    var labels = [2]str{ "MTG Studio", "Details" }
+    if t.tokens.profile == .Windows { labels = [2]str{ "&MTG Studio", "D&etails" } }
     let (made, made_error) = build_ultra(a, cells, t, labels[0usize..2usize], 120.0, false, .None)
     ret (made, made_error)
 }
@@ -162,7 +167,8 @@ fn build_about(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 // page_control_stats_<n>.png; t12 and t13 the Filter tabs with Cards or Options chosen, t14 the
 // Customization tabs with Bands held down (the press selects at once, so it is the Bands-chosen strip).
 fn build_stat_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n: usize) -> (usize, err) {
-    let labels = [11]str{ "Colors", "Rarity", "Card Type", "Editions", "Mana Analyser", "Mana Product", "Power Analyser", "Probability", "Mana Slots", "Start Hand", "Advanced" }
+    var labels = [11]str{ "Colors", "Rarity", "Card Type", "Editions", "Mana Analyser", "Mana Product", "Power Analyser", "Probability", "Mana Slots", "Start Hand", "Advanced" }
+    if t.tokens.profile == .Windows { labels = [11]str{ "&Colors", "&Rarity", "Card &Type", "&Editions", "&Mana Analyser", "Mana Product", "Power Analyser", "&Probability", "Mana &Slots", "Start &Hand", "Advanced" } }
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 11usize)
     if actions_error != ok { ret (0usize, actions_error) }
     var k = 0usize
@@ -240,13 +246,15 @@ fn build_t11(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
 }
 
 fn build_p2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
+    var labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
+    if t.tokens.profile == .Windows { labels = [3]str{ "Blocks / Formats / Editions", "&Cards", "&Options" } }
     let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 1usize, 229.0, .Focus, 22.0, 318.0)
     ret (made, made_error)
 }
 
 fn build_p3(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
+    var labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
+    if t.tokens.profile == .Windows { labels = [3]str{ "Blocks / Formats / Editions", "&Cards", "&Options" } }
     let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 2usize, 229.0, .Focus, 22.0, 407.0)
     ret (made, made_error)
 }
@@ -307,7 +315,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 2usize {
         let first_byte = args[1usize][0usize]
         if first_byte == 115u8 {
-            let stats = looks.Sheet { name: "page_control_stats", cells: 1usize, columns: 1usize, cell_w: 126.0, cell_h: 24.0, ctx: zero, build: build_stats }
+            let stats = looks.Sheet { name: "page_control_stats", cells: 1usize, columns: 1usize, cell_w: 905.0, cell_h: 24.0, ctx: zero, build: build_stats }
             ret looks.run_all(a, &stats)
         }
         if first_byte == 97u8 {
