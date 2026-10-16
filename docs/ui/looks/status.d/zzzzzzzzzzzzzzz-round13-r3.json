@@ -1,0 +1,214 @@
+{
+ "text_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Round 13: every native dark edit capture passes the strict metric: edit-rest, -hover (pixel-identical to rest in the capture), -focus, -selected, -readonly, -disabled, -password and -multiline-vscroll (compared left of the capture's light unthemed scroll bar) all 0 flat px and 0 other px off, ink within 1 px. Fixed: the selection is the system #0078D7 exactly (the colour map had lifted it to #008CFB); the caret is the native 1 px inverting column on a whole pixel (#DFDFDF over the face, #FF8728 inside the selection), the selection runs one pixel past the last glyph, and the text is set on the font's hdmx whole pixel advances with the kern pair rounded (Te is 1 px tighter at 12 px: the native Edit control kerns) so the caret and selection edge land on the captured columns. Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "Hover is pixel-identical to rest in the capture: no distinct hover look to match",
+     "Unverified (no native state): invalid, long text, placeholder colour; the capture's multi-line scroll column is the light unthemed one, ours keeps the dark bar and is not compared there",
+     "Text glyph pixels are excluded (ClearType against greyscale): ink boxes within 1 px only"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Round 13: all 7 native dark spin captures (rest, hover-up, hover-down, pressed-up, pressed-down, focus, disabled) have 0 flat px and 0 other px off under the strict metric, ink within 1 px (spin-focus: the selection is #0078D7 now). Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "Unverified: arrows dimmed at the bounds, the four-arrow v3 fast spin edit"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Round 13: all native dark combo captures pass the strict metric: edit-rest, -hover, -hover-arrow (the capture shows the field EMPTY: the cell is set empty), -focus (selected text, caret), -disabled, list-rest, -hover, -hover-arrow, -focus, -disabled, and the four open states (edit-open, edit-open-hover-row with the head text selected, list-open, list-open-hover-row; head and list together, the XOR focus rectangle phase included) 0 flat px and 0 other px off. The editable combo text origin is (6, 2) of the 23 high rect with the selection rows 3 to 17; the open editable head keeps focus and its text selected. Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "Hover captures of the edit and list are pixel-identical to rest",
+     "Unverified: invalid, the scrolling drop list (the open captures show 8 rows, no scroll bar)",
+     "The list-style combo text keeps linear advances (static text); only the editable combo's edit control uses hdmx advances"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark_mask.png",
+    "notes": "Round 13: no native mask edit exists, so it is compared as an edit with the same states: a formatted field with the same 149 px width and text (examples/looks/native_dark_mask.e) against edit-rest, -hover, -focus, -selected, -readonly and -disabled: 6 of 6 have 0 flat px and 0 other px off, ink within 1 px. Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "No native mask-edit capture: the mask behaviour (invalid state, mask characters) is unverified",
+     "Typed text with mask literals is unverified"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark3.png",
+    "notes": "Round 13: all 18 native dark button captures compare with 0 flat px and 0 other px off: rest, default, focus, default-focus, pressed, default-pressed, hover-pressed (pressed with the dotted focus rectangle), disabled; hover and default-hover are pixel-identical to rest and default; the split button (split, hover-main, hover-arrow = rest, pressed, disabled: the divider, arrow triangle and the split's own crisper right corners as captured) and the picture button (icon, icon-hover = rest, icon-disabled: the picture at (10, 7), the caption centred in the room to its right). Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "The picture is v3's artwork class (a bitmap in the capture): ours is the Info glyph, so the 16 x 16 picture area and its 2 px halo are excluded; the caption ink is within 1 px",
+     "Unverified: toggle, loading and plain kinds, a split button whose arrow part is pressed (the capture is the main part)"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Round 13: all native dark radio captures (unchecked and checked: rest, focus, pressed, disabled; hover pixel-identical to rest) have 0 flat px and 0 other px off under the strict metric including the dotted focus rectangle. The enabled caption is BLACK on the #202020 page as captured (the gallery's WM_CTLCOLORSTATIC colouring does not reach a radio's text); copied as asked. Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "The black caption is a capture artefact copied on request: it is unreadable on #202020",
+     "Unverified: radio group chrome (no native dark group box)"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Round 13: label-rest and label-disabled (white in the capture: the app colours it) 0 flat px and 0 other px off, ink within 1 px. Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "Unverified: other backgrounds, rotated, link kinds (syslink: no Neper link control compared)"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Round 13: the native multi-line edit with a vertical scroll bar (edit-multiline-vscroll) passes left of its scroll column (148 x 90: 0 flat px, 0 other px off). The capture's scroll column is the light unthemed one (the gallery leaves it out of dark mode); decision: the dark look keeps its dark bar there, so that column (17 x 90) is not compared and the memo stays review. Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "Scroll column of the capture is light and unthemed: not copied by decision",
+     "No other memo state is captured"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark2.png",
+    "notes": "Round 13: vscroll and hscroll rest, hover-arrow, hover-thumb, hover-track (vertical), pressed-thumb (all pixel-identical to rest), pressed-arrow (the expanded #1E1E1E bar, the held arrow as captured pixels on its #171717 button, the thumb dim) and disabled (both arrows #505050 pixels) : 13 of 14 captures have 0 flat px and 0 other px off. hscroll-hover-track is not compared: the whole bar rect of that capture is the #202020 window colour (the bar was not painted). Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "hscroll-hover-track capture shows no bar at all: unmatchable",
+     "Pressed on the end arrow (down, right) is the start arrow's mirror image, not captured",
+     "Hover and the held thumb keep the rest look, as every captured hover and held-thumb state does"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark2.png",
+    "notes": "Round 13: tooltip-rest (square #767676 line, #2B2B2B face) and tooltip-balloon (the captured outline, tail and window corner as pixel runs, a blue disc for the icon, the 15 px title and 12 px text on hdmx advances: ink within 1 px) have 0 flat px and 0 other px off. Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "The balloon icon is artwork: a plain disc stands in for it (its 16 x 16 area is inside the glyph exclusion)",
+     "Balloon is only reached through win_native_balloon: the app's hint keeps the square tip"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark4.png",
+    "notes": "Round 13 (appearance only: v3's 15 px rows are kept, so no whole-control diff): the two native check boxes are the captured 13 x 13 pixels (0 of 169 off each), the frame #828790, face #202020 and the chosen row (#1A364D in a #0078D4 line with the focus, #1B1B1B in #131313 without) agree with checklist-rest, -selected-focused and -selected-unfocused: 8 of 8 element checks. Whole-control diff against the native 158 x 110 list: 1976 flat px off (rows, text origin and the list view's column line).",
+    "gaps": [
+     "Row pitch 15 (v3) against 19 (native), the native one-column divider line and the selection spanning the row are not copied",
+     "The XOR dotted rectangle inside the focused row is not drawn",
+     "checklist-disabled is the light unthemed list view: no dark reference"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark4.png",
+    "notes": "Round 13: the dark list box is the native one: listbox-rest, -selected-focused (with the XOR focus rectangle), -selected-unfocused and -hover (pixel-identical to selected-unfocused) have 0 flat px and 0 other px off left of the scroll column (99 x 110). The capture's scroll column is the light unthemed one: ours keeps the dark bar there, not compared. Round 13 strict metric (scripts/looks_strict13.py): a reference pixel equal to all eight neighbours is off when ours differs by more than 2 levels (reference mask alone, no luminance mask, nothing cut); every other reference pixel (borders, corners, edges, carets) likewise; excluded only the pixels within 2 px of a glyph pixel (ClearType against grey text), a glyph being a non-flat interior pixel outside any straight run of 13 or more and any dotted line. Each native capture rect is searched at +-4 px in our cell (the offset is reported).",
+    "gaps": [
+     "Scroll column (light in the capture) not compared",
+     "listbox-disabled is not compared: the Neper list box has no disabled state"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark5.png",
+    "notes": "Round 13 (element checks, v3's menu geometry kept): border #808080, divider #3E3E3E and the text peaks (white, disabled #6D6D6D now) agree with menu-popup-rest: 4 of 4. Not copied: the native 202 x 134 layout, Segoe UI rows 22 high with the 10 px divider bands, the check and submenu glyphs and the white rounded keyboard outline (menu-popup-keyboard-*), the hover fill.",
+    "gaps": [
+     "Native keyboard selection outline and row metrics are not drawn",
+     "menu-popup-submenu*: the cascade is not compared"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/tree_list_expanded.png",
+    "notes": "Round 13 (palette presence only; v3 geometry): tree selection #626262 focused and #333333 unfocused occur in our sheets as in tree-selected-*.",
+    "gaps": [
+     "No per-cell diff: expander glyphs, row pitch, the tree's #828790 frame and text are v3's",
+     "tree-hover-expander and -classic-lines are not compared"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/data_grid_main.png",
+    "notes": "Round 13 (palette presence only; v3 geometry): header #191919, rows #202020 / #2B2B2B, chosen row #1A364D, unfocused #1B1B1B and the #171717 track occur in our sheets as in listview-*; the #828790 frame, the #0078D4 / #131313 chosen-row lines are absent from them (3 of 10 palette checks fail).",
+    "gaps": [
+     "The list view's frame colour and the chosen row's 1 px line are not drawn by the v3 grid",
+     "No per-cell diff: header sort glyph, row pitch (19), gridlines, alternating rows are not compared"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 1/4 crops. The untouched Deck Legality frame passes (0 px off); the three Options title bars fail the ink rule: with the v3 icon from x 436 masked the caption ink ends at 79 and 59 against 83 and 61 in the grab and sits 1 px low. Downgraded from the workers' matched. Round 13: the bold Tahoma captions of the three Options header bars are set on whole pixel hdmx advances and one row higher (Interface (F2), Rules (F7), Grids (F9) now end on columns 96, 74 and 72 of the capture, as the capture does, from 93, 73 and 71; rows 180 to 187 against 179 to 187 at the 215 level); the first column of ink is still 1 to 2 px earlier than the capture (ClearType fringe).",
+    "gaps": [
+     "Audit 5 unverified (no capture): disabled, focus",
+     "Unverified: disabled, focus (no capture)",
+     "Disabled: native has no distinct look; the dimmed caption is a guess",
+     "Round 12: disabled and focus have no capture; the title bar ink rule fails at 100 and 150 on ClearType (text), kept as a documented decision"
+    ]
+   }
+  }
+ }
+}

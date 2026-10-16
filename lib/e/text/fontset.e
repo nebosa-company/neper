@@ -176,7 +176,7 @@ fn width(s: *Set, families: str, weight: f64, italic: bool, size: f64, text: str
     if e != ok { ret 0.0f64 }
     let mark = mem.mark(s.a)
     var total = 0.0f64
-    let (run, shape_error) = shape.shape(s.a, s.faces.items[idx].font, text, shape.Options { direction: .LeftToRight, script: 0u32, language: "", features: zero })
+    let (run, shape_error) = shape.shape(s.a, s.faces.items[idx].font, text, shape.Options { direction: .LeftToRight, script: 0u32, language: "", features: zero, ppem: 0u32 })
     var missing = shape_error != ok
     if !missing {
         var g = 0usize

@@ -64,7 +64,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     // the head sits at (20, 8) of a 190 x 200 cell, so the cell's middle (the pointer of a driven cell) is over the fifth row
     var drive: looks.Drive = .None
     if variant % 2usize == 1usize { drive = .Hover }
-    if variant == 0usize {
+    // round 13: the editable combo's head text is selected in both captures (the edit keeps the focus while the list is open), also with
+    // the row under the pointer: the lit row is the `active` one, so the variant needs no pointer on the list
+    if variant < 2usize {
         // the editable combo's text is selected in the capture: focus it from the head's text, then select all
         drive = .Focus
         looks.aim(0usize, 0.0 - 50.0, 0.0 - 80.0)

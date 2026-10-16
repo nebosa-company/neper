@@ -51,10 +51,51 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if tcell_error != ok { ret (0usize, tcell_error) }
     cells[at] = looks.Cell { caption: "tooltip-rest", node: tcell, drive: .None }
     at += 1usize
+    // round 13, cells 3 to 7: the other scroll bar captures that differ from rest. 3 vscroll-pressed-arrow (the pointer held on the up
+    // arrow), 4 vscroll-disabled (nothing to scroll), 5 hscroll-pressed-arrow, 6 hscroll-disabled, 7 hscroll-hover-track
+    let (vp, vp_error) = control.windows_scroll_bar(a, 7030u64, t, true, 170.0, 29.0, 100.0, 24.63)
+    if vp_error != ok { ret (0usize, vp_error) }
+    let (vp_cell, vp_cell_error) = placed(a, vp, 20.0, 10.0)
+    if vp_cell_error != ok { ret (0usize, vp_cell_error) }
+    looks.aim(at, 0.0 - 102.0, 0.0 - 82.0)
+    cells[at] = looks.Cell { caption: "vscroll-pressed-arrow", node: vp_cell, drive: .Press }
+    at += 1usize
+    let (vd, vd_error) = control.windows_scroll_bar(a, 7040u64, t, true, 170.0, 100.0, 100.0, 0.0)
+    if vd_error != ok { ret (0usize, vd_error) }
+    let (vd_cell, vd_cell_error) = placed(a, vd, 20.0, 10.0)
+    if vd_cell_error != ok { ret (0usize, vd_cell_error) }
+    cells[at] = looks.Cell { caption: "vscroll-disabled", node: vd_cell, drive: .None }
+    at += 1usize
+    let (hp, hp_error) = control.windows_scroll_bar(a, 7050u64, t, false, 178.0, 29.45, 100.0, 24.7)
+    if hp_error != ok { ret (0usize, hp_error) }
+    let (hp_cell, hp_cell_error) = placed(a, hp, 16.0, 20.0)
+    if hp_cell_error != ok { ret (0usize, hp_cell_error) }
+    looks.aim(at, 0.0 - 106.0, 0.0 - 72.0)
+    cells[at] = looks.Cell { caption: "hscroll-pressed-arrow", node: hp_cell, drive: .Press }
+    at += 1usize
+    let (hd, hd_error) = control.windows_scroll_bar(a, 7060u64, t, false, 178.0, 100.0, 100.0, 0.0)
+    if hd_error != ok { ret (0usize, hd_error) }
+    let (hd_cell, hd_cell_error) = placed(a, hd, 16.0, 20.0)
+    if hd_cell_error != ok { ret (0usize, hd_cell_error) }
+    cells[at] = looks.Cell { caption: "hscroll-disabled", node: hd_cell, drive: .None }
+    at += 1usize
+    let (ht, ht_error) = control.windows_scroll_bar(a, 7070u64, t, false, 178.0, 29.45, 100.0, 24.7)
+    if ht_error != ok { ret (0usize, ht_error) }
+    let (ht_cell, ht_cell_error) = placed(a, ht, 16.0, 20.0)
+    if ht_cell_error != ok { ret (0usize, ht_cell_error) }
+    cells[at] = looks.Cell { caption: "hscroll-hover-track", node: ht_cell, drive: .Hover }
+    at += 1usize
+    // 8: tooltip-balloon (159 x 74 at (30, 52) of its 260 x 126 capture; here at (30, 40))
+    let (balloon, balloon_error) = control.win_native_balloon(a, 7080u64, t, "Tip title", "This is the tooltip text")
+    if balloon_error != ok { ret (0usize, balloon_error) }
+    let (balloon_cell, balloon_cell_error) = placed(a, balloon, 30.0, 40.0)
+    if balloon_cell_error != ok { ret (0usize, balloon_cell_error) }
+    cells[at] = looks.Cell { caption: "tooltip-balloon", node: balloon_cell, drive: .None }
+    at += 1usize
     ret (at, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark2", cells: 3usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark2", cells: 9usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

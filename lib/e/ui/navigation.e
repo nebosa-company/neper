@@ -9802,6 +9802,11 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         if !c.enabled { picture_ink = style.hex(10526880u32) }
         var ink = style.hex(0u32)
         if !c.enabled { ink = style.hex(10526880u32) }
+        // round 13: the native dark menu's disabled text is #6D6D6D (menu-popup-rest, Save)
+        if dark && !c.enabled {
+            picture_ink = style.hex_raw(0x6D6D6Du32)
+            ink = style.hex_raw(0x6D6D6Du32)
+        }
         if highlighted {
             ink = style.hex_raw(16777215u32)
             if !c.enabled { ink = style.hex(7171437u32) }
