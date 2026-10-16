@@ -3816,7 +3816,7 @@ fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chose
         if round { kind = 4u32 + 4u32 * variant }
         if chosen { kind += 2u32 }
         if state.pressed { kind += 1u32 }
-        let (baked, baked_error) = winmark.mark_node(a, kind)
+        let (baked, baked_error) = winmark.mark_node(a, kind, 0.0)
         if baked_error != ok { ret (zero, baked_error) }
         let (cell, cell_error) = mem.alloc[widget.Node](a, 1usize)
         if cell_error != ok { ret (zero, TooLarge) }
@@ -3876,6 +3876,74 @@ fn edges(left: f32, top: f32, right: f32, bottom: f32) -> style.EdgeLengths {
     ret style.EdgeLengths { left: style.Length { Px: left }, top: style.Length { Px: top }, right: style.Length { Px: right }, bottom: style.Length { Px: bottom } }
 }
 
+// ---- looks5 group b: Tahoma 11 px at GDI's whole-pixel advances ------------------------------------------------
+// v3's captions are drawn by GDI, whose Tahoma 11 px advances are whole pixels (measured: "Hide splash screen on
+// start" is 130 px, the sum of the table below; the outline advances give 128). `choices_words` lays a caption out
+// word by word at those advances, each word scaled to its hinted width, so a word starts where v3's does (ink boxes
+// within 1 px) instead of drifting 2 to 8 px over a long caption. Printable ASCII only; anything else is laid out
+// as before. The table is GDI's GetCharWidth32 for bytes 32 to 126 (script: python -I scripts/looks_refs_b.py gdi).
+fn choices_advances() -> [95]u8 {
+    ret [95]u8{ 3u8, 4u8, 4u8, 8u8, 6u8, 11u8, 7u8, 2u8, 4u8, 4u8, 6u8, 8u8, 4u8, 4u8, 4u8, 4u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 4u8, 4u8, 8u8, 8u8, 8u8, 5u8, 10u8, 7u8, 6u8, 7u8, 7u8, 6u8, 6u8, 7u8, 7u8, 4u8, 5u8, 6u8, 5u8, 8u8, 7u8, 8u8, 6u8, 8u8, 7u8, 6u8, 6u8, 7u8, 6u8, 10u8, 6u8, 6u8, 6u8, 4u8, 4u8, 4u8, 8u8, 6u8, 6u8, 6u8, 6u8, 5u8, 6u8, 6u8, 4u8, 6u8, 6u8, 2u8, 3u8, 5u8, 2u8, 8u8, 6u8, 6u8, 6u8, 6u8, 4u8, 5u8, 4u8, 6u8, 6u8, 8u8, 6u8, 6u8, 5u8, 5u8, 4u8, 5u8, 8u8 }
+}
+
+// The width of `value` in Tahoma 11 px as GDI lays it out; 0 when a byte is not printable ASCII.
+fn choices_hinted_width(value: str) -> f32 {
+    let table = choices_advances()
+    var total: f32 = 0.0
+    var i = 0usize
+    while i < value.len {
+        let c = value[i]
+        if c < 32u8 || c > 126u8 { ret 0.0 }
+        total += f32(table[usize(c - 32u8)])
+        i += 1usize
+    }
+    ret total
+}
+
+// `shown` as words at GDI's advances: a node `width` x 15 (the dialog text's line height) and the width. `options`
+// carry the 11 px size and the face; the caller's own node replaces `colored_text`.
+fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, ink: paint.Color, shown: str) -> (widget.Node, f32, err) {
+    let total = choices_hinted_width(shown)
+    if total == 0.0 {
+        let (one, one_error) = colored_text(a, 0u64, shown, t, options, ink)
+        if one_error != ok { ret (zero, 0.0, one_error) }
+        let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, t, options, shown)
+        if whole_error != ok { ret (zero, 0.0, whole_error) }
+        ret (one, whole, ok)
+    }
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, shown.len + 1usize)
+    if nodes_error != ok { ret (zero, 0.0, TooLarge) }
+    var n = 0usize
+    var i = 0usize
+    while i < shown.len {
+        if shown[i] == 32u8 {
+            i += 1usize
+            continue
+        }
+        var e = i
+        while e < shown.len && shown[e] != 32u8 { e += 1usize }
+        let word = shown[i..e]
+        let hinted = choices_hinted_width(shown[i..e])
+        let (natural, natural_fit, natural_base, natural_error) = run_metrics_faced(a, t, options, word)
+        if natural_error != ok { ret (zero, 0.0, natural_error) }
+        var piece = options
+        var size = options.size
+        if size == 0.0 { size = 11.0 }
+        if natural > 0.0 {
+            size = size * hinted / natural
+            if size < 10.0 { size = 10.0 }
+            if size > 12.0 { size = 12.0 }
+        }
+        piece.size = size
+        let (said, said_error) = colored_text(a, 0u64, word, t, piece, ink)
+        if said_error != ok { ret (zero, 0.0, said_error) }
+        nodes[n] = widget.positioned(0u64, choices_hinted_width(shown[0usize..i]) + 0.3, 0.0, style.defaults(), mem_one_node(a, said))
+        n += 1usize
+        i = e
+    }
+    ret (widget.stack(0u64, sized_style(total, 15.0), nodes[0usize..n]), total, ok)
+}
+
 // A caption in the Windows look: black (muted when disabled) regular text, 2 units either side
 // and 1 above and below; a '&' marks the mnemonic, underlined at the baseline. When `focused` the
 // dotted focus rectangle (looks4: at the text's origin, 1 below the caption's top, the text's
@@ -3884,27 +3952,31 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
+    caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if !enabled { ink = style.color(t.tokens, .TextMuted) }
     let (shown, mark_at, mark_error) = winbutton.mnemonic(a, label)
     if mark_error != ok { ret (zero, mark_error) }
-    let (words, words_error) = colored_text(a, 0u64, shown, t, caption, ink)
+    let (words, whole, words_error) = choices_words(a, t, caption, ink, shown)
     if words_error != ok { ret (zero, words_error) }
-    let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, t, caption, shown)
-    if whole_error != ok { ret (zero, whole_error) }
+    let (metric, metric_fit, whole_base, metric_error) = run_metrics_faced(a, t, caption, shown)
+    if metric_error != ok { ret (zero, metric_error) }
     var word_node = words
     if mark_at < shown.len {
-        let (before, before_fit, before_base, before_error) = run_metrics_faced(a, t, caption, shown[0usize..mark_at])
-        if before_error != ok { ret (zero, before_error) }
-        let (mark_adv, mark_fit, mark_base, mark_error_two) = run_metrics_faced(a, t, caption, shown[mark_at..mark_at + 1usize])
-        if mark_error_two != ok { ret (zero, mark_error_two) }
+        let before = choices_hinted_width(shown[0usize..mark_at])
+        var mark_adv = choices_hinted_width(shown[mark_at..mark_at + 1usize])
+        if mark_adv == 0.0 {
+            let (measured, mark_fit, mark_base, mark_error_two) = run_metrics_faced(a, t, caption, shown[mark_at..mark_at + 1usize])
+            if mark_error_two != ok { ret (zero, mark_error_two) }
+            mark_adv = measured
+        }
         var line = sized_style(mark_adv, 1.0)
         line.background = paint.Brush { Solid: ink }
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
         pair[0usize] = words
         pair[1usize] = widget.positioned(0u64, before, whole_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
-        word_node = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
+        word_node = widget.stack(0u64, sized_style(whole, 15.0), pair[0usize..2usize])
     }
     var pad = style.defaults()
     pad.padding = edges(2.0, 1.0, 2.0, 1.0)
@@ -3913,7 +3985,7 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, pad, mem_one_node(a, word_node))
     var n = 1usize
     if focused {
-        let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 2.0, 16.0, crisp)
+        let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 3.0, 16.0, crisp)
         if dots_error != ok { ret (zero, dots_error) }
         parts[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), mem_one_node(a, dots))
         n = 2usize
@@ -3967,11 +4039,12 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
+    caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if !enabled { ink = style.color(t.tokens, .TextMuted) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (words, words_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
+    let (words, words_width, words_error) = choices_words(a, &dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
     let (nodes, nodes_error) = mem.alloc[widget.Node](a, 6usize)
     if nodes_error != ok { ret (zero, TooLarge) }
@@ -4030,7 +4103,16 @@ fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 1.0, w - 2.0, 1.0), brush: paint.Brush { Solid: style.hex(13685461u32) } } })
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + h - 2.0, w - 2.0, 1.0), brush: paint.Brush { Solid: style.hex(13751254u32) } } })
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 2.0, 1.0, h - 4.0), brush: paint.Brush { Solid: style.hex(15527406u32) } } })
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 2.0, y + 2.0, 1.0, h - 4.0), brush: paint.Brush { Solid: style.hex(12764617u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 2.0, y + 2.0, 1.0, h - 4.0), brush: paint.Brush { Solid: style.hex(12764617u32) } } })
+    // looks5: the four corners are blended in the capture (outer and inner pixel of each).
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(11975101u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + 1.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(12895946u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, y, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(13487825u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 2.0, y + 1.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(11185588u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + h - 1.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(11909309u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + 1.0, y + h - 2.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(12961740u32) } } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, y + h - 1.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(13422289u32) } } })
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 2.0, y + h - 2.0, 1.0, 1.0), brush: paint.Brush { Solid: style.hex(11251380u32) } } })
 }
 
 // One row of the check list, `width` wide, 15 tall: the native check box mark 1.15 in, the caption
@@ -4043,9 +4125,10 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
+    caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if current { ink = style.hex(16777215u32) }
-    let (words, words_error) = colored_text(a, 0u64, label, dialog_t, caption, ink)
+    let (words, words_width, words_error) = choices_words(a, dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -12747,9 +12830,10 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     }
     var caption = text_options()
     caption.wrap = .None
+    caption.size = 11.0
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (heading, heading_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
+    let (heading, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, label)
     if heading_error != ok { ret (zero, heading_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
@@ -14295,7 +14379,8 @@ fn windows_group_exact(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     var caption = text_options()
     caption.wrap = .None
     caption.role = .BodyMedium
-    let (heading, heading_error) = colored_text(a, 0u64, label, &dialog_t, caption, ink)
+    caption.size = 11.0
+    let (heading, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, label)
     if heading_error != ok { ret (zero, heading_error) }
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: face }

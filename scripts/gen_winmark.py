@@ -26,10 +26,10 @@ MARKS = [
     ("rd_on_rest", "dialog-missing-set-cards-rest@1x.png", 24, 374, 13, 14),
     ("rd_on_press", "radio-pressed-search-cards@1x.png", 28, 134, 13, 14),
     # the Options pages' radio groups are resampled (a different phase): their own marks
-    ("rd_opt_off_rest", "dialog-options-grids-rest@1x.png", 232, 268, 13, 14),
-    ("rd_opt_off_press", "radio-pressed-options-search-within@1x.png", 232, 268, 13, 14),
-    ("rd_opt_on_rest", "dialog-options-grids-rest@1x.png", 232, 226, 13, 14),
-    ("rd_opt_on_press", "radio-pressed-options-search-from-start@1x.png", 232, 226, 13, 14),
+    ("rd_opt_off_rest", "dialog-options-grids-rest@1x.png", 232, 268, 14, 14),
+    ("rd_opt_off_press", "radio-pressed-options-search-within@1x.png", 232, 268, 14, 14),
+    ("rd_opt_on_rest", "dialog-options-grids-rest@1x.png", 232, 226, 14, 14),
+    ("rd_opt_on_press", "radio-pressed-options-search-from-start@1x.png", 232, 226, 14, 14),
 ]
 BG = (240, 240, 240)
 
@@ -106,15 +106,19 @@ fn mark_table(kind: u32) -> [196]u32 {
     ret mark_cb_off_rest()
 }
 
-// The mark's width in px (14 for a check box, 13 for a radio) and its height.
+// The mark's width in px (14 for a check box, 13 for a radio, 14 for the Options pages' radios whose soft edge
+// reaches a column further) and its height.
 fn mark_width(kind: u32) -> f32 {
+    if kind >= 8u32 { ret 14.0 }
     if kind >= 4u32 { ret 13.0 }
     ret 14.0
 }
 
 fn mark_height() -> f32 { ret 14.0 }
 
-type Mark = struct { kind: u32 }
+// `drift`: the vertical sub-pixel shift (px, down) of the capture's resampled theme bitmap at its place in the
+// dialog (see control.windows_mark_drift).
+type Mark = struct { kind: u32, drift: f32 }
 
 fn mark_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -126,7 +130,7 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let across = usize(mark_width(d.kind))
     // On whole pixels: a mark centred in a cell would otherwise straddle two rows and columns.
     let ox = f32(i32(area.x + 0.5))
-    let oy = f32(i32(area.y + 0.5))
+    let oy = f32(i32(area.y + 0.5)) + d.drift
     var i = 0usize
     while i < 196usize {
         let v = table[i]
@@ -148,10 +152,10 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 // The mark of `kind` as a node of its own size.
-fn mark_node(a: *mem.Arena, kind: u32) -> (widget.Node, err) {
+fn mark_node(a: *mem.Arena, kind: u32, drift: f32) -> (widget.Node, err) {
     let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
     if marks_error != ok { ret (zero, marks_error) }
-    marks[0usize] = Mark { kind: kind }
+    marks[0usize] = Mark { kind: kind, drift: drift }
     var s = style.defaults()
     s.width = style.Length { Px: mark_width(kind) }
     s.height = style.Length { Px: mark_height() }

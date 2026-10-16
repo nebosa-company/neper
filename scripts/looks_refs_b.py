@@ -218,12 +218,12 @@ SHEETS["radio_states"] = (3, 150, 25, [
 SHEETS["radio_group_states"] = (2, 340, 50, [
     (D + "dialog-search-rest@1x.png", 28, 120, 100, 42, 4, 136, 0),
     (S + "radio-pressed-search-cards@1x.png", 28, 120, 100, 42, 4, 136, 0),
-    (D + "dialog-search-rest@1x.png", 28, 162, 100, 42, 4, 136, 0),
-    (S + "radio-pressed-search-collection@1x.png", 28, 162, 100, 42, 4, 136, 0),
+    (D + "dialog-search-rest@1x.png", 28, 162, 100, 38, 4, 136, 0),
+    (S + "radio-pressed-search-collection@1x.png", 28, 162, 100, 38, 4, 136, 0),
     (D + "dialog-options-grids-rest@1x.png", 232, 212, 330, 42, 4, 0, 0),
     (S + "radio-pressed-options-search-from-start@1x.png", 232, 212, 330, 42, 4, 0, 0),
-    (D + "dialog-options-grids-rest@1x.png", 232, 254, 330, 42, 4, 0, 0),
-    (S + "radio-pressed-options-search-within@1x.png", 232, 254, 330, 42, 4, 0, 0)])
+    (D + "dialog-options-grids-rest@1x.png", 232, 254, 330, 38, 4, 0, 0),
+    (S + "radio-pressed-options-search-within@1x.png", 232, 254, 330, 38, 4, 0, 0)])
 
 # Check list box (TcxCheckListBox): the top four rows of the Options Rules and Prices lists with the current row
 # moved (the unfocused and focused grabs, and the pressed check box grab, are identical to these: the highlight
@@ -235,7 +235,29 @@ SHEETS["check_list_box_states"] = (1, 500, 90, [
     (S + "check-list-box-focused-options-rules@1x.png", 213, 92, 500, 62, 0),
     (S + "check-list-box-row-selected-focused-options-prices@1x.png", 213, 92, 500, 62, 0)])
 
+def gdi_table():
+    """Prints control.choices_advances: GDI's whole-pixel Tahoma 11 px advances for bytes 32 to 126 (Windows only)."""
+    import ctypes
+    from ctypes import wintypes
+    g, u = ctypes.windll.gdi32, ctypes.windll.user32
+    dc = u.GetDC(0)
+    font = g.CreateFontW(-11, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 5, 0, "Tahoma")
+    old = g.SelectObject(dc, font)
+    out = []
+    for c in range(32, 127):
+        w = ctypes.c_int()
+        g.GetCharWidth32W(dc, c, c, ctypes.byref(w))
+        out.append("%du8" % w.value)
+    g.SelectObject(dc, old)
+    g.DeleteObject(font)
+    u.ReleaseDC(0, dc)
+    print(", ".join(out))
+
+
 if __name__ == "__main__":
+    if sys.argv[1] == "gdi":
+        gdi_table()
+        sys.exit(0)
     command, name = sys.argv[1], sys.argv[2]
     if command == "ref":
         make_ref(name)
