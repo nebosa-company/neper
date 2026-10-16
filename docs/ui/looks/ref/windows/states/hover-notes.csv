@@ -1,0 +1,4 @@
+"Control","State","Why"
+"check box hint","hint window","no new top-level window within 3000 ms (Options)"
+"data grid header hint","hint window","no new top-level window within 3000 ms (top grid Name header)"
+"status bar panel hint","hint window","no new top-level window within 3000 ms (status bar)"
