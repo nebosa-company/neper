@@ -2632,6 +2632,12 @@ $fmtUrlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtUrlWritten -ne 'executable written') { throw 'fmt_url emission failed' }
 & $fmtUrlPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_url check failed: exit $LASTEXITCODE" }
+# `e.text.charset`, `e.text.charset_cjk`, `e.fmt.html.encoding`: Encoding Standard labels, single-byte and multi-byte decoders (windows-1252, ISO-8859-2, KOI8-R, Shift_JIS, EUC-JP, Big5, GBK, GB18030, EUC-KR, ISO-2022-JP), BOM override and the HTML meta prescan (tracker 1.4).
+$textEncodingStdPath = Join-Path $testBuild 'text-encoding-std-selfhost.exe'
+$textEncodingStdWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_encoding_std\src\main.e') $repo 'x64' 'windows' $textEncodingStdPath
+if ($LASTEXITCODE -ne 0 -or $textEncodingStdWritten -ne 'executable written') { throw 'text_encoding_std emission failed' }
+& $textEncodingStdPath
+if ($LASTEXITCODE -ne 0) { throw "a text_encoding_std check failed: exit $LASTEXITCODE" }
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 $distConsensusPath = Join-Path $testBuild 'dist-consensus-selfhost.exe'
 $distConsensusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_consensus\src\main.e') $repo 'x64' 'windows' $distConsensusPath

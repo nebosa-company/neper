@@ -2498,6 +2498,71 @@
    "blocked_by": []
   },
   {
+   "name": "e.text.charset",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.text.charset_table",
+    "e.text.encoding"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.charset_table",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.charset_cjk",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.text.charset",
+    "e.text.charset_cjk_table",
+    "e.text.encoding"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.charset_cjk_table",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.html.encoding",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.text.charset",
+    "e.text.charset_cjk"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.fmt.html.template",
    "layer": 6,
    "surface": "partial",

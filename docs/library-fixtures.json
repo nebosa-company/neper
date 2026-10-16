@@ -441,6 +441,7 @@
     "html_accessible",
     "text_css_cascade",
     "text_css_match",
+    "text_encoding_std",
     "ui_html_view"
    ]
   },

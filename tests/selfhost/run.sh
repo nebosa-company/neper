@@ -2314,6 +2314,11 @@ chmod +x "$test_build/ui-html-view-selfhost"
 fmt_url_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_url/src/main.e" "$repo" x64 linux "$test_build/fmt-url-selfhost")
 [ "$fmt_url_written" = 'executable written' ]
 chmod +x "$test_build/fmt-url-selfhost"
+# `e.text.charset`, `e.text.charset_cjk`, `e.fmt.html.encoding`: Encoding Standard labels, single-byte and multi-byte decoders (windows-1252, ISO-8859-2, KOI8-R, Shift_JIS, EUC-JP, Big5, GBK, GB18030, EUC-KR, ISO-2022-JP), BOM override and the HTML meta prescan (tracker 1.4).
+text_encoding_std_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_encoding_std/src/main.e" "$repo" x64 linux "$test_build/text-encoding-std-selfhost")
+[ "$text_encoding_std_written" = 'executable written' ]
+chmod +x "$test_build/text-encoding-std-selfhost"
+"$test_build/text-encoding-std-selfhost"
 "$test_build/fmt-url-selfhost"
 "$test_build/ui-html-view-selfhost"
 "$test_build/css-paint-selfhost"

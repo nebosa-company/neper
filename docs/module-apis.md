@@ -25296,6 +25296,116 @@ fn uts46_records() -> str
 fn uts46_pool() -> str
 ```
 
+### `e.text.charset`
+
+```neper
+error Unsupported
+fn lower_byte(c: u8) -> u8
+fn is_ascii_space(c: u8) -> bool
+fn label_to_name(label: str) -> (str, bool)
+fn eq_fold(x: str, y: str) -> bool
+fn is_single_byte(name: str) -> bool
+fn put_scalar(out: []u8, at: usize, cp: u32) -> usize
+fn entry(t: str, i: usize) -> u32
+fn decode_single(a: *mem.Arena, index: usize, bytes: []const u8) -> (str, err)
+fn decode_user_defined(a: *mem.Arena, bytes: []const u8) -> (str, err)
+fn decode(a: *mem.Arena, name: str, bytes: []const u8) -> (str, err)
+fn decode_sniffing_bom(a: *mem.Arena, name: str, bytes: []const u8) -> (str, err)
+```
+
+### `e.text.charset_table`
+
+```neper
+fn single_count() -> usize
+fn single_table_0() -> str
+fn single_table_1() -> str
+fn single_table_2() -> str
+fn single_table_3() -> str
+fn single_table_4() -> str
+fn single_table_5() -> str
+fn single_table_6() -> str
+fn single_table_7() -> str
+fn single_table_8() -> str
+fn single_table_9() -> str
+fn single_table_10() -> str
+fn single_table_11() -> str
+fn single_table_12() -> str
+fn single_table_13() -> str
+fn single_table_14() -> str
+fn single_table_15() -> str
+fn single_table_16() -> str
+fn single_table_17() -> str
+fn single_table_18() -> str
+fn single_table_19() -> str
+fn single_table_20() -> str
+fn single_table_21() -> str
+fn single_table_22() -> str
+fn single_table_23() -> str
+fn single_table_24() -> str
+fn single_table_25() -> str
+fn single_table_26() -> str
+fn single_name(i: usize) -> str
+fn single_table(i: usize) -> str
+fn label_table() -> str
+```
+
+### `e.text.charset_cjk`
+
+```neper
+const NONE_CP: u32 = 16777215u32
+fn entry(t: str, i: usize) -> u32
+type Out = struct { data: []u8, len: usize }
+fn out_new(a: *mem.Arena, input_len: usize) -> (Out, err)
+fn emit(o: *Out, cp: u32)
+fn error_mark(o: *Out) { emit(o, 65533u32) }
+fn is_ascii(b: u8) -> bool
+fn gb18030_range_cp(pointer: u32) -> u32
+fn decode_gb18030(a: *mem.Arena, bytes: []const u8) -> (str, err)
+fn decode_big5(a: *mem.Arena, bytes: []const u8) -> (str, err)
+fn decode_euc_kr(a: *mem.Arena, bytes: []const u8) -> (str, err)
+fn decode_euc_jp(a: *mem.Arena, bytes: []const u8) -> (str, err)
+fn decode_shift_jis(a: *mem.Arena, bytes: []const u8) -> (str, err)
+fn decode_iso_2022_jp(a: *mem.Arena, bytes: []const u8) -> (str, err)
+fn decode(a: *mem.Arena, name: str, bytes: []const u8) -> (str, err)
+fn decode_sniffing_bom(a: *mem.Arena, name: str, bytes: []const u8) -> (str, err)
+```
+
+### `e.text.charset_cjk_table`
+
+```neper
+fn index_big5_len() -> usize
+fn index_big5() -> str
+fn index_euc_kr_len() -> usize
+fn index_euc_kr() -> str
+fn index_gb18030_len() -> usize
+fn index_gb18030() -> str
+fn index_jis0208_len() -> usize
+fn index_jis0208() -> str
+fn index_jis0212_len() -> usize
+fn index_jis0212() -> str
+fn gb18030_ranges_len() -> usize
+fn gb18030_ranges() -> str
+```
+
+### `e.fmt.html.encoding`
+
+```neper
+type Choice = struct { name: str, from_bom: bool }
+fn lower(c: u8) -> u8
+fn is_space(c: u8) -> bool
+fn is_letter(c: u8) -> bool
+fn matches_at(b: []const u8, at: usize, word: str) -> bool
+fn find_bytes(b: []const u8, from: usize, needle: str) -> usize
+type Attr = struct { name_lo: usize, name_hi: usize, value_lo: usize, value_hi: usize, next: usize, more: bool }
+fn get_attribute(b: []const u8, pos_in: usize) -> Attr
+fn eq_lower(b: []const u8, lo: usize, hi: usize, word: str) -> bool
+fn charset_in_content(b: []const u8, lo: usize, hi: usize) -> str
+fn str_of(b: []const u8, lo: usize, hi: usize) -> str
+fn prescan(b_all: []const u8) -> str
+fn determine(bytes: []const u8, transport_label: str) -> str
+fn decode_document(a: *mem.Arena, bytes: []const u8, transport_label: str) -> (str, str, err)
+```
+
 ### `e.fmt.html.template`
 
 ```neper
