@@ -4,6 +4,7 @@
 // an error-tone message. The Windows look draws sunken panels and the size grip.
 
 use e.mem
+use e.str as strs
 use e.ui.control
 use e.ui.looks
 use e.ui.navigation
@@ -73,7 +74,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 fn build_report(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (items, items_error) = mem.alloc[navigation.StatusItem](a, 3usize)
     if items_error != ok { ret (0usize, items_error) }
-    items[0usize] = navigation.status_item("Page 1 of 1")
+    let page = mem.cast[*str](ctx)
+    items[0usize] = navigation.status_item(*page)
     items[0usize].drop_order = 77u8
     items[0usize].panel_width = 199.0
     items[1usize] = navigation.status_item("")
@@ -88,10 +90,21 @@ fn build_report(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
     ret (1usize, ok)
 }
 
+// The report windows' bars differ only in the page count: Page 1 of 1 (Card Quantities, Scorepad, Combos from Collection),
+// of 11 (Edition Availability) and of 167 (Game Rules help); one sheet each, named status_bar_report[_11|_167].
+fn run_report(a: *mem.Arena, name: str, text: str) -> err {
+    let (page, page_error) = mem.alloc[str](a, 1usize)
+    if page_error != ok { ret page_error }
+    page[0usize] = text
+    let report = looks.Sheet { name: name, cells: 1usize, columns: 1usize, cell_w: 1280.0, cell_h: 19.0, ctx: mem.cast[*void](&page[0usize]), build: build_report }
+    ret looks.run_all(a, &report)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len > 1usize {
-        let report = looks.Sheet { name: "status_bar_report", cells: 1usize, columns: 1usize, cell_w: 1280.0, cell_h: 19.0, ctx: zero, build: build_report }
-        ret looks.run_all(a, &report)
+        if strs.eq(args[1usize], "status_bar_report_11") { ret run_report(a, "status_bar_report_11", "Page 1 of 11") }
+        if strs.eq(args[1usize], "status_bar_report_167") { ret run_report(a, "status_bar_report_167", "Page 1 of 167") }
+        ret run_report(a, "status_bar_report", "Page 1 of 1")
     }
     let sheet = looks.Sheet { name: "status_bar", cells: 5usize, columns: 1usize, cell_w: 784.0, cell_h: 19.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)

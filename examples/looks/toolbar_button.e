@@ -65,7 +65,7 @@ fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, b
 
 // The two bars at the left of v3's second toolbar row (the buttons disabled, as captured):
 // 2 + 2 + 1 + 3 buttons, then 4 + 2 + 3.
-fn bars(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, enabled: bool) -> (widget.Node, err) {
+fn bars(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, enabled: bool, full: bool) -> (widget.Node, err) {
     let first = [4]usize{ 2usize, 2usize, 1usize, 3usize }
     let second = [3]usize{ 4usize, 2usize, 3usize }
     if t.tokens.profile != .Windows {
@@ -77,11 +77,21 @@ fn bars(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, ba
     if left_error != ok { ret (zero, left_error) }
     let (right, right_error) = strip(a, t, action, base + 20u64, second[0usize..3usize], 232.0, 15987699u32, enabled, 3usize)
     if right_error != ok { ret (zero, right_error) }
-    let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+    let (both, both_error) = mem.alloc[widget.Node](a, 4usize)
     if both_error != ok { ret (zero, both_error) }
     both[0usize] = left
     both[1usize] = right
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), both[0usize..2usize]), ok)
+    if !full { ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), both[0usize..2usize]), ok) }
+    // Search (6 buttons) and Help (2), at the right of those two in v3's row: enabled in the capture, the pictures stand-ins.
+    let third = [1]usize{ 6usize }
+    let fourth = [1]usize{ 2usize }
+    let (search, search_error) = strip(a, t, action, base + 40u64, third[0usize..1usize], 151.0, 15132390u32, true, 0usize)
+    if search_error != ok { ret (zero, search_error) }
+    let (help, help_error) = strip(a, t, action, base + 60u64, fourth[0usize..1usize], 59.0, 14540253u32, true, 0usize)
+    if help_error != ok { ret (zero, help_error) }
+    both[2usize] = search
+    both[3usize] = help
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), both[0usize..4usize]), ok)
 }
 
 // Cells: the whole strip; then one button at rest, hovered, pressed, keyboard-focused, checked,
@@ -91,7 +101,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     let action = &actions[0usize]
-    let (bar, bar_error) = bars(a, t, action, 100u64, false)
+    let (bar, bar_error) = bars(a, t, action, 100u64, false, false)
     if bar_error != ok { ret (0usize, bar_error) }
     cells[0usize] = looks.Cell { caption: "Bars (Windows: v3 second toolbar row, disabled as captured)", node: bar, drive: .None }
     let captions = [8]str{ "Rest", "Hover", "Pressed", "Focus", "Checked", "Disabled", "Caption", "Caption hover" }
@@ -123,7 +133,22 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (9usize, ok)
 }
 
+// The whole toolbar row of the main window: Standard and Cards (disabled as captured), Search and Help (enabled).
+fn build_row(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
+    if actions_error != ok { ret (0usize, actions_error) }
+    actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    let (bar, bar_error) = bars(a, t, &actions[0usize], 100u64, false, true)
+    if bar_error != ok { ret (0usize, bar_error) }
+    cells[0usize] = looks.Cell { caption: "Toolbar row (Standard, Cards, Search, Help)", node: bar, drive: .None }
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize {
+        let row = looks.Sheet { name: "toolbar_button_row", cells: 1usize, columns: 1usize, cell_w: 657.0, cell_h: 26.0, ctx: zero, build: build_row }
+        ret looks.run_all(a, &row)
+    }
     let sheet = looks.Sheet { name: "toolbar_button", cells: 9usize, columns: 1usize, cell_w: 447.0, cell_h: 26.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
