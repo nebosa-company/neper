@@ -10,7 +10,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 5105)
+    var b = try str.builder(a, 5226)
     try str.push(&b, "/* The user agent style sheet of e.fmt.css.ua, after the HTML Standard's rendering section (15) and Vaper's ua_stylesheet.\n")
     try str.push(&b, "   Edit this file, then run: python scripts/gen_css_ua.py (it writes lib/e/fmt/css/ua.e). */\n")
     try str.push(&b, "/* Display */\n")
@@ -32,6 +32,8 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "slot { display: contents; }\n")
     try str.push(&b, "area, base, basefont, datalist, head, link, meta, noembed, noframes, param, rp, script, style, template, title, source, track { display: none; }\n")
     try str.push(&b, "[hidden], dialog:not([open]), input[type=hidden] { display: none; }\n")
+    try str.push(&b, "/* Scripting is on in this browser: the content of <noscript> is not rendered. */\n")
+    try str.push(&b, "noscript { display: none !important; }\n")
     try str.push(&b, "/* Blocks */\n")
     try str.push(&b, "body { margin: 8px; }\n")
     try str.push(&b, "p, dl { margin-top: 1em; margin-bottom: 1em; }\n")
@@ -102,7 +104,7 @@ fn rules(a: *mem.Arena, env: sheet.MediaEnv) -> (sheet.Loaded, err) {
 }
 
 fn quirks_source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 5644)
+    var b = try str.builder(a, 5765)
     try str.push(&b, "/* The user agent style sheet of e.fmt.css.ua, after the HTML Standard's rendering section (15) and Vaper's ua_stylesheet.\n")
     try str.push(&b, "   Edit this file, then run: python scripts/gen_css_ua.py (it writes lib/e/fmt/css/ua.e). */\n")
     try str.push(&b, "/* Display */\n")
@@ -124,6 +126,8 @@ fn quirks_source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "slot { display: contents; }\n")
     try str.push(&b, "area, base, basefont, datalist, head, link, meta, noembed, noframes, param, rp, script, style, template, title, source, track { display: none; }\n")
     try str.push(&b, "[hidden], dialog:not([open]), input[type=hidden] { display: none; }\n")
+    try str.push(&b, "/* Scripting is on in this browser: the content of <noscript> is not rendered. */\n")
+    try str.push(&b, "noscript { display: none !important; }\n")
     try str.push(&b, "/* Blocks */\n")
     try str.push(&b, "body { margin: 8px; }\n")
     try str.push(&b, "p, dl { margin-top: 1em; margin-bottom: 1em; }\n")

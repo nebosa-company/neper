@@ -583,7 +583,10 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     if s.display == .None { ret }
     apply_counter_props(l, s)
     if s.display == .Contents {
+        // The element has no box of its own, but its ::before and ::after still generate boxes in its parent.
+        gen_pseudo(l, node, parent_box, 0usize)
         gen_children(l, node, parent_box)
+        gen_pseudo(l, node, parent_box, 1usize)
         ret
     }
     if n.namespace == .Html && str.eq(n.name, "br") {
@@ -4253,8 +4256,9 @@ fn parse_areas(a: *mem.Arena, text: str, areas: *list.List[GArea], dims: *Dims) 
 
 fn parse_line_spec(a: *mem.Arena, text: str) -> LineSpec {
     var out = LineSpec { kind: 0u8, n: 0i32, name: "", span_name: false }
-    let t = cv.lower(a, cv.trim_ws(text))
-    if t.len == 0usize || str.eq(t, "auto") { ret out }
+    let t = cv.trim_ws(text)
+    if t.len == 0usize || str.eq(cv.lower(a, t), "auto") { ret out }
+    // Keywords are case-insensitive; line and area names are not.
     let toks = cv.split_top_level_spaces(a, t)
     var span = false
     var n = 0i32
@@ -4264,7 +4268,7 @@ fn parse_line_spec(a: *mem.Arena, text: str) -> LineSpec {
     while i < toks.len {
         let tk = toks[i]
         i += 1usize
-        if str.eq(tk, "span") {
+        if str.eq(cv.lower(a, tk), "span") {
             span = true
             continue
         }

@@ -20,6 +20,8 @@ rt { display: ruby-text; }
 slot { display: contents; }
 area, base, basefont, datalist, head, link, meta, noembed, noframes, param, rp, script, style, template, title, source, track { display: none; }
 [hidden], dialog:not([open]), input[type=hidden] { display: none; }
+/* Scripting is on in this browser: the content of <noscript> is not rendered. */
+noscript { display: none !important; }
 
 /* Blocks */
 body { margin: 8px; }

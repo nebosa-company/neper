@@ -23,6 +23,8 @@ use e.fmt.jpeg as jpeg
 use e.fmt.png as png
 use e.fmt.url as url
 use e.fmt.webp as webp
+use e.fmt.woff as woff
+use e.fmt.woff2 as woff2
 use e.gfx.image as image
 use e.gfx.scene as scene
 use e.io
@@ -170,26 +172,36 @@ fn absolutize_css(a: *mem.Arena, text: str, base: *const url.Url) -> str {
                 let q = text[p]
                 lo = p + 1usize
                 hi = lo
-                while hi < text.len && text[hi] != q { hi += 1usize }
+                while hi < text.len && text[hi] != q {
+                    if text[hi] == 92u8 { hi += 1usize }
+                    hi += 1usize
+                }
+                if hi > text.len { hi = text.len }
                 p = hi + 1usize
             } else {
                 while hi < text.len && text[hi] != 41u8 { hi += 1usize }
                 p = hi
             }
-            var raw = str.trim(text[lo..hi])
             while p < text.len && text[p] != 41u8 { p += 1usize }
             if p < text.len { p += 1usize }
-            if raw.len > 0usize && raw[0usize] != 35u8 && !starts_fold(raw, "data:") {
+            let whole = text[i..p]
+            var raw = str.trim(text[lo..hi])
+            if raw.len > 0usize && raw[0usize] != 35u8 && !starts_fold(raw, "data:") && !has_backslash(raw) {
                 let (abs, good) = resolve_against(a, base, raw)
-                if good { raw = abs }
+                if good {
+                    url.buf_str(&out, "url(\"")
+                    var k = 0usize
+                    while k < abs.len {
+                        if abs[k] == 34u8 { url.buf_str(&out, "%22") } else { url.buf_byte(&out, abs[k]) }
+                        k += 1usize
+                    }
+                    url.buf_str(&out, "\")")
+                } else {
+                    url.buf_str(&out, whole)
+                }
+            } else {
+                url.buf_str(&out, whole)
             }
-            url.buf_str(&out, "url(\"")
-            var k = 0usize
-            while k < raw.len {
-                if raw[k] == 34u8 { url.buf_str(&out, "%22") } else { url.buf_byte(&out, raw[k]) }
-                k += 1usize
-            }
-            url.buf_str(&out, "\")")
             i = p
             continue
         }
@@ -197,6 +209,15 @@ fn absolutize_css(a: *mem.Arena, text: str, base: *const url.Url) -> str {
         i += 1usize
     }
     ret url.buf_take(a, &out)
+}
+
+fn has_backslash(s: str) -> bool {
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 92u8 { ret true }
+        i += 1usize
+    }
+    ret false
 }
 
 fn is_ident_byte(c: u8) -> bool {
@@ -281,6 +302,53 @@ fn collect_sheets(p: *Page) -> []const str {
         cur = dom.next_in_tree(d, d.root, cur)
     }
     ret list.slice_const[str](&out)
+}
+
+// --- Web fonts.
+
+fn face_weight(w: str) -> u32 {
+    let t = str.trim(w)
+    if eq_fold(t, "bold") || eq_fold(t, "bolder") { ret 700u32 }
+    var n = 0u32
+    var i = 0usize
+    while i < t.len && t[i] >= 48u8 && t[i] <= 57u8 {
+        n = n * 10u32 + u32(t[i] - 48u8)
+        i += 1usize
+    }
+    if n == 0u32 { ret 400u32 }
+    ret n
+}
+
+// Fetches every `@font-face` the page's sheets declare and registers it in the font set (WOFF/WOFF2 are unpacked to sfnt).
+fn load_web_fonts(p: *Page) {
+    var si = 0usize
+    while si < p.sheets.len {
+        var l = sheet.new_loader(p.pa, sheet.media_env(1280.0f64, 720.0f64))
+        si += 1usize
+        if sheet.load(&l, p.sheets[si - 1usize]) != ok { continue }
+        let faces = sheet.finish(&l).fonts
+        var fi = 0usize
+        while fi < faces.len {
+            let f = faces[fi]
+            fi += 1usize
+            if f.url.len == 0usize || f.family.len == 0usize { continue }
+            let (resp, fe) = fetch.fetch(p.client, get_request(f.url, p.url, fetch.Credentials.SameOrigin))
+            if fe != ok || resp.status >= 400u16 || resp.body.len < 12usize { continue }
+            var data: []const u8 = resp.body
+            let b = resp.body
+            if b[0] == 119u8 && b[1] == 79u8 && b[2] == 70u8 && b[3] == 70u8 {
+                let (sf, we) = woff.to_sfnt(p.pa, b)
+                if we != ok { continue }
+                data = sf
+            } else if b[0] == 119u8 && b[1] == 79u8 && b[2] == 70u8 && b[3] == 50u8 {
+                let (sf2, we2) = woff2.to_sfnt(p.pa, b)
+                if we2 != ok { continue }
+                data = sf2
+            }
+            let italic = eq_fold(str.trim(f.style), "italic") || starts_fold(str.trim(f.style), "oblique")
+            let added = fontset.add(p.fonts, f.family, face_weight(f.weight), italic, data, 0u32)
+        }
+    }
 }
 
 // --- Images.
@@ -629,7 +697,8 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     } else {
         ret (zero, NotRenderable)
     }
-    let (tree, pe) = dom.parse(a, source, view.parse_options(), 1024usize)
+    // The browser runs scripts, so <noscript> content is not rendered.
+    let (tree, pe) = dom.parse_with(a, source, view.parse_options(), 1024usize, true)
     if pe != ok { ret (zero, LoadFailed) }
     p.tree = tree
     // <base href> changes the base for relative references.
@@ -648,6 +717,7 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     }
     p.title = find_title(p)
     p.sheets = collect_sheets(p)
+    load_web_fonts(p)
     // The view's private arena.
     let (backing, be) = mem.alloc[u8](a, view_bytes)
     if be != ok { ret (zero, be) }
@@ -663,4 +733,10 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
 fn attach_renderer(p: *Page, r: *scene.Renderer) {
     p.renderer = r
     p.has_renderer = true
+    // Faces added since the renderer was set up (web fonts); a registered id is replaced, so this is idempotent.
+    var i = 0usize
+    while i < p.fonts.faces.len {
+        let registered = scene.register_font(r, p.fonts.faces.items[i].font)
+        i += 1usize
+    }
 }

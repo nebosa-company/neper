@@ -11,6 +11,7 @@ use e.data.list as list
 use e.algo.deflate as deflate
 use e.fs
 use e.fmt.css.layout as layout
+use e.fmt.css.style as style
 use e.fmt.dom as dom
 use e.fmt.png as png
 use e.gfx.geometry as geo
@@ -139,6 +140,15 @@ fn dump_box(a: *mem.Arena, d: *const dom.Dom, l: *const layout.Layout, id: u32, 
             put(out, "(anon)")
         }
         put(out, " ")
+        let bs = layout.st(l, bb.style)
+        if bs.visibility != style.Visibility.Visible { put(out, "[vis-hidden] ") }
+        if bs.position == style.Position.Absolute { put(out, "[abs] ") }
+        if bs.position == style.Position.Fixed { put(out, "[fixed] ") }
+        if bs.position == style.Position.Sticky { put(out, "[sticky] ") }
+        if bs.position == style.Position.Relative { put(out, "[rel] ") }
+        if bs.floating != style.Float.None { put(out, "[float] ") }
+        if bs.opacity < 1.0 { put(out, "[opacity] ") }
+        if bs.overflow_x != style.Overflow.Visible || bs.overflow_y != style.Overflow.Visible { put(out, "[clip] ") }
         if bb.inline_level { put(out, "[inline] ") }
         if bb.inner == layout.Inner.FlowRoot { put(out, "[flowroot] ") }
         if bb.inner == layout.Inner.Flex { put(out, "[flex] ") }
@@ -232,7 +242,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Network and page.
     let (roots, roots_error) = hoststore.system_roots(a, 4194304usize)
     if roots_error != ok { os.exit(5i32) }
-    let (cl, client_error) = fetch.client(a, fetch.default_config(roots.der), 256usize)
+    var config = fetch.default_config(roots.der)
+    config.allow_file = true
+    let (cl, client_error) = fetch.client(a, config, 256usize)
     if client_error != ok { os.exit(6i32) }
     var client = cl
     let (pg, load_error) = page.load(a, &client, &fonts, address, f32(width), f32(height), 268435456usize)

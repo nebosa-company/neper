@@ -212,8 +212,19 @@ fn paint_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, 
     paint_layers(p, b, s, x, y, w, h)
 }
 
+// Whether the style masks the element with an image (an icon cut out of a solid fill, usually); masks are not rendered
+// yet, so the fill is left out rather than painted as a solid block.
+fn has_mask(p: *Painter, s: *const style.Style) -> bool {
+    let (m1, h1) = geom.extra_of(s, "mask-image")
+    if h1 && !str.eq(cv.lower(p.a, cv.trim_ws(m1)), "none") { ret true }
+    let (m2, h2) = geom.extra_of(s, "-webkit-mask-image")
+    if h2 && !str.eq(cv.lower(p.a, cv.trim_ws(m2)), "none") { ret true }
+    ret false
+}
+
 fn paint_background_color(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64) {
     if alpha_of(s.background_color) == 0u32 { ret }
+    if has_mask(p, s) { ret }
     let bb = &p.l.boxes.items[usize(b)]
     var in_t = 0.0f64
     var in_r = 0.0f64

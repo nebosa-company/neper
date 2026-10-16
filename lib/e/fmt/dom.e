@@ -60,6 +60,14 @@ fn parse(a: *mem.Arena, source: str, options: html.Options, spare: usize) -> (Do
     ret (made, made_error)
 }
 
+// As `parse`, with scripting on or off (with it on, `<noscript>` content is raw text, as in a browser that runs scripts).
+fn parse_with(a: *mem.Arena, source: str, options: html.Options, spare: usize, scripting: bool) -> (Dom, err) {
+    let (doc, parse_error) = html.parse_with(a, source, options, scripting)
+    if parse_error != ok { ret (zero, parse_error) }
+    let (made, made_error) = from_document(a, &doc, spare)
+    ret (made, made_error)
+}
+
 fn new_document(a: *mem.Arena, capacity: usize) -> (Dom, err) {
     let table = try mem.alloc[html.Node](a, capacity + 1usize)
     var d = Dom { a: a, nodes: table, used: 0usize, root: 0u32, quirks: 0u8, version: 0u64 }

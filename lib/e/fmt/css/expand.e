@@ -647,6 +647,160 @@ fn expand_overflow(a: *mem.Arena, value: str, out: *list.List[Pair]) {
     if toks.len == 2usize { emit(out, "overflow-y", toks[1usize]) } else { emit(out, "overflow-y", toks[0usize]) }
 }
 
+// --- grid-template and grid.
+
+// The top-level "/" split: (before, after, whether there was a slash), quotes and brackets respected.
+fn split_grid_slash(s: str) -> (str, str, bool) {
+    var depth = 0i64
+    var quote = 0u8
+    var i = 0usize
+    while i < s.len {
+        let c = s[i]
+        if quote != 0u8 {
+            if c == quote { quote = 0u8 }
+        } else if c == 34u8 || c == 39u8 {
+            quote = c
+        } else if c == 40u8 || c == 91u8 {
+            depth += 1i64
+        } else if c == 41u8 || c == 93u8 {
+            if depth > 0i64 { depth -= 1i64 }
+        } else if c == 47u8 && depth == 0i64 {
+            ret (cv.trim_ws(s[0usize..i]), cv.trim_ws(s[i + 1usize..]), true)
+        }
+        i += 1usize
+    }
+    ret (cv.trim_ws(s), "", false)
+}
+
+fn has_quote(s: str) -> bool {
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 34u8 || s[i] == 39u8 { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// grid-template: none | <rows> / <columns> | the areas form ("a b" 100px "c d" auto / 1fr 1fr).
+fn expand_grid_template(a: *mem.Arena, value: str, out: *list.List[Pair]) {
+    let low = lc(a, value)
+    if str.eq(low, "none") {
+        emit(out, "grid-template-rows", "none")
+        emit(out, "grid-template-columns", "none")
+        emit(out, "grid-template-areas", "none")
+        ret
+    }
+    let (left, right, has_slash) = split_grid_slash(value)
+    if !has_quote(left) {
+        if !has_slash { ret }
+        emit(out, "grid-template-rows", left)
+        emit(out, "grid-template-columns", right)
+        emit(out, "grid-template-areas", "none")
+        ret
+    }
+    // Areas form: each string is a row, followed by an optional track size; line names may sit around them.
+    var areas = ""
+    var rows = ""
+    var i = 0usize
+    var pending_names = ""
+    var have_size = false
+    var row_size = "auto"
+    var first = true
+    while i < left.len {
+        let c = left[i]
+        if c == 32u8 || c == 9u8 || c == 10u8 {
+            i += 1usize
+        } else if c == 34u8 || c == 39u8 {
+            // Close the previous row.
+            if !first {
+                rows = join2(a, join2(a, rows, " "), row_size)
+            }
+            var e = i + 1usize
+            while e < left.len && left[e] != c { e += 1usize }
+            let text = left[i..e + 1usize]
+            if areas.len > 0usize { areas = join2(a, areas, " ") }
+            areas = join2(a, areas, text)
+            if pending_names.len > 0usize { rows = join2(a, join2(a, rows, " "), pending_names) }
+            pending_names = ""
+            row_size = "auto"
+            first = false
+            i = e + 1usize
+        } else if c == 91u8 {
+            var e2 = i
+            while e2 < left.len && left[e2] != 93u8 { e2 += 1usize }
+            let names = left[i..e2 + 1usize]
+            if first { pending_names = names } else { row_size = join2(a, join2(a, row_size, " "), names) }
+            i = e2 + 1usize
+        } else {
+            var e3 = i
+            var depth = 0i64
+            while e3 < left.len && !(depth == 0i64 && (left[e3] == 32u8 || left[e3] == 9u8 || left[e3] == 10u8)) {
+                if left[e3] == 40u8 { depth += 1i64 }
+                if left[e3] == 41u8 { depth -= 1i64 }
+                e3 += 1usize
+            }
+            row_size = left[i..e3]
+            have_size = true
+            i = e3
+        }
+    }
+    if !first { rows = join2(a, join2(a, rows, " "), row_size) }
+    emit(out, "grid-template-areas", areas)
+    emit(out, "grid-template-rows", cv.trim_ws(rows))
+    if has_slash { emit(out, "grid-template-columns", right) } else { emit(out, "grid-template-columns", "none") }
+}
+
+// grid: a grid-template, or one axis explicit and the other auto-flow with its auto track size.
+fn expand_grid(a: *mem.Arena, value: str, out: *list.List[Pair]) {
+    let low = lc(a, value)
+    if !str.contains(low, "auto-flow") {
+        expand_grid_template(a, value, out)
+        emit(out, "grid-auto-flow", "row")
+        emit(out, "grid-auto-rows", "auto")
+        emit(out, "grid-auto-columns", "auto")
+        ret
+    }
+    let (left, right, has_slash) = split_grid_slash(value)
+    if !has_slash { ret }
+    let llow = lc(a, left)
+    if str.starts_with(llow, "auto-flow") || str.contains(llow, "auto-flow") {
+        // auto-flow [dense] <auto-rows>? / <template-columns>
+        var rest = cv.trim_ws(replace_word(a, replace_word(a, llow, "auto-flow", ""), "dense", ""))
+        var flow = "row"
+        if str.contains(llow, "dense") { flow = "row dense" }
+        if rest.len == 0usize { rest = "auto" }
+        emit(out, "grid-template-rows", "none")
+        emit(out, "grid-template-areas", "none")
+        emit(out, "grid-template-columns", right)
+        emit(out, "grid-auto-flow", flow)
+        emit(out, "grid-auto-rows", rest)
+        emit(out, "grid-auto-columns", "auto")
+    } else {
+        // <template-rows> / auto-flow [dense] <auto-columns>?
+        let rlow = lc(a, right)
+        var rest2 = cv.trim_ws(replace_word(a, replace_word(a, rlow, "auto-flow", ""), "dense", ""))
+        var flow2 = "column"
+        if str.contains(rlow, "dense") { flow2 = "column dense" }
+        if rest2.len == 0usize { rest2 = "auto" }
+        emit(out, "grid-template-rows", left)
+        emit(out, "grid-template-areas", "none")
+        emit(out, "grid-template-columns", "none")
+        emit(out, "grid-auto-flow", flow2)
+        emit(out, "grid-auto-columns", rest2)
+        emit(out, "grid-auto-rows", "auto")
+    }
+}
+
+fn replace_word(a: *mem.Arena, s: str, word: str, with: str) -> str {
+    let (at, found) = str.find(s, word)
+    if !found { ret s }
+    let (h1, e1) = str.concat(a, s[0usize..at], with)
+    if e1 != ok { ret s }
+    let (h2, e2) = str.concat(a, h1, s[at + word.len..])
+    if e2 != ok { ret s }
+    ret h2
+}
+
 fn expand_flex_flow(a: *mem.Arena, value: str, out: *list.List[Pair]) {
     let toks = cv.split_top_level_spaces(a, value)
     if toks.len == 0usize || toks.len > 2usize { ret }
@@ -705,11 +859,12 @@ fn expand(a: *mem.Arena, property: str, value: str, rtl: bool, out: *list.List[P
 }
 
 fn is_shorthand(p: str) -> bool {
-    ret nm(",margin,padding,inset,margin-block,margin-inline,padding-block,padding-inline,inset-block,inset-inline,margin-block-start,margin-block-end,margin-inline-start,margin-inline-end,padding-block-start,padding-block-end,padding-inline-start,padding-inline-end,inset-block-start,inset-block-end,inset-inline-start,inset-inline-end,border,border-top,border-right,border-bottom,border-left,border-width,border-style,border-color,border-block,border-inline,border-block-start,border-block-end,border-inline-start,border-inline-end,border-block-width,border-block-style,border-block-color,border-inline-width,border-inline-style,border-inline-color,border-block-start-width,border-block-end-width,border-inline-start-width,border-inline-end-width,border-block-start-style,border-block-end-style,border-inline-start-style,border-inline-end-style,border-block-start-color,border-block-end-color,border-inline-start-color,border-inline-end-color,border-radius,font,flex,flex-flow,gap,grid-gap,place-items,place-content,place-self,overflow,list-style,text-decoration,outline,columns,background,block-size,inline-size,min-block-size,min-inline-size,max-block-size,max-inline-size,", p)
+    ret nm(",grid-template,grid,margin,padding,inset,margin-block,margin-inline,padding-block,padding-inline,inset-block,inset-inline,margin-block-start,margin-block-end,margin-inline-start,margin-inline-end,padding-block-start,padding-block-end,padding-inline-start,padding-inline-end,inset-block-start,inset-block-end,inset-inline-start,inset-inline-end,border,border-top,border-right,border-bottom,border-left,border-width,border-style,border-color,border-block,border-inline,border-block-start,border-block-end,border-inline-start,border-inline-end,border-block-width,border-block-style,border-block-color,border-inline-width,border-inline-style,border-inline-color,border-block-start-width,border-block-end-width,border-inline-start-width,border-inline-end-width,border-block-start-style,border-block-end-style,border-inline-start-style,border-inline-end-style,border-block-start-color,border-block-end-color,border-inline-start-color,border-inline-end-color,border-radius,font,flex,flex-flow,gap,grid-gap,place-items,place-content,place-self,overflow,list-style,text-decoration,outline,columns,background,block-size,inline-size,min-block-size,min-inline-size,max-block-size,max-inline-size,", p)
 }
 
 // A value each shorthand accepts, used only to learn its longhand names.
 fn sample_value(p: str) -> str {
+    if str.eq(p, "grid-template") || str.eq(p, "grid") { ret "none" }
     if str.eq(p, "font") { ret "1px a" }
     if str.eq(p, "flex") { ret "none" }
     if str.eq(p, "flex-flow") { ret "row" }
@@ -750,6 +905,14 @@ fn expand_value(a: *mem.Arena, p: str, v: str, rtl: bool, out: *list.List[Pair])
     let single = logical_target(a, p, rtl)
     if single.len > 0usize {
         emit(out, single, v)
+        ret true
+    }
+    if str.eq(p, "grid-template") {
+        expand_grid_template(a, v, out)
+        ret true
+    }
+    if str.eq(p, "grid") {
+        expand_grid(a, v, out)
         ret true
     }
     if str.eq(p, "margin") {
