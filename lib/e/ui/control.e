@@ -3770,14 +3770,26 @@ fn aa_rect(b: *scene.Builder, color: paint.Color, x: f32, y: f32, w: f32, h: f32
     let y_first = i32(y)
     var cy = y_first
     while f32(cy) < y + h {
-        var cx = x_first
-        while f32(cx) < x + w {
-            let over_x = min_of(f32(cx) + 1.0, x + w) - max_of(f32(cx), x)
-            let over_y = min_of(f32(cy) + 1.0, y + h) - max_of(f32(cy), y)
-            if over_x > 0.002 && over_y > 0.002 {
-                try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: f32(cx), y: f32(cy), width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: with_alpha(color, color.alpha * over_x * over_y) } } })
+        let over_y = min_of(f32(cy) + 1.0, y + h) - max_of(f32(cy), y)
+        if over_y > 0.002 {
+            // The whole columns of a row are one piece (a scaled render shows no seams between neighbours); the two
+            // end columns, which a fractional edge covers in part, are pieces of their own.
+            var cx = x_first
+            while f32(cx) < x + w {
+                let over_x = min_of(f32(cx) + 1.0, x + w) - max_of(f32(cx), x)
+                if over_x > 0.002 {
+                    var run: f32 = 1.0
+                    if over_x > 0.998 {
+                        while f32(cx) + run < x + w - 0.998 { run += 1.0 }
+                    }
+                    var wide: f32 = 1.0
+                    if over_x > 0.998 { wide = run }
+                    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: f32(cx), y: f32(cy), width: wide, height: 1.0 }, brush: paint.Brush { Solid: with_alpha(color, color.alpha * over_x * over_y) } } })
+                    cx += i32(run)
+                } else {
+                    cx += 1
+                }
             }
-            cx += 1
         }
         cy += 1
     }
@@ -14545,12 +14557,12 @@ fn windows_group_on(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     if mark_at < shown.len {
         let (metric, metric_fit, heading_base, metric_error) = run_metrics_faced(a, &dialog_t, caption, shown)
         if metric_error != ok { ret (zero, metric_error) }
-        var line = sized_style(choices_hinted_width(shown[mark_at..mark_at + 1usize]), 1.0)
-        line.background = paint.Brush { Solid: ink }
+        let (rule, rule_error) = under_node(a, ink, choices_hinted_width(shown[mark_at..mark_at + 1usize]), 0.0, 0.333, 1.0)
+        if rule_error != ok { ret (zero, rule_error) }
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
         pair[0usize] = words
-        pair[1usize] = widget.positioned(0u64, choices_hinted_width(shown[0usize..mark_at]), heading_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+        pair[1usize] = widget.positioned(0u64, choices_hinted_width(shown[0usize..mark_at]), f32(i32(heading_base + 1.0 + 0.5)), style.defaults(), mem_one_node(a, rule))
         heading = widget.stack(0u64, sized_style(heading_width, 15.0), pair[0usize..2usize])
     }
     var cut = style.defaults()
