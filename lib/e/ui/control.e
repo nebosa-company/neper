@@ -2722,7 +2722,7 @@ fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Glyp
 // and `underline` (fsUnderline: the hot-link style) underlines the whole run. One line unless `width` is above 0,
 // which wraps the words in that width (Properties.WordWrap).
 fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32) -> (widget.Node, err) {
-    let (node, node_error) = windows_label_faced(a, t, value, size, weight, ink, underline, width, 8u32, 0.0)
+    let (node, node_error) = windows_label_faced(a, t, value, size, weight, ink, underline, width, 8u32, 0.0, 0.0)
     ret (node, node_error)
 }
 
@@ -2730,8 +2730,9 @@ fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: 
 // Properties file name, Missing Set Cards description) draws DevExpress's default font, Segoe UI 9 pt = 12 px (face 7);
 // the ones that inherit the form font or set Style.Font are Tahoma (face 8).
 // `box_w` above 0 centres the one-line label in a box of that width on a whole pixel (GDI's DT_CENTER halves with an integer
-// division), the hinted advances being whole pixels.
-fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32, face: u32, box_w: f32) -> (widget.Node, err) {
+// division), the hinted advances being whole pixels. `phase` (0 to 1) is the fraction of a pixel the underline sits below its row, for the
+// labels of v3's DPI-scaled forms (Options, About), whose captures draw it as two rows of 1 - phase and phase of the ink.
+fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32, face: u32, box_w: f32, phase: f32) -> (widget.Node, err) {
     var options = text_options()
     options.face = face
     options.size = size
@@ -2794,11 +2795,20 @@ fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, we
     }
     var line = sized_style(line_w, 1.0)
     line.background = paint.Brush { Solid: ink }
-    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 3usize)
     if pair_error != ok { ret (zero, TooLarge) }
     pair[0usize] = words
-    pair[1usize] = widget.positioned(0u64, line_x, math.ceil[f32](whole_base + 1.0), style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, widget.stack(0u64, style.defaults(), pair[0usize..2usize]))), ok)
+    let line_y = math.ceil[f32](whole_base + 1.0)
+    if phase > 0.0 {
+        line.background = paint.Brush { Solid: with_alpha(ink, 1.0 - phase) }
+        var second = sized_style(line_w, 1.0)
+        second.background = paint.Brush { Solid: with_alpha(ink, phase) }
+        pair[2usize] = widget.positioned(0u64, line_x, line_y + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, second, zero)))
+    }
+    pair[1usize] = widget.positioned(0u64, line_x, line_y, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+    var layers = 2usize
+    if phase > 0.0 { layers = 3usize }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plain, mem_one_node(a, widget.stack(0u64, style.defaults(), pair[0usize..layers]))), ok)
 }
 
 // looks5: `shown` as one text node per glyph, each at the running sum of the font's hdmx advances (v3's GDI pixel widths:

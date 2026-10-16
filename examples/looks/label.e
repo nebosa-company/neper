@@ -32,6 +32,15 @@ fn spec(i: usize) -> Spec {
     ret Spec { text: "Interface (F2)", face: 8u32, size: 13.0, weight: 700u32, ink: 0u32, underline: false, width: 0.0, box_w: 150.0, box_h: 20.0, centred: false, wrap: false }
 }
 
+// The sub-pixel phase of the underline in the capture, per cell: Options draws it two rows of 62 % and 38 %, About of 41 % and 59 % (the URL 39 % and 61 %)
+// (both DPI-scaled forms), measured on the capture's rows; the other forms' labels have none.
+fn phase_of(i: usize) -> f32 {
+    if i == 0usize { ret 0.38 }
+    if i == 7usize || i == 12usize { ret 0.59 }
+    if i == 8usize { ret 0.61 }
+    ret 0.0
+}
+
 fn names(i: usize) -> str {
     let n = [13]str{ "Normal, mnemonic", "Normal", "Bold -13, #33486C", "Path", "Gray (clGray)", "Bold -21, #336CCC", "Bold -13", "Hot-link", "Hot-link, URL", "Word wrap", "Disabled (guess)", "Bold -13 (header)", "Hot-link, pressed" }
     ret n[i]
@@ -46,7 +55,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var centre_w: f32 = 0.0
         if s.centred { centre_w = s.box_w }
         if t.tokens.profile == .Windows {
-            let (word, word_error) = control.windows_label_faced(a, t, s.text, s.size, s.weight, style.hex(s.ink), s.underline, s.width, s.face, centre_w)
+            let (word, word_error) = control.windows_label_faced(a, t, s.text, s.size, s.weight, style.hex(s.ink), s.underline, s.width, s.face, centre_w, phase_of(i))
             node = word
             node_error = word_error
         } else {
