@@ -66,7 +66,8 @@ Plan: `docs/ui/looks-plan.md`. Decisions: D5108 to D5113. Audit: `docs/ui/looks/
 ## Rendering everything
 
 `scripts/render_looks_all.sh [name ...]` (Git Bash, any directory) compiles each `examples/looks/*.e` with
-`--arena 4g`, runs it, then runs `scripts/render_looks.py`. It runs `popup_menu` once per sheet name. Run
+`--arena 4g`, runs it, then runs `scripts/render_looks.py`. It still runs `popup_menu` and `scale_tiles` once per sheet
+name (their sheets are big and the run is shorter that way), but nothing requires it any more. Run
 sheets one at a time (no two processes sharing the output folder); render only the names you changed, then
 check `git status` for PNGs you did not mean to change.
 
@@ -84,9 +85,13 @@ throwaway; never point a script at the repo or installed exe.
 
 ## Harness limits
 
-- About 12 rigs per process: a sheet app with more cells or sheets must be split into several apps.
-- Several popup menus in one process fail with `TooLarge` (GPU memory): one menu sheet per process, as
-  `render_looks_all.sh` does.
+- A process runs any number of sheets: each rig (one per sheet x look x scale) closes its CPU gpu device when
+  its render is done (`gpu.close` now frees the device's registry slot; a process has 16 slots) and gives its
+  arena memory back (`looks.rig_scope`: the rigs live in one 768 MB scratch arena, zeroed before each rig; the
+  font files and the 32 MB frame storage are read once and shared). An app's own state in the arena its `main`
+  got is untouched. The old limits (about 12 rigs, `e.gpu.TooLarge`, `e.ui.widget.TooLarge`) are gone.
+- Keep a sheet's rig under the scratch size (768 MB); `popup_menu`, `data_grid` with all sheets, and the
+  `material_*` / `cup_*` apps are far below it.
 - Compile with `--arena 4g`; 512m runs out on the big sheets.
 - Baked tiles (`winbutton`, `winedit`, `winmark`) are 96 DPI: judge the 1.5x sheets separately (D5112).
 
@@ -100,7 +105,31 @@ throwaway; never point a script at the repo or installed exe.
 - A button's root node needs an explicit size; labels need a registered font (the rig registers
   Segoe UI as 7 and Tahoma as 8; Segoe leads the theme's fallback chain).
 - `testing.pump` renders at the harness scale since D5108; before that a scale of 1.5 drew at 1.
-- Windows palette is Light only; Dark and HighContrast keep Neper colours with Windows metrics.
+- `style.windows(.Dark)` is the Windows dark look (`looks.Look.WindowsDark`); HighContrast keeps Neper colours with Windows metrics.
+
+## Looks, Light and Dark
+
+Eight looks (`looks.Look`), folders `docs/ui/looks/{neper,neper-dark,windows,windows-dark,cupertino,cupertino-dark,material,material-dark}/<sheet>[@1.5x].png`.
+`looks.run_all` renders Neper, Windows and Windows dark (and Neper dark where the app's harness version does) at 1.0
+and 1.5; `looks.run_cupertino` and `looks.run_material` render the Light and Dark of the platform looks. Dark has no live
+reference (v3 has no dark mode, nor do Apple and Android): its evidence is the platform's published dark palette, so its
+status is at most `started`, never `matched`.
+
+`docs/ui/looks-progress.html` shows four flavor columns (Neper, Windows, macOS / iOS, Android), each cell holding the Light
+and the Dark thumbnail side by side with their own status chip, notes and gaps; the eight summary boxes are one per look
+(`status.json` `looks`: `neper`, `neper_dark`, `windows`, `windows_dark`, `cupertino`, `cupertino_dark`, `material`,
+`material_dark`). Overlay look ids are those ids; screenshot paths use the hyphenated folders (`windows-dark/button.png`).
+
+- Auto entry: a control with no entry for a look gets `started` with the note "Rendered from the platform palette; not
+  compared with a real screen." when `docs/ui/looks/<look dir>/<name>.png` exists, `<name>` being the control id, then its
+  `app` sheet name, then its `sheet`. An overlay entry always wins, so write one only for more than that (notes, gaps, a
+  different status or screenshot).
+- Platform idiom controls: an overlay id that is not a `status.json` control becomes an extra row (switch, slider, stepper,
+  segmented control, chip, fab, snackbar, app bar, date picker, navigation bar, ...) only when its entry has `"name"`:
+  `{"switch": {"name": "Switch", "extra": true, "neper": "control.switch", "looks": {...}}}`. They are listed under
+  "Platform idiom controls" below the 30 Delphi-equivalent rows with the Delphi column "(none)", and count in the summaries.
+- The page inlines 150 px high base64 thumbnails (cached in the temp folder `neper-looks-thumbs` by mtime), so it opens
+  from `file://` with no network and in viewers that do not resolve relative images.
 
 ## Cupertino sheets
 
@@ -121,5 +150,5 @@ throwaway; never point a script at the repo or installed exe.
   under `<dir>` instead of `docs/ui/looks` (scale files are `@1.25x`, `@1.5x`, `@2x`); `NEPER_LOOKS_NOTEXT=1`
   leaves text out. `python scripts/looks_scale_check.py` renders the Windows sheets at 1.0 and 2.0 this way and fails
   when a run of pixels of the 1.0 render is not twice as long in the 2.0 render.
-- `examples/looks/scale_tiles.e` (`scale_button`, `scale_marks`, `scale_edits`, one per process) puts the controls
+- `examples/looks/scale_tiles.e` (`scale_button`, `scale_marks`, `scale_edits`) puts the controls
   on fractional positions: review its `@1.5x` PNGs by eye after touching a tile painter.

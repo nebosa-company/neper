@@ -1057,6 +1057,20 @@ fn close(device: *Device) -> err {
         }
         vulkan.close(state.context)
     }
+    // Free the registry slot: a closed device answers InvalidHandle either way (its handle and
+    // tokens no longer resolve), and a process that opens and closes devices in turn (the looks
+    // harness opens one per rig) must not run into MAX_DEVICES.
+    locks.mutex_lock(&registry_locks[0usize])
+    var at = 0usize
+    while at < open_count {
+        if mem.address_of(open_devices[at]) == mem.address_of(state) {
+            open_devices[at] = open_devices[open_count - 1usize]
+            open_count -= 1usize
+            break
+        }
+        at += 1usize
+    }
+    locks.mutex_unlock(&registry_locks[0usize])
     ret ok
 }
 

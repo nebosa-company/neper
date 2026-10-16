@@ -45,7 +45,7 @@ type Build = fn(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []Cel
 // A sheet: `name` is the file stem (the control), `columns` cells per row, each cell a box of
 // `cell_w` x `cell_h` logical px with the control centred in it and its caption above.
 type Sheet = struct { name: str, cells: usize, columns: usize, cell_w: f32, cell_h: f32, ctx: *void, build: Build }
-type Rig = struct { a: *mem.Arena, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, width: f32, height: f32, scale: f32, material_fonts: []shape.Font }
+type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, width: f32, height: f32, scale: f32, material_fonts: []shape.Font }
 error Failed
 
 fn margin() -> f32 { ret 12.0 }
@@ -86,6 +86,59 @@ fn look_dir(look: Look) -> str {
     ret "neper"
 }
 
+// The font files and the frame storage, read and allocated by the first rig and shared by the rest.
+var shared_fonts: [6][]u8 = zero
+var shared_fonts_read: bool = false
+var shared_storage: []u8 = zero
+
+fn read_fonts(a: *mem.Arena) -> err {
+    if shared_fonts_read { ret ok }
+    let sa = stable(a)
+    let paths = [6]str{ segoe_path(), tahoma_path(), segoe_bold_path(), tahoma_bold_path(), roboto_path(), roboto_medium_path() }
+    var i = 0usize
+    while i < 6usize {
+        let (bytes, read_error) = fs.read_file(sa, paths[i], 16777216usize)
+        if read_error != ok { ret read_error }
+        shared_fonts[i] = bytes
+        i += 1usize
+    }
+    shared_fonts_read = true
+    ret ok
+}
+
+// The rigs of a run live in one scratch arena, emptied (and zeroed, as fresh arena memory is) before each
+// rig, so a process can run any number of sheets; what must outlive a rig (the font files, the frame
+// storage, an app's own state in the arena the app main got) lives in `stable`, the arena of the first run.
+var stable_arena: *mem.Arena = zero
+var rig_chunk: []u8 = zero
+var rig_arenas: []mem.Arena = zero
+
+fn stable(a: *mem.Arena) -> *mem.Arena {
+    if mem.address_of(stable_arena) == 0usize { ret a }
+    ret stable_arena
+}
+
+// The scratch arena for the next rig, empty.
+fn rig_scope(a: *mem.Arena) -> *mem.Arena {
+    if mem.address_of(stable_arena) == 0usize { stable_arena = a }
+    if rig_chunk.len == 0usize {
+        let (chunk, chunk_error) = mem.alloc[u8](stable_arena, 805306368usize)
+        if chunk_error != ok { ret stable_arena }
+        rig_chunk = chunk
+        let (holder, holder_error) = mem.alloc[mem.Arena](stable_arena, 1usize)
+        if holder_error != ok { ret stable_arena }
+        rig_arenas = holder
+    } else {
+        var i = 0usize
+        while i < rig_arenas[0usize].off {
+            rig_chunk[i] = 0u8
+            i += 1usize
+        }
+    }
+    rig_arenas[0usize] = mem.arena_from(rig_chunk)
+    ret &rig_arenas[0usize]
+}
+
 // A rig of `width` x `height` logical px at `scale`: the CPU gpu backend, the renderer, Segoe UI
 // (font id 7, first in the theme's fallback chain) and Tahoma (id 8), a runtime, the harness and
 // a frame arena. The Neper tokens until `set_look`. The rig lives in `a`.
@@ -97,26 +150,22 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     rig.width = width
     rig.height = height
     rig.scale = scale
-    let (segoe_bytes, segoe_error) = fs.read_file(a, segoe_path(), 16777216usize)
-    if segoe_error != ok { ret (rig, segoe_error) }
-    let (tahoma_bytes, tahoma_error) = fs.read_file(a, tahoma_path(), 16777216usize)
-    if tahoma_error != ok { ret (rig, tahoma_error) }
-    let (bold_bytes, bold_error) = fs.read_file(a, segoe_bold_path(), 16777216usize)
-    if bold_error != ok { ret (rig, bold_error) }
-    let (tahoma_bold_bytes, tahoma_bold_error) = fs.read_file(a, tahoma_bold_path(), 16777216usize)
-    if tahoma_bold_error != ok { ret (rig, tahoma_bold_error) }
+    try read_fonts(a)
+    let segoe_bytes = shared_fonts[0usize]
+    let tahoma_bytes = shared_fonts[1usize]
+    let bold_bytes = shared_fonts[2usize]
+    let tahoma_bold_bytes = shared_fonts[3usize]
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret (rig, device_error) }
+    rig.device = device
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { ret (rig, queue_error) }
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 64u32)
     if renderer_error != ok { ret (rig, renderer_error) }
     rig.renderer = r
     // The Android look: Roboto Regular (id 11) and Medium (id 12), led by themselves, then the Windows faces for glyphs Roboto lacks.
-    let (roboto_bytes, roboto_error) = fs.read_file(a, roboto_path(), 16777216usize)
-    if roboto_error != ok { ret (rig, roboto_error) }
-    let (medium_bytes, medium_error) = fs.read_file(a, roboto_medium_path(), 16777216usize)
-    if medium_error != ok { ret (rig, medium_error) }
+    let roboto_bytes = shared_fonts[4usize]
+    let medium_bytes = shared_fonts[5usize]
     let (droid, droid_error) = mem.alloc[shape.Font](a, 6usize)
     if droid_error != ok { ret (rig, droid_error) }
     droid[0usize] = shape.Font { id: 11u32, data: roboto_bytes, face_index: 0u32 }
@@ -149,12 +198,24 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     let (h, harness_error) = testing.harness(a, &rig.runtime, physical_w, physical_h, scale)
     if harness_error != ok { ret (rig, harness_error) }
     rig.harness = h
-    let (storage, storage_error) = mem.alloc[u8](a, 33554432usize)
-    if storage_error != ok { ret (rig, storage_error) }
-    rig.frame_storage = storage
-    rig.frame = mem.arena_from(storage)
+    if shared_storage.len == 0usize {
+        let (storage, storage_error) = mem.alloc[u8](stable(a), 33554432usize)
+        if storage_error != ok { ret (rig, storage_error) }
+        shared_storage = storage
+    }
+    rig.frame_storage = shared_storage
+    rig.frame = mem.arena_from(shared_storage)
     rig.tokens = theme_for(.Neper)
     ret (rig, ok)
+}
+
+// Lets go of the rig's device (its registry slot: a process has only 16 of them) and renderer. The
+// rig's arena memory is not given back (an app may allocate its own state in `a` after the first rig), so
+// the big parts of a rig, the font files and the frame storage, are shared by all the rigs of a process.
+fn close_rig(rig: *Rig) {
+    let h = testing.close(&rig.harness)
+    let r = scene.close(&rig.renderer)
+    let d = gpu.close(rig.device)
 }
 
 fn set_look(rig: *Rig, look: Look) {
@@ -485,26 +546,28 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
             var look: Look = .Neper
             if look_index == 1usize { look = .Windows }
             if look_index == 2usize { look = .WindowsDark }
-            let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
+            let ra = rig_scope(a)
+            let (rig, open_error) = open(ra, sheet_width(s), sheet_height(s), scale)
             if open_error != ok { ret open_error }
             set_look(rig, look)
-            let (folder, folder_error) = path_of(a, look_dir(look), "", "", 1.0, "")
+            let (folder, folder_error) = path_of(ra, look_dir(look), "", "", 1.0, "")
             if folder_error != ok { ret folder_error }
-            try fs.make_dirs(a, folder)
-            let (path, path_error) = path_of(a, look_dir(look), s.name, "", scale, ".png")
+            try fs.make_dirs(ra, folder)
+            let (path, path_error) = path_of(ra, look_dir(look), s.name, "", scale, ".png")
             if path_error != ok { ret path_error }
             let (ours, render_error) = render_sheet(rig, s, path)
             if render_error != ok { ret render_error }
             if look == .Windows {
-                let (reference_path, reference_path_error) = path_of(a, "ref/windows", s.name, "", scale, ".png")
+                let (reference_path, reference_path_error) = path_of(ra, "ref/windows", s.name, "", scale, ".png")
                 if reference_path_error != ok { ret reference_path_error }
-                let (reference, has_reference) = load_reference(a, reference_path)
+                let (reference, has_reference) = load_reference(ra, reference_path)
                 if has_reference {
-                    let (pair_path, pair_error) = path_of(a, "windows", s.name, "-vs-ref", scale, ".png")
+                    let (pair_path, pair_error) = path_of(ra, "windows", s.name, "-vs-ref", scale, ".png")
                     if pair_error != ok { ret pair_error }
-                    try beside(a, const_view(reference), ours, pair_path)
+                    try beside(ra, const_view(reference), ours, pair_path)
                 }
             }
+            close_rig(rig)
             look_index += 1usize
         }
         scale_index += 1usize
@@ -523,16 +586,18 @@ fn run_material(a: *mem.Arena, s: *const Sheet) -> err {
         while look_index < 2usize {
             var look: Look = .Material
             if look_index == 1usize { look = .MaterialDark }
-            let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
+            let ra = rig_scope(a)
+            let (rig, open_error) = open(ra, sheet_width(s), sheet_height(s), scale)
             if open_error != ok { ret open_error }
             set_look(rig, look)
-            let (folder, folder_error) = path_of(a, look_dir(look), "", "", 1.0, "")
+            let (folder, folder_error) = path_of(ra, look_dir(look), "", "", 1.0, "")
             if folder_error != ok { ret folder_error }
-            try fs.make_dirs(a, folder)
-            let (path, path_error) = path_of(a, look_dir(look), s.name, "", scale, ".png")
+            try fs.make_dirs(ra, folder)
+            let (path, path_error) = path_of(ra, look_dir(look), s.name, "", scale, ".png")
             if path_error != ok { ret path_error }
             let (ours, render_error) = render_sheet(rig, s, path)
             if render_error != ok { ret render_error }
+            close_rig(rig)
             look_index += 1usize
         }
         scale_index += 1usize
@@ -550,16 +615,18 @@ fn run_cupertino(a: *mem.Arena, s: *const Sheet) -> err {
         while look_index < 2usize {
             var look: Look = .Cupertino
             if look_index == 1usize { look = .CupertinoDark }
-            let (rig, open_error) = open(a, sheet_width(s), sheet_height(s), scale)
+            let ra = rig_scope(a)
+            let (rig, open_error) = open(ra, sheet_width(s), sheet_height(s), scale)
             if open_error != ok { ret open_error }
             set_look(rig, look)
-            let (folder, folder_error) = path_of(a, look_dir(look), "", "", 1.0, "")
+            let (folder, folder_error) = path_of(ra, look_dir(look), "", "", 1.0, "")
             if folder_error != ok { ret folder_error }
-            try fs.make_dirs(a, folder)
-            let (path, path_error) = path_of(a, look_dir(look), s.name, "", scale, ".png")
+            try fs.make_dirs(ra, folder)
+            let (path, path_error) = path_of(ra, look_dir(look), s.name, "", scale, ".png")
             if path_error != ok { ret path_error }
             let (ours, render_error) = render_sheet(rig, s, path)
             if render_error != ok { ret render_error }
+            close_rig(rig)
             look_index += 1usize
         }
         scale_index += 1usize
