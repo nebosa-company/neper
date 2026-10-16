@@ -14149,6 +14149,7 @@ var scroll_bar_crisp: bool = false
 fn set_scroll_bar_crisp(on: bool) { scroll_bar_crisp = on }
 
 fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, view: f32, content: f32, offset: f32) -> (widget.Node, err) {
+    style.windows_dark_enter(t.tokens)
     let state = control_state(t, key, true, false)
     // Measured at 100 % in the v3 main window (ref/windows/main-window@1x.png): the vertical bar's
     // thumb is 2 wide (#858585, square ends) on its 16 wide track; the horizontal bar of a grid
@@ -14168,6 +14169,13 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     if scroll_bar_crisp { track = sized_style(17.0, length) }
     if !vertical { track = sized_style(length, 16.0) }
     track.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    if style.windows_dark_on() {
+        // (round 7) Windows 11 dark: #2B2B2B track, #8A8A8A thumb (#A0A0A0 hot, #B8B8B8 held), no light rim
+        track.background = paint.Brush { Solid: style.hex_raw(0x2B2B2Bu32) }
+        ink = style.hex_raw(0x8A8A8Au32)
+        if state.hovered { ink = style.hex_raw(0xA0A0A0u32) }
+        if state.pressed { ink = style.hex_raw(0xB8B8B8u32) }
+    }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var count = 0usize
@@ -14176,6 +14184,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     if !vertical { edge = sized_style(length, 1.0) }
     edge.background = paint.Brush { Solid: style.hex(16250871u32) }
     if scroll_bar_crisp { edge.background = paint.Brush { Solid: style.hex(16777215u32) } }
+    if style.windows_dark_on() { edge.background = paint.Brush { Solid: style.hex_raw(0x2B2B2Bu32) } }
     layers[count] = widget.box(0u64, edge, zero)
     count += 1usize
     if content > view && room > 0.0 {
@@ -14206,6 +14215,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             thick = sized_style(thumb_len, w + 2.0)
             thick.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: side }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
             thick.border = style.Border { width: 1.0, color: style.hex(12237498u32) }
+            if style.windows_dark_on() { thick.border = style.Border { width: 1.0, color: style.hex_raw(0x2B2B2Bu32) } }
             thick.radius = 0.0
             if state.pressed { thick.radius = 4.0 }
         }
@@ -14243,6 +14253,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         let (arrows, arrows_error) = mem.alloc[ScrollArrows](a, 1usize)
         if arrows_error != ok { ret (zero, TooLarge) }
         arrows[0usize] = ScrollArrows { vertical: vertical, ink: style.hex(6316128u32) }
+        if style.windows_dark_on() { arrows[0usize].ink = style.hex_raw(0xB0B0B0u32) }
         var none: []const widget.Node = zero
         var fill = sized_style(16.0, length)
         if !vertical { fill = sized_style(length, 16.0) }
@@ -14366,6 +14377,21 @@ fn windows_bar_look(state: style.ControlState, ink: paint.Color) -> style.Resolv
     if state.pressed || state.selected {
         face = style.hex(11064568u32)
         edge = style.hex(6730480u32)
+    }
+    if style.windows_dark_on() {
+        // (round 7) Windows 11 dark: neutral washes (#3C3C3C hot, #333333 pressed), accent tint when checked
+        if state.hovered && !state.pressed && !state.selected {
+            face = style.hex_raw(0x3C3C3Cu32)
+            edge = style.hex_raw(0x4A4A4Au32)
+        }
+        if state.pressed {
+            face = style.hex_raw(0x333333u32)
+            edge = style.hex_raw(0x5A5A5Au32)
+        }
+        if state.selected {
+            face = style.hex_raw(0x264F78u32)
+            edge = style.hex_raw(0x4CC2FFu32)
+        }
     }
     if state.disabled {
         face = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -14509,16 +14535,24 @@ fn windows_glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: G
 
 // The same for a button at x `along` of v3's 800 px window (the greys of the box drift along it).
 fn windows_glyph_toggle_at(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool, checked: bool, along: f32) -> (widget.Node, err) {
+    style.windows_dark_enter(t.tokens)
     let state = control_state(t, key, enabled, checked)
     var look = windows_bar_look(state, style.hex(4210752u32))
     // v3's disabled pictures are pale bitmaps (mean #D4D4D4 over the glyph area, measured);
     // a drawn glyph in #C8C8C8 stands in.
     var ink = look.foreground
     if !enabled { ink = style.hex(13158600u32) }
+    if !enabled && style.windows_dark_on() { ink = style.hex_raw(0x6B6B6Bu32) }
     let (mark, mark_error) = icon_square(a, ink, kind, 16.0)
     if mark_error != ok { ret (zero, mark_error) }
     var content = mark
-    let boxed = enabled && !state.selected && (state.hovered || state.pressed)
+    let boxed = enabled && !state.selected && (state.hovered || state.pressed) && !style.windows_dark_on()
+    if enabled && state.pressed && style.windows_dark_on() {
+        let (shifted_dark, shifted_dark_error) = mem.alloc[widget.Node](a, 1usize)
+        if shifted_dark_error != ok { ret (zero, TooLarge) }
+        shifted_dark[0usize] = mark
+        content = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, sized_style(16.0, 16.0), shifted_dark[0usize..1usize])
+    }
     if boxed {
         look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
         look.border = paint.rgba(0.0, 0.0, 0.0, 0.0)

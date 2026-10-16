@@ -71,7 +71,9 @@ fn chevron(b: *scene.Builder, x: f32, y: f32, down: bool) -> err {
             let i = (at * 11usize + column) * 2usize
             let v = hexval(alpha[i]) * 16u32 + hexval(alpha[i + 1usize])
             if v > 0u32 {
-                try winpx.fill(b, x + f32(column), y + f32(row), 1.0, 1.0, paint.rgba(0.4627, 0.4627, 0.4627, f32(v) / 255.0))
+                var ink: f32 = 0.4627
+                if style.windark_active() { ink = 0.72 }
+                try winpx.fill(b, x + f32(column), y + f32(row), 1.0, 1.0, paint.rgba(ink, ink, ink, f32(v) / 255.0))
             }
             column += 1usize
         }
@@ -147,9 +149,16 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         }
         if f.tops[r] { try fill(b, x + 15.0, top - 1.0, w - 16.0, 1.0, 0xCFCFD1u32) }
         if f.selected[r] {
-            try fill(b, x + 15.0, top - 1.0, value_x - 15.0, 1.0, 0x3D87C4u32)
-            try fill(b, x + 15.0, top, value_x - 15.0, rh, 0x0078D7u32)
-            try fill(b, x + 15.0, top + rh, value_x - 15.0, 1.0, 0x6190B8u32)
+            if style.windark_active() {
+                // (round 7) the focused row's header: #264F78 between #3A6EA5 lines
+                try winpx.fill(b, x + 15.0, top - 1.0, value_x - 15.0, 1.0, style.hex_raw(0x3A6EA5u32))
+                try winpx.fill(b, x + 15.0, top, value_x - 15.0, rh, style.hex_raw(0x264F78u32))
+                try winpx.fill(b, x + 15.0, top + rh, value_x - 15.0, 1.0, style.hex_raw(0x3A6EA5u32))
+            } else {
+                try fill(b, x + 15.0, top - 1.0, value_x - 15.0, 1.0, 0x3D87C4u32)
+                try fill(b, x + 15.0, top, value_x - 15.0, rh, 0x0078D7u32)
+                try fill(b, x + 15.0, top + rh, value_x - 15.0, 1.0, 0x6190B8u32)
+            }
         }
         // the hairlines under the row; the last row's light one is the next band's top line
         if f.selected[r] {

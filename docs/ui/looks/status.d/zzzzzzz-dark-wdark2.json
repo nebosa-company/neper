@@ -1,0 +1,82 @@
+{
+ "toolbar_button": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/toolbar_button.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Flat #2B2B2B dxBar strip with a #3D3D3D foot line, a doubled #5A5A5A/#3D3D3D grip, #3D3D3D right edge and separators; buttons have no bevel box: hot #3C3C3C with a #4A4A4A rim, pressed #333333 with the glyph 1 px down, checked #264F78 with a #4CC2FF rim; glyphs light (#C6C6C6), disabled #6B6B6B; captioned buttons white text. Sheets: toolbar_button, _hot, _row.",
+    "gaps": "Wash colours are guesses from the Windows 11 ramp; the pixel-art hot/pressed boxes of the light look are deliberately not used; no focus ring variant beyond the shared one."
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/menu_bar.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Main menu on the #202020 window face (no bevel), doubled grip, #3D3D3D foot line; a hot title is a flat #3C3C3C wash, an open one #454545 with the text 1 px down; white text with the mnemonic underline kept (soft row mixed with the face). Open sheets menu_bar-open, menu_bar_open_*.",
+    "gaps": "Hot/open washes are guesses; title paddings are v3's."
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/popup_menu.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Face #2C2C2C inside a 1 px #454545 border (the light 3 px bevel frame is not drawn), rows 20 px, hot or selected row #3D3D3D, white text, disabled #787878 without the light emboss copy, mnemonic underline, #454545 separators, group headers bold on a rule, check slot a #383838 square with a #5A5A5A rim, submenu arrows and split button lines in ink, scroll arrow. Hot row, sub-menus and every popup_menu_* state re-rendered.",
+    "gaps": "Menu glyph pictures are the shared stand-in glyph; hot row is neutral grey (Windows 11) not accent tinted; no drop shadow (as in the light captures)."
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/status_bar.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Flat #2B2B2B bar under a #3D3D3D line, panels with a #4A4A4A joint line, white text (error tone keeps the theme error), progress panel with a dark track, size grip of six #6E6E6E dots; the report preview bar follows the colour map.",
+    "gaps": "Panel hover look is none (as v3); progress fill is still the guessed green; report bar uses the map rather than a hand-tuned dark."
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/scroll_bar.png",
+    "notes": "Derived, not captured: v3 has no dark mode. #2B2B2B track, thumb #8A8A8A (#A0A0A0 hot, #B8B8B8 held), no light rim or edge, hover arrows #B0B0B0. Sheets scroll_bar, _states, _live.",
+    "gaps": "Thumb thickness and hover arrows follow the light look (guessed there too)."
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/tree_list.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Gridlook v3_dark table look: header #333333, rows #262626/#2B2B2B, unfocused selection #3A3A3A, focused #264F78, rules #3A3A3A, dark scroll bar; text white, card colours lifted. Sheets tree_list, _rules, _focus, _check.",
+    "gaps": "+/- boxes and check boxes are the light tiles mapped through the colour map, not redrawn; unfocused selection not captured."
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/vertical_grid.png",
+    "notes": "Derived, not captured: v3 has no dark mode. Frame, gutter and hairlines through the colour map; category bands a grey gradient with #E0E0E0 captions and lighter chevrons; the focused row header #264F78 between #3A6EA5 lines with white text; dotted focus rectangle.",
+    "gaps": "Band gradient and hairline drift are map results, not Windows 11 values."
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/data_grid.png",
+    "notes": "Derived, not captured: v3 has no dark mode. gridlook.v3_dark(): rows #2B2B2B/#262626, header #333333 (hot #3D3D3D), selection #264F78 with a #4C8EC4 edge, group rows #2F2F2F, footer #2F2F2F with #383838 cells, frame #5A5A5A, scroll track #2B2B2B with #8A8A8A thumb; the baked bitmaps (navigator, sort, funnel, expander) are mapped pixel by pixel; the preset follows the palette per build. Sheets data_grid, _main, _states(+pressed), data_grid_dialogs(+sort).",
+    "gaps": "Pressed header barely differs from rest; navigator tiles keep a lighter rim from the map; unfocused-window selection (#3A3A3A) only in the tree; dialogs inside the grid map their literals, not all individually reviewed."
+   }
+  }
+ }
+}

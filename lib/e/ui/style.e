@@ -824,6 +824,13 @@ fn windows_accent(t: *const ThemeTokens) -> paint.Color {
     if windows_contrast(t) { ret color(t, .Primary) }
     ret hex_raw(0x298DD9u32)
 }
+// ---- round 7: the dark flag of the Windows bars and grids ------------------------------------------------------
+// `windows_dark_enter` sets the colour map (`set_windark`) from a theme at the entry of a control; the maps are above.
+fn windows_dark_enter(t: *const ThemeTokens) {
+    windark_on = t.profile == .Windows && t.palette == .Dark
+}
+
+fn windows_dark_on() -> bool { ret windark_on }
 // ---- end looks-polish palettes -----------------------------------------------------------------
 
 // ---- the Cupertino look (profile CupertinoLike, docs/ui/looks/cupertino) -----------------------

@@ -2825,7 +2825,8 @@ fn dk(t: *const control.Theme, value: u32) -> paint.Color {
 // callbacks, for the tree list: no vertical or horizontal lines, the measured stripes and selection.
 fn windows_table_look() -> TableLook {
     var look: TableLook = zero
-    let lk = gl.v3()
+    var lk = gl.v3()
+    if style.windows_dark_on() { lk = gl.v3_dark() }
     look.on = true
     // looks5-e: 20 rows with the #F4F4F4 line last (live captures of the Filter dialog's list)
     look.header_height = 20.0
@@ -2850,6 +2851,16 @@ fn windows_table_look() -> TableLook {
     look.vertical_off = true
     look.head_text = lk.text_size
     look.footer_fill = lk.footer_band
+    if style.windows_dark_on() {
+        // (round 7) Windows 11 dark: rows #2B2B2B / #262626, the unfocused selection #3A3A3A, the focused one #264F78
+        look.header_line = gl.raw(0x454545u32)
+        look.even = gl.raw(0x262626u32)
+        look.odd = gl.raw(0x2B2B2Bu32)
+        look.selected = gl.raw(0x3A3A3Au32)
+        look.selected_line = gl.raw(0x3A3A3Au32)
+        look.selected_focus = gl.raw(0x264F78u32)
+        look.line = gl.raw(0x3A3A3Au32)
+    }
     ret look
 }
 
@@ -5292,7 +5303,10 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     // table look (rows of 19, stripes, the #A6D2FF selection) and +/- boxes for twisties.
     let win = tabled && t.tokens.profile == .Windows
     var win_look = zero_look()
-    if win { win_look = windows_table_look() }
+    if win {
+        style.windows_dark_enter(t.tokens)
+        win_look = windows_table_look()
+    }
     // looks5-e: a list with rows has the #F4F4F4 line under its header, an empty one none (live captures)
     if win && count > 0usize { win_look.header_line = gl.rgb(0xF4F4F4u32) }
     // (D1372) Moving: the row a drag carries, and the gestures a row takes.
@@ -5971,6 +5985,7 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var head_pad = cell_padding(t)
     var row_height_of = extent
     if t.tokens.profile == .Windows {
+        style.windows_dark_enter(t.tokens)
         head_look = windows_table_look()
         // looks5-e: the #F4F4F4 line under the header of a list with rows (live captures); an empty list has none
         if source.count(source.ctx, 0u64) > 0usize { head_look.header_line = gl.rgb(0xF4F4F4u32) }
@@ -11029,6 +11044,7 @@ fn property_shapes_clear() {
 fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32, options: PropertyGridOptions) -> (widget.Node, err) {
     let total = source.count(source.ctx)
     if total > 256usize { ret (zero, TooLarge) }
+    style.windows_dark_enter(t.tokens)
     let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
     if tahoma_error != ok { ret (zero, tahoma_error) }
     let needle = options.filter[0usize..options.filter_len]
@@ -11102,7 +11118,9 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
             var caption = control.text_options()
             caption.role = .BodyMedium
             caption.wrap = .None
-            let (said, said_error) = control.colored_text(a, 0u64, head.group, &tahoma, caption, style.hex(0x6D6D6Du32))
+            var band_ink = style.hex(0x6D6D6Du32)
+            if style.windark_active() { band_ink = style.hex_raw(0xE0E0E0u32) }
+            let (said, said_error) = control.colored_text(a, 0u64, head.group, &tahoma, caption, band_ink)
             if said_error != ok { ret (zero, said_error) }
             let (said_held, said_held_error) = mem.alloc[widget.Node](a, 1usize)
             if said_held_error != ok { ret (zero, TooLarge) }
@@ -11144,7 +11162,7 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     var ink = style.hex(0x000000u32)
                     var nudge: f32 = 0.0
                     if chosen {
-                        ink = style.hex(0xFFFFFFu32)
+                        ink = style.hex_raw(0xFFFFFFu32)
                         nudge = 0.0
                     }
                     var line = control.text_options()
