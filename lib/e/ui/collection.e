@@ -1921,6 +1921,14 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         caption.max_lines = 1u32
         var ink = muted
         if sorted { ink = strong }
+        if t.tokens.profile == .CupertinoLike && !look.on {
+            // NSTableHeaderView: 11 pt in the secondary label colour (the label colour once sorted).
+            caption.role = .BodySmall
+            caption.size = 11.0
+            caption.weight = 400u32
+            ink = style.color(t.tokens, .TextMuted)
+            if sorted { ink = style.color(t.tokens, .Text) }
+        }
         if look.on {
             caption.size = look.text_size
             // v3 does not grow the header captions with the grid font size
@@ -1956,6 +1964,17 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if !sorted { ink = control.with_alpha(muted, 0.5) }
             let (arrow, arrow_error) = control.icon_square(a, ink, .ArrowUp, t.tokens.sizes.icon_sm)
             if arrow_error != ok { ret (zero, arrow_error) }
+            var cup_chevron: widget.Node = zero
+            var has_cup_chevron = false
+            if t.tokens.profile == .CupertinoLike && !look.on {
+                // The sort chevron: up for ascending, down for descending, 9 wide, in the header's ink.
+                var kind = 4u32
+                if sorted && column_descending { kind = 3u32 }
+                let (chev, chev_error) = control.cup_mark(a, kind, ink, ink, 1.4, 0.0, 9.0, 9.0)
+                if chev_error != ok { ret (zero, chev_error) }
+                cup_chevron = chev
+                has_cup_chevron = true
+            }
             // (D1436, docs/ux/components/HeaderRow, motion) The arrow flips by
             // turning half a turn over `duration-short-3` on `ease-standard` (kept
             // on the header, slot `header_key + 1048595`); reduced motion flips
@@ -1967,6 +1986,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if turning_error != ok { ret (zero, TooLarge) }
             turning[0usize] = arrow
             body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * flipped, offset: zero }, control.sized_style(t.tokens.sizes.icon_sm, t.tokens.sizes.icon_sm), turning[0usize..1usize])
+            if has_cup_chevron { body[1usize] = cup_chevron }
             b = 2usize
             if look.on {
                 // looks4-e: v3 marks the sort with an outlined triangle (up ascending, down descending), 8 x 9
@@ -2024,6 +2044,12 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         }
         var head_style = control.sized_style(control.max_zero(columns[i].width - grip_here), inner)
         head_style.background = paint.Brush { Solid: control.with_alpha(strong, control.state_opacity(t, state)) }
+        if t.tokens.profile == .CupertinoLike && !look.on {
+            var head_face = style.cup_alpha(style.color(t.tokens, .Text), 0.0)
+            if state.hovered { head_face = style.cup_fill(t.tokens, 0.7) }
+            if state.pressed { head_face = style.cup_fill(t.tokens, 1.4) }
+            head_style.background = paint.Brush { Solid: head_face }
+        }
         if look.on {
             var head_fill = look.header
             if state.hovered { head_fill = look.header_hover }
@@ -2473,6 +2499,25 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     var fill = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
     if selected { fill = style.layer(style.color(t.tokens, .SecondaryContainer), style.color(t.tokens, .OnSecondaryContainer), control.state_opacity(t, state)) }
     if disabled && !selected { fill = control.with_alpha(style.color(t.tokens, .OnSurface), 0.0) }
+    if t.tokens.profile == .CupertinoLike && !look.on {
+        // The macOS table view: alternating rows (the label colour at 4 %), the tertiary fill under the pointer, the selection in the
+        // accent (#0A60FF; #0B57D0 Dark) while the row holds the keyboard focus and in a neutral grey (#DCDCDC; #464649) otherwise.
+        fill = style.cup_alpha(style.color(t.tokens, .Text), 0.0)
+        if index % 2usize == 1usize { fill = style.cup_alpha(style.color(t.tokens, .Text), 0.04) }
+        if state.hovered { fill = style.cup_fill(t.tokens, 0.9) }
+        if state.pressed { fill = style.cup_fill(t.tokens, 1.8) }
+        if selected {
+            fill = style.hex(0xDCDCDCu32)
+            if t.tokens.palette == .Dark { fill = style.hex(0x464649u32) }
+            if mem.address_of(t.runtime) != 0usize {
+                let (held, has_held) = widget.focused_key(t.runtime)
+                if has_held && held == row_key {
+                    fill = style.hex(0x0A60FFu32)
+                    if t.tokens.palette == .Dark { fill = style.hex(0x0B57D0u32) }
+                }
+            }
+        }
+    }
     if look.on {
         // the measured zebra and selection, no state layer
         fill = look.even
@@ -5281,9 +5326,22 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             let state = control.control_state(t, entry.key, true, chosen)
             var fill = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
             if chosen { fill = style.layer(style.color(t.tokens, .SecondaryContainer), style.color(t.tokens, .OnSecondaryContainer), control.state_opacity(t, state)) }
+            if t.tokens.profile == .CupertinoLike {
+                // The macOS outline view: no fill at rest, the tertiary fill under the pointer or finger, a grey selection that takes
+                // the accent tint while the list holds the keyboard focus.
+                fill = style.cup_alpha(style.color(t.tokens, .Text), 0.0)
+                if state.hovered { fill = style.cup_fill(t.tokens, 0.9) }
+                if state.pressed { fill = style.cup_fill(t.tokens, 1.8) }
+                if chosen { fill = style.cup_fill(t.tokens, 2.0) }
+                if chosen && state.focused {
+                    fill = style.cup_alpha(style.color(t.tokens, .Primary), 0.22)
+                    if t.tokens.palette == .Dark { fill = style.cup_alpha(style.color(t.tokens, .Primary), 0.45) }
+                }
+            }
             var row_style = control.sized_style(control.max_zero(width - 16.0), tall)
             row_style.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: flat, right: style.Length { Px: 8.0 }, bottom: flat }
             row_style.radius = t.tokens.radii.sm
+            if t.tokens.profile == .CupertinoLike { row_style.radius = 5.0 }
             // (D1372) Lifted while dragged; the drop look on a branch under it.
             if moving && has_lifted_row && lifted_row == i {
                 fill = style.color(t.tokens, .SurfaceContainerHigh)
@@ -5333,6 +5391,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             control.focus_look(t)
             var row_gesture = widget.GestureAction { ctx: ctx_of(&picks[i]), invoke: row_pick_gesture }
             var row_gestures = 1u8 | 4u8
+            if t.tokens.profile == .CupertinoLike { row_gestures = row_gestures | widget.GESTURE_HOVER }
             if moving {
                 drags[i] = TreeRowDrag { pick: &picks[i], runtime: t.runtime, index: i, key: entry.key, rows: visible[0usize..count], move: options.move }
                 row_gesture = widget.GestureAction { ctx: ctx_of(&drags[i]), invoke: tree_row_gesture }
@@ -6008,9 +6067,19 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
     // row header column and white value cells split by 1 px #A0A0A4 lines, category rows with a +/- box.
     let win = t.tokens.profile == .Windows
     let rule_ink = gl.rgb(0xA0A0A4u32)
-    let row_min = control.if_else(win, 19.0, control.if_else(touch, 56.0, 40.0))
-    let head_h = control.if_else(win, 21.0, control.if_else(touch, 40.0, 32.0))
-    let right_pad = control.if_else(win, 0.0, 8.0)
+    let cup = t.tokens.profile == .CupertinoLike
+    // Cupertino: an inset grouped list. Each category is a section: a 13 pt secondary header over a rounded cell block of 44 tall
+    // rows (the name in the label colour at the start, the value in the secondary colour at the end) split by inset hairlines.
+    var row_min = control.if_else(win, 19.0, control.if_else(touch, 56.0, 40.0))
+    var head_h = control.if_else(win, 21.0, control.if_else(touch, 40.0, 32.0))
+    var right_pad = control.if_else(win, 0.0, 8.0)
+    var inset: f32 = 0.0
+    if cup {
+        row_min = 44.0
+        head_h = 34.0
+        right_pad = 16.0
+        inset = 16.0
+    }
     let needle = options.filter[0usize..options.filter_len]
     var grouped = false
     var g = 0usize
@@ -6020,7 +6089,8 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
     }
     var start = control.if_else(grouped, 36.0, 8.0)
     if win { start = 6.0 }
-    let value_width = control.max_zero(width - name_width - control.if_else(win, 1.0, 8.0))
+    if cup { start = 16.0 }
+    let value_width = control.max_zero(width - 2.0 * inset - name_width - control.if_else(win, 1.0, 8.0))
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let flat = style.Length { Px: 0.0 }
     let (rows, rows_error) = mem.alloc[widget.Node](a, total)
@@ -6089,11 +6159,13 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     var name_ink = muted
                     if standing.modified { name_ink = style.color(t.tokens, .OnSurface) }
                     if win { name_ink = gl.rgb(0x000000u32) }
+                    if cup { name_ink = style.color(t.tokens, .Text) }
                     var caption = control.text_options()
                     caption.role = .BodyMedium
                     caption.wrap = .None
                     caption.ellipsis = "…"
                     caption.max_lines = 1u32
+                    if cup { caption.role = .Body }
                     // (D1453) A modified property's name takes a 600 face where
                     // the theme has one.
                     if standing.modified { caption.weight = 600u32 }
@@ -6132,6 +6204,12 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     let (valued, valued_error) = mem.alloc[widget.Node](a, 1usize)
                     if valued_error != ok { ret (zero, TooLarge) }
                     valued[0usize] = editor
+                    if cup {
+                        // The value at the row's end.
+                        var flush = style.defaults()
+                        flush.width = style.Length { Px: control.max_zero(value_width - slot) }
+                        valued[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 0.0 }, flush, mem_one_of(a, editor))
+                    }
                     if standing.message.len > 0usize {
                         // The message under the editor; the row grows.
                         let err_ink = style.color(t.tokens, .Error)
@@ -6174,11 +6252,12 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                         parts_in_row = 3usize
                     }
                     var line_style = style.defaults()
-                    line_style.width = style.Length { Px: width }
+                    line_style.width = style.Length { Px: width - 2.0 * inset }
                     line_style.min_height = style.Length { Px: row_min }
                     line_style.padding = style.EdgeLengths { left: flat, top: flat, right: style.Length { Px: right_pad }, bottom: flat }
                     // (D1544) The selected row on `secondary-container`.
                     if options.selected != 0u64 && p.key == options.selected { line_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }
+                    if cup && options.selected != 0u64 && p.key == options.selected { line_style.background = paint.Brush { Solid: style.cup_fill(t.tokens, 1.6) } }
                     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
                     if lined_error != ok { ret (zero, TooLarge) }
                     lined[0usize] = widget.flex(p.key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, pair[0usize..parts_in_row])
@@ -6219,6 +6298,19 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     row_sem.row = u32(r + 1usize)
                     row_sem.row_count = u32(total)
                     rows[i + matched] = widget.semantics(0u64, row_sem, style.defaults(), lined[0usize..1usize])
+                    if cup && matched > 0usize {
+                        // The hairline above every row but the section's first, inset 16.
+                        let (split, split_error) = mem.alloc[widget.Node](a, 2usize)
+                        if split_error != ok { ret (zero, TooLarge) }
+                        var hair = style.defaults()
+                        hair.width = style.Length { Px: width - 2.0 * inset - 16.0 }
+                        hair.height = style.Length { Px: 0.5 }
+                        hair.margin = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: flat, right: flat, bottom: flat }
+                        hair.background = paint.Brush { Solid: style.cupertino_separator(t.tokens) }
+                        split[0usize] = widget.box(0u64, hair, zero)
+                        split[1usize] = rows[i + matched]
+                        rows[i + matched] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), split[0usize..2usize])
+                    }
                 }
                 matched += 1usize
             }
@@ -6230,7 +6322,14 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         }
         var shown_rows = matched
         if !open { shown_rows = 0usize }
-        let group_rows = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[i..i + shown_rows])
+        var cell_block = style.defaults()
+        if cup {
+            cell_block.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+            cell_block.radius = 10.0
+            cell_block.overflow = .Clip
+            cell_block.margin = style.EdgeLengths { left: style.Length { Px: inset }, top: flat, right: style.Length { Px: inset }, bottom: flat }
+        }
+        let group_rows = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, cell_block, rows[i..i + shown_rows])
         if head.group.len == 0usize {
             blocks[block_count] = group_rows
         } else {
@@ -6266,12 +6365,18 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
             }
             var title = control.text_options()
             title.role = .TitleSmall
+            if cup {
+                title.role = .BodySmall
+                title.size = 13.0
+            }
             if win {
                 title.role = .BodyMedium
                 title.weight = 700u32
             }
             title.wrap = .None
-            let (said, said_error) = control.colored_text(a, 0u64, head.group, t, title, style.color(t.tokens, .OnSurface))
+            var group_ink = style.color(t.tokens, .OnSurface)
+            if cup { group_ink = style.color(t.tokens, .TextMuted) }
+            let (said, said_error) = control.colored_text(a, 0u64, head.group, t, title, group_ink)
             if said_error != ok { ret (zero, said_error) }
             parts[1usize] = said
             parts[2usize] = widget.spacer(0u64, 1.0)
@@ -6305,6 +6410,10 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
             look.padding_y = control.max_zero((head_h - 24.0) * 0.5)
             look.min_height = head_h
             look.min_width = width
+            if cup {
+                look.background = style.cup_alpha(style.color(t.tokens, .Text), 0.0)
+                look.padding = 20.0
+            }
             var states = 0u32
             if open { states = accessibility.STATE_EXPANDED }
             let (header, header_error) = control.pressable_states(a, heading_key, t, 3u8, head.group, look, true, false, states, 0u32, 0u64, &actions[block_count], content)
@@ -6327,6 +6436,7 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
             stacked[1usize] = group_rows
             var group_style = style.defaults()
             if block_count > 0usize && !win { group_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: 8.0 }, right: flat, bottom: flat } }
+            if cup { group_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: 12.0 }, right: flat, bottom: flat } }
             blocks[block_count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, group_style, stacked[0usize..2usize])
         }
         block_count += 1usize
@@ -10902,3 +11012,11 @@ fn one_node(a: *mem.Arena, node: widget.Node) -> []widget.Node {
 
 // looks4-e: whether row `index` of a measured-look table is a white one (the zebra's odd rows).
 fn fill_is_light(look: TableLook, index: usize) -> bool { ret index % 2usize == 1usize }
+
+// One node as a slice, in the arena.
+fn mem_one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 1usize)
+    if nodes_error != ok { ret zero }
+    nodes[0usize] = node
+    ret nodes[0usize..1usize]
+}

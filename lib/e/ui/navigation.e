@@ -562,6 +562,12 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
         ground = .PrimaryContainer
         ink = style.color(t.tokens, .OnPrimaryContainer)
     }
+    let cupertino = t.tokens.profile == .CupertinoLike
+    // The macOS window's bottom bar: the window colour under a hairline, 12 pt text in the secondary label colour.
+    if cupertino {
+        ground = .SurfaceContainer
+        ink = style.color(t.tokens, .TextMuted)
+    }
     let (starts, starts_error) = mem.alloc[widget.Node](a, items.len)
     if starts_error != ok { ret (zero, TooLarge) }
     let (ends, ends_error) = mem.alloc[widget.Node](a, items.len)
@@ -660,6 +666,7 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
         var small = control.text_options()
         small.role = .BodySmall
         small.wrap = .None
+        if cupertino { small.size = 12.0 }
         let squeezed = i == 0usize && !item.end && total > width
         if squeezed {
             small.max_lines = 1u32
@@ -688,6 +695,7 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
             look.foreground = ink
             look.border_width = 0.0
             look.radius = 0.0
+            if cupertino { look.radius = 5.0 }
             look.custom_padding = true
             look.padding = 8.0
             look.padding_y = 4.0
@@ -769,6 +777,7 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
     groups[1usize] = widget.spacer(0u64, 1.0)
     groups[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), ends[0usize..e])
     var bar = control.sized_style(width, 24.0)
+    if cupertino { bar = control.sized_style(width, 26.0) }
     bar.background = paint.Brush { Solid: style.color(t.tokens, ground) }
     let ends_pad = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
@@ -776,6 +785,15 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
     boxed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, groups[0usize..3usize])
+    if cupertino {
+        let (piled, piled_error) = mem.alloc[widget.Node](a, 2usize)
+        if piled_error != ok { ret (zero, TooLarge) }
+        piled[0usize] = boxed[0usize]
+        var hair = control.sized_style(width, 0.5)
+        hair.background = paint.Brush { Solid: style.cupertino_separator(t.tokens) }
+        piled[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), control.mem_one_node(a, widget.box(0u64, hair, zero)))
+        boxed[0usize] = widget.stack(0u64, control.sized_style(width, 26.0), piled[0usize..2usize])
+    }
     var layer = 0usize
     if action_count > 0usize {
         let (moves, moves_error) = mem.alloc[StatusMove](a, 4usize)
@@ -1765,9 +1783,18 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         let (flat, flat_error) = windows_menu_bar_of(a, key, t, label, menus, open, toggles)
         ret (flat, flat_error)
     }
-    let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len)
+    let cupertino = t.tokens.profile == .CupertinoLike
+    var lead_count = 0usize
+    if cupertino { lead_count = 1usize }
+    let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len + 1usize)
     if heads_error != ok { ret (zero, TooLarge) }
     let ink = style.color(t.tokens, .OnSurface)
+    if cupertino {
+        // The Apple menu: the logo at 14 pt in the label colour, 10 in from the bar's start.
+        let (logo, logo_error) = control.cup_mark(a, 20u32, style.color(t.tokens, .Text), style.color(t.tokens, .Background), 0.0, 0.0, 13.0, 16.0)
+        if logo_error != ok { ret (zero, logo_error) }
+        heads[0usize] = widget.padded(0u64, 10.0, 0.0, 6.0, 0.0, style.defaults(), control.widget_one_of(a, logo))
+    }
     var i = 0usize
     while i < menus.len {
         if menus[i].commands.len > 14usize { ret (zero, TooLarge) }
@@ -1793,28 +1820,52 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         var caption = control.text_options()
         caption.role = .BodyMedium
         caption.wrap = .None
+        if cupertino {
+            // macOS: 13 pt titles (the first, the app's, bold), no hover; the open title is a translucent grey chip.
+            tint = style.color(t.tokens, .Text)
+            look.background = control.cup_clear()
+            if opened || state.pressed {
+                look.background = style.hexa(0x000000u32, 0.14)
+                if t.tokens.palette == .Dark { look.background = style.hexa(0xFFFFFFu32, 0.20) }
+            }
+            look.foreground = tint
+            look.radius = 5.0
+            look.padding = 8.0
+            look.padding_y = 1.0
+            look.min_height = 20.0
+            caption.role = .Body
+            caption.size = 13.0
+            if i == 0usize { caption.weight = 700u32 }
+        }
         let (label_node, label_error) = menu_title_label(a, t, menus[i].label, caption, tint, widget.menu_access_keys_visible(t.runtime))
         if label_error != ok { ret (zero, label_error) }
         var states = 0u32
         if opened { states = accessibility.STATE_EXPANDED }
         let (head, head_error) = control.pressable_states(a, title_key, t, 3u8, menus[i].label, look, true, false, states, accessibility.ACTION_SHOW_MENU, title_key + 1u64, &toggles[i], label_node)
         if head_error != ok { ret (zero, head_error) }
-        heads[2usize * i] = head
+        heads[2usize * i + lead_count] = head
         let (hung, hung_error) = bar_menu(a, title_key + 1u64, t, title_key, menus[i].label, menus[i].commands, opened, &toggles[i])
         if hung_error != ok { ret (zero, hung_error) }
-        heads[2usize * i + 1usize] = hung
+        heads[2usize * i + 1usize + lead_count] = hung
         i += 1usize
     }
     var bar = style.defaults()
     bar.width = style.Length { Percent: 100.0 }
     bar.height = style.Length { Px: 32.0 }
     bar.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    if cupertino {
+        // The macOS menu bar: 24 tall, the window material (an opaque approximation), a hairline under it.
+        bar.height = style.Length { Px: 24.0 }
+        bar.background = paint.Brush { Solid: style.hex(0xF6F6F6u32) }
+        if t.tokens.palette == .Dark { bar.background = paint.Brush { Solid: style.hex(0x2A2A2Cu32) } }
+        bar.border = style.Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+    }
     let ends = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
     bar.padding = style.EdgeLengths { left: ends, top: flat, right: ends, bottom: flat }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, heads[0usize..2usize * menus.len])
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, heads[0usize..2usize * menus.len + lead_count])
     var sem: widget.Semantics = zero
     sem.role = accessibility.ROLE_MENU_BAR
     sem.label = label
@@ -1896,6 +1947,51 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     while i < commands.len {
         let c = &commands[i]
         let has_submenu = c.submenu.len != 0usize
+        if t.tokens.profile == .CupertinoLike {
+            // A macOS menu row: 13 pt, the accent under the pointer, the shortcut at the end, a hairline for a separator.
+            if c.separated && i > 0usize {
+                var hair = style.defaults()
+                hair.width = style.Length { Percent: 100.0 }
+                hair.height = style.Length { Px: 0.5 }
+                hair.background = paint.Brush { Solid: style.cupertino_separator(t.tokens) }
+                let (hairs, hairs_error) = mem.alloc[widget.Node](a, 1usize)
+                if hairs_error != ok { ret (zero, TooLarge) }
+                hairs[0usize] = widget.box(0u64, hair, zero)
+                rows[n] = widget.padded(0u64, 10.0, 4.0, 10.0, 4.0, style.defaults(), hairs[0usize..1usize])
+                n += 1usize
+            }
+            let cup_key = key + 1u64 + u64(i)
+            let (cup_look, cup_content, cup_error) = control.cupertino_menu_row_parts(a, t, cup_key, c.label, c.shortcut, c.checked, c.radio, c.enabled, c.destructive, has_submenu, c.submenu_open, slotted)
+            if cup_error != ok { ret (zero, cup_error) }
+            var cup_states = 0u32
+            if c.checked { cup_states = accessibility.STATE_CHECKED }
+            var cup_role = 22u8
+            if c.checkable || c.checked { cup_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
+            if c.radio { cup_role = accessibility.ROLE_MENU_ITEM_RADIO }
+            var cup_actions = 0u32
+            var cup_controls = 0u64
+            var cup_chosen = &c.action
+            var cup_submenu_key = key + 15u64 + 16u64 * u64(i)
+            if depth > 0u8 { cup_submenu_key = key * 32u64 + 16u64 + u64(i) }
+            if has_submenu {
+                cup_actions = accessibility.ACTION_SHOW_MENU
+                cup_controls = cup_submenu_key
+                cup_chosen = &c.submenu_toggle
+                if c.submenu_open { cup_states = cup_states | accessibility.STATE_EXPANDED }
+            }
+            let (cup_made, cup_made_error) = control.pressable_states(a, cup_key, t, cup_role, c.label, cup_look, c.enabled, false, cup_states, cup_actions, cup_controls, cup_chosen, cup_content)
+            if cup_made_error != ok { ret (zero, cup_made_error) }
+            rows[n] = cup_made
+            n += 1usize
+            if has_submenu {
+                let (cup_nested, cup_nested_error) = bar_menu_at(a, cup_submenu_key, t, cup_key, c.label, c.submenu, c.submenu_open, &c.submenu_toggle, .Right, geometry.Point { x: -4.0, y: -8.0 }, depth + 1u8)
+                if cup_nested_error != ok { ret (zero, cup_nested_error) }
+                rows[n] = cup_nested
+                n += 1usize
+            }
+            i += 1usize
+            continue
+        }
         if c.separated && i > 0usize {
             let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
             if lines_error != ok { ret (zero, TooLarge) }
@@ -2018,6 +2114,11 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     sheet_style.padding = style.EdgeLengths { left: flat, top: rim, right: flat, bottom: rim }
     sheet_style.min_width = style.Length { Px: 200.0 }
     sheet_style.max_width = style.Length { Px: 320.0 }
+    if t.tokens.profile == .CupertinoLike {
+        sheet_style = control.cupertino_menu_sheet_style(t, 4.0)
+        sheet_style.min_width = style.Length { Px: 190.0 }
+        sheet_style.max_width = style.Length { Px: 320.0 }
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..n])

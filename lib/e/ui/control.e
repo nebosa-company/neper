@@ -1625,6 +1625,12 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     }
     var row_h: f32 = t.tokens.sizes.control_lg
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { row_h = t.tokens.sizes.control_xl }
+    let cupertino = t.tokens.profile == .CupertinoLike
+    // Cupertino: Outlined is the macOS box (a faint fill in a hairline, rows 28 tall), Filled the iOS inset grouped section (white rows 44 tall).
+    if cupertino {
+        row_h = 44.0
+        if options.variant == .Outlined { row_h = 28.0 }
+    }
     var fade: f32 = 1.0
     if !options.enabled { fade = t.tokens.states.disabled_content }
     let n = children.len
@@ -1638,6 +1644,14 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
             line.height = style.Length { Px: t.tokens.sizes.divider }
             if options.width > 0.0 { line.width = style.Length { Px: options.width } }
             line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            if cupertino {
+                line.background = paint.Brush { Solid: style.cupertino_separator(t.tokens) }
+                line.height = style.Length { Px: 0.5 }
+                if options.variant == .Filled {
+                    line.margin = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+                    if options.width > 0.0 { line.width = style.Length { Px: options.width - 16.0 } }
+                }
+            }
             rows[count] = widget.box(0u64, line, zero)
             count += 1usize
         }
@@ -1656,7 +1670,18 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     if !plain {
         box_style.radius = t.tokens.radii.md
         box_style.overflow = .Clip
-        if options.variant == .Filled {
+        if cupertino && options.variant == .Filled {
+            box_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+        } else if cupertino {
+            // The macOS box: the label colour at 3 % (white at 5 % in Dark) inside a hairline of the separator.
+            box_style.radius = 6.0
+            var wash: f32 = 0.03
+            if t.tokens.palette == .Dark { wash = 0.05 }
+            box_style.background = paint.Brush { Solid: style.mix(style.color(t.tokens, .Background), style.color(t.tokens, .Text), wash) }
+            var edge_ink = style.hexa(0x000000u32, 0.10)
+            if t.tokens.palette == .Dark { edge_ink = style.hexa(0xFFFFFFu32, 0.10) }
+            box_style.border = style.Border { width: 1.0, color: edge_ink }
+        } else if options.variant == .Filled {
             box_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
         } else {
             box_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
@@ -1673,7 +1698,14 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     var caption = text_options()
     caption.role = .TitleSmall
     caption.wrap = .None
-    let (heading, heading_error) = colored_text(a, 0u64, label, t, caption, with_alpha(style.color(t.tokens, .OnSurface), fade))
+    var caption_ink = style.color(t.tokens, .OnSurface)
+    if cupertino {
+        // iOS section headers are 13 pt in the secondary label colour; the macOS box title is 13 pt label colour.
+        caption.role = .BodySmall
+        caption.size = 13.0
+        if options.variant == .Filled { caption_ink = style.color(t.tokens, .TextMuted) }
+    }
+    let (heading, heading_error) = colored_text(a, 0u64, label, t, caption, with_alpha(caption_ink, fade))
     if heading_error != ok { ret (zero, heading_error) }
     heads[0usize] = heading
     if collapsible {
@@ -1736,6 +1768,7 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     var head_style = style.defaults()
     head_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     if collapsible { head_style.padding.left = style.Length { Px: 0.0 } }
+    if cupertino && options.variant == .Filled { head_style.padding.left = style.Length { Px: 16.0 } }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 2.0 }, head_style, heads[0usize..head_count])
     var part_count = 1usize
     if !collapsible || options.expanded {
@@ -6713,7 +6746,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         ret (flat, flat_error)
     }
     if t.tokens.profile == .CupertinoLike {
-        let (cup, cup_error) = cupertino_popup_head(a, key, t, label, shown, chosen, open, toggle, lead)
+        let (cup, cup_error) = cupertino_popup_head(a, key, t, label, shown, chosen, open, toggle, lead, true)
         ret (cup, cup_error)
     }
     let state = control_state(t, key, true, false)
@@ -6802,6 +6835,14 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
 // `surface-container` with 8 corners and elevation 2, 8 above and below its rows,
 // 4 below the field, matching its width; its rows are `menu_row`s.
 fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+    var none: []const widget.Node = zero
+    let (made, made_error) = select_icons(a, key, t, label, options, none, selected, open, true, toggle, picks)
+    ret (made, made_error)
+}
+
+// `select` with a picture per option (the Cupertino image combo box: the pop-up button with the chosen picture before its
+// value and a picture before each menu row). `icons` is empty or as long as `options`.
+fn select_icons(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = win_select(a, key, t, label, options, selected, open, toggle, picks)
@@ -6811,20 +6852,40 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     var shown = label
     if chosen { shown = options[selected] }
     let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
-    let (head, head_error) = field_head(a, key, t, label, shown, chosen, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense)
-    if head_error != ok { ret (zero, head_error) }
+    var lead: []const widget.Node = zero
+    if chosen && icons.len == options.len && t.tokens.profile == .CupertinoLike { lead = icons[selected..selected + 1usize] }
+    var head: widget.Node = zero
+    if t.tokens.profile == .CupertinoLike && !enabled {
+        let (off, off_error) = cupertino_popup_head(a, key, t, label, shown, chosen, false, toggle, lead, false)
+        if off_error != ok { ret (zero, off_error) }
+        head = off
+    } else {
+        let (on, on_error) = led_head(a, key, t, label, shown, chosen, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense, lead)
+        if on_error != ok { ret (zero, on_error) }
+        head = on
+    }
     var count = 1usize
-    if open { count = 2usize }
+    if open && enabled { count = 2usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
-    if open {
+    if open && enabled {
         let (items, items_error) = mem.alloc[widget.Node](a, options.len)
         if items_error != ok { ret (zero, TooLarge) }
         var i = 0usize
         while i < options.len {
-            let (item, item_error) = menu_row(a, key + 2u64 + u64(i), t, options[i], i == selected, &picks[i])
-            if item_error != ok { ret (zero, item_error) }
+            var item: widget.Node = zero
+            if t.tokens.profile == .CupertinoLike && icons.len == options.len {
+                let (look, content, content_error) = cupertino_menu_row_icon(a, t, key + 2u64 + u64(i), options[i], "", i == selected, false, true, false, false, false, true, icons[i..i + 1usize])
+                if content_error != ok { ret (zero, content_error) }
+                let (pressed_row, pressed_row_error) = pressable(a, key + 2u64 + u64(i), t, 3u8, options[i], look, true, false, &picks[i], content)
+                if pressed_row_error != ok { ret (zero, pressed_row_error) }
+                item = pressed_row
+            } else {
+                let (plain_row, plain_row_error) = menu_row(a, key + 2u64 + u64(i), t, options[i], i == selected, &picks[i])
+                if plain_row_error != ok { ret (zero, plain_row_error) }
+                item = plain_row
+            }
             var entry: widget.Semantics = zero
             entry.role = accessibility.ROLE_OPTION
             entry.label = options[i]
@@ -7030,6 +7091,26 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
             let (mark_node, mark_error) = choice_mark_at(a, t, state, chosen[i], false, false, true, picked_share)
             if mark_error != ok { ret (zero, mark_error) }
             bits[0usize] = mark_node
+            if t.tokens.profile == .CupertinoLike {
+                // iOS multi-select: a hollow circle, a blue disc with a white tick once picked.
+                var circle = style.color(t.tokens, .Outline)
+                if state.hovered { circle = style.cup_alpha(circle, 1.0) }
+                let (hollow, hollow_error) = cup_mark(a, 15u32, circle, circle, 1.5, 0.0, 22.0, 22.0)
+                if hollow_error != ok { ret (zero, hollow_error) }
+                var shown_mark = hollow
+                if chosen[i] {
+                    let (disc, disc_error) = cup_mark(a, 14u32, style.color(t.tokens, .Primary), style.color(t.tokens, .Primary), 0.0, 0.0, 22.0, 22.0)
+                    if disc_error != ok { ret (zero, disc_error) }
+                    let (tick, tick_error) = cup_mark(a, 1u32, style.hex(0xFFFFFFu32), style.hex(0xFFFFFFu32), 2.0, 0.0, 12.0, 12.0)
+                    if tick_error != ok { ret (zero, tick_error) }
+                    let (pile, pile_error) = mem.alloc[widget.Node](a, 2usize)
+                    if pile_error != ok { ret (zero, TooLarge) }
+                    pile[0usize] = disc
+                    pile[1usize] = widget.aligned(0u64, .Center, .Center, sized_style(22.0, 22.0), widget_one_of(a, tick))
+                    shown_mark = widget.stack(0u64, sized_style(22.0, 22.0), pile[0usize..2usize])
+                }
+                bits[0usize] = shown_mark
+            }
             bits[1usize] = text_item
             used = 2usize
             lead = 4.0
@@ -9015,6 +9096,9 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var hit: f32 = 8.0
     if touch { hit = 24.0 }
+    let cupertino = t.tokens.profile == .CupertinoLike
+    // macOS: the thick divider is 9 across with a 1 px separator line in it.
+    if cupertino { hit = 9.0 }
     let (handles, handles_error) = mem.alloc[Handle](a, 1usize)
     if handles_error != ok { ret (zero, TooLarge) }
     let (kept, has_kept) = sash_cell(t.runtime, key + 2u64, size)
@@ -9050,6 +9134,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     // across, WCAG 2.5.8's minimum: it reaches 8 over each side, its line centred.
     var reach: f32 = 0.0
     if !touch { reach = 8.0 }
+    if cupertino { reach = 6.0 }
     if t.tokens.profile == .Windows { reach = 0.0 }
     let over = style.Length { Px: 0.0 - reach }
     let flat = style.Length { Px: 0.0 }
@@ -9086,6 +9171,23 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
         sashes_line = style.color(t.tokens, .Primary)
         line_width = 2.0
         grip_color = sashes_line
+    }
+    if cupertino {
+        // The separator line; a dimple shows under the pointer; held or keyboard-focused the line takes the accent.
+        sashes_line = style.cupertino_separator(t.tokens)
+        if t.tokens.palette == .Dark { sashes_line = style.hex(0x48484Au32) }
+        if !(t.tokens.palette == .Dark) { sashes_line = style.hex(0xD1D1D6u32) }
+        line_width = 1.0
+        grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        if state.hovered { grip_color = style.color(t.tokens, .TextMuted) }
+        if state.pressed {
+            sashes_line = style.color(t.tokens, .Primary)
+            grip_color = style.color(t.tokens, .Primary)
+        }
+        if state.focus_visible && !state.pressed {
+            sashes_line = style.color(t.tokens, .Primary)
+            line_width = 2.0
+        }
     }
     if bar {
         grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -10140,18 +10242,34 @@ fn button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buff
     }
     var reserved = options
     reserved.end_space = 24.0 - 8.0
+    if t.tokens.profile == .CupertinoLike { reserved.end_space = 24.0 }
     let (editor, editor_error) = text_field(a, key, t, label, buffer, len, change, submit, reserved)
     if editor_error != ok { ret (zero, editor_error) }
     let usable = options.enabled && !options.read_only
-    let (dots, dots_error) = arrow_button(a, key + 1u64, t, .MoreHoriz, button_label, action, usable)
-    if dots_error != ok { ret (zero, dots_error) }
+    var dots: widget.Node = zero
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cup_dots_button(a, key + 1u64, t, button_label, action, usable)
+        if cup_error != ok { ret (zero, cup_error) }
+        dots = cup
+    } else {
+        let (plain, plain_error) = arrow_button(a, key + 1u64, t, .MoreHoriz, button_label, action, usable)
+        if plain_error != ok { ret (zero, plain_error) }
+        dots = plain
+    }
     var h = options.height
     if h <= 0.0 { h = t.tokens.metrics.control_height + 16.0 }
+    var dots_x = options.width - 8.0 - 24.0
+    var dots_box: f32 = 24.0
+    if t.tokens.profile == .CupertinoLike {
+        if options.height <= 0.0 { h = 34.0 }
+        dots_box = 28.0
+        dots_x = options.width - 4.0 - dots_box
+    }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
     layers[2usize] = dots
-    layers[1usize] = widget.positioned(0u64, options.width - 8.0 - 24.0, max_zero((h - 24.0) * 0.5), style.defaults(), layers[2usize..3usize])
+    layers[1usize] = widget.positioned(0u64, dots_x, max_zero((h - dots_box) * 0.5), style.defaults(), layers[2usize..3usize])
     ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
@@ -10810,6 +10928,10 @@ fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, toke
     if t.tokens.profile == .Windows {
         let (win, win_error) = windows_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width, 0.0, -1.0)
         ret (win, win_error)
+    }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width)
+        ret (cup, cup_error)
     }
     if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
@@ -14642,7 +14764,7 @@ fn win_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, optio
 // plain select: no icons.
 fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if t.tokens.profile != .Windows {
-        let (plain, plain_error) = select(a, key, t, label, options, selected, open, toggle, picks)
+        let (plain, plain_error) = select_icons(a, key, t, label, options, icons, selected, open, enabled, toggle, picks)
         ret (plain, plain_error)
     }
     let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, enabled, toggle, picks, 0.0, 0.0, 0.0)
@@ -14653,7 +14775,7 @@ fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
 // default of at least 112. Under the other looks the plain select, whose width the caller sets.
 fn image_select_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit, width: f32) -> (widget.Node, err) {
     if t.tokens.profile != .Windows {
-        let (plain, plain_error) = select(a, key, t, label, options, selected, open, toggle, picks)
+        let (plain, plain_error) = select_icons(a, key, t, label, options, icons, selected, open, enabled, toggle, picks)
         ret (plain, plain_error)
     }
     let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, enabled, toggle, picks, width, 0.0, 0.0)
@@ -14663,7 +14785,7 @@ fn image_select_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 // `image_select_wide` with the head's window y (v3's frame phase drifts with it: see win3_frame_paint).
 fn image_select_at(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit, width: f32, edge_y: f32, edge_x: f32) -> (widget.Node, err) {
     if t.tokens.profile != .Windows {
-        let (plain, plain_error) = select(a, key, t, label, options, selected, open, toggle, picks)
+        let (plain, plain_error) = select_icons(a, key, t, label, options, icons, selected, open, enabled, toggle, picks)
         ret (plain, plain_error)
     }
     let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, enabled, toggle, picks, width, edge_y, edge_x)
@@ -16771,6 +16893,26 @@ fn cup_mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if h < w { r = h * 0.5 }
         ret cup_ring(m, b, cx, cy, r - m.a * 0.5, m.color, m.a)
     }
+    if m.kind == 20u32 {
+        // The Apple mark, simplified: two shoulders, a waist, a leaf and a bite (`other`: the ground colour).
+        try cup_disc(m, b, x + w * 0.34, y + h * 0.62, w * 0.34, m.color)
+        try cup_disc(m, b, x + w * 0.66, y + h * 0.62, w * 0.34, m.color)
+        try cup_disc(m, b, x + w * 0.5, y + h * 0.78, w * 0.3, m.color)
+        try cup_disc(m, b, x + w * 0.5, y + h * 0.40, w * 0.18, m.color)
+        try cup_disc(m, b, x + w * 0.62, y + h * 0.12, w * 0.12, m.color)
+        ret cup_disc(m, b, x + w * 0.98, y + h * 0.5, w * 0.17, m.other)
+    }
+    if m.kind == 19u32 {
+        // A bare cross.
+        try cup_line(m, b, x + w * 0.25, y + h * 0.25, x + w * 0.75, y + h * 0.75, m.color, m.a)
+        ret cup_line(m, b, x + w * 0.75, y + h * 0.25, x + w * 0.25, y + h * 0.75, m.color, m.a)
+    }
+    if m.kind == 18u32 {
+        // The ellipsis: three discs of radius `a`, `b` apart.
+        try cup_disc(m, b, cx - m.b, cy, m.a, m.color)
+        try cup_disc(m, b, cx, cy, m.a, m.color)
+        ret cup_disc(m, b, cx + m.b, cy, m.a, m.color)
+    }
     if m.kind == 16u32 || m.kind == 17u32 {
         let (pb, pb_error) = geometry.path_builder(m.arena, 4usize, 4usize)
         if pb_error != ok { ret TooLarge }
@@ -17462,6 +17604,7 @@ fn cupertino_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     at += 1usize
     var grow = style.defaults()
     grow.width = style.Length { Flex: 1.0 }
+    grow.overflow = .Clip
     let value_stack = widget.stack(0u64, grow, layers[0usize..at])
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -17480,7 +17623,7 @@ fn cupertino_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         parts[used] = post
         used += 1usize
     }
-    if focused && len != 0usize && !options.read_only {
+    if focused && len != 0usize && !options.read_only && !multiline {
         let (clears, clears_error) = mem.alloc[CupClear](a, 1usize)
         if clears_error != ok { ret (zero, TooLarge) }
         clears[0usize] = CupClear { change: change }
@@ -17498,6 +17641,7 @@ fn cupertino_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     frame.background = paint.Brush { Solid: face }
     frame.border = style.Border { width: 1.0, color: edge }
     frame.radius = 8.0
+    frame.overflow = .Clip
     var pad_y: f32 = 0.0
     if multiline { pad_y = 6.0 }
     frame.padding = style.EdgeLengths { left: style.Length { Px: 10.0 + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: 10.0 + options.end_space }, bottom: style.Length { Px: pad_y } }
@@ -17572,6 +17716,34 @@ fn cupertino_search(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u
     var sem: widget.Semantics = zero
     sem.role = 2u8
     ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, holder)), ok)
+}
+
+// The button edit's three dots in the Cupertino look: a 28 square, 6 round, the accent glyph, the tertiary fill under it
+// while hovered or held.
+fn cup_dots_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = cup_clear()
+    if state.pressed { look.background = style.cup_fill(t.tokens, 1.6) }
+    if state.hovered && !state.pressed { look.background = style.cup_fill(t.tokens, 0.9) }
+    look.border_width = 0.0
+    look.border = cup_clear()
+    look.opacity = 1.0
+    look.elevation = 0u8
+    look.radius = 6.0
+    look.custom_padding = true
+    look.padding = 0.0
+    look.padding_y = 0.0
+    look.padding_start = 0.0
+    look.min_width = 28.0
+    look.min_height = 28.0
+    var ink = style.color(t.tokens, .Primary)
+    if !enabled { ink = style.cup_alpha(style.color(t.tokens, .Text), 0.3) }
+    let (mark, mark_error) = cup_mark(a, 18u32, ink, ink, 1.7, 5.0, 18.0, 18.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    let content = widget.aligned(0u64, .Center, .Center, sized_style(28.0, 28.0), widget_one_of(a, mark))
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, false, action, content)
+    ret (node, node_error)
 }
 
 // A stepper half: a pressable `half_w` x 32 with a plus or minus mark in the accent (30 % at a bound), pressed it
@@ -17806,11 +17978,12 @@ fn cupertino_tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []con
 
 // A macOS pop-up button (22 tall, the push button's bezel): the value at 13, an accent square with up and down
 // chevrons at the trailing end; open, the bezel is held pressed. `lead` (one node at most) goes before the value.
-fn cupertino_popup_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, lead: []const widget.Node) -> (widget.Node, err) {
-    var state = control_state(t, key, true, false)
+fn cupertino_popup_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, lead: []const widget.Node, enabled: bool) -> (widget.Node, err) {
+    var state = control_state(t, key, enabled, false)
     if open { state.pressed = true }
     var look = style.cupertino_resolve(t.tokens, .Outlined, state, 22.0)
     look.min_width = 112.0
+    if lead.len == 1usize { look.min_width = 148.0 }
     look.padding_start = 8.0
     look.padding = 2.0
     let accent = style.color(t.tokens, .Primary)
@@ -17818,31 +17991,129 @@ fn cupertino_popup_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     if !chosen { ink = style.color(t.tokens, .TextMuted) }
     let (word, word_error) = cup_label(a, t, shown, 13.0, 400u32, ink)
     if word_error != ok { ret (zero, word_error) }
-    let (arrows, arrows_error) = cup_mark(a, 7u32, style.hex(0xFFFFFFu32), style.hex(0xFFFFFFu32), 1.5, 0.0, 10.0, 14.0)
+    var chevron_ink = style.hex(0xFFFFFFu32)
+    if !enabled { chevron_ink = style.cup_alpha(style.color(t.tokens, .Text), 0.3) }
+    let (arrows, arrows_error) = cup_mark(a, 7u32, chevron_ink, chevron_ink, 1.5, 0.0, 10.0, 14.0)
     if arrows_error != ok { ret (zero, arrows_error) }
     var square = sized_style(16.0, 18.0)
     square.background = paint.Brush { Solid: accent }
+    if !enabled { square.background = paint.Brush { Solid: style.cup_fill(t.tokens, 1.5) } }
     square.radius = 4.0
     let arrow_chip = widget.aligned(0u64, .Center, .Center, square, widget_one_of(a, arrows))
-    let (bits, bits_error) = mem.alloc[widget.Node](a, 3usize)
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 5usize)
     if bits_error != ok { ret (zero, TooLarge) }
-    var used = 0usize
-    if lead.len == 1usize {
-        bits[0usize] = lead[0usize]
-        bits[1usize] = word
-        used = 2usize
-    }
     var value_part = word
-    if used == 2usize { value_part = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), bits[0usize..2usize]) }
+    if lead.len == 1usize {
+        bits[2usize] = lead[0usize]
+        bits[3usize] = word
+        value_part = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), bits[2usize..4usize])
+    }
     bits[0usize] = value_part
     bits[1usize] = arrow_chip
     var spread = style.defaults()
-    spread.min_width = style.Length { Px: 112.0 - 10.0 }
+    spread.min_width = style.Length { Px: look.min_width - 10.0 }
     let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, spread, bits[0usize..2usize])
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
-    let (head, head_error) = pressable_states(a, key, t, 3u8, shown, look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, content)
+    let (head, head_error) = pressable_states(a, key, t, 3u8, shown, look, enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, content)
     ret (head, head_error)
+}
+// A macOS token field's token: a capsule 24 tall in the accent at 16 % (30 % Dark) holding the word in 13 pt label colour
+// and a small cross that removes it; the capsule deepens under the pointer, the cross takes the label colour.
+fn cup_token_chip(a: *mem.Arena, key: widget.Key, t: *const Theme, word: str, remove: *const widget.Submit) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    let cross_state = control_state(t, key + 1u64, true, false)
+    var strength: f32 = 0.16
+    if t.tokens.palette == .Dark { strength = 0.30 }
+    if state.hovered || cross_state.hovered { strength += 0.14 }
+    if cross_state.pressed { strength += 0.12 }
+    let accent = style.color(t.tokens, .Primary)
+    var ink = style.color(t.tokens, .Text)
+    var cross_ink = style.cup_alpha(ink, 0.45)
+    if cross_state.hovered { cross_ink = style.cup_alpha(ink, 0.85) }
+    let (name, name_error) = cup_label(a, t, word, 13.0, 400u32, ink)
+    if name_error != ok { ret (zero, name_error) }
+    let (cross, cross_error) = cup_mark(a, 19u32, cross_ink, cross_ink, 1.5, 0.0, 12.0, 12.0)
+    if cross_error != ok { ret (zero, cross_error) }
+    var hit = sized_style(16.0, 24.0)
+    hit.radius = 8.0
+    let remove_region = widget.region(key + 1u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](remove), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, hit, widget_one_of(a, widget.aligned(0u64, .Center, .Center, sized_style(16.0, 24.0), widget_one_of(a, cross))))
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = name
+    var sem_remove: widget.Semantics = zero
+    sem_remove.role = 3u8
+    sem_remove.label = word
+    sem_remove.actions = accessibility.ACTION_PRESS
+    parts[1usize] = widget.semantics(0u64, sem_remove, style.defaults(), widget_one_of(a, remove_region))
+    var pill = style.defaults()
+    pill.min_height = style.Length { Px: 24.0 }
+    pill.radius = 12.0
+    pill.background = paint.Brush { Solid: style.cup_alpha(accent, strength) }
+    pill.padding = style.EdgeLengths { left: style.Length { Px: 9.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 3.0 }, bottom: style.Length { Px: 0.0 } }
+    let body = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 2.0 }, pill, parts[0usize..2usize])
+    // A region so the token hears the pointer (selecting a token is the caller's business: this one does nothing on a press).
+    let (idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+    if idle_error != ok { ret (zero, TooLarge) }
+    idle[0usize] = widget.Submit { ctx: zero, invoke: cup_idle }
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&idle[0usize]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, style.defaults(), widget_one_of(a, body)), ok)
+}
+
+fn cup_idle(ctx: *void) -> err { ret ok }
+
+// The token field in the Cupertino look (NSTokenField): the tokens and the input flow inside one field box (the text
+// field's face, hairline and 3 px focus halo); suggestions are the usual autocomplete list.
+fn cupertino_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < tokens.len {
+        let (token, token_error) = cup_token_chip(a, key + 1u64 + 2u64 * u64(i), t, tokens[i], &removes[i])
+        if token_error != ok { ret (zero, token_error) }
+        items[i] = token
+        i += 1usize
+    }
+    let state = control_state(t, key, true, false)
+    let focused = state.focused
+    var value_options = text_options()
+    value_options.role = .Body
+    value_options.size = 15.0
+    let (text_look, style_error) = text_style_faced(a, t, value_options)
+    if style_error != ok { ret (zero, style_error) }
+    var editor_style = style.defaults()
+    editor_style.min_width = style.Length { Px: 150.0 }
+    if tokens.len > 0usize { editor_style.min_width = style.Length { Px: 60.0 } }
+    editor_style.min_height = style.Length { Px: 24.0 }
+    let bare = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .Text), selection: style.color(t.tokens, .TextSelection), change: typed, submit: add, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    var input_count = 1usize
+    if len == 0usize && tokens.len == 0usize && label.len != 0usize { input_count = 2usize }
+    let (input_parts, input_parts_error) = mem.alloc[widget.Node](a, input_count)
+    if input_parts_error != ok { ret (zero, TooLarge) }
+    let (named_bare, named_bare_error) = named_editor(a, key, label, "", false, editor_style, bare)
+    if named_bare_error != ok { ret (zero, named_bare_error) }
+    input_parts[input_count - 1usize] = named_bare
+    if input_count == 2usize {
+        let (hint_node, hint_error) = cup_label(a, t, label, 15.0, 400u32, cup_placeholder(t))
+        if hint_error != ok { ret (zero, hint_error) }
+        input_parts[0usize] = hint_node
+    }
+    items[tokens.len] = widget.stack(0u64, style.defaults(), input_parts[0usize..input_count])
+    var edge = cup_field_edge(t)
+    if state.hovered { edge = style.cup_alpha(edge, edge.alpha * 1.8) }
+    if focused { edge = style.color(t.tokens, .Primary) }
+    var wrapped = style.defaults()
+    wrapped.width = style.Length { Px: width }
+    wrapped.min_height = style.Length { Px: 34.0 }
+    wrapped.radius = 8.0
+    wrapped.background = paint.Brush { Solid: cup_field_face(t) }
+    wrapped.border = style.Border { width: 1.0, color: edge }
+    wrapped.padding = style.EdgeLengths { left: style.Length { Px: 5.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 5.0 }, bottom: style.Length { Px: 4.0 } }
+    let flow = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 4.0, cross_gap: 4.0 }, wrapped, items[0usize..tokens.len + 1usize])
+    let holder = cup_ring_holder(a, t, flow, 8.0, focused)
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting(a, key, t, label, holder, none, key + 62u64, key + 63u64, suggestions, active, open, picks, activate, dismiss)
+    ret (made, made_error)
 }
 // ---- end the Cupertino look (block 4) ---------------------------------------------------------------
 
@@ -17881,6 +18152,13 @@ fn cupertino_menu_sheet_style(t: *const Theme, rim: f32) -> style.Style {
 // the secondary colour; hovered (or its submenu open) the row fills with the accent and everything on it goes white,
 // 5 round; disabled is the label at 25 %. Returns the look and the row's content for `pressable_states`.
 fn cupertino_menu_row_parts(a: *mem.Arena, t: *const Theme, key: widget.Key, label: str, shortcut: str, checked: bool, radio_mark: bool, enabled: bool, destructive: bool, has_submenu: bool, opened: bool, slotted: bool) -> (style.ResolvedControl, widget.Node, err) {
+    var none: []const widget.Node = zero
+    let (look, content, content_error) = cupertino_menu_row_icon(a, t, key, label, shortcut, checked, radio_mark, enabled, destructive, has_submenu, opened, slotted, none)
+    ret (look, content, content_error)
+}
+
+// The same with a picture (at most one node) between the check slot and the label.
+fn cupertino_menu_row_icon(a: *mem.Arena, t: *const Theme, key: widget.Key, label: str, shortcut: str, checked: bool, radio_mark: bool, enabled: bool, destructive: bool, has_submenu: bool, opened: bool, slotted: bool, pictures: []const widget.Node) -> (style.ResolvedControl, widget.Node, err) {
     var state = control_state(t, key, enabled, false)
     if opened { state.hovered = true }
     let hot = enabled && (state.hovered || state.pressed)
@@ -17913,7 +18191,7 @@ fn cupertino_menu_row_parts(a: *mem.Arena, t: *const Theme, key: widget.Key, lab
     look.padding_y = 0.0
     look.min_height = 22.0
     look.min_width = 24.0
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
     if parts_error != ok { ret (look, zero, TooLarge) }
     var n = 0usize
     if slotted {
@@ -17929,6 +18207,10 @@ fn cupertino_menu_row_parts(a: *mem.Arena, t: *const Theme, key: widget.Key, lab
             slot_nodes = widget_one_of(a, tick)
         }
         parts[n] = widget.aligned(0u64, .Center, .Center, sized_style(16.0, 16.0), slot_nodes)
+        n += 1usize
+    }
+    if pictures.len == 1usize {
+        parts[n] = pictures[0usize]
         n += 1usize
     }
     let (word, word_error) = cup_label(a, t, label, 13.0, 400u32, ink)

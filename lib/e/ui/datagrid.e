@@ -7493,6 +7493,19 @@ fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role:
             }
         }
     }
+    // The Cupertino table view: the row that is selected and holds the keyboard focus is accent-filled, so its text is white.
+    if grid.theme.tokens.profile == .CupertinoLike && !grid.look.on && grid.has_selection && grid.selected_row == row && mem.address_of(grid.theme.runtime) != 0usize {
+        let (held, has_held) = widget.focused_key(grid.theme.runtime)
+        if has_held && held == row_key(grid, row) {
+            var white = control.text_options()
+            white.wrap = .None
+            if bold { white.weight = 700u32 }
+            let (lit, lit_error) = control.colored_text(a, 0u64, text, grid.theme, white, style.hex(0xFFFFFFu32))
+            if lit_error != ok { ret lit_error }
+            *out = lit
+            ret ok
+        }
+    }
     if grid.has_ink {
         let (ink, has_row_ink) = grid.ink_of(grid.ink_ctx, row)
         if has_row_ink {

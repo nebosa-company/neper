@@ -3727,6 +3727,12 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
         heading.role = .LabelLarge
         heading_color = muted
     }
+    if t.tokens.profile == .CupertinoLike {
+        // iOS: the month and year bold in the label colour, the turn arrows in the accent.
+        heading.role = .Body
+        heading.weight = 700u32
+        heading_color = ink
+    }
     let (title_node, title_node_error) = control.colored_text(a, 0u64, title_bytes[0usize..title_len], t, heading, heading_color)
     if title_node_error != ok { ret (zero, title_node_error) }
     var spread = title_node
@@ -4058,7 +4064,8 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // A calendar's Previous or Next: a round icon button `size` across, its chevron
 // `icon` in `on-surface-variant` under that colour's state layer.
 fn month_turn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, kind: control.GlyphKind, label: str, action: *const widget.Submit, size: f32, icon: f32) -> (widget.Node, err) {
-    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var muted = style.color(t.tokens, .OnSurfaceVariant)
+    if t.tokens.profile == .CupertinoLike { muted = style.color(t.tokens, .Primary) }
     let state = control.control_state(t, key, true, false)
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), muted, control.state_opacity(t, state))
@@ -4779,6 +4786,14 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         raised_style.padding.top = style.Length { Px: 8.0 }
         raised_style.width = style.Length { Px: 7.0 * cell + 32.0 }
         var gap_below: f32 = 4.0
+        if t.tokens.profile == .CupertinoLike {
+            // The iOS graphical picker's popover: the cell colour, 14 round, a hairline and a soft shadow.
+            raised_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+            raised_style.radius = 14.0
+            raised_style.border = style.Border { width: 0.5, color: style.cupertino_separator(t.tokens) }
+            raised_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.12) }
+            gap_below = 6.0
+        }
         if t.tokens.profile == .Windows {
             // The drop-down sits against the edit: white, a grey edge, square, a hard shadow.
             raised_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
@@ -4956,14 +4971,21 @@ fn clocked_field_glyph(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         side = t.tokens.sizes.control_md
         size = t.tokens.sizes.icon_md
     }
+    let cupertino = t.tokens.profile == .CupertinoLike
+    if cupertino {
+        h = 34.0
+        side = 28.0
+        size = 18.0
+    }
     var kept = options
     kept.height = h
     kept.end_space = control.max_zero(side + 4.0 - 16.0)
+    if cupertino { kept.end_space = 24.0 }
     let (edit_node, edit_error) = control.text_field(a, key, t, label, buffer, len, typed, zero, kept)
     if edit_error != ok { ret (zero, edit_error) }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     var face_color = muted
-    if open { face_color = style.color(t.tokens, .Primary) }
+    if open || cupertino { face_color = style.color(t.tokens, .Primary) }
     let (face, face_error) = control.mark_glyph(a, face_color, glyph, size)
     if face_error != ok { ret (zero, face_error) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
@@ -4976,6 +4998,14 @@ fn clocked_field_glyph(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         look.background = control.with_alpha(muted, control.state_opacity(t, state))
         look.foreground = muted
         look.radius = side * 0.5
+        if cupertino {
+            look.background = control.cup_clear()
+            if state.pressed { look.background = style.cup_fill(t.tokens, 1.6) }
+            if state.hovered && !state.pressed { look.background = style.cup_fill(t.tokens, 0.9) }
+            look.radius = 6.0
+            look.border_width = 0.0
+            look.elevation = 0u8
+        }
         look.custom_padding = true
         look.padding = (side - size) * 0.5
         look.padding_start = look.padding
