@@ -1497,10 +1497,14 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
                 let ash = sh + valign_shift(l, asty, bstyle(l, ab.parent), ba, margin_h - ba, margin_h)
                 margin_top_y = baseline + ash - ba
             }
-            ab.x = cx + ab.margin[3usize]
-            ab.y = x.y + margin_top_y + ab.margin[0usize]
+            // The box sits in its parent's border box; the fragment keeps content-box coordinates like the line.
+            let fx = cx + ab.margin[3usize]
+            let fy = x.y + margin_top_y + ab.margin[0usize]
+            let owner = &l.boxes.items[usize(x.cont)]
+            ab.x = fx + owner.border[3usize] + owner.padding[3usize]
+            ab.y = fy + owner.border[0usize] + owner.padding[0usize]
             ab.aux = 2u32
-            let pushed = list.push[Frag](&l.frags, Frag { kind: .Atomic, box: p.box, x: ab.x, y: ab.y, w: ab.w, h: ab.h, text: "", first: true, last: true })
+            let pushed = list.push[Frag](&l.frags, Frag { kind: .Atomic, box: p.box, x: fx, y: fy, w: ab.w, h: ab.h, text: "", first: true, last: true })
             cx += p.w
         }
         k += 1usize

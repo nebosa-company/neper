@@ -322,5 +322,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 55. column-width decides the count.
     let (p55, ok55) = build(a, "<div id=m style=\"column-width:60px;width:200px\"><div id=a style=\"height:10px\"></div><div id=b style=\"height:10px\"></div><div id=c style=\"height:10px\"></div></div>", mcss)
     if !ok55 || !is_rect(rect_of(p55, "c"), 140.0f64, 0.0f64, 60.0f64, 10.0f64) { os.exit(86) }
+    // 56. An inline-block inside a padded block is offset by the padding.
+    let (p56, ok56) = build(a, "<div style=\"padding:10px;font-size:10px\"><span id=i style=\"display:inline-block;width:30px;height:20px\"></span></div>", mcss)
+    if !ok56 || !is_rect(rect_of(p56, "i"), 10.0f64, 10.0f64, 30.0f64, 20.0f64) { os.exit(87) }
     ret ok
 }
