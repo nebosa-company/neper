@@ -14842,7 +14842,7 @@ fn windows_bar_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     ret (node, node_error)
 }
 
-// ============================================================================
+// ===================================================================================
 // The Windows look of the pickers (docs/ui/looks; combo box, image combo box, date edit,
 // list box): v3's DevExpress edit with its native-style frame (#FDFDFD face, 1 px #D2D2D2
 // border, radius 4, 21 tall, a thin chevron at the right) and the classic drop-down list
@@ -19103,7 +19103,7 @@ fn win_native_tooltip(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text
     ret (widget.stack(key, frame, parts[0usize..10usize]), ok)
 }
 // ---- end the native tooltip ------------------------------------------------------------------------------------------
-=======
+
 // looks11-g1: the resting vertical thumb of the live top grid as 3 pixel columns: two end rows (#D1 #B7 #D6, #B9 #8A #C1 on top; #BB #8D #C3, #DC #CB #DF
 // at the foot) and #B6 #85 #BF between
 fn windows_thumb(a: *mem.Arena, h: f32) -> (widget.Node, err) {
