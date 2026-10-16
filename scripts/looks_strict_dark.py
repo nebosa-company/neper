@@ -179,6 +179,29 @@ def table(sheet="native_dark", spec=None, cols=7, cw=200, ch=100, only=None):
     print("total (flat + chrome) off", tot)
 
 
+# native_dark2 sheet (examples/looks/native_dark2.e): (capture, cell index, rect index, (x, y) of the control in its cell, ref (x, y, w, h) override or None)
+SHEET2 = [("vscroll-rest", 0, 0, (20, 10), None), ("hscroll-rest", 1, 0, (16, 20), None), ("tooltip-rest", 2, 1, (30, 40), None)]
+
+
+def table2(only=None, cols=4, cw=260, ch=200):
+    sh = load(OURS + "native_dark2.png")
+    tot = 0
+    for stem, idx, rect, anchor, over in SHEET2:
+        if only and not stem.startswith(only):
+            continue
+        img, (rx, ry, rw, rh) = native(stem, rect=rect)
+        ref = img[ry:ry + rh, rx:rx + rw]
+        col, row = idx % cols, idx // cols
+        x, y = 12 + col * (cw + 10), 12 + row * (16 + 4 + ch + 10) + 20
+        ZONE[:] = [3, 3, 22]
+        _CACHE.clear()
+        r, at = best(ref, sh, x, y, cw, ch, 2, 0, anchor)
+        o = sh[at[1]:at[1] + rh, at[0]:at[0] + rw]
+        tot += r[5] + r[0]
+        print("%-26s %3dx%-3d flat off %5d / %5d (max %3d)  chrome off %5d  at %s" % (stem, rw, rh, r[5], r[4], r[6], r[0], at))
+    print("total (flat + chrome) off", tot)
+
+
 def open_table():
     """combo-*-open captures (150 x 23 head + 150 x 122 list) against native_dark_open<n> (head at (20, 8) of its cell, 214 x 244 sheet)."""
     for n, stem in enumerate(("combo-edit-open", "combo-edit-open-hover-row", "combo-list-open", "combo-list-open-hover-row")):
@@ -196,6 +219,9 @@ def open_table():
 
 
 def main():
+    if "--two" in sys.argv:
+        table2(only=([a for a in sys.argv[1:] if not a.startswith("--")] or [None])[0])
+        return
     if "--open" in sys.argv:
         open_table()
         return

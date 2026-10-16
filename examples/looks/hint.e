@@ -81,7 +81,7 @@ fn build_hinted_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n
     let o = hinted_spec(n)
     var node: widget.Node = zero
     var node_error: err = ok
-    if n == 7usize && t.tokens.profile == .Windows && t.tokens.palette != .Dark {
+    if n == 7usize && t.tokens.profile == .Windows {
         // round 11: the light look of the native tooltip (ref/windows-native/light/tooltip-rest)
         let (native, native_error) = control.win_native_tooltip(a, 100u64, t, o.text, o.width, o.high)
         node = native

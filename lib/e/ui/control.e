@@ -14575,6 +14575,8 @@ fn set_scroll_bar_crisp(on: bool) { scroll_bar_crisp = on }
 fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, view: f32, content: f32, offset: f32) -> (widget.Node, err) {
     style.windows_dark_enter(t.tokens)
     let state = control_state(t, key, true, false)
+    // round 12: the native dark bar is the 17 wide pixel bar of vscroll-rest (crisp: thumb columns 8 and 9)
+    let crisp = scroll_bar_crisp || style.windows_dark_on()
     // Measured at 100 % in the v3 main window (ref/windows/main-window@1x.png): the vertical bar's
     // thumb is 2 wide (#858585, square ends) on its 16 wide track; the horizontal bar of a grid
     // (in the navigator row) is a 9 thick #858585 block with square ends.
@@ -14583,6 +14585,8 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     // #858585 pressed or not and no arrows show while the thumb is pressed
     var w: f32 = 2.0
     if !vertical { w = 8.0 }
+    // round 12: the native dark bar is thin both ways: the thumb is 2 thick on rows 8 and 9 of the 17 (hscroll-rest)
+    if style.windows_dark_on() && !vertical { w = 2.0 }
     var ink = style.hex(8750469u32)
     if state.hovered && vertical { w = 6.0 }
     if state.pressed { w = 6.0 }
@@ -14591,8 +14595,9 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     var dark_track = style.hex_raw(0x171717u32)
     var thick = style.defaults()
     var track = sized_style(16.0, length)
-    if scroll_bar_crisp { track = sized_style(17.0, length) }
+    if crisp { track = sized_style(17.0, length) }
     if !vertical { track = sized_style(length, 16.0) }
+    if !vertical && style.windows_dark_on() { track = sized_style(length, 17.0) }
     track.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     if style.windows_dark_on() {
         // (round 7) Windows 11 dark: #2B2B2B track, #8A8A8A thumb (#A0A0A0 hot, #B8B8B8 held), no light rim
@@ -14604,14 +14609,16 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         track.background = paint.Brush { Solid: dark_track }
         ink = style.hex_raw(0x858585u32)
     }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    // (round 12) the native thumb body is #959595 between 1 px #858585 end rows
+    var body = style.hex_raw(0x959595u32)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var count = 0usize
     // looks4-e: the track's first pixel line, towards the content, is #F7F7F7 (live captures, scroll_bar_live*.png)
     var edge = sized_style(1.0, length)
     if !vertical { edge = sized_style(length, 1.0) }
     edge.background = paint.Brush { Solid: style.hex(16250871u32) }
-    if scroll_bar_crisp { edge.background = paint.Brush { Solid: style.hex(16777215u32) } }
+    if crisp { edge.background = paint.Brush { Solid: style.hex(16777215u32) } }
     if style.windows_dark_on() { edge.background = paint.Brush { Solid: dark_track } }
     layers[count] = widget.box(0u64, edge, zero)
     count += 1usize
@@ -14626,12 +14633,12 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         var side = (16.0 - w) * 0.5 + 0.46
         // looks5-e: pressed, the pill stands on whole pixels (live captures: 6 px, #858585, 294 to 299 on a bar that starts at 289)
         var lift: f32 = 0.47
-        if scroll_bar_crisp {
+        if crisp {
             side = 8.0
             if state.pressed || state.hovered { side = 6.0 }
             lift = 0.0
         }
-        if state.pressed && vertical && !scroll_bar_crisp {
+        if state.pressed && vertical && !crisp {
             side = (16.0 - w) * 0.5
             lift = 0.0
         }
@@ -14646,11 +14653,29 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             if style.windows_dark_on() { thick.border = style.Border { width: 1.0, color: dark_track } }
             thick.radius = 0.0
             if state.pressed { thick.radius = 4.0 }
+            if style.windows_dark_on() {
+                thick = sized_style(thumb_len, 2.0)
+                thick.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            }
         }
         thick.background = paint.Brush { Solid: ink }
         layers[count] = widget.box(0u64, thick, zero)
+        if style.windows_dark_on() && !vertical && !state.pressed && !state.hovered && thumb_len > 3.0 {
+            var inner = sized_style(thumb_len - 2.0, 2.0)
+            inner.margin = style.EdgeLengths { left: style.Length { Px: at + 1.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            inner.background = paint.Brush { Solid: body }
+            count += 1usize
+            layers[count] = widget.box(0u64, inner, zero)
+        }
+        if style.windows_dark_on() && vertical && !state.pressed && !state.hovered && thumb_len > 3.0 {
+            var inner = sized_style(w, thumb_len - 2.0)
+            inner.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at + lift + 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            inner.background = paint.Brush { Solid: body }
+            count += 1usize
+            layers[count] = widget.box(0u64, inner, zero)
+        }
         // looks11-g1: at rest the live grid bar's thumb is three pixel columns (#B6 #85 #BF) with soft ends, 7 px from the bar's first pixel
-        if vertical && !state.pressed && !state.hovered && !scroll_bar_crisp && !style.windows_dark_on() && thumb_len >= 6.0 {
+        if vertical && !state.pressed && !state.hovered && !crisp && !style.windows_dark_on() && thumb_len >= 6.0 {
             let (pixel_thumb, pixel_thumb_error) = windows_thumb(a, thumb_len)
             if pixel_thumb_error != ok { ret (zero, pixel_thumb_error) }
             var pixel_style = sized_style(3.0, thumb_len)
@@ -19459,6 +19484,24 @@ fn native_tooltip_corner_node(a: *mem.Arena, which: usize) -> (widget.Node, err)
 
 fn win_native_tooltip(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, width: f32, height: f32) -> (widget.Node, err) {
     let frame = sized_style(width, height)
+    if t.tokens.palette == .Dark {
+        // round 12: the dark tooltip (tooltip-rest of the native dark captures) is square: a 1 px #767676 line round a #2B2B2B face, white text
+        var rim = sized_style(width, height)
+        rim.background = paint.Brush { Solid: style.hex_raw(0x767676u32) }
+        var inside = sized_style(width - 2.0, height - 2.0)
+        inside.background = paint.Brush { Solid: style.hex_raw(0x2B2B2Bu32) }
+        var dark_words = text_options()
+        dark_words.size = 12.0
+        dark_words.wrap = .None
+        let (dark_said, dark_said_error) = colored_text(a, 0u64, hint_text, t, dark_words, style.hex_raw(0xFFFFFFu32))
+        if dark_said_error != ok { ret (zero, dark_said_error) }
+        let (dark_parts, dark_parts_error) = mem.alloc[widget.Node](a, 3usize)
+        if dark_parts_error != ok { ret (zero, TooLarge) }
+        dark_parts[0usize] = widget.box(0u64, rim, zero)
+        dark_parts[1usize] = widget.positioned(0u64, 1.0, 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, inside, zero)))
+        dark_parts[2usize] = widget.positioned(0u64, 5.0, 1.0, style.defaults(), mem_one_node(a, dark_said))
+        ret (widget.stack(key, frame, dark_parts[0usize..3usize]), ok)
+    }
     var line = sized_style(width - 12.0, 1.0)
     line.background = paint.Brush { Solid: style.hex_raw(0xE5E5E5u32) }
     var column = sized_style(1.0, height - 12.0)
