@@ -1,0 +1,135 @@
+{
+ "text_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/text_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Round 5: every captured state of the password edits (New and Old password at rest and focused, Confirm at rest) and the hot key edit (rest and focused) has a cell and reproduces within tolerance. Per-state numbers at scale 1.0 (scripts/looks_edits_states_eval.py, structural = flat runs of 11 or more away from ink, tolerance 2): mask focus new/old 0 px off (max 0/1), spin fast focus and the four pressed cells 0 px (max 2), morph spin focus and both pressed 0 px (max 0), button edit focus/selected/ellipsis pressed 1 px (max 4, caret), hot key rest and focus 0 px; edits_dialog: 3 masks, 3 spins, 2 button edits 0 to 1 px (max 4).",
+    "gaps": [
+     "Unverified: hover (needs the real pointer: not capturable)",
+     "Unverified (not captured): selection, read-only, disabled, invalid, placeholder of the plain edit",
+     "The hot key edit (THotKey) is a native VCL control: the sheet draws it from boxes, the library has no such control; the toolbar page box (TEdit, borderless 37 x 15 white) is not drawn at all",
+     "Baked edit chrome shows dotted seams at 1.5x (looks5-scale owns making the baked tiles scale-robust)",
+     "Text ink: Tahoma advance widths are unhinted, so a long run with spaces ends up to 5 px wide of the capture (the path texts end within 1 px); ink boxes of the numbers, shortcut and carets are within 1 px"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/mask_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "Round 5: Old, New and Confirm password at rest and Old and New focused all compared (0 px off, max 1 and 2 at corners). Per-state numbers at scale 1.0 (scripts/looks_edits_states_eval.py, structural = flat runs of 11 or more away from ink, tolerance 2): mask focus new/old 0 px off (max 0/1), spin fast focus and the four pressed cells 0 px (max 2), morph spin focus and both pressed 0 px (max 0), button edit focus/selected/ellipsis pressed 1 px (max 4, caret), hot key rest and focus 0 px; edits_dialog: 3 masks, 3 spins, 2 button edits 0 to 1 px (max 4).",
+    "gaps": [
+     "Unverified: hover (needs the real pointer: not capturable)",
+     "Unverified (not captured): text and selection in a mask edit, invalid, disabled, read-only",
+     "Baked edit chrome shows dotted seams at 1.5x (looks5-scale owns making the baked tiles scale-robust)"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/spin_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "Round 5: rest, focused, and the up, down, left and right presses (Max Same Cards) and Morph Speed up and down all compared. v3 draws no pressed face on a spin arrow (the grabs differ only in the number): our arrows do not change either, a press gives the edit its focused frame. The morph spin edits stand at x = 406 where the left rim is 3 levels darker: own left tile. Per-state numbers at scale 1.0 (scripts/looks_edits_states_eval.py, structural = flat runs of 11 or more away from ink, tolerance 2): mask focus new/old 0 px off (max 0/1), spin fast focus and the four pressed cells 0 px (max 2), morph spin focus and both pressed 0 px (max 0), button edit focus/selected/ellipsis pressed 1 px (max 4, caret), hot key rest and focus 0 px; edits_dialog: 3 masks, 3 spins, 2 button edits 0 to 1 px (max 4).",
+    "gaps": [
+     "Unverified: hover (needs the real pointer: not capturable)",
+     "Unverified (not captured): disabled, read-only, an arrow that cannot step is greyed (a guess)",
+     "Baked edit chrome shows dotted seams at 1.5x (looks5-scale owns making the baked tiles scale-robust)",
+     "Text ink: Tahoma advance widths are unhinted, so a long run with spaces ends up to 5 px wide of the capture (the path texts end within 1 px); ink boxes of the numbers, shortcut and carets are within 1 px"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/button_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Round 5: the ellipsis frame is exact (0 px off at rest, pressed, focused and disabled; the audit's 23 levels were the foot's y drift at the sheet's arbitrary y: the chrome now defaults to the capture's y per kind) and the selection highlight is 13 px tall from row 5 with partial rows as in the capture (was 157 levels off over 479 px). Pressing the ellipsis keeps the edit focused with all text selected. Per-state numbers at scale 1.0 (scripts/looks_edits_states_eval.py, structural = flat runs of 11 or more away from ink, tolerance 2): mask focus new/old 0 px off (max 0/1), spin fast focus and the four pressed cells 0 px (max 2), morph spin focus and both pressed 0 px (max 0), button edit focus/selected/ellipsis pressed 1 px (max 4, caret), hot key rest and focus 0 px; edits_dialog: 3 masks, 3 spins, 2 button edits 0 to 1 px (max 4).",
+    "gaps": [
+     "Mismatch: the disabled Card Art text ends 5 px right of the capture ink (unhinted Tahoma advances over six spaces)",
+     "Unverified: hover (needs the real pointer: not capturable)",
+     "Unverified (not captured): read-only, invalid, the ellipsis hover",
+     "Baked edit chrome shows dotted seams at 1.5x (looks5-scale owns making the baked tiles scale-robust)"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/token_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/token_edit.png",
+    "notes": "Round 5: the three empty token edits of the Filter dialog's Cards tab (315 x 46, 315 x 46, 315 x 27, token_edit_dialog sheet) reproduce exactly (0 px off, max 0); they are the plain edit frame blended over the tab page (#F9F9F9), drawn by e.ui.winedit.token_chrome. Tokens, hint, focus and hover were never captured.",
+    "gaps": [
+     "Unverified: tokens (chip face, border, cross), the hint, the focused foot (a guess from the plain edit), wrapping, hover",
+     "Unverified: hover (needs the real pointer: not capturable)",
+     "Chips and the unsized token edit keep the older guessed layout"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/memo.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/memo.png",
+    "notes": "Round 5: no memo exists in any v3 capture; it shares the plain edit's selection geometry (13 px highlight) and chrome. Nothing to compare.",
+    "gaps": [
+     "Unverified: every state (no capture)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/date_edit.png",
+    "notes": "The baseline: overlay.date_picker_with with a typed field (stray carets are the harness's focus slot, as in the other sheets)."
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Round 5: the v3 date edit could not be captured (no reachable dialog has one); no change.",
+    "gaps": [
+     "Unverified: every state (no capture)"
+    ]
+   }
+  }
+ }
+}

@@ -22,6 +22,7 @@ use e.ui.style
 use e.ui.widget
 use e.ui.winchrome
 use e.ui.window as win
+use e.ui.winpx
 
 error TooLarge
 
@@ -138,6 +139,10 @@ fn bar_group(items: []const widget.Node) -> widget.Node {
 // ponytail: worded actions stay text buttons.
 fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, options: AppBarOptions, width: f32) -> (widget.Node, err) {
     if leading.len > 8usize || trailing.len > 8usize { ret (zero, TooLarge) }
+    if t.tokens.profile == .CupertinoLike {
+        let (cup, cup_error) = cupertino_nav_bar(a, key, t, title, leading, trailing, options, width)
+        ret (cup, cup_error)
+    }
     // The options' actions outlive the frame in the arena.
     let (held, held_error) = mem.alloc[widget.Submit](a, 3usize)
     if held_error != ok { ret (zero, TooLarge) }
@@ -9221,53 +9226,46 @@ fn windows_item_label(a: *mem.Arena, t: *const control.Theme, label: str, captio
 fn windows_menu_check(a: *mem.Arena, ink: paint.Color) -> (widget.Node, err) {
     let solid = [14]u8{ 165u8, 150u8, 166u8, 71u8, 135u8, 151u8, 72u8, 88u8, 120u8, 136u8, 89u8, 105u8, 121u8, 106u8 }
     let edge = [7]u8{ 164u8, 149u8, 70u8, 134u8, 87u8, 119u8, 104u8 }
-    let (dots, dots_error) = mem.alloc[widget.Node](a, 23usize)
-    if dots_error != ok { ret (zero, TooLarge) }
+    let (codes, codes_error) = mem.alloc[u8](a, 23usize)
+    if codes_error != ok { ret (zero, TooLarge) }
+    let (colors, colors_error) = mem.alloc[paint.Color](a, 23usize)
+    if colors_error != ok { ret (zero, TooLarge) }
     let soft = style.mix(ink, style.hex(15790320u32), 0.8)
     var i = 0usize
     while i < 23usize {
-        var code = 0u8
-        var color = ink
-        if i < 14usize { code = solid[i] } else if i < 21usize {
-            code = edge[i - 14usize]
-            color = soft
+        if i < 14usize {
+            codes[i] = solid[i]
+            colors[i] = ink
+        } else if i < 21usize {
+            codes[i] = edge[i - 14usize]
+            colors[i] = soft
         } else {
             // Two white pixels of the bitmap, where the dither would leave the face.
-            code = [2]u8{ 181u8, 55u8 }[i - 21usize]
-            color = style.hex(16777215u32)
+            codes[i] = [2]u8{ 181u8, 55u8 }[i - 21usize]
+            colors[i] = style.hex(16777215u32)
         }
-        var dot = windows_flat(0u32)
-        dot.background = paint.Brush { Solid: color }
-        dot.width = style.Length { Px: 1.0 }
-        dot.height = style.Length { Px: 1.0 }
-        dots[i] = widget.positioned(0u64, f32(u32(code) / 16u32), f32(u32(code) % 16u32), dot, zero)
         i += 1usize
     }
-    ret (widget.stack(0u64, control.sized_style(16.0, 16.0), dots[0usize..23usize]), ok)
+    // One node painting whole device pixels, so that the check is as crisp at 150 % as at 100 %.
+    let (sprite, sprite_error) = winpx.sprite(a, codes[0usize..23usize], colors[0usize..23usize], 16.0, 16.0)
+    ret (sprite, sprite_error)
 }
 
 // The ground of a checked item's slot, 18 x 18: v3 dithers white pixels (every other one, where x + y
 // is odd) over the face, and the 16 px `picture` sits 1 in.
 fn windows_menu_checked_ground(a: *mem.Arena, picture: widget.Node, flip: bool, plain: bool) -> (widget.Node, err) {
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 18usize * 9usize + 1usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize + 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
-    var y = 0usize
-    while y < 18usize {
-        // (looks4-f) the dither follows the window's screen position: `flip` takes the other phase.
-        var x = (y + 1usize) % 2usize
-        if flip { x = y % 2usize }
-        // A disabled or highlighted checked slot has no dither (search All Cards, toolbars Standard).
-        if plain { x = 18usize }
-        while x < 18usize {
-            var dot = windows_flat(16777215u32)
-            dot.width = style.Length { Px: 1.0 }
-            dot.height = style.Length { Px: 1.0 }
-            parts[n] = widget.positioned(0u64, f32(x), f32(y), dot, zero)
-            n += 1usize
-            x += 2usize
-        }
-        y += 1usize
+    // (looks4-f) the dither follows the window's screen position: `flip` takes the other phase. A disabled or
+    // highlighted checked slot has no dither (search All Cards, toolbars Standard). One node of whole device pixels.
+    if !plain {
+        var parity = 1u32
+        if flip { parity = 0u32 }
+        let (dither, dither_error) = winpx.dither(a, 18u32, 18u32, parity, style.hex(16777215u32))
+        if dither_error != ok { ret (zero, dither_error) }
+        parts[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one(a, dither))
+        n += 1usize
     }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
@@ -10137,4 +10135,136 @@ fn windows_status_bar_report(a: *mem.Arena, key: widget.Key, t: *const control.T
     parts[n] = windows_rect(width - 1.0, 17.0, 1.0, 1.0, 15329769u32)
     n += 1usize
     ret (widget.stack(0u64, control.sized_style(width, 19.0), parts[0usize..n]), ok)
+}
+
+// ---- the Cupertino navigation bar (docs/ui/looks/cupertino) ----------------------------------------------
+// UINavigationBar: 44 tall on the bar face over a hairline, the title centred in 17 semibold, a back button
+// (chevron and the previous title in the accent) or the leading actions at the start, the trailing actions at the end
+// as accent text buttons; the Large size adds the 34 bold title under the row (no hairline until content scrolls).
+fn cupertino_nav_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, options: AppBarOptions, width: f32) -> (widget.Node, err) {
+    if leading.len > 8usize || trailing.len > 8usize { ret (zero, TooLarge) }
+    let dark = t.tokens.palette == .Dark
+    var face = style.hex(0xF9F9F9u32)
+    if dark { face = style.hex(0x1D1D1Du32) }
+    let large = options.size == .Large || options.size == .Medium
+    let accent = style.color(t.tokens, .Primary)
+    let ink = style.color(t.tokens, .Text)
+    let (held, held_error) = mem.alloc[widget.Submit](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = options.back
+    let (fronts, fronts_error) = mem.alloc[widget.Node](a, leading.len + 1usize)
+    if fronts_error != ok { ret (zero, TooLarge) }
+    var lead_count = 0usize
+    if options.back_label.len > 0usize {
+        let state = control.control_state(t, key + 1u64, !options.back_disabled, false)
+        var look = style.cupertino_resolve(t.tokens, .Plain, state, 44.0)
+        look.min_width = 44.0
+        look.padding = 8.0
+        look.padding_start = 8.0
+        look.radius = 8.0
+        let (chevron, chevron_error) = control.cup_mark(a, 6u32, look.foreground, look.foreground, 2.6, 0.0, 13.0, 21.0)
+        if chevron_error != ok { ret (zero, chevron_error) }
+        let (word, word_error) = control.cup_label(a, t, options.back_label, 17.0, 400u32, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = chevron
+        pair[1usize] = word
+        let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 5.0 }, style.defaults(), pair[0usize..2usize])
+        let (held_row, held_row_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_row_error != ok { ret (zero, TooLarge) }
+        held_row[0usize] = row
+        var tall_row = style.defaults()
+        tall_row.min_height = style.Length { Px: 44.0 }
+        let content = widget.aligned(0u64, .Start, .Center, tall_row, held_row[0usize..1usize])
+        let (back_node, back_error) = control.pressable(a, key + 1u64, t, 3u8, options.back_label, look, !options.back_disabled, false, &held[0usize], content)
+        if back_error != ok { ret (zero, back_error) }
+        fronts[0usize] = back_node
+        lead_count = 1usize
+    }
+    if options.back_label.len == 0usize {
+        var i = 0usize
+        while i < leading.len {
+            let (made, made_error) = bar_action(a, key + 1u64 + u64(i), t, &leading[i], accent)
+            if made_error != ok { ret (zero, made_error) }
+            fronts[i] = made
+            i += 1usize
+        }
+        lead_count = leading.len
+    }
+    let (backs, backs_error) = mem.alloc[widget.Node](a, trailing.len + 1usize)
+    if backs_error != ok { ret (zero, TooLarge) }
+    var j = 0usize
+    while j < trailing.len {
+        let (made, made_error) = bar_action(a, key + 9u64 + u64(j), t, &trailing[j], accent)
+        if made_error != ok { ret (zero, made_error) }
+        backs[j] = made
+        j += 1usize
+    }
+    // The centred title of the row (small bars), or, on a large-title bar, only once the large title has scrolled away.
+    let row_title_shown = !large || options.offset > 40.0
+    let (row_title, row_title_error) = control.cup_label(a, t, title, 17.0, 600u32, ink)
+    if row_title_error != ok { ret (zero, row_title_error) }
+    var title_sem: widget.Semantics = zero
+    title_sem.role = 25u8
+    title_sem.label = title
+    title_sem.level = 1u8
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var centred = style.defaults()
+    centred.width = style.Length { Percent: 100.0 }
+    centred.height = style.Length { Px: 44.0 }
+    let (title_holder, title_holder_error) = mem.alloc[widget.Node](a, 1usize)
+    if title_holder_error != ok { ret (zero, TooLarge) }
+    title_holder[0usize] = row_title
+    if row_title_shown { layers[0usize] = widget.aligned(0u64, .Center, .Center, centred, title_holder[0usize..1usize]) }
+    if !row_title_shown { layers[0usize] = widget.box(0u64, centred, zero) }
+    let (sides, sides_error) = mem.alloc[widget.Node](a, 3usize)
+    if sides_error != ok { ret (zero, TooLarge) }
+    sides[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), fronts[0usize..lead_count])
+    sides[1usize] = widget.spacer(0u64, 1.0)
+    sides[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), backs[0usize..trailing.len])
+    var row_style = control.sized_style(width, 44.0)
+    row_style.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, row_style, sides[0usize..3usize])
+    let row_box = control.sized_style(width, 44.0)
+    let (column, column_error) = mem.alloc[widget.Node](a, 3usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.stack(0u64, row_box, layers[0usize..2usize])
+    var column_count = 1usize
+    if large {
+        var big = control.text_options()
+        big.role = .DisplayLarge
+        big.wrap = .None
+        big.size = 34.0
+        big.weight = 700u32
+        let (big_node, big_error) = control.colored_text(a, 0u64, title, t, big, ink)
+        if big_error != ok { ret (zero, big_error) }
+        let (big_held, big_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if big_held_error != ok { ret (zero, TooLarge) }
+        big_held[0usize] = big_node
+        var big_style = style.defaults()
+        big_style.width = style.Length { Percent: 100.0 }
+        big_style.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 8.0 } }
+        column[1usize] = widget.semantics(0u64, title_sem, big_style, big_held[0usize..1usize])
+        column_count = 2usize
+    }
+    var hairline = control.sized_style(width, 0.5)
+    hairline.background = paint.Brush { Solid: style.cupertino_separator(t.tokens) }
+    var line_count = column_count
+    if !large || options.scrolled || options.offset > 0.0 {
+        column[column_count] = widget.box(0u64, hairline, zero)
+        line_count = column_count + 1usize
+    }
+    var bar = style.defaults()
+    bar.width = style.Length { Px: width }
+    bar.background = paint.Brush { Solid: face }
+    let body = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, bar, column[0usize..line_count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = title
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = body
+    ret (widget.semantics(key, sem, style.defaults(), framed[0usize..1usize]), ok)
 }

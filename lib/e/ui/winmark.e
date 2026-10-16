@@ -13,6 +13,7 @@ use e.gfx.scene
 use e.mem
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 
 // cb_off_rest: dialog-options-interface-rest@1x.png at (217, 78), 14 x 14, edge (120, 120, 120)
@@ -76,20 +77,23 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     // On whole pixels: a mark centred in a cell would otherwise straddle two rows and columns.
     let ox = f32(i32(area.x + 0.5))
     let oy = f32(i32(area.y + 0.5))
+    let legacy = scene.builder_scale(b) == 1.0
     var i = 0usize
     while i < 196usize {
         let v = table[i]
         let alpha = v >> 24u32
         if alpha != 0u32 {
             let c = paint.rgba(f32((v >> 16u32) & 255u32) / 255.0, f32((v >> 8u32) & 255u32) / 255.0, f32(v & 255u32) / 255.0, f32(alpha) / 255.0)
-            // An opaque pixel reaches 0.5 under its opaque right and lower neighbours so that a scaled render shows no seams.
+            // At 100 % an opaque pixel reaches 0.5 under its opaque right and lower neighbours (the committed renders show the
+            // faint bleed of that into the diagonal pixel: kept so that they stay byte for byte). At any other scale `fill`
+            // puts every pixel on whole device pixels, so no overlap is needed.
             var wide: f32 = 1.0
             var high: f32 = 1.0
-            if alpha == 255u32 {
+            if legacy && alpha == 255u32 {
                 if i % across + 1usize < across && (table[i + 1usize] >> 24u32) == 255u32 { wide = 1.5 }
                 if i + across < 196usize && (table[i + across] >> 24u32) == 255u32 { high = 1.5 }
             }
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: ox + f32(i % across), y: oy + f32(i / across), width: wide, height: high }, brush: paint.Brush { Solid: c } } })
+            try winpx.fill(b, ox + f32(i % across), oy + f32(i / across), wide, high, c)
         }
         i += 1usize
     }

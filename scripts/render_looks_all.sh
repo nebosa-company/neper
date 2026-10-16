@@ -23,6 +23,11 @@ for c in "${names[@]}"; do
              popup_menu_admin popup_menu_help; do
       "$out/$c.exe" "$s" >/dev/null 2>&1 || fail="$fail run:$c/$s"
     done
+  elif [ "$c" = "scale_tiles" ]; then
+    # one sheet per process (a sheet opens six of the 16 gpu devices a process may)
+    for s in scale_button scale_marks scale_edits; do
+      "$out/$c.exe" "$s" >/dev/null 2>&1 || fail="$fail run:$c/$s"
+    done
   else
     "$out/$c.exe" >/dev/null 2>&1 || fail="$fail run:$c"
   fi

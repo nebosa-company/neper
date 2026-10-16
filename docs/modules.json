@@ -4949,7 +4949,10 @@
     "e.ui.input",
     "e.ui.layout",
     "e.ui.style",
-    "e.ui.widget"
+    "e.ui.widget",
+    "e.ui.winbutton",
+    "e.ui.winedit",
+    "e.ui.winmark"
    ],
    "blocked_by": []
   },
@@ -4968,7 +4971,8 @@
     "e.ui.control",
     "e.ui.layout",
     "e.ui.style",
-    "e.ui.widget"
+    "e.ui.widget",
+    "e.ui.winchrome"
    ],
    "blocked_by": []
   },
@@ -4990,6 +4994,7 @@
     "e.ui.overlay",
     "e.ui.style",
     "e.ui.widget",
+    "e.ui.winchrome",
     "e.ui.window"
    ],
    "blocked_by": []
@@ -5009,6 +5014,7 @@
     "e.ui.input",
     "e.ui.layout",
     "e.ui.style",
+    "e.ui.vgridlook",
     "e.ui.widget"
    ],
    "blocked_by": []
@@ -5081,6 +5087,92 @@
     "e.ui.layout",
     "e.ui.style",
     "e.ui.testing",
+    "e.ui.widget"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.winbutton",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.gfx.scene",
+    "e.mem",
+    "e.str",
+    "e.ui.layout",
+    "e.ui.style",
+    "e.ui.widget"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.winchrome",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.gfx.scene",
+    "e.mem",
+    "e.ui.layout",
+    "e.ui.style",
+    "e.ui.widget"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.winedit",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.gfx.scene",
+    "e.mem",
+    "e.ui.layout",
+    "e.ui.style",
+    "e.ui.widget"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.winmark",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.gfx.scene",
+    "e.mem",
+    "e.ui.layout",
+    "e.ui.style",
+    "e.ui.widget"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.vgridlook",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.gfx.scene",
+    "e.mem",
+    "e.ui.layout",
+    "e.ui.style",
     "e.ui.widget"
    ],
    "blocked_by": []
