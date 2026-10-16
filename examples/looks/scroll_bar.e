@@ -83,6 +83,29 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 // The two bars as the live capture of the v3 main window shows them (ref/windows/scroll_bar_live*.png),
 // at rest: the grid's vertical bar (16 wide, the thumb 2 wide) and a horizontal bar (a 9 thick block).
 fn build_live(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    if t.tokens.profile == .Windows {
+        // round 13: the two bars at rest exactly as the live main window draws them: the grid's vertical one (16 x 186, an 88 px thumb)
+        // and the navigator's horizontal one (196 x 16, a 163 px thumb after the 17 px slot), each at its cell's corner
+        var k = 0usize
+        while k < 2usize {
+            var length: f32 = 186.0
+            var view: f32 = 88.0
+            var live_content: f32 = 154.0
+            if k == 1usize {
+                length = 196.0
+                view = 163.0
+                live_content = 164.0
+            }
+            let (live_bar, live_error) = control.windows_scroll_bar(a, u64(23000usize + k), t, k == 0usize, length, view, live_content, 0.0)
+            if live_error != ok { ret (0usize, live_error) }
+            let corner = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, looks.size_style(200.0, 190.0), mem_one(a, live_bar))
+            var live_caption = "Vertical"
+            if k == 1usize { live_caption = "Horizontal" }
+            cells[k] = looks.Cell { caption: live_caption, node: corner, drive: .None }
+            k += 1usize
+        }
+        ret (2usize, ok)
+    }
     var i = 0usize
     while i < 2usize {
         let vertical = i == 0usize
@@ -139,7 +162,97 @@ fn build_states(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
     ret (4usize, ok)
 }
 
+
+// ---- round 13: the grid bar of the live main window in every captured state (ref/windows/states/*scroll-bar*) ----------------------
+// scripts/looks_bars.py cuts the capture crops (track x 775 to 790, y 111 to 296 of the 800 x 600 grabs) and compares them with the cells
+// of this sheet at whole pixels. A cell is the bar alone, 16 x 186. The pointer goes where the capture's pointer was.
+// cell: 0 rest (the long thumb of main-window@1x), 1 hover thumb, 2 hover upper arrow, 3 hover lower arrow, 4 hover track,
+// 5 pressed thumb, 6 pressed lower arrow
+fn build_main_bar(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let captions = [7]str{ "Rest", "Hover thumb", "Hover up", "Hover down", "Hover track", "Pressed thumb", "Pressed down" }
+    var i = 0usize
+    while i < 7usize {
+        var view: f32 = 17.0
+        if i == 0usize { view = 88.0 }
+        let (bar, bar_error) = control.windows_scroll_bar(a, u64(20000usize + i), t, true, 186.0, view, 154.0, 0.0)
+        if bar_error != ok { ret (0usize, bar_error) }
+        var drive: looks.Drive = .None
+        var dy: f32 = 0.0
+        if i == 1usize { drive = .Hover
+            dy = 0.0 - 69.0 }
+        if i == 2usize { drive = .Hover
+            dy = 0.0 - 85.0 }
+        if i == 3usize { drive = .Hover
+            dy = 84.0 }
+        if i == 4usize { drive = .Hover
+            dy = 7.0 }
+        if i == 5usize { drive = .Press
+            dy = 0.0 - 69.0 }
+        if i == 6usize { drive = .Press
+            dy = 85.0 }
+        looks.aim(i, 0.0, dy)
+        cells[i] = looks.Cell { caption: captions[i], node: bar, drive: drive }
+        i += 1usize
+    }
+    ret (7usize, ok)
+}
+
+// The horizontal bar of the main window's navigator: rest, pointer on the thumb, thumb held (a 163 px thumb after a 17 px slot, 16 thick).
+fn build_main_h(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let captions = [3]str{ "Rest", "Hover thumb", "Pressed thumb" }
+    var i = 0usize
+    while i < 3usize {
+        let (bar, bar_error) = control.windows_scroll_bar(a, u64(21000usize + i), t, false, 196.0, 163.0, 164.0, 0.0)
+        if bar_error != ok { ret (0usize, bar_error) }
+        var drive: looks.Drive = .None
+        if i == 1usize { drive = .Hover }
+        if i == 2usize { drive = .Press }
+        looks.aim(i, 0.0, 0.0 - 1.0)
+        cells[i] = looks.Cell { caption: captions[i], node: bar, drive: drive }
+        i += 1usize
+    }
+    ret (3usize, ok)
+}
+
+// The states v3 never showed, from the native Windows 11 light captures (ref/windows-native/light): the disabled bars (vertical 17 x 170,
+// horizontal 178 x 17) and the upper arrow held down (only the arrow is compared: the native thumb is its own look, v3's stays).
+fn build_native_bar(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let captions = [3]str{ "Disabled", "Disabled H", "Pressed up" }
+    var i = 0usize
+    while i < 3usize {
+        control.set_scroll_bar_disabled(i < 2usize)
+        var vertical = i != 1usize
+        var length: f32 = 170.0
+        if i == 1usize { length = 178.0 }
+        let (bar, bar_error) = control.windows_scroll_bar(a, u64(22000usize + i), t, vertical, length, 40.0, 154.0, 0.0)
+        control.set_scroll_bar_disabled(false)
+        if bar_error != ok { ret (0usize, bar_error) }
+        var drive: looks.Drive = .None
+        if i == 2usize {
+            drive = .Press
+            looks.aim(i, 0.0 - 81.0, 0.0 - 77.0)
+        }
+        // the bar at the cell's corner (the harness centres a smaller node)
+        let holder = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, looks.size_style(178.0, 170.0), mem_one(a, bar))
+        cells[i] = looks.Cell { caption: captions[i], node: holder, drive: drive }
+        i += 1usize
+    }
+    ret (3usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize && args[1usize].len > 1usize && args[1usize][0usize] == 109u8 && args[1usize][1usize] == 104u8 {
+        let main_h = looks.Sheet { name: "scroll_bar_main_h", cells: 3usize, columns: 1usize, cell_w: 196.0, cell_h: 16.0, ctx: zero, build: build_main_h }
+        ret looks.run_all(a, &main_h)
+    }
+    if args.len > 1usize && args[1usize].len > 0usize && args[1usize][0usize] == 110u8 {
+        let native_bar = looks.Sheet { name: "scroll_bar_native", cells: 3usize, columns: 3usize, cell_w: 178.0, cell_h: 170.0, ctx: zero, build: build_native_bar }
+        ret looks.run_all(a, &native_bar)
+    }
+    if args.len > 1usize && args[1usize].len > 0usize && args[1usize][0usize] == 109u8 {
+        let main_bar = looks.Sheet { name: "scroll_bar_main", cells: 7usize, columns: 7usize, cell_w: 16.0, cell_h: 186.0, ctx: zero, build: build_main_bar }
+        ret looks.run_all(a, &main_bar)
+    }
     if args.len > 2usize {
         let states = looks.Sheet { name: "scroll_bar_states", cells: 4usize, columns: 4usize, cell_w: 130.0, cell_h: 130.0, ctx: zero, build: build_states }
         ret looks.run_all(a, &states)

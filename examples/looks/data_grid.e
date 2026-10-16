@@ -346,7 +346,7 @@ fn coll_specs(a: *mem.Arena) -> ([]dg.ColumnSpec, err) {
     ret (specs, ok)
 }
 
-fn setup_main(m: *Main) -> err {
+fn setup_main(m: *Main, windows: bool) -> err {
     let a = m.a
     try load_pool(a, m)
     try load_coll(a, m)
@@ -394,13 +394,25 @@ fn setup_main(m: *Main) -> err {
     // looks9-w1 (Windows only, in the grid): the live footer cells' edge pixels and the frame ring's colours along the left side
     pool_look.footer_edges = true
     pool_look.group_rect = true
+    if windows {
+        // round 13: the live pool grid's bar starts over the group box and its thumb is 88 px; the navigator thumb is 91 px of body
+        pool_look.bar_up = 34.0
+        pool_look.hthumb_adj = 0.0 - 2.0
+        pool_look.hthumb_dx = 1.0
+        pool_look.hthumb_flat = true
+        pool_look.thumb_len = 88.0
+    }
+    pool_look.soft_a0 = 0.75
+    pool_look.soft_x0 = 183.0
+    pool_look.soft_slope = 0.0 - 0.0005
     pool_look.nav_rule = true
-    pool_look.ring_marks = "0 1 1 999ca0;0 2 161 9599a0;0 163 1 8e9299;0 164 49 878b93;1 1 1 8d9096;1 2 1 bbbdc1;1 3 34 dddedf;1 37 1 e5e5e7;1 38 128 eaeaec;1 166 1 e5e7eb;1 167 21 e0e4e9;1 188 1 c5c8cb;1 189 1 c5c5c7;1 190 23 dddedf"
+    pool_look.ring_marks = "0 1 1 999ca0;0 2 161 9599a0;0 163 1 8e9299;0 164 49 878b93;1 1 1 8d9096;1 2 1 bbbdc1;1 3 34 dddedf;1 37 1 e5e5e7;1 38 128 eaeaec;1 166 1 e5e7eb;1 167 21 e0e4e9;1 188 1 c5c8cb;1 189 1 c5c5c7;1 190 23 dddedf;479 2 34 f8f8f8;480 2 34 f7f7f7;487 18 1 d1d1d1;487 19 1 b9b9b9;487 20 16 b6b6b6;488 18 1 b7b7b7;488 19 1 8a8a8a;488 20 16 858585;489 18 1 d6d6d6;489 19 1 c1c1c1;489 20 16 bfbfbf;67 212 1 bfc2c6;68 212 1 c1c3c8 69;137 212 1 bbbec2;479 36 1 fcfcfc;480 36 1 f7f7f7;481 36 1 f0f0f0 6;487 36 1 b6b6b6;488 36 1 858585;489 36 1 bfbfbf;490 36 1 f0f0f0 6"
     dg.set_look(&m.pool_grid, pool_look)
     dg.show_filter_row(&m.pool_grid, true)
     dg.show_group_box(&m.pool_grid, true)
     dg.show_navigator(&m.pool_grid, true)
     dg.set_pane_hint(&m.pool_grid, 493.0)
+    if windows { dg.set_pane_hint(&m.pool_grid, 494.0) }
     dg.set_count_column(&m.pool_grid, 4usize)
     dg.set_footer_label(&m.pool_grid, "Count")
     dg.show_sort(&m.pool_grid, 5usize, true)
@@ -423,9 +435,12 @@ fn setup_main(m: *Main) -> err {
     look.ring_left_i = gl.rgb(0xEAEAECu32)
     look.ring_bottom = gl.rgb(0xCACCCFu32)
     look.footer_edges = true
+    if windows { look.hthumb_adj = 0.0 - 1.0 }
     look.soft_a0 = 0.75
     look.soft_x0 = 183.0
     look.soft_slope = 0.0 - 0.0005
+    // round 13: the position field's foot row (live main window)
+    look.bar_marks = "67 241 1 d2d4d7;68 241 1 d4d6d9 39;107 241 1 ccced1"
     look.ring_marks = "0 1 79 878b93;0 80 1 8d9199;0 81 160 9599a0;1 1 1 b5b8bd;1 2 192 eaeaec;1 194 1 e6e8eb;1 195 21 e0e4e9;1 216 1 cdd0d4;1 217 1 bdbec0;1 218 23 dddedf"
     dg.set_look(&m.coll_grid, look)
     dg.set_row_ink(&m.coll_grid, mem.cast[*void](m), coll_ink)
@@ -458,7 +473,7 @@ fn build_main(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     let m = mem.cast[*Main](ctx)
     if m.ready && m.windows != (t.tokens.profile == .Windows) { m.ready = false }
     if !m.ready {
-        try setup_main(m)
+        try setup_main(m, t.tokens.profile == .Windows)
         m.ready = true
         m.windows = t.tokens.profile == .Windows
     }

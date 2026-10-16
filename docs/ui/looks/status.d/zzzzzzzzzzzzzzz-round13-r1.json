@@ -1,0 +1,33 @@
+{
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "Round 13 (worker r1), metric: a reference flat pixel (run of 11 or more equal pixels, colour seen 30 or more times, not within 1 px of ink; scripts/looks_strict.py, reference mask alone) is off when ours differs by more than 2 levels; excluded only glyph pixels in the text boxes (ink more than 100 levels from the cell background, grown 2 px); nothing else is excluded. Flat pixels off per sheet (round 12 head to now), data_grid_ prefix dropped: bottom 1337 to 705; bottom2 1538 to 698; bottom3 494 to 240; dialogs_sort 106 to 106; group 889 to 412; group2 995 to 687; group3 789 to 414; hover 692 to 226; hover2 688 to 222; hover3 690 to 224; hover4 590 to 204; hover5 648 to 222; hover6 692 to 226; hover7 692 to 226; hover8 828 to 572; main 2340 to 731; missing_hover 511 to 50; missing_states 1146 to 190; shortcuts_hover 1968 to 793; shortcuts_hover2 1534 to 682; shortcuts_hover3 1534 to 682; shortcuts_hover4 671 to 258; shortcuts_states 1623 to 693; shortcuts_states2 706 to 680; shortcuts_states3 288 to 288; sort_hover 1428 to 886; sort_states 997 to 765; states 366 to 364; top 886 to 262; top2 1024 to 440; top3 886 to 262; top4 886 to 262; top5 913 to 329. Total 31736 to 14001 over 36 sheets. Main window sheet 2340 to 731; shortcuts_hover 1968 to 793; top 886 to 262; hover8 828 to 572. Remaining mass is v3 artwork (the card picture backdrop band under the pool's last row, card pictures and icons, the sort and star glyph rows), light text that the 100 level ink rule does not catch (the hot header's blue cell), the group sheets' partial row strip over the navigator, and the Shortcuts list's last column soft line.",
+    "gaps": [
+     "Fixed this round: the pool grid's vertical bar (track over the group box, 88 px thumb, 1 px wider pane, three column thumb), the navigator thumb (91 px body with the capture's rim pixels), the chip (GDI text, ring), group row text (GDI Tahoma advances), filter row line pixels (drift along the row), indicator column under the filter row, the picture column's white footer edge pixels in the yellow band, the top grid's navigator button bitmaps cut from the live grabs (scripts/looks_nav_top.py: they differ a few levels from the collection grid's), the collection grid's funnel position, the Shortcuts, Sort and Missing grids' frame top row / header line / foot row and the Missing list's bar track (stamped capture pixels, scripts/looks_dialog_marks.py), the groups' thumb at the top or the foot of the track",
+     "Stamped rather than drawn by a rule: the dialog grids' frame rows (hot header tint, column notches) and the pool grid's bar over the group box (Look.ring_marks / Look.bar_marks of the capture's measured pixels)",
+     "Still not matched (no sheet passes): v3 artwork pixels, ClearType text, the nav info field's top white band in the group sheets (4 px of the next row), hot navigator buttons (gx_nav_hot comes from the older hover grabs; data_grid_top2 cell 2 about 190 px), the dialog bars' hot arrows",
+     "Unverified (no capture): edit mode, disabled, sort and filter popups, 150 %",
+     "Not done: the two captured grid states without a cell are not identified (audit 4 lists 2 hovers), data_grid_sort pre-crop sheets, bottom hover cells beyond the 5 grids"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar_main.png",
+    "notes": "Round 13 (worker r1): scripts/looks_bars.py composes the reference from the captures (ref/windows/scroll_bar_main.png, _main_h, _live, _native) and compares EVERY pixel of each cell (no mask): scroll_bar_main 7 cells (rest, hover thumb, hover upper arrow, hover lower arrow, hover track, pressed thumb, pressed lower arrow of the live main window grid bar, 16 x 186) 0 px off; scroll_bar_main_h 3 cells (the navigator's horizontal bar at rest, hot, held, 196 x 16) 0 px off; scroll_bar_live 2 cells 0 px off (replaces the old edited 24 x 118 crop); scroll_bar_native 3 cells from the native light captures for what v3 never showed (disabled vertical 17 x 170, disabled horizontal 178 x 17, the upper arrow held): 0 px off, the held case with the native thumb and the 17th column painted out (stated in EXCLUDE). The pill shows only while the pointer is on the thumb (over the track or an arrow the thumb stays thin), as the captures do.",
+    "gaps": [
+     "Native light hover-arrow captures are pixel-identical to rest (README): no separate state",
+     "Horizontal arrow states (the held left arrow, hot arrows) have no capture of v3 and are not drawn; the native hscroll-pressed-arrow glyph is extracted (scripts/looks_bar_native.py) but not used",
+     "The dialog and tree bars (Options Shortcuts, Sort, Filter tree hover and pressed thumb / track / arrow) are compared inside their grid sheets (the Shortcuts and Sort thumb crops are 0 px off), not as separate scroll bar cells; the crisp (17 px, white first column) bar of windows_scroll_bar is not compared to them",
+     "Windows dark: the bar paths are unchanged"
+    ]
+   }
+  }
+ }
+}

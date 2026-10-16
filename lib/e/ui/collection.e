@@ -2267,6 +2267,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 if drift < 0.0 { drift = 0.0 }
                 first_line.background = paint.Brush { Solid: dk(t, 0xE8E8E8u32 + u32(drift + 0.5) * 65793u32) }
                 second_line.background = paint.Brush { Solid: dk(t, 0xFCFCFCu32 - u32(drift + 0.5) * 65793u32) }
+                // round 13: the indicator column's line is #EAEAEA over #FAFAFA (live main window)
+                if i == 0usize && look.top_fit {
+                    first_line.background = paint.Brush { Solid: dk(t, 0xEAEAEAu32) }
+                    second_line.background = paint.Brush { Solid: dk(t, 0xFAFAFAu32) }
+                }
             }
             // round 12: a hot or pressed header's own column takes the hot colour over its first line pixel and a faint tint on its second;
             // the column after it has its previous neighbour's second pixel blended with the hot colour (live hover and pressed grabs)
@@ -3092,7 +3097,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool, thumb_len: f32, thumb_top: f32 }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4861,6 +4866,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         let room = track_h - 32.0
         var thumb_h = room
         if content > body_height && content > 0.0 { thumb_h = room * body_height / content }
+        if lk.thumb_len > 0.0 { thumb_h = lk.thumb_len }
         if thumb_h < 17.0 { thumb_h = 17.0 }
         if thumb_h > room { thumb_h = room }
         var thumb_y: f32 = 0.0
@@ -4871,6 +4877,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             if share > 1.0 { share = 1.0 }
             thumb_y = (room - thumb_h) * share
         }
+        if lk.thumb_len > 0.0 && lk.thumb_top >= 0.0 { thumb_y = lk.thumb_top }
         // the thumb thickens under the pointer (the track keeps its width, so nothing moves)
         let track_key = key + 3300u64
         var thumb_w: f32 = 2.7
@@ -4975,7 +4982,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             edged[1usize] = bar_parts[1usize]
             bar_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), edged[0usize..2usize])
         }
-        if lk.bar_margin != 0.0 {
+        if lk.bar_margin != 0.0 || lk.bar_top != 0.0 {
             // a table shifted sideways keeps its bar at the view's right edge: the track stands over the
             // table (out of the row, which would be shortened by a negative margin) at the offset's place
             let (over_held, over_error) = mem.alloc[widget.Node](a, 1usize)
@@ -4987,7 +4994,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             // round 12: the top grid's rows end in a #F8F8F8 pixel before the bar's #F7F7F7 one (live captures, every state)
             if lk.top_fit && t.tokens.profile == .Windows && lk.soft_lines {
                 var pre_strip = control.sized_style(1.0, track_h - head_height)
-                pre_strip.background = paint.Brush { Solid: gl.rgb(0xF8F8F8u32) }
+                pre_strip.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.55) }
                 let (with_pre, with_pre_error) = mem.alloc[widget.Node](a, 3usize)
                 if with_pre_error != ok { ret (zero, TooLarge) }
                 with_pre[0usize] = bar_parts[0usize]
