@@ -1,0 +1,993 @@
+{
+ "label": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/label.png",
+    "notes": "iOS text styles in the theme's type scale: body 17, secondary label, footnote 13, caption 12, headline (bold), title 2, large title 34 bold, accent link, link held (35 %), disabled (30 %), grouped-list section header, macOS form label 13. A new sheet (cup_label.e), not the v3 captions.",
+    "gaps": [
+     "Semibold is drawn in Segoe UI Bold",
+     "Link underline and mnemonics are not drawn (Apple links are not underlined)",
+     "Text styles are the iOS defaults; macOS uses 13 pt for body (shown in one cell)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/label.png",
+    "notes": "iOS text styles in the theme's type scale: body 17, secondary label, footnote 13, caption 12, headline (bold), title 2, large title 34 bold, accent link, link held (35 %), disabled (30 %), grouped-list section header, macOS form label 13. A new sheet (cup_label.e), not the v3 captions. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Semibold is drawn in Segoe UI Bold",
+     "Link underline and mnemonics are not drawn (Apple links are not underlined)",
+     "Text styles are the iOS defaults; macOS uses 13 pt for body (shown in one cell)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/button.png",
+    "notes": "Filled, tinted, gray (Elevated), plain, macOS bordered (Outlined, 22/28), default, destructive, loading; large 44 / medium 34 / small 28 (sizes from the brief; Apple's large configuration is 50). Confident: systemBlue #007AFF/#0A84FF, tint fill 15 %, tertiary fill 12 %/24 %, macOS regular push button 22 tall, 13 pt label. No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/checkbox.png",
+    "notes": "macOS check box 14 x 14 (confident), white face, accent fill with white tick or dash, 13 pt label. Also the iOS switch, an extra control without a status row: switch.png (51 x 31, thumb 27, systemGreen; confident), via control.switch_control. No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Box radius 3.5, unchecked edge alpha and pressed face approximated",
+     "Switch thumb stretch while pressed (+6) and the thumb shadow stack are approximations",
+     "Extra controls render_looks.py cannot add as rows: switch (switch.png), segmented_control (segmented_control.png, iOS 32 tall), slider (slider.png, thumb 28, track 4), stepper (spin_edit.png, 94 x 32)",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/radio.png",
+    "notes": "macOS radio 14 (confident), accent disc with 6 px white dot when selected, painted circles. No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Dot size and off-state edge approximated",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/radio_group.png",
+    "notes": "macOS radio group: rows of the Cupertino radio (15 round, accent dot), selected, long captions, disabled, keyboard focus ring around the row. The v3 sheet cells with the Cupertino radio; no iOS equivalent exists (iOS uses a list with a trailing tick, see list_box).",
+    "gaps": [
+     "No group box or title is drawn around the group",
+     "Focus ring is the runtime ring around one row",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/radio_group.png",
+    "notes": "macOS radio group: rows of the Cupertino radio (15 round, accent dot), selected, long captions, disabled, keyboard focus ring around the row. The v3 sheet cells with the Cupertino radio; no iOS equivalent exists (iOS uses a list with a trailing tick, see list_box). Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No group box or title is drawn around the group",
+     "Focus ring is the runtime ring around one row",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/text_edit.png",
+    "notes": "Rounded-rect text field 34 tall, 8 round, grouped-cell face with hairline, 17 pt value, placeholder at 30 % label (confident), clear button while focused and holding text (reports the empty string through change), selection, invalid red edge, read only, three rows, prefix and suffix, password. Search field (36 tall, 10 round, tertiary fill, magnifier, clear): search_field.png. No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "34 height and radius 8 approximate UITextField / SwiftUI roundedBorder; search 36 / 10 are closer to UIKit",
+     "text_field has no clear action: the clear mark only reports an empty change",
+     "Suffix overflows the right padding when prefix and suffix are both set",
+     "Multi-row field has no scrolling viewport",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/spin_edit.png",
+    "notes": "iOS stepper 94 x 32 (confident), minus and plus halves, divider, accent glyphs (30 % at a bound), hover and pressed fill; the spin box is the rounded field beside the stepper pill. No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Radius 8 and glyph weight approximate",
+     "macOS NSStepper (stacked chevrons) is not drawn",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/combo_box.png",
+    "notes": "macOS pop-up button 22 tall: bezel, 13 pt value, accent chip with up/down chevrons (approx.); open (combo_box_open.png) holds it pressed with the macOS menu below. Select and picker heads use it. No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Chip size and colours approximated",
+     "Editable combo box and image combo box not styled",
+     "iOS pull-down menu button idiom not drawn",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/image_combo_box.png",
+    "notes": "macOS pop-up button with item pictures: the chosen picture before the value in the button, a picture after the check slot in every menu row (accent row under the pointer), disabled (arrows chip grey, text 25 %), nothing chosen (secondary placeholder), keyboard focus. Same 22 tall bezel and blue up/down chip as the combo box; the menu opens under the button at its width (min 148 with pictures).",
+    "gaps": [
+     "Pictures are the drawn glyph stand-ins of the sheet, not a real image list",
+     "The menu is not widened to its longest row (long names clip)",
+     "Hover on the closed button is the faint bezel change only",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/image_combo_box.png",
+    "notes": "macOS pop-up button with item pictures: the chosen picture before the value in the button, a picture after the check slot in every menu row (accent row under the pointer), disabled (arrows chip grey, text 25 %), nothing chosen (secondary placeholder), keyboard focus. Same 22 tall bezel and blue up/down chip as the combo box; the menu opens under the button at its width (min 148 with pictures). Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Pictures are the drawn glyph stand-ins of the sheet, not a real image list",
+     "The menu is not widened to its longest row (long names clip)",
+     "Hover on the closed button is the faint bezel change only",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/date_edit.png",
+    "notes": "Typed date field (34 tall, 8 round, hairline) with a trailing accent calendar glyph button (28, 6 round, tertiary fill while hot or pressed: date_edit_button.png). Opens the iOS graphical picker as a popover: cell-colour card 14 round with a hairline and shadow, bold month and year, accent turn arrows, weekday row, accent disc on the chosen day, Today / Clear text buttons. Open, open with a day under the pointer, rest, hover, empty, focus (halo, clear button).",
+    "gaps": [
+     "The iOS compact picker (a grey date capsule) and the macOS stepper date field are not drawn: this is the DevExpress edit-plus-drop-button idiom in Apple colours",
+     "Today is not marked with an accent ring",
+     "The chosen-day disc is the shared 34 squircle stand-in (circular arcs)",
+     "Month and year picking (wheels) not drawn",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/date_edit.png",
+    "notes": "Typed date field (34 tall, 8 round, hairline) with a trailing accent calendar glyph button (28, 6 round, tertiary fill while hot or pressed: date_edit_button.png). Opens the iOS graphical picker as a popover: cell-colour card 14 round with a hairline and shadow, bold month and year, accent turn arrows, weekday row, accent disc on the chosen day, Today / Clear text buttons. Open, open with a day under the pointer, rest, hover, empty, focus (halo, clear button). Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "The iOS compact picker (a grey date capsule) and the macOS stepper date field are not drawn: this is the DevExpress edit-plus-drop-button idiom in Apple colours",
+     "Today is not marked with an accent ring",
+     "The chosen-day disc is the shared 34 squircle stand-in (circular arcs)",
+     "Month and year picking (wheels) not drawn",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/mask_edit.png",
+    "notes": "Same field as text_edit (34 tall, 8 round, halo and clear button while focused, red edge when invalid, grey face when disabled or read only, placeholder at 30 %), clipped inside its frame so a long value never crosses the border.",
+    "gaps": [
+     "No mask-specific chrome: the mask itself is the control's behaviour, not a look",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/mask_edit.png",
+    "notes": "Same field as text_edit (34 tall, 8 round, halo and clear button while focused, red edge when invalid, grey face when disabled or read only, placeholder at 30 %), clipped inside its frame so a long value never crosses the border. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No mask-specific chrome: the mask itself is the control's behaviour, not a look",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/memo.png",
+    "notes": "UITextView / NSTextView as a field: 4 rows of 22 in the rounded field, wrapped text, no clear button (a multi-line field has none), selection in the accent tint, disabled, read only, invalid, placeholder, a longer text clipped by the frame.",
+    "gaps": [
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/memo.png",
+    "notes": "UITextView / NSTextView as a field: 4 rows of 22 in the rounded field, wrapped text, no clear button (a multi-line field has none), selection in the accent tint, disabled, read only, invalid, placeholder, a longer text clipped by the frame. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/button_edit.png",
+    "notes": "Rounded field with a trailing 28 square ellipsis button (three accent dots; tertiary fill while hot or pressed, grey when disabled), the clear button before it while focused, red edge when invalid, a long value clipped before the button.",
+    "gaps": [
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/button_edit.png",
+    "notes": "Rounded field with a trailing 28 square ellipsis button (three accent dots; tertiary fill while hot or pressed, grey when disabled), the clear button before it while focused, red edge when invalid, a long value clipped before the button. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/token_edit.png",
+    "notes": "NSTokenField: tokens are 24 tall capsules in the accent at 16 % (30 % Dark) with 13 pt text and a small cross that removes them, deepening under the pointer or the cross; they wrap inside the field box (hairline, 8 round, 3 px halo while the input is focused). Rest, hover token, hover cross, focused, empty (placeholder), wrapped, one token.",
+    "gaps": [
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/token_edit.png",
+    "notes": "NSTokenField: tokens are 24 tall capsules in the accent at 16 % (30 % Dark) with 13 pt text and a small cross that removes them, deepening under the pointer or the cross; they wrap inside the field box (hairline, 8 round, 3 px halo while the input is focused). Rest, hover token, hover cross, focused, empty (placeholder), wrapped, one token. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/check_list_box.png",
+    "notes": "iOS multi-select list: inset grouped block (10 round), 44 tall rows, a hollow circle that becomes an accent disc with a white tick, inset hairlines, tertiary fill under the pointer, keyboard focus rectangle on the row, scrolling clipped by the block, empty list.",
+    "gaps": [
+     "The keyboard focus is the runtime's rectangular ring (iOS shows none, macOS a rounded one)",
+     "The scroll indicator is the shared thin grey thumb",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/check_list_box.png",
+    "notes": "iOS multi-select list: inset grouped block (10 round), 44 tall rows, a hollow circle that becomes an accent disc with a white tick, inset hairlines, tertiary fill under the pointer, keyboard focus rectangle on the row, scrolling clipped by the block, empty list. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "The keyboard focus is the runtime's rectangular ring (iOS shows none, macOS a rounded one)",
+     "The scroll indicator is the shared thin grey thumb",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/progress_bar.png",
+    "notes": "iOS progress view 4 (6 thick), systemFill track, accent fill, round ends; activity indicator of 12 ticks (20 and 37, confident), determinate ring; error red, paused orange. Indeterminate bar is a travelling 35 % capsule (iOS has none, macOS draws stripes). No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Track 4 pt is the iOS 14+ value",
+     "Indeterminate bar and ring stroke widths are approximations",
+     "Time-dependent frames use a fixed phase",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/group_box.png",
+    "notes": "Outlined is the macOS box: faint label-colour fill (3 %, 5 % Dark) in a 1 px hairline, 6 round, 28 tall rows with separators, the title above at 13 pt; Filled is the iOS inset grouped section: 13 pt secondary header at 16 in over white (#2C2C2E) rows 44 tall, 10 round, inset hairlines. Plain, disabled, invalid (2 px red edge and message) and empty are shown.",
+    "gaps": [
+     "The macOS box title sits above the box instead of in a notch (NSBox style 'above top')",
+     "Fill and hairline alphas of the macOS box are approximations",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/group_box.png",
+    "notes": "Outlined is the macOS box: faint label-colour fill (3 %, 5 % Dark) in a 1 px hairline, 6 round, 28 tall rows with separators, the title above at 13 pt; Filled is the iOS inset grouped section: 13 pt secondary header at 16 in over white (#2C2C2E) rows 44 tall, 10 round, inset hairlines. Plain, disabled, invalid (2 px red edge and message) and empty are shown. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "The macOS box title sits above the box instead of in a notch (NSBox style 'above top')",
+     "Fill and hairline alphas of the macOS box are approximations",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/page_control.png",
+    "notes": "macOS tab view as a 24 tall segmented strip, and the iOS tab bar (49 tall, 10 pt labels under 25 icons, accent chosen, systemGray rest; confident). No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Icons are Neper glyphs, not SF Symbols",
+     "Bar face is flat #F9F9F9 / #1D1D1D (no blur)",
+     "Badges and scrolling strips not styled",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "The keyboard focus of the segmented strip is the runtime's square rectangle inside the segment (no rounding)"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/splitter.png",
+    "notes": "macOS split view: a 9 wide divider (9 tall lying down) with a 1 px separator line (#D1D1D6 / #48484A), the two panes on the cell colour. Rest, hover, dragged and keyboard-focused rows, upright and lying; the focused divider takes a 2 px accent line.",
+    "gaps": [
+     "The harness hover and press do not reach the divider (the same in the Neper sheet), so the dimple and the accent line of a held divider are drawn by code but not shown in a PNG",
+     "The thick-divider dimple is the existing 4 x 44 rounded grip, not Apple's pane splitter grip",
+     "The pane keeps its own focus ring while the divider is focused (a second line above)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/splitter.png",
+    "notes": "macOS split view: a 9 wide divider (9 tall lying down) with a 1 px separator line (#D1D1D6 / #48484A), the two panes on the cell colour. Rest, hover, dragged and keyboard-focused rows, upright and lying; the focused divider takes a 2 px accent line. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "The harness hover and press do not reach the divider (the same in the Neper sheet), so the dimple and the accent line of a held divider are drawn by code but not shown in a PNG",
+     "The thick-divider dimple is the existing 4 x 44 rounded grip, not Apple's pane splitter grip",
+     "The pane keeps its own focus ring while the divider is focused (a second line above)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/status_bar.png",
+    "notes": "Window bottom bar: 26 tall on the window colour under a 0.5 px separator, 12 pt text in the secondary label colour, the message at the start and the rest at the end, a progress meter item (48 x 4), a pressable item with a 5 round tertiary fill while hovered, an error item with the red alert mark, a narrow bar with the message clipped. Panels are not boxed or sunk.",
+    "gaps": [
+     "Panel dividers and the size grip are not drawn (macOS has neither)",
+     "Item hover is drawn so the state is visible (macOS status text is not pressable)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/status_bar.png",
+    "notes": "Window bottom bar: 26 tall on the window colour under a 0.5 px separator, 12 pt text in the secondary label colour, the message at the start and the rest at the end, a progress meter item (48 x 4), a pressable item with a 5 round tertiary fill while hovered, an error item with the red alert mark, a narrow bar with the message clipped. Panels are not boxed or sunk. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Panel dividers and the size grip are not drawn (macOS has neither)",
+     "Item hover is drawn so the state is visible (macOS status text is not pressable)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/toolbar_button.png",
+    "notes": "Toolbar glyph buttons (accent, rounded hover and pressed layer, tint when on) and the iOS navigation bar: 44 row, centred 17 semibold title, back chevron and previous title, accent text actions, 34 bold large title (confident). No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Glyphs are Neper icons",
+     "The Neper More menu is not used past three actions",
+     "macOS toolbar (gray glyphs) not drawn",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/menu_bar.png",
+    "notes": "macOS menu bar: 24 tall on a flat #F6F6F6 (#2A2A2C Dark) bar, the Apple logo (drawn), the app menu in bold, File Edit View Cards Window Help at 13 pt; an open or pressed title holds a translucent grey chip (14 % black, 20 % white Dark); no hover change (macOS has none). The open menu (menu_bar-open.png) is the macOS menu panel: accent row under the pointer, shortcut column, hairline separators, disabled rows at 25 %.",
+    "gaps": [
+     "The bar is opaque: the real bar is a translucent material over the wallpaper",
+     "The Apple logo is a drawn approximation (discs), not the glyph",
+     "Shortcuts are written as Cmd+ words, not command symbols",
+     "The title chip colour is an approximation of the menu-bar highlight",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/menu_bar.png",
+    "notes": "macOS menu bar: 24 tall on a flat #F6F6F6 (#2A2A2C Dark) bar, the Apple logo (drawn), the app menu in bold, File Edit View Cards Window Help at 13 pt; an open or pressed title holds a translucent grey chip (14 % black, 20 % white Dark); no hover change (macOS has none). The open menu (menu_bar-open.png) is the macOS menu panel: accent row under the pointer, shortcut column, hairline separators, disabled rows at 25 %. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "The bar is opaque: the real bar is a translucent material over the wallpaper",
+     "The Apple logo is a drawn approximation (discs), not the glyph",
+     "Shortcuts are written as Cmd+ words, not command symbols",
+     "The title chip colour is an approximation of the menu-bar highlight",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/popup_menu.png",
+    "notes": "macOS menu: flat panel, 10 round, 5 inset, 22 tall 13 pt rows, check and dot slot, shortcuts and submenu chevron in the secondary colour, accent fill with white text on the hovered row (popup_menu-hover.png). No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Shortcuts are written as Ctrl+ words, not command symbols",
+     "Item pictures, group heads and the submenu panel are not restyled beyond the row",
+     "Panel radius 10, inset 5, row radius 5 are approximations",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/hint.png",
+    "notes": "macOS help tag: light or dark rounded face, hairline, 11 pt, below the anchor (approximation of macOS 11+). No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "iOS has no tooltip",
+     "Rich tooltip not restyled",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/scroll_bar.png",
+    "notes": "Overlay scroll indicator: thin rounded thumb in the label colour at 35 %, no track, widening under the pointer (runtime behaviour). No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Thumb width 4 (8 hovered) vs iOS 3 and macOS 7",
+     "No fade-out timing shown, no legacy always-on scroller",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/list_box.png",
+    "notes": "Inset grouped list: cell colour, 10 round, 44 rows, 17 pt, hairline separators inset 16, trailing accent tick on the choice, gray pressed fill. No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Section headers and footers not drawn",
+     "Multi-select list keeps its Neper check boxes",
+     "Selection is a tick only (macOS sidebar accent fill not drawn)",
+     "Row hover colour approximated; the scroll thumb is the runtime's",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/tree_list.png",
+    "notes": "macOS outline view: disclosure chevrons, 24 tall rows with 5 round selection, bold top level, a grey selection that turns accent-tinted (22 %, 45 % Dark) while the list holds the keyboard focus, the tertiary fill under the pointer or finger, shut branches. Node keys carry the cell so each tree is independent.",
+    "gaps": [
+     "The focused selection is an accent tint with dark text: row text is built by the caller and is not recoloured white as AppKit does",
+     "No icons in the rows (a source list has SF Symbols)",
+     "Columns, headers and the v3 filter list are not shown (see data_grid for the table form)",
+     "Indentation is 20 per level (AppKit uses about 14)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/tree_list.png",
+    "notes": "macOS outline view: disclosure chevrons, 24 tall rows with 5 round selection, bold top level, a grey selection that turns accent-tinted (22 %, 45 % Dark) while the list holds the keyboard focus, the tertiary fill under the pointer or finger, shut branches. Node keys carry the cell so each tree is independent. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "The focused selection is an accent tint with dark text: row text is built by the caller and is not recoloured white as AppKit does",
+     "No icons in the rows (a source list has SF Symbols)",
+     "Columns, headers and the v3 filter list are not shown (see data_grid for the table form)",
+     "Indentation is 20 per level (AppKit uses about 14)",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/vertical_grid.png",
+    "notes": "iOS inset grouped property rows: a 13 pt secondary section header (with a disclosure chevron, 'n properties' while shut) over a rounded cell block (10 round, #FFFFFF / #2C2C2E), 44 tall rows, the name in the label colour at the start, the value in the secondary colour at the end, inset hairlines, the chosen row on the tertiary fill. Both sections open, both shut, one shut.",
+    "gaps": [
+     "Editors are plain text at rest; the focused row's editor (field, combo, ellipsis) is not styled in this sheet",
+     "Section headers are written in capitals in the data, not by the control",
+     "No trailing disclosure chevron on rows",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/vertical_grid.png",
+    "notes": "iOS inset grouped property rows: a 13 pt secondary section header (with a disclosure chevron, 'n properties' while shut) over a rounded cell block (10 round, #FFFFFF / #2C2C2E), 44 tall rows, the name in the label colour at the start, the value in the secondary colour at the end, inset hairlines, the chosen row on the tertiary fill. Both sections open, both shut, one shut. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Editors are plain text at rest; the focused row's editor (field, combo, ellipsis) is not styled in this sheet",
+     "Section headers are written in capitals in the data, not by the control",
+     "No trailing disclosure chevron on rows",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/data_grid.png",
+    "notes": "macOS table view: 11 pt header in the secondary label colour with a sort chevron (up ascending, down descending) and column separators, alternating rows (label colour at 4 %), the selected row accent #0A60FF (#0B57D0 Dark) with white text while the grid holds the focus and neutral #DCDCDC (#464649 Dark) without it, the tertiary fill under the pointer, group row, summary footer, filter row in the rounded field, thin scroll thumb.",
+    "gaps": [
+     "Group rows keep the '[-] Common (14)' text of the shared grid, not an AppKit disclosure triangle",
+     "Footer summaries are bold text on the window colour (no footer material)",
+     "Row separators are the shared hairlines (an AppKit table has none unless grid lines are on)",
+     "iOS list form of a grid is not drawn (see list_box)",
+     "Only the sheet's two grids are covered: the main-window and dialog grids of the v3 sheet are not rendered",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/data_grid.png",
+    "notes": "macOS table view: 11 pt header in the secondary label colour with a sort chevron (up ascending, down descending) and column separators, alternating rows (label colour at 4 %), the selected row accent #0A60FF (#0B57D0 Dark) with white text while the grid holds the focus and neutral #DCDCDC (#464649 Dark) without it, the tertiary fill under the pointer, group row, summary footer, filter row in the rounded field, thin scroll thumb. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Group rows keep the '[-] Common (14)' text of the shared grid, not an AppKit disclosure triangle",
+     "Footer summaries are bold text on the window colour (no footer material)",
+     "Row separators are the shared hairlines (an AppKit table has none unless grid lines are on)",
+     "iOS list form of a grid is not drawn (see list_box)",
+     "Only the sheet's two grids are covered: the main-window and dialog grids of the v3 sheet are not rendered",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/dialog.png",
+    "notes": "iOS alert: 270 wide, 14 round, 17 semibold title, 13 message, 44 buttons (two side by side, more stacked), default semibold, destructive red; the open dialog over its scrim is dialog_open.png (overlay.dialog / alert_dialog). No Apple reference exists: standard values are published HIG/UIKit/AppKit numbers, the rest approximations. Font: Segoe UI stands in for SF Pro (SF is not installed on this Windows host); sizes are SF sizes, glyph widths and the semibold weight (mapped to Segoe UI Bold) are not. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Blur material not reproduced",
+     "Form dialogs with other content get the same card",
+     "macOS NSAlert and sheets not drawn",
+     "Press on the right button of a pair is not captured (cell centre)",
+     "No live Apple capture: nothing here is compared with a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row"
+    ]
+   }
+  }
+ },
+ "switch": {
+  "name": "Switch",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/switch.png",
+    "notes": "UISwitch: 51 x 31 capsule, systemGreen when on, tertiary grey when off, 27 white thumb with a soft shadow; hover, pressed (wider thumb), focus ring, disabled.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/switch.png",
+    "notes": "UISwitch: 51 x 31 capsule, systemGreen when on, tertiary grey when off, 27 white thumb with a soft shadow; hover, pressed (wider thumb), focus ring, disabled. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "segmented_control": {
+  "name": "Segmented control",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/segmented_control.png",
+    "notes": "UISegmentedControl / NSSegmentedControl: tertiary fill track, raised white (grey Dark) selected segment, separators, hover and pressed segment, disabled segment.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/segmented_control.png",
+    "notes": "UISegmentedControl / NSSegmentedControl: tertiary fill track, raised white (grey Dark) selected segment, separators, hover and pressed segment, disabled segment. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "slider": {
+  "name": "Slider",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/slider.png",
+    "notes": "UISlider: 4 tall track, accent minimum side, white 27 thumb with shadow; hover, dragged, focus, disabled.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/slider.png",
+    "notes": "UISlider: 4 tall track, accent minimum side, white 27 thumb with shadow; hover, dragged, focus, disabled. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "stepper": {
+  "name": "Stepper",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/spin_edit.png",
+    "notes": "UIStepper: 94 x 32 tertiary pill with accent plus and minus and a divider; hover and pressed half, bound states (30 % glyph); also the spin box (field plus stepper) on the same sheet.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/spin_edit.png",
+    "notes": "UIStepper: 94 x 32 tertiary pill with accent plus and minus and a divider; hover and pressed half, bound states (30 % glyph); also the spin box (field plus stepper) on the same sheet. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "name": "Search field",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/search_field.png",
+    "notes": "UISearchBar field: 36 tall, 10 round tertiary fill, magnifier and Search placeholder, clear button once typed, halo on focus, disabled.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/search_field.png",
+    "notes": "UISearchBar field: 36 tall, 10 round tertiary fill, magnifier and Search placeholder, clear button once typed, halo on focus, disabled. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "activity_indicator": {
+  "name": "Activity indicator",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/progress_bar.png",
+    "notes": "UIActivityIndicatorView: 12 ticks fading around (frame at phase 0.25), 20 and 37 points; the sheet also holds the progress bars and rings.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/progress_bar.png",
+    "notes": "UIActivityIndicatorView: 12 ticks fading around (frame at phase 0.25), 20 and 37 points; the sheet also holds the progress bars and rings. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "navigation_bar": {
+  "name": "Navigation bar",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/toolbar_button.png",
+    "notes": "UINavigationBar: 44 tall, back chevron with the previous title in the accent, centred bold title, accent actions at the end (cells 'nav: back, action' and 'nav: actions').",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/toolbar_button.png",
+    "notes": "UINavigationBar: 44 tall, back chevron with the previous title in the accent, centred bold title, accent actions at the end (cells 'nav: back, action' and 'nav: actions'). Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "tab_bar": {
+  "name": "Tab bar",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/page_control.png",
+    "notes": "UITabBar: icon over 10 pt label, accent for the selected item (filled icon), grey others, hairline above; rows 'bar: first / second / hover / pressed / disabled' on the page control sheet.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/page_control.png",
+    "notes": "UITabBar: icon over 10 pt label, accent for the selected item (filled icon), grey others, hairline above; rows 'bar: first / second / hover / pressed / disabled' on the page control sheet. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "large_title": {
+  "name": "Large title",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/toolbar_button.png",
+    "notes": "Large title navigation bar: 34 pt bold title under the bar row (cell 'nav: large title' of the toolbar sheet).",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/toolbar_button.png",
+    "notes": "Large title navigation bar: 34 pt bold title under the bar row (cell 'nav: large title' of the toolbar sheet). Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "Round 5 sheet, not re-measured in round 7",
+     "No live Apple capture: nothing here is compared with a real control; standard values are published HIG / UIKit / AppKit numbers, the rest approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ }
+}
