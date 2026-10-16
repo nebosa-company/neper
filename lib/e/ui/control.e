@@ -15449,7 +15449,9 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         var words = text_options()
         words.role = .BodyMedium
         words.wrap = .None
-        let (label_node, label_error) = colored_text(a, 0u64, options[i], &dialog_t, words, ink)
+        words.size = 11.0
+        // looks9: the rows' words sit at GDI's whole-pixel Tahoma advances (ink boxes of the live Customization list within 1 px).
+        let (label_node, label_width, label_error) = choices_words(a, &dialog_t, words, ink, options[i])
         if label_error != ok { ret (zero, label_error) }
         var line_style = style.defaults()
         line_style.width = style.Length { Percent: 100.0 }
@@ -15463,9 +15465,10 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         layers[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, text_held[0usize..1usize])
         var count = 1usize
         if state.focused {
-            let (dots, dots_error) = win3_dots(a, ink, max_zero(width - 2.0), 20.0)
+            // looks9: on the chosen row the live list's rectangle is 20 tall in the fill-tinted greys (win_list_dots).
+            let (dots, dots_error) = win_list_dots(a, max_zero(width - 2.0), 20.0)
             if dots_error != ok { ret (zero, dots_error) }
-            layers[1usize] = dots
+            layers[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, dots))
             count = 2usize
         }
         var row_style = style.defaults()
@@ -18547,3 +18550,42 @@ fn win_tab_edge() -> paint.Color {
     if style.windark_active() { ret style.hex_raw(0x9D9D9Du32) }
     ret style.hex(2829099u32)
 }
+
+// ---- looks9: the list box's focus rectangle on its chosen row ---------------------------------------------------
+// The live Customization list draws the dotted focus rectangle 20 rows tall (the row plus the line under it) in greys that
+// the chosen row's blue fill tints: top rows #7C7169 / #93979A, side dots #6D6966 / #929699, bottom rows #716E6C / #A69F99
+// (measured on ref/windows/states/list-box-row-selected-focused-customization). Same two-row dot pattern as `win3_dots`.
+fn win_list_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let top_dark = style.hex(8155497u32)
+    let top_light = style.hex(9672602u32)
+    let side_dark = style.hex(7170406u32)
+    let side_light = style.hex(9606809u32)
+    let low_dark = style.hex(7433836u32)
+    let low_light = style.hex(10919833u32)
+    var x: f32 = 1.0
+    while x < area.width - 1.0 {
+        try win3_rect(b, area.x + x, area.y, 1.0, 1.0, top_dark)
+        try win3_rect(b, area.x + x, area.y + 1.0, 1.0, 1.0, top_light)
+        try win3_rect(b, area.x + x, area.y + area.height - 2.0, 1.0, 1.0, low_dark)
+        try win3_rect(b, area.x + x, area.y + area.height - 1.0, 1.0, 1.0, low_light)
+        x += 2.0
+    }
+    var y: f32 = 1.0
+    while y < area.height - 1.0 {
+        var edge = side_light
+        if (u32(y) & 1u32) == 1u32 { edge = side_dark }
+        try win3_rect(b, area.x, area.y + y, 1.0, 1.0, edge)
+        try win3_rect(b, area.x + area.width - 1.0, area.y + y, 1.0, 1.0, edge)
+        y += 1.0
+    }
+    ret ok
+}
+
+fn win_list_dots(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win3Dots](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win3Dots { ink: style.hex(0u32) }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_list_dots_paint, state: widget.bytes_of[Win3Dots](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
+}
+// ---- end looks9 -------------------------------------------------------------------------------------------------
