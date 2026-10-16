@@ -4,6 +4,7 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.gfx.paint
 use e.ui.style
 use e.ui.widget
 use e.ui.layout as ui_layout
@@ -204,7 +205,43 @@ fn build_lists(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 // The toolbar combos of the v3 main window (flat, TcxBarEditItem), as the live capture
 // ref/windows/combo_box_flat*.png shows them: the Mode combo with a value, the empty one at the
 // left of the toolbar, a disabled one. Under the Neper look `flat` is ignored.
+fn bar_line(x: f32, y: f32, w: f32, rgb: u32) -> widget.Node {
+    var line = looks.size_style(w, 1.0)
+    line.background = paint.Brush { Solid: style.hex(rgb) }
+    ret widget.positioned(0u64, x, y, line, zero)
+}
+
+// `build_flat` is the toolbar strip of the live main window (crop 604,56 188x28): the toolbar's
+// own rows, and the Mode combo at (58, 6), 127 wide. `build_flat_states` are the three states.
 fn build_flat(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let colors = [4]str{ "Collection from Pool", "Collection from Deck", "Pool", "Deck" }
+    var options = control.field_options()
+    options.flat = true
+    options.width = 127.0
+    let (combo, combo_error) = one(a, t, 100u64, "Collection from Pool", colors[0usize..4usize], 0usize, false, options, 0.0, 0.0, 17.0, 127.0)
+    if combo_error != ok { ret (0usize, combo_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = bar_line(0.0, 0.0, 188.0, 14606046u32)
+    parts[1usize] = bar_line(0.0, 1.0, 188.0, 16119285u32)
+    parts[2usize] = bar_line(0.0, 26.0, 188.0, 12434877u32)
+    parts[3usize] = bar_line(59.0, 27.0, 129.0, 13882323u32)
+    parts[5usize] = bar_line(0.0, 27.0, 59.0, 14474460u32)
+    parts[4usize] = widget.positioned(0u64, 58.0, 6.0, style.defaults(), widget_one(a, combo))
+    var strip = looks.size_style(188.0, 28.0)
+    strip.background = paint.Brush { Solid: style.hex(15790320u32) }
+    cells[0usize] = looks.Cell { caption: "", node: widget.stack(0u64, strip, parts[0usize..6usize]), drive: .None }
+    ret (1usize, ok)
+}
+
+fn widget_one(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret zero }
+    held[0usize] = node
+    ret held[0usize..1usize]
+}
+
+fn build_flat_states(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let colors = [4]str{ "Collection from Pool", "Collection from Deck", "Pool", "Deck" }
     let captions = [3]str{ "Mode", "Empty", "Disabled" }
     var i = 0usize
@@ -435,8 +472,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret looks.run_all(a, &pick)
         }
     }
+    if args.len > 3usize {
+        let states = looks.Sheet { name: "combo_box_flat_states", cells: 3usize, columns: 3usize, cell_w: 170.0, cell_h: 50.0, ctx: zero, build: build_flat_states }
+        ret looks.run_all(a, &states)
+    }
     if args.len > 2usize {
-        let flat = looks.Sheet { name: "combo_box_flat", cells: 3usize, columns: 3usize, cell_w: 170.0, cell_h: 50.0, ctx: zero, build: build_flat }
+        let flat = looks.Sheet { name: "combo_box_flat", cells: 1usize, columns: 1usize, cell_w: 188.0, cell_h: 28.0, ctx: zero, build: build_flat }
         ret looks.run_all(a, &flat)
     }
     let (passes, passes_error) = mem.alloc[Pass](a, 1usize)

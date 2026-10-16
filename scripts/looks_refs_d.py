@@ -56,6 +56,8 @@ def open_src(src):
     path = os.path.join(DLG, src + "@1x.png")
     if not os.path.exists(path):
         path = os.path.join(STATES, src + "@1x.png")
+    if not os.path.exists(path):
+        path = os.path.join(ROOT, "docs/ui/looks/ref/windows", src + "@1x.png")
     return Image.open(path).convert("RGB")
 
 
@@ -212,11 +214,14 @@ PARTS["list_box_blur"] = (164, 300, [("list-box-row-selected-unfocused-customiza
 
 for _k in range(1, 12):
     PARTS["page_control_stats_%d" % _k] = (905, 24, [("tab-selected-statistics-%d" % _k, 8, 31, 905, 24, 0, 0)])
-PARTS["page_control_cards"] = (229, 22, [("tab-selected-filter-cards", 8, 31, 229, 22, 0, 0)])
-PARTS["page_control_options"] = (229, 22, [("tab-selected-filter-options", 8, 31, 229, 22, 0, 0)])
+PARTS["page_control_cards"] = (318, 22, [("tab-selected-filter-cards", 8, 31, 229, 22, 0, 0)])
+PARTS["page_control_options"] = (407, 22, [("tab-selected-filter-options", 8, 31, 229, 22, 0, 0)])
 PARTS["page_control_held"] = (96, 22, [("tab-pressed-customization-columns", 12, 33, 96, 22, 0, 0)])
 
 
+PARTS["combo_box_flat"] = (188, 28, [("main-window", 604, 56, 188, 28, 0, 0)])
+PARTS["page_control_bottom"] = (282, 29, [("main-window", 8, 546, 282, 29, 0, 0)])
+PARTS["page_control_bottom2"] = (192, 23, [("tab-selected-second-main-left", 8, 549, 192, 23, 0, 0)])
 PARTS["combo_box_search_held"] = (297, 29, [("combo-box-drop-button-pressed-search", 20, 70, 289, 22, 4, 4)])
 
 
