@@ -14,6 +14,7 @@ use e.gfx.scene
 use e.mem
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 
 // kind: 0 plain, 1 spin with fast buttons, 2 spin with stacked arrows, 3 button edit. state: 0 rest, 1 focused,
@@ -76,6 +77,33 @@ fn wedit_left_slope_1() -> [198]f32 { ret [198]f32{ 0.0070, 0.0070, 0.0070, -0.0
 // left rim, state 2: edit-button-ellipsis-pressed-options-cardart
 fn wedit_left_2() -> [66]u32 { ret [66]u32{ 0xFFEFEFF0u32, 0xFFEEEEEFu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFF0F0F0u32, 0xFFF2F2F2u32, 0xFFEDEDEDu32, 0xFFF7F7F7u32, 0xFFFCFCFCu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF8F8F8u32, 0xFFFDFDFDu32, 0xFFEEEEEEu32, 0xFFF2F2F2u32, 0xFFF5F5F5u32, 0xFFEFEFEFu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32 } }
 fn wedit_left_2_y() -> f32 { ret 385.0 }
+// left rim of the morph spin edits, state 0: dialog-options-morph-rest
+fn wedit_left2_0() -> [66]u32 { ret [66]u32{ 0xFFF0F0F0u32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFF3F3F3u32, 0xFFF6F6F6u32, 0xFFEDEDEDu32, 0xFFF8F8F8u32, 0xFFFEFEFEu32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFEBEBEBu32, 0xFFF9F9F9u32, 0xFFEEEEEEu32, 0xFFC2C2C2u32, 0xFFB3B3B3u32, 0xFFEFEFEFu32, 0xFFD5D5D5u32, 0xFFC6C6C6u32 } }
+fn wedit_left2_0_y() -> f32 { ret 105.0 }
+// left rim of the morph spin edits, state 1: spin-edit-focused-options-morph-speed
+fn wedit_left2_1() -> [66]u32 { ret [66]u32{ 0xFFF0F0F0u32, 0xFFEFEFEFu32, 0xFFEEEEEEu32, 0xFFEEEEEEu32, 0xFFF3F3F3u32, 0xFFF7F7F7u32, 0xFFEDEDEDu32, 0xFFF8F8F8u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFFEDEDEDu32, 0xFFF9F9F9u32, 0u32, 0xFF89B5DBu32, 0xFF64A2D7u32, 0xFF67A4D9u32, 0xFF5698D1u32, 0xFF076BC1u32, 0xFF0067C0u32, 0xFFB7CFE4u32, 0xFF94BBDEu32, 0xFF8FB9DDu32 } }
+fn wedit_left2_1_y() -> f32 { ret 105.0 }
+fn wedit_left2(state: u32, out: []u32) -> f32 {
+    if state == 0u32 {
+        let t = wedit_left2_0()
+        var i = 0usize
+        while i < 66usize {
+            out[i] = t[i]
+            i += 1usize
+        }
+        ret wedit_left2_0_y()
+    }
+    if state == 1u32 {
+        let t = wedit_left2_1()
+        var i = 0usize
+        while i < 66usize {
+            out[i] = t[i]
+            i += 1usize
+        }
+        ret wedit_left2_1_y()
+    }
+    ret 0.0
+}
 // the right end of kind `kind` in `state` copied into `out` (K columns x 22 rows, row-major): answers K * 22 and the capture's y
 fn wedit_right(kind: u32, state: u32, out: []u32) -> (usize, f32) {
     if kind == 0u32 && state == 0u32 {
@@ -298,7 +326,7 @@ fn wedit_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
 }
 
 fn wedit_rect(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, argb: u32) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: style.hex(argb & 0xFFFFFFu32) } } })
+    ret winpx.fill(b, x, y, w, h, style.hex(argb & 0xFFFFFFu32))
 }
 
 // The row's place in the models (0, 1, 19, 20, 21 -> 0..4) or 99 for a row that is plain face.
@@ -419,7 +447,14 @@ fn wedit_block(b: *scene.Builder, models: [90]f32, model_state: u32, cells: []co
 fn wedit_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Chrome](ctx)
     var y = d.window_y
-    if y < 0.0 { y = area.y }
+    // No window y given: the look of the capture each kind was tiled from (Options Passwords 144, Decks 159 and 94, Morph 105),
+    // so the same control looks the same wherever it sits (the foot's drift with y is a v3 window artefact).
+    if y < 0.0 {
+        y = 144.0
+        if d.kind == 1u32 { y = 159.0 }
+        if d.kind == 2u32 { y = 105.0 }
+        if d.kind == 3u32 { y = 94.0 }
+    }
     let height = usize(d.height + 0.5)
     var model_state = d.state
     if model_state == 3u32 { model_state = 1u32 }
@@ -444,7 +479,10 @@ fn wedit_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     var left: [66]u32 = zero
     var left_state = d.state
     if left_state == 3u32 { left_state = 1u32 }
-    let left_y = wedit_left(left_state, left[0usize..66usize])
+    var left_y = wedit_left(left_state, left[0usize..66usize])
+    // The morph spin edits (x = 406 in the window) have their own left rim, 3 levels darker in column 1.
+    let own_left = d.kind == 2u32 && left_state < 2u32
+    if own_left { left_y = wedit_left2(left_state, left[0usize..66usize]) }
     let w = d.width + 1.0
     var arrow_store: [16]u32 = zero
     let arrow_count = wedit_arrows(d.kind, arrow_store[0usize..16usize])
@@ -465,7 +503,7 @@ fn wedit_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         r += 1usize
     }
     var left_s: []const f32 = zero
-    if wedit_left_slopes(left_state, left_slopes[0usize..198usize]) { left_s = left_slopes[0usize..198usize] }
+    if !own_left && wedit_left_slopes(left_state, left_slopes[0usize..198usize]) { left_s = left_slopes[0usize..198usize] }
     var right_s: []const f32 = zero
     if has_right_slopes { right_s = right_slopes[0usize..n * 3usize] }
     try wedit_block(b, models, left_state, left[0usize..66usize], left_s, 3usize, height, area.x, area.y, y, left_y, zero, 0u32)
@@ -483,4 +521,56 @@ fn chrome(a: *mem.Arena, kind: u32, state: u32, width: f32, height: f32, window_
     s.height = style.Length { Px: height }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: wedit_measure, paint: wedit_paint, state: widget.bytes_of[Chrome](&made[0usize]) } }, style: s, children: none }, ok)
+}
+
+// ---- the token edit's frame -------------------------------------------------------------------------------------
+// The empty TdxTokenEdit boxes of the Filter dialog's Cards tab (states/tab-selected-filter-cards, three instances 315 x 46,
+// 315 x 46 and 315 x 27 that are pixel identical whatever their height or y): the edit frame of the plain edit but blended over
+// the tab page (#F9F9F9) instead of the dialog (#F0F0F0), W pixels wide (the plain edit has W + 1). A row is five values:
+// column 0, column 1, the middle, column W - 2 and column W - 1. Focused is not captured: its foot rows (the last three) are
+// the plain edit's focused foot (a guess).
+type TokenChrome = struct { width: f32, height: f32, focused: bool }
+
+fn wtoken_gray(v: u32) -> u32 { ret 0xFF000000u32 | (v << 16u32) | (v << 8u32) | v }
+
+fn wtoken_row(b: *scene.Builder, x: f32, y: f32, h: f32, w: f32, p: [5]u32) -> err {
+    try wedit_rect(b, x, y, 1.0, h, p[0usize])
+    try wedit_rect(b, x + 1.0, y, 1.0, h, p[1usize])
+    try wedit_rect(b, x + 2.0, y, w - 4.0, h, p[2usize])
+    try wedit_rect(b, x + w - 2.0, y, 1.0, h, p[3usize])
+    try wedit_rect(b, x + w - 1.0, y, 1.0, h, p[4usize])
+    ret ok
+}
+
+fn wtoken_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*TokenChrome](ctx)
+    let w = d.width
+    let h = d.height
+    let g = wtoken_gray
+    try wtoken_row(b, area.x, area.y, 1.0, w, [5]u32{ g(246u32), g(241u32), g(240u32), g(237u32), g(242u32) })
+    try wtoken_row(b, area.x, area.y + 1.0, 1.0, w, [5]u32{ g(240u32), g(246u32), g(248u32), g(239u32), g(233u32) })
+    try wtoken_row(b, area.x, area.y + 2.0, 1.0, w, [5]u32{ g(237u32), g(253u32), g(255u32), g(246u32), g(230u32) })
+    try wtoken_row(b, area.x, area.y + 3.0, h - 6.0, w, [5]u32{ g(236u32), g(254u32), g(255u32), g(247u32), g(230u32) })
+    if d.focused {
+        try wtoken_row(b, area.x, area.y + h - 3.0, 1.0, w, [5]u32{ 0xFF7BACD7u32, 0xFF6CA7DAu32, 0xFF6EA8DBu32, 0xFF66A3D6u32, 0xFFA5C5E0u32 })
+        try wtoken_row(b, area.x, area.y + h - 2.0, 1.0, w, [5]u32{ 0xFF3786CBu32, 0xFF0369C1u32, 0xFF0067C0u32, 0xFF0A6DC2u32, 0xFF7FB0D9u32 })
+        try wtoken_row(b, area.x, area.y + h - 1.0, 1.0, w, [5]u32{ 0xFFA6C6E1u32, 0xFF8BB7DCu32, 0xFF89B5DBu32, 0xFF91B9DDu32, 0xFFC3D6E7u32 })
+    } else {
+        try wtoken_row(b, area.x, area.y + h - 3.0, 1.0, w, [5]u32{ g(237u32), g(232u32), g(254u32), g(230u32), g(231u32) })
+        try wtoken_row(b, area.x, area.y + h - 2.0, 1.0, w, [5]u32{ g(242u32), g(171u32), g(172u32), g(171u32), g(240u32) })
+        try wtoken_row(b, area.x, area.y + h - 1.0, 1.0, w, [5]u32{ g(247u32), g(215u32), g(210u32), g(215u32), g(247u32) })
+    }
+    ret ok
+}
+
+// The token edit's frame `width` wide (the DFM width W: the frame is W pixels) and `height` high (the DFM height + 1).
+fn token_chrome(a: *mem.Arena, width: f32, height: f32, focused: bool) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[TokenChrome](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    made[0usize] = TokenChrome { width: width, height: height, focused: focused }
+    var s = style.defaults()
+    s.width = style.Length { Px: width }
+    s.height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: wedit_measure, paint: wtoken_paint, state: widget.bytes_of[TokenChrome](&made[0usize]) } }, style: s, children: none }, ok)
 }

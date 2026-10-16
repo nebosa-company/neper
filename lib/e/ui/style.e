@@ -717,6 +717,281 @@ fn windows_accent(t: *const ThemeTokens) -> paint.Color {
 }
 // ---- end looks-polish palettes -----------------------------------------------------------------
 
+// ---- the Cupertino look (profile CupertinoLike, docs/ui/looks/cupertino) -----------------------
+// Apple's system colours, Light and Dark, from the Human Interface Guidelines / UIKit: label and
+// secondaryLabel, systemBlue #007AFF (#0A84FF dark), the grouped backgrounds, the separators, the
+// four fills. No Apple platform was available as a live reference, so every value is the published
+// system value (confident) or an approximation (marked in docs/ui/looks/cupertino notes). SF Pro is
+// not installed on the Windows host: the type scale uses Segoe UI at SF Pro's sizes.
+
+// A colour from 0xRRGGBB at `alpha`.
+fn hexa(value: u32, alpha: f32) -> paint.Color {
+    ret paint.rgba(f32((value >> 16u32) & 255u32) / 255.0, f32((value >> 8u32) & 255u32) / 255.0, f32(value & 255u32) / 255.0, alpha)
+}
+
+fn puta(t: *ThemeTokens, role: ColorRole, value: u32, alpha: f32) {
+    t.colors[color_index(role)] = hexa(value, alpha)
+}
+
+fn cupertino(palette: Palette) -> ThemeTokens {
+    var t = reference(palette)
+    t.profile = .CupertinoLike
+    let dark = palette == .Dark || palette == .HighContrastDark
+    // systemBlue, systemRed, systemGreen, systemOrange.
+    var blue = 0x007AFFu32
+    var red = 0xFF3B30u32
+    var green = 0x34C759u32
+    var orange = 0xFF9500u32
+    if dark {
+        blue = 0x0A84FFu32
+        red = 0xFF453Au32
+        green = 0x30D158u32
+        orange = 0xFF9F0Au32
+    }
+    // Grouped backgrounds: Light #F2F2F7 / white cells; Dark #1C1C1E / #2C2C2E cells (the elevated grouped level).
+    if !dark {
+        puta(&t, .Background, 0xF2F2F7u32, 1.0)
+        puta(&t, .Surface, 0xFFFFFFu32, 1.0)
+        puta(&t, .SurfaceVariant, 0xE5E5EAu32, 1.0)
+        puta(&t, .Text, 0x000000u32, 1.0)
+        puta(&t, .OnSurface, 0x000000u32, 1.0)
+        // secondaryLabel rgba(60,60,67,0.6) flattened on white.
+        puta(&t, .TextMuted, 0x8A8A8Eu32, 1.0)
+        puta(&t, .OnSurfaceVariant, 0x8A8A8Eu32, 1.0)
+        // opaqueSeparator #C6C6C8; Outline is the unchecked-box edge (rgba(0,0,0,0.25) flattened).
+        puta(&t, .Border, 0xC6C6C8u32, 1.0)
+        puta(&t, .Outline, 0xBFBFBFu32, 1.0)
+        puta(&t, .OutlineVariant, 0xD1D1D6u32, 1.0)
+        puta(&t, .SecondaryContainer, 0xE9E9EBu32, 1.0)
+        puta(&t, .OnSecondaryContainer, 0x000000u32, 1.0)
+        puta(&t, .PrimaryContainer, 0xD9EBFFu32, 1.0)
+        puta(&t, .SurfaceDim, 0xD1D1D6u32, 1.0)
+        puta(&t, .SurfaceBright, 0xFFFFFFu32, 1.0)
+        puta(&t, .SurfaceContainerLowest, 0xFFFFFFu32, 1.0)
+        puta(&t, .SurfaceContainerLow, 0xF9F9FBu32, 1.0)
+        puta(&t, .SurfaceContainer, 0xF2F2F7u32, 1.0)
+        puta(&t, .SurfaceContainerHigh, 0xE9E9EBu32, 1.0)
+        puta(&t, .SurfaceContainerHighest, 0xE5E5EAu32, 1.0)
+        puta(&t, .InverseSurface, 0x2C2C2Eu32, 1.0)
+        puta(&t, .InverseOnSurface, 0xFFFFFFu32, 1.0)
+        puta(&t, .Selection, 0xB3D7FFu32, 1.0)
+        puta(&t, .TextSelection, 0xB3D7FFu32, 1.0)
+        puta(&t, .ErrorContainer, 0xFFE0DEu32, 1.0)
+    }
+    if dark {
+        puta(&t, .Background, 0x1C1C1Eu32, 1.0)
+        puta(&t, .Surface, 0x2C2C2Eu32, 1.0)
+        puta(&t, .SurfaceVariant, 0x3A3A3Cu32, 1.0)
+        puta(&t, .Text, 0xFFFFFFu32, 1.0)
+        puta(&t, .OnSurface, 0xFFFFFFu32, 1.0)
+        // secondaryLabel rgba(235,235,245,0.6) flattened on #2C2C2E.
+        puta(&t, .TextMuted, 0x9E9EA6u32, 1.0)
+        puta(&t, .OnSurfaceVariant, 0x9E9EA6u32, 1.0)
+        puta(&t, .Border, 0x38383Au32, 1.0)
+        puta(&t, .Outline, 0x6B6B6Eu32, 1.0)
+        puta(&t, .OutlineVariant, 0x48484Au32, 1.0)
+        puta(&t, .SecondaryContainer, 0x48484Au32, 1.0)
+        puta(&t, .OnSecondaryContainer, 0xFFFFFFu32, 1.0)
+        puta(&t, .PrimaryContainer, 0x0F3A66u32, 1.0)
+        puta(&t, .SurfaceDim, 0x000000u32, 1.0)
+        puta(&t, .SurfaceBright, 0x3A3A3Cu32, 1.0)
+        puta(&t, .SurfaceContainerLowest, 0x1C1C1Eu32, 1.0)
+        puta(&t, .SurfaceContainerLow, 0x242426u32, 1.0)
+        puta(&t, .SurfaceContainer, 0x2C2C2Eu32, 1.0)
+        puta(&t, .SurfaceContainerHigh, 0x3A3A3Cu32, 1.0)
+        puta(&t, .SurfaceContainerHighest, 0x48484Au32, 1.0)
+        puta(&t, .InverseSurface, 0xE5E5EAu32, 1.0)
+        puta(&t, .InverseOnSurface, 0x000000u32, 1.0)
+        puta(&t, .Selection, 0x1E4F8Au32, 1.0)
+        puta(&t, .TextSelection, 0x1E4F8Au32, 1.0)
+        puta(&t, .ErrorContainer, 0x5A1A16u32, 1.0)
+    }
+    puta(&t, .Primary, blue, 1.0)
+    puta(&t, .OnPrimary, 0xFFFFFFu32, 1.0)
+    puta(&t, .OnPrimaryContainer, blue, 1.0)
+    puta(&t, .Secondary, 0x8E8E93u32, 1.0)
+    puta(&t, .OnSecondary, 0xFFFFFFu32, 1.0)
+    puta(&t, .Focus, blue, 1.0)
+    // The keyboard focus ring: the accent at about half strength.
+    puta(&t, .FocusRing, blue, 0.55)
+    puta(&t, .Error, red, 1.0)
+    puta(&t, .OnError, 0xFFFFFFu32, 1.0)
+    puta(&t, .OnErrorContainer, red, 1.0)
+    puta(&t, .Success, green, 1.0)
+    puta(&t, .OnSuccess, 0xFFFFFFu32, 1.0)
+    puta(&t, .Warning, orange, 1.0)
+    puta(&t, .OnWarning, 0xFFFFFFu32, 1.0)
+    puta(&t, .Tertiary, orange, 1.0)
+    puta(&t, .Scrim, 0x000000u32, 1.0)
+    puta(&t, .Shadow, 0x000000u32, 1.0)
+    puta(&t, .Data1, blue, 1.0)
+    puta(&t, .Data2, green, 1.0)
+    puta(&t, .Data3, orange, 1.0)
+    puta(&t, .Data4, 0xAF52DEu32, 1.0)
+    puta(&t, .Data5, 0xFF2D55u32, 1.0)
+    puta(&t, .Data6, 0x5AC8FAu32, 1.0)
+    // SF Pro's text styles (iOS defaults), set in Segoe UI: body 17, subhead 15, caption 12 / 11, title 22 / 28 / 34.
+    t.text[0] = TextStyle { size: 17.0, line_height: 22.0, weight: 400u16, italic: false }
+    t.text[1] = TextStyle { size: 15.0, line_height: 20.0, weight: 400u16, italic: false }
+    t.text[2] = TextStyle { size: 22.0, line_height: 28.0, weight: 400u16, italic: false }
+    t.text[3] = TextStyle { size: 17.0, line_height: 22.0, weight: 600u16, italic: false }
+    t.text[4] = TextStyle { size: 15.0, line_height: 20.0, weight: 600u16, italic: false }
+    t.text[5] = TextStyle { size: 12.0, line_height: 16.0, weight: 400u16, italic: false }
+    t.text[6] = TextStyle { size: 13.0, line_height: 18.0, weight: 400u16, italic: false }
+    t.text[7] = TextStyle { size: 34.0, line_height: 41.0, weight: 400u16, italic: false }
+    t.text[8] = TextStyle { size: 28.0, line_height: 34.0, weight: 400u16, italic: false }
+    t.text[9] = TextStyle { size: 22.0, line_height: 28.0, weight: 400u16, italic: false }
+    t.text[10] = TextStyle { size: 34.0, line_height: 41.0, weight: 700u16, italic: false }
+    t.text[11] = TextStyle { size: 28.0, line_height: 34.0, weight: 700u16, italic: false }
+    t.text[12] = TextStyle { size: 20.0, line_height: 25.0, weight: 400u16, italic: false }
+    t.text[13] = TextStyle { size: 22.0, line_height: 28.0, weight: 400u16, italic: false }
+    t.text[14] = TextStyle { size: 17.0, line_height: 22.0, weight: 600u16, italic: false }
+    t.text[15] = TextStyle { size: 15.0, line_height: 20.0, weight: 600u16, italic: false }
+    t.text[16] = TextStyle { size: 17.0, line_height: 22.0, weight: 400u16, italic: false }
+    t.text[17] = TextStyle { size: 15.0, line_height: 20.0, weight: 400u16, italic: false }
+    t.text[18] = TextStyle { size: 17.0, line_height: 22.0, weight: 600u16, italic: false }
+    t.text[19] = TextStyle { size: 13.0, line_height: 18.0, weight: 400u16, italic: false }
+    t.text[20] = TextStyle { size: 11.0, line_height: 13.0, weight: 400u16, italic: false }
+    // Corner radii 5 (macOS controls), 8, 10, 12 (iOS grouped list), 14 (sheets); circular arcs stand in for Apple's continuous curve.
+    t.radii = Radii { xs: 5.0, sm: 8.0, md: 10.0, lg: 12.0, xl: 14.0, full: 9999.0 }
+    t.spacing = Spacing { xs: 4.0, sm: 8.0, md: 12.0, lg: 16.0, xl: 20.0 }
+    t.borders = Borders { hairline: 0.5, regular: 1.0, thick: 2.0 }
+    var e: [6]f32 = zero
+    e[1] = 0.10
+    e[2] = 0.12
+    e[3] = 0.14
+    e[4] = 0.16
+    e[5] = 0.18
+    t.elevation = e
+    t.states = States { hover: 0.06, focus: 0.0, pressed: 0.14, dragged: 0.16, disabled_container: 0.12, disabled_content: 0.3, scrim: 0.4 }
+    // Control heights: macOS regular 22 / large 28 / x-large 32, iOS medium 34 / large 44 (the hit-target minimum) / 50.
+    t.sizes = Sizes { control_xs: 22.0, control_sm: 28.0, control_md: 34.0, control_lg: 44.0, control_xl: 50.0, target_touch: 44.0, target_pointer: 28.0, icon_xs: 12.0, icon_sm: 17.0, icon_md: 22.0, icon_lg: 28.0, divider: 0.5, outline_focused: 3.0 }
+    t.motion = Motion { fast_ms: 100u32, normal_ms: 250u32, slow_ms: 350u32, reduced: false }
+    t.metrics = Metrics { hit_target: 44.0, control_height: 34.0, density: 1.0, focus_ring: 3.0, focus_offset: 0.0 }
+    ret t
+}
+// The hairline between list rows and under bars: iOS's separator colour.
+fn cupertino_separator(t: *const ThemeTokens) -> paint.Color {
+    if t.palette == .Dark { ret hexa(0x545458u32, 0.6) }
+    ret hexa(0x3C3C43u32, 0.29)
+}
+
+// A colour at another alpha.
+fn cup_alpha(c: paint.Color, alpha: f32) -> paint.Color {
+    ret paint.Color { red: c.red, green: c.green, blue: c.blue, alpha: alpha }
+}
+
+// The tertiary fill (rgba(118,118,128,.12) Light, .24 Dark) that gray and bezel-less controls rest on,
+// at `strength` times its resting alpha.
+fn cup_fill(t: *const ThemeTokens, strength: f32) -> paint.Color {
+    if t.palette == .Dark { ret hexa(0x767680u32, 0.24 * strength) }
+    ret hexa(0x767680u32, 0.12 * strength)
+}
+
+// A button's look in the Cupertino idiom. `variant`: Filled / Default / Container the prominent accent fill,
+// Tonal the tinted button (accent at 15 %), Elevated the gray one (tertiary fill, accent label), Plain the
+// label alone, Outlined the macOS bezel (white face, hairline, 1 px shadow below), Danger the red fill.
+// `height` picks the size: 28 small, 34 medium, 44 large (iOS configuration sizes; 22 / 28 / 32 for the macOS
+// bezel). Hover is an approximation (Apple's buttons have none on touch; the iPad pointer lifts them).
+fn cupertino_resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState, height: f32) -> ResolvedControl {
+    let dark = t.palette == .Dark
+    let accent = color(t, .Primary)
+    let ink = color(t, .Text)
+    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var face = accent
+    var label = hex(0xFFFFFFu32)
+    var edge = clear
+    var edge_w: f32 = 0.0
+    var lift = 0u8
+    var pad_x: f32 = 16.0
+    var radius: f32 = 10.0
+    var weight_pad: f32 = 0.0
+    if height <= 28.5 {
+        pad_x = 12.0
+        radius = 8.0
+    }
+    if height >= 40.0 {
+        pad_x = 20.0
+        radius = 12.0
+    }
+    // The macOS regular push button (22 tall) is 5 px round with 14 px sides and a 64 px least width.
+    var least = height
+    if height <= 24.0 {
+        radius = 5.0
+        pad_x = 12.0
+        least = 64.0
+    }
+    let prominent = variant == .Filled || variant == .Default || variant == .Container
+    if variant == .Danger { face = color(t, .Error) }
+    if variant == .Tonal {
+        face = cup_alpha(accent, 0.15)
+        if dark { face = cup_alpha(accent, 0.22) }
+        label = accent
+    }
+    if variant == .Elevated {
+        face = cup_fill(t, 1.0)
+        label = accent
+    }
+    if variant == .Plain {
+        face = clear
+        label = accent
+    }
+    if variant == .Outlined {
+        // The macOS push button (bordered): radius about a quarter of the height, a hairline and a shadow edge.
+        radius = height * 0.23
+        pad_x = 12.0
+        if height > 25.0 { pad_x = 14.0 }
+        lift = 1u8
+        label = cup_alpha(ink, 0.85)
+        if dark {
+            face = hexa(0xFFFFFFu32, 0.22)
+            edge = hexa(0xFFFFFFu32, 0.08)
+        }
+        if !dark {
+            face = hex(0xFFFFFFu32)
+            edge = hexa(0x000000u32, 0.10)
+        }
+        edge_w = 0.5
+    }
+    // The states: pressed darkens a fill (the accent toward black), a tint or gray fill deepens, plain dims its label.
+    if state.hovered && !state.pressed {
+        if prominent || variant == .Danger { face = mix(face, hex(0xFFFFFFu32), 0.10) }
+        if variant == .Tonal { face = cup_alpha(accent, 0.20) }
+        if variant == .Elevated { face = cup_fill(t, 1.5) }
+        if variant == .Plain { face = cup_fill(t, 0.6) }
+        if variant == .Outlined && !dark { face = hex(0xFAFAFAu32) }
+        if variant == .Outlined && dark { face = hexa(0xFFFFFFu32, 0.27) }
+    }
+    if state.pressed {
+        if prominent || variant == .Danger { face = mix(face, hex(0x000000u32), 0.22) }
+        if variant == .Tonal { face = cup_alpha(accent, 0.28) }
+        if variant == .Elevated { face = cup_fill(t, 2.0) }
+        if variant == .Plain { label = cup_alpha(label, 0.35) }
+        if variant == .Outlined && !dark { face = hex(0xE3E3E3u32) }
+        if variant == .Outlined && dark { face = hexa(0xFFFFFFu32, 0.34) }
+        if variant == .Outlined { lift = 0u8 }
+    }
+    if state.disabled {
+        if prominent || variant == .Danger {
+            face = cup_fill(t, 1.5)
+            label = cup_alpha(color(t, .OnSurface), 0.3)
+        }
+        if variant == .Tonal || variant == .Elevated {
+            face = cup_fill(t, 0.8)
+            label = cup_alpha(color(t, .OnSurface), 0.3)
+        }
+        if variant == .Plain { label = cup_alpha(color(t, .OnSurface), 0.3) }
+        if variant == .Outlined {
+            label = cup_alpha(ink, 0.25)
+            if !dark { face = hexa(0xFFFFFFu32, 0.6) }
+            if dark { face = hexa(0xFFFFFFu32, 0.10) }
+            lift = 0u8
+        }
+    }
+    ret ResolvedControl { background: face, foreground: label, border: edge, border_width: edge_w, focus_ring: 0.0, opacity: 1.0, radius: radius, elevation: lift, padding: pad_x, padding_start: 0.0, padding_y: weight_pad, custom_padding: true, min_width: least, min_height: height, corners: zero }
+}
+// ---- end the Cupertino look --------------------------------------------------------------------
+
 fn in_unit(v: f32) -> bool {
     ret finite(v) && v >= 0.0 && v <= 1.0
 }
@@ -823,6 +1098,8 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
         border = color(t, .Error)
         if border_width < t.borders.regular { border_width = t.borders.regular }
     }
+    // M3: a focused outlined control's outline turns `primary` (md.comp.outlined-button.focus.outline.color).
+    if t.profile == .MaterialLike && variant == .Outlined && state.focus_visible && !state.invalid { border = color(t, .Primary) }
     var focus_ring: f32 = 0.0
     if state.focused { focus_ring = t.metrics.focus_ring }
     var opacity: f32 = 1.0
@@ -1012,3 +1289,113 @@ fn windows_caption_close(pressed: bool) -> paint.Color {
 
 // looks3: the live 96 DPI captures put the dark caption at 31 rows (y 0 to 30).
 fn windows_caption_height() -> f32 { ret 31.0 }
+
+// ---- Android look (docs/ui/looks, profile MaterialLike) ---------------------------------------
+// Material Design 3 as Android ships it. The Neper default already is M3 in structure (shape
+// scale 4/8/12/16/28, state layers 8/10/10/16 %, the fifteen type styles, elevation 0 to 5), so
+// the Android look is: the M3 baseline tonal palette (seed #6750A4), the phone metrics (40 high
+// controls, 48 targets, density 1, no focus ring: Android shows focus as the 10 % state layer),
+// and Roboto Medium (500) where the M3 type scale says Medium. Colours are the published M3
+// baseline values (exact); the control geometry is in `control.material_*`.
+fn material_fill_light(t: *ThemeTokens) {
+    put(t, .Background, 0xFEF7FFu32)
+    put(t, .Surface, 0xFEF7FFu32)
+    put(t, .SurfaceVariant, 0xE7E0ECu32)
+    put(t, .Primary, 0x6750A4u32)
+    put(t, .OnPrimary, 0xFFFFFFu32)
+    put(t, .PrimaryContainer, 0xEADDFFu32)
+    put(t, .OnPrimaryContainer, 0x21005Du32)
+    put(t, .Secondary, 0x625B71u32)
+    put(t, .OnSecondary, 0xFFFFFFu32)
+    put(t, .SecondaryContainer, 0xE8DEF8u32)
+    put(t, .OnSecondaryContainer, 0x1D192Bu32)
+    put(t, .Tertiary, 0x7D5260u32)
+    put(t, .OnTertiary, 0xFFFFFFu32)
+    put(t, .TertiaryContainer, 0xFFD8E4u32)
+    put(t, .OnTertiaryContainer, 0x31111Du32)
+    put(t, .Error, 0xB3261Eu32)
+    put(t, .OnError, 0xFFFFFFu32)
+    put(t, .ErrorContainer, 0xF9DEDCu32)
+    put(t, .OnErrorContainer, 0x410E0Bu32)
+    put(t, .Text, 0x1D1B20u32)
+    put(t, .OnSurface, 0x1D1B20u32)
+    put(t, .TextMuted, 0x49454Fu32)
+    put(t, .OnSurfaceVariant, 0x49454Fu32)
+    put(t, .Border, 0x79747Eu32)
+    put(t, .Outline, 0x79747Eu32)
+    put(t, .OutlineVariant, 0xCAC4D0u32)
+    put(t, .Focus, 0x6750A4u32)
+    put(t, .FocusRing, 0x6750A4u32)
+    put(t, .Selection, 0xD0BCFFu32)
+    put(t, .TextSelection, 0xD0BCFFu32)
+    put(t, .SurfaceDim, 0xDED8E1u32)
+    put(t, .SurfaceBright, 0xFEF7FFu32)
+    put(t, .SurfaceContainerLowest, 0xFFFFFFu32)
+    put(t, .SurfaceContainerLow, 0xF7F2FAu32)
+    put(t, .SurfaceContainer, 0xF3EDF7u32)
+    put(t, .SurfaceContainerHigh, 0xECE6F0u32)
+    put(t, .SurfaceContainerHighest, 0xE6E0E9u32)
+    put(t, .InverseSurface, 0x322F35u32)
+    put(t, .InverseOnSurface, 0xF5EFF7u32)
+    put(t, .InversePrimary, 0xD0BCFFu32)
+}
+
+fn material_fill_dark(t: *ThemeTokens) {
+    put(t, .Background, 0x141218u32)
+    put(t, .Surface, 0x141218u32)
+    put(t, .SurfaceVariant, 0x49454Fu32)
+    put(t, .Primary, 0xD0BCFFu32)
+    put(t, .OnPrimary, 0x381E72u32)
+    put(t, .PrimaryContainer, 0x4F378Bu32)
+    put(t, .OnPrimaryContainer, 0xEADDFFu32)
+    put(t, .Secondary, 0xCCC2DCu32)
+    put(t, .OnSecondary, 0x332D41u32)
+    put(t, .SecondaryContainer, 0x4A4458u32)
+    put(t, .OnSecondaryContainer, 0xE8DEF8u32)
+    put(t, .Tertiary, 0xEFB8C8u32)
+    put(t, .OnTertiary, 0x492532u32)
+    put(t, .TertiaryContainer, 0x633B48u32)
+    put(t, .OnTertiaryContainer, 0xFFD8E4u32)
+    put(t, .Error, 0xF2B8B5u32)
+    put(t, .OnError, 0x601410u32)
+    put(t, .ErrorContainer, 0x8C1D18u32)
+    put(t, .OnErrorContainer, 0xF9DEDCu32)
+    put(t, .Text, 0xE6E0E9u32)
+    put(t, .OnSurface, 0xE6E0E9u32)
+    put(t, .TextMuted, 0xCAC4D0u32)
+    put(t, .OnSurfaceVariant, 0xCAC4D0u32)
+    put(t, .Border, 0x938F99u32)
+    put(t, .Outline, 0x938F99u32)
+    put(t, .OutlineVariant, 0x49454Fu32)
+    put(t, .Focus, 0xD0BCFFu32)
+    put(t, .FocusRing, 0xD0BCFFu32)
+    put(t, .Selection, 0x4F378Bu32)
+    put(t, .TextSelection, 0x4F378Bu32)
+    put(t, .SurfaceDim, 0x141218u32)
+    put(t, .SurfaceBright, 0x3B383Eu32)
+    put(t, .SurfaceContainerLowest, 0x0F0D13u32)
+    put(t, .SurfaceContainerLow, 0x1D1B20u32)
+    put(t, .SurfaceContainer, 0x211F26u32)
+    put(t, .SurfaceContainerHigh, 0x2B2930u32)
+    put(t, .SurfaceContainerHighest, 0x36343Bu32)
+    put(t, .InverseSurface, 0xE6E0E9u32)
+    put(t, .InverseOnSurface, 0x322F35u32)
+    put(t, .InversePrimary, 0x6750A4u32)
+}
+
+fn material(palette: Palette) -> ThemeTokens {
+    var t = reference(palette)
+    t.profile = .MaterialLike
+    if palette == .Light { material_fill_light(&t) }
+    if palette == .Dark { material_fill_dark(&t) }
+    // The M3 type scale's Medium (500) styles; Neper draws them at 600.
+    var i = 0usize
+    while i < 21usize {
+        if t.text[i].weight == 600u16 { t.text[i].weight = 500u16 }
+        i += 1usize
+    }
+    // Phone metrics: 40 dp controls, 48 dp targets, a 4 dp grid, no focus ring.
+    t.metrics = Metrics { hit_target: 48.0, control_height: 40.0, density: 1.0, focus_ring: 0.0, focus_offset: 0.0 }
+    ret t
+}
+// ---- end Android look ---------------------------------------------------------------------------

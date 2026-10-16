@@ -54,7 +54,7 @@ const MAX_LAYERS: usize = 4usize
 const MAX_FONTS: usize = 16usize
 const MAX_STATES: usize = 32usize
 
-type BuilderState = struct { commands: []Command, count: usize, finished: bool }
+type BuilderState = struct { commands: []Command, count: usize, finished: bool, scale: f32 }
 
 // A texture is premultiplied RGBA, four floats per pixel.
 type Texture = struct { live: bool, generation: u32, width: u32, height: u32, pixels: []f32 }
@@ -76,8 +76,28 @@ fn builder(a: *mem.Arena, max_commands: usize) -> (Builder, err) {
     if states_error != ok { ret (zero, OutOfMemory) }
     let (commands, commands_error) = mem.alloc[Command](a, max_commands)
     if commands_error != ok { ret (zero, OutOfMemory) }
-    states[0usize] = BuilderState { commands: commands, count: 0usize, finished: false }
+    states[0usize] = BuilderState { commands: commands, count: 0usize, finished: false, scale: 1.0 }
     ret (Builder { state: mem.cast[*void](&states[0usize]) }, ok)
+}
+
+var text_hidden: bool = false
+
+fn set_text_hidden(hidden: bool) {
+    text_hidden = hidden
+}
+
+// The device scale the commands will be rendered at, so that a paint routine can place pixel art on whole
+// device pixels (1.0 until `set_builder_scale`).
+fn set_builder_scale(b: *Builder, scale: f32) {
+    let s = mem.cast[*BuilderState](b.state)
+    if mem.address_of(s) == 0usize || !(scale > 0.0) { ret }
+    s.scale = scale
+}
+
+fn builder_scale(b: *Builder) -> f32 {
+    let s = mem.cast[*BuilderState](b.state)
+    if mem.address_of(s) == 0usize { ret 1.0 }
+    ret s.scale
 }
 
 fn push(b: *Builder, command: Command) -> err {
@@ -111,6 +131,8 @@ fn push(b: *Builder, command: Command) -> err {
         if !rect_ok(draw.source) || !rect_ok(draw.destination) || !unit(draw.opacity) { ret Invalid }
     case .Text as text:
         if mem.address_of(text.layout) == 0usize || paint.validate(&text.brush) != ok { ret Invalid }
+        // A scale check leaves text out so that only pixel art is compared (see scripts/looks_scale_check.py).
+        if text_hidden { ret ok }
     case .OpacityLayer as layer:
         if !rect_ok(layer.bounds) || !unit(layer.opacity) { ret Invalid }
     }

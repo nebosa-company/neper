@@ -2410,6 +2410,23 @@ fn rounded(r: geometry.Rect, radius: f32) -> geometry.RRect {
     ret geometry.RRect { rect: r, top_left: corner, top_right: corner, bottom_right: corner, bottom_left: corner }
 }
 
+// The Android look draws a rounded corner as a quarter circle (a cubic) so a radius of half the side is a true circle;
+// every other look keeps the quadratic corner its pictures were taken with. Set by `set_arc_corners`.
+var arc_corners: bool = false
+
+fn set_arc_corners(on: bool) {
+    arc_corners = on
+}
+
+// A corner from `from` to `to` about the square corner point `at`.
+fn corner_curve(builder: *geometry.PathBuilder, from: geometry.Point, at: geometry.Point, to: geometry.Point) -> err {
+    if !arc_corners { ret geometry.quad_to(builder, at, to) }
+    let k: f32 = 0.5523
+    let first = geometry.Point { x: from.x + (at.x - from.x) * k, y: from.y + (at.y - from.y) * k }
+    let second = geometry.Point { x: to.x + (at.x - to.x) * k, y: to.y + (at.y - to.y) * k }
+    ret geometry.cubic_to(builder, first, second, to)
+}
+
 // A rectangle with rounded corners as a closed path of lines and quadratic corners.
 fn trace_rounded(builder: *geometry.PathBuilder, r: geometry.Rect, c: f32) -> err {
     let x0 = r.x
@@ -2418,19 +2435,19 @@ fn trace_rounded(builder: *geometry.PathBuilder, r: geometry.Rect, c: f32) -> er
     let y1 = r.y + r.height
     try geometry.move_to(builder, geometry.Point { x: x0 + c, y: y0 })
     try geometry.line_to(builder, geometry.Point { x: x1 - c, y: y0 })
-    if c > 0.0 { try geometry.quad_to(builder, geometry.Point { x: x1, y: y0 }, geometry.Point { x: x1, y: y0 + c }) }
+    if c > 0.0 { try corner_curve(builder, geometry.Point { x: x1 - c, y: y0 }, geometry.Point { x: x1, y: y0 }, geometry.Point { x: x1, y: y0 + c }) }
     try geometry.line_to(builder, geometry.Point { x: x1, y: y1 - c })
-    if c > 0.0 { try geometry.quad_to(builder, geometry.Point { x: x1, y: y1 }, geometry.Point { x: x1 - c, y: y1 }) }
+    if c > 0.0 { try corner_curve(builder, geometry.Point { x: x1, y: y1 - c }, geometry.Point { x: x1, y: y1 }, geometry.Point { x: x1 - c, y: y1 }) }
     try geometry.line_to(builder, geometry.Point { x: x0 + c, y: y1 })
-    if c > 0.0 { try geometry.quad_to(builder, geometry.Point { x: x0, y: y1 }, geometry.Point { x: x0, y: y1 - c }) }
+    if c > 0.0 { try corner_curve(builder, geometry.Point { x: x0 + c, y: y1 }, geometry.Point { x: x0, y: y1 }, geometry.Point { x: x0, y: y1 - c }) }
     try geometry.line_to(builder, geometry.Point { x: x0, y: y0 + c })
-    if c > 0.0 { try geometry.quad_to(builder, geometry.Point { x: x0, y: y0 }, geometry.Point { x: x0 + c, y: y0 }) }
+    if c > 0.0 { try corner_curve(builder, geometry.Point { x: x0, y: y0 + c }, geometry.Point { x: x0, y: y0 }, geometry.Point { x: x0 + c, y: y0 }) }
     ret geometry.close_path(builder)
 }
 
 fn rounded_path(a: *mem.Arena, r: geometry.Rect, radius: f32) -> (geometry.Path, err) {
     let rr = rounded(r, radius)
-    let (pb, pb_error) = geometry.path_builder(a, 10usize, 16usize)
+    let (pb, pb_error) = geometry.path_builder(a, 12usize, 32usize)
     if pb_error != ok { ret (zero, TooLarge) }
     var builder = pb
     let traced = trace_rounded(&builder, r, rr.top_left.x)
@@ -2460,7 +2477,7 @@ fn corner_at(radius: f32, grow: f32, limit: f32) -> geometry.Radius {
 
 // A shape as a closed path: lines and a quadratic per rounded corner.
 fn shape_path(a: *mem.Arena, rr: geometry.RRect) -> (geometry.Path, err) {
-    let (pb, pb_error) = geometry.path_builder(a, 10usize, 16usize)
+    let (pb, pb_error) = geometry.path_builder(a, 12usize, 32usize)
     if pb_error != ok { ret (zero, TooLarge) }
     var builder = pb
     let r = rr.rect
@@ -2474,13 +2491,13 @@ fn shape_path(a: *mem.Arena, rr: geometry.RRect) -> (geometry.Path, err) {
     let bl = rr.bottom_left.x
     if geometry.move_to(&builder, geometry.Point { x: x0 + tl, y: y0 }) != ok { ret (zero, TooLarge) }
     if geometry.line_to(&builder, geometry.Point { x: x1 - tr, y: y0 }) != ok { ret (zero, TooLarge) }
-    if tr > 0.0 && geometry.quad_to(&builder, geometry.Point { x: x1, y: y0 }, geometry.Point { x: x1, y: y0 + tr }) != ok { ret (zero, TooLarge) }
+    if tr > 0.0 && corner_curve(&builder, geometry.Point { x: x1 - tr, y: y0 }, geometry.Point { x: x1, y: y0 }, geometry.Point { x: x1, y: y0 + tr }) != ok { ret (zero, TooLarge) }
     if geometry.line_to(&builder, geometry.Point { x: x1, y: y1 - br }) != ok { ret (zero, TooLarge) }
-    if br > 0.0 && geometry.quad_to(&builder, geometry.Point { x: x1, y: y1 }, geometry.Point { x: x1 - br, y: y1 }) != ok { ret (zero, TooLarge) }
+    if br > 0.0 && corner_curve(&builder, geometry.Point { x: x1, y: y1 - br }, geometry.Point { x: x1, y: y1 }, geometry.Point { x: x1 - br, y: y1 }) != ok { ret (zero, TooLarge) }
     if geometry.line_to(&builder, geometry.Point { x: x0 + bl, y: y1 }) != ok { ret (zero, TooLarge) }
-    if bl > 0.0 && geometry.quad_to(&builder, geometry.Point { x: x0, y: y1 }, geometry.Point { x: x0, y: y1 - bl }) != ok { ret (zero, TooLarge) }
+    if bl > 0.0 && corner_curve(&builder, geometry.Point { x: x0 + bl, y: y1 }, geometry.Point { x: x0, y: y1 }, geometry.Point { x: x0, y: y1 - bl }) != ok { ret (zero, TooLarge) }
     if geometry.line_to(&builder, geometry.Point { x: x0, y: y0 + tl }) != ok { ret (zero, TooLarge) }
-    if tl > 0.0 && geometry.quad_to(&builder, geometry.Point { x: x0, y: y0 }, geometry.Point { x: x0 + tl, y: y0 }) != ok { ret (zero, TooLarge) }
+    if tl > 0.0 && corner_curve(&builder, geometry.Point { x: x0, y: y0 + tl }, geometry.Point { x: x0, y: y0 }, geometry.Point { x: x0 + tl, y: y0 }) != ok { ret (zero, TooLarge) }
     if geometry.close_path(&builder) != ok { ret (zero, TooLarge) }
     ret (geometry.finish(&builder), ok)
 }
@@ -3032,6 +3049,7 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     let (b, builder_error) = scene.builder(frame_arena, s.limits.max_commands)
     if builder_error != ok { ret (zero, TooLarge) }
     var builder = b
+    if s.snap > 0.0 { scene.set_builder_scale(&builder, 1.0 / s.snap) }
     s.overlay_count = 0usize
     s.window_size = size
     var place_error = place(s, frame_arena, &root, root_index, geometry.Rect { x: 0.0, y: 0.0, width: size.width, height: size.height }, &builder, 1usize)

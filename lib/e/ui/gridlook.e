@@ -23,6 +23,7 @@ use e.gfx.scene
 use e.gfx.svg
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.winpx
 use e.ui.widget
 
 type Look = struct {
@@ -244,15 +245,15 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         var row_at: f32 = 0.0
         while row_at < 4.0 {
             let ry = area.y + area.height * (0.14 + 0.24 * row_at)
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: ry, width: area.width * 0.2, height: area.height * 0.12 }, brush: paint.Brush { Solid: m.color } } })
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + area.width * 0.35, y: ry, width: area.width * 0.65, height: area.height * 0.12 }, brush: paint.Brush { Solid: m.inner } } })
+            try winpx.fill(b, area.x, ry, area.width * 0.2, area.height * 0.12, m.color)
+            try winpx.fill(b, area.x + area.width * 0.35, ry, area.width * 0.65, area.height * 0.12, m.inner)
             row_at += 1.0
         }
         ret ok
     }
     if m.shape == Shape.ArrowLong {
         // v3's editing indicator: a shaft with a solid head, pointing right
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: area.y + area.height * 0.38, width: area.width * 0.62, height: area.height * 0.24 }, brush: paint.Brush { Solid: m.color } } })
+        try winpx.fill(b, area.x, area.y + area.height * 0.38, area.width * 0.62, area.height * 0.24, m.color)
         let (apb, apb_error) = geometry.path_builder(m.arena, 4usize, 4usize)
         if apb_error != ok { ret apb_error }
         var ab = apb
@@ -268,21 +269,21 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         // edges (DotEdges also its left and right ends)
         var dx: f32 = 0.0
         while dx < area.width {
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + dx, y: area.y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: m.color } } })
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + dx, y: area.y + area.height - 1.0, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: m.color } } })
+            try winpx.fill(b, area.x + dx, area.y, 1.0, 1.0, m.color)
+            try winpx.fill(b, area.x + dx, area.y + area.height - 1.0, 1.0, 1.0, m.color)
             dx += 2.0
         }
         if m.shape == Shape.DotEdges {
             var dy: f32 = 0.0
             while dy < area.height {
-                try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: area.y + dy, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: m.color } } })
+                try winpx.fill(b, area.x, area.y + dy, 1.0, 1.0, m.color)
                 dy += 2.0
             }
         }
         ret ok
     }
     if m.shape == Shape.Minus {
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x, y: area.y + area.height * 0.4, width: area.width, height: area.height * 0.2 }, brush: paint.Brush { Solid: m.color } } })
+        try winpx.fill(b, area.x, area.y + area.height * 0.4, area.width, area.height * 0.2, m.color)
         ret ok
     }
     if m.shape == Shape.Check {
@@ -787,7 +788,7 @@ fn svg_fit_mark(a: *mem.Arena, text: str, color: paint.Color, width: f32, height
 // TreePlus / TreeMinus: the 9 x 10 expander (a #919191 frame, a light gradient, a navy cross);
 // TreeBox: the 13 x 13 unchecked check box of the node (the capture's grey values, row by row).
 fn tpx(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: w, height: h }, brush: paint.Brush { Solid: rgb(value) } } })
+    ret winpx.fill(b, x, y, w, h, rgb(value))
 }
 
 fn tree_box_grays() -> str {
@@ -867,13 +868,7 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
         let bl = (pix_digit(m.pix[at + 4usize]) * 16.0 + pix_digit(m.pix[at + 5usize])) / 255.0
         let px = f32(n % m.cols)
         let py = f32(n / m.cols)
-        // a pixel overlaps the next one by half a pixel (the next paints over it): at a scale between whole numbers
-        // the rectangles then leave no seams
-        var pw: f32 = 1.5
-        var ph: f32 = 1.5
-        if n % m.cols == m.cols - 1usize { pw = 1.0 }
-        if (n / m.cols) * 6usize * m.cols + 6usize * m.cols >= m.pix.len { ph = 1.0 }
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: f32(i64(area.x + 0.5)) + px, y: f32(i64(area.y + 0.5)) + py, width: pw, height: ph }, brush: paint.Brush { Solid: paint.rgba(r, g, bl, 1.0) } } })
+        try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, 1.0, 1.0, paint.rgba(r, g, bl, 1.0))
         at += 6usize
         n += 1usize
     }
@@ -979,8 +974,8 @@ fn dots_soft_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
     while dx < area.width {
         var ink = m.color
         if i64(dx) % 2i64 == 1i64 { ink = m.inner }
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: left + dx, y: top, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: ink } } })
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: left + dx, y: foot, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: ink } } })
+        try winpx.fill(b, left + dx, top, 1.0, 1.0, ink)
+        try winpx.fill(b, left + dx, foot, 1.0, 1.0, ink)
         dx += 1.0
     }
     if m.shape == Shape.DotsSoftLeft {
@@ -988,7 +983,7 @@ fn dots_soft_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
         while top + dy <= foot {
             var ink = m.color
             if i64(dy) % 2i64 == 1i64 { ink = m.inner }
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: left, y: top + dy, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: ink } } })
+            try winpx.fill(b, left, top + dy, 1.0, 1.0, ink)
             dy += 1.0
         }
     }
@@ -996,7 +991,7 @@ fn dots_soft_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 fn dot_px(b: *scene.Builder, x: f32, y: f32, c: u32) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: rgb(c) } } })
+    ret winpx.fill(b, x, y, 1.0, 1.0, rgb(c))
 }
 
 // looks4-e: the focus rectangle of a selected row, measured on the live capture (states/grid-row-selected-focused-main):
