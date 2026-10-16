@@ -4385,9 +4385,9 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
 
 // A TcxCheckListBox in the Windows look (the Options Rules, Prices and Card Art pages), `rows` 15 unit
 // rows tall; see `windows_check_list_sized`.
-// The highlighted row of a check list: the system highlight #0078D7 (Windows 11 dark: the selection #264F78).
+// The highlighted row of a check list: the system highlight #0078D7 (Windows 11 dark: the native list view selection #1A364D).
 fn check_highlight(t: *const Theme) -> paint.Color {
-    if t.tokens.palette == .Dark { ret style.hex_raw(0x264F78u32) }
+    if t.tokens.palette == .Dark { ret style.hex_raw(0x1A364Du32) }
     ret style.hex(30935u32)
 }
 
@@ -4613,6 +4613,8 @@ fn windows_check_list_rows(a: *mem.Arena, key: widget.Key, t: *const Theme, labe
     }
     var view_style = sized_style(width - 4.0, height - 4.0)
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    // round 10: the native dark list view face is #202020 (checklist-*)
+    if t.tokens.palette == .Dark { view_style.background = paint.Brush { Solid: style.hex_raw(0x202020u32) } }
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
     if view_error != ok { ret (zero, TooLarge) }
@@ -14877,6 +14879,8 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
     if lit {
         ink = style.hex_raw(16777215u32)
         fill = style.hex(30935u32)
+        // round 10: the native dark list's selected row is the system #0078D7 (combo-*-open, listbox-selected-*)
+        if t.tokens.palette == .Dark { fill = style.hex_raw(0x0078D7u32) }
     }
     var h = line
     if pic.len == 1usize { h = win_icon_row_height() }
@@ -14946,6 +14950,11 @@ fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []co
     frame_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
     if ground != 0u32 { frame_style.background = paint.Brush { Solid: style.hex(ground) } }
     frame_style.border = style.Border { width: 1.0, color: style.hex(30935u32) }
+    // round 10: the native dark drop list is #202020 inside a 1 px #7A7A7A line (combo-edit-open, combo-list-open)
+    if t.tokens.palette == .Dark {
+        frame_style.background = paint.Brush { Solid: style.hex_raw(0x202020u32) }
+        frame_style.border = style.Border { width: 1.0, color: style.hex_raw(0x7A7A7Au32) }
+    }
     frame_style.padding = edges(1.0, 1.0, 1.0, 1.0)
     frame_style.min_width = style.Length { Px: 40.0 }
     frame_style.overflow = .Clip
@@ -15528,7 +15537,10 @@ type Win3Lines = struct { shade: f32 }
 fn win3_lines_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let x = area.x
     let y = area.y
-    try win3_rect(b, x + 1.0, y + 1.0, area.width - 3.0, area.height - 2.0, style.hex(16777215u32))
+    // round 10: the dark list face is the native list's #202020 (listbox-*, combo-*-open)
+    var list_face = style.hex(16777215u32)
+    if style.windark_active() { list_face = style.hex_raw(0x202020u32) }
+    try win3_rect(b, x + 1.0, y + 1.0, area.width - 3.0, area.height - 2.0, list_face)
     try win3_rect(b, x, y, area.width - 1.0, 1.0, style.hex(12698049u32))
     try win3_rect(b, x, y + 1.0, 1.0, area.height - 1.0, style.hex(10592673u32))
     try win3_rect(b, x + area.width - 2.0, y + 1.0, 1.0, area.height - 2.0, style.hex(15395562u32))
@@ -15574,7 +15586,10 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         var words = text_options()
         words.role = .BodyMedium
         words.wrap = .None
-        let (label_node, label_error) = colored_text(a, 0u64, options[i], &dialog_t, words, ink)
+        var row_ink = ink
+        // round 10: the native dark list's selected row is #0078D7 under white text (listbox-selected-focused)
+        if t.tokens.palette == .Dark && i == selected && list_focused { row_ink = style.hex_raw(0xFFFFFFu32) }
+        let (label_node, label_error) = colored_text(a, 0u64, options[i], &dialog_t, words, row_ink)
         if label_error != ok { ret (zero, label_error) }
         var line_style = style.defaults()
         line_style.width = style.Length { Percent: 100.0 }
@@ -15597,6 +15612,7 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         row_style.width = style.Length { Percent: 100.0 }
         row_style.height = style.Length { Px: 19.0 }
         if i == selected && list_focused { row_style.background = paint.Brush { Solid: style.hex(14281721u32) } }
+        if t.tokens.palette == .Dark && i == selected && list_focused { row_style.background = paint.Brush { Solid: style.hex_raw(0x0078D7u32) } }
         var stack_style = style.defaults()
         stack_style.width = style.Length { Percent: 100.0 }
         stack_style.height = style.Length { Px: 19.0 }
