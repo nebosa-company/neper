@@ -31,7 +31,7 @@ fn at(a: *mem.Arena, node: widget.Node, x: f32, y: f32) -> (widget.Node, err) {
 fn box(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: u64, label: str, x: f32, y: f32) -> (widget.Node, err) {
     var made: widget.Node = zero
     if t.tokens.profile == .Windows {
-        let (drawn, drawn_error) = control.windows_checkbox_phase(a, key, t, label, false, false, action, true, 21.0, false, 1u32, 0.0 - 1.0)
+        let (drawn, drawn_error) = control.windows_checkbox_phase(a, key, t, label, false, false, action, true, 21.0, false, 1u32, 0.0 - 1.0, 0.0 - 1.0)
         if drawn_error != ok { ret (zero, drawn_error) }
         made = drawn
     } else {
@@ -46,7 +46,7 @@ fn box(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key
 fn radio(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: u64, label: str, selected: bool, x: f32, y: f32, window_y: f32) -> (widget.Node, err) {
     var made: widget.Node = zero
     if t.tokens.profile == .Windows {
-        let (drawn, drawn_error) = control.windows_radio_phase(a, key, t, label, selected, action, true, 17.0, 5u32, window_y)
+        let (drawn, drawn_error) = control.windows_radio_phase(a, key, t, label, selected, action, true, 17.0, 5u32, 0.0 - 1.0, window_y)
         if drawn_error != ok { ret (zero, drawn_error) }
         made = drawn
     } else {

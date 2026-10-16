@@ -19,6 +19,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let action = &actions[0usize]
     let labels = [5]str{ "Cards", "Collection", "Search from start (typing \"War\" would not find \"Fog of War\")", "Search within (typing \"War\" would find \"Fog of War\")", "Move to next row" }
     let selected = [5]bool{ true, false, true, false, false }
+    let window_xs = [5]f32{ 28.0, 28.0, 232.0, 232.0, 232.0 }
     let window_ys = [5]f32{ 134.0, 176.0, 226.0, 268.0, 379.0 }
     let xs = [5]f32{ 140.0, 140.0, 4.0, 4.0, 140.0 }
     let columns = [3]str{ "rest", "pressed", "focus" }
@@ -41,11 +42,11 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var made: widget.Node = zero
         if t.tokens.profile == .Windows {
             if row < 2usize {
-                let (radio, radio_error) = control.windows_radio_phase(a, u64(i + 1usize), t, labels[row], chosen, action, true, 42.0, 3u32, window_ys[row] - 14.0)
+                let (radio, radio_error) = control.windows_radio_phase(a, u64(i + 1usize), t, labels[row], chosen, action, true, 42.0, 3u32, window_xs[row], window_ys[row] - 14.0)
                 if radio_error != ok { ret (0usize, radio_error) }
                 made = radio
             } else {
-                let (radio, radio_error) = control.windows_radio_phase(a, u64(i + 1usize), t, labels[row], chosen, action, true, 42.0, 6u32, window_ys[row] - 14.0)
+                let (radio, radio_error) = control.windows_radio_phase(a, u64(i + 1usize), t, labels[row], chosen, action, true, 42.0, 6u32, window_xs[row], window_ys[row] - 14.0)
                 if radio_error != ok { ret (0usize, radio_error) }
                 made = radio
             }

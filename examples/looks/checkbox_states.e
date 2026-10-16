@@ -29,6 +29,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let labels = [5]str{ "Hide splash screen on start", "Show Filter &Row", "Show Foil &Symbol", "Use Morph effect", "Show tooltips" }
     let checked = [5]bool{ false, false, true, true, true }
     let columns = [3]str{ "rest", "pressed", "focus" }
+    let window_xs = [5]f32{ 215.0, 224.0, 224.0, 215.0, 215.0 }
     let window_ys = [5]f32{ 74.0, 132.0, 102.0, 71.0, 155.0 }
     let skip = [15]bool{ false, false, false, false, false, true, false, false, false, false, false, false, false, false, false }
     let (held, held_error) = mem.alloc[widget.Node](a, 15usize)
@@ -45,7 +46,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         var box: widget.Node = zero
         if t.tokens.profile == .Windows {
-            let (made, made_error) = control.windows_checkbox_phase(a, u64(i + 1usize), t, labels[row], checked[row], false, action, true, 21.0, false, 0u32, window_ys[row])
+            let (made, made_error) = control.windows_checkbox_phase(a, u64(i + 1usize), t, labels[row], checked[row], false, action, true, 21.0, false, 0u32, window_xs[row], window_ys[row])
             if made_error != ok { ret (0usize, made_error) }
             box = made
         } else {

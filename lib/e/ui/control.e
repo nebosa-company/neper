@@ -2420,6 +2420,11 @@ fn max_of(a: f32, b: f32) -> f32 {
     ret b
 }
 
+fn min_of(a: f32, b: f32) -> f32 {
+    if a < b { ret a }
+    ret b
+}
+
 fn max_zero(v: f32) -> f32 {
     if v < 0.0 { ret 0.0 }
     ret v
@@ -3744,65 +3749,108 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
 // v3's check box, radio button and radio group (DevExpress with NativeStyle: the Windows 11 theme
 // draws the mark). See `style.windows_choice_resolve` for the colours.
 
-// A dotted rectangle, 1 unit dots every 2 units round the area: the focus rectangle DevExpress
-// draws round a focused caption. looks4: the live 100 % captures show it as a resampled bitmap (grey
-// dots and gaps, soft on the outside), measured pixel by pixel on the Options check box grabs: a line
-// is two pixels wide, a dot pixel 44 % black, the pixel between the dots 33 %, their outer
-// neighbours 10 % and 8 %. The top and bottom lines run on odd columns, the left line on odd rows
-// and the right one on even rows; the area is the rectangle plus the outer column and row.
-type Dotted = struct { color: paint.Color, dot: f32, gap: f32, dot_spill: f32, gap_spill: f32 }
+// A dotted rectangle, 1 unit dots every 2 units round the area: the focus rectangle DevExpress draws round a
+// focused caption. looks5: the live 100 % captures fit one analytic model to within a level. A black dot (alpha
+// 225/240 over the face) of 1 x 1 units, 1 on and 1 off along each side, on lines 0.31 (Options pages) or 0.33
+// below a whole row: the top line's dots at u = 1, 3, ... from the left line's column, the bottom line 14 rows
+// lower, the left line's dots from 1 + the line offset, the right line's from the line offset plus 1 when the
+// span (right column minus left column) is even (the dash pattern runs on round the corners), a vertical dot only
+// between row 1 and row 13.5. The Options pages' window is drawn 1.0007 times its size (so is the mark's bitmap):
+// every position is `scaled = (window + at) * (1 + s)`, which is why a long rectangle's dots drift across the
+// pixels (121 to 135 levels over 130 px) and why the offset depends on where the control stands. The other
+// windows' rectangles are drawn without the scale (crisp dots of 90 and 165 levels).
+// `lw`, `tw`: the window coordinates of the rectangle's left column and top row (negative: unknown, no scale).
+type Dotted = struct { color: paint.Color, s: f32, line: f32, lw: f32, tw: f32, span: f32 }
+// The dots are the inverse of the face (DrawFocusRect's XOR): a dot over a face of 240 is 15, over 249 it is 6.
 
-fn dotted_pixel(b: *scene.Builder, color: paint.Color, x: f32, y: f32, alpha: f32) -> err {
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: y, width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: with_alpha(color, alpha) } } })
-}
-
-fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    let d = mem.cast[*Dotted](ctx)
-    var y: f32 = 0.0
-    while y < area.height - 1.0 {
-        var left_dot = d.gap
-        var left_spill = d.gap_spill
-        var right_dot = d.gap
-        var right_spill = d.gap_spill
-        let odd = (i32(y) % 2) == 1
-        if odd {
-            left_dot = d.dot
-            left_spill = d.dot_spill
-        } else {
-            right_dot = d.dot
-            right_spill = d.dot_spill
+// A rectangle `w` x `h` at (x, y) as the pixels it covers, each filled with its share of the colour's alpha (the
+// edges are exact whatever the renderer's own edge treatment).
+fn aa_rect(b: *scene.Builder, color: paint.Color, x: f32, y: f32, w: f32, h: f32) -> err {
+    let x_first = i32(x)
+    let y_first = i32(y)
+    var cy = y_first
+    while f32(cy) < y + h {
+        var cx = x_first
+        while f32(cx) < x + w {
+            let over_x = min_of(f32(cx) + 1.0, x + w) - max_of(f32(cx), x)
+            let over_y = min_of(f32(cy) + 1.0, y + h) - max_of(f32(cy), y)
+            if over_x > 0.002 && over_y > 0.002 {
+                try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: f32(cx), y: f32(cy), width: 1.0, height: 1.0 }, brush: paint.Brush { Solid: with_alpha(color, color.alpha * over_x * over_y) } } })
+            }
+            cx += 1
         }
-        try dotted_pixel(b, d.color, area.x, area.y + y, left_dot)
-        try dotted_pixel(b, d.color, area.x + 1.0, area.y + y, left_spill)
-        try dotted_pixel(b, d.color, area.x + area.width - 2.0, area.y + y, right_dot)
-        try dotted_pixel(b, d.color, area.x + area.width - 1.0, area.y + y, right_spill)
-        y += 1.0
-    }
-    var x: f32 = 0.0
-    while x < area.width {
-        let odd = (i32(x) % 2) == 1
-        var dot = d.dot_spill
-        var gap = d.gap_spill
-        if odd {
-            dot = d.dot
-            gap = d.gap
-        }
-        try dotted_pixel(b, d.color, area.x + x, area.y, dot)
-        try dotted_pixel(b, d.color, area.x + x, area.y + 1.0, gap)
-        try dotted_pixel(b, d.color, area.x + x, area.y + area.height - 2.0, dot)
-        try dotted_pixel(b, d.color, area.x + x, area.y + area.height - 1.0, gap)
-        x += 1.0
+        cy += 1
     }
     ret ok
 }
 
-// The dotted focus rectangle as a node `width` x `height`.
-fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, crisp: bool) -> (widget.Node, err) {
+fn dotted_dot(b: *scene.Builder, color: paint.Color, x: f32, y: f32, size: f32) -> err {
+    ret aa_rect(b, color, x, y, size, size)
+}
+
+// The mnemonic's underline: `w` wide and 1 tall at (`fx`, `fy`) from the node's top left, times the window's scale `k`.
+type Under = struct { color: paint.Color, w: f32, fx: f32, fy: f32, k: f32 }
+
+fn under_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let u = mem.cast[*Under](ctx)
+    ret aa_rect(b, u.color, f32(i32(area.x + 0.01)) + u.fx, f32(i32(area.y + 0.01)) + u.fy, u.w * u.k, u.k)
+}
+
+fn under_node(a: *mem.Arena, color: paint.Color, w: f32, fx: f32, fy: f32, k: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[Under](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    marks[0usize] = Under { color: color, w: w, fx: fx, fy: fy, k: k }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: under_paint, state: widget.bytes_of[Under](&marks[0usize]) } }, style: sized_style(1.0, 1.0), children: none }, ok)
+}
+
+fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let d = mem.cast[*Dotted](ctx)
+    let x0 = f32(i32(area.x + 0.01))
+    let y0 = f32(i32(area.y + 0.01))
+    var lw = d.lw
+    var tw = d.tw
+    var s = d.s
+    if lw < 0.0 || tw < 0.0 {
+        lw = 0.0
+        tw = 0.0
+        s = 0.0
+    }
+    let k = 1.0 + s
+    let size = k
+    let left_x = x0 + lw * k - lw
+    let right_x = x0 + (lw + d.span) * k - lw
+    var u: f32 = 1.0
+    while u <= d.span + 0.5 {
+        let x = x0 + (lw + u) * k - lw
+        try dotted_dot(b, d.color, x, y0 + (tw + d.line) * k - tw, size)
+        try dotted_dot(b, d.color, x, y0 + (tw + 14.0 + d.line) * k - tw, size)
+        u += 2.0
+    }
+    var v = 1.0 + d.line
+    while v <= 13.5 {
+        try dotted_dot(b, d.color, left_x, y0 + (tw + v) * k - tw, size)
+        v += 2.0
+    }
+    v = d.line + f32((i32(d.span) + 1) % 2)
+    while v < 1.0 { v += 2.0 }
+    while v <= 13.5 {
+        try dotted_dot(b, d.color, right_x, y0 + (tw + v) * k - tw, size)
+        v += 2.0
+    }
+    ret ok
+}
+
+// Where a rectangle stands: the window coordinates of its left column and top row (negative: unknown), the window's
+// scale and its line offset (see `Dotted`).
+type DotGeom = struct { s: f32, line: f32, lw: f32, tw: f32, face: f32 }
+
+// The dotted focus rectangle as a node `width` x `height` (the rectangle is `width` wide: its right line sits 2 in).
+fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom: DotGeom) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[Dotted](a, 1usize)
     if dots_error != ok { ret (zero, TooLarge) }
-    // The check boxes' grabs show the rectangle soft (44 %, 33 %, 10 % and 8 % black), the radios' crisp (62 % and 31 %).
-    dots[0usize] = Dotted { color: color, dot: 0.44, gap: 0.33, dot_spill: 0.10, gap_spill: 0.08 }
-    if crisp { dots[0usize] = Dotted { color: color, dot: 0.625, gap: 0.31, dot_spill: 0.0, gap_spill: 0.0 } }
+    let ink = (255.0 - geom.face) / 255.0
+    dots[0usize] = Dotted { color: paint.rgba(ink, ink, ink, 1.0), s: geom.s, line: geom.line, lw: geom.lw, tw: geom.tw, span: width - 2.0 }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: mark_measure, paint: dotted_paint, state: widget.bytes_of[Dotted](&dots[0usize]) } }, style: sized_style(width, height), children: none }, ok)
 }
@@ -3811,7 +3859,7 @@ fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, cris
 // looks5: which window's marks to paint and the control's y in it (negative: unknown, the family's first table):
 // the theme bitmap's sub-pixel phase follows the y of the row (the mark stands (high - 14) / 2 below it; see
 // scripts/gen_winmark.py for the contexts).
-type Phase = struct { context: u32, y: f32 }
+type Phase = struct { context: u32, x: f32, y: f32 }
 
 fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
     // looks4: rest and pressed are painted pixel for pixel from the live captures (e.ui.winmark); hover,
@@ -3955,7 +4003,7 @@ fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, ink: pain
 // and 1 above and below; a '&' marks the mnemonic, underlined at the baseline. When `focused` the
 // dotted focus rectangle (looks4: at the text's origin, 1 below the caption's top, the text's
 // rounded advance + 1 wide, 15 tall) lies over it without moving anything.
-fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, enabled: bool, crisp: bool) -> (widget.Node, err) {
+fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, enabled: bool, geom: DotGeom) -> (widget.Node, err) {
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
@@ -3968,8 +4016,21 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
     if words_error != ok { ret (zero, words_error) }
     let (metric, metric_fit, whole_base, metric_error) = run_metrics_faced(a, t, caption, shown)
     if metric_error != ok { ret (zero, metric_error) }
-    var word_node = words
+    var pad = style.defaults()
+    pad.padding = edges(2.0, 1.0, 2.0, 1.0)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, pad, mem_one_node(a, words))
+    var n = 1usize
+    if focused {
+        let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 3.0, 16.0, geom)
+        if dots_error != ok { ret (zero, dots_error) }
+        parts[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), mem_one_node(a, dots))
+        n = 2usize
+    }
     if mark_at < shown.len {
+        // looks5: the underline starts at the text's origin (1 right of the rectangle's left line), runs the character's
+        // advance and lies 13 under the rectangle's top line, `line` (0.31 or 0.33) into its row; it is drawn at the window's scale.
         let before = choices_hinted_width(shown[0usize..mark_at])
         var mark_adv = choices_hinted_width(shown[mark_at..mark_at + 1usize])
         if mark_adv == 0.0 {
@@ -3977,25 +4038,19 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
             if mark_error_two != ok { ret (zero, mark_error_two) }
             mark_adv = measured
         }
-        var line = sized_style(mark_adv, 1.0)
-        line.background = paint.Brush { Solid: ink }
-        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
-        if pair_error != ok { ret (zero, TooLarge) }
-        pair[0usize] = words
-        pair[1usize] = widget.positioned(0u64, before, whole_base + 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
-        word_node = widget.stack(0u64, sized_style(whole, 15.0), pair[0usize..2usize])
-    }
-    var pad = style.defaults()
-    pad.padding = edges(2.0, 1.0, 2.0, 1.0)
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
-    if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, pad, mem_one_node(a, word_node))
-    var n = 1usize
-    if focused {
-        let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 3.0, 16.0, crisp)
-        if dots_error != ok { ret (zero, dots_error) }
-        parts[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), mem_one_node(a, dots))
-        n = 2usize
+        var k: f32 = 1.0 + geom.s
+        var ux: f32 = 3.0 + before
+        var uy: f32 = 14.0 + geom.line
+        if geom.lw >= 0.0 && geom.tw >= 0.0 {
+            ux = 2.0 + (geom.lw + 1.0 + before) * k - geom.lw
+            uy = 1.0 + (geom.tw + 13.0 + geom.line) * k - geom.tw
+        } else {
+            k = 1.0
+        }
+        let (rule, rule_error) = under_node(a, ink, mark_adv, ux - f32(i32(ux)), uy - f32(i32(uy)), k)
+        if rule_error != ok { ret (zero, rule_error) }
+        parts[n] = widget.positioned(0u64, f32(i32(ux)), f32(i32(uy)), style.defaults(), mem_one_node(a, rule))
+        n += 1usize
     }
     ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
 }
@@ -4003,7 +4058,7 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
 // A check box or radio button row: the mark, then the caption, as a tap-and-hover region at
 // least 21 tall (TcxCheckBox's default height). `role` 4 is a checkbox, 5 a radio.
 fn windows_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, role, label, chosen, mixed, round, action, enabled, 21.0, false, Phase { context: 0u32, y: 0.0 - 1.0 })
+    let (row, row_error) = windows_choice_high(a, key, t, role, label, chosen, mixed, round, action, enabled, 21.0, false, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
     ret (row, row_error)
 }
 
@@ -4015,7 +4070,20 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if mark_error != ok { ret (zero, mark_error) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (label_node, label_error) = windows_caption(a, &dialog_t, label, (state.focused || state.pressed) && enabled, enabled, round)
+    // looks5: where the focus rectangle stands in its window (the caption is 2 right of the mark's 13, the check box's row
+    // 2 in; the rectangle 1 under the caption's top) and which window's scale it is drawn at.
+    var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0 }
+    if phase.context == 4u32 || phase.context == 5u32 { geom.face = 249.0 }
+    if phase.context == 0u32 { geom.s = 0.0007 }
+    if phase.context == 6u32 { geom.s = 0.00073 }
+    if phase.context == 0u32 || phase.context == 6u32 { geom.line = 0.3125 }
+    if phase.x >= 0.0 && phase.y >= 0.0 {
+        var lead: f32 = 15.0
+        if !round && !flush { lead = 17.0 }
+        geom.lw = phase.x + lead
+        geom.tw = phase.y + f32(i32((high - 17.0) * 0.5 + 1.0 + 0.01))
+    }
+    let (label_node, label_error) = windows_caption(a, &dialog_t, label, (state.focused || state.pressed) && enabled, enabled, geom)
     if label_error != ok { ret (zero, label_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -4129,7 +4197,7 @@ fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // highlight from 34.16, 18 tall from 0.4, the caption from 36.
 fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: *const Theme, label: str, chosen: bool, current: bool, below: bool, action: *const widget.Submit, width: f32, art: bool, mark_y: f32) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0, Phase { context: 7u32, y: mark_y })
+    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, false, false, 15.0, Phase { context: 7u32, x: 0.0 - 1.0, y: mark_y })
     if mark_error != ok { ret (zero, mark_error) }
     var caption = text_options()
     caption.role = .BodyMedium
@@ -4164,7 +4232,7 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
             parts[n] = widget.positioned(0u64, 34.16, 0.0, tail, zero)
             n += 1usize
         }
-        let (art_mark, art_mark_error) = windows_mark(a, t, state, chosen, false, false, 18.0, Phase { context: 8u32, y: mark_y })
+        let (art_mark, art_mark_error) = windows_mark(a, t, state, chosen, false, false, 18.0, Phase { context: 8u32, x: 0.0 - 1.0, y: mark_y })
         if art_mark_error != ok { ret (zero, art_mark_error) }
         parts[n] = widget.positioned(0u64, 19.0, 0.0, style.defaults(), widget_one_of(a, art_mark))
         n += 1usize
@@ -14369,33 +14437,33 @@ fn widget_one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
 // A check box in a row `high` tall; `flush` drops the 2 unit transparent border at its left
 // (TcxCheckBox with Style.TransparentBorder = False is 17 tall and flush). Windows look only.
 fn windows_checkbox_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, Phase { context: 0u32, y: 0.0 - 1.0 })
+    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
     ret (row, row_error)
 }
 
 // looks5: `windows_checkbox_sized` as the window `context` of the live captures draws it, the control `window_y` px down
 // its window (context 0 the Options pages, 1 the Filter window's Cards tab; see scripts/gen_winmark.py).
-fn windows_checkbox_phase(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, context: u32, window_y: f32) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, Phase { context: context, y: window_y })
+fn windows_checkbox_phase(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, context: u32, window_x: f32, window_y: f32) -> (widget.Node, err) {
+    let (row, row_error) = windows_choice_high(a, key, t, 4u8, label, checked, mixed, false, action, enabled, high, flush, Phase { context: context, x: window_x, y: window_y })
     ret (row, row_error)
 }
 
 // A radio button in a row `high` tall (TcxRadioButton is 17, a TcxRadioGroup's rows 42). Windows only.
 fn windows_radio_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: 2u32, y: 0.0 - 1.0 })
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: 2u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
     ret (row, row_error)
 }
 
 // `windows_radio_sized` for a radio of the Options pages' groups (their discs are resampled, see e.ui.winmark).
 fn windows_radio_options(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: 6u32, y: 0.0 - 1.0 })
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: 6u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
     ret (row, row_error)
 }
 
 // looks5: a radio of the window `context` (2 Missing Set Cards, 3 Search for Card, 4 the Filter window's Blocks row,
 // 5 its Match group, 6 the Options pages' groups), `window_y` px down its window.
-fn windows_radio_phase(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32, context: u32, window_y: f32) -> (widget.Node, err) {
-    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: context, y: window_y })
+fn windows_radio_phase(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, high: f32, context: u32, window_x: f32, window_y: f32) -> (widget.Node, err) {
+    let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, high, true, Phase { context: context, x: window_x, y: window_y })
     ret (row, row_error)
 }
 
@@ -14432,10 +14500,14 @@ fn group_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
     let y = area.y + g.top
     let w = g.right - g.left
     let h = g.bottom - g.top
+    // looks5: the side lines run from the row under the top line's first row to the bottom line's first row, on whole
+    // rows: the capture's corner pixels are the full line colour (a blend of the sides with the 65 % rows gives 5 to 7 levels).
+    let side_top = f32(i32(y)) + 1.0
+    let side_end = f32(i32(y + h - 1.0)) + 1.0
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, w, 1.0), brush: brush } })
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + h - 1.0, w, 1.0), brush: brush } })
-    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y + 1.0, 1.0, h - 2.0), brush: brush } })
-    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, y + 1.0, 1.0, h - 2.0), brush: brush } })
+    try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, side_top, 1.0, side_end - side_top), brush: brush } })
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x + w - 1.0, side_top, 1.0, side_end - side_top), brush: brush } })
 }
 
 // `windows_group_sized` with the frame's outer extents given: (`left`, `top`) to (`right`, `bottom`) in
@@ -14502,24 +14574,24 @@ fn windows_group_on(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // each 42 tall (v3's items fill the group), the mark flush at the left and the caption centred
 // beside it. `selected` is the chosen index (past the end: none). Windows look only.
 fn windows_radio_group_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32) -> (widget.Node, err) {
-    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, false, 0.0 - 1.0)
+    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, false, 0.0 - 1.0, 0.0 - 1.0)
     ret (made, made_error)
 }
 
 // A TcxRadioGroup with Style.BorderStyle = ebsFlat (the Search for Card dialog's): the square frame of a
 // TcxGroupBox in place of the Options pages' fractional one.
 fn windows_radio_group_flat(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32) -> (widget.Node, err) {
-    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, true, 0.0 - 1.0)
+    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, true, 0.0 - 1.0, 0.0 - 1.0)
     ret (made, made_error)
 }
 
 // looks5: either group `window_y` px down its window (the discs' sub-pixel phase follows it).
-fn windows_radio_group_at(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool, window_y: f32) -> (widget.Node, err) {
-    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, flat, window_y)
+fn windows_radio_group_at(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool, window_x: f32, window_y: f32) -> (widget.Node, err) {
+    let (made, made_error) = windows_radio_group_kind(a, key, t, label, labels, selected, actions, enabled, width, height, flat, window_x, window_y)
     ret (made, made_error)
 }
 
-fn windows_radio_group_kind(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool, window_y: f32) -> (widget.Node, err) {
+fn windows_radio_group_kind(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool, width: f32, height: f32, flat: bool, window_x: f32, window_y: f32) -> (widget.Node, err) {
     if actions.len != labels.len { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
     if items_error != ok { ret (zero, TooLarge) }
@@ -14527,10 +14599,14 @@ fn windows_radio_group_kind(a: *mem.Arena, key: widget.Key, t: *const Theme, lab
     while i < labels.len {
         var item: widget.Node = zero
         var item_y: f32 = 0.0 - 1.0
-        if window_y >= 0.0 { item_y = window_y + 18.0 + 42.0 * f32(i) }
+        var item_x: f32 = 0.0 - 1.0
+        if window_y >= 0.0 && window_x >= 0.0 {
+            item_y = window_y + 18.0 + 42.0 * f32(i)
+            item_x = window_x + 8.0
+        }
         var context = 6u32
         if flat { context = 3u32 }
-        let (made, made_error) = windows_radio_phase(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, 42.0, context, item_y)
+        let (made, made_error) = windows_radio_phase(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, 42.0, context, item_x, item_y)
         if made_error != ok { ret (zero, made_error) }
         item = made
         items[i] = widget.positioned(0u64, 8.0, 18.0 + 42.0 * f32(i), style.defaults(), widget_one_of(a, item))

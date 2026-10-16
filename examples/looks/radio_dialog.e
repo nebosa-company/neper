@@ -28,10 +28,10 @@ fn at(a: *mem.Arena, node: widget.Node, x: f32, y: f32) -> (widget.Node, err) {
 }
 
 // A radio at (x, y) of its cell, `high` tall (the Windows look's TcxRadioButton; another look's own radio).
-fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: u64, label: str, selected: bool, x: f32, y: f32, high: f32, context: u32, window_y: f32) -> (widget.Node, err) {
+fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: u64, label: str, selected: bool, x: f32, y: f32, high: f32, context: u32, window_x: f32, window_y: f32) -> (widget.Node, err) {
     var made: widget.Node = zero
     if t.tokens.profile == .Windows {
-        let (radio, radio_error) = control.windows_radio_phase(a, key, t, label, selected, action, true, high, context, window_y)
+        let (radio, radio_error) = control.windows_radio_phase(a, key, t, label, selected, action, true, high, context, window_x, window_y)
         if radio_error != ok { ret (zero, radio_error) }
         made = radio
     } else {
@@ -51,11 +51,11 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (0usize, parts_error) }
     // Missing Set Cards: crop (8,340)-(262,460); the group at (16,351) 234 x 99, radios at (+8,+21/45/69).
-    let (r0, e0) = one(a, t, action, 1u64, "&Missing Only", true, 8.0, 21.0, 17.0, 2u32, 372.0)
+    let (r0, e0) = one(a, t, action, 1u64, "&Missing Only", true, 8.0, 21.0, 17.0, 2u32, 24.0, 372.0)
     if e0 != ok { ret (0usize, e0) }
-    let (r1, e1) = one(a, t, action, 2u64, "&Available Only", false, 8.0, 45.0, 17.0, 2u32, 396.0)
+    let (r1, e1) = one(a, t, action, 2u64, "&Available Only", false, 8.0, 45.0, 17.0, 2u32, 24.0, 396.0)
     if e1 != ok { ret (0usize, e1) }
-    let (r2, e2) = one(a, t, action, 3u64, "&Both Missing and Available", false, 8.0, 69.0, 17.0, 2u32, 420.0)
+    let (r2, e2) = one(a, t, action, 3u64, "&Both Missing and Available", false, 8.0, 69.0, 17.0, 2u32, 24.0, 420.0)
     if e2 != ok { ret (0usize, e2) }
     parts[0usize] = r0
     parts[1usize] = r1
@@ -71,11 +71,11 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let (framed, framed_error) = at(a, frame, 8.0, 11.0)
     if framed_error != ok { ret (0usize, framed_error) }
     // Filter: crop (10,56)-(290,92); radios at (21,65) (82 wide), (109,65), (204,65), 17 tall.
-    let (f0, g0) = one(a, t, action, 21u64, "Blocks", true, 11.0, 9.0, 17.0, 4u32, 65.0)
+    let (f0, g0) = one(a, t, action, 21u64, "Blocks", true, 11.0, 9.0, 17.0, 4u32, 21.0, 65.0)
     if g0 != ok { ret (0usize, g0) }
-    let (f1, g1) = one(a, t, action, 22u64, "Formats", false, 99.0, 9.0, 17.0, 4u32, 65.0)
+    let (f1, g1) = one(a, t, action, 22u64, "Formats", false, 99.0, 9.0, 17.0, 4u32, 109.0, 65.0)
     if g1 != ok { ret (0usize, g1) }
-    let (f2, g2) = one(a, t, action, 23u64, "Editions", false, 194.0, 9.0, 17.0, 4u32, 65.0)
+    let (f2, g2) = one(a, t, action, 23u64, "Editions", false, 194.0, 9.0, 17.0, 4u32, 204.0, 65.0)
     if g2 != ok { ret (0usize, g2) }
     parts[3usize] = f0
     parts[4usize] = f1

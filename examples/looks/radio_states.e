@@ -30,6 +30,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let xs = [4]f32{ 4.0, 4.0, 40.0, 40.0 }
     let skip = [12]bool{ false, true, false, false, false, true, false, false, false, false, false, true }
     let contexts = [4]u32{ 2u32, 2u32, 4u32, 4u32 }
+    let window_xs = [4]f32{ 24.0, 24.0, 21.0, 109.0 }
     let window_ys = [4]f32{ 372.0, 396.0, 65.0, 65.0 }
     let columns = [3]str{ "rest", "pressed", "focus" }
     let (held, held_error) = mem.alloc[widget.Node](a, 24usize)
@@ -47,7 +48,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         var made: widget.Node = zero
         if t.tokens.profile == .Windows {
-            let (radio, radio_error) = control.windows_radio_phase(a, u64(i + 1usize), t, labels[row], selected[row], action, true, 17.0, contexts[row], window_ys[row])
+            let (radio, radio_error) = control.windows_radio_phase(a, u64(i + 1usize), t, labels[row], selected[row], action, true, 17.0, contexts[row], window_xs[row], window_ys[row])
             if radio_error != ok { ret (0usize, radio_error) }
             made = radio
         } else {
