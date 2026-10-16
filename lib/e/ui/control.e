@@ -6146,7 +6146,9 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var highlight = win_rgb(0u32, 120u32, 215u32)
     // Windows 11 dark: the selection is #264F78 under white text.
     if t.tokens.palette == .Dark { highlight = style.hex_raw(0x264F78u32) }
-    let highlighted = win_rgb(255u32, 255u32, 255u32)
+    var highlighted = win_rgb(255u32, 255u32, 255u32)
+    // looks9: the dark map would turn the selected text dark; it stays white on #264F78.
+    if t.tokens.palette == .Dark { highlighted = style.hex_raw(0xFFFFFFu32) }
     var value_options = text_options()
     value_options.role = .BodyMedium
     value_options.mono = options.mono
