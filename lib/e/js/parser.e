@@ -9,6 +9,7 @@
 
 use e.data.list as list
 use e.js.ast as ast
+use e.js.early as early
 use e.js.lex as lex
 use e.mem
 use e.str
@@ -1859,5 +1860,12 @@ fn parse_program(a: *mem.Arena, source: str) -> (Parsed, err) {
     if p.strict { p.nodes.items[usize(root)].flags = ast.F_STRICT }
     close_hoist(&p, root, 0usize)
     out.program = ast.Program { nodes: list.slice_const[ast.Node](&p.nodes), kids: list.slice_const[u32](&p.kids), strs: list.slice_const[ast.TemplateStr](&p.strs), root: root, source: source }
+    // Static semantics beyond the grammar.
+    let (early_result, early_error) = early.check(a, &out.program)
+    if early_error != ok {
+        out.message = early_result.message
+        out.line = early_result.line
+        ret (out, ParseError)
+    }
     ret (out, ok)
 }

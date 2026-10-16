@@ -1084,6 +1084,7 @@ fn new_realm(a: *mem.Arena) -> (*js.Interp, err) {
     install_host(it)
     b_typed.install_array_buffer(it)
     b_typed.install_typed_arrays(it)
+    b_typed.install_data_view(it)
     js.add_method(it, it.global, "print", 1u32, global_print)
     let ev = js.make_native(it, "eval", 1u32, global_eval)
     it.eval_fn = ev

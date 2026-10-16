@@ -969,3 +969,179 @@ fn install_typed_arrays(it: *js.Interp) {
         kind += 1u8
     }
 }
+
+// --- DataView
+
+type DView = struct { buffer: *js.Obj, offset: usize, length: usize, tracking: bool }
+
+fn dv_of(o: *js.Obj) -> *DView { ret mem.cast[*DView](o.data) }
+
+fn dataview_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    if !it.has_new_target { ret (js.undefv(), js.throw_type(it, "Constructor DataView requires 'new'")) }
+    let bv = arg(args, 0usize)
+    if !js.is_object(bv) || js.as_object(bv).class != js.C_ARRAYBUFFER { ret (js.undefv(), js.throw_type(it, "First argument to DataView constructor must be an ArrayBuffer")) }
+    let b = js.buf_of(js.as_object(bv))
+    let (off, offe) = js.to_number(it, arg(args, 1usize))
+    if offe != ok { ret (js.undefv(), offe) }
+    let offset = js.to_integer(off)
+    if offset < 0.0f64 || js.is_infinite(offset) { ret (js.undefv(), js.throw_range(it, "Start offset is outside the bounds of the buffer")) }
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    if offset > f64(b.bytes.len) { ret (js.undefv(), js.throw_range(it, "Start offset is outside the bounds of the buffer")) }
+    var view_len = f64(b.bytes.len) - offset
+    if !js.is_undefined(arg(args, 2usize)) {
+        let (ln, lne) = js.to_number(it, args[2usize])
+        if lne != ok { ret (js.undefv(), lne) }
+        let l2 = js.to_integer(ln)
+        if l2 < 0.0f64 || offset + l2 > f64(b.bytes.len) { ret (js.undefv(), js.throw_range(it, "Invalid DataView length")) }
+        view_len = l2
+    }
+    let nto = js.as_object(it.new_target)
+    let (proto, pe) = js.proto_value_of(it, nto, it.protos.data_view)
+    if pe != ok { ret (js.undefv(), pe) }
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    let o = js.new_obj(it, js.C_DATAVIEW, proto)
+    let (cell, ce) = mem.alloc[DView](it.a, 1usize)
+    if ce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    cell[0usize] = DView { buffer: js.as_object(bv), offset: usize(offset), length: usize(view_len), tracking: false }
+    o.data = mem.cast[*void](&cell[0usize])
+    ret (js.obj_value(o), ok)
+}
+
+fn this_dv(it: *js.Interp, v: js.Value) -> (*DView, err) {
+    if js.is_object(v) && js.as_object(v).class == js.C_DATAVIEW { ret (dv_of(js.as_object(v)), ok) }
+    var none: *DView = zero
+    ret (none, js.throw_type(it, "Receiver is not a DataView"))
+}
+
+fn dv_buffer_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (d, e) = this_dv(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    ret (js.obj_value(d.buffer), ok)
+}
+
+fn dv_byte_length_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (d, e) = this_dv(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    let b = js.buf_of(d.buffer)
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    ret (js.num_value(f64(d.length)), ok)
+}
+
+fn dv_byte_offset_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (d, e) = this_dv(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    let b = js.buf_of(d.buffer)
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    ret (js.num_value(f64(d.offset)), ok)
+}
+
+fn dv_get(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err) {
+    let (d, e) = this_dv(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    let (n, ne) = js.to_number(it, arg(args, 0usize))
+    if ne != ok { ret (js.undefv(), ne) }
+    let idx = js.to_integer(n)
+    if idx < 0.0f64 || js.is_infinite(idx) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
+    let little = js.to_boolean(arg(args, 1usize))
+    let b = js.buf_of(d.buffer)
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    let size = js.ta_elem_size(kind)
+    if idx + f64(size) > f64(d.length) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
+    var raw = 0u64
+    var i = 0usize
+    while i < size {
+        let byte_at = usize(idx) + i
+        var shift = 8usize * i
+        if !little { shift = 8usize * (size - 1usize - i) }
+        raw = raw | (u64(b.bytes[d.offset + byte_at]) << u64(shift))
+        i += 1usize
+    }
+    ret (js.raw_to_value(kind, raw), ok)
+}
+
+fn dv_set(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err) {
+    let (d, e) = this_dv(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    let (n, ne) = js.to_number(it, arg(args, 0usize))
+    if ne != ok { ret (js.undefv(), ne) }
+    let idx = js.to_integer(n)
+    if idx < 0.0f64 || js.is_infinite(idx) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
+    let (vn, vne) = js.to_number(it, arg(args, 1usize))
+    if vne != ok { ret (js.undefv(), vne) }
+    let little = js.to_boolean(arg(args, 2usize))
+    let b = js.buf_of(d.buffer)
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    let size = js.ta_elem_size(kind)
+    if idx + f64(size) > f64(d.length) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
+    let raw = js.value_to_raw(kind, vn)
+    var i = 0usize
+    while i < size {
+        var shift = 8usize * i
+        if !little { shift = 8usize * (size - 1usize - i) }
+        b.bytes[d.offset + usize(idx) + i] = u8((raw >> u64(shift)) & 255u64)
+        i += 1usize
+    }
+    ret (js.undefv(), ok)
+}
+
+fn dv_get_int8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 1u8)
+    ret (r, e) }
+fn dv_get_uint8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 2u8)
+    ret (r, e) }
+fn dv_get_int16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 4u8)
+    ret (r, e) }
+fn dv_get_uint16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 5u8)
+    ret (r, e) }
+fn dv_get_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 6u8)
+    ret (r, e) }
+fn dv_get_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 7u8)
+    ret (r, e) }
+fn dv_get_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 8u8)
+    ret (r, e) }
+fn dv_get_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 9u8)
+    ret (r, e) }
+fn dv_set_int8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 1u8)
+    ret (r, e) }
+fn dv_set_uint8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 2u8)
+    ret (r, e) }
+fn dv_set_int16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 4u8)
+    ret (r, e) }
+fn dv_set_uint16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 5u8)
+    ret (r, e) }
+fn dv_set_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 6u8)
+    ret (r, e) }
+fn dv_set_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 7u8)
+    ret (r, e) }
+fn dv_set_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 8u8)
+    ret (r, e) }
+fn dv_set_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 9u8)
+    ret (r, e) }
+
+fn install_data_view(it: *js.Interp) {
+    it.protos.data_view = js.new_obj(it, js.C_OBJECT, it.protos.object)
+    let ctor = js.make_native(it, "DataView", 1u32, dataview_ctor)
+    ctor.ctor_kind = js.K_BASE
+    let e1 = js.define_data(it, ctor, js.key_of("prototype"), js.obj_value(it.protos.data_view), 0u8)
+    let e2 = js.define_data(it, it.protos.data_view, js.key_of("constructor"), js.obj_value(ctor), js.P_HIDDEN)
+    let e3 = js.define_data(it, it.global, js.key_of("DataView"), js.obj_value(ctor), js.P_HIDDEN)
+    js.add_getter(it, it.protos.data_view, "buffer", dv_buffer_getter)
+    js.add_getter(it, it.protos.data_view, "byteLength", dv_byte_length_getter)
+    js.add_getter(it, it.protos.data_view, "byteOffset", dv_byte_offset_getter)
+    let e4 = js.define_data(it, it.protos.data_view, js.key_of_symbol(it.sym_to_string_tag), js.str_value("DataView"), js.P_CONFIGURABLE)
+    js.add_method(it, it.protos.data_view, "getInt8", 1u32, dv_get_int8)
+    js.add_method(it, it.protos.data_view, "getUint8", 1u32, dv_get_uint8)
+    js.add_method(it, it.protos.data_view, "getInt16", 1u32, dv_get_int16)
+    js.add_method(it, it.protos.data_view, "getUint16", 1u32, dv_get_uint16)
+    js.add_method(it, it.protos.data_view, "getInt32", 1u32, dv_get_int32)
+    js.add_method(it, it.protos.data_view, "getUint32", 1u32, dv_get_uint32)
+    js.add_method(it, it.protos.data_view, "getFloat32", 1u32, dv_get_float32)
+    js.add_method(it, it.protos.data_view, "getFloat64", 1u32, dv_get_float64)
+    js.add_method(it, it.protos.data_view, "setInt8", 2u32, dv_set_int8)
+    js.add_method(it, it.protos.data_view, "setUint8", 2u32, dv_set_uint8)
+    js.add_method(it, it.protos.data_view, "setInt16", 2u32, dv_set_int16)
+    js.add_method(it, it.protos.data_view, "setUint16", 2u32, dv_set_uint16)
+    js.add_method(it, it.protos.data_view, "setInt32", 2u32, dv_set_int32)
+    js.add_method(it, it.protos.data_view, "setUint32", 2u32, dv_set_uint32)
+    js.add_method(it, it.protos.data_view, "setFloat32", 2u32, dv_set_float32)
+    js.add_method(it, it.protos.data_view, "setFloat64", 2u32, dv_set_float64)
+}

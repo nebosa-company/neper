@@ -26744,6 +26744,53 @@ fn ta_of_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
 fn install_typed_arrays(it: *js.Interp)
 ```
 
+### `e.js.early`
+
+```neper
+error EarlyError
+type Ctx = struct
+fn fail(c: *Ctx, id: u32, m: str) -> err
+fn node(c: *const Ctx, id: u32) -> ast.Node
+fn kid(c: *const Ctx, first: u32, i: usize) -> u32
+fn is_strict_reserved(name: str) -> bool
+fn is_reserved_word(name: str) -> bool
+fn check_ident(c: *Ctx, id: u32, binding: bool) -> err
+type Names = struct { lex: list.List[str], vars: list.List[str], funcs: list.List[str], sloppy_funcs: list.List[bool] }
+fn has_name(l: *const list.List[str], name: str) -> bool
+fn pattern_names(c: *Ctx, id: u32, out: *list.List[str]) -> err
+fn collect_vars(c: *Ctx, id: u32, out: *list.List[str]) -> err
+fn check_scope(c: *Ctx, first: u32, count: u32, top: bool, params: *const list.List[str]) -> err
+fn first_stmt_node(c: *const Ctx, first: u32, count: u32) -> u32
+fn check_pattern(c: *Ctx, id: u32, binding: bool, allow_cover: bool) -> err
+fn is_simple_target(c: *const Ctx, id: u32) -> bool
+fn check_assign_target(c: *Ctx, id: u32, allow_pattern: bool) -> err
+fn check_args(c: *Ctx, first: u32, count: u32) -> err
+fn check_expr(c: *Ctx, id: u32) -> err
+fn regex_units(c: *Ctx, s: str) -> []const u16
+fn check_private_ref(c: *Ctx, id: u32, name: str) -> err
+fn check_object(c: *Ctx, id: u32) -> err
+fn param_names(c: *Ctx, n: ast.Node, out: *list.List[str]) -> err
+fn is_simple_params(c: *const Ctx, n: ast.Node) -> bool
+fn has_use_strict(c: *const Ctx, body: u32) -> bool
+fn directive_raw(c: *const Ctx, line: u32) -> bool
+fn check_function(c: *Ctx, id: u32) -> err
+type Saved = struct
+fn save_ctx(c: *const Ctx) -> Saved
+fn restore_ctx(c: *Ctx, s: Saved)
+fn restore_fail(c: *Ctx, s: Saved, e: err) -> err
+fn check_class(c: *Ctx, id: u32) -> err
+fn is_loop(c: *const Ctx, id: u32) -> bool
+fn check_substatement(c: *Ctx, id: u32, allow_plain_function: bool) -> err
+fn check_stmt_list(c: *Ctx, first: u32, count: u32) -> err
+fn check_var_decl(c: *Ctx, id: u32, in_for_head: bool) -> err
+fn check_stmt(c: *Ctx, id: u32) -> err
+fn check_switch_scope(c: *Ctx, all: list.List[u32]) -> err
+fn check_for(c: *Ctx, id: u32) -> err
+fn check_for_in_of(c: *Ctx, id: u32) -> err
+type Result = struct { message: str, line: u32 }
+fn check(a: *mem.Arena, prog: *const ast.Program) -> (Result, err)
+```
+
 ### `e.fmt.html.template`
 
 ```neper
