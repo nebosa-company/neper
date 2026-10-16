@@ -1,0 +1,96 @@
+{
+ "button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_states.png",
+    "notes": "Round 9: the DPI-scaled forms' ring is now the exact area coverage of the native ring at a fractional position (one pixel line at a third of a pixel; phases fitted per button: scripts/looks_ref_a/fitring.py), so every captured pressed, hover and focus cell of Options, Deck Properties, Deck Legality and About, and every crisp dialog button, shows 0 structural px off at 2 levels (max 1 level; button_states 38 cells, button_hover 28). Remaining: caption ink boxes of 3 hover cells (Open... 2 px wide, v3 hinted widths) and the disabled Edit Rule button's v3 glyph. Round 11: the caption is set on v3's hdmx advances (the Open... hover cell's ink box is now within 1 px: 58..95 against 58..95 at the 60 level; was 2 px off on the left, 3 px narrow). The disabled Edit Rule picture and the New Rule one are v3 bitmap artwork (not text): excluded, the caption right of them is within 1 px (475..541 against 474..541). button_hover: 28 comps, 0 text/structural px off; the pass counts of looks_cells for button_states (18 of 33), button_hover (15 of 28) and button_kinds are as before the change.",
+    "gaps": [
+     "Corner arcs and focus dots of the scaled forms are a bilinear mix of the crisp tile (not structural); dots measured 13 levels mean error",
+     "Unverified: toggle, split, loading and plain kinds (no capture); disabled has one capture",
+     "Scale: 1.5x ring tile is uneven (informational)",
+     "Edit Rule and New Rule pictures are v3 bitmap artwork (decided: not text), drawn as a placeholder glyph and excluded"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog_message.png",
+    "notes": "Round 10 light, native captures as reference for states v3 never showed. title_bar_native.png (4 cells: window and dialog, active and inactive, 302 and 296 wide) against ref/windows-native/light/window-*, dialog-*: flat pixels (3 px halo round ink excluded) 0 off by more than 2 levels on both window cells (max 1); the light caption is #F0F4F8 against the native #F1F4F7; the inactive light caption is new (#F3F3F3, ink about #939393 derived from the capture). A caption without an icon starts its title at 16 as the native dialog does. dialog_message.png now reproduces the native message box (messagebox-active, 338 x 151): 0 of 8521 flat pixels off by more than 2 levels (max 1): light caption 31 tall, white body 78, #F5F5F5 row, footer 41, buttons 10 below the footer top and 16 from the right edge, 11 apart, icon at (21, 23) with the text 9 after it. Title ink, text and button labels are ClearType in the capture. Round 11: the light message box draws the native question bitmap (32 x 33 cut from ref/windows-native/light/messagebox-active@1x, e.ui.winmsgicon): 0 of 1056 icon pixels off by more than 2 levels, at (21, 23) of the body. The body text is 11.7 px unhinted: every word start and the line end are within 1 px of the native 12 px GDI line (12.0 unhinted is 6 px wide over the line; the native glyphs are hinted). The footer, body and row regions are still 0 off (8521 flat px). Info stands for the question icon (the only message box icon captured).",
+    "gaps": [
+     "Dialog close button: v3's 33 wide one kept; the native dialog's is 46 wide (56 flat px off in the dialog cells)",
+     "Caption buttons are 1 px right of the native window's (v3 geometry kept)",
+     "Task dialog (command links, footer, verification box) is captured natively but has no Neper control: not built",
+     "Message box width is fixed at 338; Windows sizes it to the text",
+     "Caption hot and pressed: the native hot captures equal rest; pressed is not capturable",
+     "Info, warning and error message box bitmaps were not captured; Info draws the question bitmap",
+     "The OK button's dotted keyboard focus cue (visible in the native capture) is not drawn: a driven focus on the modal dialog reached no button",
+     "Message box text 11.7 px stands for the native 12 px hinted line (ClearType in the capture)",
+     "Message box icon is a 96 DPI tile: blocky at 1.5x"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/hint_toolbar_cards_f-vs-ref.png",
+    "notes": "Round 11: all six captured v3 hints (hint_toolbar_cards_expand, cards_f, help_home, search_binoculars, search_filter, hint_grid_header_name) pass scripts/looks_cells.py: 0 structural px off (max 1 level), ink boxes within 1 px. The grid header hint was 5 px short: v3 spaces its Tahoma 11 text on rounded linear advances (the 'i', 'l', 'm' are 3, 3, 9 wide where hdmx lists 2, 2, 8), now winhint.advance_linear; its template offset went from 2 px to 0. New native light tooltip cell (hint_native.png, control.win_native_tooltip, hint.exe T7): against ref/windows-native/light/tooltip-rest@1x the 126 x 20 frame, rounded corners (the capture's own 6 x 6 pixels) and face are 0 px off by more than 2 levels (0 of the ring), the text ink box is 6..119 by 5..16 against 6..118 by 5..16 (Segoe UI 12 px greyscale against ClearType). The native tooltip is a state v3 never shows; the v3 cxHint stays the default hint.",
+    "gaps": [
+     "tooltip-balloon (rounded 8, icon, title) is not drawn: not cut",
+     "Native tooltip text is ClearType, ours greyscale; the native tooltip is a separate variant (control.win_native_tooltip), not what overlay.tooltip_of draws",
+     "Unverified: multi-line hints, other placements"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Round 11: the sheet's cells were 32 high around the 21 high bar, which put the bar on a half pixel (its top and bottom frame rows came out as two 55 percent rows, D4/D1, instead of one #BCBCBC row); the cell is 31 now, so the frame is the native 1 px #BCBCBC on every side. The fill ends on a whole pixel (floor, 88 of 148 for 60 percent; the native capture has 105 of 176, the same rule, and no antialiased edge: ours had one). Against ref/windows-native/light/progress-{empty,determinate,full,paused,error,disabled}@1x the horizontal runs agree (frame, track #E6E6E6, fill #0F7B0F / paused #9D5D00 / error #C42B1C, fill share 0.595 against 0.597) and the vertical profile is frame, fill, frame; the height stays 21 (the v3 import form's bar is NativeStyle: native theme drawn at its 21 px client height; the native gallery bar is 16). Marquee and percent text are not covered by a capture.",
+    "gaps": [
+     "Height 21 (v3 DFM default) against the native 16: the theme part scaled, unverified against a v3 capture of the import form",
+     "Marquee: the native block is at least 126 wide and overdraws the frame edge; our 0.6 segment is a guess; the lighter lower half is not drawn",
+     "Native vertical bar has no Neper cell (v3's statistics bar is a flat vertical bar, not captured)",
+     "Percent text (v3 cxtsText) has no native counterpart; main-window bar (148 x 21, cxbsGradient teal, Enabled False) is DevExpress-drawn and was never captured: it still draws the native look",
+     "Native disabled progress is drawn identical to enabled (green); we do the same"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/toolbar_button_row.png",
+    "notes": "Round 9: the toolbar reference crops had the grid's top border (#8D9096) in their last row from x=287 on; that row is restored to the bar's own edge (#D2D2D2) (tbclean.py) and the refs are laid at our sheets' size (padref.py). toolbar_button_row 57 -> 0 non-artwork px, toolbar_button_hot 9 strips 464 -> 0 outside v3's icon bitmaps (34 to 39 px per strip are v3 artwork: gray disabled pictures, the blue hot icon). Frames, grips, separators, hot and pressed boxes match at 2 levels. Round 11: new cell 'Caption disabled' (toolbar_button.png) against ref/windows-native/light/toolbar-disabled@1x: the caption ink darkest value is 161 against the native 160 (#A0A0A0, within 1 level); the native disabled picture is a flat grey disc (artwork). The rest of the sheet is unchanged (strict looks_cells on toolbar_button_row still counts only the 39 artwork px).",
+    "gaps": [
+     "v3 icon artwork (34 to 39 flat-run px per strip) is a drawn glyph here and excluded",
+     "Reference edit: last row of the three toolbar ref crops (foreign grid border) replaced",
+     "Unverified: checked, focus, dropdown, disabled (hover grabs identical to rest)"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Round 9: 39 new cells (popup_menu_sel_<menu>_h<n>) cover every mouse-hot row of the live hover grabs (Help, Online, Reports included); each has the same error profile as its menu's rest cell: only v3 icon artwork, ClearType stems and a few arrow/mnemonic pixels (max 7 levels at 4 px in Cards, 1 px in Tools/File) differ. The grid-lines sub-menu popup is compared (icons are v3 art). Round 11 re-measure of popup_menu_{file,cards,tools,search,view,cardart,help,reports,online,admin}: the 22 px arrow strip at the right of every row is 0 px off, ink bands (107) are within 1 px except 4 bold heading rows 2 px wider on the right (Sort Order, General Filter and two like them: Tahoma Bold hinted advances in the table equal hdmx 12 exactly, so the 2 px is glyph shape), the Print arrow row mentioned before is not found now; what is left outside the icon column are glyph hinting differences (the hyphen of 'Num -' sits one row up, 4 px).",
+    "gaps": [
+     "Remaining non-artwork: Cards Print arrow row 4 px up to 7 levels, File 2 px, Tools 1 px (5 levels), Search/Cardart text stems up to 139 levels at 1 to 2 px (ClearType)",
+     "Placeholder icons (v3 artwork excluded)",
+     "Unverified: disabled items beyond the captured menus",
+     "Scale: popup_menu_file 2.0 100 %; 1.5 79.2 % (informational)"
+    ]
+   }
+  }
+ }
+}

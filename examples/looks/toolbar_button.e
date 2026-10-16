@@ -114,9 +114,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let (bar, bar_error) = bars(a, t, action, 100u64, false, false)
     if bar_error != ok { ret (0usize, bar_error) }
     cells[0usize] = looks.Cell { caption: "Bars (Windows: v3 second toolbar row, disabled as captured)", node: bar, drive: .None }
-    let captions = [8]str{ "Rest", "Hover", "Pressed", "Focus", "Checked", "Disabled", "Caption", "Caption hover" }
+    let captions = [9]str{ "Rest", "Hover", "Pressed", "Focus", "Checked", "Disabled", "Caption", "Caption hover", "Caption disabled" }
     var i = 0usize
-    while i < 8usize {
+    while i < 9usize {
         var node: widget.Node = zero
         var node_error: err = ok
         if i < 6usize {
@@ -124,7 +124,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             node = g
             node_error = g_error
         } else if t.tokens.profile == .Windows {
-            let (b, b_error) = control.windows_bar_button(a, 200u64 + u64(i), t, "Print", action, true, false)
+            let (b, b_error) = control.windows_bar_button(a, 200u64 + u64(i), t, "Print", action, i != 8usize, false)
             node = b
             node_error = b_error
         } else {
@@ -140,7 +140,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i + 1usize] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
-    ret (9usize, ok)
+    ret (10usize, ok)
 }
 
 fn placed(a: *mem.Arena, node: widget.Node, x: f32, w: f32, h: f32) -> (widget.Node, err) {
@@ -170,7 +170,7 @@ fn build_hot(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
         cells[i] = looks.Cell { caption: names[i], node: shown, drive: drive }
         i += 1usize
     }
-    ret (9usize, ok)
+    ret (10usize, ok)
 }
 
 // The whole toolbar row of the main window: Standard and Cards (disabled as captured), Search and Help (enabled).
@@ -193,6 +193,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let row = looks.Sheet { name: "toolbar_button_row", cells: 1usize, columns: 1usize, cell_w: 657.0, cell_h: 26.0, ctx: zero, build: build_row }
         ret looks.run_all(a, &row)
     }
-    let sheet = looks.Sheet { name: "toolbar_button", cells: 9usize, columns: 1usize, cell_w: 447.0, cell_h: 26.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "toolbar_button", cells: 10usize, columns: 1usize, cell_w: 447.0, cell_h: 26.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
