@@ -17,7 +17,7 @@ use e.str
 error ParseError
 
 type Parser = struct {
-    a: *mem.Arena, lx: lex.Lexer, tok: lex.Tok, prev_end: usize, prev_line: u32,
+    a: *mem.Arena, lx: lex.Lexer, tok: lex.Tok, prev_end: usize, prev_start: usize, prev_line: u32,
     nodes: list.List[ast.Node], kids: list.List[u32], strs: list.List[ast.TemplateStr], vars: list.List[u32],
     strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool,
     message: str, line: u32
@@ -31,6 +31,7 @@ fn fail(p: *Parser, message: str) -> err {
 
 fn adv(p: *Parser) -> err {
     p.prev_end = p.tok.end
+    p.prev_start = p.tok.start
     p.prev_line = p.tok.line
     let (t, e) = lex.next_token(&p.lx)
     if e != ok {
@@ -300,7 +301,7 @@ fn parse_arrow_body(p: *Parser, fid: u32, async_flag: bool) -> err {
 }
 
 // An arrow function whose parameters are already parsed into `params`.
-fn finish_arrow(p: *Parser, params: *const list.List[u32], async_flag: bool) -> (u32, err) {
+fn finish_arrow(p: *Parser, params: *const list.List[u32], async_flag: bool, start: usize) -> (u32, err) {
     let (fid, fe) = mk(p, ast.N_FUNC)
     if fe != ok { ret (ast.NONE, fe) }
     let (k, ke) = commit(p, params)
@@ -316,6 +317,7 @@ fn finish_arrow(p: *Parser, params: *const list.List[u32], async_flag: bool) -> 
     try expect_p(p, "=>")
     try parse_arrow_body(p, fid, async_flag)
     close_hoist(p, fid, saved_vars)
+    node(p, fid).text2 = p.lx.src[start..p.prev_end]
     ret (fid, ok)
 }
 
@@ -369,7 +371,7 @@ fn parse_assign(p: *Parser) -> (u32, err) {
                     if pe != ok { ret (ast.NONE, pe) }
                     node(p, pid).text = name_tok.text
                     try list.push[u32](&ids, pid)
-                    let f = try finish_arrow(p, &ids, true)
+                    let f = try finish_arrow(p, &ids, true, m.tok.start)
                     ret (f, ok)
                 }
                 restore(p, m)
@@ -379,7 +381,7 @@ fn parse_assign(p: *Parser) -> (u32, err) {
                 let is_arrow = try arrow_follows_paren(p)
                 if is_arrow {
                     let params = try parse_params(p)
-                    let f2 = try finish_arrow(p, &params, true)
+                    let f2 = try finish_arrow(p, &params, true, m2.tok.start)
                     ret (f2, ok)
                 }
                 restore(p, m2)
@@ -396,15 +398,16 @@ fn parse_assign(p: *Parser) -> (u32, err) {
                 if pe2 != ok { ret (ast.NONE, pe2) }
                 node(p, pid2).text = name_tok2.text
                 try list.push[u32](&ids2, pid2)
-                let f3 = try finish_arrow(p, &ids2, false)
+                let f3 = try finish_arrow(p, &ids2, false, name_tok2.start)
                 ret (f3, ok)
             }
         }
     } else if is_p(p, "(") {
         let is_arrow2 = try arrow_follows_paren(p)
         if is_arrow2 {
+            let paren_start = p.tok.start
             let params2 = try parse_params(p)
-            let f4 = try finish_arrow(p, &params2, false)
+            let f4 = try finish_arrow(p, &params2, false, paren_start)
             ret (f4, ok)
         }
     }
@@ -677,12 +680,13 @@ fn parse_property_key(p: *Parser) -> (u32, bool, err) {
 }
 
 // A method, getter, setter or generator/async method body: the `(`..`}` after the key; `flags` gives async/generator/method.
-fn parse_method(p: *Parser, name: str, flags: u16) -> (u32, err) {
+fn parse_method(p: *Parser, name: str, flags: u16, start: usize) -> (u32, err) {
     let (fid, fe) = mk(p, ast.N_FUNC)
     if fe != ok { ret (ast.NONE, fe) }
     node(p, fid).text = name
     node(p, fid).flags = flags | ast.F_METHOD
     try parse_function_rest(p, fid)
+    node(p, fid).text2 = p.lx.src[start..p.prev_end]
     ret (fid, ok)
 }
 
@@ -699,6 +703,7 @@ fn parse_object(p: *Parser) -> (u32, err) {
         let (pid, pe) = mk(p, ast.N_PROP)
         if pe != ok { ret (ast.NONE, pe) }
         node(p, pid).op = ast.M_INIT
+        let member_start = p.tok.start
         if is_p(p, "...") {
             try adv(p)
             let v = try parse_assign(p)
@@ -738,7 +743,7 @@ fn parse_object(p: *Parser) -> (u32, err) {
                 if p.strict { mf = mf | ast.F_STRICT }
                 var name = ""
                 if !key_computed { name = key_name(p, key) }
-                let f = try parse_method(p, name, mf)
+                let f = try parse_method(p, name, mf, member_start)
                 node(p, pid).b = f
                 if kind == 20u8 { node(p, pid).op = ast.M_GET } else if kind == 21u8 { node(p, pid).op = ast.M_SET } else { node(p, pid).op = ast.M_METHOD }
             } else if is_p(p, ":") {
@@ -1280,6 +1285,8 @@ fn parse_function_rest(p: *Parser, fid: u32) -> err {
 fn parse_function(p: *Parser, decl: bool, is_async: bool) -> (u32, err) {
     let (fid, fe) = mk(p, ast.N_FUNC)
     if fe != ok { ret (ast.NONE, fe) }
+    var fn_start = p.tok.start
+    if is_async { fn_start = p.prev_start }
     try expect_k(p, "function")
     var fl = 0u16
     if is_async { fl = fl | ast.F_ASYNC }
@@ -1297,12 +1304,14 @@ fn parse_function(p: *Parser, decl: bool, is_async: bool) -> (u32, err) {
         ret (ast.NONE, fail(p, "function declaration needs a name"))
     }
     try parse_function_rest(p, fid)
+    node(p, fid).text2 = p.lx.src[fn_start..p.prev_end]
     ret (fid, ok)
 }
 
 fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
     let (cid, ce) = mk(p, ast.N_CLASS)
     if ce != ok { ret (ast.NONE, ce) }
+    let class_start = p.tok.start
     try expect_k(p, "class")
     if decl { node(p, cid).flags = ast.F_DECL }
     let saved_strict = p.strict
@@ -1356,6 +1365,7 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
             try list.push[u32](&ids, mid)
             continue
         }
+        let member_start2 = p.tok.start
         var is_async = false
         var is_gen = false
         var kind = ast.M_METHOD
@@ -1387,7 +1397,7 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
             if is_gen { mf = mf | ast.F_GENERATOR }
             var name = ""
             if !key_computed { name = key_name(p, key) }
-            let f = try parse_method(p, name, mf)
+            let f = try parse_method(p, name, mf, member_start2)
             node(p, mid).b = f
             if accessor == 1u8 { kind = ast.M_GET } else if accessor == 2u8 { kind = ast.M_SET }
             node(p, mid).op = kind
@@ -1420,6 +1430,7 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
     }
     try adv(p)
     p.strict = saved_strict
+    node(p, cid).text2 = p.lx.src[class_start..p.prev_end]
     let (first, ke) = commit(p, &ids)
     if ke != ok { ret (ast.NONE, ke) }
     node(p, cid).b = first

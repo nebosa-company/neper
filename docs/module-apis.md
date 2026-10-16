@@ -26791,6 +26791,47 @@ type Result = struct { message: str, line: u32 }
 fn check(a: *mem.Arena, prog: *const ast.Program) -> (Result, err)
 ```
 
+### `e.js.b_misc`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn hex_digit(v: u8) -> u8
+fn in_set(c: u8, set: str) -> bool
+fn is_alnum(c: u8) -> bool
+fn uri_encode(it: *js.Interp, s: str, unescaped_extra: str) -> (str, err)
+fn encode_uri(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn encode_uri_component(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn hex_val(c: u8) -> i32
+fn uri_decode(it: *js.Interp, s: str, reserved: str) -> (str, err)
+fn decode_uri(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn decode_uri_component(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn js_escape(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn js_unescape(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn aggregate_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_to_reversed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_to_sorted(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_to_spliced(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn object_group_by(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn html_method(it: *js.Interp, this_val: js.Value, args: []const js.Value, tag: str, attr: str) -> (js.Value, err)
+fn h_anchor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "a", "name")
+fn h_big(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "big", "")
+fn h_blink(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "blink", "")
+fn h_bold(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "b", "")
+fn h_fixed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "tt", "")
+fn h_fontcolor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "font", "color")
+fn h_fontsize(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "font", "size")
+fn h_italics(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "i", "")
+fn h_link(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "a", "href")
+fn h_small(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "small", "")
+fn h_strike(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "strike", "")
+fn h_sub(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "sub", "")
+fn h_sup(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "sup", "")
+fn string_is_well_formed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_to_well_formed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_misc(it: *js.Interp)
+```
+
 ### `e.fmt.html.template`
 
 ```neper

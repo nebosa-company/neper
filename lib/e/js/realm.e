@@ -12,6 +12,7 @@ use e.js.b_collections as b_collections
 use e.js.b_control as b_control
 use e.js.b_date as b_date
 use e.js.b_json as b_json
+use e.js.b_misc as b_misc
 use e.js.b_number as b_number
 use e.js.b_regexp as b_regexp
 use e.js.b_string as b_string
@@ -709,6 +710,11 @@ fn function_proto_bind(it: *js.Interp, this_val: js.Value, args: []const js.Valu
 fn function_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     if !js.is_callable(this_val) { ret (js.undefv(), js.throw_type(it, "Function.prototype.toString requires that 'this' be a Function")) }
     let fo = js.as_object(this_val)
+    if fo.class == js.C_FUNCTION && fo.text.len > 0usize { ret (js.str_value(fo.text), ok) }
+    if fo.class == js.C_FUNCTION && !fo.has_native && fo.node != ast.NONE {
+        let src = fo.prog.nodes[usize(fo.node)].text2
+        if src.len > 0usize { ret (js.str_value(src), ok) }
+    }
     var name = ""
     let (nv, ne) = js.get_prop(it, fo, js.key_of("name"), this_val)
     if ne == ok && js.is_string(nv) { name = js.value_str(nv) }
@@ -1085,6 +1091,7 @@ fn new_realm(a: *mem.Arena) -> (*js.Interp, err) {
     b_typed.install_array_buffer(it)
     b_typed.install_typed_arrays(it)
     b_typed.install_data_view(it)
+    b_misc.install_misc(it)
     js.add_method(it, it.global, "print", 1u32, global_print)
     let ev = js.make_native(it, "eval", 1u32, global_eval)
     it.eval_fn = ev

@@ -2861,6 +2861,21 @@
    "blocked_by": []
   },
   {
+   "name": "e.js.b_misc",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.js.b_array",
+    "e.js.interp",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.fmt.html.template",
    "layer": 6,
    "surface": "partial",

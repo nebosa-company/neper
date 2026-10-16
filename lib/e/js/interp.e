@@ -99,7 +99,7 @@ type Protos = struct {
     object: *Obj, function: *Obj, array: *Obj, string: *Obj, number: *Obj, boolean: *Obj, symbol: *Obj, error_proto: *Obj,
     type_error: *Obj, range_error: *Obj, syntax_error: *Obj, reference_error: *Obj, eval_error: *Obj, uri_error: *Obj,
     iterator: *Obj, array_iterator: *Obj, generator: *Obj, promise: *Obj, regexp: *Obj, date: *Obj, map: *Obj, set: *Obj,
-    bigint: *Obj, arguments: *Obj, gen_function: *Obj, async_function: *Obj, async_generator: *Obj, async_gen_function: *Obj, map_iterator: *Obj, set_iterator: *Obj, weakmap: *Obj, weakset: *Obj, regexp_string_iterator: *Obj, array_buffer: *Obj, typed_array: *Obj, data_view: *Obj
+    bigint: *Obj, arguments: *Obj, gen_function: *Obj, async_function: *Obj, async_generator: *Obj, async_gen_function: *Obj, map_iterator: *Obj, set_iterator: *Obj, weakmap: *Obj, weakset: *Obj, regexp_string_iterator: *Obj, array_buffer: *Obj, typed_array: *Obj, data_view: *Obj, aggregate_error: *Obj
 }
 
 type Interp = struct {
@@ -3834,6 +3834,7 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
     ctor.ctor_kind = K_BASE
     if n.a != ast.NONE { ctor.ctor_kind = K_DERIVED }
     ctor.num = 1.0f64
+    ctor.text = n.text2
     ctor.proto = ctor_parent
     ctor.has_proto = true
     ctor.home = proto
