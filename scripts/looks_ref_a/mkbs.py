@@ -1,13 +1,20 @@
-import os
-tables=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'bs_tables.txt')).read()
-src='''// Every captured button state of the live v3 grabs (docs/ui/looks/ref/windows/states/button-*), one cell each, in the
-// Windows look: the box is cropped from the grab with %d px of its dialog around it, and the cell holds the same
-// surroundings (the dialog's own face: the Filter dialog is #F9F9F9, the others #F0F0F0) so a soft ring row that blends
-// with the dialog shows the same pixels. Pressed and focused cells are driven (Drive.Press / Drive.Focus); the rest
-// are plain. The tables below are generated from the capture list by scripts/looks_ref_a/genbs.py and mkbs.py: caption,
-// caption word, control rect size, drive, default, enabled, dialog face, picture, and the sub-pixel shift (dx, dy) of the
-// four DPI-scaled forms (Options, Deck Properties, Deck Legality, About), whose buttons v3 draws resampled by that offset:
-// the phase fitted to each capture (scripts/looks_ref_a/fitshift.py), a crisp button moved by it. Hover has no capture.
+# Writes examples/looks/button_states.e or button_hover.e from the tables genbs.py just made (bs_tables.txt, deleted after).
+#   python -I scripts/looks_ref_a/genbs.py states && python -I scripts/looks_ref_a/mkbs.py states
+import os,sys
+HERE=os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0,HERE)
+from bspec import SPEC
+SHEET=sys.argv[1] if len(sys.argv)>1 else 'states'
+tables=open(os.path.join(HERE,'bs_tables.txt')).read()
+n=sum(1 for r in SPEC if (r[7]=='H')==(SHEET=='hover'))+(5 if SHEET=='states' else 0)
+what='state' if SHEET=='states' else 'hover'
+src='''// Every captured button %(what)s of the live v3 grabs (docs/ui/looks/ref/windows/states/%(files)s), one cell each, in the
+// Windows look: the box is cropped from the grab with 5 px of its dialog around it, and the cell holds the same
+// surroundings (the dialog's own face: the Filter page is #F9F9F9, the others #F0F0F0) so a soft ring row that blends
+// with the dialog shows the same pixels. %(drives)s The tables below are generated from the capture list by
+// scripts/looks_ref_a/genbs.py and mkbs.py: caption, caption word, control rect size, drive, default, enabled, dialog face, picture,
+// focused, and the sub-pixel shift (dx, dy) of the four DPI-scaled forms (Options, Deck Properties, Deck Legality, About), whose
+// buttons v3 draws resampled by that offset: the phase fitted to each capture (scripts/looks_ref_a/fitshift.py), a crisp button moved by it.
 // Run from the repository root; see docs/ui/looks-howto.md.
 
 use e.gfx.paint
@@ -21,7 +28,7 @@ use e.ui.widget
 fn margin_px() -> f32 { ret 5.0 }
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-%s
+%(tables)s
 
 // The holder of a cell: odd wide and even tall (so the cell centres it on whole pixels in 133 x 40), the dialog face
 // behind, the visible box (the control rect less 2 wide, 1 tall) at (margin, margin).
@@ -52,16 +59,18 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let enabled = t_enabled()
     let faces = t_faces()
     let glyphs = t_glyphs()
+    let focused = t_focused()
     let shift_x = t_shift_x()
     let shift_y = t_shift_y()
     var i = 0usize
-    while i < %d {
+    while i < %(n)d {
         var options = control.button_options()
         options.width = widths[i]
         options.height = heights[i]
         options.enabled = enabled[i]
         options.shift_x = shift_x[i]
         options.shift_y = shift_y[i]
+        options.focused = focused[i]
         if defaults[i] { options.variant = .Default }
         var node: widget.Node = zero
         var node_error: err = ok
@@ -84,13 +93,14 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: captions[i], node: held, drive: drive }
         i += 1usize
     }
-    ret (%d, ok)
+    ret (%(n)d, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "button_states", cells: %dusize, columns: 4usize, cell_w: 133.0, cell_h: 40.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "button_%(sheet)s", cells: %(n)dusize, columns: 4usize, cell_w: 133.0, cell_h: 40.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
-'''
-n=42
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','..','examples','looks','button_states.e'),'w').write(src%(5,tables,n,n,n))
+'''%dict(what=what,files=('button-*' if SHEET=='states' else 'hover-button-*'),drives=('Pressed and focused cells are driven (Drive.Press, Drive.Focus), the rest are plain; the last five cells have no capture (the ring at 75x32 and 125x40).' if SHEET=='states' else 'Every cell is driven with the pointer on it (Drive.Hover; a pressed one with the button held).'),tables=tables,n=n,sheet=SHEET)
+open(os.path.join(HERE,'..','..','examples','looks','button_%s.e'%SHEET),'w').write(src)
+os.remove(os.path.join(HERE,'bs_tables.txt'))
+print('wrote button_%s.e with %d cells'%(SHEET,n))

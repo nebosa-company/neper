@@ -143,6 +143,12 @@ fn ring_line(kind: u32) -> u32 {
     ret 0xD0D0D0u32
 }
 
+// The inner rows next to the face (edges 1 and 2: top1 and bottom1) are the ring line over the face it was captured on: the same
+// re-facing as a corner cell, so a hovered button (face #E0EEF9) shows them over its own face.
+fn ring_edge_faced(d: *const Ring, which: usize) -> u32 {
+    ret ring_pick(ring_edge(d.kind, which), ring_baked(d.kind), ring_line(d.kind), d.face)
+}
+
 fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Ring](ctx)
     if d.dx != 0.0 || d.dy != 0.0 {
@@ -156,9 +162,9 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     try ring_rect(b, x0 + 1.0, y0 + 6.0, 5.0, h - 12.0, d.face)
     try ring_rect(b, x0 + w - 6.0, y0 + 6.0, 5.0, h - 12.0, d.face)
     try ring_rect(b, x0 + 6.0, y0, w - 12.0, 1.0, ring_edge(d.kind, 0usize))
-    try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, 1.0, ring_edge(d.kind, 1usize))
+    try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, 1.0, ring_edge_faced(d, 1usize))
     // bottom: edge 2 is the row h - 2, edge 3 the row h - 1
-    try ring_rect(b, x0 + 6.0, y0 + h - 2.0, w - 12.0, 1.0, ring_edge(d.kind, 2usize))
+    try ring_rect(b, x0 + 6.0, y0 + h - 2.0, w - 12.0, 1.0, ring_edge_faced(d, 2usize))
     try ring_rect(b, x0 + 6.0, y0 + h - 1.0, w - 12.0, 1.0, ring_edge(d.kind, 3usize))
     try ring_rect(b, x0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 4usize))
     try ring_rect(b, x0 + w - 1.0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 7usize))
@@ -223,8 +229,8 @@ fn ring_value(d: *const Ring, x: i32, y: i32, w: i32, h: i32) -> u32 {
     }
     if y < 6 || y >= h - 6 {
         if y == 0 { ret ring_edge(d.kind, 0usize) }
-        if y == 1 { ret ring_edge(d.kind, 1usize) }
-        if y == h - 2 { ret ring_edge(d.kind, 2usize) }
+        if y == 1 { ret ring_edge_faced(d, 1usize) }
+        if y == h - 2 { ret ring_edge_faced(d, 2usize) }
         if y == h - 1 { ret ring_edge(d.kind, 3usize) }
         ret face
     }

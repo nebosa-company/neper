@@ -1,1 +1,122 @@
-{"16": [0.38, 0.46], "17": [0.36, 0.48], "18": [0.42, 0.48], "19": [0.48, 0.48], "20": [0.44, 0.5], "21": [0.48, 0.5], "22": [0.18, 0.26], "23": [0.18, 0.26], "24": [0.42, 0.44], "25": [0.48, 0.46], "26": [0.36, 0.44], "27": [0.14, 0.48], "28": [0.36, 0.48], "29": [0.04, 0.06], "30": [0.1, 0.06], "31": [0.36, 0.48], "32": [0.42, 0.48], "33": [0.48, 0.48], "34": [0.18, 0.2], "35": [0.42, 0.42], "36": [0.48, 0.42]}
+{
+"button-pressed-about-ok": [
+0.38,
+0.46
+],
+"button-pressed-options-ok": [
+0.36,
+0.48
+],
+"button-pressed-options-cancel": [
+0.42,
+0.48
+],
+"button-pressed-options-apply": [
+0.48,
+0.48
+],
+"button-focused-options-cancel": [
+0.44,
+0.5
+],
+"button-focused-options-apply": [
+0.48,
+0.5
+],
+"button-pressed-options-password-change": [
+0.18,
+0.26
+],
+"button-focused-options-password-change": [
+0.18,
+0.26
+],
+"button-pressed-options-shortcut-set": [
+0.42,
+0.44
+],
+"button-pressed-options-shortcut-reset": [
+0.48,
+0.46
+],
+"button-pressed-options-cardart-validate": [
+0.36,
+0.44
+],
+"button-pressed-deck-properties-ok": [
+0.14,
+0.48
+],
+"button-pressed-deck-legality-close": [
+0.36,
+0.48
+],
+"button-pressed-deck-legality-standard": [
+0.04,
+0.06
+],
+"button-focused-deck-legality-modern": [
+0.1,
+0.06
+],
+"hover-button-options-cancel-pressed": [
+0.42,
+0.48
+],
+"button-image-pressed-options-cardart-move-up": [
+0.5,
+0.15
+],
+"hover-button-options-ok": [
+0.36,
+0.48
+],
+"hover-button-options-cancel": [
+0.42,
+0.48
+],
+"hover-button-options-apply": [
+0.48,
+0.48
+],
+"hover-button-options-password-change": [
+0.18,
+0.2
+],
+"hover-button-options-shortcut-set": [
+0.42,
+0.42
+],
+"hover-button-options-shortcut-reset": [
+0.48,
+0.42
+],
+"hover-button-about-ok": [
+0.38,
+0.5
+],
+"hover-button-options-cardart-validate": [
+0.34,
+0.42
+],
+"hover-button-deck-properties-ok": [
+0.14,
+0.48
+],
+"hover-button-deck-legality-close": [
+0.36,
+0.46
+],
+"hover-button-deck-legality-standard": [
+0.04,
+0.04
+],
+"hover-button-deck-legality-modern": [
+0.12,
+0.04
+],
+"hover-button-image-options-cardart-move-up": [
+0.5,
+0.15
+]
+}
