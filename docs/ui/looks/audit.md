@@ -1,3 +1,73 @@
+# Looks audit 5, 2026-10-16 (Windows light and Windows dark only)
+
+Independent recompute of the two Windows looks at HEAD dd6b28824 after rounds 11 and 12 (every sheet app freshly rendered and committed). Own tools (a mask-based comparer, a native-dark matcher and a manifest crediting script, kept in a scratch folder), not `scripts/looks_*.py`. The workers' tools were checked first: `looks_strict_dark.py` excludes from its flat count every pixel whose luminance is above 70 inside the text zone (`glyph_mask`), which removes a selection box (#0078D7 or #008CFB, luminance 95 to 111) from the comparison entirely; `looks_strict.py` and `looks_cells2.py` use the reference mask alone and are sound, but their text zone is a height and density filter that also swallows the frames of selected rows.
+
+Result. Windows (light): matched 15, review 14, started 1, ready 0 (workers claimed matched 16, review 13, started 1; audit 4 had matched 13). Windows dark: matched 1, review 17, started 12 (workers claimed matched 5, review 13, started 12; audit 4 had matched 0). Page completion: Windows Light 79 %, Dark 45 %, the Windows flavor 62 %, all five flavors 48 %.
+
+Downgrades against the workers' claims. Light: group box (matched to review: the three Options title bars fail the ink rule, the caption ends at 79 and 59 against 83 and 61 once the v3 icon from x 436 is masked, and sits 1 px low; the untouched Deck Legality frame passes). Dark: text edit, spin edit, combo box and mask edit (matched to review). The native selection fill is #0078D7; ours is #008CFB in the edit, spin edit and mask edit, so edit-selected has 76 flat px off (66 selection fill, 36 levels) and spin-focus 12; edit-focus has 15 px (caret 2 px right, 56 levels); combo-edit-open-hover-row has 121 flat px off (the native head text is selected, ours is not) and combo-edit-hover-arrow 156 (the capture's field is empty). The mask edit has no native capture and fails against edit-selected the same way (191 flat px). The dark check box stays matched. Kept as the workers set them: radio (the Search Cards hover grab differs from rest only by the caret column of the Search edit, verified on the grabs), image combo box, toolbar button and the other light matched controls.
+
+## Method
+
+The committed PNGs are what HEAD renders (the tree was just re-rendered; nothing was re-rendered here). Reference integrity: the 278 sheets still cut (XY cut, gap 6) into 644 crops; the two references changed since audit 4 are verified: button_arrows (new, four exact sub-images of the Card Art grabs) and group_box_dialog (the interior is no longer blanked: its four crops are exact sub-images of grabs). Comparison as in audit 4: structural pixel of the reference (run of 11 or more equal pixels, colour 30 or more times, not within 1 px of non-flat), off above 2 levels in any channel, reference mask alone; crops compared in place, or placed at the offset of fewest flat px off (ties broken by ink boxes). Text zone: ink pieces (more than 60 levels from the crop background, outside runs) with a bounding box of at most 18 x 30 and 150 px, grown by 2 px; a pixel of at most 4 levels within 3 px of ink is a glyph edge. Excluded: v3 toolbar icon bitmaps (groups up to 20 x 20, and the centre of a hot face, in both images), the card combo icons from x 140, the group box icon from x 436, the menu bar hot_view reference beyond x 768 (the grab stops inside Reports; the rest is unverified). Ink boxes at 60, 100 and 150 levels within 1 px (60 and one of the others, or 100 and 150 when lines exist), plus a luminance correlation check on short lines. Manifest rows were credited by an exact sub-image search of the crops in the 502 grabs; rows whose crop is a composite or an edit are not found by it, so for controls whose sheets and references are byte for byte audit 4's (label, check box, radio group, spin edit, mask edit, button edit, token edit, list box, splitter, status bar, toolbar button, menu bar, hint) its state credits stand.
+
+Windows dark. Reference = native dark @1x. Each capture's whole control rect is matched in our native_dark sheets at a free offset (at most 3 px around the best match) and compared with the 8-neighbour flat rule and the text zone above; nothing is cut. Light sizes are unchanged: every control audit 4 matched still passes its crops.
+
+Scale. `looks_scale_check.py` on the 12 sheets: 12 of 12 pass at 1.5 and at 2.0, numbers as in audit 4 (button 94.2 and 98.3, spin edit 96.6 and 99.2, status bar 96.4 and 95.6, image combo box 98.7 and 99.9, the rest 100). The own stricter run check was not repeated.
+
+## Windows (light) look
+
+| Control | Workers | Audit 4 | Now | Crops | Key numbers | Unverified (no capture) |
+|---|---|---|---|---|---|---|
+| Label | matched | matched | **matched** | 12/12 | 0 flat px off | disabled, rotated, other backgrounds |
+| Button | review | review | **review** | 75/84 | 0 chrome px; 9 crops fail ink (4 new arrow buttons, 5 baseline or icon) | toggle, split, loading, plain |
+| Check box | matched | matched | **matched** | 29/29 | 0 px | disabled, indeterminate |
+| Radio button | matched | review | **matched** | 19/19 | 0 px; Search Cards hover identical to rest | disabled |
+| Radio group | matched | matched | **matched** | 18/18 | 0 px | disabled |
+| Text edit | review | review | **review** | 9/9 | 0 chrome px; no TcxTextEdit captured | every state |
+| Spin edit | matched | matched | **matched** | 19/19 | 0 chrome px | disabled, read-only |
+| Combo box | review | review | **review** | 43/44 | 6 flat px 3 levels (combo_hover cell 2); lit row text 1 px right; grid editor combo 3 px up to 20 levels | disabled, read-only |
+| Image combo box | matched | review | **matched** | 29/29 | 0 chrome px; Art 2 head now Stretch | disabled, row hover |
+| Date edit | started | started | **started** | none | no capture | every state |
+| Mask edit | matched | matched | **matched** | shared edit crops | 0 chrome px | typed text, invalid, disabled, read-only |
+| Memo | review | review | **review** | none | no capture | every state |
+| Button edit | matched | matched | **matched** | 9/9 | 0 chrome px | read-only, invalid |
+| Token edit | matched | matched | **matched** | 3/3 | 0 px | focus, hover, disabled, tokens |
+| Check list box | review | review | **review** | 12/15 | 48 flat px up to 95 levels (icon column, check corner) | disabled, multi-select |
+| Progress bar | review | review | **review** | none | not in any v3 frame | every state |
+| Group box | matched | review | **review** | 1/4 | 3 title bar captions 4 and 2 px short | disabled, focus |
+| Page control | review | review | **review** | 20/21 | 156 px near tab text up to 212 levels; 14 click rows without own cell | disabled tab, scroll buttons |
+| Splitter | matched | matched | **matched** | 9/9 | 0 px | drag, disabled |
+| Status bar | matched | matched | **matched** | 8/8 | 0 px | disabled panels, pressed panel |
+| Toolbar button | matched | matched | **matched** | 11/11 | 0 flat px outside icons; hot sheet runs again | checked, focus, dropdown, disabled |
+| Menu bar | matched | matched | **matched** | 21/21 | 0 px (hot_view reference ends at x 793) | disabled item, Alt focus |
+| Popup menu | review | review | **review** | 45/77 | 307 chrome px in 32 crops, max 240 levels | disabled items |
+| Hint | matched | matched | **matched** | 6/6 | 0 px | multi-line, placements |
+| Scroll bar | review | review | **review** | 0/1 | 1238 chrome px | disabled, horizontal |
+| List box | matched | matched | **matched** | 3/3 | 0 px | disabled, multi-select |
+| Tree list | review | review | **review** | 0/11 | 961 chrome, 5154 text px | disabled |
+| Vertical grid | review | review | **review** | 0/11 | 7887 chrome, 8460 text px | other editors, disabled |
+| Data grid | review | review | **review** | 0/67 | 30,223 chrome, 10,789 text px (group sheets 5973 or 6219 per crop down to 419 to 613) | edit mode, disabled, sort and filter popups, 150 % |
+| Dialog (form chrome) | review | review | **review** | 78/107 | captions pass, bodies are app content | caption pressed, resize, disabled |
+
+Counts: matched 15, ready 0, review 14, started 1.
+
+Ten largest remaining mismatches (flat px off in one crop, text included, dialog bodies left out): data_grid_main 2008; vertical_grid_states 1796, 1505 and 1455 (twice more at 1454); vertical_grid_hover 1455 (twice); tree_list_expanded 1331 and 1327; data_grid_shortcuts_hover 1197.
+
+## Windows dark look
+
+| Control | Workers | Now | Evidence |
+|---|---|---|---|
+| Check box | matched | **matched** | 12 of 12 native captures, 0 flat px and 0 non-glyph px off, ink within 1 px |
+| Text edit | matched | **review** | edit-selected 76 flat px (selection #008CFB against #0078D7), edit-focus 15; 5 other captures 0 |
+| Spin edit | matched | **review** | spin-focus 12 flat px (selection fill); the other 6 captures 0 chrome |
+| Combo box | matched | **review** | open-hover-row 121 flat px, hover-arrow 156, edit-open 3 px at 20 levels; list captures 0 |
+| Mask edit | matched | **review** | no native capture; the selected cell fails like the edit |
+| The other 25 | as the workers set them | unchanged | notes read, not re-measured (review 13: label, button, radio, image combo box, memo, check list box, popup menu, hint, scroll bar, list box, tree list, data grid, dialog; started 12) |
+
+Counts: matched 1, ready 0, review 17, started 12. Largest dark gaps against native: the multi-line edit (1036 flat px, 208 levels), the selection fill, the open combo head.
+
+---
+
 # Looks audit 4, 2026-10-16 (Windows light and Windows dark only)
 
 Independent recompute of the two Windows looks after rounds 4 to 11 (30 controls x 2). Nothing here trusts a self-report. Scale 1.0, PIL and numpy, `python -I`, scratch tools in a temp folder (not the workers' `scripts/looks_*.py`). Audit 3 and its evidence check of the other looks follow below, unchanged.
