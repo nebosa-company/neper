@@ -2302,6 +2302,11 @@ chmod +x "$test_build/css-layout-selfhost"
 css_geom_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_geom/src/main.e" "$repo" x64 linux "$test_build/css-geom-selfhost")
 [ "$css_geom_written" = 'executable written' ]
 chmod +x "$test_build/css-geom-selfhost"
+# `e.fmt.css.paint`: scene commands from a layout in CSS 2.1 Appendix E order -- backgrounds, borders, z-index order, opacity layers, transforms, radius and overflow clips, inline backgrounds, text through the environment, view culling and the canvas background (tracker 3.1, 3.4, 3.6).
+css_paint_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/css_paint/src/main.e" "$repo" x64 linux "$test_build/css-paint-selfhost")
+[ "$css_paint_written" = 'executable written' ]
+chmod +x "$test_build/css-paint-selfhost"
+"$test_build/css-paint-selfhost"
 "$test_build/css-geom-selfhost"
 "$test_build/css-layout-selfhost"
 "$test_build/css-ua-selfhost"

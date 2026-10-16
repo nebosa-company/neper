@@ -25021,6 +25021,70 @@ fn contains_point(r: Rect, x: f64, y: f64) -> bool
 fn hit_test(a: *mem.Arena, l: *const layout.Layout, b: u32, x: f64, y: f64) -> u32
 ```
 
+### `e.fmt.css.paint`
+
+```neper
+type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, height: f32 }
+type PaintEnv = struct
+type Entry = struct { box: u32, z: i64, real: bool }
+type Painter = struct
+fn emit(p: *Painter, c: scene.Command)
+fn color_of(c: u32) -> pt.Color
+fn alpha_of(c: u32) -> u32
+fn solid(c: u32) -> pt.Brush
+fn grect(x: f64, y: f64, w: f64, h: f64) -> geo.Rect
+fn fill(p: *Painter, x: f64, y: f64, w: f64, h: f64, c: u32)
+fn save(p: *Painter)
+fn restore(p: *Painter)
+fn shade(c: u32, factor: f64) -> u32
+fn border_color_of(s: *const style.Style, side: usize) -> u32
+fn has_border(s: *const style.Style, side: usize) -> bool
+fn quad_path(a: *mem.Arena, x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) -> geo.Path
+fn fill_quad(p: *Painter, x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64, c: u32)
+fn rrect_path(a: *mem.Arena, rr: geo.RRect) -> geo.Path
+fn corner_radii(s: *const style.Style, w: f64, h: f64) -> [4]geo.Radius
+fn has_radius(s: *const style.Style) -> bool
+fn maxf(x: f64, y: f64) -> f64
+fn minf(x: f64, y: f64) -> f64
+fn region_rrect(s: *const style.Style, x: f64, y: f64, w: f64, h: f64, in_t: f64, in_r: f64, in_b: f64, in_l: f64) -> geo.RRect
+fn maxf32(x: f32, y: f32) -> f32
+fn first_token(a: *mem.Arena, s: *const style.Style, name: str) -> str
+fn paint_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
+fn side_color(s: *const style.Style, side: usize) -> u32
+fn dashed_run(p: *Painter, x: f64, y: f64, len: f64, t: f64, horizontal: bool, dot: bool, c: u32)
+fn paint_border_side(p: *Painter, s: *const style.Style, side: usize, x: f64, y: f64, w: f64, h: f64, bt: f64, br: f64, bbm: f64, bl: f64, trapezoid: bool)
+fn borders_uniform(s: *const style.Style) -> bool
+fn paint_borders(p: *Painter, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
+fn paint_outline(p: *Painter, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
+fn paint_box_shadow(p: *Painter, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
+fn paint_decor(p: *Painter, b: u32, x: f64, y: f64)
+fn font_metrics_of(p: *Painter, s: *const style.Style) -> layout.FontMetrics
+fn decoration_in_force(p: *Painter, text_box: u32) -> (u8, u32, style.DecorationStyle)
+fn paint_decoration_line(p: *Painter, x: f64, y: f64, w: f64, t: f64, c: u32, how: style.DecorationStyle)
+fn paint_text_run(p: *Painter, text_box: u32, text: str, x: f64, y: f64, w: f64)
+fn paint_marker(p: *Painter, mb: u32, text: str, x: f64, y: f64, w: f64)
+fn paint_inline_decor(p: *Painter, ob: u32, fr: layout.Frag, cx: f64, cy: f64)
+fn paint_lines(p: *Painter, b: u32, ax: f64, ay: f64)
+fn paint_replaced(p: *Painter, b: u32, x: f64, y: f64)
+fn is_plain_inline(l: *const layout.Layout, b: u32) -> bool
+fn clips_overflow(s: *const style.Style) -> bool
+fn compute_ext(p: *Painter, b: u32)
+fn outside_view(p: *Painter, b: u32, ax: f64, ay: f64) -> bool
+fn push_overflow_clip(p: *Painter, b: u32, ax: f64, ay: f64) -> bool
+fn is_entry(p: *Painter, b: u32) -> bool
+fn paint_block_backgrounds(p: *Painter, b: u32, ax: f64, ay: f64)
+fn paint_floats(p: *Painter, b: u32, ax: f64, ay: f64)
+fn paint_inline_layer(p: *Painter, b: u32, ax: f64, ay: f64)
+fn paint_atomic(p: *Painter, b: u32, x: f64, y: f64)
+fn collect(p: *Painter, root: u32, out: *list.List[Entry])
+fn sort_entries(items: []Entry, n: usize)
+fn push_entry_clips(p: *Painter, e: u32, root: u32, rx: f64, ry: f64) -> usize
+fn paint_entry(p: *Painter, en: Entry, root: u32, rx: f64, ry: f64)
+fn paint_context(p: *Painter, root: u32, x: f64, y: f64)
+fn paint_canvas(p: *Painter)
+fn paint(a: *mem.Arena, l: *const layout.Layout, env: PaintEnv, b: *scene.Builder, view: geo.Rect, scroll_x: f64, scroll_y: f64) -> err
+```
+
 ### `e.fmt.html.template`
 
 ```neper

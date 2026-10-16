@@ -430,6 +430,7 @@
    "fixtures": [
     "css_geom",
     "css_layout",
+    "css_paint",
     "css_sheet",
     "css_style",
     "css_ua",

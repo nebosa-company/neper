@@ -2614,6 +2614,12 @@ $cssGeomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $cssGeomWritten -ne 'executable written') { throw 'css_geom emission failed' }
 & $cssGeomPath
 if ($LASTEXITCODE -ne 0) { throw "a css_geom check failed: exit $LASTEXITCODE" }
+# `e.fmt.css.paint`: scene commands from a layout in CSS 2.1 Appendix E order -- backgrounds, borders, z-index order, opacity layers, transforms, radius and overflow clips, inline backgrounds, text through the environment, view culling and the canvas background (tracker 3.1, 3.4, 3.6).
+$cssPaintPath = Join-Path $testBuild 'css-paint-selfhost.exe'
+$cssPaintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\css_paint\src\main.e') $repo 'x64' 'windows' $cssPaintPath
+if ($LASTEXITCODE -ne 0 -or $cssPaintWritten -ne 'executable written') { throw 'css_paint emission failed' }
+& $cssPaintPath
+if ($LASTEXITCODE -ne 0) { throw "a css_paint check failed: exit $LASTEXITCODE" }
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 $distConsensusPath = Join-Path $testBuild 'dist-consensus-selfhost.exe'
 $distConsensusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_consensus\src\main.e') $repo 'x64' 'windows' $distConsensusPath
