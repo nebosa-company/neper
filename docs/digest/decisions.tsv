@@ -2763,4 +2763,5 @@ D5127	1485	Style sheets are loaded once against a media environment; the user ag
 D5128	1379	CSS layout is one module over styled DOM, with the font and image knowledge injected (browser 2.1 to 2.5)
 D5129	1479	Tables are laid out inside the box tree, captions included (browser 2.6)
 D5130	1150	Flex layout follows the spec's algorithm in logical axes (browser 2.7)
-D5131	1418	Grid layout reads templates from the style's declared text and sizes tracks by the spec's phases (browser 2.8)
+D5131	1419	Grid layout reads templates from the style's declared text and sizes tracks by the spec's phases (browser 2.8)
+D5132	1124	Multi-column layout moves finished lines and blocks rather than fragmenting boxes (browser 2.9)

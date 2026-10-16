@@ -473,6 +473,7 @@ fn is_bfc_root(l: *const Layout, b: u32) -> bool {
     if bb.inner == .FlowRoot || bb.inner == .Flex || bb.inner == .Grid || bb.inner == .Table || bb.inner == .Cell || bb.inner == .Replaced { ret true }
     if s.floating != .None || s.position == .Absolute || s.position == .Fixed { ret true }
     if s.overflow_x != .Visible || s.overflow_y != .Visible { ret true }
+    if has_columns(s) { ret true }
     if s.display == .FlowRoot || s.display == .InlineBlock { ret true }
     ret false
 }
@@ -1940,6 +1941,7 @@ fn layout_in_new_bfc(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let base = l.floats.len
     var fc = Flow { base: base, ox: 0.0f64, oy: 0.0f64 }
     var h = 0.0f64
+    var done = false
     let inner = l.boxes.items[usize(b)].inner
     if inner == .Table {
         h = layout_table(l, b, cw, ch)
@@ -1948,10 +1950,20 @@ fn layout_in_new_bfc(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     } else if inner == .Grid {
         h = layout_grid(l, b, cw, ch)
     } else {
-        let (ch2, _m) = layout_children(l, b, cw, ch, &fc, false)
-        h = ch2
+        let bs = st(l, l.boxes.items[usize(b)].style)
+        if (inner == .Flow || inner == .FlowRoot) && has_columns(bs) {
+            let cols = columns_for(l, bs, cw)
+            if cols.count > 1usize {
+                h = layout_multicol(l, b, cw, ch, cols, &fc)
+                done = true
+            }
+        }
+        if !done {
+            let (ch2, _m) = layout_children(l, b, cw, ch, &fc, false)
+            h = ch2
+        }
     }
-    h = maxf(h, float_bottom(l, base, 2u32, 0.0f64))
+    if !done { h = maxf(h, float_bottom(l, base, 2u32, 0.0f64)) }
     l.floats.len = base
     ret h
 }
@@ -4701,6 +4713,155 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         total = maxf(total, last.pos + last.base)
     }
     ret total
+}
+
+// --- Multi-column layout (CSS Multicol 3): the content is laid out as one tall column at the column width and its
+// lines and blocks are then moved into balanced columns. Boxes are not fragmented: a block that straddles a column break
+// stays in the first column it starts in (its lines and children move on), and tables, flex and grid boxes, replaced
+// elements move whole. `column-span` and the break properties are not honoured.
+
+type Cols = struct { count: usize, width: f64, gap: f64 }
+
+fn has_columns(s: *const style.Style) -> bool {
+    let (cc, has_cc) = extra_text(s, "column-count")
+    if has_cc && !str.eq(cc, "auto") { ret true }
+    let (cwid, has_cw) = extra_text(s, "column-width")
+    ret has_cw && !str.eq(cwid, "auto")
+}
+
+// The used column count, width and gap for a content width `cw` (count 1: a plain block).
+fn columns_for(l: *Layout, s: *const style.Style, cw: f64) -> Cols {
+    var out = Cols { count: 1usize, width: cw, gap: 0.0f64 }
+    if cw <= 0.0f64 { ret out }
+    let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
+    var count = 0usize
+    var wid = -1.0f64
+    let (cc, has_cc) = extra_text(s, "column-count")
+    if has_cc {
+        let (n, good) = str.parse_i64(cv.trim_ws(cc))
+        if good == ok && n >= 1i64 { count = usize(n) }
+    }
+    let (cwid, has_cw) = extra_text(s, "column-width")
+    if has_cw && !str.eq(cwid, "auto") {
+        let (len, parsed) = style.parse_len(&ctx, cwid, s.font_size, 0u32)
+        if parsed && len.kind == .Px && len.pct == 0.0f64 && len.px > 0.0f64 { wid = len.px }
+    }
+    if count == 0usize && wid < 0.0f64 { ret out }
+    var gap = s.font_size
+    let (gv, has_g) = resolve_len(s.column_gap, cw)
+    if s.column_gap.kind == .Px && has_g { gap = maxf(0.0f64, gv) }
+    var n2 = count
+    if wid >= 0.0f64 {
+        var fit = usize(maxf(1.0f64, (cw + gap) / (wid + gap)))
+        if fit < 1usize { fit = 1usize }
+        if n2 == 0usize || fit < n2 { n2 = fit }
+    }
+    if n2 < 1usize { n2 = 1usize }
+    if n2 > 64usize { n2 = 64usize }
+    out.count = n2
+    out.gap = gap
+    out.width = maxf(0.0f64, (cw - gap * f64(n2 - 1usize)) / f64(n2))
+    ret out
+}
+
+fn column_of(y: f64, colh: f64) -> usize {
+    if y <= 0.0f64 || colh <= 0.0f64 { ret 0usize }
+    ret usize((y + 0.01f64) / colh)
+}
+
+fn unbreakable(l: *const Layout, b: u32) -> bool {
+    let bb = &l.boxes.items[usize(b)]
+    ret bb.inner == .Replaced || bb.inner == .Table || bb.inner == .Flex || bb.inner == .Grid || bb.inner == .Marker || bb.inner == .Text || bb.inner == .Break
+}
+
+// Moves the lines and blocks of `b` into columns of height `colh` (apply) or only finds the last column used.
+// `abs_y` is `b`'s border box top in the one-column layout, measured from the multicol content top.
+fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -> usize {
+    var maxk = 0usize
+    let bb0 = &l.boxes.items[usize(b)]
+    let top = abs_y + bb0.border[0usize] + bb0.padding[0usize]
+    if bb0.line_count > 0u32 {
+        let first = usize(bb0.line_first)
+        var li = 0usize
+        while li < usize(bb0.line_count) {
+            let ln = l.lines.items[first + li]
+            let k = column_of(top + ln.y, colh)
+            if k > maxk { maxk = k }
+            if apply && k > 0usize {
+                let dx = f64(k) * stride
+                let dy = f64(k) * colh
+                l.lines.items[first + li].x += dx
+                l.lines.items[first + li].y -= dy
+                l.lines.items[first + li].baseline -= dy
+                var fi = 0usize
+                while fi < usize(ln.frag_count) {
+                    let fr = usize(ln.frag_first) + fi
+                    l.frags.items[fr].x += dx
+                    l.frags.items[fr].y -= dy
+                    if l.frags.items[fr].kind == .Atomic {
+                        let ab = usize(l.frags.items[fr].box)
+                        l.boxes.items[ab].x += dx
+                        l.boxes.items[ab].y -= dy
+                    }
+                    fi += 1usize
+                }
+            }
+            li += 1usize
+        }
+    }
+    var kid = bb0.first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        let nxt = kb.next
+        if !kb.inline_level && kb.inner != .Marker && !(kb.positioned_out) {
+            let ks = st(l, kb.style)
+            if ks.position != .Absolute && ks.position != .Fixed {
+                let ky = abs_y + kb.y
+                let k0 = column_of(ky, colh)
+                let k1 = column_of(ky + kb.h - 0.02f64, colh)
+                if k0 == k1 || unbreakable(l, kid) || (kb.first == NONE && kb.line_count == 0u32) {
+                    if k0 > maxk { maxk = k0 }
+                    if apply && k0 > 0usize {
+                        l.boxes.items[usize(kid)].x += f64(k0) * stride
+                        l.boxes.items[usize(kid)].y -= f64(k0) * colh
+                    }
+                } else {
+                    let m = colify(l, kid, ky, colh, stride, apply)
+                    if m > maxk { maxk = m }
+                }
+            }
+        }
+        kid = nxt
+    }
+    ret maxk
+}
+
+fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) -> f64 {
+    let (h0, _m) = layout_children(l, b, cols.width, -1.0f64, fc, false)
+    let total = maxf(h0, float_bottom(l, fc.base, 2u32, 0.0f64))
+    if total <= 0.0f64 { ret 0.0f64 }
+    let bb = bx(l, b)
+    let origin = -(bb.border[0usize] + bb.padding[0usize])
+    let stride = cols.width + cols.gap
+    var colh = total / f64(cols.count)
+    let s = st(l, bb.style)
+    let (fill, has_fill) = extra_text(s, "column-fill")
+    let fill_auto = has_fill && str.eq(cv.lower(l.a, cv.trim_ws(fill)), "auto")
+    if ch >= 0.0f64 && fill_auto {
+        colh = ch
+    } else {
+        // Balance: the least column height under which everything fits in the available columns.
+        var step = maxf(1.0f64, total / 64.0f64)
+        var iter = 0usize
+        while iter < 80usize && colify(l, b, origin, colh, stride, false) >= cols.count && colh < total {
+            colh += step
+            iter += 1usize
+        }
+        if colh > total { colh = total }
+        if ch >= 0.0f64 && colh > ch { colh = ch }
+    }
+    let _used = colify(l, b, origin, colh, stride, true)
+    ret colh
 }
 
 // --- Positioned boxes.

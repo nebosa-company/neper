@@ -310,5 +310,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !ok51 || !is_rect(rect_of(p51, "g"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(80) }
     let (p52, ok52) = build(a, "<div style=\"display:grid;grid-template-columns:auto auto;width:100px\"><div id=a>aaaa</div><div id=b>bb</div></div>", gcss)
     if !ok52 || !is_rect(rect_of(p52, "a"), 0.0f64, 0.0f64, 60.0f64, 10.0f64) || !is_rect(rect_of(p52, "b"), 60.0f64, 0.0f64, 40.0f64, 10.0f64) { os.exit(81) }
+    let mcss = "div { font-size: 10px; }"
+    // 53. Columns split block children and balance their height.
+    let (p53, ok53) = build(a, "<div id=m style=\"column-count:2;width:200px\"><div id=a style=\"height:20px\"></div><div id=b style=\"height:20px\"></div></div>", mcss)
+    if !ok53 || !is_rect(rect_of(p53, "m"), 0.0f64, 0.0f64, 200.0f64, 20.0f64) { os.exit(82) }
+    if !is_rect(rect_of(p53, "a"), 0.0f64, 0.0f64, 95.0f64, 20.0f64) || !is_rect(rect_of(p53, "b"), 105.0f64, 0.0f64, 95.0f64, 20.0f64) { os.exit(83) }
+    // 54. Lines of a paragraph move into the next column.
+    let (p54, ok54) = build(a, "<div id=m style=\"column-count:2;width:200px\">aaaa bbbb cccc dddd</div>", mcss)
+    if !ok54 || p54.lay.lines.len != 2usize || !near(p54.lay.lines.items[1usize].x, 105.0f64) || !near(p54.lay.lines.items[1usize].y, 0.0f64) { os.exit(84) }
+    if !is_rect(rect_of(p54, "m"), 0.0f64, 0.0f64, 200.0f64, 10.0f64) { os.exit(85) }
+    // 55. column-width decides the count.
+    let (p55, ok55) = build(a, "<div id=m style=\"column-width:60px;width:200px\"><div id=a style=\"height:10px\"></div><div id=b style=\"height:10px\"></div><div id=c style=\"height:10px\"></div></div>", mcss)
+    if !ok55 || !is_rect(rect_of(p55, "c"), 140.0f64, 0.0f64, 60.0f64, 10.0f64) { os.exit(86) }
     ret ok
 }

@@ -24979,6 +24979,13 @@ fn grid_item_width(l: *Layout, id: u32, cs: *const style.Style, area_w: f64) -> 
 fn grid_axis_offset(mode: style.Align, free: f64) -> f64
 fn grid_widths(l: *Layout, b: u32) -> (f64, f64)
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
+type Cols = struct { count: usize, width: f64, gap: f64 }
+fn has_columns(s: *const style.Style) -> bool
+fn columns_for(l: *Layout, s: *const style.Style, cw: f64) -> Cols
+fn column_of(y: f64, colh: f64) -> usize
+fn unbreakable(l: *const Layout, b: u32) -> bool
+fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -> usize
+fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) -> f64
 fn abs_origin(l: *const Layout, b: u32) -> (f64, f64)
 fn containing_block_of(l: *const Layout, b: u32, fixed: bool) -> u32
 fn layout_abs(l: *Layout, b: u32)
