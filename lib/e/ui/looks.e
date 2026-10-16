@@ -158,7 +158,10 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
 }
 
 fn set_look(rig: *Rig, look: Look) {
+    style.set_windark(false)
     rig.tokens = theme_for(look)
+    // The Windows dark look maps the light literals of its tile painters (style.hex) to dark; nothing else does.
+    style.set_windark(look == .WindowsDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
 }
