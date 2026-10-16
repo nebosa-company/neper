@@ -15,15 +15,22 @@ Each dialog is opened fresh, its `*-rest` grab is taken first, and the states fo
 | open menu title + open popup, sub-menu open | yes | click the title, `VK_DOWN` n times, `VK_RIGHT` for the sub-menu |
 | selected focused / unfocused row (grid, tree, list, check list) | yes | click the row; `WM_KILLFOCUS` to the control for the unfocused look |
 | inactive caption | main window only, approximately | `WM_NCACTIVATE 0` |
-| hover (mouse over) of anything | NO | DevExpress (dxBar, cxButton, cxGrid, cxEdit) and the VCL mouse-enter logic read the real pointer with `GetCursorPos` or a global mouse hook; posted / sent `WM_MOUSEMOVE`, `WM_MOUSEHOVER`, VCL `CM_MOUSEENTER`, with and without activation changed nothing |
-| toolbar buttons (dxBar toolbars: hot, pressed, checked, drop-down) and their hint windows | NO | the toolbars ignore posted mouse messages entirely (the Search toolbar binoculars neither pressed nor opened the dialog); hints need the real pointer resting over a button |
-| tooltip / hint windows of grid headers, toolbar, status bar | NO | same: cxHint is started by the real pointer |
-| status bar panel hover, splitter hover, scroll bar hover, navigator hover | NO | same |
-| caption button hover / pressed | NOT TRIED | `WM_NCLBUTTONDOWN` on the close X enters the system's modal caption-button loop that watches the real pointer; judged not worth the risk of closing the copy |
+| hover (mouse over) of anything, toolbar buttons hot / pressed, hint windows, status bar / splitter / scroll bar / navigator hover, caption button hover, the mouse-hot row of menus and open lists | yes, with the pointer hook | `scripts/grab_v3_hover.ps1` on a copy whose `GetCursorPos` / `WindowFromPoint` / `GetKeyState(VK_LBUTTON)` are faked by `scripts/v3_hook` (section below); these are the `hover-*` files |
+| caption button pressed | NO | `WM_NCLBUTTONDOWN` on the X returns at once and the grab shows the plain (not even hot) button: the system does not hold the pressed caption button without a real button; hover of the caption buttons IS captured (`hover-caption-*`) |
 | progress bar | only if a window shows while computing | see the table: the report previews open in under 120 ms, the bar was never on screen when grabbed |
 | date edit | not present | no dialog reachable without printing / generating a document has one |
 
-If the hover looks are required, the only remaining route that does not simulate physical input is to patch the copy to report a fixed pointer position (a hook on `GetCursorPos` inside the copy). That was not done: it is outside the approved message list.
+Hover has its own section below. Without the hook it is not reachable: DevExpress / VCL read the real pointer.
+
+## Hover (mouse-over) states
+
+Captured by `scripts/grab_v3_hover.ps1` (helpers `scripts/v3_hover_lib.ps1`, hook source and build in `scripts/v3_hook/`, see its README). VCL and DevExpress decide "the mouse is over this control" from the real pointer (`GetCursorPos`, `WindowFromPoint`, `GetKeyState`, `TrackMouseEvent`), which posted messages cannot change. The copy (`mtgstudio_s.exe`, only that process) is therefore injected with `v3hook.dll`: those calls answer from a small shared memory block that the script writes (the fake pointer), the script then posts the ordinary `WM_MOUSEMOVE` to the window under that fake pointer, waits 350 to 600 ms and grabs with `PrintWindow`. The fake pointer is parked far off screen between grabs. The real cursor and keyboard are never used (no `SendInput`, `mouse_event`, `keybd_event`, `SetCursorPos`); the maintainer's v3, the installed program and `version-3` in the repo were not touched.
+
+Naming: `hover-<control>-<what>@1x.png`. Every dialog or window gets a `hover-<dialog>-rest` grab first; each hover grab is also compared with a grab taken just before the pointer moved in, and the Notes column says `PIXEL-IDENTICAL to rest: no distinct hover look` where the control draws nothing different (disabled toolbar buttons, grid rows, group rows, status bar panels, the left tabs, Statistics tabs, list box rows ...). Those PNGs are kept as proof that the hover was tried. `hover-*-pressed` files are fake pointer + fake left button + `WM_LBUTTONDOWN`, never released (`WM_CANCELMODE` after). Hint windows are grabbed as their own top-level window (`hover-hint-*`, class `TdxBarHintWindow` / `TcxHintWindow`) plus the owner (`*-context`). Popup rows (`hover-menu-*-rowN`, `hover-combo-list-*-rowN`) are the true mouse-hot row, as opposed to the keyboard row of the other captures. Window-caption hover is a `WM_NCMOUSEMOVE` with the hit-test code (min, max, close are visibly hot).
+
+Not captured: hint windows of the status bar panels (none appear) and of Options check boxes (none); a pressed caption button (see table); grid filter-row cells and date edits (no reachable screen: the filter row needs Options > Show Filter Row, which is a saved setting, and no dialog without printing has a date edit); a progress bar (Filter OK on the 120k pool finished in under 0.5 s and the status bar stayed on "Idle" in 20 frames). Hover on the deck-mode vertical grid, tree list rows, tabs, list boxes draws nothing different.
+
+Traps specific to hover: the hook must be rebuilt for a new v3 build only if the exe stops importing those functions (it matches the resolved addresses in every module's import table, not names). `Start-Sleep 1500` is 1500 seconds. Hover state is per process: restarting the copy resets the hook, `Start-Hooked` re-injects. Hints appear only after a quiet 0.7 s and not at all after an unreleased dxBar button press, so the toolbar hints run before the pressed grabs. Posting `WM_MOUSEMOVE` repeatedly at the same spot restarts the hint timer. Native `Button` / `TcxButton` windows call `TrackMouseEvent(TME_LEAVE)`; with no real pointer over the window the system would send `WM_MOUSELEAVE` at once and un-hot the button, so the hook swallows those requests for button classes only (swallowing them for dxBar broke the toolbar hover). Re-run: `pwsh -File scripts\grab_v3_hover.ps1 [-Only main,menus,options,dialogs,deck,grid]`.
 
 ## Traps
 
@@ -176,6 +183,338 @@ The script kills and relaunches the `mtgstudio_s` copy at the start. The copy ru
 | grid-row-selected-unfocused-main@1x.png | data grid (top) | selected row, grid not focused | same row, then WM_KILLFOCUS to the grid site | TMainForm | 800x600 |  |
 | grid-row-selected-unfocused-options-shortcuts@1x.png | data grid (shortcuts) | selected row, grid not focused | WM_KILLFOCUS to the grid site | TOptionsForm | 728x494 |  |
 | grid-row-selected-unfocused-sort@1x.png | data grid (sort columns) | selected row, grid not focused | WM_KILLFOCUS | TSortColumnsForm | 367x347 |  |
+| hover-about-rest@1x.png | dialog (About) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Help > About) | TAboutForm | 452x372 |  |
+| hover-advanced-filter-rest@1x.png | dialog (Advanced Filter) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Search > Advanced Filter) | TfmFilterControlDialog | 560x355 |  |
+| hover-button-about-ok@1x.png | button (default) | hover (OK) | fake pointer + WM_MOUSEMOVE (About) | TAboutForm | 452x372 |  |
+| hover-button-advanced-filter-ok@1x.png | button (default) | hover (OK) | fake pointer + WM_MOUSEMOVE (Advanced Filter) | TfmFilterControlDialog | 560x355 |  |
+| hover-button-advanced-filter-open@1x.png | button | hover (Open...) | fake pointer + WM_MOUSEMOVE (Advanced Filter) | TfmFilterControlDialog | 560x355 |  |
+| hover-button-conditional-formatting-apply@1x.png | button | hover (Apply) | fake pointer + WM_MOUSEMOVE (Conditional Formatting) | TfrmDataControllerConditionalFormattingRulesManagerDialog | 700x421 |  |
+| hover-button-conditional-formatting-edit-rule-disabled@1x.png | button | hover over a DISABLED button (Edit Rule...) | fake pointer + WM_MOUSEMOVE (Conditional Formatting) | TfrmDataControllerConditionalFormattingRulesManagerDialog | 700x421 |  |
+| hover-button-conditional-formatting-new-rule@1x.png | button | hover (New Rule...) | fake pointer + WM_MOUSEMOVE (Conditional Formatting) | TfrmDataControllerConditionalFormattingRulesManagerDialog | 700x421 |  |
+| hover-button-conditional-formatting-ok@1x.png | button | hover (OK) | fake pointer + WM_MOUSEMOVE (Conditional Formatting) | TfrmDataControllerConditionalFormattingRulesManagerDialog | 700x421 |  |
+| hover-button-deck-legality-close@1x.png | button (default) | hover (Close) | fake pointer + WM_MOUSEMOVE (Deck Legality) | TDeckLegalityForm | 555x486 |  |
+| hover-button-deck-legality-modern@1x.png | button (format toggle) | hover (Modern) | fake pointer + WM_MOUSEMOVE (Deck Legality) | TDeckLegalityForm | 555x486 |  |
+| hover-button-deck-legality-standard@1x.png | button (format toggle) | hover (Standard) | fake pointer + WM_MOUSEMOVE (Deck Legality) | TDeckLegalityForm | 555x486 |  |
+| hover-button-deck-properties-ok@1x.png | button (default) | hover (OK) | fake pointer + WM_MOUSEMOVE (Deck Properties) | TDeckPropertiesForm | 364x552 |  |
+| hover-button-filter-all@1x.png | button | hover (All) | fake pointer + WM_MOUSEMOVE (Filter) | TFilterForm | 708x493 |  |
+| hover-button-filter-clear@1x.png | button | hover (Clear) | fake pointer + WM_MOUSEMOVE (Filter) | TFilterForm | 708x493 |  |
+| hover-button-filter-invert@1x.png | button | hover (Invert) | fake pointer + WM_MOUSEMOVE (Filter) | TFilterForm | 708x493 |  |
+| hover-button-filter-ok@1x.png | button (default) | hover (OK) | fake pointer + WM_MOUSEMOVE (Filter) | TFilterForm | 708x493 |  |
+| hover-button-image-options-cardart-move-up@1x.png | speed button (image) | hover over the up arrow | fake pointer + WM_MOUSEMOVE (Options > Card Art) | TOptionsForm | 728x494 |  |
+| hover-button-missing-set-cards-ok@1x.png | button (default) | hover (OK) | fake pointer + WM_MOUSEMOVE (Missing Set Cards) | TMissingSetCardsForm | 266x503 |  |
+| hover-button-options-apply@1x.png | button | hover (Apply) | fake pointer + WM_MOUSEMOVE (Options) | TOptionsForm | 728x494 |  |
+| hover-button-options-cancel-pressed@1x.png | button | hover and pressed (Cancel) | fake pointer + fake left button, WM_LBUTTONDOWN, no up, then WM_CANCELMODE (Options) | TOptionsForm | 728x494 |  |
+| hover-button-options-cancel@1x.png | button | hover (Cancel) | fake pointer + WM_MOUSEMOVE (Options) | TOptionsForm | 728x494 |  |
+| hover-button-options-cardart-validate@1x.png | button | hover (Validate) | fake pointer + WM_MOUSEMOVE (Options > Card Art) | TOptionsForm | 728x494 |  |
+| hover-button-options-ok@1x.png | button (default) | hover (OK, default button) | fake pointer + WM_MOUSEMOVE (Options) | TOptionsForm | 728x494 |  |
+| hover-button-options-password-change@1x.png | button | hover (Change) | fake pointer + WM_MOUSEMOVE (Options > Passwords) | TOptionsForm | 728x494 |  |
+| hover-button-options-shortcut-reset@1x.png | button | hover (Reset) | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-button-options-shortcut-set@1x.png | button | hover (Set) | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-button-search-cancel@1x.png | button | hover (Cancel) | fake pointer + WM_MOUSEMOVE (Search for Card) | TSearchForm | 325x257 |  |
+| hover-button-search-ok-pressed@1x.png | button (default) | hover and pressed (OK) | fake pointer + fake left button, WM_LBUTTONDOWN, no up, then WM_CANCELMODE (Search for Card) | TSearchForm | 325x257 |  |
+| hover-button-search-ok@1x.png | button (default) | hover (OK) | fake pointer + WM_MOUSEMOVE (Search for Card) | TSearchForm | 325x257 |  |
+| hover-button-sort-clear@1x.png | button | hover (Clear) | fake pointer + WM_MOUSEMOVE (Sort) | TSortColumnsForm | 367x347 |  |
+| hover-button-sort-ok@1x.png | button (default) | hover (OK) | fake pointer + WM_MOUSEMOVE (Sort) | TSortColumnsForm | 367x347 |  |
+| hover-button-statistics-close@1x.png | button | hover (Close) | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 |  |
+| hover-caption-close-main@1x.png | caption button | hover | fake pointer + WM_NCMOUSEMOVE hit-test 20 (main window) | TMainForm | 800x600 |  |
+| hover-caption-close-options@1x.png | caption button (close X) | hover | fake pointer + WM_NCMOUSEMOVE hit-test 20 (Options dialog) | TOptionsForm | 728x494 |  |
+| hover-caption-inactive-main@1x.png | title bar | inactive window | WM_NCACTIVATE with wParam 0 | TMainForm | 800x600 |  |
+| hover-caption-inactive-options@1x.png | title bar | inactive dialog | WM_NCACTIVATE with wParam 0 | TOptionsForm | 728x494 |  |
+| hover-caption-maximize-main@1x.png | caption button | hover | fake pointer + WM_NCMOUSEMOVE hit-test 9 (main window) | TMainForm | 800x600 |  |
+| hover-caption-minimize-main@1x.png | caption button | hover | fake pointer + WM_NCMOUSEMOVE hit-test 8 (main window) | TMainForm | 800x600 |  |
+| hover-category-list-options-decks@1x.png | category list (TCategoryButtons) | hover over an unselected item | fake pointer + WM_MOUSEMOVE (Options, left list) | TOptionsForm | 728x494 |  |
+| hover-category-list-options-selected@1x.png | category list (TCategoryButtons) | hover over the selected item | fake pointer + WM_MOUSEMOVE (Options, left list) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-check-list-box-checkbox-options-rules@1x.png | check list box | hover over a row check box | fake pointer + WM_MOUSEMOVE (Options > Rules) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-check-list-box-empty-options-rules@1x.png | check list box | hover over the empty area | fake pointer + WM_MOUSEMOVE (Options > Rules) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-check-list-box-row-options-cardart@1x.png | check list box | hover over a row | fake pointer + WM_MOUSEMOVE (Options > Card Art) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-check-list-box-row-options-prices@1x.png | check list box | hover over a row text | fake pointer + WM_MOUSEMOVE (Options > Prices) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-check-list-box-row-options-rules@1x.png | check list box | hover over a row text | fake pointer + WM_MOUSEMOVE (Options > Rules) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-checkbox-options-card-preview-label@1x.png | check box | hover over the caption (checked) | fake pointer + WM_MOUSEMOVE (Options > Interface) | TOptionsForm | 728x494 |  |
+| hover-checkbox-options-hide-splash-label@1x.png | check box | hover over the caption (unchecked) | fake pointer + WM_MOUSEMOVE (Options > Interface) | TOptionsForm | 728x494 |  |
+| hover-checkbox-options-hide-splash@1x.png | check box | hover (unchecked box) | fake pointer + WM_MOUSEMOVE (Options > Interface) | TOptionsForm | 728x494 |  |
+| hover-checkbox-options-morph-use@1x.png | check box | hover (checked) | fake pointer + WM_MOUSEMOVE (Options > Morph) | TOptionsForm | 728x494 |  |
+| hover-checkbox-options-show-filter-row@1x.png | check box | hover (unchecked box) | fake pointer + WM_MOUSEMOVE (Options > Grids) | TOptionsForm | 728x494 |  |
+| hover-checkbox-options-show-foil@1x.png | check box | hover (checked box) | fake pointer + WM_MOUSEMOVE (Options > Grids) | TOptionsForm | 728x494 |  |
+| hover-checkbox-options-show-tooltips@1x.png | check box | hover (checked box) | fake pointer + WM_MOUSEMOVE (Options > Interface) | TOptionsForm | 728x494 |  |
+| hover-combo-box-drop-conditional-formatting-show@1x.png | combo box | hover over the drop button | fake pointer + WM_MOUSEMOVE (Conditional Formatting) | TfrmDataControllerConditionalFormattingRulesManagerDialog | 700x421 |  |
+| hover-combo-box-drop-options-auth-type@1x.png | combo box | hover over the drop button | fake pointer + WM_MOUSEMOVE (Options > Internet) | TOptionsForm | 728x494 |  |
+| hover-combo-box-drop-options-card-art-position@1x.png | combo box | hover over the drop button | fake pointer + WM_MOUSEMOVE (Options > Morph) | TOptionsForm | 728x494 |  |
+| hover-combo-box-drop-options-condition@1x.png | combo box | hover over the drop button | fake pointer + WM_MOUSEMOVE (Options > Defaults) | TOptionsForm | 728x494 |  |
+| hover-combo-box-drop-options-row-color@1x.png | combo box | hover over the drop button | fake pointer + WM_MOUSEMOVE (Options > Grids) | TOptionsForm | 728x494 |  |
+| hover-combo-box-drop-search@1x.png | combo box | hover over the drop button | fake pointer + WM_MOUSEMOVE (Search for Card) | TSearchForm | 325x257 |  |
+| hover-combo-box-edit-options-auth-type@1x.png | combo box | hover over the edit | fake pointer + WM_MOUSEMOVE (Options > Internet) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-combo-box-edit-options-row-color@1x.png | combo box | hover over the edit | fake pointer + WM_MOUSEMOVE (Options > Grids) | TOptionsForm | 728x494 |  |
+| hover-combo-box-edit-search@1x.png | combo box (editable) | hover over the edit | fake pointer + WM_MOUSEMOVE (Search for Card) | TSearchForm | 325x257 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-combo-list-conditional-formatting-show-open@1x.png | combo box drop-down list | open, pointer away | click on the drop button (Conditional Formatting, Show rules for) | TcxComboBoxPopupWindow | 143x106 |  |
+| hover-combo-list-conditional-formatting-show-row1@1x.png | combo box drop-down list | mouse-hot row at y=8 | fake pointer + WM_MOUSEMOVE (Conditional Formatting, Show rules for) | TcxComboBoxPopupWindow | 143x106 |  |
+| hover-combo-list-conditional-formatting-show-row2@1x.png | combo box drop-down list | mouse-hot row at y=53 | fake pointer + WM_MOUSEMOVE (Conditional Formatting, Show rules for) | TcxComboBoxPopupWindow | 143x106 |  |
+| hover-combo-list-conditional-formatting-show-row3@1x.png | combo box drop-down list | mouse-hot row at y=98 | fake pointer + WM_MOUSEMOVE (Conditional Formatting, Show rules for) | TcxComboBoxPopupWindow | 143x106 |  |
+| hover-combo-list-options-auth-type-open@1x.png | combo box drop-down list | open, pointer away | click on the drop button (Options > Internet Authentication) | TcxComboBoxPopupWindow | 189x32 |  |
+| hover-combo-list-options-auth-type-row1@1x.png | combo box drop-down list | mouse-hot row at y=8 | fake pointer + WM_MOUSEMOVE (Options > Internet Authentication) | TcxComboBoxPopupWindow | 189x32 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-combo-list-options-auth-type-row2@1x.png | combo box drop-down list | mouse-hot row at y=16 | fake pointer + WM_MOUSEMOVE (Options > Internet Authentication) | TcxComboBoxPopupWindow | 189x32 |  |
+| hover-combo-list-options-auth-type-row3@1x.png | combo box drop-down list | mouse-hot row at y=24 | fake pointer + WM_MOUSEMOVE (Options > Internet Authentication) | TcxComboBoxPopupWindow | 189x32 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-combo-list-options-card-art-position-open@1x.png | combo box drop-down list | open, pointer away | click on the drop button (Options > Morph, Card Art Position) | TcxComboBoxPopupWindow | 151x47 |  |
+| hover-combo-list-options-card-art-position-row1@1x.png | combo box drop-down list | mouse-hot row at y=8 | fake pointer + WM_MOUSEMOVE (Options > Morph, Card Art Position) | TcxComboBoxPopupWindow | 151x47 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-combo-list-options-card-art-position-row2@1x.png | combo box drop-down list | mouse-hot row at y=24 | fake pointer + WM_MOUSEMOVE (Options > Morph, Card Art Position) | TcxComboBoxPopupWindow | 151x47 |  |
+| hover-combo-list-options-card-art-position-row3@1x.png | combo box drop-down list | mouse-hot row at y=39 | fake pointer + WM_MOUSEMOVE (Options > Morph, Card Art Position) | TcxComboBoxPopupWindow | 151x47 |  |
+| hover-combo-list-options-condition-open@1x.png | combo box drop-down list | open, pointer away | click on the drop button (Options > Defaults, Condition) | TcxComboBoxPopupWindow | 335x227 |  |
+| hover-combo-list-options-condition-row1@1x.png | combo box drop-down list | mouse-hot row at y=8 | fake pointer + WM_MOUSEMOVE (Options > Defaults, Condition) | TcxComboBoxPopupWindow | 335x227 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-combo-list-options-condition-row2@1x.png | combo box drop-down list | mouse-hot row at y=114 | fake pointer + WM_MOUSEMOVE (Options > Defaults, Condition) | TcxComboBoxPopupWindow | 335x227 |  |
+| hover-combo-list-options-condition-row3@1x.png | combo box drop-down list | mouse-hot row at y=219 | fake pointer + WM_MOUSEMOVE (Options > Defaults, Condition) | TcxComboBoxPopupWindow | 335x227 |  |
+| hover-combo-list-options-font-size-open@1x.png | combo box drop-down list | open, pointer away | click on the drop button (Options > Grids, Font Size) | TcxComboBoxPopupWindow | 389x54 |  |
+| hover-combo-list-options-font-size-row1@1x.png | combo box drop-down list | mouse-hot row at y=8 | fake pointer + WM_MOUSEMOVE (Options > Grids, Font Size) | TcxComboBoxPopupWindow | 389x54 |  |
+| hover-combo-list-options-font-size-row2@1x.png | combo box drop-down list | mouse-hot row at y=27 | fake pointer + WM_MOUSEMOVE (Options > Grids, Font Size) | TcxComboBoxPopupWindow | 389x54 |  |
+| hover-combo-list-options-font-size-row3@1x.png | combo box drop-down list | mouse-hot row at y=46 | fake pointer + WM_MOUSEMOVE (Options > Grids, Font Size) | TcxComboBoxPopupWindow | 389x54 |  |
+| hover-combo-list-options-row-color-open@1x.png | combo box drop-down list | open, pointer away | click on the drop button (Options > Grids, Row Color) | TcxComboBoxPopupWindow | 389x41 |  |
+| hover-combo-list-options-row-color-row1@1x.png | combo box drop-down list | mouse-hot row at y=8 | fake pointer + WM_MOUSEMOVE (Options > Grids, Row Color) | TcxComboBoxPopupWindow | 389x41 |  |
+| hover-combo-list-options-row-color-row2@1x.png | combo box drop-down list | mouse-hot row at y=20 | fake pointer + WM_MOUSEMOVE (Options > Grids, Row Color) | TcxComboBoxPopupWindow | 389x41 |  |
+| hover-combo-list-options-row-color-row3@1x.png | combo box drop-down list | mouse-hot row at y=33 | fake pointer + WM_MOUSEMOVE (Options > Grids, Row Color) | TcxComboBoxPopupWindow | 389x41 |  |
+| hover-conditional-formatting-rest@1x.png | dialog (Conditional Formatting) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (View > Conditional Formatting...) | TfrmDataControllerConditionalFormattingRulesManagerDialog | 700x421 |  |
+| hover-customization-rest@1x.png | dialog (Customization) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (View > Show Columns...) | TcxGridBandedTableCustomizationForm | 180x300 |  |
+| hover-deck-legality-rest@1x.png | dialog (Deck Legality) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (File > Legality) | TDeckLegalityForm | 555x486 |  |
+| hover-deck-properties-rest@1x.png | dialog (Deck Properties) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (File > Properties (deck mode)) | TDeckPropertiesForm | 364x552 |  |
+| hover-edit-button-ellipsis-options-cardart@1x.png | button edit ellipsis | hover over the ... button | fake pointer + WM_MOUSEMOVE (Options > Card Art) | TOptionsForm | 728x494 |  |
+| hover-edit-button-ellipsis-options-deck-path@1x.png | button edit ellipsis | hover over the ... button | fake pointer + WM_MOUSEMOVE (Options > Decks) | TOptionsForm | 728x494 |  |
+| hover-edit-options-deck-path@1x.png | button edit (path) | hover over the edit | fake pointer + WM_MOUSEMOVE (Options > Decks) | TOptionsForm | 728x494 |  |
+| hover-edit-options-old-password@1x.png | text edit (password) | hover | fake pointer + WM_MOUSEMOVE (Options > Passwords) | TOptionsForm | 728x494 |  |
+| hover-edit-options-shortcut-hotkey@1x.png | hot key edit | hover | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-filter-control-advanced-filter-root@1x.png | filter control | hover over the root condition | fake pointer + WM_MOUSEMOVE (Advanced Filter) | TfmFilterControlDialog | 560x355 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-filter-rest@1x.png | dialog (Filter Card Pool) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Search > Filter Card Pool) | TFilterForm | 708x493 |  |
+| hover-grid-cell-sort-order@1x.png | data grid cell (image combo) | hover over the Sort Order cell | fake pointer + WM_MOUSEMOVE (Sort) | TSortColumnsForm | 367x347 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-group-chip-pressed@1x.png | grid group-by box | hover and pressed (Edition chip) | fake pointer + fake left button, WM_LBUTTONDOWN, no up, then WM_CANCELMODE (top grid, group box chip) | TMainForm | 800x600 |  |
+| hover-grid-group-header-edition@1x.png | data grid header | hot grouped column header (Edition) | fake pointer + WM_MOUSEMOVE (top grid, grouped) | TMainForm | 800x600 |  |
+| hover-grid-group-header-name@1x.png | data grid header | hot column header while grouped (Name) | fake pointer + WM_MOUSEMOVE (top grid, grouped) | TMainForm | 800x600 |  |
+| hover-grid-group-row-expand@1x.png | data grid group row | hover over the expand button | fake pointer + WM_MOUSEMOVE (top grid, grouped) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-group-row-text@1x.png | data grid group row | hover over a group row caption | fake pointer + WM_MOUSEMOVE (top grid, grouped) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-group-row@1x.png | data grid group row | hover over a group row | fake pointer + WM_MOUSEMOVE (top grid, grouped) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-groupbox-chip@1x.png | grid group-by box | hover over the Edition group chip | fake pointer + WM_MOUSEMOVE (top grid, group box chip) | TMainForm | 800x600 |  |
+| hover-grid-groupbox-empty@1x.png | grid group-by box | hover over the empty box area | fake pointer + WM_MOUSEMOVE (top grid, group box) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-groupbox-rest@1x.png | data grid (group box shown) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (View > Show Group Box) | TMainForm | 800x600 |  |
+| hover-grid-grouped-rest@1x.png | data grid (grouped by Edition) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (View > Group by Edition) | TMainForm | 800x600 |  |
+| hover-grid-header-bottom-name@1x.png | data grid header | hot column header | fake pointer + WM_MOUSEMOVE (bottom grid) | TMainForm | 800x600 |  |
+| hover-grid-header-color@1x.png | data grid header | hot column header | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 |  |
+| hover-grid-header-edition@1x.png | data grid header | hot column header | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 |  |
+| hover-grid-header-name@1x.png | data grid header | hot column header | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 |  |
+| hover-grid-header-options-shortcuts-command@1x.png | data grid header | hot column header (Command) | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-grid-header-options-shortcuts-key@1x.png | data grid header | hot column header (Shortcut) | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-grid-header-rarity@1x.png | data grid header | hot column header | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 |  |
+| hover-grid-header-sort-column@1x.png | data grid header | hot column header (Column) | fake pointer + WM_MOUSEMOVE (Sort) | TSortColumnsForm | 367x347 |  |
+| hover-grid-header-sort-order@1x.png | data grid header | hot column header (Sort Order) | fake pointer + WM_MOUSEMOVE (Sort) | TSortColumnsForm | 367x347 |  |
+| hover-grid-header-type@1x.png | data grid header | hot column header | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 |  |
+| hover-grid-navigator-bottom-filter@1x.png | grid navigator | hover over 'filter' button (bottom grid) | fake pointer + WM_MOUSEMOVE (bottom grid navigator) | TMainForm | 800x600 |  |
+| hover-grid-navigator-bottom-first@1x.png | grid navigator | hover over 'first' button (bottom grid) | fake pointer + WM_MOUSEMOVE (bottom grid navigator) | TMainForm | 800x600 |  |
+| hover-grid-navigator-bottom-next@1x.png | grid navigator | hover over 'next' button (bottom grid) | fake pointer + WM_MOUSEMOVE (bottom grid navigator) | TMainForm | 800x600 |  |
+| hover-grid-navigator-filter@1x.png | grid navigator | hover over 'filter' button | fake pointer + WM_MOUSEMOVE (top grid navigator) | TMainForm | 800x600 |  |
+| hover-grid-navigator-first@1x.png | grid navigator | hover over 'first' button | fake pointer + WM_MOUSEMOVE (top grid navigator) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-navigator-last@1x.png | grid navigator | hover over 'last' button | fake pointer + WM_MOUSEMOVE (top grid navigator) | TMainForm | 800x600 |  |
+| hover-grid-navigator-next@1x.png | grid navigator | hover over 'next' button | fake pointer + WM_MOUSEMOVE (top grid navigator) | TMainForm | 800x600 |  |
+| hover-grid-navigator-prior@1x.png | grid navigator | hover over 'prior' button | fake pointer + WM_MOUSEMOVE (top grid navigator) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-row-bottom@1x.png | data grid row | hover over a row (cell) | fake pointer + WM_MOUSEMOVE (bottom grid) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-row-missing-set-cards@1x.png | data grid row | hover over a row | fake pointer + WM_MOUSEMOVE (Missing Set Cards) | TMissingSetCardsForm | 266x503 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-row-options-shortcuts@1x.png | data grid row | hover over a row | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-grid-row-sort@1x.png | data grid row | hover over a row | fake pointer + WM_MOUSEMOVE (Sort) | TSortColumnsForm | 367x347 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-row-top-selected@1x.png | data grid row | hover over the selected row | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-row-top@1x.png | data grid row | hover over a row (cell) | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-grid-star-header@1x.png | data grid header | hot (indicator / star column) | fake pointer + WM_MOUSEMOVE (top grid, star) | TMainForm | 800x600 |  |
+| hover-hint-grid-header-name-context@1x.png | data grid header | hint showing (owner window) | same, grab of the owner window (top grid Name header) | TMainForm | 800x600 |  |
+| hover-hint-grid-header-name@1x.png | data grid header hint window | visible after the fake pointer rested on it | fake pointer + WM_MOUSEMOVE, held; window class TcxHintWindow (top grid Name header) | TcxHintWindow | 285x25 |  |
+| hover-hint-toolbar-cards-expand-context@1x.png | toolbar button | hint showing (owner window) | same, grab of the owner window (toolbar cards-expand) | TMainForm | 800x600 |  |
+| hover-hint-toolbar-cards-expand@1x.png | toolbar button hint window | visible after the fake pointer rested on it | fake pointer + WM_MOUSEMOVE, held; window class TdxBarHintWindow (toolbar cards-expand) | TdxBarHintWindow | 210x20 |  |
+| hover-hint-toolbar-cards-f-context@1x.png | toolbar button | hint showing (owner window) | same, grab of the owner window (toolbar cards-f) | TMainForm | 800x600 |  |
+| hover-hint-toolbar-cards-f@1x.png | toolbar button hint window | visible after the fake pointer rested on it | fake pointer + WM_MOUSEMOVE, held; window class TdxBarHintWindow (toolbar cards-f) | TdxBarHintWindow | 180x20 |  |
+| hover-hint-toolbar-help-home-context@1x.png | toolbar button | hint showing (owner window) | same, grab of the owner window (toolbar help-home) | TMainForm | 800x600 |  |
+| hover-hint-toolbar-help-home@1x.png | toolbar button hint window | visible after the fake pointer rested on it | fake pointer + WM_MOUSEMOVE, held; window class TdxBarHintWindow (toolbar help-home) | TdxBarHintWindow | 188x20 |  |
+| hover-hint-toolbar-search-binoculars-context@1x.png | toolbar button | hint showing (owner window) | same, grab of the owner window (toolbar search-binoculars) | TMainForm | 800x600 |  |
+| hover-hint-toolbar-search-binoculars@1x.png | toolbar button hint window | visible after the fake pointer rested on it | fake pointer + WM_MOUSEMOVE, held; window class TdxBarHintWindow (toolbar search-binoculars) | TdxBarHintWindow | 185x20 |  |
+| hover-hint-toolbar-search-filter-context@1x.png | toolbar button | hint showing (owner window) | same, grab of the owner window (toolbar search-filter) | TMainForm | 800x600 |  |
+| hover-hint-toolbar-search-filter@1x.png | toolbar button hint window | visible after the fake pointer rested on it | fake pointer + WM_MOUSEMOVE, held; window class TdxBarHintWindow (toolbar search-filter) | TdxBarHintWindow | 255x20 |  |
+| hover-label-link-about-support@1x.png | link label | hover (Send email to Support) | fake pointer + WM_MOUSEMOVE (About) | TAboutForm | 452x372 |  |
+| hover-list-box-row-customization@1x.png | list box (column chooser) | hover over a row | fake pointer + WM_MOUSEMOVE (Customization) | TcxGridBandedTableCustomizationForm | 180x300 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-list-box-row2-customization@1x.png | list box (column chooser) | hover over a second row | fake pointer + WM_MOUSEMOVE (Customization) | TcxGridBandedTableCustomizationForm | 180x300 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-main-rest@1x.png | main window | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (launch, window active) | TMainForm | 800x600 |  |
+| hover-menu-cardart-rest@1x.png | menu popup | open, pointer away | click on the 'Card Art' title, fake pointer parked | TdxBarSubMenuControl | 189x332 |  |
+| hover-menu-cardart-row1@1x.png | menu popup | mouse-hot row at y=33 | fake pointer + WM_MOUSEMOVE (Card Art menu) | TdxBarSubMenuControl | 189x332 |  |
+| hover-menu-cardart-row2@1x.png | menu popup | mouse-hot row at y=93 | fake pointer + WM_MOUSEMOVE (Card Art menu) | TdxBarSubMenuControl | 189x332 |  |
+| hover-menu-cardart-row3@1x.png | menu popup | mouse-hot row at y=153 | fake pointer + WM_MOUSEMOVE (Card Art menu) | TdxBarSubMenuControl | 189x332 |  |
+| hover-menu-cards-rest@1x.png | menu popup | open, pointer away | click on the 'Cards' title, fake pointer parked | TdxBarSubMenuControl | 217x496 |  |
+| hover-menu-cards-row1@1x.png | menu popup | mouse-hot row at y=13 | fake pointer + WM_MOUSEMOVE (Cards menu) | TdxBarSubMenuControl | 217x496 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-menu-cards-row2@1x.png | menu popup | mouse-hot row at y=103 | fake pointer + WM_MOUSEMOVE (Cards menu) | TdxBarSubMenuControl | 217x496 |  |
+| hover-menu-cards-row3@1x.png | menu popup | mouse-hot row at y=123 | fake pointer + WM_MOUSEMOVE (Cards menu) | TdxBarSubMenuControl | 217x496 |  |
+| hover-menu-cards-row4@1x.png | menu popup | mouse-hot row at y=343 | fake pointer + WM_MOUSEMOVE (Cards menu) | TdxBarSubMenuControl | 217x496 |  |
+| hover-menu-cards-row5@1x.png | menu popup | mouse-hot row at y=373 | fake pointer + WM_MOUSEMOVE (Cards menu) | TdxBarSubMenuControl | 217x496 |  |
+| hover-menu-cards-row6@1x.png | menu popup | mouse-hot row at y=393 | fake pointer + WM_MOUSEMOVE (Cards menu) | TdxBarSubMenuControl | 217x496 |  |
+| hover-menu-cards-row7@1x.png | menu popup | mouse-hot row at y=433 | fake pointer + WM_MOUSEMOVE (Cards menu) | TdxBarSubMenuControl | 217x496 |  |
+| hover-menu-file-rest@1x.png | menu popup | open, pointer away | click on the 'File' title, fake pointer parked | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-file-row1@1x.png | menu popup | mouse-hot row at y=13 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-menu-file-row10@1x.png | menu popup | mouse-hot row at y=567 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-file-row2@1x.png | menu popup | mouse-hot row at y=213 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-menu-file-row3@1x.png | menu popup | mouse-hot row at y=317 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-file-row4@1x.png | menu popup | mouse-hot row at y=337 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-file-row5@1x.png | menu popup | mouse-hot row at y=377 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-file-row6@1x.png | menu popup | mouse-hot row at y=427 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-file-row7@1x.png | menu popup | mouse-hot row at y=477 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-file-row8@1x.png | menu popup | mouse-hot row at y=497 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-file-row9@1x.png | menu popup | mouse-hot row at y=537 | fake pointer + WM_MOUSEMOVE (File menu) | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-help-rest@1x.png | menu popup | open, pointer away | click on the 'Help' title, fake pointer parked | TdxBarSubMenuControl | 191x216 |  |
+| hover-menu-help-row1@1x.png | menu popup | mouse-hot row at y=23 | fake pointer + WM_MOUSEMOVE (Help menu) | TdxBarSubMenuControl | 191x216 |  |
+| hover-menu-help-row2@1x.png | menu popup | mouse-hot row at y=83 | fake pointer + WM_MOUSEMOVE (Help menu) | TdxBarSubMenuControl | 191x216 |  |
+| hover-menu-help-row3@1x.png | menu popup | mouse-hot row at y=143 | fake pointer + WM_MOUSEMOVE (Help menu) | TdxBarSubMenuControl | 191x216 |  |
+| hover-menu-help-row4@1x.png | menu popup | mouse-hot row at y=203 | fake pointer + WM_MOUSEMOVE (Help menu) | TdxBarSubMenuControl | 191x216 |  |
+| hover-menu-online-rest@1x.png | menu popup | open, pointer away | click on the 'Online' title, fake pointer parked | TdxBarSubMenuControl | 162x86 |  |
+| hover-menu-online-row1@1x.png | menu popup | mouse-hot row at y=23 | fake pointer + WM_MOUSEMOVE (Online menu) | TdxBarSubMenuControl | 162x86 |  |
+| hover-menu-online-row2@1x.png | menu popup | mouse-hot row at y=43 | fake pointer + WM_MOUSEMOVE (Online menu) | TdxBarSubMenuControl | 162x86 |  |
+| hover-menu-reports-rest@1x.png | menu popup | open, pointer away | click on the 'Reports' title, fake pointer parked | TdxBarSubMenuControl | 228x206 |  |
+| hover-menu-reports-row1@1x.png | menu popup | mouse-hot row at y=103 | fake pointer + WM_MOUSEMOVE (Reports menu) | TdxBarSubMenuControl | 228x206 |  |
+| hover-menu-reports-row2@1x.png | menu popup | mouse-hot row at y=123 | fake pointer + WM_MOUSEMOVE (Reports menu) | TdxBarSubMenuControl | 228x206 |  |
+| hover-menu-reports-row3@1x.png | menu popup | mouse-hot row at y=143 | fake pointer + WM_MOUSEMOVE (Reports menu) | TdxBarSubMenuControl | 228x206 |  |
+| hover-menu-reports-row4@1x.png | menu popup | mouse-hot row at y=163 | fake pointer + WM_MOUSEMOVE (Reports menu) | TdxBarSubMenuControl | 228x206 |  |
+| hover-menu-search-rest@1x.png | menu popup | open, pointer away | click on the 'Search' title, fake pointer parked | TdxBarSubMenuControl | 227x488 |  |
+| hover-menu-search-row1@1x.png | menu popup | mouse-hot row at y=13 | fake pointer + WM_MOUSEMOVE (Search menu) | TdxBarSubMenuControl | 227x488 |  |
+| hover-menu-search-row2@1x.png | menu popup | mouse-hot row at y=53 | fake pointer + WM_MOUSEMOVE (Search menu) | TdxBarSubMenuControl | 227x488 |  |
+| hover-menu-search-row3@1x.png | menu popup | mouse-hot row at y=105 | fake pointer + WM_MOUSEMOVE (Search menu) | TdxBarSubMenuControl | 227x488 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-menu-search-row4@1x.png | menu popup | mouse-hot row at y=157 | fake pointer + WM_MOUSEMOVE (Search menu) | TdxBarSubMenuControl | 227x488 |  |
+| hover-menu-search-row5@1x.png | menu popup | mouse-hot row at y=221 | fake pointer + WM_MOUSEMOVE (Search menu) | TdxBarSubMenuControl | 227x488 |  |
+| hover-menu-search-row6@1x.png | menu popup | mouse-hot row at y=325 | fake pointer + WM_MOUSEMOVE (Search menu) | TdxBarSubMenuControl | 227x488 |  |
+| hover-menu-search-row7@1x.png | menu popup | mouse-hot row at y=385 | fake pointer + WM_MOUSEMOVE (Search menu) | TdxBarSubMenuControl | 227x488 |  |
+| hover-menu-search-row8@1x.png | menu popup | mouse-hot row at y=455 | fake pointer + WM_MOUSEMOVE (Search menu) | TdxBarSubMenuControl | 227x488 |  |
+| hover-menu-submenu-cards-print-popup1@1x.png | menu popup | sub-menu parent row 'cards-print' hovered, popup 1 of the open chain | fake pointer rests on the parent row; the sub-menu opens after the menu delay | TdxBarSubMenuControl | 216x86 |  |
+| hover-menu-submenu-cards-print-popup2@1x.png | menu popup | sub-menu parent row 'cards-print' hovered, popup 2 of the open chain | fake pointer rests on the parent row; the sub-menu opens after the menu delay | TdxBarSubMenuControl | 217x496 |  |
+| hover-menu-submenu-view-grid-lines-popup1@1x.png | menu popup | sub-menu parent row 'view-grid-lines' hovered, popup 1 of the open chain | fake pointer rests on the parent row; the sub-menu opens after the menu delay | TdxBarSubMenuControl | 105x86 |  |
+| hover-menu-submenu-view-grid-lines-popup2@1x.png | menu popup | sub-menu parent row 'view-grid-lines' hovered, popup 2 of the open chain | fake pointer rests on the parent row; the sub-menu opens after the menu delay | TdxBarSubMenuControl | 214x626 |  |
+| hover-menu-submenu-view-toolbars-popup1@1x.png | menu popup | sub-menu parent row 'view-toolbars' hovered, popup 1 of the open chain | fake pointer rests on the parent row; the sub-menu opens after the menu delay | TdxBarSubMenuControl | 119x216 |  |
+| hover-menu-submenu-view-toolbars-popup2@1x.png | menu popup | sub-menu parent row 'view-toolbars' hovered, popup 2 of the open chain | fake pointer rests on the parent row; the sub-menu opens after the menu delay | TdxBarSubMenuControl | 214x626 |  |
+| hover-menu-switch-file-to-search-popup1@1x.png | menu popup | popup showing while hovering the other title | same | TdxBarSubMenuControl | 227x488 |  |
+| hover-menu-switch-file-to-search@1x.png | menu bar | menu 'File' open, pointer on the 'Search' title | fake pointer + WM_MOUSEMOVE to the bar while a menu is open | TMainForm | 800x600 |  |
+| hover-menu-switch-file-to-view-popup1@1x.png | menu popup | popup showing while hovering the other title | same | TdxBarSubMenuControl | 214x626 |  |
+| hover-menu-switch-file-to-view@1x.png | menu bar | menu 'File' open, pointer on the 'View' title | fake pointer + WM_MOUSEMOVE to the bar while a menu is open | TMainForm | 800x600 |  |
+| hover-menu-switch-help-to-file-popup1@1x.png | menu popup | popup showing while hovering the other title | same | TdxBarSubMenuControl | 251x580 |  |
+| hover-menu-switch-help-to-file@1x.png | menu bar | menu 'Help' open, pointer on the 'File' title | fake pointer + WM_MOUSEMOVE to the bar while a menu is open | TMainForm | 800x600 |  |
+| hover-menu-switch-search-to-reports-popup1@1x.png | menu popup | popup showing while hovering the other title | same | TdxBarSubMenuControl | 228x206 |  |
+| hover-menu-switch-search-to-reports@1x.png | menu bar | menu 'Search' open, pointer on the 'Reports' title | fake pointer + WM_MOUSEMOVE to the bar while a menu is open | TMainForm | 800x600 |  |
+| hover-menu-switch-view-to-tools-popup1@1x.png | menu popup | popup showing while hovering the other title | same | TdxBarSubMenuControl | 255x166 |  |
+| hover-menu-switch-view-to-tools@1x.png | menu bar | menu 'View' open, pointer on the 'Tools' title | fake pointer + WM_MOUSEMOVE to the bar while a menu is open | TMainForm | 800x600 |  |
+| hover-menu-tools-rest@1x.png | menu popup | open, pointer away | click on the 'Tools' title, fake pointer parked | TdxBarSubMenuControl | 255x166 |  |
+| hover-menu-tools-row1@1x.png | menu popup | mouse-hot row at y=33 | fake pointer + WM_MOUSEMOVE (Tools menu) | TdxBarSubMenuControl | 255x166 |  |
+| hover-menu-tools-row2@1x.png | menu popup | mouse-hot row at y=93 | fake pointer + WM_MOUSEMOVE (Tools menu) | TdxBarSubMenuControl | 255x166 |  |
+| hover-menu-tools-row3@1x.png | menu popup | mouse-hot row at y=153 | fake pointer + WM_MOUSEMOVE (Tools menu) | TdxBarSubMenuControl | 255x166 |  |
+| hover-menu-view-rest@1x.png | menu popup | open, pointer away | click on the 'View' title, fake pointer parked | TdxBarSubMenuControl | 214x626 |  |
+| hover-menu-view-row1@1x.png | menu popup | mouse-hot row at y=75 | fake pointer + WM_MOUSEMOVE (View menu) | TdxBarSubMenuControl | 214x626 |  |
+| hover-menu-view-row2@1x.png | menu popup | mouse-hot row at y=135 | fake pointer + WM_MOUSEMOVE (View menu) | TdxBarSubMenuControl | 214x626 |  |
+| hover-menu-view-row3@1x.png | menu popup | mouse-hot row at y=195 | fake pointer + WM_MOUSEMOVE (View menu) | TdxBarSubMenuControl | 214x626 |  |
+| hover-menu-view-row4@1x.png | menu popup | mouse-hot row at y=303 | fake pointer + WM_MOUSEMOVE (View menu) | TdxBarSubMenuControl | 214x626 |  |
+| hover-menu-view-row5@1x.png | menu popup | mouse-hot row at y=483 | fake pointer + WM_MOUSEMOVE (View menu) | TdxBarSubMenuControl | 214x626 |  |
+| hover-menu-view-row6@1x.png | menu popup | mouse-hot row at y=553 | fake pointer + WM_MOUSEMOVE (View menu) | TdxBarSubMenuControl | 214x626 |  |
+| hover-menubar-title-admin@1x.png | menu bar | hot title (admin), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-menubar-title-cardart@1x.png | menu bar | hot title (cardart), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-menubar-title-cards@1x.png | menu bar | hot title (cards), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-menubar-title-file@1x.png | menu bar | hot title (file), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-menubar-title-help@1x.png | menu bar | hot title (help), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-menubar-title-online@1x.png | menu bar | hot title (online), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-menubar-title-reports@1x.png | menu bar | hot title (reports), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-menubar-title-search@1x.png | menu bar | hot title (search), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-menubar-title-tools@1x.png | menu bar | hot title (tools), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-menubar-title-view@1x.png | menu bar | hot title (view), no menu open | fake pointer + WM_MOUSEMOVE (Main Menu bar) | TMainForm | 800x600 |  |
+| hover-missing-set-cards-rest@1x.png | dialog (Missing Set Cards) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Reports > Missing Set Cards) | TMissingSetCardsForm | 266x503 |  |
+| hover-options-cardart-rest@1x.png | dialog (Options, Card Art page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 10) | TOptionsForm | 728x494 |  |
+| hover-options-decks-rest@1x.png | dialog (Options, Decks page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 2) | TOptionsForm | 728x494 |  |
+| hover-options-defaults-rest@1x.png | dialog (Options, Defaults page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 9) | TOptionsForm | 728x494 |  |
+| hover-options-grids-rest@1x.png | dialog (Options, Grids page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 8) | TOptionsForm | 728x494 |  |
+| hover-options-interface-rest@1x.png | dialog (Options, Interface page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 1) | TOptionsForm | 728x494 |  |
+| hover-options-internet-rest@1x.png | dialog (Options, Internet page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 5) | TOptionsForm | 728x494 |  |
+| hover-options-morph-rest@1x.png | dialog (Options, Morph page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 11) | TOptionsForm | 728x494 |  |
+| hover-options-passwords-rest@1x.png | dialog (Options, Passwords page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 4) | TOptionsForm | 728x494 |  |
+| hover-options-prices-rest@1x.png | dialog (Options, Prices page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 7) | TOptionsForm | 728x494 |  |
+| hover-options-rules-rest@1x.png | dialog (Options, Rules page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 6) | TOptionsForm | 728x494 |  |
+| hover-options-shortcuts-rest@1x.png | dialog (Options, Shortcuts page) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Options, page 3) | TOptionsForm | 728x494 |  |
+| hover-panel-options-header@1x.png | page header | hover | fake pointer + WM_MOUSEMOVE (Options page header) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-radio-filter-blocks@1x.png | radio button | hover (selected Blocks) | fake pointer + WM_MOUSEMOVE (Filter) | TFilterForm | 708x493 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-radio-filter-formats@1x.png | radio button | hover (unselected Formats) | fake pointer + WM_MOUSEMOVE (Filter) | TFilterForm | 708x493 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-radio-missing-set-cards-available@1x.png | radio button | hover (unselected) | fake pointer + WM_MOUSEMOVE (Missing Set Cards) | TMissingSetCardsForm | 266x503 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-radio-missing-set-cards-missing@1x.png | radio button | hover over the caption | fake pointer + WM_MOUSEMOVE (Missing Set Cards) | TMissingSetCardsForm | 266x503 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-radio-options-move-next-row@1x.png | radio button | hover (unselected) | fake pointer + WM_MOUSEMOVE (Options > Grids) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-radio-options-search-from-start@1x.png | radio button | hover (selected) | fake pointer + WM_MOUSEMOVE (Options > Grids) | TOptionsForm | 728x494 |  |
+| hover-radio-options-search-within-label@1x.png | radio button | hover over the caption | fake pointer + WM_MOUSEMOVE (Options > Grids) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-radio-options-search-within@1x.png | radio button | hover (unselected) | fake pointer + WM_MOUSEMOVE (Options > Grids) | TOptionsForm | 728x494 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-radio-search-cards@1x.png | radio button | hover (selected Cards) | fake pointer + WM_MOUSEMOVE (Search for Card) | TSearchForm | 325x257 |  |
+| hover-radio-search-collection@1x.png | radio button | hover (unselected Collection) | fake pointer + WM_MOUSEMOVE (Search for Card) | TSearchForm | 325x257 |  |
+| hover-scroll-bar-arrow-down-options-shortcuts@1x.png | scroll bar (grid) | hover over the lower arrow | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-scroll-bar-arrow-up-options-shortcuts@1x.png | scroll bar (grid) | hover over the upper arrow | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-scroll-bar-horizontal-thumb@1x.png | scroll bar (horizontal, in the navigator) | hover over the thumb | fake pointer + WM_MOUSEMOVE (top grid navigator) | TMainForm | 800x600 |  |
+| hover-scroll-bar-thumb-filter-tree@1x.png | scroll bar (tree) | hover over the thumb | fake pointer + WM_MOUSEMOVE (Filter, Blocks tree) | TFilterForm | 708x493 |  |
+| hover-scroll-bar-thumb-options-shortcuts@1x.png | scroll bar (grid) | hover over the thumb | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-scroll-bar-thumb-sort@1x.png | scroll bar (grid) | hover over the thumb | fake pointer + WM_MOUSEMOVE (Sort) | TSortColumnsForm | 367x347 |  |
+| hover-scroll-bar-track-filter-tree@1x.png | scroll bar (tree) | hover over the track | fake pointer + WM_MOUSEMOVE (Filter, Blocks tree) | TFilterForm | 708x493 |  |
+| hover-scroll-bar-track-options-shortcuts@1x.png | scroll bar (grid) | hover over the track | fake pointer + WM_MOUSEMOVE (Options > Shortcuts) | TOptionsForm | 728x494 |  |
+| hover-scroll-bar-vertical-arrow-down@1x.png | scroll bar (vertical, top grid) | hover over the lower arrow | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 |  |
+| hover-scroll-bar-vertical-arrow-up@1x.png | scroll bar (vertical, top grid) | hover over the upper arrow | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 |  |
+| hover-scroll-bar-vertical-thumb@1x.png | scroll bar (vertical, top grid) | hover over the thumb | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 |  |
+| hover-scroll-bar-vertical-track@1x.png | scroll bar (vertical, top grid) | hover over the track below the thumb | fake pointer + WM_MOUSEMOVE (top grid) | TMainForm | 800x600 |  |
+| hover-search-rest@1x.png | dialog (Search for Card) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (Search > Search) | TSearchForm | 325x257 |  |
+| hover-sort-rest@1x.png | dialog (Sort) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (View > Sort...) | TSortColumnsForm | 367x347 |  |
+| hover-spin-edit-arrow-down-options-max-same-cards@1x.png | spin edit | hover over the down arrow | fake pointer + WM_MOUSEMOVE (Options > Decks) | TOptionsForm | 728x494 |  |
+| hover-spin-edit-arrow-down-options-morph-speed@1x.png | spin edit (stacked arrows) | hover over the down arrow | fake pointer + WM_MOUSEMOVE (Options > Morph) | TOptionsForm | 728x494 |  |
+| hover-spin-edit-arrow-left-options-max-same-cards@1x.png | spin edit | hover over the left (decrease) button | fake pointer + WM_MOUSEMOVE (Options > Decks) | TOptionsForm | 728x494 |  |
+| hover-spin-edit-arrow-right-options-max-same-cards@1x.png | spin edit | hover over the right (increase) button | fake pointer + WM_MOUSEMOVE (Options > Decks) | TOptionsForm | 728x494 |  |
+| hover-spin-edit-arrow-up-options-max-same-cards@1x.png | spin edit | hover over the up arrow | fake pointer + WM_MOUSEMOVE (Options > Decks) | TOptionsForm | 728x494 |  |
+| hover-spin-edit-arrow-up-options-morph-speed@1x.png | spin edit (stacked arrows) | hover over the up arrow | fake pointer + WM_MOUSEMOVE (Options > Morph) | TOptionsForm | 728x494 |  |
+| hover-spin-edit-options-max-same-cards@1x.png | spin edit | hover over the edit | fake pointer + WM_MOUSEMOVE (Options > Decks) | TOptionsForm | 728x494 |  |
+| hover-spin-edit-options-morph-speed@1x.png | spin edit | hover over the edit | fake pointer + WM_MOUSEMOVE (Options > Morph) | TOptionsForm | 728x494 |  |
+| hover-splitter-filter@1x.png | splitter (dialog) | hover | fake pointer + WM_MOUSEMOVE (Filter, between tree and web view) | TFilterForm | 708x493 |  |
+| hover-splitter-horizontal@1x.png | splitter (horizontal, between grids) | hover | fake pointer + WM_MOUSEMOVE (8 px strip) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-splitter-vertical@1x.png | splitter (vertical, left) | hover | fake pointer + WM_MOUSEMOVE (8 px strip) | TMainForm | 800x600 |  |
+| hover-statistics-rest@1x.png | dialog (Statistics) | rest (pointer away) | dialog / window just opened, fake pointer parked off screen (File > Statistics) | TStatisticsForm | 957x509 |  |
+| hover-status-bar-panel-1@1x.png | status bar panel | hover | fake pointer + WM_MOUSEMOVE (status bar) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-status-bar-panel-2@1x.png | status bar panel | hover | fake pointer + WM_MOUSEMOVE (status bar) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-status-bar-panel-3@1x.png | status bar panel | hover | fake pointer + WM_MOUSEMOVE (status bar) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-status-bar-panel-4@1x.png | status bar panel | hover | fake pointer + WM_MOUSEMOVE (status bar) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-customization-columns@1x.png | tab control (single tab) | hover over the tab | fake pointer + WM_MOUSEMOVE (Customization) | TcxGridBandedTableCustomizationForm | 180x300 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-filter-blocks-selected@1x.png | tab control (top tabs) | hover over the selected tab | fake pointer + WM_MOUSEMOVE (Filter) | TFilterForm | 708x493 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-filter-cards@1x.png | tab control (top tabs) | hover over an unselected tab (Cards) | fake pointer + WM_MOUSEMOVE (Filter) | TFilterForm | 708x493 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-filter-options@1x.png | tab control (top tabs) | hover over an unselected tab (Options) | fake pointer + WM_MOUSEMOVE (Filter) | TFilterForm | 708x493 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-left-first@1x.png | tab control (left, bottom tabs) | hover over the selected first tab | fake pointer + WM_MOUSEMOVE (left tabs) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-left-second@1x.png | tab control (left, bottom tabs) | hover over the second tab | fake pointer + WM_MOUSEMOVE (left tabs) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-1@1x.png | tab control (top tabs) | hover over tab 1 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-10@1x.png | tab control (top tabs) | hover over tab 10 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-11@1x.png | tab control (top tabs) | hover over tab 11 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-2@1x.png | tab control (top tabs) | hover over tab 2 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-3@1x.png | tab control (top tabs) | hover over tab 3 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-4@1x.png | tab control (top tabs) | hover over tab 4 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-5@1x.png | tab control (top tabs) | hover over tab 5 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-6@1x.png | tab control (top tabs) | hover over tab 6 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-7@1x.png | tab control (top tabs) | hover over tab 7 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-8@1x.png | tab control (top tabs) | hover over tab 8 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tab-statistics-9@1x.png | tab control (top tabs) | hover over tab 9 | fake pointer + WM_MOUSEMOVE (Statistics) | TStatisticsForm | 957x509 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-cards-1@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Cards bar, first (greyed)) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-cards-expand@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Cards bar, blue double arrow) | TMainForm | 800x600 |  |
+| hover-toolbar-button-cards-f@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Cards bar, F button) | TMainForm | 800x600 |  |
+| hover-toolbar-button-cards-minus@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Cards bar, minus) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-cards-plus@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Cards bar, plus) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-help-discord@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Help bar, discord) | TMainForm | 800x600 |  |
+| hover-toolbar-button-help-home@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Help bar, home) | TMainForm | 800x600 |  |
+| hover-toolbar-button-search-4@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Search bar) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-search-5@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Search bar) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-search-binoculars-pressed@1x.png | toolbar button | pressed (button down) | fake pointer + fake left button, WM_LBUTTONDOWN, no up, then WM_CANCELMODE (Search bar binoculars) | TMainForm | 800x600 |  |
+| hover-toolbar-button-search-binoculars@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Search bar, binoculars) | TMainForm | 800x600 |  |
+| hover-toolbar-button-search-filter-plus@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Search bar, funnel plus) | TMainForm | 800x600 |  |
+| hover-toolbar-button-search-filter-pressed@1x.png | toolbar button | pressed (button down) | fake pointer + fake left button, WM_LBUTTONDOWN, no up, then WM_CANCELMODE (Search bar funnel) | TMainForm | 800x600 |  |
+| hover-toolbar-button-search-filter@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Search bar, filter funnel) | TMainForm | 800x600 |  |
+| hover-toolbar-button-search-pencil@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Search bar) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-standard-1@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Standard bar, first (greyed)) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-standard-2@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Standard bar (greyed)) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-standard-3@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Standard bar (greyed)) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-button-standard-8@1x.png | toolbar button | hot (hover) | fake pointer + WM_MOUSEMOVE (Standard bar, last (greyed)) | TMainForm | 800x600 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-toolbar-combo-card-drop@1x.png | toolbar combo (card name) | hover over the drop button | fake pointer + WM_MOUSEMOVE (Standard bar combo) | TMainForm | 800x600 |  |
+| hover-toolbar-combo-card-edit@1x.png | toolbar combo (card name) | hover over the edit | fake pointer + WM_MOUSEMOVE (Standard bar combo) | TMainForm | 800x600 |  |
+| hover-toolbar-combo-mode@1x.png | toolbar combo (Mode) | hover over the combo | fake pointer + WM_MOUSEMOVE (mode combo) | TMainForm | 800x600 |  |
+| hover-tree-list-checkbox-filter@1x.png | tree list check box | hover over a node check box | fake pointer + WM_MOUSEMOVE (Filter > Blocks tree) | TFilterForm | 708x493 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tree-list-conditional-formatting@1x.png | tree list | hover over the rule list | fake pointer + WM_MOUSEMOVE (Conditional Formatting) | TfrmDataControllerConditionalFormattingRulesManagerDialog | 700x421 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tree-list-expander-filter@1x.png | tree list expander (+) | hover over the expand button | fake pointer + WM_MOUSEMOVE (Filter > Blocks tree) | TFilterForm | 708x493 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-tree-list-row-filter@1x.png | tree list | hover over a row | fake pointer + WM_MOUSEMOVE (Filter > Blocks tree) | TFilterForm | 708x493 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-vertical-grid-caption-deck-properties-author@1x.png | vertical grid | hover over a row caption | fake pointer + WM_MOUSEMOVE (Deck Properties) | TDeckPropertiesForm | 364x552 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-vertical-grid-category-deck-properties-general@1x.png | vertical grid category header | hover over the category (collapse button) | fake pointer + WM_MOUSEMOVE (Deck Properties) | TDeckPropertiesForm | 364x552 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-vertical-grid-combo-deck-properties-archetype@1x.png | vertical grid (combo) | hover over the Archetype value cell | fake pointer + WM_MOUSEMOVE (Deck Properties) | TDeckPropertiesForm | 364x552 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-vertical-grid-row-deck-properties-description@1x.png | vertical grid | hover over the Description value cell | fake pointer + WM_MOUSEMOVE (Deck Properties) | TDeckPropertiesForm | 364x552 | PIXEL-IDENTICAL to rest: no distinct hover look |
+| hover-vertical-grid-row-deck-properties-name@1x.png | vertical grid | hover over the Name value cell | fake pointer + WM_MOUSEMOVE (Deck Properties) | TDeckPropertiesForm | 364x552 | PIXEL-IDENTICAL to rest: no distinct hover look |
 | image-combo-box-cell-editor-sort@1x.png | image combo box (in-place cell editor) | editor active in the Sort Order cell | click the Sort Order cell of the Name row (no value changed) | TSortColumnsForm | 367x347 |  |
 | image-combo-box-open-dialog-sort@1x.png | image combo box | drop-down open (dialog side) | click on the cell editor drop button | TSortColumnsForm | 367x347 |  |
 | image-combo-box-open-list-sort@1x.png | image combo box drop-down list | open list with images, current item selected | popup TcxComboBoxPopupWindow | TcxComboBoxPopupWindow | 153x56 |  |
@@ -282,9 +621,13 @@ The script kills and relaunches the `mtgstudio_s` copy at the start. The copy ru
 
 | Control | State | Why |
 |---|---|---|
+|  |  |  |
 | toolbar button | hot / pressed / checked | dxBar toolbars ignore posted mouse messages (a posted down+up on the Search-toolbar binoculars neither pressed nor opened the dialog); hit-test uses the real pointer |
 | any control | hover (mouse over) | DevExpress reads the real pointer with GetCursorPos / its own mouse hook; a posted WM_MOUSEMOVE changes nothing visible (tried toolbar, menu popup, cxButton, grid header and rows, with and without app activation, with CM_MOUSEENTER and WM_MOUSEHOVER) |
 | combo box (Search for Card, Card combo (history; may be empty)) | open drop-down list | no popup window appeared after a posted click on the drop button |
 | vertical grid combo | open list | no popup after clicking the editor drop button |
 | date edit | any state | no v3 dialog reached with posted messages contains a date edit: Deck Registration Sheets and Deck Availability would print/generate documents, so they were not opened |
+| check box hint | hint window | no new top-level window within 3000 ms (Options) |
+| data grid header hint | hint window | no new top-level window within 3000 ms (top grid Name header) |
+| status bar panel hint | hint window | no new top-level window within 3000 ms (status bar) |
 

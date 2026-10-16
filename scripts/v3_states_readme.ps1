@@ -27,15 +27,22 @@ Each dialog is opened fresh, its `*-rest` grab is taken first, and the states fo
 | open menu title + open popup, sub-menu open | yes | click the title, `VK_DOWN` n times, `VK_RIGHT` for the sub-menu |
 | selected focused / unfocused row (grid, tree, list, check list) | yes | click the row; `WM_KILLFOCUS` to the control for the unfocused look |
 | inactive caption | main window only, approximately | `WM_NCACTIVATE 0` |
-| hover (mouse over) of anything | NO | DevExpress (dxBar, cxButton, cxGrid, cxEdit) and the VCL mouse-enter logic read the real pointer with `GetCursorPos` or a global mouse hook; posted / sent `WM_MOUSEMOVE`, `WM_MOUSEHOVER`, VCL `CM_MOUSEENTER`, with and without activation changed nothing |
-| toolbar buttons (dxBar toolbars: hot, pressed, checked, drop-down) and their hint windows | NO | the toolbars ignore posted mouse messages entirely (the Search toolbar binoculars neither pressed nor opened the dialog); hints need the real pointer resting over a button |
-| tooltip / hint windows of grid headers, toolbar, status bar | NO | same: cxHint is started by the real pointer |
-| status bar panel hover, splitter hover, scroll bar hover, navigator hover | NO | same |
-| caption button hover / pressed | NOT TRIED | `WM_NCLBUTTONDOWN` on the close X enters the system's modal caption-button loop that watches the real pointer; judged not worth the risk of closing the copy |
+| hover (mouse over) of anything, toolbar buttons hot / pressed, hint windows, status bar / splitter / scroll bar / navigator hover, caption button hover, the mouse-hot row of menus and open lists | yes, with the pointer hook | `scripts/grab_v3_hover.ps1` on a copy whose `GetCursorPos` / `WindowFromPoint` / `GetKeyState(VK_LBUTTON)` are faked by `scripts/v3_hook` (section below); these are the `hover-*` files |
+| caption button pressed | NO | `WM_NCLBUTTONDOWN` on the X returns at once and the grab shows the plain (not even hot) button: the system does not hold the pressed caption button without a real button; hover of the caption buttons IS captured (`hover-caption-*`) |
 | progress bar | only if a window shows while computing | see the table: the report previews open in under 120 ms, the bar was never on screen when grabbed |
 | date edit | not present | no dialog reachable without printing / generating a document has one |
 
-If the hover looks are required, the only remaining route that does not simulate physical input is to patch the copy to report a fixed pointer position (a hook on `GetCursorPos` inside the copy). That was not done: it is outside the approved message list.
+Hover has its own section below. Without the hook it is not reachable: DevExpress / VCL read the real pointer.
+
+## Hover (mouse-over) states
+
+Captured by `scripts/grab_v3_hover.ps1` (helpers `scripts/v3_hover_lib.ps1`, hook source and build in `scripts/v3_hook/`, see its README). VCL and DevExpress decide "the mouse is over this control" from the real pointer (`GetCursorPos`, `WindowFromPoint`, `GetKeyState`, `TrackMouseEvent`), which posted messages cannot change. The copy (`mtgstudio_s.exe`, only that process) is therefore injected with `v3hook.dll`: those calls answer from a small shared memory block that the script writes (the fake pointer), the script then posts the ordinary `WM_MOUSEMOVE` to the window under that fake pointer, waits 350 to 600 ms and grabs with `PrintWindow`. The fake pointer is parked far off screen between grabs. The real cursor and keyboard are never used (no `SendInput`, `mouse_event`, `keybd_event`, `SetCursorPos`); the maintainer's v3, the installed program and `version-3` in the repo were not touched.
+
+Naming: `hover-<control>-<what>@1x.png`. Every dialog or window gets a `hover-<dialog>-rest` grab first; each hover grab is also compared with a grab taken just before the pointer moved in, and the Notes column says `PIXEL-IDENTICAL to rest: no distinct hover look` where the control draws nothing different (disabled toolbar buttons, grid rows, group rows, status bar panels, the left tabs, Statistics tabs, list box rows ...). Those PNGs are kept as proof that the hover was tried. `hover-*-pressed` files are fake pointer + fake left button + `WM_LBUTTONDOWN`, never released (`WM_CANCELMODE` after). Hint windows are grabbed as their own top-level window (`hover-hint-*`, class `TdxBarHintWindow` / `TcxHintWindow`) plus the owner (`*-context`). Popup rows (`hover-menu-*-rowN`, `hover-combo-list-*-rowN`) are the true mouse-hot row, as opposed to the keyboard row of the other captures. Window-caption hover is a `WM_NCMOUSEMOVE` with the hit-test code (min, max, close are visibly hot).
+
+Not captured: hint windows of the status bar panels (none appear) and of Options check boxes (none); a pressed caption button (see table); grid filter-row cells and date edits (no reachable screen: the filter row needs Options > Show Filter Row, which is a saved setting, and no dialog without printing has a date edit); a progress bar (Filter OK on the 120k pool finished in under 0.5 s and the status bar stayed on "Idle" in 20 frames). Hover on the deck-mode vertical grid, tree list rows, tabs, list boxes draws nothing different.
+
+Traps specific to hover: the hook must be rebuilt for a new v3 build only if the exe stops importing those functions (it matches the resolved addresses in every module's import table, not names). `Start-Sleep 1500` is 1500 seconds. Hover state is per process: restarting the copy resets the hook, `Start-Hooked` re-injects. Hints appear only after a quiet 0.7 s and not at all after an unreleased dxBar button press, so the toolbar hints run before the pressed grabs. Posting `WM_MOUSEMOVE` repeatedly at the same spot restarts the hint timer. Native `Button` / `TcxButton` windows call `TrackMouseEvent(TME_LEAVE)`; with no real pointer over the window the system would send `WM_MOUSELEAVE` at once and un-hot the button, so the hook swallows those requests for button classes only (swallowing them for dxBar broke the toolbar hover). Re-run: `pwsh -File scripts\grab_v3_hover.ps1 [-Only main,menus,options,dialogs,deck,grid]`.
 
 ## Traps
 
@@ -67,6 +74,8 @@ The script kills and relaunches the `mtgstudio_s` copy at the start. The copy ru
   [void]$sb.AppendLine($head)
   foreach($r in $rows){ [void]$sb.AppendLine(("| {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f $r.File,$r.Control,$r.State,($r.How -replace '\|','/'),$r.Class,$r.Size,($r.Notes -replace '\|','/'))) }
   [void]$sb.AppendLine("`n## Not reached in this run`n`n| Control | State | Why |`n|---|---|---|")
-  foreach($n in $script:Notes){ [void]$sb.AppendLine("| $($n.Control) | $($n.State) | $($n.Why -replace '\|','/') |") }
+  $hnf=Join-Path $script:Out 'hover-notes.csv'
+  $allNotes=@($script:Notes); if(Test-Path $hnf){ $allNotes += @(Import-Csv $hnf) }
+  foreach($n in $allNotes){ [void]$sb.AppendLine("| $($n.Control) | $($n.State) | $($n.Why -replace '\|','/') |") }
   Set-Content (Join-Path $script:Out 'README.md') $sb.ToString() -Encoding UTF8
 }
