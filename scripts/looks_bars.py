@@ -30,8 +30,19 @@ CASES = {
         ("hover thumb", MAIN % "hover-scroll-bar-horizontal-thumb", (441, 303, 196, 16)),
         ("pressed thumb", MAIN % "scroll-bar-thumb-pressed-main-horizontal", (441, 303, 196, 16)),
     ]),
+    "scroll_bar_live": dict(columns=2, cw=200, ch=190, cells=[
+        ("vertical rest", "main-window@1x.png", (775, 111, 16, 186)),
+        ("horizontal rest", MAIN % "hover-scroll-bar-vertical-thumb", (441, 303, 196, 16)),
+    ]),
+    "scroll_bar_native": dict(columns=3, cw=178, ch=170, cells=[
+        ("disabled", "vscroll-disabled@1x.png", (20, 10, 17, 170)),
+        ("disabled horizontal", "hscroll-disabled@1x.png", (16, 20, 178, 17)),
+        ("pressed upper arrow", "vscroll-pressed-arrow@1x.png", (20, 10, 17, 170)),
+    ]),
 }
-EXCLUDE = {}
+# cell relative rectangles painted out of both images (nothing but v3 or native artwork of another look): the native thumb of the pressed
+# arrow cell (2 px, v3's is its own 3 pixel one) and the 17th column and the white first column (v3's is #F7F7F7) of the 16 wide v3 track
+EXCLUDE = {("scroll_bar_native", "pressed upper arrow"): [(0, 14, 17, 170), (16, 0, 17, 14), (0, 0, 1, 14)]}
 
 
 def origin(c, i):

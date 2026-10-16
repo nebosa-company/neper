@@ -14572,8 +14572,58 @@ fn scroll_arrows_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> er
 var scroll_bar_crisp: bool = false
 fn set_scroll_bar_crisp(on: bool) { scroll_bar_crisp = on }
 
+// ---- round 13: the native light bar's states v3 never showed (ref/windows-native/light/vscroll-disabled, hscroll-disabled, *-pressed-arrow) ----
+// Windows 11's disabled bar: a 17 wide (or high) bar of the face colour with a white first line and two light grey arrows 4 in from the
+// line, 6 from each end; the pressed upper (left) arrow is the dark #686868 one. Pixel strings from scripts/looks_bar_native.py.
+var scroll_bar_disabled: bool = false
+fn set_scroll_bar_disabled(on: bool) { scroll_bar_disabled = on }
+fn native_arrow_up_disabled() -> str { ret "F0F0F0F0F0F0F0F0F0E2E2E2ABABABABABABE2E2E2F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0EDEDEDAFAFAFA4A4A4A4A4A4AFAFAFEDEDEDF0F0F0F0F0F0F0F0F0F0F0F0C4C4C4A4A4A4A4A4A4A4A4A4A4A4A4C4C4C4F0F0F0F0F0F0F0F0F0DADADAA4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4DADADAF0F0F0EFEFEFACACACA4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4ACACACEFEFEFEFEFEFAFAFAFA4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4AFAFAFEFEFEF" }
+fn native_arrow_down_disabled() -> str { ret "EFEFEFAFAFAFA4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4AFAFAFEFEFEFEFEFEFACACACA4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4ACACACEFEFEFF0F0F0DADADAA4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4DADADAF0F0F0F0F0F0F0F0F0C4C4C4A4A4A4A4A4A4A4A4A4A4A4A4C4C4C4F0F0F0F0F0F0F0F0F0F0F0F0EDEDEDAFAFAFA4A4A4A4A4A4AFAFAFEDEDEDF0F0F0F0F0F0F0F0F0F0F0F0F0F0F0E2E2E2ABABABABABABE2E2E2F0F0F0F0F0F0F0F0F0" }
+fn native_arrow_left_disabled() -> str { ret "F0F0F0F0F0F0F0F0F0F0F0F0EFEFEFEFEFEFF0F0F0F0F0F0F0F0F0DADADAACACACAFAFAFF0F0F0EDEDEDC4C4C4A4A4A4A4A4A4A4A4A4E2E2E2AFAFAFA4A4A4A4A4A4A4A4A4A4A4A4ABABABA4A4A4A4A4A4A4A4A4A4A4A4A4A4A4ABABABA4A4A4A4A4A4A4A4A4A4A4A4A4A4A4E2E2E2AFAFAFA4A4A4A4A4A4A4A4A4A4A4A4F0F0F0EDEDEDC4C4C4A4A4A4A4A4A4A4A4A4F0F0F0F0F0F0F0F0F0DADADAACACACAFAFAFF0F0F0F0F0F0F0F0F0F0F0F0EFEFEFEFEFEF" }
+fn native_arrow_right_disabled() -> str { ret "EFEFEFEFEFEFF0F0F0F0F0F0F0F0F0F0F0F0AFAFAFACACACDADADAF0F0F0F0F0F0F0F0F0A4A4A4A4A4A4A4A4A4C4C4C4EDEDEDF0F0F0A4A4A4A4A4A4A4A4A4A4A4A4AFAFAFE2E2E2A4A4A4A4A4A4A4A4A4A4A4A4A4A4A4ABABABA4A4A4A4A4A4A4A4A4A4A4A4A4A4A4ABABABA4A4A4A4A4A4A4A4A4A4A4A4AFAFAFE2E2E2A4A4A4A4A4A4A4A4A4C4C4C4EDEDEDF0F0F0AFAFAFACACACDADADAF0F0F0F0F0F0F0F0F0EFEFEFEFEFEFF0F0F0F0F0F0F0F0F0F0F0F0" }
+fn native_arrow_up_pressed() -> str { ret "F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0EFEFEFC8C8C8C8C8C8EFEFEFF0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0A8A8A8686868686868A8A8A8F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0CFCFCF696969686868686868696969CFCFCFF0F0F0F0F0F0F0F0F0F0F0F0F0F0F0E8E8E8787878686868686868686868686868787878E8E8E8F0F0F0F0F0F0F0F0F0F0F0F09A9A9A6868686868686868686868686868686868689A9A9AF0F0F0F0F0F0F0F0F0C6C6C6686868686868686868686868686868686868686868686868C6C6C6F0F0F0F0F0F0ABABAB686868686868686868686868686868686868686868686868ABABABF0F0F0F0F0F0E9E9E9BFBFBFBDBDBDBDBDBDBDBDBDBDBDBDBDBDBDBDBDBDBFBFBFE9E9E9" }
+fn native_arrow_left_pressed() -> str { ret "F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0C6C6C6ACACACE9E9E9F0F0F0F0F0F0F0F0F0E8E8E89A9A9A686868686868BFBFBFF0F0F0F0F0F0CFCFCF787878686868686868686868BDBDBDEFEFEFA9A9A9696969686868686868686868686868BDBDBDC8C8C8686868686868686868686868686868686868BDBDBDC8C8C8686868686868686868686868686868686868BDBDBDEFEFEFA9A9A9696969686868686868686868686868BDBDBDF0F0F0F0F0F0CFCFCF787878686868686868686868BDBDBDF0F0F0F0F0F0F0F0F0E8E8E89A9A9A686868686868BFBFBFF0F0F0F0F0F0F0F0F0F0F0F0F0F0F0C6C6C6ACACACE9E9E9" }
+
+fn windows_scroll_bar_disabled(a: *mem.Arena, t: *const Theme, vertical: bool, length: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var line = sized_style(1.0, length)
+    if !vertical { line = sized_style(length, 1.0) }
+    line.background = paint.Brush { Solid: style.hex(16777215u32) }
+    parts[0usize] = widget.box(0u64, line, zero)
+    var first = native_arrow_up_disabled()
+    var second = native_arrow_down_disabled()
+    var aw: f32 = 10.0
+    var ah: f32 = 6.0
+    if !vertical {
+        first = native_arrow_left_disabled()
+        second = native_arrow_right_disabled()
+        aw = 6.0
+        ah = 10.0
+    }
+    let (arrow_a, arrow_a_error) = gl.pixels(a, first, aw, ah)
+    if arrow_a_error != ok { ret (zero, arrow_a_error) }
+    let (arrow_b, arrow_b_error) = gl.pixels(a, second, aw, ah)
+    if arrow_b_error != ok { ret (zero, arrow_b_error) }
+    if vertical {
+        parts[1usize] = widget.positioned(0u64, 4.0, 6.0, style.defaults(), one_widget(a, arrow_a))
+        parts[2usize] = widget.positioned(0u64, 4.0, length - 11.0, style.defaults(), one_widget(a, arrow_b))
+    } else {
+        parts[1usize] = widget.positioned(0u64, 5.0, 4.0, style.defaults(), one_widget(a, arrow_a))
+        parts[2usize] = widget.positioned(0u64, length - 11.0, 4.0, style.defaults(), one_widget(a, arrow_b))
+    }
+    var face = sized_style(17.0, length)
+    if !vertical { face = sized_style(length, 17.0) }
+    face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    ret (widget.stack(0u64, face, parts[0usize..3usize]), ok)
+}
+
 fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, view: f32, content: f32, offset: f32) -> (widget.Node, err) {
     style.windows_dark_enter(t.tokens)
+    if scroll_bar_disabled && !style.windows_dark_on() {
+        let (off_bar, off_bar_error) = windows_scroll_bar_disabled(a, t, vertical, length)
+        ret (off_bar, off_bar_error)
+    }
     let state = control_state(t, key, true, false)
     // round 12: the native dark bar is the 17 wide pixel bar of vscroll-rest (crisp: thumb columns 8 and 9)
     let crisp = scroll_bar_crisp || style.windows_dark_on()
@@ -14731,6 +14781,13 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     if state.pressed && vertical && !crisp && !pill_hot && mem.address_of(t.runtime) != 0usize {
         // round 13: the lower end held down shows the pressed arrow (states/scroll-bar-arrow-pressed-main-vertical)
         let (held_box, has_held_box) = keyed_bounds(t.runtime, key)
+        if has_held_box && widget.pointer_position(t.runtime).y - held_box.y < 16.0 {
+            // the native pressed upper arrow (the grabs of v3 show only the lower one held)
+            let (held_up, held_up_error) = gl.pixels(a, native_arrow_up_pressed(), 12.0, 8.0)
+            if held_up_error != ok { ret (zero, held_up_error) }
+            layers[count] = widget.positioned(0u64, 2.0, 5.0, style.defaults(), one_widget(a, held_up))
+            count += 1usize
+        }
         if has_held_box && widget.pointer_position(t.runtime).y - held_box.y > length - 16.0 {
             let (held_arrow, held_arrow_error) = gl.pixels(a, gl.gx_arrow_down(), gl.gx_arrow_down_w(), gl.gx_arrow_down_h())
             if held_arrow_error != ok { ret (zero, held_arrow_error) }
