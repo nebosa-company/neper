@@ -2758,7 +2758,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     if look.focus_on { lined_row = row_key == look.focus_key }
     let dotted_row = look.on && lined_row && look.soft_lines && look.dotted_focus
     // looks5-e: the idle selected row has no frame: its top edge is the line above it and its foot pair the edge colour and #F1F1F1
-    if look.on && lined_row && !dotted_row && !look.top_edge_on { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
+    if look.on && lined_row && !dotted_row && !look.top_edge_on && !look.tree_dots { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
     if lined_error != ok { ret (zero, TooLarge) }
     var content_look = style.defaults()
@@ -5604,7 +5604,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             if box_held_error != ok { ret (none, TooLarge) }
             box_held[0usize] = box
             var hit = control.sized_style(14.0, tall)
-            hit.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 4.0 }, right: flat, bottom: flat }
+            hit.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 2.0 }, right: flat, bottom: flat }
             twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, hit, box_held[0usize..1usize])
         }
         if entry.branch && !win {

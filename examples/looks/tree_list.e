@@ -170,7 +170,7 @@ fn build_row(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> 
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret held_error }
     held[0usize] = shown
-    let boxed = widget.padded(0u64, 2.0, 3.0, 0.0, 0.0, control.sized_style(17.0, 17.0), held[0usize..1usize])
+    let boxed = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, control.sized_style(17.0, 17.0), held[0usize..1usize])
     if node < 200u64 {
         *out = boxed
         ret ok
@@ -187,7 +187,7 @@ fn build_row(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> 
     check_held[0usize] = checked
     // the tree indents a level by 20, the capture by 14: the box and the text lean back 6 px
     parts[0usize] = widget.positioned(0u64, 6.0, 1.0, style.defaults(), check_held[0usize..1usize])
-    parts[1usize] = widget.positioned(0u64, 24.0, 1.0, style.defaults(), one_of(a, label))
+    parts[1usize] = widget.positioned(0u64, 29.0, 1.0, style.defaults(), one_of(a, label))
     *out = widget.stack(0u64, control.sized_style(80.0, 17.0), parts[0usize..2usize])
     ret ok
 }
@@ -204,7 +204,7 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
     if node >= 200u64 && column == 3usize {
         let (date, date_error) = control.text(a, 0u64, child_date(usize(node - 200u64)), t, control.text_options())
         if date_error != ok { ret date_error }
-        *out = date
+        *out = widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), one_of(a, date))
         ret ok
     }
     if column != 2usize {
@@ -214,6 +214,8 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
     let (made, made_error) = control.colored_text(a, 0u64, name_of(node), t, control.text_options(), gl.rgb(ink_of(node)))
     if made_error != ok { ret made_error }
     *out = made
+    // the capture's names start 2 px further right on the top-level rows
+    if node < 200u64 && t.tokens.profile == .Windows { *out = widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), one_of(a, made)) }
     ret ok
 }
 
@@ -228,7 +230,7 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key, focus_tw
     columns[0usize] = collection.Column { title: "        Abbr.", width: 85.0 }
     columns[1usize] = collection.Column { title: "ES", width: 20.0 }
     columns[2usize] = collection.Column { title: "Block/Edition", width: 119.0 }
-    columns[3usize] = collection.Column { title: "Released", width: 64.0 }
+    columns[3usize] = collection.Column { title: "    Released", width: 64.0 }
     let (picked, picked_error) = mem.alloc[widget.Key](a, 1usize)
     if picked_error != ok { ret (zero, picked_error) }
     picked[0usize] = 1u64
