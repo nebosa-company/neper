@@ -247,7 +247,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (cl, client_error) = fetch.client(a, config, 256usize)
     if client_error != ok { os.exit(6i32) }
     var client = cl
-    let (pg, load_error) = page.load(a, &client, &fonts, address, f32(width), f32(height), 3221225472usize)
+    let (pg, load_error) = page.load(a, &client, &fonts, address, f32(width), f32(height), 1073741824usize)
     if load_error != ok {
         var why = "other"
         if load_error == fetch.BadUrl { why = "bad url" } else if load_error == fetch.NoAddress { why = "no address" } else if load_error == fetch.NetworkError { why = "network error" } else if load_error == fetch.TooManyRedirects { why = "too many redirects" } else if load_error == fetch.RedirectRefused { why = "redirect refused" } else if load_error == fetch.TooLarge { why = "too large" } else if load_error == fetch.BadEncoding { why = "bad encoding" } else if load_error == fetch.UnsupportedScheme { why = "unsupported scheme" } else if load_error == page.LoadFailed { why = "decode or parse" } else if load_error == page.NotRenderable { why = "not renderable" } else if load_error == mem.Full { why = "arena full" } else if load_error == layout.TooBig { why = "layout too big" }

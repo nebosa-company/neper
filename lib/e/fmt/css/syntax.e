@@ -113,7 +113,9 @@ fn hex_value(c: i32) -> i32 {
 
 // --- the tokenizer ---------------------------------------------------------------------------------------------------
 
-type Scan = struct { a: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token] }
+// `a` holds the token list; `keep` holds what a token's text outlives it for (names with escapes, strings, urls), so a caller can
+// give `a` a short life.
+type Scan = struct { a: *mem.Arena, keep: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token] }
 
 fn cp(s: *const Scan, at: usize) -> i32 {
     if at < s.n { ret i32(s.src[at]) }
@@ -248,7 +250,15 @@ fn consume_escape(s: *Scan) -> u32 {
 }
 
 fn consume_name(s: *Scan) -> str {
-    let (b, e) = str.builder(s.a, 16usize)
+    // A name of plain bytes is a slice of the source.
+    var j = s.i
+    while j < s.n && s.src[j] != 0u8 && is_name(i32(s.src[j])) { j += 1usize }
+    if !(j < s.n && is_valid_escape(s, j)) {
+        let plain_name = s.src[s.i..j]
+        s.i = j
+        ret plain_name
+    }
+    let (b, e) = str.builder(s.keep, 16usize)
     if e != ok { ret "" }
     var out = b
     var more = true
@@ -364,7 +374,7 @@ fn consume_bad_url_remnants(s: *Scan, start: usize) {
 
 fn consume_url(s: *Scan, start: usize) {
     while s.i < s.n && is_ws(peek(s, 0usize)) { s.i += 1usize }
-    let (b, e) = str.builder(s.a, 16usize)
+    let (b, e) = str.builder(s.keep, 16usize)
     if e != ok { ret }
     var out = b
     while s.i < s.n {
@@ -445,7 +455,7 @@ fn lower_eq(s: str, lower: str) -> bool {
 fn consume_string(s: *Scan, quote: i32) {
     let start = s.i
     s.i += 1usize
-    let (b, e) = str.builder(s.a, 16usize)
+    let (b, e) = str.builder(s.keep, 16usize)
     if e != ok { ret }
     var out = b
     while s.i < s.n {
@@ -493,7 +503,7 @@ fn consume_hash(s: *Scan) {
 }
 
 fn delim_of(c: i32, s: *Scan) -> str {
-    let (b, e) = str.builder(s.a, 4usize)
+    let (b, e) = str.builder(s.keep, 4usize)
     if e != ok { ret "" }
     var out = b
     push_source_byte(&out, c)
@@ -648,9 +658,15 @@ fn consume_token(s: *Scan) {
 
 // Tokenize `input`; the list ends in an `Eof` token.
 fn tokenize(a: *mem.Arena, input: str) -> ([]const Token, err) {
+    let (all, all_error) = tokenize_with(a, a, input)
+    ret (all, all_error)
+}
+
+// Tokens in `a`, and the text they own (see `Scan`) in `keep`.
+fn tokenize_with(a: *mem.Arena, keep: *mem.Arena, input: str) -> ([]const Token, err) {
     let (out, e) = list.init[Token](a, 64usize)
     if e != ok { ret (zero, e) }
-    var s = Scan { a: a, src: input, n: input.len, i: 0usize, out: out }
+    var s = Scan { a: a, keep: keep, src: input, n: input.len, i: 0usize, out: out }
     while s.i < s.n { consume_token(&s) }
     add(&s, plain(.Eof, s.n, s.n))
     ret (list.slice_const[Token](&s.out), ok)

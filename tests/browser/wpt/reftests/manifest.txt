@@ -124,3 +124,5 @@ css-text__text-stroke-width-subpixel.html | css-text__text-stroke-width-subpixel
 css-text__zwnj-renders-invisible.html | css-text__blank.html | match
 svg-img-001.html | svg-img-001-ref.html | match
 svg-bg-001.html | svg-bg-001-ref.html | match
+index-001.html | index-001-ref.html | match
+custom-inherit-001.html | custom-inherit-001-ref.html | match

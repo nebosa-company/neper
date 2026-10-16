@@ -1227,7 +1227,7 @@ fn builder_done(t: *Text) -> str {
 // --- Ranking after expansion.
 
 // `pseudo_kinds` has bit k set when some rule styles pseudo-element k.
-type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, author: bool, pseudo_kinds: u32 }
+type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, pindex: cascade.Index, author: bool, pseudo_kinds: u32 }
 
 fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet {
     var kinds = 0u32
@@ -1236,11 +1236,13 @@ fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet 
         if rules[i].pseudo >= 0i64 { kinds |= 1u32 << u32(rules[i].pseudo) }
         i += 1usize
     }
-    ret Sheet { rules: rules, index: cascade.build_index(a, rules), author: author, pseudo_kinds: kinds }
+    ret Sheet { rules: rules, index: cascade.build_index(a, rules, false), pindex: cascade.build_index(a, rules, true), author: author, pseudo_kinds: kinds }
 }
 
 fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64) {
-    let visit = cascade.candidates(m, &rs.index, el)
+    var which = &rs.index
+    if want >= 0i64 { which = &rs.pindex }
+    let visit = cascade.candidates(m, which, el)
     var v = 0usize
     while v < visit.len {
         let rule = rs.rules[visit[v]]
@@ -1279,6 +1281,10 @@ fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -
     let (made, e) = list.init[cascade.Declared](a, declared.len + 8usize)
     if e != ok { ret zero }
     var best = made
+    // One pair list for every declaration: its pairs are consumed before the next one is expanded.
+    let (tmp_made, tmp_error) = list.init[expand.Pair](a, 8usize)
+    if tmp_error != ok { ret zero }
+    var pairs = tmp_made
     var i = 0usize
     while i < declared.len {
         let d = declared[i]
@@ -1288,9 +1294,7 @@ fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -
             consider(&best, d)
             continue
         }
-        let (tmp_made, tmp_error) = list.init[expand.Pair](a, 8usize)
-        if tmp_error != ok { continue }
-        var pairs = tmp_made
+        pairs.len = 0usize
         if expand.expand(a, prop, d.declaration.value, rtl, &pairs) {
             var p = 0usize
             while p < pairs.len {
@@ -1386,27 +1390,37 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
     let rtl = declared_direction(all, parent.direction == .Rtl)
     let winners = rank_expanded(a, all, rtl)
 
-    // Custom properties: the parent's, overridden by this element's, each with its own var() resolved.
-    let (cmade, cerror) = list.init[Custom](a, parent.custom.len + 8usize)
-    if cerror != ok { ret (initial_style(), false, cerror) }
-    var customs = cmade
-    var pc = 0usize
-    while pc < parent.custom.len {
-        let pushed = list.push[Custom](&customs, parent.custom[pc])
-        pc += 1usize
-    }
+    // Custom properties: the parent's, overridden by this element's, each with its own var() resolved. An element that sets
+    // none shares its parent's list (copying it per element is what made custom-property-heavy sites cost gigabytes).
+    var sets_custom = false
     var w = 0usize
     while w < winners.len {
-        let prop = winners[w].declaration.property
-        if str.starts_with(prop, "--") {
-            let (value, good) = substitute(a, cv.trim_ws(winners[w].declaration.value), list.slice_const[Custom](&customs), 0usize)
-            if good {
-                let pushed = list.push[Custom](&customs, Custom { name: prop, value: value })
-            }
-        }
+        if str.starts_with(winners[w].declaration.property, "--") { sets_custom = true }
         w += 1usize
     }
-    let custom_all = list.slice_const[Custom](&customs)
+    var custom_all = parent.custom
+    if sets_custom {
+        let (cmade, cerror) = list.init[Custom](a, parent.custom.len + 8usize)
+        if cerror != ok { ret (initial_style(), false, cerror) }
+        var customs = cmade
+        var pc = 0usize
+        while pc < parent.custom.len {
+            let pushed = list.push[Custom](&customs, parent.custom[pc])
+            pc += 1usize
+        }
+        w = 0usize
+        while w < winners.len {
+            let prop = winners[w].declaration.property
+            if str.starts_with(prop, "--") {
+                let (value, good) = substitute(a, cv.trim_ws(winners[w].declaration.value), list.slice_const[Custom](&customs), 0usize)
+                if good {
+                    let pushed = list.push[Custom](&customs, Custom { name: prop, value: value })
+                }
+            }
+            w += 1usize
+        }
+        custom_all = list.slice_const[Custom](&customs)
+    }
 
     var s = inherit_from(parent)
     s.custom = custom_all

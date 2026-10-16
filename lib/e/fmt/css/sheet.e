@@ -824,7 +824,7 @@ type Loader = struct {
     a: *mem.Arena, env: MediaEnv,
     rules: list.List[cascade.Rule], fonts: list.List[FontFace], keyframes: list.List[Keyframes],
     properties: list.List[PropertyRule], imports: list.List[str], layers: list.List[str],
-    order: i64, anonymous: usize
+    order: i64, anonymous: usize, scratch: mem.Arena
 }
 
 fn new_loader(a: *mem.Arena, env: MediaEnv) -> Loader {
@@ -857,7 +857,7 @@ fn layer_index(l: *Loader, name: str) -> i64 {
 }
 
 fn decls_of(l: *Loader, src: str, tokens: []const syntax.Token) -> []const cascade.Declaration {
-    let (parsed, e) = syntax.parse_declarations(l.a, tokens)
+    let (parsed, e) = syntax.parse_declarations(&l.scratch, tokens)
     if e != ok { ret zero }
     let (out, me) = mem.alloc[cascade.Declaration](l.a, parsed.len + 1usize)
     if me != ok { ret zero }
@@ -944,7 +944,7 @@ fn add_keyframes(l: *Loader, src: str, one: syntax.Rule) {
     let prelude = cv.trim_ws(syntax.raw_text(src, one.prelude))
     let name = strip_quotes(prelude)
     if name.len == 0usize { ret }
-    let (inner_rules, e) = syntax.parse_rules(l.a, one.block.inner, false)
+    let (inner_rules, e) = syntax.parse_rules(&l.scratch, one.block.inner, false)
     if e != ok { ret }
     let (made, me) = list.init[Stop](l.a, inner_rules.len + 1usize)
     if me != ok { ret }
@@ -1153,7 +1153,7 @@ fn text_done(t: *Text) -> str {
 }
 
 fn walk_block(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
-    let (inner, e) = syntax.parse_rules(l.a, one.block.inner, false)
+    let (inner, e) = syntax.parse_rules(&l.scratch, one.block.inner, false)
     if e != ok { ret }
     walk(l, src, inner, ctx)
 }
@@ -1181,10 +1181,21 @@ fn load(l: *Loader, source: str) -> err {
             if e2 == ok { text = a2 }
         }
     }
-    let tokens = try syntax.tokenize(l.a, text)
-    let rules = try syntax.parse_rules(l.a, tokens, true)
+    // The token and rule trees (about a hundred bytes per source byte) are only read while walking, so they live in a scratch
+    // arena that every load of this loader reuses.
+    let need = text.len * 160usize + 262144usize
+    if l.scratch.cap < need {
+        let (buf, be) = mem.alloc[u8](l.a, need)
+        if be != ok { ret be }
+        l.scratch = mem.arena_from(buf)
+    }
+    let sa = &l.scratch
+    let mark = mem.mark(sa)
+    let tokens = try syntax.tokenize_with(sa, l.a, text)
+    let rules = try syntax.parse_rules(sa, tokens, true)
     let ctx = Ctx { has_layer: false, layer: 0i64, path: "", containers: zero, scopes: zero }
     walk(l, text, rules, ctx)
+    mem.reset(sa, mark)
     ret ok
 }
 

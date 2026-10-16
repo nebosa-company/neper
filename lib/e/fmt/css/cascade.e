@@ -19,6 +19,7 @@
 // Media queries and the value readers are not here: the caller drops a rule whose `@media` fails before it is passed in.
 
 use e.data.list as list
+use e.data.map as map
 use e.fmt.css.container as container
 use e.fmt.css.match as match
 use e.fmt.css.selector as selector
@@ -49,7 +50,15 @@ type Winner = struct { property: str, value: str }
 
 type Bucket = enum u8 { Universal, Id, Klass, Tag }
 
-type Index = struct { rules: []const Rule, buckets: []Bucket, keys: []str }
+// Rules chained by bucket: `ids`, `classes` and `tags` map a key to a slot, `head`/`tail` give that slot's first and last rule and
+// `next` the following rule with the same key, so a lookup visits only the rules sharing the key, in source order. The
+// `universal` chain starts at `universal_head`.
+type Index = struct {
+    rules: []const Rule, ids: map.Map[str, usize], classes: map.Map[str, usize], tags: map.Map[str, usize],
+    head: []usize, tail: []usize, next: []usize, slots: usize, universal_head: usize, universal_tail: usize
+}
+
+const END: usize = 18446744073709551615usize
 
 // --- ranking ---------------------------------------------------------------------------------------------------------
 
@@ -116,15 +125,50 @@ fn drop_outranked_longhands(best: *list.List[Declared], shorthand: str, first: s
 
 // --- the rule index --------------------------------------------------------------------------------------------------
 
-fn build_index(a: *mem.Arena, rules: []const Rule) -> Index {
-    let (bs, be) = mem.alloc[Bucket](a, rules.len + 1usize)
-    let (ks, ke) = mem.alloc[str](a, rules.len + 1usize)
-    if be != ok || ke != ok { ret Index { rules: rules, buckets: zero, keys: zero } }
+fn chain_add(m: *map.Map[str, usize], idx: *Index, key: str, at: usize) {
+    let (slot, found) = map.get[str, usize](m, key)
+    if found {
+        idx.next[idx.tail[slot]] = at
+        idx.tail[slot] = at
+    } else {
+        let s = idx.slots
+        idx.slots += 1usize
+        idx.head[s] = at
+        idx.tail[s] = at
+        let (replaced, put_error) = map.put[str, usize](m, key, s)
+    }
+}
+
+// `pseudo` selects the rules that style a pseudo-element (the others are left out), so an element's own pass and each pseudo-element
+// pass visit only their rules.
+fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> Index {
+    var idx: Index = zero
+    idx.rules = rules
+    idx.universal_head = END
+    idx.universal_tail = END
+    let (ids, e1) = map.init[str, usize](a, rules.len / 4usize + 8usize)
+    let (classes, e2) = map.init[str, usize](a, rules.len / 2usize + 8usize)
+    let (tags, e3) = map.init[str, usize](a, 128usize)
+    let (head, e4) = mem.alloc[usize](a, rules.len + 1usize)
+    let (tail, e5) = mem.alloc[usize](a, rules.len + 1usize)
+    let (next, e6) = mem.alloc[usize](a, rules.len + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret idx }
+    idx.ids = ids
+    idx.classes = classes
+    idx.tags = tags
+    idx.head = head
+    idx.tail = tail
+    idx.next = next
     var at = 0usize
     while at < rules.len {
-        bs[at] = .Universal
-        ks[at] = ""
+        next[at] = END
+        if (rules[at].pseudo >= 0i64) != pseudo {
+            at += 1usize
+            continue
+        }
         let sel = rules[at].selector
+        var kind = 0u8
+        var key = ""
         if sel.compounds.len > 0usize {
             let parts = sel.compounds[sel.compounds.len - 1usize].parts
             var id_name = ""
@@ -150,28 +194,32 @@ fn build_index(a: *mem.Arena, rules: []const Rule) -> Index {
                 p += 1usize
             }
             if have_id {
-                bs[at] = .Id
-                ks[at] = id_name
+                kind = 1u8
+                key = id_name
             } else if have_class {
-                bs[at] = .Klass
-                ks[at] = class_name
+                kind = 2u8
+                key = class_name
             } else if have_tag {
-                bs[at] = .Tag
-                ks[at] = tag_name
+                kind = 3u8
+                key = tag_name
             }
+        }
+        if kind == 1u8 { chain_add(&idx.ids, &idx, key, at) } else if kind == 2u8 { chain_add(&idx.classes, &idx, key, at) } else if kind == 3u8 { chain_add(&idx.tags, &idx, key, at) } else {
+            if idx.universal_head == END { idx.universal_head = at } else { idx.next[idx.universal_tail] = at }
+            idx.universal_tail = at
         }
         at += 1usize
     }
-    ret Index { rules: rules, buckets: bs[0usize..rules.len], keys: ks[0usize..rules.len] }
+    ret idx
 }
 
-fn push_bucket(out: *list.List[usize], idx: *const Index, bucket: Bucket, key: str) {
-    var at = 0usize
-    while at < idx.rules.len {
-        if idx.buckets[at] == bucket && (bucket == .Universal || str.eq(idx.keys[at], key)) {
-            let pushed = list.push[usize](out, at)
-        }
-        at += 1usize
+fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, usize], key: str) {
+    let (slot, found) = map.get[str, usize](m, key)
+    if !found { ret }
+    var at = idx.head[slot]
+    while at != END {
+        let pushed = list.push[usize](out, at)
+        at = idx.next[at]
     }
 }
 
@@ -196,7 +244,7 @@ fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []
     if e != ok { ret zero }
     var out = made
     let element_id = match.element_id(m, el)
-    if element_id.len > 0usize { push_bucket(&out, idx, .Id, element_id) }
+    if element_id.len > 0usize { push_chain(&out, idx, &idx.ids, element_id) }
     let (classes, have_classes) = match.attr(m, el, "class")
     if have_classes {
         var start = 0usize
@@ -206,7 +254,7 @@ fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []
                 if i > start {
                     let name = classes[start..i]
                     let seen = class_seen(classes, start, name)
-                    if !seen { push_bucket(&out, idx, .Klass, name) }
+                    if !seen { push_chain(&out, idx, &idx.classes, name) }
                 }
                 start = i + 1usize
             }
@@ -214,8 +262,12 @@ fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []
         }
     }
     let tag = match.local_name(m, el)
-    if tag.len > 0usize { push_bucket(&out, idx, .Tag, tag) }
-    push_bucket(&out, idx, .Universal, "")
+    if tag.len > 0usize { push_chain(&out, idx, &idx.tags, tag) }
+    var u = idx.universal_head
+    while u != END {
+        let pushed = list.push[usize](&out, u)
+        u = idx.next[u]
+    }
     ret list.slice_const[usize](&out)
 }
 
@@ -595,7 +647,7 @@ fn inline_declarations(a: *mem.Arena, source: str) -> []const Declaration {
 }
 
 fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Rule, author: bool, el: html.NodeId, stack: []const ContainerBox) {
-    let idx = build_index(m.a, rules)
+    let idx = build_index(m.a, rules, false)
     let visit = candidates(m, &idx, el)
     var v = 0usize
     while v < visit.len {

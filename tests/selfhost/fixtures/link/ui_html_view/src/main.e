@@ -31,7 +31,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let page = "<html><body style=\"margin:0;background:#fff\"><div style=\"font:20px Ahem;color:#000;width:40px\"><a href=\"/x\" style=\"color:#000\">ab</a></div><div style=\"height:10px;background:#00f\"></div></body></html>"
     let no_sheets: []const str = zero
     // The view owns its own arena: it rewinds it for every paint.
-    let (backing, backing_error) = mem.alloc[u8](a, 33554432usize)
+    let (backing, backing_error) = mem.alloc[u8](a, 67108864usize)
     if backing_error != ok { os.exit(4i32) }
     var view_arena = mem.arena_from(backing)
     let (v, open_error) = view.open(&view_arena, page, no_sheets, &fonts_value, view.no_images(), 128.0, 128.0)
@@ -77,7 +77,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if pixels[25usize * SIDE + 100usize] != BLUE { os.exit(24i32) }
     if pixels[60usize * SIDE + 10usize] != WHITE { os.exit(25i32) }
     // A gradient background renders from red on the left to blue on the right.
-    let (backing2, backing2_error) = mem.alloc[u8](a, 33554432usize)
+    let (backing2, backing2_error) = mem.alloc[u8](a, 67108864usize)
     if backing2_error != ok { os.exit(30i32) }
     var view_arena2 = mem.arena_from(backing2)
     let page2 = "<html><body style=\"margin:0\"><div style=\"height:20px;background:linear-gradient(to right,#f00,#00f)\"></div></body></html>"

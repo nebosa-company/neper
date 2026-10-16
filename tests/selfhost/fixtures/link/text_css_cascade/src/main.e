@@ -152,7 +152,7 @@ fn build_rule(a: *mem.Arena, j: json.Value) -> cascade.Rule {
         scopes[s] = cascade.Scope { starts: selectors(a, ir.value_of(ss[s], "s")), limits: selectors(a, ir.value_of(ss[s], "l")) }
         s += 1usize
     }
-    ret cascade.Rule { selector: parse_selector(a, text_of(j, "sel")), declarations: decls[0usize..ds.len], source: int_of(j, "src"), has_layer: !is_null_at(j, "layer"), layer: int_of(j, "layer"), containers: queries[0usize..cs.len], scopes: scopes[0usize..ss.len] }
+    ret cascade.Rule { selector: parse_selector(a, text_of(j, "sel")), declarations: decls[0usize..ds.len], source: int_of(j, "src"), has_layer: !is_null_at(j, "layer"), layer: int_of(j, "layer"), containers: queries[0usize..cs.len], scopes: scopes[0usize..ss.len], pseudo: -1i64 }
 }
 
 fn build_rules(a: *mem.Arena, v: json.Value) -> []const cascade.Rule {
@@ -316,8 +316,8 @@ fn check_element(a: *mem.Arena, m: *const match.Matcher, ua: []const cascade.Rul
         }
         h += 1usize
     }
-    let author_index = cascade.build_index(a, author)
-    let ua_index = cascade.build_index(a, ua)
+    let author_index = cascade.build_index(a, author, false)
+    let ua_index = cascade.build_index(a, ua, false)
     if !same_indices(cascade.candidates(m, &author_index, el), ir.value_of(want, "a")) {
         let shown = io.print("author candidates differ")
         ret false
