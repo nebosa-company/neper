@@ -2229,6 +2229,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             mark.background = paint.Brush { Solid: look.line }
             mark.margin = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: flat, right: flat, bottom: flat }
             if look.soft_lines { mark.margin = style.EdgeLengths { left: style.Length { Px: grip_here - 2.0 }, top: flat, right: flat, bottom: flat } }
+            // looks13-r2: the tree list's last column has no line at its right edge (live capture)
+            if look.tree_dots && i + 1usize == columns.len { mark.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
         }
         if active && !(look.on && has_lifted_column) {
             mark = control.sized_style(3.0, inner)
@@ -2868,12 +2870,18 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         // the selection's fill starts at x = 32, under the cells; the cells before it stay white
         var band = control.sized_style(4000.0, extent)
         band.background = paint.Brush { Solid: fill }
-        let (with_band, with_band_error) = mem.alloc[widget.Node](a, 3usize)
+        let (with_band, with_band_error) = mem.alloc[widget.Node](a, 4usize)
         if with_band_error != ok { ret (zero, TooLarge) }
         with_band[0usize] = widget.positioned(0u64, 32.0, 0.0, style.defaults(), one_node(a, widget.box(0u64, band, zero)))
         with_band[1usize] = lined[0usize]
         with_band[2usize] = widget.positioned(0u64, 32.0, 0.0 - 1.0, style.defaults(), one_node(a, tree_dots))
-        lined[0usize] = widget.stack(0u64, style.defaults(), with_band[0usize..3usize])
+        // looks13-r2: the row's foot pixel under the cells before the selection (live capture: #F4F4F4 under a white row, #FAFAFA under a grey one)
+        var foot_px = gl.rgb(0xF4F4F4u32)
+        if index % 2usize == 0usize { foot_px = gl.rgb(0xFAFAFAu32) }
+        var foot_box = control.sized_style(32.0, 1.0)
+        foot_box.background = paint.Brush { Solid: foot_px }
+        with_band[3usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, foot_box, zero)))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_band[0usize..4usize])
     }
     if dotted_row {
         // looks4-e: a focused selected row carries v3's dotted focus rectangle, not a line
