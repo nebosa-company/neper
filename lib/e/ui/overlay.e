@@ -1067,6 +1067,8 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
             options.loading = busy
             if !busy { submit = buttons[i].action }
         }
+        // M3 dialog actions are all text buttons.
+        if t.tokens.profile == .MaterialLike && buttons[i].kind != .Destructive { options.variant = .Plain }
         if buttons[i].kind == .Destructive { options.variant = .Danger }
         if buttons[i].kind == .Cancel && !busy { cancel = buttons[i].action }
         if busy && buttons[i].kind != .Default { options.enabled = false }
@@ -1082,6 +1084,8 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     if parts_error != ok { ret (zero, TooLarge) }
     var heading = control.text_options()
     heading.role = title_role
+    // M3: the dialog headline is `headline-small` (md.comp.dialog.headline).
+    if t.tokens.profile == .MaterialLike && title_role == .TitleLarge { heading.role = .HeadlineSmall }
     if has_icon { heading.align = .Center }
     let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, title_ink))
     if title_error != ok { ret (zero, title_error) }

@@ -823,6 +823,8 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
         border = color(t, .Error)
         if border_width < t.borders.regular { border_width = t.borders.regular }
     }
+    // M3: a focused outlined control's outline turns `primary` (md.comp.outlined-button.focus.outline.color).
+    if t.profile == .MaterialLike && variant == .Outlined && state.focus_visible && !state.invalid { border = color(t, .Primary) }
     var focus_ring: f32 = 0.0
     if state.focused { focus_ring = t.metrics.focus_ring }
     var opacity: f32 = 1.0
@@ -1012,3 +1014,113 @@ fn windows_caption_close(pressed: bool) -> paint.Color {
 
 // looks3: the live 96 DPI captures put the dark caption at 31 rows (y 0 to 30).
 fn windows_caption_height() -> f32 { ret 31.0 }
+
+// ---- Android look (docs/ui/looks, profile MaterialLike) ---------------------------------------
+// Material Design 3 as Android ships it. The Neper default already is M3 in structure (shape
+// scale 4/8/12/16/28, state layers 8/10/10/16 %, the fifteen type styles, elevation 0 to 5), so
+// the Android look is: the M3 baseline tonal palette (seed #6750A4), the phone metrics (40 high
+// controls, 48 targets, density 1, no focus ring: Android shows focus as the 10 % state layer),
+// and Roboto Medium (500) where the M3 type scale says Medium. Colours are the published M3
+// baseline values (exact); the control geometry is in `control.material_*`.
+fn material_fill_light(t: *ThemeTokens) {
+    put(t, .Background, 0xFEF7FFu32)
+    put(t, .Surface, 0xFEF7FFu32)
+    put(t, .SurfaceVariant, 0xE7E0ECu32)
+    put(t, .Primary, 0x6750A4u32)
+    put(t, .OnPrimary, 0xFFFFFFu32)
+    put(t, .PrimaryContainer, 0xEADDFFu32)
+    put(t, .OnPrimaryContainer, 0x21005Du32)
+    put(t, .Secondary, 0x625B71u32)
+    put(t, .OnSecondary, 0xFFFFFFu32)
+    put(t, .SecondaryContainer, 0xE8DEF8u32)
+    put(t, .OnSecondaryContainer, 0x1D192Bu32)
+    put(t, .Tertiary, 0x7D5260u32)
+    put(t, .OnTertiary, 0xFFFFFFu32)
+    put(t, .TertiaryContainer, 0xFFD8E4u32)
+    put(t, .OnTertiaryContainer, 0x31111Du32)
+    put(t, .Error, 0xB3261Eu32)
+    put(t, .OnError, 0xFFFFFFu32)
+    put(t, .ErrorContainer, 0xF9DEDCu32)
+    put(t, .OnErrorContainer, 0x410E0Bu32)
+    put(t, .Text, 0x1D1B20u32)
+    put(t, .OnSurface, 0x1D1B20u32)
+    put(t, .TextMuted, 0x49454Fu32)
+    put(t, .OnSurfaceVariant, 0x49454Fu32)
+    put(t, .Border, 0x79747Eu32)
+    put(t, .Outline, 0x79747Eu32)
+    put(t, .OutlineVariant, 0xCAC4D0u32)
+    put(t, .Focus, 0x6750A4u32)
+    put(t, .FocusRing, 0x6750A4u32)
+    put(t, .Selection, 0xD0BCFFu32)
+    put(t, .TextSelection, 0xD0BCFFu32)
+    put(t, .SurfaceDim, 0xDED8E1u32)
+    put(t, .SurfaceBright, 0xFEF7FFu32)
+    put(t, .SurfaceContainerLowest, 0xFFFFFFu32)
+    put(t, .SurfaceContainerLow, 0xF7F2FAu32)
+    put(t, .SurfaceContainer, 0xF3EDF7u32)
+    put(t, .SurfaceContainerHigh, 0xECE6F0u32)
+    put(t, .SurfaceContainerHighest, 0xE6E0E9u32)
+    put(t, .InverseSurface, 0x322F35u32)
+    put(t, .InverseOnSurface, 0xF5EFF7u32)
+    put(t, .InversePrimary, 0xD0BCFFu32)
+}
+
+fn material_fill_dark(t: *ThemeTokens) {
+    put(t, .Background, 0x141218u32)
+    put(t, .Surface, 0x141218u32)
+    put(t, .SurfaceVariant, 0x49454Fu32)
+    put(t, .Primary, 0xD0BCFFu32)
+    put(t, .OnPrimary, 0x381E72u32)
+    put(t, .PrimaryContainer, 0x4F378Bu32)
+    put(t, .OnPrimaryContainer, 0xEADDFFu32)
+    put(t, .Secondary, 0xCCC2DCu32)
+    put(t, .OnSecondary, 0x332D41u32)
+    put(t, .SecondaryContainer, 0x4A4458u32)
+    put(t, .OnSecondaryContainer, 0xE8DEF8u32)
+    put(t, .Tertiary, 0xEFB8C8u32)
+    put(t, .OnTertiary, 0x492532u32)
+    put(t, .TertiaryContainer, 0x633B48u32)
+    put(t, .OnTertiaryContainer, 0xFFD8E4u32)
+    put(t, .Error, 0xF2B8B5u32)
+    put(t, .OnError, 0x601410u32)
+    put(t, .ErrorContainer, 0x8C1D18u32)
+    put(t, .OnErrorContainer, 0xF9DEDCu32)
+    put(t, .Text, 0xE6E0E9u32)
+    put(t, .OnSurface, 0xE6E0E9u32)
+    put(t, .TextMuted, 0xCAC4D0u32)
+    put(t, .OnSurfaceVariant, 0xCAC4D0u32)
+    put(t, .Border, 0x938F99u32)
+    put(t, .Outline, 0x938F99u32)
+    put(t, .OutlineVariant, 0x49454Fu32)
+    put(t, .Focus, 0xD0BCFFu32)
+    put(t, .FocusRing, 0xD0BCFFu32)
+    put(t, .Selection, 0x4F378Bu32)
+    put(t, .TextSelection, 0x4F378Bu32)
+    put(t, .SurfaceDim, 0x141218u32)
+    put(t, .SurfaceBright, 0x3B383Eu32)
+    put(t, .SurfaceContainerLowest, 0x0F0D13u32)
+    put(t, .SurfaceContainerLow, 0x1D1B20u32)
+    put(t, .SurfaceContainer, 0x211F26u32)
+    put(t, .SurfaceContainerHigh, 0x2B2930u32)
+    put(t, .SurfaceContainerHighest, 0x36343Bu32)
+    put(t, .InverseSurface, 0xE6E0E9u32)
+    put(t, .InverseOnSurface, 0x322F35u32)
+    put(t, .InversePrimary, 0x6750A4u32)
+}
+
+fn material(palette: Palette) -> ThemeTokens {
+    var t = reference(palette)
+    t.profile = .MaterialLike
+    if palette == .Light { material_fill_light(&t) }
+    if palette == .Dark { material_fill_dark(&t) }
+    // The M3 type scale's Medium (500) styles; Neper draws them at 600.
+    var i = 0usize
+    while i < 21usize {
+        if t.text[i].weight == 600u16 { t.text[i].weight = 500u16 }
+        i += 1usize
+    }
+    // Phone metrics: 40 dp controls, 48 dp targets, a 4 dp grid, no focus ring.
+    t.metrics = Metrics { hit_target: 48.0, control_height: 40.0, density: 1.0, focus_ring: 0.0, focus_offset: 0.0 }
+    ret t
+}
+// ---- end Android look ---------------------------------------------------------------------------
