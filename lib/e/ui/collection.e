@@ -2852,7 +2852,18 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     }
     if look.on && selected && look.tree_dots {
         // looks4-e: the tree list's selected row has a dotted rectangle from x = 32 (measured, tree_list.png)
-        let (tree_dots, tree_dots_error) = gl.mark(a, .DotsSoftLeft, gl.rgb(0x5B5C62u32), gl.rgb(0xA4A39Du32), 4000.0, 18.0)
+        // looks13-r2: the capture's two-pixel focus rectangle, 256 px wide (the table's 288 less the 32 before it), blue on the focused selection
+        var blue_focus = false
+        if fill.red == look.selected_focus.red && fill.green == look.selected_focus.green && fill.blue == look.selected_focus.blue { blue_focus = true }
+        var tree_total: f32 = 0.0
+        var tree_at = 0usize
+        while tree_at < columns.len {
+            tree_total += columns[tree_at].width
+            tree_at += 1usize
+        }
+        var tree_wide = tree_total - 32.0
+        if tree_wide < 8.0 || tree_wide > 4000.0 { tree_wide = 4000.0 }
+        let (tree_dots, tree_dots_error) = gl.tree_focus(a, blue_focus, tree_wide, 18.0)
         if tree_dots_error != ok { ret (zero, tree_dots_error) }
         // the selection's fill starts at x = 32, under the cells; the cells before it stay white
         var band = control.sized_style(4000.0, extent)
