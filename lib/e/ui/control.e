@@ -8813,6 +8813,8 @@ fn sash_paint_v3(s: *Sash, b: *scene.Builder, sized: geometry.Rect) -> err {
     // looks4 group d: the strip's first row along it is #F3F3F3 (measured on the Filter window's splitter;
     // a held strip (WM_LBUTTONDOWN grabs) is the same as at rest, so no press tint).
     var first_v: f32 = 0.0
+    // looks9: the 574 px held / hot strip's first column is the plain face (ref/windows/states/splitter-pressed-main-horizontal).
+    if s.across && s.held { first_v = thick }
     while first_v < thick {
         try v3_zone_px(b, s.across, area.x, area.y, 0.0, first_v, 1.0, style.hex(15987699u32))
         first_v += 1.0
@@ -8825,7 +8827,8 @@ fn sash_paint_v3(s: *Sash, b: *scene.Builder, sized: geometry.Rect) -> err {
     let ay = area.y
     let u0 = f32(i64((along - len) * 0.5 + 1.0))
     if !s.across && len == 140.0 && s.held { ret win5_zone_paint(b, false, ax, ay, u0, 140usize, win5_zone_upright_held()) }
-    if s.across && len == 174.0 && s.held { ret win5_zone_paint(b, true, ax, ay, u0, 174usize, win5_zone_lying_held()) }
+    // looks9: the 574 px held / hot strip's zone starts at 200 (the capture), not 201.
+    if s.across && len == 174.0 && s.held { ret win5_zone_paint(b, true, ax, ay, u0 - 1.0, 174usize, win5_zone_lying_held()) }
     if !s.across && len == 140.0 { ret win5_zone_paint(b, false, ax, ay, u0, 140usize, win5_zone_upright()) }
     if s.across && len == 151.0 { ret win5_zone_paint(b, true, ax, ay, u0, 151usize, win5_zone_lying()) }
     let last = thick - 1.0
