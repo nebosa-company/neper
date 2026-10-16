@@ -2653,16 +2653,44 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
             shown_label = plain
             mark_at = at
         }
-        let (word_node, label_error) = colored_text(a, 0u64, shown_label, t, caption, ink)
-        if label_error != ok { ret (zero, label_error) }
+        var word_node: widget.Node = zero
+        // round 11: v3's GDI caption is set on whole pixel advances (hdmx), so "Open..." is 3 px wider than the shaped run
+        var hinted_row = false
+        var hinted_w: f32 = 0.0
+        var hinted_before: f32 = 0.0
+        var hinted_mark: f32 = 0.0
+        if t.tokens.profile == .Windows {
+            let (hrow, hw, hbefore, hmark, hok, hrow_error) = windows_hinted_row(a, t, caption, shown_label, mark_at, ink)
+            if hrow_error != ok { ret (zero, hrow_error) }
+            if hok {
+                word_node = hrow
+                hinted_row = true
+                hinted_w = hw
+                hinted_before = hbefore
+                hinted_mark = hmark
+            }
+        }
+        if !hinted_row {
+            let (plain_node, label_error) = colored_text(a, 0u64, shown_label, t, caption, ink)
+            if label_error != ok { ret (zero, label_error) }
+            word_node = plain_node
+        }
         var label_node = word_node
         if mark_at < shown_label.len {
-            let (before, before_fit, before_base, before_error) = run_metrics_faced(a, t, caption, shown_label[0usize..mark_at])
+            var before: f32 = hinted_before
+            var mark_adv: f32 = hinted_mark
+            var whole_base: f32 = 0.0
+            let (shaped_before, before_fit, before_base, before_error) = run_metrics_faced(a, t, caption, shown_label[0usize..mark_at])
             if before_error != ok { ret (zero, before_error) }
-            let (mark_adv, mark_fit, mark_base, mark_error) = run_metrics_faced(a, t, caption, shown_label[mark_at..mark_at + 1usize])
+            let (shaped_mark, mark_fit, mark_base, mark_error) = run_metrics_faced(a, t, caption, shown_label[mark_at..mark_at + 1usize])
             if mark_error != ok { ret (zero, mark_error) }
-            let (whole, whole_fit, whole_base, whole_error) = run_metrics_faced(a, t, caption, shown_label)
+            let (whole, whole_fit, whole_base_shaped, whole_error) = run_metrics_faced(a, t, caption, shown_label)
             if whole_error != ok { ret (zero, whole_error) }
+            whole_base = whole_base_shaped
+            if !hinted_row {
+                before = shaped_before
+                mark_adv = shaped_mark
+            }
             var line = sized_style(mark_adv, 1.0)
             line.background = paint.Brush { Solid: ink }
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
@@ -2676,6 +2704,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         let (advance, fit, baseline, metrics_error) = run_metrics_faced(a, t, caption, shown_label)
         if metrics_error != ok { ret (zero, metrics_error) }
         content_w += fit
+        if hinted_row { content_w += hinted_w - fit }
         if count == 2usize { content_w += 4.0 }
     }
     var row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), parts[0usize..count])
