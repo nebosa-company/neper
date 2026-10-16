@@ -1,0 +1,101 @@
+{
+ "text_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/text_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Round 5: every captured state of the password edits (New and Old password at rest and focused, Confirm at rest) and the hot key edit (rest and focused) has a cell and reproduces within tolerance. Per-state numbers at scale 1.0 (scripts/looks_edits_states_eval.py, structural = flat runs of 11 or more away from ink, tolerance 2): mask focus new/old 0 px off (max 0/1), spin fast focus and the four pressed cells 0 px (max 2), morph spin focus and both pressed 0 px (max 0), button edit focus/selected/ellipsis pressed 1 px (max 4, caret), hot key rest and focus 0 px; edits_dialog: 3 masks, 3 spins, 2 button edits 0 to 1 px (max 4). Round 6, hover (states/hover-*, scripts/looks_edits_hover_eval.py, sheet edits_hover, one cell per capture, pointer driven at the zone, scale 1.0): a hovered edit darkens its rim ring by 2 levels (rows 1, 2, 19, 20, two columns each side; the white face and the text do not change: the old #F9F9F9 face guess is gone) and re-draws its bottom right corner; the ellipsis and the four fast spin buttons turn pale blue; the stacked arrows of the Morph spin edit have no hover look of their own (the up and down grabs equal the edit grab). Hover numbers (flat pixels off by more than 2 / largest error): mask edit over its text (Old Password) 0 / 1, whole cell 0 px off (max 2); hot key edit hover 0 / 0 (corner pixels as captured).",
+    "gaps": [
+     "Unverified (not captured): selection, read-only, disabled, invalid, placeholder of the plain edit",
+     "The hot key edit (THotKey) is a native VCL control: the sheet draws it from boxes, the library has no such control; the toolbar page box (TEdit, borderless 37 x 15 white) is not drawn at all",
+     "Text ink: Tahoma advance widths are unhinted, so a long run with spaces ends up to 5 px wide of the capture (the path texts end within 1 px); ink boxes of the numbers, shortcut and carets are within 1 px",
+     "1.5x and 2x: the tiles are painted on whole device pixels (looks5-scale); scripts/looks_scale_check.py at 2.0: spin edit 94.7 %, button edit 96.7 %, text edit 93.2 % pass, mask edit 92.0 % fails the threshold exactly as on master (the misses are in the invalid and focus cells)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/mask_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "Round 5: Old, New and Confirm password at rest and Old and New focused all compared (0 px off, max 1 and 2 at corners). Per-state numbers at scale 1.0 (scripts/looks_edits_states_eval.py, structural = flat runs of 11 or more away from ink, tolerance 2): mask focus new/old 0 px off (max 0/1), spin fast focus and the four pressed cells 0 px (max 2), morph spin focus and both pressed 0 px (max 0), button edit focus/selected/ellipsis pressed 1 px (max 4, caret), hot key rest and focus 0 px; edits_dialog: 3 masks, 3 spins, 2 button edits 0 to 1 px (max 4). Round 6, hover (states/hover-*, scripts/looks_edits_hover_eval.py, sheet edits_hover, one cell per capture, pointer driven at the zone, scale 1.0): a hovered edit darkens its rim ring by 2 levels (rows 1, 2, 19, 20, two columns each side; the white face and the text do not change: the old #F9F9F9 face guess is gone) and re-draws its bottom right corner; the ellipsis and the four fast spin buttons turn pale blue; the stacked arrows of the Morph spin edit have no hover look of their own (the up and down grabs equal the edit grab). Hover numbers (flat pixels off by more than 2 / largest error): Old Password hover 0 / 1, whole cell 0 px off (max 2).",
+    "gaps": [
+     "Unverified (not captured): text and selection in a mask edit, invalid, disabled, read-only",
+     "1.5x and 2x: the tiles are painted on whole device pixels (looks5-scale); scripts/looks_scale_check.py at 2.0: spin edit 94.7 %, button edit 96.7 %, text edit 93.2 % pass, mask edit 92.0 % fails the threshold exactly as on master (the misses are in the invalid and focus cells)"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/spin_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "Round 5: rest, focused, and the up, down, left and right presses (Max Same Cards) and Morph Speed up and down all compared. v3 draws no pressed face on a spin arrow (the grabs differ only in the number): our arrows do not change either, a press gives the edit its focused frame. The morph spin edits stand at x = 406 where the left rim is 3 levels darker: own left tile. Per-state numbers at scale 1.0 (scripts/looks_edits_states_eval.py, structural = flat runs of 11 or more away from ink, tolerance 2): mask focus new/old 0 px off (max 0/1), spin fast focus and the four pressed cells 0 px (max 2), morph spin focus and both pressed 0 px (max 0), button edit focus/selected/ellipsis pressed 1 px (max 4, caret), hot key rest and focus 0 px; edits_dialog: 3 masks, 3 spins, 2 button edits 0 to 1 px (max 4). Round 6, hover (states/hover-*, scripts/looks_edits_hover_eval.py, sheet edits_hover, one cell per capture, pointer driven at the zone, scale 1.0): a hovered edit darkens its rim ring by 2 levels (rows 1, 2, 19, 20, two columns each side; the white face and the text do not change: the old #F9F9F9 face guess is gone) and re-draws its bottom right corner; the ellipsis and the four fast spin buttons turn pale blue; the stacked arrows of the Morph spin edit have no hover look of their own (the up and down grabs equal the edit grab). Hover numbers (flat pixels off by more than 2 / largest error): Max Same Cards over the edit 0 / 1, up 0 / 1, down 0 / 1, left 0 / 1, right 0 / 1; Morph Speed over the edit, up and down 0 / 1; every cell 0 px off outside the text (max 2).",
+    "gaps": [
+     "Unverified (not captured): disabled, read-only, an arrow that cannot step is greyed (a guess)",
+     "Text ink: Tahoma advance widths are unhinted, so a long run with spaces ends up to 5 px wide of the capture (the path texts end within 1 px); ink boxes of the numbers, shortcut and carets are within 1 px",
+     "1.5x and 2x: the tiles are painted on whole device pixels (looks5-scale); scripts/looks_scale_check.py at 2.0: spin edit 94.7 %, button edit 96.7 %, text edit 93.2 % pass, mask edit 92.0 % fails the threshold exactly as on master (the misses are in the invalid and focus cells)",
+     "Hover of a focused edit is not captured (the hover look is drawn only when the edit is not focused)"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/button_edit.png",
+    "notes": "The baseline: the existing v2 outlined field, unchanged."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_edit.png",
+    "notes": "Round 5: the ellipsis frame is exact (0 px off at rest, pressed, focused and disabled; the audit's 23 levels were the foot's y drift at the sheet's arbitrary y: the chrome now defaults to the capture's y per kind) and the selection highlight is 13 px tall from row 5 with partial rows as in the capture (was 157 levels off over 479 px). Pressing the ellipsis keeps the edit focused with all text selected. Per-state numbers at scale 1.0 (scripts/looks_edits_states_eval.py, structural = flat runs of 11 or more away from ink, tolerance 2): mask focus new/old 0 px off (max 0/1), spin fast focus and the four pressed cells 0 px (max 2), morph spin focus and both pressed 0 px (max 0), button edit focus/selected/ellipsis pressed 1 px (max 4, caret), hot key rest and focus 0 px; edits_dialog: 3 masks, 3 spins, 2 button edits 0 to 1 px (max 4). Round 6, hover (states/hover-*, scripts/looks_edits_hover_eval.py, sheet edits_hover, one cell per capture, pointer driven at the zone, scale 1.0): a hovered edit darkens its rim ring by 2 levels (rows 1, 2, 19, 20, two columns each side; the white face and the text do not change: the old #F9F9F9 face guess is gone) and re-draws its bottom right corner; the ellipsis and the four fast spin buttons turn pale blue; the stacked arrows of the Morph spin edit have no hover look of their own (the up and down grabs equal the edit grab). Hover numbers (flat pixels off by more than 2 / largest error): path edit over its text (Decks) 1 / 4, ellipsis (Decks) 1 / 4, ellipsis (Card Art, the same button 291 px lower: its own captured pixels) 1 / 4, whole frame 0 px off (max 2); the single flat pixel is the foot's left end, as in the rest and focus cells.",
+    "gaps": [
+     "Mismatch: the disabled Card Art text ends 5 px right of the capture ink (unhinted Tahoma advances over six spaces)",
+     "1.5x and 2x: the tiles are painted on whole device pixels (looks5-scale); scripts/looks_scale_check.py at 2.0: spin edit 94.7 %, button edit 96.7 %, text edit 93.2 % pass, mask edit 92.0 % fails the threshold exactly as on master (the misses are in the invalid and focus cells)",
+     "Unverified (not captured): read-only, invalid"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/combo_box.png",
+    "notes": "The baseline: the v2 outlined combo box in the same cells. Open lists are on neper/combo_box_lists.png (run the app with an argument, `combo_box.exe lists`); the list opens fading, so one frame shows it part way."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/combo_box_open_color.png",
+    "notes": "Round 5. Numbers are scripts/looks_struct_d.py at scale 1.0 (the audit's structural pixels: flat fills and straight runs of 11 or more, a 1 px halo round ink masked, tolerance 2 levels per channel): px more than 2 levels off, and the worst level; what is left is glyph pixels of text (ClearType against grey scale), icon artwork and caret phase. Every captured combo state has a cell: rest (dialog 2 combos 0 px, pick 0, search held 0, held 0, focus 0, edit combo_box_edit 15 px (max 255)), the six open lists as the head + popup composite (combo_box_open_color 4 px (max 4); combo_box_open_color2 1 px (max 3); combo_box_open_size 21 px (max 139); combo_box_open_size2 18 px (max 139); combo_box_open_show 3 px (max 4); combo_box_open_show2 3 px (max 4)), each also as an exact head crop (combo_box_open_color_head 3 px (max 4); combo_box_open_color2_head 0 px (max 0); combo_box_open_size_head 4 px (max 4); combo_box_open_size2_head 0 px (max 0); combo_box_open_show_head 0 px (max 0); combo_box_open_show2_head 0 px (max 0)) and an exact popup crop (combo_box_list_color 1 px (max 3); combo_box_list_color2 1 px (max 3); combo_box_list_size 17 px (max 139); combo_box_list_size2 18 px (max 139); combo_box_list_show 3 px (max 4); combo_box_list_show2 3 px (max 4)), and the toolbar combos (Mode rest 0 px, Mode hover 0, card name rest combo_box_flat_card 7 px (max 85), hover combo_box_flat_card_hover 10 px (max 85); hover of the edit and of the drop button are the same pixels). The open head fades in: the first grab is the rest frame under the settled one at 92 percent (the first grabs: Row Color, Font Size), the popup frame has measured soft bottom and right lines for the sizes captured, and the scroll track is flush with the right frame. Round 6, hover of the list-style and the editable combo (states/hover-combo-box-*, sheet combo_hover, scripts/looks_combo_hover_eval.py, flat pixels off by more than 2 / largest error): Row Color over the drop button 0 / 2 and over its text 0 / 2 (the whole frame is the pale blue hot frame of looks5-d, the text capture equals the drop capture), Conditional Formatting Show (focused as in the dialog, hot, dotted focus rectangle) 20 / 3 (the dotted rectangle's phase), Search for Card editable combo (focused) over the drop button 0 / 0 (a boxed #E5F1FB drop button in a #0078D4 frame, rows 0, 1, 20, 21 measured) and over its text 1 / 255 (the caret blink phase; the capture equals rest); the three image combos over the drop button 0 / 2 each and Authentication over its text 0 / 0 (equal to rest). The corners and the chevron's anti-aliasing stay off by up to 90 levels on 40 to 160 pixels per cell (looks5-d's corner model), outside the flat measure.",
+    "gaps": [
+     "Unverified (not captured): hover over an unfocused editable combo (drawn as the hot frame: a guess), disabled, read-only, the placeholder, the long-text clipping",
+     "The editable combo's caret in combo_box_edit (15 px): the capture shows the blink off phase, ours draws the caret",
+     "The popup frame's soft bottom and right lines, the pale inner row and column and the open head's drift with the window position are measured per captured size and position (3 rows of 13, 3 of 15, 15 of 15; heads at y 41, 71, 99, 159, 278), other sizes get a full 1 px frame",
+     "The toolbar combo's hot ring tables are the captured pixels of the Mode combo and of the card name combo; the hot ring shows while the pointer is over the drop button (the editor takes no pointer here), the capture gives the same pixels for either",
+     "Text: Tahoma is unhinted, ink boxes of the list rows are within 1 px (heads 1 px low on some rows), glyph pixels differ from ClearType",
+     "Baked frame tiles hold at 1.5x since winpx.fill places every pixel on whole device pixels (checked by eye; scripts/looks_scale_check.py does not list this control)"
+    ]
+   }
+  }
+ }
+}

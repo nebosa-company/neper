@@ -577,12 +577,120 @@ fn reference(palette: Palette) -> ThemeTokens {
 }
 
 // A colour from 0xRRGGBB.
-fn hex(value: u32) -> paint.Color {
+fn hex_raw(value: u32) -> paint.Color {
     ret paint.rgba(f32((value >> 16u32) & 255u32) / 255.0, f32((value >> 8u32) & 255u32) / 255.0, f32(value & 255u32) / 255.0, 1.0)
 }
 
 fn put(t: *ThemeTokens, role: ColorRole, value: u32) {
-    t.colors[color_index(role)] = hex(value)
+    t.colors[color_index(role)] = hex_raw(value)
+}
+
+// ---- the Windows dark look's colour map ----------------------------------------------------------------------
+// The Windows light look paints its tiles and tables from measured light colours (`hex` literals in the painters).
+// While `set_windark(true)` is on (the harness and the app turn it on for the Windows Dark palette), `hex` and `hexa`
+// map such a light literal to its dark counterpart instead of every painter carrying a second table: a neutral grey
+// follows the tone curve below (face #FDFDFD to #2B2B2B, dialog #F0F0F0 to #202020, border #D2D2D2 to #5A5A5A, text
+// black to white), a light tint (selection, hover) becomes a dark tint of its hue, a mid accent (#0078D7) is lifted
+// (to about #4CC2FF). The tokens (`put`, `hex_raw`) and every resolver in this file are written in dark values already
+// and never pass through the map; a painter that wants an exact dark value calls `hex_raw`.
+var windark_on: bool = false
+
+fn set_windark(on: bool) {
+    windark_on = on
+}
+
+fn windark_active() -> bool {
+    ret windark_on
+}
+
+// A segment of the grey tone curve: input v between v0 and v1 gives o0 to o1.
+fn wd_seg(v: f32, v0: f32, v1: f32, o0: f32, o1: f32) -> f32 {
+    ret o0 + (o1 - o0) * (v - v0) / (v1 - v0)
+}
+
+// The dark grey (0..255) of a light grey (0..255). Folded at #F0F0F0: the light face and the dark face are both
+// the "lowest" grey of their theme, and the lighter hover and border greys of the light theme are darker, so
+// in dark they are the lighter ones.
+fn windark_gray(v: f32) -> f32 {
+    if v >= 253.0 { ret 43.0 }
+    if v >= 240.0 { ret wd_seg(v, 240.0, 253.0, 32.0, 43.0) }
+    if v >= 232.0 { ret wd_seg(v, 232.0, 240.0, 46.0, 32.0) }
+    if v >= 229.0 { ret wd_seg(v, 229.0, 232.0, 60.0, 46.0) }
+    if v >= 222.0 { ret wd_seg(v, 222.0, 229.0, 69.0, 60.0) }
+    if v >= 210.0 { ret wd_seg(v, 210.0, 222.0, 90.0, 69.0) }
+    if v >= 192.0 { ret wd_seg(v, 192.0, 210.0, 105.0, 90.0) }
+    if v >= 160.0 { ret wd_seg(v, 160.0, 192.0, 130.0, 105.0) }
+    if v >= 128.0 { ret wd_seg(v, 128.0, 160.0, 145.0, 130.0) }
+    if v >= 109.0 { ret wd_seg(v, 109.0, 128.0, 157.0, 145.0) }
+    if v >= 80.0 { ret wd_seg(v, 80.0, 109.0, 190.0, 157.0) }
+    if v >= 40.0 { ret wd_seg(v, 40.0, 80.0, 230.0, 190.0) }
+    ret wd_seg(v, 0.0, 40.0, 255.0, 230.0)
+}
+
+fn wd_hue(p: f32, q: f32, h0: f32) -> f32 {
+    var h = h0
+    if h < 0.0 { h += 1.0 }
+    if h > 1.0 { h -= 1.0 }
+    if h < 1.0 / 6.0 { ret p + (q - p) * 6.0 * h }
+    if h < 0.5 { ret q }
+    if h < 2.0 / 3.0 { ret p + (q - p) * (2.0 / 3.0 - h) * 6.0 }
+    ret p
+}
+
+// The dark colour (0..1 channels in, out) of a light one.
+fn windark_rgb(red: f32, green: f32, blue: f32) -> paint.Color {
+    var hi = red
+    if green > hi { hi = green }
+    if blue > hi { hi = blue }
+    var lo = red
+    if green < lo { lo = green }
+    if blue < lo { lo = blue }
+    if hi - lo <= 0.04 {
+        let g = windark_gray((red + green + blue) / 3.0 * 255.0) / 255.0
+        ret paint.rgba(g, g, g, 1.0)
+    }
+    let light = (hi + lo) / 2.0
+    var span = 2.0 * light
+    if light > 0.5 { span = 2.0 - 2.0 * light }
+    var sat = (hi - lo) / span
+    var hue: f32 = 0.0
+    let d = hi - lo
+    if hi == red {
+        hue = (green - blue) / d
+        if green < blue { hue += 6.0 }
+    } else if hi == green {
+        hue = (blue - red) / d + 2.0
+    } else {
+        hue = (red - green) / d + 4.0
+    }
+    hue = hue / 6.0
+    var nl = light
+    if light >= 0.8 {
+        nl = 0.38 - (light - 0.8) * 0.9
+        if sat > 0.9 { sat = 0.9 }
+    } else if light < 0.5 {
+        // a mid accent is lifted a little only: #0078D7 stays a row colour white text reads on (the focus line and rims that want #4CC2FF say so)
+        nl = light + 0.07
+    }
+    var q = nl + sat - nl * sat
+    if nl < 0.5 { q = nl * (1.0 + sat) }
+    let p = 2.0 * nl - q
+    ret paint.rgba(wd_hue(p, q, hue + 1.0 / 3.0), wd_hue(p, q, hue), wd_hue(p, q, hue - 1.0 / 3.0), 1.0)
+}
+
+// A colour from 0xRRGGBB; under `set_windark` the dark counterpart of a light colour.
+fn hex(value: u32) -> paint.Color {
+    let c = hex_raw(value)
+    if !windark_on { ret c }
+    ret windark_rgb(c.red, c.green, c.blue)
+}
+
+// A colour from 0xRRGGBB at `alpha`; mapped like `hex`.
+fn hexa(value: u32, alpha: f32) -> paint.Color {
+    let c = hex_raw(value)
+    if !windark_on { ret hexa_raw(value, alpha) }
+    let d = windark_rgb(c.red, c.green, c.blue)
+    ret paint.rgba(d.red, d.green, d.blue, alpha)
 }
 
 // The Windows look: MTG Studio v3's DevExpress controls as the program draws them, measured
@@ -711,9 +819,9 @@ fn windows_contrast(t: *const ThemeTokens) -> bool {
 // (measured on v3's default button, docs/ui/looks/windows-measurements.md), Dark #4CC2FF, and the
 // contrast palettes' Highlight.
 fn windows_accent(t: *const ThemeTokens) -> paint.Color {
-    if t.palette == .Dark { ret hex(0x4CC2FFu32) }
+    if t.palette == .Dark { ret hex_raw(0x4CC2FFu32) }
     if windows_contrast(t) { ret color(t, .Primary) }
-    ret hex(0x298DD9u32)
+    ret hex_raw(0x298DD9u32)
 }
 // ---- end looks-polish palettes -----------------------------------------------------------------
 
@@ -725,12 +833,12 @@ fn windows_accent(t: *const ThemeTokens) -> paint.Color {
 // not installed on the Windows host: the type scale uses Segoe UI at SF Pro's sizes.
 
 // A colour from 0xRRGGBB at `alpha`.
-fn hexa(value: u32, alpha: f32) -> paint.Color {
+fn hexa_raw(value: u32, alpha: f32) -> paint.Color {
     ret paint.rgba(f32((value >> 16u32) & 255u32) / 255.0, f32((value >> 8u32) & 255u32) / 255.0, f32(value & 255u32) / 255.0, alpha)
 }
 
 fn puta(t: *ThemeTokens, role: ColorRole, value: u32, alpha: f32) {
-    t.colors[color_index(role)] = hexa(value, alpha)
+    t.colors[color_index(role)] = hexa_raw(value, alpha)
 }
 
 fn cupertino(palette: Palette) -> ThemeTokens {
@@ -872,8 +980,8 @@ fn cupertino(palette: Palette) -> ThemeTokens {
 }
 // The hairline between list rows and under bars: iOS's separator colour.
 fn cupertino_separator(t: *const ThemeTokens) -> paint.Color {
-    if t.palette == .Dark { ret hexa(0x545458u32, 0.6) }
-    ret hexa(0x3C3C43u32, 0.29)
+    if t.palette == .Dark { ret hexa_raw(0x545458u32, 0.6) }
+    ret hexa_raw(0x3C3C43u32, 0.29)
 }
 
 // A colour at another alpha.
@@ -884,8 +992,8 @@ fn cup_alpha(c: paint.Color, alpha: f32) -> paint.Color {
 // The tertiary fill (rgba(118,118,128,.12) Light, .24 Dark) that gray and bezel-less controls rest on,
 // at `strength` times its resting alpha.
 fn cup_fill(t: *const ThemeTokens, strength: f32) -> paint.Color {
-    if t.palette == .Dark { ret hexa(0x767680u32, 0.24 * strength) }
-    ret hexa(0x767680u32, 0.12 * strength)
+    if t.palette == .Dark { ret hexa_raw(0x767680u32, 0.24 * strength) }
+    ret hexa_raw(0x767680u32, 0.12 * strength)
 }
 
 // A button's look in the Cupertino idiom. `variant`: Filled / Default / Container the prominent accent fill,
@@ -899,7 +1007,7 @@ fn cupertino_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Cont
     let ink = color(t, .Text)
     let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
     var face = accent
-    var label = hex(0xFFFFFFu32)
+    var label = hex_raw(0xFFFFFFu32)
     var edge = clear
     var edge_w: f32 = 0.0
     var lift = 0u8
@@ -944,31 +1052,31 @@ fn cupertino_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Cont
         lift = 1u8
         label = cup_alpha(ink, 0.85)
         if dark {
-            face = hexa(0xFFFFFFu32, 0.22)
-            edge = hexa(0xFFFFFFu32, 0.08)
+            face = hexa_raw(0xFFFFFFu32, 0.22)
+            edge = hexa_raw(0xFFFFFFu32, 0.08)
         }
         if !dark {
-            face = hex(0xFFFFFFu32)
-            edge = hexa(0x000000u32, 0.10)
+            face = hex_raw(0xFFFFFFu32)
+            edge = hexa_raw(0x000000u32, 0.10)
         }
         edge_w = 0.5
     }
     // The states: pressed darkens a fill (the accent toward black), a tint or gray fill deepens, plain dims its label.
     if state.hovered && !state.pressed {
-        if prominent || variant == .Danger { face = mix(face, hex(0xFFFFFFu32), 0.10) }
+        if prominent || variant == .Danger { face = mix(face, hex_raw(0xFFFFFFu32), 0.10) }
         if variant == .Tonal { face = cup_alpha(accent, 0.20) }
         if variant == .Elevated { face = cup_fill(t, 1.5) }
         if variant == .Plain { face = cup_fill(t, 0.6) }
-        if variant == .Outlined && !dark { face = hex(0xFAFAFAu32) }
-        if variant == .Outlined && dark { face = hexa(0xFFFFFFu32, 0.27) }
+        if variant == .Outlined && !dark { face = hex_raw(0xFAFAFAu32) }
+        if variant == .Outlined && dark { face = hexa_raw(0xFFFFFFu32, 0.27) }
     }
     if state.pressed {
-        if prominent || variant == .Danger { face = mix(face, hex(0x000000u32), 0.22) }
+        if prominent || variant == .Danger { face = mix(face, hex_raw(0x000000u32), 0.22) }
         if variant == .Tonal { face = cup_alpha(accent, 0.28) }
         if variant == .Elevated { face = cup_fill(t, 2.0) }
         if variant == .Plain { label = cup_alpha(label, 0.35) }
-        if variant == .Outlined && !dark { face = hex(0xE3E3E3u32) }
-        if variant == .Outlined && dark { face = hexa(0xFFFFFFu32, 0.34) }
+        if variant == .Outlined && !dark { face = hex_raw(0xE3E3E3u32) }
+        if variant == .Outlined && dark { face = hexa_raw(0xFFFFFFu32, 0.34) }
         if variant == .Outlined { lift = 0u8 }
     }
     if state.disabled {
@@ -983,8 +1091,8 @@ fn cupertino_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Cont
         if variant == .Plain { label = cup_alpha(color(t, .OnSurface), 0.3) }
         if variant == .Outlined {
             label = cup_alpha(ink, 0.25)
-            if !dark { face = hexa(0xFFFFFFu32, 0.6) }
-            if dark { face = hexa(0xFFFFFFu32, 0.10) }
+            if !dark { face = hexa_raw(0xFFFFFFu32, 0.6) }
+            if dark { face = hexa_raw(0xFFFFFFu32, 0.10) }
             lift = 0u8
         }
     }
@@ -1134,12 +1242,12 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
         if !contrast { face = mix(color(t, .SurfaceContainerLowest), accent, 0.2) }
     }
     // looks5: the hover face measured on v3's hovered Options buttons (states/hover-button-options-*): #E0EEF9 inside the accent ring.
-    var hover = hex(0xE0EEF9u32)
+    var hover = hex_raw(0xE0EEF9u32)
     // looks4: the pressed face measured on v3's pressed buttons (docs/ui/looks/ref/windows/states/button-pressed-*): #CCE4F7.
-    var press = hex(0xCCE4F7u32)
+    var press = hex_raw(0xCCE4F7u32)
     if t.palette == .Dark {
-        hover = hex(0x323232u32)
-        press = hex(0x272727u32)
+        hover = hex_raw(0x323232u32)
+        press = hex_raw(0x272727u32)
     }
     if state.hovered && !state.pressed {
         if contrast {
@@ -1163,13 +1271,13 @@ fn windows_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
     if variant == .Default || state.focused || state.selected { edge = accent }
     if state.disabled {
         // Measured on v3's disabled Apply: face #F9F9F9, border #EAEAEA, label #878787 (Light).
-        face = hex(0xF9F9F9u32)
-        edge = hex(0xEAEAEAu32)
-        ink = hex(0x878787u32)
+        face = hex_raw(0xF9F9F9u32)
+        edge = hex_raw(0xEAEAEAu32)
+        ink = hex_raw(0x878787u32)
         if t.palette == .Dark {
-            face = hex(0x282828u32)
-            edge = hex(0x333333u32)
-            ink = hex(0x757575u32)
+            face = hex_raw(0x282828u32)
+            edge = hex_raw(0x333333u32)
+            ink = hex_raw(0x757575u32)
         }
         if contrast {
             face = color(t, .SurfaceContainerLowest)
@@ -1242,9 +1350,9 @@ fn adapt(t: *const ThemeTokens, a: Adaptation) -> ThemeTokens {
 // `background` is the face, `foreground` the tick or dot, `border` the edge.
 fn windows_choice_resolve(t: *const ThemeTokens, chosen: bool, state: ControlState) -> ResolvedControl {
     let ground = color(t, .Background)
-    var face = hex(15987699u32)
-    var edge = hex(7895160u32)
-    var ink = hex(16777215u32)
+    var face = hex_raw(15987699u32)
+    var edge = hex_raw(7895160u32)
+    var ink = hex_raw(16777215u32)
     if chosen {
         face = color(t, .Primary)
         edge = face
@@ -1252,15 +1360,15 @@ fn windows_choice_resolve(t: *const ThemeTokens, chosen: bool, state: ControlSta
         if state.pressed { face = mix(face, ground, 0.2) }
         edge = face
     } else {
-        if state.hovered && !state.pressed { face = layer(face, hex(0u32), 0.04) }
+        if state.hovered && !state.pressed { face = layer(face, hex_raw(0u32), 0.04) }
         if state.pressed {
-            face = layer(face, hex(0u32), 0.09)
+            face = layer(face, hex_raw(0u32), 0.09)
             edge = mix(edge, ground, 0.25)
         }
     }
     if state.disabled {
         if chosen {
-            face = layer(ground, hex(0u32), 0.22)
+            face = layer(ground, hex_raw(0u32), 0.22)
             edge = face
         } else {
             face = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -1275,20 +1383,20 @@ fn windows_choice_resolve(t: *const ThemeTokens, chosen: bool, state: ControlSta
 // docs/grid-parity/tcxgrid/00-options-interface-controls-v3.png (150 % DPI; 30 tall, the close
 // glyph 10 wide). Unmeasured guesses: the inactive caption and every hover and pressed colour.
 fn windows_caption_face(active: bool) -> paint.Color {
-    if active { ret hex(2039842u32) }
+    if active { ret hex_raw(2039842u32) }
     // looks3: measured on the live captures (the inactive Options and About captions are #202020).
-    ret hex(2105376u32)
+    ret hex_raw(2105376u32)
 }
 
 fn windows_caption_ink(active: bool) -> paint.Color {
-    if active { ret hex(16777215u32) }
-    ret hex(7895160u32)
+    if active { ret hex_raw(16777215u32) }
+    ret hex_raw(7895160u32)
 }
 
 // The close button's hover (#C42B1C) and pressed (#B22A1B) faces; its glyph turns white.
 fn windows_caption_close(pressed: bool) -> paint.Color {
-    if pressed { ret hex(11676187u32) }
-    ret hex(12856092u32)
+    if pressed { ret hex_raw(11676187u32) }
+    ret hex_raw(12856092u32)
 }
 
 // looks3: the live 96 DPI captures put the dark caption at 31 rows (y 0 to 30).
@@ -1296,8 +1404,15 @@ fn windows_caption_height() -> f32 { ret 31.0 }
 
 // looks5: the light caption of v3's DevExpress dialogs (Advanced Filter, Conditional Formatting Rules Manager, the Customization
 // tool window): #F0F4F8 with black text and glyphs, as the live captures show (the capture varies by one level, a Mica wash).
-fn windows_caption_light_face() -> paint.Color { ret hex(0xF0F4F8u32) }
-fn windows_caption_light_ink() -> paint.Color { ret hex(0u32) }
+fn windows_caption_light_face() -> paint.Color {
+    // Windows 11 dark: the DevExpress dialogs' caption is the #2B2B2B control grey with white text.
+    if windark_on { ret hex_raw(0x2B2B2Bu32) }
+    ret hex_raw(0xF0F4F8u32)
+}
+fn windows_caption_light_ink() -> paint.Color {
+    if windark_on { ret hex_raw(0xFFFFFFu32) }
+    ret hex_raw(0u32)
+}
 
 // ---- Android look (docs/ui/looks, profile MaterialLike) ---------------------------------------
 // Material Design 3 as Android ships it. The Neper default already is M3 in structure (shape
@@ -1409,4 +1524,7 @@ fn material(palette: Palette) -> ThemeTokens {
 }
 // ---- end Android look ---------------------------------------------------------------------------
 // looks5: the hovered minimise or maximise button's wash over the dark caption (states/hover-caption-minimize-main, -maximize-main).
-fn windows_caption_hot() -> paint.Color { ret hex(0x2C2D2Fu32) }
+fn windows_caption_hot() -> paint.Color {
+    if windark_on { ret hex_raw(0x3C3C3Cu32) }
+    ret hex_raw(0x2C2D2Fu32)
+}
