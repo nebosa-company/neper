@@ -9672,7 +9672,7 @@ fn windows_menu_rule(a: *mem.Arena) -> (widget.Node, err) {
     pair[0usize] = windows_rule(0.0, 1.0, 10526880u32)
     pair[1usize] = windows_rule(0.0, 1.0, 16777215u32)
     if style.windows_dark_on() {
-        pair[0usize] = windows_rule_raw(0.0, 1.0, 0x454545u32)
+        pair[0usize] = windows_rule_raw(0.0, 1.0, 0x3E3E3Eu32)
         pair[1usize] = windows_rule_raw(0.0, 1.0, 0x2C2C2Cu32)
     }
     var line_style = style.defaults()
@@ -9759,7 +9759,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             pair[0usize] = windows_rule(0.0, 1.0, 10526880u32)
             pair[1usize] = windows_rule(0.0, 1.0, 16777215u32)
             if dark {
-                pair[0usize] = windows_rule_raw(0.0, 1.0, 0x454545u32)
+                pair[0usize] = windows_rule_raw(0.0, 1.0, 0x3E3E3Eu32)
                 pair[1usize] = windows_rule_raw(0.0, 1.0, 0x2C2C2Cu32)
             }
             var line_style = style.defaults()
@@ -10007,11 +10007,11 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     padded_column[0usize] = widget.padded(0u64, 1.0, 1.0, 1.0, tail, windows_menu_flat(), body_held[0usize..1usize])
     var framed: widget.Node = zero
     if dark {
-        // (round 7) Windows 11 dark flyout: one #454545 line round the #2C2C2C face
+        // (round 7) Windows 11 dark flyout: one #808080 line (native dark #32768) round the #2C2C2C face
         let (ring_held, ring_held_error) = mem.alloc[widget.Node](a, 1usize)
         if ring_held_error != ok { ret (zero, TooLarge) }
         ring_held[0usize] = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, windows_menu_flat(), padded_column[0usize..1usize])
-        framed = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, windows_flat_raw(0x454545u32), ring_held[0usize..1usize])
+        framed = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, windows_flat_raw(0x808080u32), ring_held[0usize..1usize])
     } else {
         let (inner_ring, inner_ring_error) = windows_bevel(a, 16777215u32, 10526880u32, padded_column[0usize], 0.0, 0.0)
         if inner_ring_error != ok { ret (zero, inner_ring_error) }

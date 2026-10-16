@@ -323,7 +323,7 @@ fn state_editor(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> e
         let (copies, copies_error) = mem.alloc[control.Theme](a, 1usize)
         if copies_error != ok { ret copies_error }
         copies[0usize] = tahoma
-        let (white, white_error) = control.colored_text(a, 0u64, values(0usize), &copies[0usize], control.text_options(), gl.rgb(0xFFFFFFu32))
+        let (white, white_error) = control.colored_text(a, 0u64, values(0usize), &copies[0usize], control.text_options(), gl.raw(0xFFFFFFu32))
         if white_error != ok { ret white_error }
         var mark = style.defaults()
         mark.background = paint.Brush { Solid: gl.rgb(0x0078D7u32) }

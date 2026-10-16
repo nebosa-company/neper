@@ -2055,8 +2055,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if state.hovered { head_fill = look.header_hover }
             // looks4-e: a pressed header is #BCDCF4 (live capture, states/grid-header-pressed-main)
             if state.pressed && look.soft_lines { head_fill = dk(t, 0xBCDCF4u32) }
-            // looks4-e: a pressed header is #BCDCF4 (live capture, states/grid-header-pressed-main)
-            if state.pressed && look.soft_lines { head_fill = dk(t, 0xBCDCF4u32) }
+            // (round 10) the native Windows 11 dark list view's pressed header is #838383 (ref/windows-native/dark/listview-header-pressed)
+            if state.pressed && look.soft_lines && style.windark_active() { head_fill = style.hex_raw(0x838383u32) }
             head_style.background = paint.Brush { Solid: head_fill }
         }
         // (D1345) The dragged header lifts: `surface-container-highest` at elevation 4.
@@ -2852,14 +2852,16 @@ fn windows_table_look() -> TableLook {
     look.head_text = lk.text_size
     look.footer_fill = lk.footer_band
     if style.windows_dark_on() {
-        // (round 7) Windows 11 dark: rows #2B2B2B / #262626, the unfocused selection #3A3A3A, the focused one #264F78
-        look.header_line = gl.raw(0x454545u32)
-        look.even = gl.raw(0x262626u32)
+        // (round 10) the native Windows 11 dark tree view (ref/windows-native/dark/tree-*): selected focused row #626262,
+        // unfocused / hot row #333333, rows #202020 (the gallery's colour; v3's stripes take #2B2B2B), column lines #414141,
+        // header separator #636363 as in the dark list view
+        look.header_line = gl.raw(0x636363u32)
+        look.even = gl.raw(0x202020u32)
         look.odd = gl.raw(0x2B2B2Bu32)
-        look.selected = gl.raw(0x3A3A3Au32)
-        look.selected_line = gl.raw(0x3A3A3Au32)
-        look.selected_focus = gl.raw(0x264F78u32)
-        look.line = gl.raw(0x3A3A3Au32)
+        look.selected = gl.raw(0x333333u32)
+        look.selected_line = gl.raw(0x2F2F2Fu32)
+        look.selected_focus = gl.raw(0x626262u32)
+        look.line = gl.raw(0x414141u32)
     }
     ret look
 }
