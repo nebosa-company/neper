@@ -13065,8 +13065,14 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         if share > 1.0 { share = 1.0 }
         let at = 17.0 + (room - thumb_len) * share
         var side = (16.0 - w) * 0.5 + 0.46
+        // looks5-e: pressed, the pill stands on whole pixels (live captures: 6 px, #858585, 294 to 299 on a bar that starts at 289)
+        var lift: f32 = 0.47
+        if state.pressed && vertical {
+            side = (16.0 - w) * 0.5
+            lift = 0.0
+        }
         thick = sized_style(w, thumb_len)
-        thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at + 0.47 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        thick.margin = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: at + lift }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         thick.radius = w * 0.5
         if !vertical {
             side = (16.0 - (w + 2.0)) * 0.5

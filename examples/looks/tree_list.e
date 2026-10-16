@@ -19,7 +19,7 @@ use e.ui.gridlook as gl
 use e.ui.looks
 use e.ui.widget
 
-type Flags = struct { checked: bool }
+type Flags = struct { checked: bool, expanded: bool }
 var flags: Flags = zero
 fn checked_two() -> bool { ret flags.checked }
 
@@ -28,7 +28,70 @@ fn noop_sort(ctx: *void, value: usize) -> err { ret ok }
 fn noop_reorder(ctx: *void, value: collection.Reorder) -> err { ret ok }
 fn noop_resize(ctx: *void, value: collection.ColumnResize) -> err { ret ok }
 
+// looks5-e: the sixteen editions of Core Sets as the live captures show them (states/tree-list-expander-pressed-filter): the
+// children are keys 200 to 215 (`key_of`: parent * 100 + index)
+fn child_name(index: usize) -> str {
+    if index == 0usize { ret "Foundations" }
+    if index == 1usize { ret "Core Set 2021" }
+    if index == 2usize { ret "Core Set 2020" }
+    if index == 3usize { ret "Core Set 2019" }
+    if index == 4usize { ret "Magic Origins" }
+    if index == 5usize { ret "Magic 2015" }
+    if index == 6usize { ret "Magic 2014" }
+    if index == 7usize { ret "Magic 2013" }
+    if index == 8usize { ret "Magic 2012" }
+    if index == 9usize { ret "Magic 2011" }
+    if index == 10usize { ret "Magic 2010" }
+    if index == 11usize { ret "Tenth Edition" }
+    if index == 12usize { ret "Ninth Edition" }
+    if index == 13usize { ret "Eighth Edition" }
+    if index == 14usize { ret "Seventh Edition" }
+    if index == 15usize { ret "Sixth Edition" }
+    ret "Fifth Edition"
+}
+
+fn child_abbr(index: usize) -> str {
+    if index == 0usize { ret "FDN" }
+    if index == 1usize { ret "M21" }
+    if index == 2usize { ret "M20" }
+    if index == 3usize { ret "M19" }
+    if index == 4usize { ret "ORI" }
+    if index == 5usize { ret "M15" }
+    if index == 6usize { ret "M14" }
+    if index == 7usize { ret "M13" }
+    if index == 8usize { ret "M12" }
+    if index == 9usize { ret "M11" }
+    if index == 10usize { ret "M10" }
+    if index == 11usize { ret "10E" }
+    if index == 12usize { ret "9ED" }
+    if index == 13usize { ret "8ED" }
+    if index == 14usize { ret "7ED" }
+    if index == 15usize { ret "6ED" }
+    ret "5ED"
+}
+
+fn child_date(index: usize) -> str {
+    if index == 0usize { ret "2024-11-15" }
+    if index == 1usize { ret "2020-08-08" }
+    if index == 2usize { ret "2019-07-12" }
+    if index == 3usize { ret "2018-07-13" }
+    if index == 4usize { ret "2015-07-17" }
+    if index == 5usize { ret "2014-07-18" }
+    if index == 6usize { ret "2013-07-19" }
+    if index == 7usize { ret "2012-07-13" }
+    if index == 8usize { ret "2011-07-15" }
+    if index == 9usize { ret "2010-07-16" }
+    if index == 10usize { ret "2009-07-17" }
+    if index == 11usize { ret "2007-07-13" }
+    if index == 12usize { ret "2005-07-29" }
+    if index == 13usize { ret "2003-07-28" }
+    if index == 14usize { ret "2001-04-11" }
+    if index == 15usize { ret "1999-04-28" }
+    ret "1997-03-24"
+}
+
 fn name_of(node: widget.Key) -> str {
+    if node >= 200u64 && node < 224u64 { ret child_name(usize(node - 200u64)) }
     if node == 1u64 { ret "Expansions" }
     if node == 2u64 { ret "Core Sets" }
     if node == 3u64 { ret "Masters" }
@@ -50,6 +113,7 @@ fn name_of(node: widget.Key) -> str {
 }
 
 fn ink_of(node: widget.Key) -> u32 {
+    if node >= 200u64 && node < 224u64 { ret 0x000000u32 }
     if node == 1u64 { ret 0xFF0000u32 }
     if node == 2u64 { ret 0x000000u32 }
     if node == 3u64 { ret 0x9400D3u32 }
@@ -72,6 +136,7 @@ fn ink_of(node: widget.Key) -> u32 {
 
 fn count_of(ctx: *void, parent: widget.Key) -> usize {
     if parent == 0u64 { ret 24usize }
+    if parent == 2u64 && flags.expanded { ret 24usize }
     ret 1usize
 }
 
@@ -81,6 +146,7 @@ fn key_of(ctx: *void, parent: widget.Key, index: usize) -> widget.Key {
 }
 
 fn has_children(ctx: *void, node: widget.Key) -> bool {
+    if node >= 200u64 { ret false }
     ret node < 100u64
 }
 
@@ -94,12 +160,44 @@ fn build_row(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> 
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret held_error }
     held[0usize] = box
-    *out = widget.padded(0u64, 2.0, 3.0, 0.0, 0.0, control.sized_style(17.0, 17.0), held[0usize..1usize])
+    let boxed = widget.padded(0u64, 2.0, 3.0, 0.0, 0.0, control.sized_style(17.0, 17.0), held[0usize..1usize])
+    if node < 200u64 {
+        *out = boxed
+        ret ok
+    }
+    // an edition: the checked box, then its abbreviation
+    let t = mem.cast[*const control.Theme](ctx)
+    let (checked, checked_error) = gl.pixels(a, gl.gx_tree_check_on(), gl.gx_tree_check_on_w(), gl.gx_tree_check_h())
+    if checked_error != ok { ret checked_error }
+    let (label, label_error) = control.text(a, 0u64, child_abbr(usize(node - 200u64)), t, control.text_options())
+    if label_error != ok { ret label_error }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret parts_error }
+    let (check_held, check_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if check_held_error != ok { ret check_held_error }
+    check_held[0usize] = checked
+    // the tree indents a level by 20, the capture by 14: the box and the text lean back 6 px
+    parts[0usize] = widget.positioned(0u64, 6.0, 1.0, style.defaults(), check_held[0usize..1usize])
+    parts[1usize] = widget.positioned(0u64, 24.0, 1.0, style.defaults(), one_of(a, label))
+    *out = widget.stack(0u64, control.sized_style(80.0, 17.0), parts[0usize..2usize])
     ret ok
+}
+
+fn one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (nodes, nodes_error) = mem.alloc[widget.Node](a, 1usize)
+    if nodes_error != ok { ret zero }
+    nodes[0usize] = node
+    ret nodes[0usize..1usize]
 }
 
 fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *widget.Node) -> err {
     let t = mem.cast[*const control.Theme](ctx)
+    if node >= 200u64 && column == 3usize {
+        let (date, date_error) = control.text(a, 0u64, child_date(usize(node - 200u64)), t, control.text_options())
+        if date_error != ok { ret date_error }
+        *out = date
+        ret ok
+    }
     if column != 2usize {
         *out = widget.spacer(0u64, 1.0)
         ret ok
@@ -131,10 +229,17 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key, focus_tw
     let source = collection.TreeSource { ctx: mem.cast[*void](held), count: count_of, key: key_of, has_children: has_children, build: build_row }
     let cells = collection.CellSource { ctx: mem.cast[*void](held), cell: build_cell }
     var none: []const widget.Key = zero
+    var opened: []const widget.Key = zero
+    if flags.expanded {
+        let (open_keys, open_error) = mem.alloc[widget.Key](a, 1usize)
+        if open_error != ok { ret (zero, open_error) }
+        open_keys[0usize] = 2u64
+        opened = open_keys[0usize..1usize]
+    }
     var options: collection.TreeOptions = zero
     options.height = 300.0
     if focus_two { options.height = 71.0 }
-    let (node, node_error) = collection.tree_table_with(a, key, held, "Blocks", columns[0usize..4usize], source, cells, none, picked[0usize..1usize], widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, 99usize, false, widget.Change[usize] { ctx: zero, invoke: noop_sort }, widget.Change[collection.Reorder] { ctx: zero, invoke: noop_reorder }, widget.Change[collection.ColumnResize] { ctx: zero, invoke: noop_resize }, 17.0, options)
+    let (node, node_error) = collection.tree_table_with(a, key, held, "Blocks", columns[0usize..4usize], source, cells, opened, picked[0usize..1usize], widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, 99usize, false, widget.Change[usize] { ctx: zero, invoke: noop_sort }, widget.Change[collection.Reorder] { ctx: zero, invoke: noop_reorder }, widget.Change[collection.ColumnResize] { ctx: zero, invoke: noop_resize }, 17.0, options)
     ret (node, node_error)
 }
 
@@ -200,8 +305,35 @@ fn build_rules(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
     ret (1usize, ok)
 }
 
+// looks5-e: Core Sets open (its sixteen editions, checked) and selected, with the expander pressed and with the bar's thumb
+// pressed (states/tree-list-expander-pressed-filter and scroll-bar-thumb-pressed-filter-tree, 305 x 319 at (21, 88))
+fn build_expanded(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    var k = 0usize
+    while k < 2usize {
+        let (node, node_error) = filter_list(a, t, u64(1000 + k * 10000), false)
+        if node_error != ok { ret (0usize, node_error) }
+        var drive: looks.Drive = .Focus
+        var caption = "Expander pressed (Core Sets)"
+        looks.aim(k, 0.0, 45.0 - 159.5)
+        if k == 1usize {
+            caption = "Scroll thumb pressed"
+            drive = .Press
+            looks.aim(k, 297.0 - 152.5, 70.0 - 159.5)
+        }
+        cells[k] = looks.Cell { caption: caption, node: node, drive: drive }
+        k += 1usize
+    }
+    ret (2usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // `tree_list.exe states` renders the two state sheets (the arena holds only so many sheets)
+    if args.len > 1usize && args[1usize][0usize] == 101u8 {
+        flags.checked = true
+        flags.expanded = true
+        let expanded = looks.Sheet { name: "tree_list_expanded", cells: 2usize, columns: 2usize, cell_w: 305.0, cell_h: 319.0, ctx: zero, build: build_expanded }
+        ret looks.run_all(a, &expanded)
+    }
     if args.len > 1usize { ret main_states(a) }
     let sheet = looks.Sheet { name: "tree_list", cells: 1usize, columns: 1usize, cell_w: 305.0, cell_h: 319.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)

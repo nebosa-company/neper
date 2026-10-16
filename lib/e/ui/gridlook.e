@@ -53,6 +53,16 @@ type Look = struct {
     frame_none: bool,
     // looks5-e: a dialog grid's lines (one crisp column line, its own row-foot pixels)
     dialog_lines: bool,
+    // looks5-e: the two pixels at the foot of a grey and of a white row, when set
+    foot_set: bool,
+    // looks5-e: a grid without the focus paints its selected row in this fill and edge (the Options grids), else as focused
+    idle_on: bool,
+    idle_fill: paint.Color,
+    idle_edge: paint.Color,
+    foot_g1: paint.Color,
+    foot_g2: paint.Color,
+    foot_w1: paint.Color,
+    foot_w2: paint.Color,
     // looks5-e: the TcxGrid's own 2 px frame (live capture, top grid of the main window): outer and inner line of the
     // top and left sides, one line at the bottom and the right; the lines differ a little with the grid's content
     ring: bool,
@@ -98,6 +108,14 @@ fn v3() -> Look {
         group_flat: true,
         frame_none: false,
         dialog_lines: false,
+        foot_set: false,
+        idle_on: false,
+        idle_fill: rgb(0xD5E4EEu32),
+        idle_edge: rgb(0xD9DFE3u32),
+        foot_g1: rgb(0xE7E7E7u32),
+        foot_g2: rgb(0xEBEBEBu32),
+        foot_w1: rgb(0xF0F0F0u32),
+        foot_w2: rgb(0xE5E5E5u32),
         ring: true,
         ring_top_o: rgb(0x8D9096u32),
         ring_top_i: rgb(0xC6C8CCu32),
@@ -886,6 +904,10 @@ fn gx_sort_down_w() -> f32 { ret 8.0 }
 fn gx_sort_down_h() -> f32 { ret 9.0 }
 fn gx_sort_up() -> str { ret "FFFFFFFFFFFFFFFFFFD1D1D1F3F3F3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB4B4B4EBEBEBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD1D1D1D6D6D6C9C9C9F3F3F3FFFFFFFFFFFFFFFFFFFFFFFFB4B4B4EBEBEBB4B4B4EBEBEBFFFFFFFFFFFFFFFFFFD1D1D1D6D6D6F7F7F7E2E2E2C9C9C9F3F3F3FFFFFFFFFFFFB3B3B3EBEBEBFFFFFFFFFFFFB4B4B4EBEBEBFFFFFFD1D1D1D6D6D6F7F7F7FFFFFFFFFFFFE2E2E2C9C9C9F3F3F3B3B3B3BEBEBEC5C5C5C5C5C5C5C5C5C5C5C5A8A8A8EBEBEBE1E1E1DADADADADADADADADADADADADADADADADADAF7F7F7" }
 fn gx_sort_up_w() -> f32 { ret 8.0 }
+// looks5-e: the scroll bar's pressed lower arrow, cut from states/scroll-bar-arrow-pressed-main-vertical (on #F0F0F0)
+fn gx_arrow_down() -> str { ret "E8E8E8D1D1D1C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3D4D4D4EAEAEAD6D6D69D9D9D7F7F7F7F7F7F7F7F7F7F7F7F7F7F7FA2A2A2DADADADCDCDC9A9A9A6A6A6A6666666666666666666B6B6BA1A1A1DFDFDFEEEEEEC6C6C6838383666666666666666666888888CCCCCCEEEEEEF0F0F0E8E8E8B1B1B1767676666666787878B8B8B8E9E9E9F0F0F0F0F0F0F0F0F0DCDCDCA7A7A7888888ACACACDFDFDFF0F0F0F0F0F0F0F0F0F0F0F0EFEFEFDCDCDCCDCDCDDFDFDFEFEFEFF0F0F0F0F0F0" }
+fn gx_arrow_down_w() -> f32 { ret 9.0 }
+fn gx_arrow_down_h() -> f32 { ret 7.0 }
 fn gx_sort_up_h() -> f32 { ret 9.0 }
 fn gx_list() -> str { ret "818181E4E4E4818181676767676767676767E4E4E4A9A9A9EDEDEDAAAAAA979797979797979797EDEDEDFFFFFFFFFFFF828282686868686868686868E4E4E4FFFFFFFFFFFFAAAAAA979797979797979797EDEDED828282E4E4E4828282686868686868686868E4E4E4A9A9A9EDEDEDAAAAAA979797979797979797EDEDEDFFFFFFFFFFFF828282686868686868686868E4E4E4FFFFFFFFFFFFAAAAAA979797979797979797EDEDED828282E5E5E5838383696969696969696969E5E5E5A8A8A8EDEDEDA9A9A9969696969696969696EDEDED" }
 fn gx_list_w() -> f32 { ret 7.0 }

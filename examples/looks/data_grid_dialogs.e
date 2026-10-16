@@ -169,6 +169,11 @@ fn plain_grid(windows: bool, events: dg.Events, row_height: f32, a: *mem.Arena, 
     look.header_line = gl.rgb(0xF4F4F4u32)
     look.frame_none = true
     look.dialog_lines = true
+    look.foot_set = true
+    look.foot_g1 = gl.rgb(0xE2E2E2u32)
+    look.foot_g2 = gl.rgb(0xF3F3F3u32)
+    look.foot_w1 = gl.rgb(0xE8E8E8u32)
+    look.foot_w2 = gl.rgb(0xE9E9E9u32)
     look.row_height = row_height
     dg.set_look(&grid, look)
     dg.show_indicator(&grid, false)

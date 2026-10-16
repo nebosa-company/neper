@@ -9881,6 +9881,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     if grid.filter_visible && !grid.look.on { body_height = body_height - 44.0 }
     if grid.bands.len != 0usize { body_height = body_height - 36.0 }
     if grid.navigator_visible { body_height = body_height - 52.0 }
+    if grid.look.on && grid.look.group_flat && !grid.footer_visible && grid.navigator_visible { body_height = body_height - 2.0 }
     if grid.group_box_visible { body_height = body_height - 35.0 }
     grid.page_rows = usize(body_height / grid.row_height)
     follow_row_after_reorder(grid)
@@ -9948,10 +9949,9 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         var dotted_focus = true
         if !grid.editing && !grid.chooser_active && mem.address_of(theme.runtime) != 0usize {
             let (held, has_held) = widget.focused_key(theme.runtime)
-            if !grid.force_focus && (!has_held || !grid.has_selection || held != row_key(grid, grid.selected_row)) {
-                selected_fill = gl.rgb(0xD5E4EEu32)
-                // v3 frames the current row of a grid without the focus in near black
-                selected_edge = gl.rgb(0x212121u32)
+            if lk.idle_on && !grid.force_focus && (!has_held || !grid.has_selection || held != row_key(grid, grid.selected_row)) {
+                selected_fill = lk.idle_fill
+                selected_edge = lk.idle_edge
                 dotted_focus = false
             }
         }
@@ -9961,7 +9961,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             if made_filter_error != ok { ret (zero, made_filter_error) }
             v3_filter = made_filter
         }
-        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select, dialog_lines: grid.look.dialog_lines }
+        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select, dialog_lines: grid.look.dialog_lines, foot_set: grid.look.foot_set, foot_g1: grid.look.foot_g1, foot_g2: grid.look.foot_g2, foot_w1: grid.look.foot_w1, foot_w2: grid.look.foot_w2 }
     }
     // group footers are taller: the list of the entries that are
     if has_extras(grid) && grid.look.on {
@@ -10067,6 +10067,13 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             let (filter_panel, filter_panel_error) = filter_panel_row(a, grid)
             if filter_panel_error != ok { ret (zero, filter_panel_error) }
             parts[at] = filter_panel
+        } else if grid.look.group_flat && !grid.footer_visible && grid.navigator_visible {
+            // looks5-e: with no summary footer the navigator's top has two #F7F7F7 pixel rows (live capture, states grids)
+            var rule = style.defaults()
+            rule.width = style.Length { Percent: 100.0 }
+            rule.height = style.Length { Px: 2.0 }
+            rule.background = paint.Brush { Solid: gl.rgb(0xF7F7F7u32) }
+            parts[at] = widget.box(0u64, rule, zero)
         } else {
             parts[at] = widget.box(0u64, style.defaults(), zero)
         }
@@ -10109,23 +10116,10 @@ fn ring_side(a: *mem.Arena, color: paint.Color, left: f32, top: f32, right: f32,
 
 fn ring_wrap(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (widget.Node, err) {
     let lk = grid.look
-    // the inner lines lie over the content (a header starts under them, measured), the outer ones take a pixel each
-    var top_line = style.defaults()
-    top_line.width = style.Length { Percent: 100.0 }
-    top_line.height = style.Length { Px: 1.0 }
-    top_line.background = paint.Brush { Solid: lk.ring_top_i }
-    var left_line = style.defaults()
-    left_line.width = style.Length { Px: 1.0 }
-    left_line.height = style.Length { Percent: 100.0 }
-    left_line.background = paint.Brush { Solid: lk.ring_left_i }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
-    if layers_error != ok { ret (zero, control.TooLarge) }
-    layers[0usize] = inner
-    layers[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one(a, widget.box(0u64, top_line, zero)))
-    layers[2usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one(a, widget.box(0u64, left_line, zero)))
-    var node = widget.stack(0u64, style.defaults(), layers[0usize..3usize])
-    node = ring_side(a, lk.ring_right, 0.0, 0.0, 1.0, 0.0, node)
+    var node = ring_side(a, lk.ring_right, 0.0, 0.0, 1.0, 0.0, inner)
     node = ring_side(a, lk.ring_bottom, 0.0, 0.0, 0.0, 1.0, node)
+    node = ring_side(a, lk.ring_left_i, 1.0, 0.0, 0.0, 0.0, node)
+    node = ring_side(a, lk.ring_top_i, 0.0, 1.0, 0.0, 0.0, node)
     node = ring_side(a, lk.ring_left_o, 1.0, 0.0, 0.0, 0.0, node)
     node = ring_side(a, lk.ring_top_o, 0.0, 1.0, 0.0, 0.0, node)
     ret (node, ok)

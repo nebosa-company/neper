@@ -19,7 +19,7 @@ use e.ui.style
 use e.ui.widget
 
 const ROWS: usize = 120283usize
-const CELLS: usize = 7usize
+const CELLS: usize = 10usize
 const C_NAME: usize = 0usize
 const C_ED: usize = 1usize
 const C_COLOR: usize = 2usize
@@ -41,6 +41,8 @@ type App = struct {
 }
 
 fn name_of(row: usize) -> str {
+    if row == 9usize { ret "Dust to Dust" }
+    if row == 10usize { ret "Euru, Acorn Scrounger" }
     let k = row % 9usize
     if k == 0usize { ret "Path of Ancestry" }
     if k == 1usize { ret "Exotic Orchard" }
@@ -54,6 +56,8 @@ fn name_of(row: usize) -> str {
 }
 
 fn type_of(row: usize) -> str {
+    if row == 9usize { ret "Sorcery" }
+    if row == 10usize { ret "Legendary Creature — Squirrel" }
     let k = row % 9usize
     if k == 0usize || k == 1usize { ret "Land" }
     if k == 3usize { ret "Artifact — Equipment" }
@@ -62,6 +66,7 @@ fn type_of(row: usize) -> str {
 }
 
 fn rarity_of(row: usize) -> str {
+    if row == 9usize || row == 10usize { ret "U" }
     let k = row % 9usize
     if k == 0usize { ret "C" }
     if k == 1usize || k == 7usize || k == 8usize { ret "R" }
@@ -69,6 +74,8 @@ fn rarity_of(row: usize) -> str {
 }
 
 fn color_of(row: usize) -> str {
+    if row == 9usize { ret "W" }
+    if row == 10usize { ret "M" }
     if row % 9usize == 8usize { ret "R" }
     ret "N"
 }
@@ -103,6 +110,14 @@ fn load(a: *mem.Arena, app: *App) -> err {
 
 // every card of the capture is colourless (grey) but Chaos Warp (red)
 fn ink(ctx: *void, row: usize) -> (paint.Color, bool) {
+    if row == 9usize {
+        let (white, has_white) = gl.card_ink(87u8)
+        ret (white, has_white)
+    }
+    if row == 10usize {
+        let (multi, has_multi) = gl.card_ink(77u8)
+        ret (multi, has_multi)
+    }
     if row % 9usize == 8usize {
         let (red, has_red) = gl.card_ink(82u8)
         ret (red, has_red)
@@ -154,13 +169,19 @@ fn setup(app: *App) -> err {
         if made_error != ok { ret made_error }
         app.grids[k] = made
         var look = gl.v3()
-        look.header_height = 23.0
+        look.header_height = 22.0
         // the live capture's frame: white header, so a lighter inner top line
         look.ring_top_i = gl.rgb(0xD0D2D5u32)
         look.ring_left_o = gl.rgb(0x90949Cu32)
         look.ring_left_i = gl.rgb(0xEFF0F1u32)
+        look.foot_set = true
+        look.foot_g1 = gl.rgb(0xE5E5E5u32)
+        look.foot_g2 = gl.rgb(0xF0F0F0u32)
+        look.foot_w1 = gl.rgb(0xEBEBEBu32)
+        look.foot_w2 = gl.rgb(0xE7E7E7u32)
         dg.set_look(&app.grids[k], look)
         dg.set_row_ink(&app.grids[k], zero, ink)
+        dg.set_grid_lines(&app.grids[k], dg.GridLines.Horizontal)
         dg.show_navigator(&app.grids[k], true)
         dg.set_pane_hint(&app.grids[k], 573.0)
         app.grids[k].aligns[4usize] = 2u8
@@ -173,19 +194,21 @@ fn setup(app: *App) -> err {
         // focused: the cells 0 to 5 (the capture's grid had the focus: dotted row rectangle); the last one is not
         dg.set_forced_focus(&app.grids[k], k != 6usize)
         if k == 0usize { dg.show_sort(&app.grids[k], 3usize, false) }
+        // the lower arrow held down scrolls the rows (the capture shows two rows gone)
+        if k == 9usize { app.grids[k].offset = 38.0 }
         k += 1usize
     }
     ret ok
 }
 
 fn cell_of(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid) -> (widget.Node, err) {
-    let (body, body_error) = dg.build(a, grid, t, 238.0)
+    let (body, body_error) = dg.build(a, grid, t, 239.0)
     if body_error != ok { ret (zero, body_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, held_error) }
     held[0usize] = body
-    var face = looks.size_style(576.0, 215.0)
-    face.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    var face = looks.size_style(576.0, 213.0)
+    face.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize]), ok)
 }
@@ -198,7 +221,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         try setup(app)
         app.ready = true
     }
-    let captions = [CELLS]str{ "Header pressed (Name)", "Navigator at rest", "First pressed", "Next pressed", "Last pressed", "Row selected, grid focused", "Row selected, grid not focused" }
+    let captions = [CELLS]str{ "Header pressed (Name)", "Navigator at rest", "First pressed", "Next pressed", "Last pressed", "Row selected, grid focused", "Row selected, grid not focused", "Vertical thumb pressed", "Horizontal thumb pressed", "Lower arrow pressed" }
     var i = app.first
     while i < app.first + app.count {
         let (node, node_error) = cell_of(a, t, &app.grids[i])
@@ -207,19 +230,31 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         // the pointer goes to the control that is pressed: the Name header, the first, next or last record button
         if i == 0usize {
             drive = .Press
-            looks.aim(i - app.first, 100.0 - 288.0, 12.0 - 107.5)
+            looks.aim(i - app.first, 100.0 - 288.0, 12.0 - 106.5)
         }
         if i == 2usize {
             drive = .Press
-            looks.aim(i - app.first, 12.0 - 288.0, 200.0 - 107.5)
+            looks.aim(i - app.first, 12.0 - 288.0, 199.0 - 106.5)
         }
         if i == 3usize {
             drive = .Press
-            looks.aim(i - app.first, 146.0 - 288.0, 200.0 - 107.5)
+            looks.aim(i - app.first, 146.0 - 288.0, 199.0 - 106.5)
         }
         if i == 4usize {
             drive = .Press
-            looks.aim(i - app.first, 192.0 - 288.0, 200.0 - 107.5)
+            looks.aim(i - app.first, 192.0 - 288.0, 199.0 - 106.5)
+        }
+        if i == 7usize {
+            drive = .Press
+            looks.aim(i - app.first, 783.0 - 216.0 - 288.0, 135.0 - 109.0 - 106.5)
+        }
+        if i == 8usize {
+            drive = .Press
+            looks.aim(i - app.first, 323.0 - 288.0, 201.0 - 106.5)
+        }
+        if i == 9usize {
+            drive = .Press
+            looks.aim(i - app.first, 783.0 - 216.0 - 288.0, 187.0 - 106.5)
         }
         cells[i - app.first] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
@@ -244,8 +279,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if part == 1usize { name = "data_grid_top2" }
         if part == 2usize { name = "data_grid_top3" }
         if part == 3usize { name = "data_grid_top4" }
+        if part == 4usize { name = "data_grid_top5" }
     }
     apps[0usize] = seed
-    let sheet = looks.Sheet { name: name, cells: seed.count, columns: 2usize, cell_w: 576.0, cell_h: 215.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
+    let sheet = looks.Sheet { name: name, cells: seed.count, columns: 2usize, cell_w: 576.0, cell_h: 213.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
     ret looks.run_all(a, &sheet)
 }

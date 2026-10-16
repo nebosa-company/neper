@@ -2155,10 +2155,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if look.on && look.soft_lines && !active && !lands_here {
             // looks4-e: the header's column line is two pixels wide (#EBEBEB, #F8F8F8), as the grid's
             var first_line = control.sized_style(1.0, inner)
-            first_line.background = paint.Brush { Solid: gl.rgb(0xEBEBEBu32) }
+            first_line.background = paint.Brush { Solid: gl.rgb(0xEAEAEAu32) }
             if look.dialog_lines { first_line.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
             var second_line = control.sized_style(1.0, inner)
-            second_line.background = paint.Brush { Solid: gl.rgb(0xF8F8F8u32) }
+            second_line.background = paint.Brush { Solid: gl.rgb(0xFAFAFAu32) }
             let (two_lines, two_lines_error) = mem.alloc[widget.Node](a, 2usize)
             if two_lines_error != ok { ret (zero, TooLarge) }
             two_lines[0usize] = widget.box(0u64, first_line, zero)
@@ -2540,13 +2540,13 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                 first_px = gl.rgb(0xF0F0F0u32)
                 second_px = gl.rgb(0xE5E5E5u32)
             }
-            // looks5-e: a dialog's grid (measured, Sort and Missing Set Cards): grey rows #E2E2E2 then #F3F3F3, white rows #E8E8E8 then #E9E9E9
-            if look.dialog_lines {
-                first_px = gl.rgb(0xE2E2E2u32)
-                second_px = gl.rgb(0xF3F3F3u32)
+            // looks5-e: a grid with its own row-foot pixels (measured: the Sort and Missing Set Cards dialogs, the Options grids)
+            if look.foot_set {
+                first_px = look.foot_g1
+                second_px = look.foot_g2
                 if fill_is_light(look, index) {
-                    first_px = gl.rgb(0xE8E8E8u32)
-                    second_px = gl.rgb(0xE9E9E9u32)
+                    first_px = look.foot_w1
+                    second_px = look.foot_w2
                 }
             }
             var one_style = control.sized_style(4000.0, 1.0)
@@ -2564,6 +2564,18 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         var stacked_count = 2usize
         if look.soft_lines { stacked_count = 3usize }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
+    }
+    if look.on && !selected && look.tree_dots {
+        // looks5-e: one pixel at the foot of a tree row, #FAFAFA under a grey one and #F4F4F4 under a white one (live captures)
+        var foot_px = gl.rgb(0xF4F4F4u32)
+        if index % 2usize == 0usize { foot_px = gl.rgb(0xFAFAFAu32) }
+        var foot_box = control.sized_style(4000.0, 1.0)
+        foot_box.background = paint.Brush { Solid: foot_px }
+        let (with_foot, with_foot_error) = mem.alloc[widget.Node](a, 2usize)
+        if with_foot_error != ok { ret (zero, TooLarge) }
+        with_foot[0usize] = lined[0usize]
+        with_foot[1usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, foot_box, zero)))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_foot[0usize..2usize])
     }
     if look.on && selected && look.tree_dots {
         // looks4-e: the tree list's selected row has a dotted rectangle from x = 32 (measured, tree_list.png)
@@ -2698,7 +2710,8 @@ fn windows_table_look() -> TableLook {
     var look: TableLook = zero
     let lk = gl.v3()
     look.on = true
-    look.header_height = 19.0
+    // looks5-e: 20 rows with the #F4F4F4 line last (live captures of the Filter dialog's list)
+    look.header_height = 20.0
     look.pad = 2.0
     look.text_size = lk.text_size
     look.header = lk.header
@@ -2731,7 +2744,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -4526,6 +4539,11 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             thumb_w = 2.0
             track_w = lk.scroll_width - 1.0
             thumb_left = 7.0
+            // pressed: a 6 px pill (live capture, Sort and Shortcuts)
+            if control.control_state(t, track_key, true, false).pressed {
+                thumb_w = 6.0
+                thumb_left = 5.0
+            }
         }
         var thumb_style = control.sized_style(thumb_w, thumb_h)
         thumb_style.background = paint.Brush { Solid: lk.thumb }
@@ -4534,12 +4552,26 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         let (thumb_holder, thumb_error) = mem.alloc[widget.Node](a, 1usize)
         if thumb_error != ok { ret (zero, TooLarge) }
         thumb_holder[0usize] = widget.box(0u64, thumb_style, zero)
+        // looks5-e: the lower end of the track pressed shows the down arrow (live capture, main window)
+        if lk.soft_lines && control.control_state(t, track_key, true, false).pressed && mem.address_of(t.runtime) != 0usize {
+            let (track_box, has_track_box) = control.keyed_bounds(t.runtime, track_key)
+            let pointer_now = widget.pointer_position(t.runtime)
+            if has_track_box && pointer_now.y > track_box.y + track_box.height * 0.5 {
+                let (arrow, arrow_error) = gl.pixels(a, gl.gx_arrow_down(), gl.gx_arrow_down_w(), gl.gx_arrow_down_h())
+                if arrow_error != ok { ret (zero, arrow_error) }
+                let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+                if pair_error != ok { ret (zero, TooLarge) }
+                pair[0usize] = thumb_holder[0usize]
+                pair[1usize] = widget.positioned(0u64, 4.0, track_h - 12.0, style.defaults(), one_node(a, arrow))
+                thumb_holder[0usize] = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
+            }
+        }
         var track_style = control.sized_style(track_w, track_h)
         track_style.background = paint.Brush { Solid: lk.track }
         let (bar_parts, bar_error) = mem.alloc[widget.Node](a, 3usize)
         if bar_error != ok { ret (zero, TooLarge) }
         bar_parts[0usize] = column_node[0usize]
-        bar_parts[1usize] = widget.region(track_key, widget.Region { gesture: zero, gestures: 4u8, enabled: true, focusable: false }, track_style, thumb_holder[0usize..1usize])
+        bar_parts[1usize] = widget.region(track_key, widget.Region { gesture: widget.GestureAction { ctx: zero, invoke: control.scroll_bar_gesture }, gestures: 5u8, enabled: true, focusable: false }, track_style, thumb_holder[0usize..1usize])
         if lk.bar_margin != 0.0 {
             // a table shifted sideways keeps its bar at the view's right edge: the track stands over the
             // table (out of the row, which would be shortened by a negative margin) at the offset's place
@@ -5100,6 +5132,8 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     let win = tabled && t.tokens.profile == .Windows
     var win_look = zero_look()
     if win { win_look = windows_table_look() }
+    // looks5-e: a list with rows has the #F4F4F4 line under its header, an empty one none (live captures)
+    if win && count > 0usize { win_look.header_line = gl.rgb(0xF4F4F4u32) }
     // (D1372) Moving: the row a drag carries, and the gestures a row takes.
     let moving = widget.change_set[TreeMove](options.move.invoke)
     let (lifted_row, has_lifted_row) = tree_lifted(t, count)
@@ -5763,6 +5797,8 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var row_height_of = extent
     if t.tokens.profile == .Windows {
         head_look = windows_table_look()
+        // looks5-e: the #F4F4F4 line under the header of a list with rows (live captures); an empty list has none
+        if source.count(source.ctx, 0u64) > 0usize { head_look.header_line = gl.rgb(0xF4F4F4u32) }
         head_height = head_look.header_height
         head_pad = head_look.pad
         if !(row_height_of > 0.0) { row_height_of = gl.v3().row_height }

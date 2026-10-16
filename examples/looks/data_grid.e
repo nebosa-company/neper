@@ -579,7 +579,10 @@ fn setup_states(s: *States) -> err {
     if g1_error != ok { ret g1_error }
     s.grid = g1
     var look = gl.v3()
-    look.header_height = 23.0
+    look.header_height = 22.0
+    look.ring_top_i = gl.rgb(0xD0D2D5u32)
+    look.ring_left_o = gl.rgb(0x90949Cu32)
+    look.ring_left_i = gl.rgb(0xEFF0F1u32)
     dg.set_look(&s.grid, look)
     dg.set_row_ink(&s.grid, mem.cast[*void](s), state_ink)
     s.grid.aligns[4usize] = 2u8
