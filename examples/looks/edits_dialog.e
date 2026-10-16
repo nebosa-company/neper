@@ -44,16 +44,16 @@ fn copy_into(buffer: []u8, words: str) -> usize {
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let captions = [6]str{ "Mask edit, empty (Options Passwords)", "Spin edit with fast buttons (Options Decks)", "Spin edit (Options Morph)", "Spin edit (Options Morph)", "Button edit (Options Decks)", "Button edit (Options Card Art)" }
+    let captions = [8]str{ "Mask edit, empty (Options Passwords, Old)", "Mask edit, empty (Options Passwords, New)", "Mask edit, empty (Options Passwords, Confirm)", "Spin edit with fast buttons (Options Decks)", "Spin edit (Options Morph)", "Spin edit (Options Morph)", "Button edit (Options Decks)", "Button edit (Options Card Art)" }
     var i = 0usize
-    while i < 6usize {
+    while i < 8usize {
         let (buffer, buffer_error) = mem.alloc[u8](a, 128usize)
         if buffer_error != ok { ret (0usize, buffer_error) }
         let key = u64(10usize * (i + 1usize))
         var node: widget.Node = zero
-        let ys = [6]f32{ 89.0, 159.0, 105.0, 169.0, 94.0, 385.0 }
+        let ys = [8]f32{ 89.0, 144.0, 198.0, 159.0, 105.0, 169.0, 94.0, 385.0 }
         let wy = ys[i]
-        if i == 0usize {
+        if i <= 2usize {
             var options = control.field_options()
             options.width = 495.0
             options.window_y = wy
@@ -61,20 +61,20 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             if made_error != ok { ret (0usize, made_error) }
             node = made
         }
-        if i >= 1usize && i <= 3usize {
+        if i >= 3usize && i <= 5usize {
             var value = 4i64
             var width: f32 = 121.0
-            if i == 2usize { value = 650i64 }
-            if i == 3usize { value = 500i64 }
-            if i != 1usize { width = 67.0 }
-            let (made, made_error) = control.windows_spin_with(a, key, t, "Spin", buffer, value, 1i64, 3000i64, 1i64, widget.Change[i64] { ctx: zero, invoke: noop_step }, widget.Change[str] { ctx: zero, invoke: noop_change }, width, i == 1usize, wy)
+            if i == 4usize { value = 650i64 }
+            if i == 5usize { value = 500i64 }
+            if i != 3usize { width = 67.0 }
+            let (made, made_error) = control.windows_spin_with(a, key, t, "Spin", buffer, value, 1i64, 3000i64, 1i64, widget.Change[i64] { ctx: zero, invoke: noop_step }, widget.Change[str] { ctx: zero, invoke: noop_change }, width, i == 3usize, wy)
             if made_error != ok { ret (0usize, made_error) }
             node = made
         }
-        if i >= 4usize {
+        if i >= 6usize {
             var words = "C:\\Users\\gaddl\\AppData\\Roaming\\MTG Studio\\My Decks"
             var width: f32 = 495.0
-            if i == 5usize {
+            if i == 7usize {
                 words = "C:\\Users\\gaddl\\AppData\\Roaming\\MTG Studio\\Card Art"
                 width = 464.0
             }
@@ -93,10 +93,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: captions[i], node: at, drive: .None }
         i += 1usize
     }
-    ret (6usize, ok)
+    ret (8usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "edits_dialog", cells: 6usize, columns: 1usize, cell_w: 520.0, cell_h: 30.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "edits_dialog", cells: 8usize, columns: 1usize, cell_w: 520.0, cell_h: 30.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

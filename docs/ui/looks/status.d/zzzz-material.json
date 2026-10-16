@@ -1,0 +1,255 @@
+{
+ "button": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/button.png",
+    "notes": "Five M3 variants (filled, tonal, elevated, outlined, text) in enabled, hovered, focused, pressed, disabled; button_icon.png adds the 18 dp leading icon (16 dp start, 24 dp end, 8 dp gap); fab.png has the small (40, r12), regular (56, r16), large (96, r28) and extended FABs and the four icon buttons (40 dp circle in a 48 dp target). Exact spec values: 40 dp height, full corners, 24 dp side padding, state layers 8/10/10 %, disabled 12 % container / 38 % label, outlined focus outline turns primary, M3 baseline colours, Roboto Medium 14/20 labels. Approximations: elevated shadow, text-button padding with an icon (16 where M3 says 12).",
+    "gaps": [
+     "The icon-button toggled forms are approximated (standard primary icon; filled primary; tonal secondary-container; outlined inverse-surface)",
+     "The elevated button's tonal surface tint at hover (elevation 2) is the 8 % layer only",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/checkbox.png",
+    "notes": "Unchecked, checked and indeterminate in enabled, hovered, focused, pressed, disabled and error: 18 dp box, 2 dp outline, 2 dp corners, 40 dp state-layer circle in a 48 dp target, tick 2 dp stroke. switch.png is the M3 switch (52 x 32 track, thumbs 16 / 24 with icon / 28 pressed, 40 dp halo, 16 dp thumb icon, 2 dp outline) off and on, plain and with the thumb icon, with disabled. Exact spec values except the tick geometry (the Neper tick, not the Material path).",
+    "gaps": [
+     "The tick and dash are the Neper glyphs, not the Material path",
+     "Switch thumb animation is Neper's cross-fade, not the M3 emphasized-decelerate stretch",
+     "The error state of the switch does not exist in M3 and is not drawn",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/radio.png",
+    "notes": "Unselected and selected in enabled, hovered, focused, pressed, disabled and error: 20 dp ring 2 dp, 10 dp dot, 40 dp state layer in a 48 dp target. Exact spec values.",
+    "gaps": [
+     "The selected dot scale-in is Neper's, not the M3 curve",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/text_field.png",
+    "notes": "Filled (surface-container-highest, 4 dp top corners, 1 dp on-surface-variant indicator, 2 dp primary when focused) and outlined (1 dp outline, 4 dp corners, 2 dp primary focused, 2 dp error) in 56 dp fields, 16 dp sides, floating label (body-large to body-small), supporting text 12 sp 16 dp in, enabled / hovered / focused / with text / disabled / error. Exact spec values; the supporting text is built by the sheet (examples/looks/material_text_field.e), not by the control. MaterialLike branches: the filled indicator spans the box; the disabled outlined field has no fill.",
+    "gaps": [
+     "The outlined field's label notch is filled with the page background, so a field on a surface-container-high dialog shows a lighter notch (M3 cuts the outline)",
+     "Leading and trailing icons, prefix and suffix, the character counter and the filled field's disabled 4 % layer on the label are not on the sheet",
+     "Supporting text is not part of the control",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/progress.png",
+    "notes": "Linear (4 dp track, secondary-container, a 4 dp gap and stop dot) and circular (48 dp, 4 dp stroke) at 0, 30, 60, 100 % and indeterminate. slider.png is the slider (the current M3 handle form: a 4 x 44 handle, 4 dp track with a gap, a 6 dp halo and the value pill while pressed or keyboard-focused), single and range, enabled, hovered, focused, pressed, disabled.",
+    "gaps": [
+     "The slider is the handle form of the current M3 spec, not the classic circular 20 dp thumb with the 4 dp track; its width is 120 dp",
+     "The pressed and focused slider cells show the thumb where the harness's click put it (the cell centre), not at the sheet's 50 % value",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/tabs.png",
+    "notes": "Primary tabs (48 dp, 64 dp with icons, 3 dp indicator the width of the label, rounded top) and secondary tabs (48 dp, 2 dp full width indicator), a disabled tab, hover and pressed layers, divider outline-variant. Exact spec values.",
+    "gaps": [
+     "Scrollable tabs and the badge are not on the sheet",
+     "The indicator slide animation is Neper's",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/menu.png",
+    "notes": "M3 dropdown menu: surface-container, 4 dp corners as Neper draws them (radius-sm 8), 48 dp items, 12 dp sides, leading 24 dp icon, a divider, a disabled item; menu_hover.png has a hovered row.",
+    "gaps": [
+     "The menu's corner is Neper's 8 dp where M3 says 4 dp (extra-small)",
+     "The trailing shortcut text is not drawn by this menu",
+     "Submenus and checked items are not on the sheet",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/tooltip.png",
+    "notes": "Plain tooltip (inverse-surface, 4 dp corners, body-small, 24 dp high) and the rich tooltip (surface-container, 12 dp corners, subhead title-small, body-small text, a text action).",
+    "gaps": [
+     "The rich tooltip overlaps its anchor (the shared placement is BelowEnd with a 4 dp offset)",
+     "A plain tooltip stops at two lines",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/dialog.png",
+    "notes": "Basic dialog (surface-container-high, 28 dp corners, 24 dp padding, headline-small, body-medium, two text buttons right aligned, scrim) and dialog_icon.png (icon, centred headline). MaterialLike branch: every dialog action is a text button (M3), not Filled.",
+    "gaps": [
+     "Full-screen dialogs, the divider on scroll and the stacked-buttons layout are not on the sheet",
+     "The dialog's surface tint is not drawn",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/list.png",
+    "notes": "M3 list items: one, two and three lines (56 / 72 / 88 dp), leading icon, trailing icon, overline and meta, hovered, focused, pressed, selected (secondary-container) and disabled. Exact spec values.",
+    "gaps": [
+     "The three-line item's leading icon is top aligned by the control, M3 centres a 24 dp icon only in one and two line items; the swipe and drag states are not on the sheet",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/date_picker.png",
+    "notes": "Modal date picker (surface-container-high, 28 dp corners, headline-large date, the calendar, Cancel / OK) and date_input.png (input mode: the field with its yyyy-mm-dd hint). Neper's own modal, which is already the M3 layout.",
+    "gaps": [
+     "The input field's label notch is white-ish (see text field)",
+     "The input format is yyyy-mm-dd, M3 follows the locale (mm/dd/yyyy)",
+     "The range picker and the docked variant are not on the sheet",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/fab.png",
+    "notes": "Icon buttons and floating action buttons (see button). chips.png has the assist, filter (off, on), input and suggestion chips (32 dp, 8 dp corners, outline-variant, label-large) enabled, hovered, focused, pressed. Closest Delphi counterpart only: v3 has no FAB or chip.",
+    "gaps": [
+     "There is no Delphi control; the row stands in for the icon-button family",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/navigation_bar.png",
+    "notes": "app_bar.png has the top app bars drawn by control.material_app_bar from glyphs: small and centre-aligned (64 dp), medium (112) and large (152), the scrolled surface-container (Neper app_bar_of has the same sizes but needs icon textures for its actions; it is not wired to the helper; the collapse on scroll is not drawn). Navigation bar (80 dp, surface-container, 64 x 32 indicator secondary-container, icon 24 dp, label-medium) with a count badge and a dot, hovered and pressed items. This is Neper's destination_bar_of unchanged: M3 matches.",
+    "gaps": [
+     "Nearest Delphi counterpart only (v3 has a menu bar): the navigation bar replaces it on Android",
+     "The navigation rail and drawer are not on the sheet",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/snackbar.png",
+    "notes": "Snackbar (inverse-surface, 4 dp corners, 48 dp min height, 16 / 8 dp padding, body-medium inverse-on-surface, action inverse-primary, optional 24 dp close). MaterialLike branch in stacked_toast; sheet calls control.material_snackbar.",
+    "gaps": [
+     "Nearest Delphi counterpart only (v3 has a status bar)",
+     "The two-line snackbar is 68 dp in M3, here the row is as high as the text and the minimum",
+     "Evidence is the published Material 3 spec geometry from memory, not a capture of a device: nothing here was measured against an Android screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing: the M3 type scale tracks its text (label-large 0.1 sp, body-medium 0.25 sp, body-large 0.5 sp), the text layout cannot",
+     "No ripple: pressed is the 10 % state layer only (Android adds a ripple on top)",
+     "Icons are Neper's stroked glyphs, not Material Symbols (a settings gear, an alert circle and a person differ in drawing)"
+    ]
+   }
+  }
+ }
+}

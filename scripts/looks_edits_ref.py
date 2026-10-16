@@ -9,11 +9,14 @@ and writes docs/ui/looks/windows/edits_dialog-diff.png (reference, ours, 4x |dif
 import sys
 from PIL import Image
 
-ROOT = "D:/Temp/lanes/looks3-c/docs/ui/looks/"
+import os
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "ui", "looks") + os.sep
 DIALOGS = ROOT + "ref/windows/dialogs/"
 # (caption, dialog, x, y, w, h): the control's window rectangle in the dialog capture.
 CELLS = [
-    ("mask", "options-04-passwords", 215, 89, 495, 21),
+    ("mask 89", "options-04-passwords", 215, 89, 495, 21),
+    ("mask 144", "options-04-passwords", 215, 144, 495, 21),
+    ("mask 198", "options-04-passwords", 215, 198, 495, 21),
     ("spin fast", "options-02-decks", 215, 159, 121, 21),
     ("spin 650", "options-11-morph", 406, 105, 67, 21),
     ("spin 500", "options-11-morph", 406, 169, 67, 21),
