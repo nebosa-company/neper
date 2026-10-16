@@ -82,6 +82,31 @@ fn builder(a: *mem.Arena, max_commands: usize) -> (Builder, err) {
 
 var text_hidden: bool = false
 
+// The Windows look's pixel-exact mode (D?): when on, a plain rectangle or border that a widget paints at a device scale
+// other than 1 has each edge moved to a whole device pixel (`ui.widget.snapped`), so a 1 px line is never smeared over two
+// device pixels. The look sets it for the rig it renders (`ui.looks.set_look`); off, nothing changes.
+var pixel_exact: bool = false
+
+fn set_pixel_exact(on: bool) {
+    pixel_exact = on
+}
+
+fn pixel_exact_on() -> bool {
+    ret pixel_exact
+}
+
+// The scale check renders its 1.0 reference with the snapping on as well (NEPER_LOOKS_EXACT), so a shape the sheet put on a
+// fractional logical position is not blurred in the reference.
+var pixel_exact_at_one: bool = false
+
+fn set_pixel_exact_at_one(on: bool) {
+    pixel_exact_at_one = on
+}
+
+fn pixel_exact_at_one_on() -> bool {
+    ret pixel_exact_at_one
+}
+
 fn set_text_hidden(hidden: bool) {
     text_hidden = hidden
 }

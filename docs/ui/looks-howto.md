@@ -148,7 +148,17 @@ and the Dark thumbnail side by side with their own status chip, notes and gaps; 
   application sets from the window (`widget.set_snap`) and `looks.open` sets for a rig of scale other than 1.
 - `NEPER_LOOKS_SCALE=1.25|1.5|2` makes a sheet app render that one scale, and `NEPER_LOOKS_OUT=<dir>` writes
   under `<dir>` instead of `docs/ui/looks` (scale files are `@1.25x`, `@1.5x`, `@2x`); `NEPER_LOOKS_NOTEXT=1`
-  leaves text out. `python scripts/looks_scale_check.py` renders the Windows sheets at 1.0 and 2.0 this way and fails
-  when a run of pixels of the 1.0 render is not twice as long in the 2.0 render.
+  leaves text out; `NEPER_LOOKS_ONLY=windows` renders the Windows look alone; `NEPER_LOOKS_EXACT=1` turns the whole-pixel
+  snapping on at scale 1 as well (the scale check's reference).
+- Whole-pixel mode (round 9): with the Windows look (`scene.set_pixel_exact`, set by `looks.set_look`; an application sets
+  it the same way when its theme is the Windows one) `widget.place` moves every plain box, border and shape of a node to whole
+  device pixels at a scale other than 1 (`widget.snapped`), so a layout line (a menu rule, a frame, a selection bar) is never
+  smeared over two device pixels; baked tiles put their origin there too (`winpx.origin`, the button ring and its focus dots).
+  At scale 1 nothing moves, so the 100 % PNGs are unchanged.
+- `python scripts/looks_scale_check.py [--scale S] [--report] [sheet ...]` renders every Windows sheet (the sheet to
+  app and arguments table is `scripts/looks_scale_sheets.json`, rebuilt by `--discover [app ...]` when a sheet app is added)
+  at 1.0 and at 1.25, 1.5 and 2.0 and fails when too few runs of pixels of the 1.0 render are a clean scaling in the other
+  scales (see the header of the script); `--report` writes `docs/ui/looks/scale-report.md`. A full run compiles all sheet apps
+  (`NEPER_SCALE_EXES=<dir>` keeps the built apps between runs) and takes about 45 minutes; give sheet names to run a few.
 - `examples/looks/scale_tiles.e` (`scale_button`, `scale_marks`, `scale_edits`) puts the controls
   on fractional positions: review its `@1.5x` PNGs by eye after touching a tile painter.
