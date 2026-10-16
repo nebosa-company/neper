@@ -4567,7 +4567,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         if lk.soft_lines {
             // looks4-e: 2 wide, 0.4 right of the track's middle (measured), a pill 6 wide when pressed
             thumb_w = 2.0
-            thumb_nudge = 0.4
+            thumb_nudge = 0.5
             if control.control_state(t, track_key, true, false).pressed { thumb_w = 6.0 }
         }
         // looks5-e: the main window's bar widens its thumb only under the pointer, and shows the arrow the pointer is on
@@ -4585,6 +4585,11 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         // looks5-e: a dialog's bar: a white first pixel, then a crisp 2 px thumb 8 px in (measured, Sort dialog)
         var track_w = lk.scroll_width
         var thumb_left = (lk.scroll_width - thumb_w) * 0.5 + thumb_nudge
+        // the main window's bar likewise starts with a #F7F7F7 pixel (live capture)
+        if lk.soft_lines && !lk.dialog_lines {
+            track_w = lk.scroll_width - 1.0
+            thumb_left -= 1.0
+        }
         if lk.dialog_lines {
             thumb_w = 2.0
             track_w = lk.scroll_width - 1.0
@@ -4628,7 +4633,9 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             let (hot_pair, hot_pair_error) = mem.alloc[widget.Node](a, 2usize)
             if hot_pair_error != ok { ret (zero, TooLarge) }
             hot_pair[0usize] = thumb_holder[0usize]
-            hot_pair[1usize] = widget.positioned(0u64, 3.0, hot_top, style.defaults(), one_node(a, hot))
+            var hot_left: f32 = 3.0
+            if lk.dialog_lines { hot_left = 2.0 }
+            hot_pair[1usize] = widget.positioned(0u64, hot_left, hot_top, style.defaults(), one_node(a, hot))
             thumb_holder[0usize] = widget.stack(0u64, style.defaults(), hot_pair[0usize..2usize])
         }
         var track_style = control.sized_style(track_w, track_h)
@@ -4637,6 +4644,16 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         if bar_error != ok { ret (zero, TooLarge) }
         bar_parts[0usize] = column_node[0usize]
         bar_parts[1usize] = widget.region(track_key, widget.Region { gesture: widget.GestureAction { ctx: zero, invoke: control.scroll_bar_gesture }, gestures: 5u8, enabled: true, focusable: false }, track_style, thumb_holder[0usize..1usize])
+        if lk.soft_lines && !lk.dialog_lines {
+            // the main window's bar: its first pixel is #F7F7F7 (live capture), then the track
+            var edge_strip = control.sized_style(1.0, track_h)
+            edge_strip.background = paint.Brush { Solid: gl.rgb(0xF7F7F7u32) }
+            let (edged, edged_error) = mem.alloc[widget.Node](a, 2usize)
+            if edged_error != ok { ret (zero, TooLarge) }
+            edged[0usize] = widget.box(0u64, edge_strip, zero)
+            edged[1usize] = bar_parts[1usize]
+            bar_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), edged[0usize..2usize])
+        }
         if lk.bar_margin != 0.0 {
             // a table shifted sideways keeps its bar at the view's right edge: the track stands over the
             // table (out of the row, which would be shortened by a negative margin) at the offset's place

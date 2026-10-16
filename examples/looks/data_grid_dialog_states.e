@@ -123,7 +123,7 @@ fn miss_ink(ctx: *void, row: usize) -> (paint.Color, bool) {
 
 fn rows_of(family: usize) -> usize {
     if family == 0usize { ret 20usize }
-    if family == 1usize { ret 18usize }
+    if family == 1usize { ret 147usize }
     ret 13usize
 }
 
@@ -150,8 +150,8 @@ fn load(a: *mem.Arena, app: *App) -> err {
         }
         if app.family == 1usize {
             try table.set_str(&app.tbl, 0usize, got, "File")
-            try table.set_str(&app.tbl, 1usize, got, command_name(row))
-            try table.set_str(&app.tbl, 2usize, got, shortcut_name(row))
+            try table.set_str(&app.tbl, 1usize, got, command_name(row % 18usize))
+            try table.set_str(&app.tbl, 2usize, got, shortcut_name(row % 18usize))
         }
         if app.family == 2usize { try table.set_str(&app.tbl, 0usize, got, miss_name(row)) }
         row += 1usize
@@ -281,7 +281,7 @@ fn arrange(app: *App, k: usize) {
     var selected = 0usize
     var focused = false
     // the hover grabs start from the grid at rest (hover-sort-rest, hover-options-shortcuts-rest: the same as the rest grabs)
-    var kk = k
+    var kk = k + app.first
     if app.hover { kk = 0usize }
     if app.family == 0usize { selected = 2usize }
     if app.family == 1usize { selected = 1usize }
@@ -369,15 +369,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     while k < app.cells {
         let (node, node_error) = cell_of(a, t, app, k, w, h)
         if node_error != ok { ret (0usize, node_error) }
+        let which = app.first + k
         var drive: looks.Drive = .None
         var caption = "At rest"
-        if k == 1usize { caption = "Header pressed" }
-        if k == 2usize { caption = "Row selected, grid focused" }
-        if k == 3usize { caption = "Row selected, grid not focused" }
-        if k == 4usize { caption = "Scroll thumb pressed" }
-        if app.family == 2usize && k == 1usize { caption = "Row selected, grid focused" }
+        if which == 1usize { caption = "Header pressed" }
+        if which == 2usize { caption = "Row selected, grid focused" }
+        if which == 3usize { caption = "Row selected, grid not focused" }
+        if which == 4usize { caption = "Scroll thumb pressed" }
+        if app.family == 2usize && which == 1usize { caption = "Row selected, grid focused" }
         if app.hover { caption = "Hover" }
-        if app.family == 0usize && k == 2usize { caption = "Name selected, grid focused" }
+        if app.family == 0usize && which == 2usize { caption = "Name selected, grid focused" }
         // the hover cells: the pointer over a header, the bar's thumb, arrows or track (the cell's coordinates)
         if app.hover {
             drive = .Hover
@@ -403,7 +404,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
                 hy = 80.0
             } else {
                 // part 0: Command, Shortcut, a row, the thumb; part 1: the arrows and the track
-                let which = app.first + k
                 hx = 250.0
                 if which == 1usize { hx = 413.0 }
                 if which == 2usize { hy = 100.0 }
@@ -411,9 +411,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
                     hx = 487.0
                     hy = 35.0
                 }
+                // the capture's pointer for the upper arrow stands on the thumb, which sits at the top of the bar
                 if which == 4usize {
                     hx = 487.0
-                    hy = 8.0
+                    hy = 22.0
                 }
                 if which == 5usize {
                     hx = 487.0
@@ -426,19 +427,19 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             }
             looks.aim(k, hx - w * 0.5, hy - h * 0.5)
         }
-        if !app.hover && app.family == 0usize && k == 1usize {
+        if !app.hover && app.family == 0usize && which == 1usize {
             drive = .Press
             looks.aim(k, 235.0 - w * 0.5, 10.0 - h * 0.5)
         }
-        if !app.hover && app.family == 0usize && k == 4usize {
+        if !app.hover && app.family == 0usize && which == 4usize {
             drive = .Press
             looks.aim(k, 321.5 - w * 0.5, 88.0 - h * 0.5)
         }
-        if !app.hover && app.family == 1usize && k == 1usize {
+        if !app.hover && app.family == 1usize && which == 1usize {
             drive = .Press
             looks.aim(k, 250.0 - w * 0.5, 10.0 - h * 0.5)
         }
-        if !app.hover && app.family == 1usize && k == 4usize {
+        if !app.hover && app.family == 1usize && which == 4usize {
             drive = .Press
             looks.aim(k, 487.0 - w * 0.5, 35.0 - h * 0.5)
         }
@@ -461,11 +462,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var cols = 3usize
     if args.len > 1usize {
         if args[1usize][0usize] == 115u8 && args[1usize][1usize] == 104u8 {
+            // `sh`, `sh1`, `sh2`: the Shortcuts grid's states in three sheets (the rig holds only so many nodes)
             name = "data_grid_shortcuts_states"
             seed.family = 1usize
             w = 496.0
             h = 334.0
             cols = 2usize
+            seed.cells = 2usize
+            if args[1usize].len > 2usize && args[1usize][2usize] == 49u8 {
+                name = "data_grid_shortcuts_states2"
+                seed.first = 2usize
+            }
+            if args[1usize].len > 2usize && args[1usize][2usize] == 50u8 {
+                name = "data_grid_shortcuts_states3"
+                seed.first = 4usize
+                seed.cells = 1usize
+            }
         } else if args[1usize][0usize] == 109u8 && args[1usize].len > 1usize && args[1usize][1usize] == 104u8 {
             // `mh`: the Missing Set Cards list under the pointer (v3 shows no hover look on a row)
             name = "data_grid_missing_hover"
@@ -494,18 +506,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
             cols = 3usize
         }
         if args[1usize][0usize] == 104u8 {
+            // `h0` to `h3`: the Shortcuts grid under the pointer, two cells to a sheet
+            let part = usize(args[1usize][1usize] - 48u8)
             seed.family = 1usize
             seed.hover = true
             w = 496.0
             h = 334.0
             cols = 2usize
-            seed.cells = 4usize
-            name = "data_grid_shortcuts_hover"
-            if args[1usize][1usize] == 49u8 {
-                name = "data_grid_shortcuts_hover2"
-                seed.first = 4usize
-                seed.cells = 3usize
-            }
+            seed.first = part * 2usize
+            seed.cells = 2usize
+            if seed.first + 2usize > 7usize { seed.cells = 7usize - seed.first }
+            let names = [4]str{ "data_grid_shortcuts_hover", "data_grid_shortcuts_hover2", "data_grid_shortcuts_hover3", "data_grid_shortcuts_hover4" }
+            name = names[part]
         }
     }
     apps[0usize] = seed

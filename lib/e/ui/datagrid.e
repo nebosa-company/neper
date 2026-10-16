@@ -8925,9 +8925,17 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         thumb.background = paint.Brush { Solid: gl.rgb(0x808080u32) }
         if live_row {
             // looks4-e: v3's thumb is #858585 with a 1 px lighter rim (#BABABA) all round
+            // looks5-e: under the pointer or pressed it is 12 thick (live hover and pressed captures), the ends rounded
+            var hot_thumb = false
+            if mem.address_of(grid.theme) != 0usize && mem.address_of(grid.theme.runtime) != 0usize {
+                let hot_state = control.control_state(grid.theme, navigator_key(grid) + 9u64, true, false)
+                hot_thumb = hot_state.hovered || hot_state.pressed
+            }
+            if hot_thumb { thumb_h = 12.0 }
             thumb = control.sized_style(hthumb_width(grid) + 2.0, thumb_h + 2.0)
             thumb.background = paint.Brush { Solid: gl.rgb(0x858585u32) }
             thumb.border = style.Border { width: 1.0, color: gl.rgb(0xBABABAu32) }
+            if hot_thumb { thumb.radius = 4.0 }
         }
         var room = htrack(grid) - hthumb_width(grid)
         var left: f32 = 0.0
@@ -8935,9 +8943,9 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var thumb_start: f32 = 14.0
         var thumb_top: f32 = 0.0
         if live_row { thumb_top = 1.0 }
-        if live_row { thumb_start = 19.5 }
+        if live_row { thumb_start = 17.5 }
         thumb.margin = style.EdgeLengths { left: style.Length { Px: thumb_start + left }, top: style.Length { Px: thumb_top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-        cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 35u8, enabled: true, focusable: false }, thumb, zero)
+        cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 39u8, enabled: true, focusable: false }, thumb, zero)
         shown = 9usize
     }
     if live_row {

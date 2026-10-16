@@ -157,7 +157,7 @@ fn specs_of(a: *mem.Arena) -> ([]dg.ColumnSpec, err) {
     specs[7usize] = dg.ColumnSpec { title: "Rarity", width: 50.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     specs[8usize] = dg.ColumnSpec { title: "", width: 24.0, column: C_NAME, kind: dg.CellKind.Picture, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     // the columns beyond the pane: the navigator's thumb says the content is wider
-    specs[9usize] = dg.ColumnSpec { title: "Power", width: 500.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    specs[9usize] = dg.ColumnSpec { title: "Power", width: 586.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
     ret (specs, ok)
 }
 
@@ -207,7 +207,7 @@ fn setup(app: *App) -> err {
         dg.set_look(&app.grids[k], look)
         if k >= 25usize && k < 31usize { dg.show_group_box(&app.grids[k], true) }
         dg.set_row_ink(&app.grids[k], zero, ink)
-        dg.set_grid_lines(&app.grids[k], dg.GridLines.Horizontal)
+        dg.set_grid_lines(&app.grids[k], dg.GridLines.Both)
         dg.show_navigator(&app.grids[k], true)
         dg.set_pane_hint(&app.grids[k], 573.0)
         app.grids[k].aligns[4usize] = 2u8
