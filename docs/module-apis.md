@@ -24250,46 +24250,21 @@ message parts, and `xsd_neper_type` maps an XSD built-in type name to a Neper ty
 type NodeId = u32
 const NONE: NodeId = 4294967295u32
 type NodeKind = enum u8 { Document, Doctype, Element, Text, Comment }
-type Namespace = enum u8 { Html, Svg, MathMl }
+type Namespace = enum u8 { Html, Svg, MathMl, Xlink, Xml, Xmlns }
 type Attribute = struct { namespace: Namespace, name: str, value: str }
 type Node = struct { kind: NodeKind, namespace: Namespace, name: str, value: str, attributes: []const Attribute, parent: NodeId, first_child: NodeId, last_child: NodeId, previous_sibling: NodeId, next_sibling: NodeId }
-type Document = struct { nodes: []const Node, root: NodeId }
+type Document = struct { nodes: []const Node, root: NodeId, quirks: u8 }
 type Children = struct { document: *const Document, next: NodeId }
 type Options = struct { max_bytes: usize, max_nodes: usize, max_attributes: usize, max_depth: u16, preserve_comments: bool }
 error InvalidEncoding
 error TooDeep
 error TooLarge
-type Builder = struct { a: *mem.Arena, nodes: []Node, used: usize, options: Options, stack: []NodeId, depth: usize, html: NodeId, head: NodeId, body: NodeId, text_start: usize, text_len: usize, text_buffer: []u8 }
 fn is_void(name: str) -> bool
 fn is_raw_text(name: str) -> bool
-fn is_rcdata(name: str) -> bool { ret str.eq(name, "textarea") || str.eq(name, "title") }
-fn is_head_only(name: str) -> bool
-fn closes_p(name: str) -> bool
-fn is_heading(name: str) -> bool
-fn add_node(b: *Builder, kind: NodeKind, namespace: Namespace, name: str, value: str, parent: NodeId) -> (NodeId, err)
-fn current(b: *Builder) -> NodeId
-fn current_name(b: *Builder) -> str
-fn push(b: *Builder, id: NodeId) -> err
-fn close_to(b: *Builder, name: str) -> bool
-fn has_open(b: *Builder, name: str) -> bool
-fn flush_text(b: *Builder) -> err
-fn is_blank(text: str) -> bool
-fn ensure_html(b: *Builder) -> err
-fn ensure_head(b: *Builder) -> err
-fn ensure_body(b: *Builder) -> err
-fn append_text(b: *Builder, bytes: []const u8) -> err
 fn write_utf8(scalar: u32, dst: []u8, at: usize) -> usize
 fn lookup_entity(text: str, at: usize, in_attribute: bool) -> ([]const u8, usize, bool)
 fn decode_reference(text: str, at: usize, in_attribute: bool, out: []u8) -> (usize, usize)
-fn lower(a: *mem.Arena, text: str) -> (str, err)
-fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 || c == 12u8 }
-fn start_element(b: *Builder, name: str, attributes: []const Attribute, self_closing: bool) -> err
-fn end_element(b: *Builder, name: str) -> err
 fn utf8_valid(text: str) -> bool
-fn find_ci(text: str, needle: str, from: usize) -> (usize, bool)
-fn append_decoded(b: *Builder, text: str, in_attribute: bool) -> err
-fn decode_value(b: *Builder, raw: str) -> (str, err)
-fn parse_into(b: *Builder, source: str) -> err
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Document, err)
 fn parse_reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Document, err)
 fn node(document: *const Document, id: NodeId) -> *const Node
@@ -24307,9 +24282,6 @@ fn escape(a: *mem.Arena, text: str) -> (str, err)
 fn unescape(a: *mem.Arena, text: str) -> (str, err)
 type TokenKind = enum u8 { StartTag, EndTag, Text, Comment, Doctype }
 type Token = struct { kind: TokenKind, name: str, value: str, attributes: []const Attribute, self_closing: bool }
-type Tokens = struct { out: []Token, count: usize }
-fn emit(t: *Tokens, token: Token) -> err
-fn emit_text(b: *Builder, t: *Tokens) -> err
 fn tokenize(a: *mem.Arena, source: str, out: []Token) -> (usize, err)
 type MdWriter = struct { out: []u8, n: usize, space: bool, depth_pre: bool, rule_done: bool }
 const MD_MAX_DEPTH: usize = 40usize
@@ -24323,7 +24295,12 @@ fn md_skipped(name: str) -> bool
 fn md_block(name: str) -> bool
 fn md_walk(doc: *const Document, id: NodeId, w: *MdWriter, depth: usize)
 fn to_markdown(a: *mem.Arena, source: str) -> (str, err)
-```
+
+fn parse_with(a: *mem.Arena, source: str, options: Options, scripting: bool) -> (Document, err)
+fn parse_fragment(a: *mem.Arena, source: str, context: str, context_ns: Namespace, options: Options) -> (Document, err)
+fn parse_fragment_with(a: *mem.Arena, source: str, context: str, context_ns: Namespace, options: Options, scripting: bool) -> (Document, err)
+fn doctype_public(n: *const Node) -> str
+fn doctype_system(n: *const Node) -> str```
 
 The input is UTF-8 with an optional UTF-8 BOM; invalid UTF-8 returns
 `InvalidEncoding`. `parse_reader` reads no more than `max_bytes`, and `parse` rejects

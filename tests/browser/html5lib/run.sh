@@ -10,8 +10,9 @@ case "$(uname -s)" in
   *)     os=windows; compiler="$repo/build/windows/neper-try.exe"; exe="$repo/build/windows/run-html5lib.exe" ;;
 esac
 [ -x "$compiler" ] || { echo "no $compiler: run scripts/check-fixture.sh <any fixture> once to build it" >&2; exit 2; }
-[ $# -gt 0 ] && [ "${*#--show}" != "$*" ] && [ $# -eq 1 ] && set -- "$@" "$here"/data/*.dat
-[ $# -gt 0 ] || set -- "$here"/data/*.dat
+if [ $# -eq 1 ] && [[ "$1" == --* ]]; then set -- "$@" "$here"/data/*.dat; fi
+# The whole corpus also enforces the recorded floor (all 1791 pass).
+[ $# -gt 0 ] || set -- --floor 1791 "$here"/data/*.dat
 cd "$repo"
 written=$("$compiler" emit-executable "$here/run.e" "$repo" x64 "$os" "$exe" --arena 1g)
 [ "$written" = 'executable written' ] || { echo "run.e did not emit: $written" >&2; exit 1; }

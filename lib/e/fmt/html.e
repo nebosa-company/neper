@@ -1,21 +1,24 @@
-// HTML parsed into an arena-owned node table with parent, child and sibling links.
-// The tokenizer follows the WHATWG data, tag, attribute, comment, DOCTYPE, RCDATA and
-// RAWTEXT states, decoding named (the full HTML5 table, generated from Python's
-// html.entities beside the fixture) and numeric character references. The tree
-// builder carries the rules that shape ordinary documents: html, head and body
-// implied; head-only elements before the body go to the head; void elements take no
-// children; `p` closes before a block element; `li`, `dt`, `dd`, `option`, table
-// cells and rows and headings close their open sibling; an end tag closes back to
-// its element and is ignored without one; `svg` and `math` open their namespaces,
-// in which self-closing tags close. Malformed input is recovered, never refused;
-// invalid UTF-8 is `InvalidEncoding`, and the `Options` limits are `TooLarge` and
-// `TooDeep`.
+// HTML parsed into an arena-owned node table with parent, child and sibling links, by the
+// WHATWG parsing algorithm (https://html.spec.whatwg.org/multipage/parsing.html): the
+// tokenizer states (data, RCDATA, RAWTEXT, script data with its escape states, PLAINTEXT,
+// comments, DOCTYPE with public and system identifiers, CDATA in foreign content, named
+// and numeric character references), and tree construction through every insertion mode:
+// the adoption agency and the list of active formatting elements, foster parenting, tables,
+// select (the current customizable-select rules, `selectedcontent` filled when parsing
+// ends), `template` (its content is its children), frameset, SVG and MathML with their
+// integration points and name and attribute adjustments (a foreign attribute's prefix is
+// its `Namespace`: Xlink, Xml, Xmlns), quirks mode in `Document.quirks`, and fragment parsing
+// (`parse_fragment`, innerHTML). Malformed input is recovered, never refused; invalid UTF-8
+// is `InvalidEncoding`, and the `Options` limits are `TooLarge` and `TooDeep`.
 //
-// ponytail: this is the WHATWG algorithm's common path, not its whole: the adoption
-// agency (mis-nested formatting elements), foster parenting (text inside a table
-// outside a cell), the template element and the in-table insertion modes beyond
-// cell and row closing are not written, and the html5lib tree-construction fixtures
-// have not been run against it. A document that leans on those parses differently.
+// `parse` has scripting off, so `noscript` holds markup; `parse_with` and
+// `parse_fragment_with` take the flag. Conformance: all 1791 html5lib tree-construction
+// cases pass (tests/browser/html5lib/run.sh); a DOCTYPE node's identifiers are read with
+// `doctype_public` and `doctype_system`.
+//
+// ponytail: `Options.max_attributes` over 64 is capped at 64 (a tag with more is TooLarge);
+// a comment cut off by the end of the input and a DOCTYPE with an empty system identifier
+// are read as the spec's missing case.
 use e.io
 use e.mem
 use e.str
@@ -23,17 +26,16 @@ use e.str
 type NodeId = u32
 const NONE: NodeId = 4294967295u32
 type NodeKind = enum u8 { Document, Doctype, Element, Text, Comment }
-type Namespace = enum u8 { Html, Svg, MathMl }
+type Namespace = enum u8 { Html, Svg, MathMl, Xlink, Xml, Xmlns }
 type Attribute = struct { namespace: Namespace, name: str, value: str }
 type Node = struct { kind: NodeKind, namespace: Namespace, name: str, value: str, attributes: []const Attribute, parent: NodeId, first_child: NodeId, last_child: NodeId, previous_sibling: NodeId, next_sibling: NodeId }
-type Document = struct { nodes: []const Node, root: NodeId }
+type Document = struct { nodes: []const Node, root: NodeId, quirks: u8 }
 type Children = struct { document: *const Document, next: NodeId }
 type Options = struct { max_bytes: usize, max_nodes: usize, max_attributes: usize, max_depth: u16, preserve_comments: bool }
 error InvalidEncoding
 error TooDeep
 error TooLarge
 
-type Builder = struct { a: *mem.Arena, nodes: []Node, used: usize, options: Options, stack: []NodeId, depth: usize, html: NodeId, head: NodeId, body: NodeId, text_start: usize, text_len: usize, text_buffer: []u8 }
 
 // --- Names.
 
@@ -45,160 +47,25 @@ fn is_raw_text(name: str) -> bool {
     ret str.eq(name, "script") || str.eq(name, "style") || str.eq(name, "xmp") || str.eq(name, "iframe") || str.eq(name, "noembed") || str.eq(name, "noframes")
 }
 
-fn is_rcdata(name: str) -> bool { ret str.eq(name, "textarea") || str.eq(name, "title") }
 
-fn is_head_only(name: str) -> bool {
-    ret str.eq(name, "title") || str.eq(name, "meta") || str.eq(name, "link") || str.eq(name, "style") || str.eq(name, "script") || str.eq(name, "base") || str.eq(name, "noscript")
-}
 
-fn closes_p(name: str) -> bool {
-    if name.len == 2usize && name[0] == 104u8 && name[1] >= 49u8 && name[1] <= 54u8 { ret true }
-    ret str.eq(name, "address") || str.eq(name, "article") || str.eq(name, "aside") || str.eq(name, "blockquote") || str.eq(name, "details") || str.eq(name, "div") || str.eq(name, "dl") || str.eq(name, "fieldset") || str.eq(name, "figcaption") || str.eq(name, "figure") || str.eq(name, "footer") || str.eq(name, "form") || str.eq(name, "header") || str.eq(name, "hr") || str.eq(name, "main") || str.eq(name, "menu") || str.eq(name, "nav") || str.eq(name, "ol") || str.eq(name, "p") || str.eq(name, "pre") || str.eq(name, "section") || str.eq(name, "table") || str.eq(name, "ul") || str.eq(name, "li") || str.eq(name, "dd") || str.eq(name, "dt")
-}
 
-fn is_heading(name: str) -> bool {
-    ret name.len == 2usize && name[0] == 104u8 && name[1] >= 49u8 && name[1] <= 54u8
-}
 
 // --- Nodes.
 
-fn add_node(b: *Builder, kind: NodeKind, namespace: Namespace, name: str, value: str, parent: NodeId) -> (NodeId, err) {
-    if b.used >= b.nodes.len { ret (NONE, TooLarge) }
-    let id = u32(b.used)
-    b.nodes[b.used] = Node { kind: kind, namespace: namespace, name: name, value: value, attributes: zero, parent: parent, first_child: NONE, last_child: NONE, previous_sibling: NONE, next_sibling: NONE }
-    b.used += 1usize
-    if parent != NONE {
-        let last = b.nodes[usize(parent)].last_child
-        if last == NONE {
-            b.nodes[usize(parent)].first_child = id
-        } else {
-            b.nodes[usize(last)].next_sibling = id
-            b.nodes[usize(id)].previous_sibling = last
-        }
-        b.nodes[usize(parent)].last_child = id
-    }
-    ret (id, ok)
-}
 
-fn current(b: *Builder) -> NodeId {
-    if b.depth == 0usize { ret 0u32 }
-    ret b.stack[b.depth - 1usize]
-}
 
-fn current_name(b: *Builder) -> str {
-    ret b.nodes[usize(current(b))].name
-}
 
-fn push(b: *Builder, id: NodeId) -> err {
-    if b.depth >= b.stack.len { ret TooDeep }
-    b.stack[b.depth] = id
-    b.depth += 1usize
-    ret ok
-}
 
-// Pops until the nearest open element named `name` is closed; false if none is open.
-fn close_to(b: *Builder, name: str) -> bool {
-    var i = b.depth
-    while i > 0usize {
-        i -= 1usize
-        if str.eq(b.nodes[usize(b.stack[i])].name, name) {
-            b.depth = i
-            ret true
-        }
-    }
-    ret false
-}
 
-fn has_open(b: *Builder, name: str) -> bool {
-    var i = 0usize
-    while i < b.depth {
-        if str.eq(b.nodes[usize(b.stack[i])].name, name) { ret true }
-        i += 1usize
-    }
-    ret false
-}
 
-fn flush_text(b: *Builder) -> err {
-    if b.text_len == 0usize { ret ok }
-    let (copy, copy_error) = mem.alloc[u8](b.a, b.text_len)
-    if copy_error != ok { ret copy_error }
-    mem.copy[u8](copy, b.text_buffer[..b.text_len])
-    b.text_len = 0usize
-    let parent = current(b)
-    // Text at the top or in the head that is not all space opens the body.
-    var target_node = parent
-    if parent == 0u32 || parent == b.html || parent == b.head {
-        if is_blank(copy) && parent != b.head {
-            if parent == 0u32 { ret ok }
-        }
-        if !is_blank(copy) {
-            try ensure_body(b)
-            target_node = b.body
-        } else {
-            if parent == 0u32 || parent == b.html { ret ok }
-        }
-    }
-    // Adjacent text merges into one node.
-    let last = b.nodes[usize(target_node)].last_child
-    if last != NONE && b.nodes[usize(last)].kind == .Text {
-        let old = b.nodes[usize(last)].value
-        let (merged, merged_error) = mem.alloc[u8](b.a, old.len + copy.len)
-        if merged_error != ok { ret merged_error }
-        mem.copy[u8](merged[..old.len], old)
-        mem.copy[u8](merged[old.len..], copy)
-        b.nodes[usize(last)].value = merged
-        ret ok
-    }
-    let (id, add_error) = add_node(b, .Text, .Html, "", copy, target_node)
-    ret add_error
-}
 
-fn is_blank(text: str) -> bool {
-    var i = 0usize
-    while i < text.len {
-        let c = text[i]
-        if c != 32u8 && c != 9u8 && c != 10u8 && c != 13u8 && c != 12u8 { ret false }
-        i += 1usize
-    }
-    ret true
-}
 
-fn ensure_html(b: *Builder) -> err {
-    if b.html != NONE { ret ok }
-    let (id, add_error) = add_node(b, .Element, .Html, "html", "", 0u32)
-    if add_error != ok { ret add_error }
-    b.html = id
-    b.depth = 0usize
-    ret push(b, id)
-}
 
-fn ensure_head(b: *Builder) -> err {
-    try ensure_html(b)
-    if b.head != NONE { ret ok }
-    let (id, add_error) = add_node(b, .Element, .Html, "head", "", b.html)
-    if add_error != ok { ret add_error }
-    b.head = id
-    ret ok
-}
 
-fn ensure_body(b: *Builder) -> err {
-    try ensure_head(b)
-    if b.body != NONE { ret ok }
-    let (id, add_error) = add_node(b, .Element, .Html, "body", "", b.html)
-    if add_error != ok { ret add_error }
-    b.body = id
-    b.depth = 1usize
-    ret push(b, id)
-}
 
 // --- Character references.
 
-fn append_text(b: *Builder, bytes: []const u8) -> err {
-    if b.text_len + bytes.len > b.text_buffer.len { ret TooLarge }
-    mem.copy[u8](b.text_buffer[b.text_len..b.text_len + bytes.len], bytes)
-    b.text_len += bytes.len
-    ret ok
-}
 
 fn write_utf8(scalar: u32, dst: []u8, at: usize) -> usize {
     if scalar < 128u32 {
@@ -221,6 +88,22 @@ fn write_utf8(scalar: u32, dst: []u8, at: usize) -> usize {
     dst[at + 2usize] = u8(128u32 | ((scalar >> 6u32) & 63u32))
     dst[at + 3usize] = u8(128u32 | (scalar & 63u32))
     ret at + 4usize
+}
+
+// The Windows-1252 character a numeric reference to U+0080..U+009F stands for.
+fn c1_replacement(scalar: u32) -> u32 {
+    let table = "20AC0081201A0192201E20262020202102C62030016020390152008D017D008F009020182019201C201D20222013201402DC21220161203A0153009D017E0178"
+    let at = usize(scalar - 128u32) * 4usize
+    var value = 0u32
+    var i = 0usize
+    while i < 4usize {
+        let c = table[at + i]
+        var digit = 0u32
+        if c >= 65u8 { digit = u32(c - 55u8) } else { digit = u32(c - 48u8) }
+        value = value * 16u32 + digit
+        i += 1usize
+    }
+    ret value
 }
 
 // The longest entity name at `text[at..]` (the `&` already behind), with its
@@ -277,6 +160,7 @@ fn decode_reference(text: str, at: usize, in_attribute: bool, out: []u8) -> (usi
         if digits == 0usize { ret (0usize, 0usize) }
         if i < text.len && text[i] == 59u8 { i += 1usize }
         if scalar == 0u64 || scalar > 1114111u64 || (scalar >= 55296u64 && scalar <= 57343u64) { scalar = 65533u64 }
+        if scalar >= 128u64 && scalar <= 159u64 { scalar = u64(c1_replacement(u32(scalar))) }
         let written = write_utf8(u32(scalar), out, 0usize)
         ret (written, i - at)
     }
@@ -288,99 +172,9 @@ fn decode_reference(text: str, at: usize, in_attribute: bool, out: []u8) -> (usi
 
 // --- Tokens into the tree.
 
-fn lower(a: *mem.Arena, text: str) -> (str, err) {
-    var needs = false
-    var i = 0usize
-    while i < text.len {
-        if text[i] >= 65u8 && text[i] <= 90u8 { needs = true }
-        i += 1usize
-    }
-    if !needs { ret (text, ok) }
-    let (copy, copy_error) = mem.alloc[u8](a, text.len)
-    if copy_error != ok { ret ("", copy_error) }
-    mem.copy[u8](copy, text)
-    str.ascii_lower_in_place(copy)
-    ret (copy, ok)
-}
 
-fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 || c == 12u8 }
 
-fn start_element(b: *Builder, name: str, attributes: []const Attribute, self_closing: bool) -> err {
-    try flush_text(b)
-    if str.eq(name, "html") {
-        try ensure_html(b)
-        if b.nodes[usize(b.html)].attributes.len == 0usize { b.nodes[usize(b.html)].attributes = attributes }
-        ret ok
-    }
-    if str.eq(name, "head") {
-        try ensure_head(b)
-        if b.nodes[usize(b.head)].attributes.len == 0usize { b.nodes[usize(b.head)].attributes = attributes }
-        b.depth = 1usize
-        ret push(b, b.head)
-    }
-    if str.eq(name, "body") {
-        try ensure_body(b)
-        if b.nodes[usize(b.body)].attributes.len == 0usize { b.nodes[usize(b.body)].attributes = attributes }
-        ret ok
-    }
-    var namespace: Namespace = .Html
-    let parent_namespace = b.nodes[usize(current(b))].namespace
-    if parent_namespace != .Html && current(b) != 0u32 { namespace = parent_namespace }
-    if str.eq(name, "svg") { namespace = .Svg }
-    if str.eq(name, "math") { namespace = .MathMl }
-    if b.body == NONE {
-        if is_head_only(name) && namespace == .Html {
-            try ensure_head(b)
-            if current(b) != b.head {
-                b.depth = 1usize
-                try push(b, b.head)
-            }
-        } else {
-            try ensure_body(b)
-        }
-    } else {
-        if current(b) == b.head || current(b) == b.html { b.depth = 2usize }
-    }
-    if namespace == .Html {
-        // Implied end tags.
-        if closes_p(name) && has_open(b, "p") { let closed = close_to(b, "p") }
-        if str.eq(name, "li") && has_open(b, "li") { let closed = close_to(b, "li") }
-        if (str.eq(name, "dt") || str.eq(name, "dd")) && (has_open(b, "dt") || has_open(b, "dd")) {
-            if !close_to(b, "dt") { let closed = close_to(b, "dd") }
-        }
-        if str.eq(name, "option") && str.eq(current_name(b), "option") { b.depth -= 1usize }
-        if (str.eq(name, "td") || str.eq(name, "th")) && (has_open(b, "td") || has_open(b, "th")) {
-            if !close_to(b, "td") { let closed = close_to(b, "th") }
-        }
-        if str.eq(name, "tr") && has_open(b, "tr") { let closed = close_to(b, "tr") }
-        if (str.eq(name, "tbody") || str.eq(name, "thead") || str.eq(name, "tfoot")) && has_open(b, "tbody") { let closed = close_to(b, "tbody") }
-        if is_heading(name) && is_heading(current_name(b)) { b.depth -= 1usize }
-    }
-    let (id, add_error) = add_node(b, .Element, namespace, name, "", current(b))
-    if add_error != ok { ret add_error }
-    b.nodes[usize(id)].attributes = attributes
-    if namespace == .Html && is_void(name) { ret ok }
-    if namespace != .Html && self_closing { ret ok }
-    ret push(b, id)
-}
 
-fn end_element(b: *Builder, name: str) -> err {
-    try flush_text(b)
-    if str.eq(name, "html") || str.eq(name, "body") || str.eq(name, "head") {
-        if str.eq(name, "head") && b.head != NONE { b.depth = 1usize }
-        ret ok
-    }
-    if str.eq(name, "p") && !has_open(b, "p") {
-        // A stray </p> is an empty paragraph.
-        try ensure_body(b)
-        let (id, add_error) = add_node(b, .Element, .Html, "p", "", current(b))
-        ret add_error
-    }
-    let closed = close_to(b, name)
-    if b.depth == 0usize && b.html != NONE { b.depth = 1usize }
-    if b.depth == 1usize && b.body != NONE { b.depth = 2usize }
-    ret ok
-}
 
 // --- The tokenizer.
 
@@ -414,253 +208,10 @@ fn utf8_valid(text: str) -> bool {
     ret true
 }
 
-fn find_ci(text: str, needle: str, from: usize) -> (usize, bool) {
-    var i = from
-    while i + needle.len <= text.len {
-        if str.compare_ascii_fold(text[i..i + needle.len], needle) == 0 { ret (i, true) }
-        i += 1usize
-    }
-    ret (0usize, false)
-}
 
-// Text with references decoded, appended to the text buffer.
-fn append_decoded(b: *Builder, text: str, in_attribute: bool) -> err {
-    var at = 0usize
-    var run = 0usize
-    var scratch: [8]u8 = zero
-    while at < text.len {
-        if text[at] == 38u8 {
-            let (written, used) = decode_reference(text, at + 1usize, in_attribute, scratch[0..])
-            if used > 0usize {
-                try append_text(b, text[run..at])
-                try append_text(b, scratch[..written])
-                at += 1usize + used
-                run = at
-                continue
-            }
-        }
-        at += 1usize
-    }
-    ret append_text(b, text[run..])
-}
 
-// An attribute value with references decoded, into the arena.
-fn decode_value(b: *Builder, raw: str) -> (str, err) {
-    let (amp, has_amp) = str.find(raw, "&")
-    if !has_amp { ret (raw, ok) }
-    let (out, out_error) = mem.alloc[u8](b.a, raw.len * 2usize + 8usize)
-    if out_error != ok { ret ("", out_error) }
-    var at = 0usize
-    var used = 0usize
-    while at < raw.len {
-        if raw[at] == 38u8 {
-            let (written, taken) = decode_reference(raw, at + 1usize, true, out[used..])
-            if taken > 0usize {
-                used += written
-                at += 1usize + taken
-                continue
-            }
-        }
-        out[used] = raw[at]
-        used += 1usize
-        at += 1usize
-    }
-    ret (out[..used], ok)
-}
 
-fn parse_into(b: *Builder, source: str) -> err {
-    var at = 0usize
-    if source.len >= 3usize && source[0] == 239u8 && source[1] == 187u8 && source[2] == 191u8 { at = 3usize }
-    while at < source.len {
-        let c = source[at]
-        if c != 60u8 {
-            // Character data up to the next tag, references decoded.
-            let (lt, has_lt) = str.find_from(source, "<", at)
-            var stop = source.len
-            if has_lt { stop = lt }
-            try append_decoded(b, source[at..stop], false)
-            at = stop
-            continue
-        }
-        if at + 1usize >= source.len {
-            try append_text(b, "<")
-            at += 1usize
-            continue
-        }
-        let next = source[at + 1usize]
-        if next == 33u8 {
-            if str.starts_with(source[at..], "<!--") {
-                let (close, has_close) = str.find_from(source, "-->", at + 4usize)
-                var stop = source.len
-                var body_stop = source.len
-                if has_close {
-                    stop = close + 3usize
-                    body_stop = close
-                }
-                if b.options.preserve_comments {
-                    try flush_text(b)
-                    var parent = current(b)
-                    if b.body == NONE && b.html != NONE && parent == 0u32 { parent = b.html }
-                    let (id, add_error) = add_node(b, .Comment, .Html, "", source[at + 4usize..body_stop], parent)
-                    if add_error != ok { ret add_error }
-                }
-                at = stop
-                continue
-            }
-            let (close, has_close) = str.find_from(source, ">", at)
-            var stop = source.len
-            if has_close { stop = close + 1usize }
-            var body_end = source.len
-            if has_close { body_end = close }
-            let body = source[at + 2usize..body_end]
-            if body.len >= 7usize && str.compare_ascii_fold(body[..7usize], "doctype") == 0 {
-                try flush_text(b)
-                let (name, lower_error) = lower(b.a, str.trim(body[7usize..]))
-                if lower_error != ok { ret lower_error }
-                let (id, add_error) = add_node(b, .Doctype, .Html, name, "", 0u32)
-                if add_error != ok { ret add_error }
-            }
-            at = stop
-            continue
-        }
-        if next == 63u8 {
-            // A bogus comment: skipped.
-            let (close, has_close) = str.find_from(source, ">", at)
-            if has_close { at = close + 1usize } else { at = source.len }
-            continue
-        }
-        if next == 47u8 {
-            var stop = at + 2usize
-            while stop < source.len && !is_space(source[stop]) && source[stop] != 62u8 { stop += 1usize }
-            let (name, lower_error) = lower(b.a, source[at + 2usize..stop])
-            if lower_error != ok { ret lower_error }
-            let (close, has_close) = str.find_from(source, ">", stop)
-            if has_close { at = close + 1usize } else { at = source.len }
-            if name.len > 0usize { try end_element(b, name) }
-            continue
-        }
-        if !str.is_ascii_alpha(next) {
-            try append_text(b, "<")
-            at += 1usize
-            continue
-        }
-        // A start tag: name, attributes, an optional self-closing slash.
-        var stop = at + 1usize
-        while stop < source.len && !is_space(source[stop]) && source[stop] != 62u8 && source[stop] != 47u8 { stop += 1usize }
-        let (name, lower_error) = lower(b.a, source[at + 1usize..stop])
-        if lower_error != ok { ret lower_error }
-        var attributes: [64]Attribute = zero
-        var count = 0usize
-        var self_closing = false
-        var cursor = stop
-        while cursor < source.len {
-            while cursor < source.len && is_space(source[cursor]) { cursor += 1usize }
-            if cursor >= source.len { break }
-            if source[cursor] == 62u8 {
-                cursor += 1usize
-                break
-            }
-            if source[cursor] == 47u8 {
-                if cursor + 1usize < source.len && source[cursor + 1usize] == 62u8 {
-                    self_closing = true
-                    cursor += 2usize
-                    break
-                }
-                cursor += 1usize
-                continue
-            }
-            var name_stop = cursor
-            while name_stop < source.len && !is_space(source[name_stop]) && source[name_stop] != 61u8 && source[name_stop] != 62u8 && source[name_stop] != 47u8 { name_stop += 1usize }
-            let (attribute_name, name_error) = lower(b.a, source[cursor..name_stop])
-            if name_error != ok { ret name_error }
-            cursor = name_stop
-            while cursor < source.len && is_space(source[cursor]) { cursor += 1usize }
-            var value = ""
-            if cursor < source.len && source[cursor] == 61u8 {
-                cursor += 1usize
-                while cursor < source.len && is_space(source[cursor]) { cursor += 1usize }
-                if cursor < source.len && (source[cursor] == 34u8 || source[cursor] == 39u8) {
-                    let quote = source[cursor]
-                    var value_stop = cursor + 1usize
-                    while value_stop < source.len && source[value_stop] != quote { value_stop += 1usize }
-                    let (decoded, decode_error) = decode_value(b, source[cursor + 1usize..value_stop])
-                    if decode_error != ok { ret decode_error }
-                    value = decoded
-                    cursor = value_stop + 1usize
-                } else {
-                    var value_stop = cursor
-                    while value_stop < source.len && !is_space(source[value_stop]) && source[value_stop] != 62u8 { value_stop += 1usize }
-                    let (decoded, decode_error) = decode_value(b, source[cursor..value_stop])
-                    if decode_error != ok { ret decode_error }
-                    value = decoded
-                    cursor = value_stop
-                }
-            }
-            if count >= b.options.max_attributes || count >= 64usize { ret TooLarge }
-            var duplicate = false
-            var k = 0usize
-            while k < count {
-                if str.eq(attributes[k].name, attribute_name) { duplicate = true }
-                k += 1usize
-            }
-            if !duplicate && attribute_name.len > 0usize {
-                attributes[count] = Attribute { namespace: .Html, name: attribute_name, value: value }
-                count += 1usize
-            }
-        }
-        at = cursor
-        let (copy, copy_error) = mem.alloc[Attribute](b.a, count)
-        if copy_error != ok { ret copy_error }
-        mem.copy[Attribute](copy, attributes[..count])
-        try start_element(b, name, copy[0..], self_closing)
-        // Raw text and RCDATA elements swallow everything to their end tag.
-        if b.nodes[usize(current(b))].namespace == .Html && (is_raw_text(name) || is_rcdata(name)) && str.eq(current_name(b), name) {
-            var closer: [16]u8 = zero
-            closer[0] = 60u8
-            closer[1] = 47u8
-            mem.copy[u8](closer[2usize..2usize + name.len], name)
-            let (close, has_close) = find_ci(source, closer[..2usize + name.len], at)
-            var body_stop = source.len
-            if has_close { body_stop = close }
-            if is_rcdata(name) {
-                try append_decoded(b, source[at..body_stop], false)
-            } else {
-                try append_text(b, source[at..body_stop])
-            }
-            try flush_text(b)
-            if has_close {
-                let (gt, has_gt) = str.find_from(source, ">", close)
-                if has_gt { at = gt + 1usize } else { at = source.len }
-            } else {
-                at = source.len
-            }
-            b.depth -= 1usize
-        }
-    }
-    try flush_text(b)
-    ret ok
-}
 
-fn parse(a: *mem.Arena, source: str, options: Options) -> (Document, err) {
-    if source.len > options.max_bytes { ret (zero, TooLarge) }
-    if !utf8_valid(source) { ret (zero, InvalidEncoding) }
-    let (nodes, nodes_error) = mem.alloc[Node](a, options.max_nodes)
-    if nodes_error != ok { ret (zero, nodes_error) }
-    let (stack, stack_error) = mem.alloc[NodeId](a, usize(options.max_depth) + 1usize)
-    if stack_error != ok { ret (zero, stack_error) }
-    let (text_buffer, text_error) = mem.alloc[u8](a, source.len + 8usize)
-    if text_error != ok { ret (zero, text_error) }
-    var b = Builder { a: a, nodes: nodes, used: 0usize, options: options, stack: stack, depth: 0usize, html: NONE, head: NONE, body: NONE, text_start: 0usize, text_len: 0usize, text_buffer: text_buffer }
-    let (root, root_error) = add_node(&b, .Document, .Html, "", "", NONE)
-    if root_error != ok { ret (zero, root_error) }
-    let parse_error = parse_into(&b, source)
-    if parse_error != ok { ret (zero, parse_error) }
-    if b.html == NONE {
-        let body_error = ensure_body(&b)
-        if body_error != ok { ret (zero, body_error) }
-    }
-    ret (Document { nodes: b.nodes[..b.used], root: 0u32 }, ok)
-}
 
 fn parse_reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Document, err) {
     let (buffer, buffer_error) = mem.alloc[u8](a, options.max_bytes + 1usize)
@@ -791,6 +342,9 @@ fn write_node(writer: *io.Writer, document: *const Document, id: NodeId) -> err 
         var i = 0usize
         while i < n.attributes.len {
             try io.write_all(writer, " ")
+            if n.attributes[i].namespace == .Xlink { try io.write_all(writer, "xlink:") }
+            if n.attributes[i].namespace == .Xml { try io.write_all(writer, "xml:") }
+            if n.attributes[i].namespace == .Xmlns && !str.eq(n.attributes[i].name, "xmlns") { try io.write_all(writer, "xmlns:") }
             try io.write_all(writer, n.attributes[i].name)
             try io.write_all(writer, "=\"")
             try write_escaped(writer, n.attributes[i].value, true)
@@ -865,12 +419,6 @@ fn escape(a: *mem.Arena, text: str) -> (str, err) {
 // Every named and numeric character reference in `text` decoded, as in character data (a
 // legacy name without its semicolon counts).
 fn unescape(a: *mem.Arena, text: str) -> (str, err) {
-    var b: Builder = zero
-    b.a = a
-    let (decoded, decode_error) = decode_value(&b, text)
-    if decode_error != ok { ret ("", decode_error) }
-    if decoded.len == text.len { ret (decoded, ok) }
-    // `decode_value` follows the attribute rule for legacy names; text decodes them all.
     let (out, out_error) = mem.alloc[u8](a, text.len * 2usize + 8usize)
     if out_error != ok { ret ("", out_error) }
     var at = 0usize
@@ -897,216 +445,36 @@ type TokenKind = enum u8 { StartTag, EndTag, Text, Comment, Doctype }
 // it was written with the slash.
 type Token = struct { kind: TokenKind, name: str, value: str, attributes: []const Attribute, self_closing: bool }
 
-type Tokens = struct { out: []Token, count: usize }
-
-fn emit(t: *Tokens, token: Token) -> err {
-    if t.count >= t.out.len { ret TooLarge }
-    t.out[t.count] = token
-    t.count += 1usize
-    ret ok
-}
-
-fn emit_text(b: *Builder, t: *Tokens) -> err {
-    if b.text_len == 0usize { ret ok }
-    let (copy, copy_error) = mem.alloc[u8](b.a, b.text_len)
-    if copy_error != ok { ret copy_error }
-    mem.copy[u8](copy, b.text_buffer[..b.text_len])
-    b.text_len = 0usize
-    ret emit(t, Token { kind: .Text, name: "", value: copy, attributes: zero, self_closing: false })
-}
-
-// The token stream of `source` into `out`: (count, error). The same lexing as `parse`, with
-// references decoded in text and attribute values, tag and attribute names lower-cased, a
-// raw text element's body (script, style, ...) kept verbatim and a RCDATA one's (title,
-// textarea) decoded. `TooLarge` when `out` fills. ponytail: a second copy of the lexing in
-// `parse_into`, which is written against the tree builder and was left as it is; the
-// helpers (`lower`, `decode_value`, `append_decoded`, `find_ci`) are shared.
+// The token stream of `source` into `out`: (count, error), from the same tokenizer the tree
+// builder uses: references decoded in text and attribute values, tag and attribute names
+// lower-cased, a raw text element's body (script, style, ...) kept verbatim and a RCDATA
+// one's (title, textarea) decoded. `TooLarge` when `out` fills.
 fn tokenize(a: *mem.Arena, source: str, out: []Token) -> (usize, err) {
-    if !utf8_valid(source) { ret (0usize, InvalidEncoding) }
-    let (text_buffer, text_error) = mem.alloc[u8](a, source.len + 8usize)
-    if text_error != ok { ret (0usize, text_error) }
-    var b: Builder = zero
-    b.a = a
-    b.text_buffer = text_buffer
-    var t = Tokens { out: out, count: 0usize }
-    var at = 0usize
-    if source.len >= 3usize && source[0] == 239u8 && source[1] == 187u8 && source[2] == 191u8 { at = 3usize }
-    while at < source.len {
-        let c = source[at]
-        if c != 60u8 {
-            let (lt, has_lt) = str.find_from(source, "<", at)
-            var stop = source.len
-            if has_lt { stop = lt }
-            let append_error = append_decoded(&b, source[at..stop], false)
-            if append_error != ok { ret (t.count, append_error) }
-            at = stop
-            continue
+    let options = Options { max_bytes: source.len, max_nodes: 1usize, max_attributes: 64usize, max_depth: 1u16, preserve_comments: true }
+    let (made, made_error) = ps_new(a, source, options)
+    if made_error != ok { ret (0usize, made_error) }
+    var p = made
+    var tk: Tok = zero
+    var count = 0usize
+    while true {
+        let next_error = tk_next(&p, &tk)
+        if next_error != ok { ret (count, next_error) }
+        if tk.kind == .Eof { break }
+        if count >= out.len { ret (count, TooLarge) }
+        if tk.kind == .Chars { out[count] = Token { kind: .Text, name: "", value: tk.data, attributes: zero, self_closing: false } }
+        if tk.kind == .Comment { out[count] = Token { kind: .Comment, name: "", value: tk.data, attributes: zero, self_closing: false } }
+        if tk.kind == .Doctype { out[count] = Token { kind: .Doctype, name: tk.name, value: "", attributes: zero, self_closing: false } }
+        if tk.kind == .End { out[count] = Token { kind: .EndTag, name: tk.name, value: "", attributes: zero, self_closing: false } }
+        if tk.kind == .Start {
+            out[count] = Token { kind: .StartTag, name: tk.name, value: "", attributes: tk.attrs, self_closing: tk.self_closing }
+            if nm_in(",title,textarea,", tk.name) { p.ts = TS_RCDATA }
+            if nm_in(",style,xmp,iframe,noembed,noframes,", tk.name) { p.ts = TS_RAWTEXT }
+            if str.eq(tk.name, "script") { p.ts = TS_SCRIPT }
+            if str.eq(tk.name, "plaintext") { p.ts = TS_PLAINTEXT }
         }
-        if at + 1usize >= source.len {
-            let append_error = append_text(&b, "<")
-            if append_error != ok { ret (t.count, append_error) }
-            at += 1usize
-            continue
-        }
-        let next_byte = source[at + 1usize]
-        if next_byte == 33u8 {
-            let flush_error = emit_text(&b, &t)
-            if flush_error != ok { ret (t.count, flush_error) }
-            if str.starts_with(source[at..], "<!--") {
-                let (close, has_close) = str.find_from(source, "-->", at + 4usize)
-                var stop = source.len
-                var body_stop = source.len
-                if has_close {
-                    stop = close + 3usize
-                    body_stop = close
-                }
-                let emit_error = emit(&t, Token { kind: .Comment, name: "", value: source[at + 4usize..body_stop], attributes: zero, self_closing: false })
-                if emit_error != ok { ret (t.count, emit_error) }
-                at = stop
-                continue
-            }
-            let (close, has_close) = str.find_from(source, ">", at)
-            var stop = source.len
-            if has_close { stop = close + 1usize }
-            var body_end = source.len
-            if has_close { body_end = close }
-            let body = source[at + 2usize..body_end]
-            if body.len >= 7usize && str.compare_ascii_fold(body[..7usize], "doctype") == 0 {
-                let (name, lower_error) = lower(a, str.trim(body[7usize..]))
-                if lower_error != ok { ret (t.count, lower_error) }
-                let emit_error = emit(&t, Token { kind: .Doctype, name: name, value: "", attributes: zero, self_closing: false })
-                if emit_error != ok { ret (t.count, emit_error) }
-            }
-            at = stop
-            continue
-        }
-        if next_byte == 63u8 {
-            let (close, has_close) = str.find_from(source, ">", at)
-            if has_close { at = close + 1usize } else { at = source.len }
-            continue
-        }
-        if next_byte == 47u8 {
-            var stop = at + 2usize
-            while stop < source.len && !is_space(source[stop]) && source[stop] != 62u8 { stop += 1usize }
-            let (name, lower_error) = lower(a, source[at + 2usize..stop])
-            if lower_error != ok { ret (t.count, lower_error) }
-            let (close, has_close) = str.find_from(source, ">", stop)
-            if has_close { at = close + 1usize } else { at = source.len }
-            if name.len > 0usize {
-                let flush_error = emit_text(&b, &t)
-                if flush_error != ok { ret (t.count, flush_error) }
-                let emit_error = emit(&t, Token { kind: .EndTag, name: name, value: "", attributes: zero, self_closing: false })
-                if emit_error != ok { ret (t.count, emit_error) }
-            }
-            continue
-        }
-        if !str.is_ascii_alpha(next_byte) {
-            let append_error = append_text(&b, "<")
-            if append_error != ok { ret (t.count, append_error) }
-            at += 1usize
-            continue
-        }
-        var stop = at + 1usize
-        while stop < source.len && !is_space(source[stop]) && source[stop] != 62u8 && source[stop] != 47u8 { stop += 1usize }
-        let (name, lower_error) = lower(a, source[at + 1usize..stop])
-        if lower_error != ok { ret (t.count, lower_error) }
-        var attributes: [64]Attribute = zero
-        var count = 0usize
-        var self_closing = false
-        var cursor = stop
-        while cursor < source.len {
-            while cursor < source.len && is_space(source[cursor]) { cursor += 1usize }
-            if cursor >= source.len { break }
-            if source[cursor] == 62u8 {
-                cursor += 1usize
-                break
-            }
-            if source[cursor] == 47u8 {
-                if cursor + 1usize < source.len && source[cursor + 1usize] == 62u8 {
-                    self_closing = true
-                    cursor += 2usize
-                    break
-                }
-                cursor += 1usize
-                continue
-            }
-            var name_stop = cursor
-            while name_stop < source.len && !is_space(source[name_stop]) && source[name_stop] != 61u8 && source[name_stop] != 62u8 && source[name_stop] != 47u8 { name_stop += 1usize }
-            let (attribute_name, name_error) = lower(a, source[cursor..name_stop])
-            if name_error != ok { ret (t.count, name_error) }
-            cursor = name_stop
-            while cursor < source.len && is_space(source[cursor]) { cursor += 1usize }
-            var value = ""
-            if cursor < source.len && source[cursor] == 61u8 {
-                cursor += 1usize
-                while cursor < source.len && is_space(source[cursor]) { cursor += 1usize }
-                if cursor < source.len && (source[cursor] == 34u8 || source[cursor] == 39u8) {
-                    let quote = source[cursor]
-                    var value_stop = cursor + 1usize
-                    while value_stop < source.len && source[value_stop] != quote { value_stop += 1usize }
-                    let (decoded, decode_error) = decode_value(&b, source[cursor + 1usize..value_stop])
-                    if decode_error != ok { ret (t.count, decode_error) }
-                    value = decoded
-                    cursor = value_stop + 1usize
-                } else {
-                    var value_stop = cursor
-                    while value_stop < source.len && !is_space(source[value_stop]) && source[value_stop] != 62u8 { value_stop += 1usize }
-                    let (decoded, decode_error) = decode_value(&b, source[cursor..value_stop])
-                    if decode_error != ok { ret (t.count, decode_error) }
-                    value = decoded
-                    cursor = value_stop
-                }
-            }
-            if count >= 64usize { ret (t.count, TooLarge) }
-            var duplicate = false
-            var k = 0usize
-            while k < count {
-                if str.eq(attributes[k].name, attribute_name) { duplicate = true }
-                k += 1usize
-            }
-            if !duplicate && attribute_name.len > 0usize {
-                attributes[count] = Attribute { namespace: .Html, name: attribute_name, value: value }
-                count += 1usize
-            }
-        }
-        at = cursor
-        let (copy, copy_error) = mem.alloc[Attribute](a, count)
-        if copy_error != ok { ret (t.count, copy_error) }
-        mem.copy[Attribute](copy, attributes[..count])
-        let flush_error = emit_text(&b, &t)
-        if flush_error != ok { ret (t.count, flush_error) }
-        let emit_error = emit(&t, Token { kind: .StartTag, name: name, value: "", attributes: copy[0..], self_closing: self_closing })
-        if emit_error != ok { ret (t.count, emit_error) }
-        if is_raw_text(name) || is_rcdata(name) {
-            var closer: [16]u8 = zero
-            closer[0] = 60u8
-            closer[1] = 47u8
-            mem.copy[u8](closer[2usize..2usize + name.len], name)
-            let (close, has_close) = find_ci(source, closer[..2usize + name.len], at)
-            var body_stop = source.len
-            if has_close { body_stop = close }
-            var body_error = ok
-            if is_rcdata(name) {
-                body_error = append_decoded(&b, source[at..body_stop], false)
-            } else {
-                body_error = append_text(&b, source[at..body_stop])
-            }
-            if body_error != ok { ret (t.count, body_error) }
-            let body_flush_error = emit_text(&b, &t)
-            if body_flush_error != ok { ret (t.count, body_flush_error) }
-            if has_close {
-                let (gt, has_gt) = str.find_from(source, ">", close)
-                if has_gt { at = gt + 1usize } else { at = source.len }
-                let end_error = emit(&t, Token { kind: .EndTag, name: name, value: "", attributes: zero, self_closing: false })
-                if end_error != ok { ret (t.count, end_error) }
-            } else {
-                at = source.len
-            }
-        }
+        count += 1usize
     }
-    let flush_error = emit_text(&b, &t)
-    if flush_error != ok { ret (t.count, flush_error) }
-    ret (t.count, ok)
+    ret (count, ok)
 }
 
 // ---- HTML as a Markdown-like outline (D4804): what a viewer's reading mode shows of a page.
@@ -1297,4 +665,3031 @@ fn to_markdown(a: *mem.Arena, source: str) -> (str, err) {
     md_end_line(&w)
     while w.n > 0usize && w.out[w.n - 1usize] == 10u8 { w.n -= 1usize }
     ret (out[0usize..w.n], ok)
+}
+
+// =====================================================================================
+// WHATWG parsing: tokenizer states and tree construction (insertion modes), after
+// https://html.spec.whatwg.org/multipage/parsing.html. `parse` and `parse_fragment`
+// drive `Ps`; the tokenizer is pulled one token at a time because the tree builder
+// switches its state (RCDATA, RAWTEXT, script data, PLAINTEXT) and asks whether the
+// adjusted current node is foreign (CDATA).
+// =====================================================================================
+
+type TokKind = enum u8 { Chars, Start, End, Comment, Doctype, Eof }
+type Tok = struct { kind: TokKind, name: str, data: str, attrs: []const Attribute, self_closing: bool, force_quirks: bool, public_id: str, system_id: str }
+
+const TS_DATA: u8 = 0u8
+const TS_RCDATA: u8 = 1u8
+const TS_RAWTEXT: u8 = 2u8
+const TS_SCRIPT: u8 = 3u8
+const TS_PLAINTEXT: u8 = 4u8
+
+const M_INITIAL: u8 = 0u8
+const M_BEFORE_HTML: u8 = 1u8
+const M_BEFORE_HEAD: u8 = 2u8
+const M_IN_HEAD: u8 = 3u8
+const M_IN_HEAD_NOSCRIPT: u8 = 4u8
+const M_AFTER_HEAD: u8 = 5u8
+const M_IN_BODY: u8 = 6u8
+const M_TEXT: u8 = 7u8
+const M_IN_TABLE: u8 = 8u8
+const M_IN_TABLE_TEXT: u8 = 9u8
+const M_IN_CAPTION: u8 = 10u8
+const M_IN_COLGROUP: u8 = 11u8
+const M_IN_TBODY: u8 = 12u8
+const M_IN_ROW: u8 = 13u8
+const M_IN_CELL: u8 = 14u8
+const M_IN_SELECT: u8 = 15u8
+const M_IN_SELECT_TABLE: u8 = 16u8
+const M_IN_TEMPLATE: u8 = 17u8
+const M_AFTER_BODY: u8 = 18u8
+const M_IN_FRAMESET: u8 = 19u8
+const M_AFTER_FRAMESET: u8 = 20u8
+const M_AFTER_AFTER_BODY: u8 = 21u8
+const M_AFTER_AFTER_FRAMESET: u8 = 22u8
+
+const Q_NO: u8 = 0u8
+const Q_LIMITED: u8 = 1u8
+const Q_QUIRKS: u8 = 2u8
+
+const SC_DEFAULT: u8 = 0u8
+const SC_LIST: u8 = 1u8
+const SC_BUTTON: u8 = 2u8
+const SC_TABLE: u8 = 3u8
+const SC_SELECT: u8 = 4u8
+
+type Ps = struct {
+    a: *mem.Arena, src: str, pos: usize,
+    nodes: []Node, used: usize, options: Options,
+    ts: u8, last_start: str,
+    open: []NodeId, nopen: usize,
+    fmt: []NodeId, nfmt: usize,
+    tmodes: [64]u8, ntmodes: usize,
+    mode: u8, orig_mode: u8,
+    head: NodeId, form: NodeId, ctx: NodeId, fragment: bool,
+    frameset_ok: bool, foster: bool, quirks: u8, ignore_lf: bool, stopped: bool, scripting: bool,
+    pend: []u8, npend: usize
+}
+
+fn nm_in(set: str, name: str) -> bool {
+    var i = 1usize
+    while i < set.len {
+        var j = i
+        while j < set.len && set[j] != 44u8 { j += 1usize }
+        if j - i == name.len && str.eq(set[i..j], name) { ret true }
+        i = j + 1usize
+    }
+    ret false
+}
+
+// --- Nodes.
+
+fn pn_new(p: *Ps, kind: NodeKind, ns: Namespace, name: str, value: str) -> (NodeId, err) {
+    if p.used >= p.nodes.len { ret (NONE, TooLarge) }
+    let id = u32(p.used)
+    p.nodes[p.used] = Node { kind: kind, namespace: ns, name: name, value: value, attributes: zero, parent: NONE, first_child: NONE, last_child: NONE, previous_sibling: NONE, next_sibling: NONE }
+    p.used += 1usize
+    ret (id, ok)
+}
+
+fn pn_detach(p: *Ps, id: NodeId) {
+    let parent = p.nodes[usize(id)].parent
+    if parent == NONE { ret }
+    let prev = p.nodes[usize(id)].previous_sibling
+    let next = p.nodes[usize(id)].next_sibling
+    if prev == NONE { p.nodes[usize(parent)].first_child = next } else { p.nodes[usize(prev)].next_sibling = next }
+    if next == NONE { p.nodes[usize(parent)].last_child = prev } else { p.nodes[usize(next)].previous_sibling = prev }
+    p.nodes[usize(id)].parent = NONE
+    p.nodes[usize(id)].previous_sibling = NONE
+    p.nodes[usize(id)].next_sibling = NONE
+}
+
+// Inserts the detached `id` under `parent` before `before` (NONE: at the end).
+fn pn_insert(p: *Ps, parent: NodeId, id: NodeId, before: NodeId) {
+    p.nodes[usize(id)].parent = parent
+    if before == NONE {
+        let last = p.nodes[usize(parent)].last_child
+        p.nodes[usize(id)].previous_sibling = last
+        p.nodes[usize(id)].next_sibling = NONE
+        if last == NONE { p.nodes[usize(parent)].first_child = id } else { p.nodes[usize(last)].next_sibling = id }
+        p.nodes[usize(parent)].last_child = id
+        ret
+    }
+    let prev = p.nodes[usize(before)].previous_sibling
+    p.nodes[usize(id)].previous_sibling = prev
+    p.nodes[usize(id)].next_sibling = before
+    p.nodes[usize(before)].previous_sibling = id
+    if prev == NONE { p.nodes[usize(parent)].first_child = id } else { p.nodes[usize(prev)].next_sibling = id }
+}
+
+// Text at (parent, before): merges into an adjacent text node.
+fn pn_text(p: *Ps, parent: NodeId, before: NodeId, data: str) -> err {
+    if data.len == 0usize { ret ok }
+    var prev = p.nodes[usize(parent)].last_child
+    if before != NONE { prev = p.nodes[usize(before)].previous_sibling }
+    if prev != NONE && p.nodes[usize(prev)].kind == .Text {
+        let old = p.nodes[usize(prev)].value
+        let merged = try mem.alloc[u8](p.a, old.len + data.len)
+        mem.copy[u8](merged[..old.len], old)
+        mem.copy[u8](merged[old.len..], data)
+        p.nodes[usize(prev)].value = merged
+        ret ok
+    }
+    let id = try pn_new(p, .Text, .Html, "", data)
+    pn_insert(p, parent, id, before)
+    ret ok
+}
+
+fn pn_element(p: *Ps, ns: Namespace, name: str, attrs: []const Attribute) -> (NodeId, err) {
+    let (id, e) = pn_new(p, .Element, ns, name, "")
+    if e != ok { ret (NONE, e) }
+    p.nodes[usize(id)].attributes = attrs
+    ret (id, ok)
+}
+
+fn pn_is(p: *Ps, id: NodeId, name: str) -> bool {
+    if id == NONE { ret false }
+    ret p.nodes[usize(id)].namespace == .Html && str.eq(p.nodes[usize(id)].name, name)
+}
+
+fn pn_in(p: *Ps, id: NodeId, set: str) -> bool {
+    if id == NONE { ret false }
+    ret p.nodes[usize(id)].namespace == .Html && nm_in(set, p.nodes[usize(id)].name)
+}
+
+// --- The tokenizer.
+
+fn ws_byte(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 12u8 || c == 13u8 }
+
+fn ascii_eq_fold(x: str, y: str) -> bool { ret str.compare_ascii_fold(x, y) == 0i32 }
+
+// Copies `s` when it holds an upper-case letter (with `lower_it`) or a NUL (which
+// becomes U+FFFD); otherwise returns it unchanged.
+fn tk_clean(p: *Ps, s: str, lower_it: bool) -> (str, err) {
+    var nuls = 0usize
+    var upper = false
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 0u8 { nuls += 1usize }
+        if lower_it && s[i] >= 65u8 && s[i] <= 90u8 { upper = true }
+        i += 1usize
+    }
+    if nuls == 0usize && !upper { ret (s, ok) }
+    let out = try mem.alloc[u8](p.a, s.len + nuls * 2usize)
+    var at = 0usize
+    i = 0usize
+    while i < s.len {
+        let c = s[i]
+        if c == 0u8 {
+            out[at] = 239u8
+            out[at + 1usize] = 191u8
+            out[at + 2usize] = 189u8
+            at += 3usize
+        } else {
+            if lower_it && c >= 65u8 && c <= 90u8 { out[at] = c + 32u8 } else { out[at] = c }
+            at += 1usize
+        }
+        i += 1usize
+    }
+    ret (out[..at], ok)
+}
+
+// `s` with references decoded (and NUL as U+FFFD when `nul_fffd`).
+fn tk_decode(p: *Ps, s: str, in_attribute: bool, nul_fffd: bool) -> (str, err) {
+    var special = false
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 38u8 || (nul_fffd && s[i] == 0u8) { special = true }
+        i += 1usize
+    }
+    if !special { ret (s, ok) }
+    let out = try mem.alloc[u8](p.a, s.len * 3usize + 8usize)
+    var at = 0usize
+    var used = 0usize
+    while at < s.len {
+        let c = s[at]
+        if c == 38u8 {
+            let (written, taken) = decode_reference(s, at + 1usize, in_attribute, out[used..])
+            if taken > 0usize {
+                used += written
+                at += 1usize + taken
+                continue
+            }
+        }
+        if c == 0u8 && nul_fffd {
+            used = write_utf8(65533u32, out, used)
+        } else {
+            out[used] = c
+            used += 1usize
+        }
+        at += 1usize
+    }
+    ret (out[..used], ok)
+}
+
+fn tk_reset(tk: *Tok) {
+    tk.kind = .Eof
+    tk.name = ""
+    tk.data = ""
+    tk.attrs = no_attrs()
+    tk.self_closing = false
+    tk.force_quirks = false
+    tk.public_id = ""
+    tk.system_id = ""
+}
+
+fn tk_chars(p: *Ps, tk: *Tok, start: usize, stop: usize, decode: bool, nul_fffd: bool) -> err {
+    var data = p.src[start..stop]
+    if decode {
+        data = try tk_decode(p, data, false, nul_fffd)
+    } else {
+        if nul_fffd { data = try tk_clean(p, data, false) }
+    }
+    p.pos = stop
+    tk.kind = .Chars
+    tk.data = data
+    ret ok
+}
+
+fn tk_comment(p: *Ps, tk: *Tok, start: usize, stop: usize) -> err {
+    tk.kind = .Comment
+    tk.data = try tk_clean(p, p.src[start..stop], false)
+    ret ok
+}
+
+// A bogus comment from `start` to the next `>` (or the end); consumes the `>`.
+fn tk_bogus(p: *Ps, tk: *Tok, start: usize) -> err {
+    let (close, found) = str.find_from(p.src, ">", start)
+    if found {
+        p.pos = close + 1usize
+        ret tk_comment(p, tk, start, close)
+    }
+    p.pos = p.src.len
+    ret tk_comment(p, tk, start, p.src.len)
+}
+
+// Skips a DOCTYPE's remains after an error: to the next `>`.
+fn tk_skip_gt(p: *Ps, from: usize) -> usize {
+    let (close, found) = str.find_from(p.src, ">", from)
+    if found { ret close + 1usize }
+    ret p.src.len
+}
+
+fn tk_skip_ws(s: str, from: usize) -> usize {
+    var i = from
+    while i < s.len && ws_byte(s[i]) { i += 1usize }
+    ret i
+}
+
+type Quoted = struct { text: str, next: usize, closed: bool }
+
+// A quoted identifier at `i` (the quote).
+fn tk_quoted(p: *Ps, i: usize) -> (Quoted, err) {
+    let s = p.src
+    let quote = s[i]
+    var j = i + 1usize
+    while j < s.len && s[j] != quote { j += 1usize }
+    let raw = try tk_clean(p, s[i + 1usize..j], false)
+    if j >= s.len { ret (Quoted { text: raw, next: s.len, closed: false }, ok) }
+    ret (Quoted { text: raw, next: j + 1usize, closed: true }, ok)
+}
+
+// `<!DOCTYPE` was matched; `p.pos` is after it.
+fn tk_doctype(p: *Ps, tk: *Tok) -> err {
+    let s = p.src
+    tk.kind = .Doctype
+    var i = tk_skip_ws(s, p.pos)
+    if i >= s.len {
+        tk.force_quirks = true
+        p.pos = s.len
+        ret ok
+    }
+    if s[i] == 62u8 {
+        tk.force_quirks = true
+        p.pos = i + 1usize
+        ret ok
+    }
+    let name_start = i
+    while i < s.len && !ws_byte(s[i]) && s[i] != 62u8 { i += 1usize }
+    tk.name = try tk_clean(p, s[name_start..i], true)
+    i = tk_skip_ws(s, i)
+    if i >= s.len {
+        tk.force_quirks = true
+        p.pos = s.len
+        ret ok
+    }
+    if s[i] == 62u8 {
+        p.pos = i + 1usize
+        ret ok
+    }
+    var is_public = false
+    var is_system = false
+    if i + 6usize <= s.len && ascii_eq_fold(s[i..i + 6usize], "public") { is_public = true }
+    if i + 6usize <= s.len && ascii_eq_fold(s[i..i + 6usize], "system") { is_system = true }
+    if !is_public && !is_system {
+        tk.force_quirks = true
+        p.pos = tk_skip_gt(p, i)
+        ret ok
+    }
+    i = tk_skip_ws(s, i + 6usize)
+    if i >= s.len {
+        tk.force_quirks = true
+        p.pos = s.len
+        ret ok
+    }
+    if s[i] != 34u8 && s[i] != 39u8 {
+        tk.force_quirks = true
+        if s[i] == 62u8 { p.pos = i + 1usize } else { p.pos = tk_skip_gt(p, i) }
+        ret ok
+    }
+    let first = try tk_quoted(p, i)
+    if is_public { tk.public_id = first.text } else { tk.system_id = first.text }
+    i = first.next
+    if !first.closed {
+        tk.force_quirks = true
+        p.pos = s.len
+        ret ok
+    }
+    i = tk_skip_ws(s, i)
+    if i >= s.len {
+        tk.force_quirks = true
+        p.pos = s.len
+        ret ok
+    }
+    if s[i] == 62u8 {
+        p.pos = i + 1usize
+        ret ok
+    }
+    if is_public && (s[i] == 34u8 || s[i] == 39u8) {
+        let second = try tk_quoted(p, i)
+        tk.system_id = second.text
+        if !second.closed {
+            tk.force_quirks = true
+            p.pos = s.len
+            ret ok
+        }
+        i = tk_skip_ws(s, second.next)
+        if i >= s.len {
+            tk.force_quirks = true
+            p.pos = s.len
+            ret ok
+        }
+        if s[i] == 62u8 { p.pos = i + 1usize } else { p.pos = tk_skip_gt(p, i) }
+        ret ok
+    }
+    if is_public { tk.force_quirks = true }
+    p.pos = tk_skip_gt(p, i)
+    ret ok
+}
+
+// A tag whose name starts at `p.pos`. A tag cut off by the end of the input is dropped (Eof).
+fn tk_tag(p: *Ps, tk: *Tok, is_end: bool) -> err {
+    let s = p.src
+    var i = p.pos
+    let name_start = i
+    while i < s.len && !ws_byte(s[i]) && s[i] != 47u8 && s[i] != 62u8 { i += 1usize }
+    if i >= s.len {
+        p.pos = s.len
+        tk.kind = .Eof
+        ret ok
+    }
+    tk.name = try tk_clean(p, s[name_start..i], true)
+    var buf: [64]Attribute = zero
+    var count = 0usize
+    var self_closing = false
+    while true {
+        i = tk_skip_ws(s, i)
+        if i >= s.len {
+            p.pos = s.len
+            tk.kind = .Eof
+            tk.name = ""
+            ret ok
+        }
+        let c = s[i]
+        if c == 62u8 {
+            i += 1usize
+            break
+        }
+        if c == 47u8 {
+            i += 1usize
+            if i < s.len && s[i] == 62u8 {
+                self_closing = true
+                i += 1usize
+                break
+            }
+            continue
+        }
+        let attr_start = i
+        i += 1usize
+        while i < s.len && !ws_byte(s[i]) && s[i] != 47u8 && s[i] != 62u8 && s[i] != 61u8 { i += 1usize }
+        let attr_name = try tk_clean(p, s[attr_start..i], true)
+        var value: str = ""
+        let after_name = tk_skip_ws(s, i)
+        if after_name < s.len && s[after_name] == 61u8 {
+            i = tk_skip_ws(s, after_name + 1usize)
+            if i >= s.len {
+                p.pos = s.len
+                tk.kind = .Eof
+                tk.name = ""
+                ret ok
+            }
+            var raw: str = ""
+            if s[i] == 34u8 || s[i] == 39u8 {
+                let quote = s[i]
+                let value_start = i + 1usize
+                var j = value_start
+                while j < s.len && s[j] != quote { j += 1usize }
+                if j >= s.len {
+                    p.pos = s.len
+                    tk.kind = .Eof
+                    tk.name = ""
+                    ret ok
+                }
+                raw = s[value_start..j]
+                i = j + 1usize
+            } else {
+                let value_start = i
+                while i < s.len && !ws_byte(s[i]) && s[i] != 62u8 { i += 1usize }
+                raw = s[value_start..i]
+            }
+            value = try tk_decode(p, raw, true, true)
+        } else {
+            i = after_name
+        }
+        var duplicate = false
+        var k = 0usize
+        while k < count {
+            if str.eq(buf[k].name, attr_name) { duplicate = true }
+            k += 1usize
+        }
+        if duplicate || is_end { continue }
+        if count >= p.options.max_attributes || count >= 64usize { ret TooLarge }
+        buf[count] = Attribute { namespace: .Html, name: attr_name, value: value }
+        count += 1usize
+    }
+    p.pos = i
+    if is_end {
+        tk.kind = .End
+    } else {
+        tk.kind = .Start
+        p.last_start = tk.name
+    }
+    tk.self_closing = self_closing
+    if count > 0usize {
+        let copy = try mem.alloc[Attribute](p.a, count)
+        mem.copy[Attribute](copy, buf[0..count])
+        tk.attrs = copy
+    }
+    ret ok
+}
+
+// Text in RCDATA, RAWTEXT, script data: up to the appropriate end tag.
+fn tk_special(p: *Ps, tk: *Tok) -> err {
+    let s = p.src
+    let n = s.len
+    let start = p.pos
+    var i = start
+    var esc = 0u8
+    let is_script = p.ts == TS_SCRIPT
+    let name_len = p.last_start.len
+    while i < n {
+        let c = s[i]
+        if c == 60u8 {
+            if i + 1usize < n && s[i + 1usize] == 47u8 {
+                if name_len > 0usize && i + 2usize + name_len < n && ascii_eq_fold(s[i + 2usize..i + 2usize + name_len], p.last_start) {
+                    let d = s[i + 2usize + name_len]
+                    if ws_byte(d) || d == 47u8 || d == 62u8 {
+                        if is_script && esc == 2u8 {
+                            esc = 1u8
+                            i += 2usize + name_len
+                            continue
+                        }
+                        if i > start { ret tk_chars(p, tk, start, i, p.ts == TS_RCDATA, true) }
+                        p.pos = i + 2usize
+                        try tk_tag(p, tk, true)
+                        p.ts = TS_DATA
+                        ret ok
+                    }
+                }
+                i += 1usize
+                continue
+            }
+            if is_script {
+                if esc == 0u8 && str.starts_with(s[i..], "<!--") {
+                    esc = 1u8
+                    i += 4usize
+                    if i < n && s[i] == 62u8 { esc = 0u8 }
+                    if i + 1usize < n && s[i] == 45u8 && s[i + 1usize] == 62u8 { esc = 0u8 }
+                    continue
+                }
+                if esc == 1u8 && i + 7usize < n && ascii_eq_fold(s[i + 1usize..i + 7usize], "script") {
+                    let d = s[i + 7usize]
+                    if ws_byte(d) || d == 47u8 || d == 62u8 {
+                        esc = 2u8
+                        i += 7usize
+                        continue
+                    }
+                }
+            }
+            i += 1usize
+            continue
+        }
+        if c == 45u8 && is_script && esc >= 1u8 && str.starts_with(s[i..], "-->") {
+            esc = 0u8
+            i += 3usize
+            continue
+        }
+        i += 1usize
+    }
+    ret tk_chars(p, tk, start, n, p.ts == TS_RCDATA, true)
+}
+
+// A `<` at `i` that opens a tag, an end tag, a declaration or a bogus comment.
+fn tk_markup_at(s: str, i: usize) -> bool {
+    if s[i] != 60u8 || i + 1usize >= s.len { ret false }
+    let d = s[i + 1usize]
+    ret str.is_ascii_alpha(d) || d == 33u8 || d == 47u8 || d == 63u8
+}
+
+fn tk_next(p: *Ps, tk: *Tok) -> err {
+    let s = p.src
+    let n = s.len
+    while true {
+        tk_reset(tk)
+        if p.pos >= n { ret ok }
+        if p.ts == TS_PLAINTEXT { ret tk_chars(p, tk, p.pos, n, false, true) }
+        if p.ts != TS_DATA { ret tk_special(p, tk) }
+        let start = p.pos
+        if !tk_markup_at(s, start) {
+            var i = start + 1usize
+            while i < n && !tk_markup_at(s, i) { i += 1usize }
+            ret tk_chars(p, tk, start, i, true, false)
+        }
+        let d = s[start + 1usize]
+        if str.is_ascii_alpha(d) {
+            p.pos = start + 1usize
+            ret tk_tag(p, tk, false)
+        }
+        if d == 47u8 {
+            if start + 2usize >= n { ret tk_chars(p, tk, start, n, false, false) }
+            let e = s[start + 2usize]
+            if str.is_ascii_alpha(e) {
+                p.pos = start + 2usize
+                ret tk_tag(p, tk, true)
+            }
+            if e == 62u8 {
+                p.pos = start + 3usize
+                continue
+            }
+            ret tk_bogus(p, tk, start + 2usize)
+        }
+        if d == 63u8 { ret tk_bogus(p, tk, start + 1usize) }
+        // `<!`
+        if str.starts_with(s[start..], "<!--") {
+            var from = start + 4usize
+            if from < n && s[from] == 62u8 {
+                p.pos = from + 1usize
+                tk.kind = .Comment
+                ret ok
+            }
+            if from + 1usize < n && s[from] == 45u8 && s[from + 1usize] == 62u8 {
+                p.pos = from + 2usize
+                tk.kind = .Comment
+                ret ok
+            }
+            var j = from
+            var stop = n
+            var next = n
+            while j < n {
+                if j + 3usize <= n && s[j] == 45u8 && s[j + 1usize] == 45u8 && s[j + 2usize] == 62u8 {
+                    stop = j
+                    next = j + 3usize
+                    break
+                }
+                if j + 4usize <= n && s[j] == 45u8 && s[j + 1usize] == 45u8 && s[j + 2usize] == 33u8 && s[j + 3usize] == 62u8 {
+                    stop = j
+                    next = j + 4usize
+                    break
+                }
+                j += 1usize
+            }
+            if next == n && stop == n {
+                if stop - 3usize >= from && s[stop - 1usize] == 33u8 && s[stop - 2usize] == 45u8 && s[stop - 3usize] == 45u8 { stop -= 3usize } else {
+                    if stop - 2usize >= from && s[stop - 1usize] == 45u8 && s[stop - 2usize] == 45u8 { stop -= 2usize } else {
+                        if stop - 1usize >= from && s[stop - 1usize] == 45u8 { stop -= 1usize }
+                    }
+                }
+            }
+            p.pos = next
+            ret tk_comment(p, tk, from, stop)
+        }
+        if start + 9usize <= n && ascii_eq_fold(s[start + 2usize..start + 9usize], "doctype") {
+            p.pos = start + 9usize
+            ret tk_doctype(p, tk)
+        }
+        if start + 9usize <= n && str.starts_with(s[start..], "<![CDATA[") && tb_foreign_adjusted(p) {
+            let (close, found) = str.find_from(s, "]]>", start + 9usize)
+            var stop = n
+            var next = n
+            if found {
+                stop = close
+                next = close + 3usize
+            }
+            if stop == start + 9usize {
+                p.pos = next
+                continue
+            }
+            tk.kind = .Chars
+            tk.data = s[start + 9usize..stop]
+            p.pos = next
+            ret ok
+        }
+        ret tk_bogus(p, tk, start + 2usize)
+    }
+    ret ok
+}
+
+// --- Tree construction: stack, scope, insertion and the formatting list.
+
+type Place = struct { parent: NodeId, before: NodeId }
+
+fn tb_cur(p: *Ps) -> NodeId {
+    if p.nopen == 0usize { ret NONE }
+    ret p.open[p.nopen - 1usize]
+}
+
+fn tb_push(p: *Ps, id: NodeId) -> err {
+    if p.nopen >= p.open.len { ret TooDeep }
+    p.open[p.nopen] = id
+    p.nopen += 1usize
+    ret ok
+}
+
+fn tb_pop(p: *Ps) {
+    if p.nopen > 0usize { p.nopen -= 1usize }
+}
+
+fn tb_open_index(p: *Ps, id: NodeId) -> (usize, bool) {
+    var i = p.nopen
+    while i > 0usize {
+        i -= 1usize
+        if p.open[i] == id { ret (i, true) }
+    }
+    ret (0usize, false)
+}
+
+fn tb_open_remove_at(p: *Ps, at: usize) {
+    var i = at
+    while i + 1usize < p.nopen {
+        p.open[i] = p.open[i + 1usize]
+        i += 1usize
+    }
+    p.nopen -= 1usize
+}
+
+fn tb_open_has(p: *Ps, name: str) -> bool {
+    var i = 0usize
+    while i < p.nopen {
+        if pn_is(p, p.open[i], name) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+fn tb_pop_until(p: *Ps, name: str) {
+    while p.nopen > 0usize {
+        let id = tb_cur(p)
+        tb_pop(p)
+        if pn_is(p, id, name) { break }
+    }
+}
+
+fn tb_pop_until_set(p: *Ps, set: str) {
+    while p.nopen > 0usize {
+        let id = tb_cur(p)
+        tb_pop(p)
+        if pn_in(p, id, set) { break }
+    }
+}
+
+fn tb_special(p: *Ps, id: NodeId) -> bool {
+    let n = &p.nodes[usize(id)]
+    if n.namespace == .Html {
+        ret nm_in(",address,applet,area,article,aside,base,basefont,bgsound,blockquote,body,br,button,caption,center,col,colgroup,dd,details,dir,div,dl,dt,embed,fieldset,figcaption,figure,footer,form,frame,frameset,h1,h2,h3,h4,h5,h6,head,header,hgroup,hr,html,iframe,img,input,keygen,li,link,listing,main,marquee,menu,meta,nav,noembed,noframes,noscript,object,ol,p,param,plaintext,pre,script,search,section,select,source,style,summary,table,tbody,td,template,textarea,tfoot,th,thead,title,tr,track,ul,wbr,xmp,", n.name)
+    }
+    if n.namespace == .MathMl { ret nm_in(",mi,mo,mn,ms,mtext,annotation-xml,", n.name) }
+    if n.namespace == .Svg { ret nm_in(",foreignObject,desc,title,", n.name) }
+    ret false
+}
+
+fn tb_scope_stop(p: *Ps, id: NodeId, kind: u8) -> bool {
+    let n = &p.nodes[usize(id)]
+    if kind == SC_SELECT { ret !(n.namespace == .Html && (str.eq(n.name, "optgroup") || str.eq(n.name, "option"))) }
+    if kind == SC_TABLE { ret n.namespace == .Html && nm_in(",html,table,template,", n.name) }
+    if n.namespace == .Html {
+        if nm_in(",applet,caption,html,table,td,th,marquee,object,select,template,", n.name) { ret true }
+        if kind == SC_LIST && (str.eq(n.name, "ol") || str.eq(n.name, "ul")) { ret true }
+        if kind == SC_BUTTON && str.eq(n.name, "button") { ret true }
+        ret false
+    }
+    if n.namespace == .MathMl { ret nm_in(",mi,mo,mn,ms,mtext,annotation-xml,", n.name) }
+    ret nm_in(",foreignObject,desc,title,", n.name)
+}
+
+fn tb_in_scope(p: *Ps, name: str, kind: u8) -> bool {
+    var i = p.nopen
+    while i > 0usize {
+        i -= 1usize
+        let id = p.open[i]
+        if pn_is(p, id, name) { ret true }
+        if tb_scope_stop(p, id, kind) { ret false }
+    }
+    ret false
+}
+
+fn tb_in_scope_set(p: *Ps, set: str, kind: u8) -> bool {
+    var i = p.nopen
+    while i > 0usize {
+        i -= 1usize
+        let id = p.open[i]
+        if pn_in(p, id, set) { ret true }
+        if tb_scope_stop(p, id, kind) { ret false }
+    }
+    ret false
+}
+
+fn tb_in_scope_id(p: *Ps, wanted: NodeId, kind: u8) -> bool {
+    var i = p.nopen
+    while i > 0usize {
+        i -= 1usize
+        let id = p.open[i]
+        if id == wanted { ret true }
+        if tb_scope_stop(p, id, kind) { ret false }
+    }
+    ret false
+}
+
+// --- Foreign content helpers.
+
+fn tb_adjusted(p: *Ps) -> NodeId {
+    if p.fragment && p.nopen == 1usize { ret p.ctx }
+    ret tb_cur(p)
+}
+
+fn tb_foreign_adjusted(p: *Ps) -> bool {
+    let id = tb_adjusted(p)
+    ret id != NONE && p.nodes[usize(id)].namespace != .Html
+}
+
+fn tb_mathml_text_ip(p: *Ps, id: NodeId) -> bool {
+    let n = &p.nodes[usize(id)]
+    ret n.namespace == .MathMl && nm_in(",mi,mo,mn,ms,mtext,", n.name)
+}
+
+fn tb_html_ip(p: *Ps, id: NodeId) -> bool {
+    let n = &p.nodes[usize(id)]
+    if n.namespace == .MathMl && str.eq(n.name, "annotation-xml") {
+        let (enc, has) = attribute(n, "encoding")
+        ret has && (ascii_eq_fold(enc, "text/html") || ascii_eq_fold(enc, "application/xhtml+xml"))
+    }
+    ret n.namespace == .Svg && nm_in(",foreignObject,desc,title,", n.name)
+}
+
+fn adj_lookup(table: str, name: str) -> (str, bool) {
+    var i = 1usize
+    while i < table.len {
+        var j = i
+        while j < table.len && table[j] != 44u8 { j += 1usize }
+        var eq = i
+        while eq < j && table[eq] != 61u8 { eq += 1usize }
+        if eq - i == name.len && str.eq(table[i..eq], name) { ret (table[eq + 1usize..j], true) }
+        i = j + 1usize
+    }
+    ret ("", false)
+}
+
+fn tb_svg_name(name: str) -> str {
+    let (fixed, found) = adj_lookup(",altglyph=altGlyph,altglyphdef=altGlyphDef,altglyphitem=altGlyphItem,animatecolor=animateColor,animatemotion=animateMotion,animatetransform=animateTransform,clippath=clipPath,feblend=feBlend,fecolormatrix=feColorMatrix,fecomponenttransfer=feComponentTransfer,fecomposite=feComposite,feconvolvematrix=feConvolveMatrix,fediffuselighting=feDiffuseLighting,fedisplacementmap=feDisplacementMap,fedistantlight=feDistantLight,fedropshadow=feDropShadow,feflood=feFlood,fefunca=feFuncA,fefuncb=feFuncB,fefuncg=feFuncG,fefuncr=feFuncR,fegaussianblur=feGaussianBlur,feimage=feImage,femerge=feMerge,femergenode=feMergeNode,femorphology=feMorphology,feoffset=feOffset,fepointlight=fePointLight,fespecularlighting=feSpecularLighting,fespotlight=feSpotLight,fetile=feTile,feturbulence=feTurbulence,foreignobject=foreignObject,glyphref=glyphRef,lineargradient=linearGradient,radialgradient=radialGradient,textpath=textPath,", name)
+    if found { ret fixed }
+    ret name
+}
+
+fn tb_svg_attr(name: str) -> str {
+    let (fixed, found) = adj_lookup(",attributename=attributeName,attributetype=attributeType,basefrequency=baseFrequency,baseprofile=baseProfile,calcmode=calcMode,clippathunits=clipPathUnits,diffuseconstant=diffuseConstant,edgemode=edgeMode,filterunits=filterUnits,glyphref=glyphRef,gradienttransform=gradientTransform,gradientunits=gradientUnits,kernelmatrix=kernelMatrix,kernelunitlength=kernelUnitLength,keypoints=keyPoints,keysplines=keySplines,keytimes=keyTimes,lengthadjust=lengthAdjust,limitingconeangle=limitingConeAngle,markerheight=markerHeight,markerunits=markerUnits,markerwidth=markerWidth,maskcontentunits=maskContentUnits,maskunits=maskUnits,numoctaves=numOctaves,pathlength=pathLength,patterncontentunits=patternContentUnits,patterntransform=patternTransform,patternunits=patternUnits,pointsatx=pointsAtX,pointsaty=pointsAtY,pointsatz=pointsAtZ,preservealpha=preserveAlpha,preserveaspectratio=preserveAspectRatio,primitiveunits=primitiveUnits,refx=refX,refy=refY,repeatcount=repeatCount,repeatdur=repeatDur,requiredextensions=requiredExtensions,requiredfeatures=requiredFeatures,specularconstant=specularConstant,specularexponent=specularExponent,spreadmethod=spreadMethod,startoffset=startOffset,stddeviation=stdDeviation,stitchtiles=stitchTiles,surfacescale=surfaceScale,systemlanguage=systemLanguage,tablevalues=tableValues,targetx=targetX,targety=targetY,textlength=textLength,viewbox=viewBox,viewtarget=viewTarget,xchannelselector=xChannelSelector,ychannelselector=yChannelSelector,zoomandpan=zoomAndPan,", name)
+    if found { ret fixed }
+    ret name
+}
+
+// Attributes with the foreign adjustments: SVG or MathML case fixes, and the
+// xlink, xml and xmlns names split into a namespace and a local name.
+fn tb_adjust_attrs(p: *Ps, attrs: []const Attribute, ns: Namespace) -> ([]const Attribute, err) {
+    if attrs.len == 0usize { ret (attrs, ok) }
+    let out = try mem.alloc[Attribute](p.a, attrs.len)
+    var i = 0usize
+    while i < attrs.len {
+        var name = attrs[i].name
+        var space: Namespace = .Html
+        if ns == .Svg { name = tb_svg_attr(name) }
+        if ns == .MathMl && str.eq(name, "definitionurl") { name = "definitionURL" }
+        if nm_in(",xlink:actuate,xlink:arcrole,xlink:href,xlink:role,xlink:show,xlink:title,xlink:type,", name) {
+            space = .Xlink
+            name = name[6usize..]
+        } else {
+            if nm_in(",xml:lang,xml:space,", name) {
+                space = .Xml
+                name = name[4usize..]
+            } else {
+                if str.eq(name, "xmlns") {
+                    space = .Xmlns
+                } else {
+                    if str.eq(name, "xmlns:xlink") {
+                        space = .Xmlns
+                        name = name[6usize..]
+                    }
+                }
+            }
+        }
+        out[i] = Attribute { namespace: space, name: name, value: attrs[i].value }
+        i += 1usize
+    }
+    ret (out, ok)
+}
+
+// --- Insertion.
+
+fn tb_place(p: *Ps, override: NodeId) -> Place {
+    var anchor = override
+    if anchor == NONE { anchor = tb_cur(p) }
+    if p.foster && anchor != NONE && pn_in(p, anchor, ",table,tbody,tfoot,thead,tr,") {
+        var last_template = NONE
+        var last_table = NONE
+        var template_at = 0usize
+        var table_at = 0usize
+        var i = p.nopen
+        while i > 0usize {
+            i -= 1usize
+            let id = p.open[i]
+            if last_template == NONE && pn_is(p, id, "template") {
+                last_template = id
+                template_at = i
+            }
+            if last_table == NONE && pn_is(p, id, "table") {
+                last_table = id
+                table_at = i
+            }
+        }
+        if last_template != NONE && (last_table == NONE || template_at > table_at) { ret Place { parent: last_template, before: NONE } }
+        if last_table == NONE { ret Place { parent: p.open[0usize], before: NONE } }
+        let table_parent = p.nodes[usize(last_table)].parent
+        if table_parent != NONE { ret Place { parent: table_parent, before: last_table } }
+        ret Place { parent: p.open[table_at - 1usize], before: NONE }
+    }
+    ret Place { parent: anchor, before: NONE }
+}
+
+fn tb_insert_node(p: *Ps, id: NodeId) {
+    let place = tb_place(p, NONE)
+    pn_insert(p, place.parent, id, place.before)
+}
+
+fn tb_insert_chars(p: *Ps, data: str) -> err {
+    let place = tb_place(p, NONE)
+    if place.parent == 0u32 { ret ok }
+    ret pn_text(p, place.parent, place.before, data)
+}
+
+// A comment at the current place, or under `parent` when it is not NONE.
+fn tb_insert_comment(p: *Ps, data: str, parent: NodeId) -> err {
+    if !p.options.preserve_comments { ret ok }
+    let id = try pn_new(p, .Comment, .Html, "", data)
+    if parent != NONE {
+        pn_insert(p, parent, id, NONE)
+        ret ok
+    }
+    tb_insert_node(p, id)
+    ret ok
+}
+
+// Inserts the element for a start tag and makes it the current node.
+fn tb_insert_element(p: *Ps, ns: Namespace, name: str, attrs: []const Attribute) -> (NodeId, err) {
+    let id = try pn_element(p, ns, name, attrs)
+    tb_insert_node(p, id)
+    try tb_push(p, id)
+    ret (id, ok)
+}
+
+fn tb_insert_html(p: *Ps, tk: *Tok) -> (NodeId, err) {
+    let (id, e) = tb_insert_element(p, .Html, tk.name, tk.attrs)
+    ret (id, e)
+}
+
+// An element with no attributes, as the spec "insert an HTML element for a token whose name is ...".
+fn tb_insert_named(p: *Ps, name: str) -> (NodeId, err) {
+    let (id, e) = tb_insert_element(p, .Html, name, no_attrs())
+    ret (id, e)
+}
+
+fn tb_clone(p: *Ps, id: NodeId) -> (NodeId, err) {
+    let (copy, e) = pn_element(p, p.nodes[usize(id)].namespace, p.nodes[usize(id)].name, p.nodes[usize(id)].attributes)
+    ret (copy, e)
+}
+
+// --- The list of active formatting elements; NONE entries are markers.
+
+fn tb_fmt_index(p: *Ps, id: NodeId) -> (usize, bool) {
+    var i = p.nfmt
+    while i > 0usize {
+        i -= 1usize
+        if p.fmt[i] == id { ret (i, true) }
+    }
+    ret (0usize, false)
+}
+
+fn tb_fmt_remove_at(p: *Ps, at: usize) {
+    var i = at
+    while i + 1usize < p.nfmt {
+        p.fmt[i] = p.fmt[i + 1usize]
+        i += 1usize
+    }
+    p.nfmt -= 1usize
+}
+
+fn tb_fmt_insert_at(p: *Ps, at: usize, id: NodeId) -> err {
+    if p.nfmt >= p.fmt.len { ret TooDeep }
+    var i = p.nfmt
+    while i > at {
+        p.fmt[i] = p.fmt[i - 1usize]
+        i -= 1usize
+    }
+    p.fmt[at] = id
+    p.nfmt += 1usize
+    ret ok
+}
+
+fn tb_fmt_marker(p: *Ps) -> err {
+    ret tb_fmt_insert_at(p, p.nfmt, NONE)
+}
+
+fn tb_fmt_clear_to_marker(p: *Ps) {
+    while p.nfmt > 0usize {
+        p.nfmt -= 1usize
+        if p.fmt[p.nfmt] == NONE { break }
+    }
+}
+
+fn tb_same_element(p: *Ps, x: NodeId, y: NodeId) -> bool {
+    let nx = &p.nodes[usize(x)]
+    let ny = &p.nodes[usize(y)]
+    if nx.namespace != ny.namespace || !str.eq(nx.name, ny.name) || nx.attributes.len != ny.attributes.len { ret false }
+    var i = 0usize
+    while i < nx.attributes.len {
+        let (other, has) = attribute(ny, nx.attributes[i].name)
+        if !has || !str.eq(other, nx.attributes[i].value) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn tb_fmt_push(p: *Ps, id: NodeId) -> err {
+    var count = 0usize
+    var earliest = 0usize
+    var i = p.nfmt
+    while i > 0usize {
+        i -= 1usize
+        let entry = p.fmt[i]
+        if entry == NONE { break }
+        if tb_same_element(p, entry, id) {
+            count += 1usize
+            earliest = i
+        }
+    }
+    if count >= 3usize { tb_fmt_remove_at(p, earliest) }
+    ret tb_fmt_insert_at(p, p.nfmt, id)
+}
+
+fn tb_reconstruct(p: *Ps) -> err {
+    if p.nfmt == 0usize { ret ok }
+    let last = p.fmt[p.nfmt - 1usize]
+    if last == NONE { ret ok }
+    let (_, open_already) = tb_open_index(p, last)
+    if open_already { ret ok }
+    var i = p.nfmt - 1usize
+    while i > 0usize {
+        let before = p.fmt[i - 1usize]
+        if before == NONE { break }
+        let (_, in_stack) = tb_open_index(p, before)
+        if in_stack { break }
+        i -= 1usize
+    }
+    while i < p.nfmt {
+        let entry = p.fmt[i]
+        let clone = try tb_clone(p, entry)
+        tb_insert_node(p, clone)
+        try tb_push(p, clone)
+        p.fmt[i] = clone
+        i += 1usize
+    }
+    ret ok
+}
+
+// --- End tags that close things.
+
+// Pops while the current node is an implied-end-tag element other than `except`.
+fn tb_implied(p: *Ps, except: str) {
+    while p.nopen > 0usize {
+        let id = tb_cur(p)
+        if !pn_in(p, id, ",dd,dt,li,optgroup,option,p,rb,rp,rt,rtc,") || pn_is(p, id, except) { break }
+        tb_pop(p)
+    }
+}
+
+fn tb_implied_all(p: *Ps) {
+    while p.nopen > 0usize {
+        let id = tb_cur(p)
+        if !pn_in(p, id, ",caption,colgroup,dd,dt,li,optgroup,option,p,rb,rp,rt,rtc,tbody,td,tfoot,th,thead,tr,") { break }
+        tb_pop(p)
+    }
+}
+
+fn tb_close_p(p: *Ps) {
+    tb_implied(p, "p")
+    tb_pop_until(p, "p")
+}
+
+fn tb_any_other_end(p: *Ps, name: str) {
+    var i = p.nopen
+    while i > 0usize {
+        i -= 1usize
+        let id = p.open[i]
+        if pn_is(p, id, name) {
+            tb_implied(p, name)
+            p.nopen = i
+            ret
+        }
+        if tb_special(p, id) { ret }
+    }
+}
+
+// The adoption agency algorithm. True: the caller runs "any other end tag".
+fn tb_adoption(p: *Ps, subject: str) -> (bool, err) {
+    let top = tb_cur(p)
+    if top != NONE && pn_is(p, top, subject) {
+        let (_, listed) = tb_fmt_index(p, top)
+        if !listed {
+            tb_pop(p)
+            ret (false, ok)
+        }
+    }
+    var outer = 0usize
+    while outer < 8usize {
+        outer += 1usize
+        var idx = p.nfmt
+        var found = false
+        while idx > 0usize {
+            idx -= 1usize
+            let entry = p.fmt[idx]
+            if entry == NONE { break }
+            if pn_is(p, entry, subject) {
+                found = true
+                break
+            }
+        }
+        if !found { ret (true, ok) }
+        let fe = p.fmt[idx]
+        let (stack_at, in_stack) = tb_open_index(p, fe)
+        if !in_stack {
+            tb_fmt_remove_at(p, idx)
+            ret (false, ok)
+        }
+        if !tb_in_scope_id(p, fe, SC_DEFAULT) { ret (false, ok) }
+        var fb = NONE
+        var fb_at = 0usize
+        var k = stack_at + 1usize
+        while k < p.nopen {
+            if tb_special(p, p.open[k]) {
+                fb = p.open[k]
+                fb_at = k
+                break
+            }
+            k += 1usize
+        }
+        if fb == NONE {
+            p.nopen = stack_at
+            tb_fmt_remove_at(p, idx)
+            ret (false, ok)
+        }
+        let common = p.open[stack_at - 1usize]
+        var bookmark = idx
+        var last = fb
+        var node_at = fb_at
+        var inner = 0usize
+        while true {
+            inner += 1usize
+            node_at -= 1usize
+            var cur_node = p.open[node_at]
+            if cur_node == fe { break }
+            let (list_at, listed_now) = tb_fmt_index(p, cur_node)
+            var listed = listed_now
+            if inner > 3usize && listed {
+                tb_fmt_remove_at(p, list_at)
+                if list_at < bookmark { bookmark -= 1usize }
+                listed = false
+            }
+            if !listed {
+                tb_open_remove_at(p, node_at)
+                continue
+            }
+            let clone = try tb_clone(p, cur_node)
+            p.fmt[list_at] = clone
+            p.open[node_at] = clone
+            cur_node = clone
+            if last == fb { bookmark = list_at + 1usize }
+            pn_detach(p, last)
+            pn_insert(p, cur_node, last, NONE)
+            last = cur_node
+        }
+        pn_detach(p, last)
+        let place = tb_place(p, common)
+        pn_insert(p, place.parent, last, place.before)
+        let fresh = try tb_clone(p, fe)
+        while p.nodes[usize(fb)].first_child != NONE {
+            let child = p.nodes[usize(fb)].first_child
+            pn_detach(p, child)
+            pn_insert(p, fresh, child, NONE)
+        }
+        pn_insert(p, fb, fresh, NONE)
+        let (old_at, _) = tb_fmt_index(p, fe)
+        tb_fmt_remove_at(p, old_at)
+        if old_at < bookmark { bookmark -= 1usize }
+        try tb_fmt_insert_at(p, bookmark, fresh)
+        let (fe_at, _) = tb_open_index(p, fe)
+        tb_open_remove_at(p, fe_at)
+        let (fb_now, _) = tb_open_index(p, fb)
+        if p.nopen >= p.open.len { ret (false, TooDeep) }
+        var m = p.nopen
+        while m > fb_now + 1usize {
+            p.open[m] = p.open[m - 1usize]
+            m -= 1usize
+        }
+        p.open[fb_now + 1usize] = fresh
+        p.nopen += 1usize
+    }
+    ret (false, ok)
+}
+
+// --- Insertion mode bookkeeping.
+
+fn tb_reset_mode(p: *Ps) {
+    var i = p.nopen
+    while i > 0usize {
+        i -= 1usize
+        var id = p.open[i]
+        let last = i == 0usize
+        if last && p.fragment { id = p.ctx }
+        if pn_is(p, id, "select") {
+            if !last {
+                var j = i
+                while j > 0usize {
+                    j -= 1usize
+                    let anc = p.open[j]
+                    if pn_is(p, anc, "template") { break }
+                    if pn_is(p, anc, "table") {
+                        p.mode = M_IN_SELECT_TABLE
+                        ret
+                    }
+                }
+            }
+            p.mode = M_IN_SELECT
+            ret
+        }
+        if !last && (pn_is(p, id, "td") || pn_is(p, id, "th")) {
+            p.mode = M_IN_CELL
+            ret
+        }
+        if pn_is(p, id, "tr") {
+            p.mode = M_IN_ROW
+            ret
+        }
+        if pn_in(p, id, ",tbody,thead,tfoot,") {
+            p.mode = M_IN_TBODY
+            ret
+        }
+        if pn_is(p, id, "caption") {
+            p.mode = M_IN_CAPTION
+            ret
+        }
+        if pn_is(p, id, "colgroup") {
+            p.mode = M_IN_COLGROUP
+            ret
+        }
+        if pn_is(p, id, "table") {
+            p.mode = M_IN_TABLE
+            ret
+        }
+        if pn_is(p, id, "template") {
+            if p.ntmodes > 0usize { p.mode = p.tmodes[p.ntmodes - 1usize] } else { p.mode = M_IN_BODY }
+            ret
+        }
+        if !last && pn_is(p, id, "head") {
+            p.mode = M_IN_HEAD
+            ret
+        }
+        if pn_is(p, id, "body") {
+            p.mode = M_IN_BODY
+            ret
+        }
+        if pn_is(p, id, "frameset") {
+            p.mode = M_IN_FRAMESET
+            ret
+        }
+        if pn_is(p, id, "html") {
+            if p.head == NONE { p.mode = M_BEFORE_HEAD } else { p.mode = M_AFTER_HEAD }
+            ret
+        }
+        if last {
+            p.mode = M_IN_BODY
+            ret
+        }
+    }
+    p.mode = M_IN_BODY
+}
+
+fn tb_clear_to(p: *Ps, set: str) {
+    while p.nopen > 0usize && !pn_in(p, tb_cur(p), set) { tb_pop(p) }
+}
+
+// --- Quirks mode from a DOCTYPE token.
+
+fn starts_any(subject: str, list: str) -> bool {
+    var i = 1usize
+    while i < list.len {
+        var j = i
+        while j < list.len && list[j] != 124u8 { j += 1usize }
+        if str.starts_with(subject, list[i..j]) { ret true }
+        i = j + 1usize
+    }
+    ret false
+}
+
+fn tb_quirks_of(p: *Ps, tk: *Tok) -> (u8, err) {
+    if tk.force_quirks || !str.eq(tk.name, "html") { ret (Q_QUIRKS, ok) }
+    let pub_id = try tk_clean(p, tk.public_id, true)
+    let sys_id = try tk_clean(p, tk.system_id, true)
+    if str.eq(pub_id, "-//w3o//dtd w3 html strict 3.0//en//") || str.eq(pub_id, "-/w3c/dtd html 4.0 transitional/en") || str.eq(pub_id, "html") { ret (Q_QUIRKS, ok) }
+    if str.eq(sys_id, "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd") { ret (Q_QUIRKS, ok) }
+    if starts_any(pub_id, "|+//silmaril//dtd html pro v0r11 19970101//|-//as//dtd html 3.0 aswedit + extensions//|-//advasoft ltd//dtd html 3.0 aswedit + extensions//|-//ietf//dtd html 2.0 level 1//|-//ietf//dtd html 2.0 level 2//|-//ietf//dtd html 2.0 strict level 1//|-//ietf//dtd html 2.0 strict level 2//|-//ietf//dtd html 2.0 strict//|-//ietf//dtd html 2.0//|-//ietf//dtd html 2.1e//|-//ietf//dtd html 3.0//|-//ietf//dtd html 3.2 final//|-//ietf//dtd html 3.2//|-//ietf//dtd html 3//|-//ietf//dtd html level 0//|-//ietf//dtd html level 1//|-//ietf//dtd html level 2//|-//ietf//dtd html level 3//|-//ietf//dtd html strict level 0//|-//ietf//dtd html strict level 1//|-//ietf//dtd html strict level 2//|-//ietf//dtd html strict level 3//|-//ietf//dtd html strict//|-//ietf//dtd html//|-//metrius//dtd metrius presentational//|-//microsoft//dtd internet explorer 2.0 html strict//|-//microsoft//dtd internet explorer 2.0 html//|-//microsoft//dtd internet explorer 2.0 tables//|-//microsoft//dtd internet explorer 3.0 html strict//|-//microsoft//dtd internet explorer 3.0 html//|-//microsoft//dtd internet explorer 3.0 tables//|-//netscape comm. corp.//dtd html//|-//netscape comm. corp.//dtd strict html//|-//o'reilly and associates//dtd html 2.0//|-//o'reilly and associates//dtd html extended 1.0//|-//o'reilly and associates//dtd html extended relaxed 1.0//|-//softquad software//dtd hotmetal pro 6.0::19990601::extensions to html 4.0//|-//softquad//dtd hotmetal pro 4.0::19971010::extensions to html 4.0//|-//spyglass//dtd html 2.0 extended//|-//sq//dtd html 2.0 hotmetal + extensions//|-//sun microsystems corp.//dtd hotjava html//|-//sun microsystems corp.//dtd hotjava strict html//|-//w3c//dtd html 3 1995-03-24//|-//w3c//dtd html 3.2 draft//|-//w3c//dtd html 3.2 final//|-//w3c//dtd html 3.2//|-//w3c//dtd html 3.2s draft//|-//w3c//dtd html 4.0 frameset//|-//w3c//dtd html 4.0 transitional//|-//w3c//dtd html experimental 19960712//|-//w3c//dtd html experimental 970421//|-//w3c//dtd w3 html//|-//w3o//dtd w3 html 3.0//|-//webtechs//dtd mozilla html 2.0//|-//webtechs//dtd mozilla html//|") { ret (Q_QUIRKS, ok) }
+    if sys_id.len == 0usize && starts_any(pub_id, "|-//w3c//dtd html 4.01 frameset//|-//w3c//dtd html 4.01 transitional//|") { ret (Q_QUIRKS, ok) }
+    if starts_any(pub_id, "|-//w3c//dtd xhtml 1.0 frameset//|-//w3c//dtd xhtml 1.0 transitional//|") { ret (Q_LIMITED, ok) }
+    if sys_id.len != 0usize && starts_any(pub_id, "|-//w3c//dtd html 4.01 frameset//|-//w3c//dtd html 4.01 transitional//|") { ret (Q_LIMITED, ok) }
+    ret (Q_NO, ok)
+}
+
+fn no_attrs() -> []const Attribute {
+    var none: []const Attribute = zero
+    ret none
+}
+
+// --- Insertion modes. Each returns (reprocess, err): true runs the same token again
+// in the (possibly changed) current mode.
+
+fn ws_prefix(s: str) -> usize {
+    var i = 0usize
+    while i < s.len && ws_byte(s[i]) { i += 1usize }
+    ret i
+}
+
+fn tk_attr(tk: *Tok, name: str) -> (str, bool) {
+    var i = 0usize
+    while i < tk.attrs.len {
+        if str.eq(tk.attrs[i].name, name) { ret (tk.attrs[i].value, true) }
+        i += 1usize
+    }
+    ret ("", false)
+}
+
+// `attrs` not already on element `id`, appended to it.
+fn tb_merge_attrs(p: *Ps, id: NodeId, attrs: []const Attribute) -> err {
+    var missing = 0usize
+    var i = 0usize
+    while i < attrs.len {
+        let (_, has) = attribute(&p.nodes[usize(id)], attrs[i].name)
+        if !has { missing += 1usize }
+        i += 1usize
+    }
+    if missing == 0usize { ret ok }
+    let old = p.nodes[usize(id)].attributes
+    let merged = try mem.alloc[Attribute](p.a, old.len + missing)
+    mem.copy[Attribute](merged[..old.len], old)
+    var at = old.len
+    i = 0usize
+    while i < attrs.len {
+        let (_, has) = attribute(&p.nodes[usize(id)], attrs[i].name)
+        if !has {
+            merged[at] = attrs[i]
+            at += 1usize
+        }
+        i += 1usize
+    }
+    p.nodes[usize(id)].attributes = merged
+    ret ok
+}
+
+fn tb_strip_nul(p: *Ps, s: str) -> (str, err) {
+    var nuls = 0usize
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 0u8 { nuls += 1usize }
+        i += 1usize
+    }
+    if nuls == 0usize { ret (s, ok) }
+    let out = try mem.alloc[u8](p.a, s.len - nuls)
+    var at = 0usize
+    i = 0usize
+    while i < s.len {
+        if s[i] != 0u8 {
+            out[at] = s[i]
+            at += 1usize
+        }
+        i += 1usize
+    }
+    ret (out[..at], ok)
+}
+
+fn tb_comment_doc(p: *Ps, tk: *Tok) -> err {
+    ret tb_insert_comment(p, tk.data, 0u32)
+}
+
+// Raw text / RCDATA element: insert it, switch the tokenizer and the mode.
+fn tb_text_element(p: *Ps, tk: *Tok, state: u8) -> err {
+    let id = try tb_insert_html(p, tk)
+    p.ts = state
+    p.orig_mode = p.mode
+    p.mode = M_TEXT
+    ret ok
+}
+
+fn tm_initial(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let w = ws_prefix(tk.data)
+        if w == tk.data.len { ret (false, ok) }
+        tk.data = tk.data[w..]
+    }
+    if tk.kind == .Comment {
+        try tb_comment_doc(p, tk)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype {
+        var value: str = ""
+        if tk.public_id.len > 0usize || tk.system_id.len > 0usize {
+            let joined = try str.concat(p.a, tk.public_id, "\x00")
+            value = try str.concat(p.a, joined, tk.system_id)
+        }
+        let id = try pn_new(p, .Doctype, .Html, tk.name, value)
+        pn_insert(p, 0u32, id, NONE)
+        p.quirks = try tb_quirks_of(p, tk)
+        p.mode = M_BEFORE_HTML
+        ret (false, ok)
+    }
+    p.quirks = Q_QUIRKS
+    p.mode = M_BEFORE_HTML
+    ret (true, ok)
+}
+
+fn tm_before_html(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Comment {
+        try tb_comment_doc(p, tk)
+        ret (false, ok)
+    }
+    if tk.kind == .Chars {
+        let w = ws_prefix(tk.data)
+        if w == tk.data.len { ret (false, ok) }
+        tk.data = tk.data[w..]
+    }
+    if tk.kind == .Start && str.eq(tk.name, "html") {
+        let id = try pn_element(p, .Html, "html", tk.attrs)
+        pn_insert(p, 0u32, id, NONE)
+        try tb_push(p, id)
+        p.mode = M_BEFORE_HEAD
+        ret (false, ok)
+    }
+    if tk.kind == .End && !nm_in(",head,body,html,br,", tk.name) { ret (false, ok) }
+    let id = try pn_element(p, .Html, "html", no_attrs())
+    pn_insert(p, 0u32, id, NONE)
+    try tb_push(p, id)
+    p.mode = M_BEFORE_HEAD
+    ret (true, ok)
+}
+
+fn tm_before_head(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let w = ws_prefix(tk.data)
+        if w == tk.data.len { ret (false, ok) }
+        tk.data = tk.data[w..]
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Start && str.eq(tk.name, "html") {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Start && str.eq(tk.name, "head") {
+        let id = try tb_insert_html(p, tk)
+        p.head = id
+        p.mode = M_IN_HEAD
+        ret (false, ok)
+    }
+    if tk.kind == .End && !nm_in(",head,body,html,br,", tk.name) { ret (false, ok) }
+    let id = try tb_insert_named(p, "head")
+    p.head = id
+    p.mode = M_IN_HEAD
+    ret (true, ok)
+}
+
+fn tm_in_head(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let w = ws_prefix(tk.data)
+        if w > 0usize { try tb_insert_chars(p, tk.data[..w]) }
+        if w == tk.data.len { ret (false, ok) }
+        tk.data = tk.data[w..]
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Start {
+        let name = tk.name
+        if str.eq(name, "html") {
+            let again = try tm_in_body(p, tk)
+            ret (again, ok)
+        }
+        if nm_in(",base,basefont,bgsound,link,meta,", name) {
+            let id = try tb_insert_html(p, tk)
+            tb_pop(p)
+            ret (false, ok)
+        }
+        if str.eq(name, "title") {
+            try tb_text_element(p, tk, TS_RCDATA)
+            ret (false, ok)
+        }
+        if nm_in(",noframes,style,", name) {
+            try tb_text_element(p, tk, TS_RAWTEXT)
+            ret (false, ok)
+        }
+        if str.eq(name, "noscript") {
+            if p.scripting {
+                try tb_text_element(p, tk, TS_RAWTEXT)
+                ret (false, ok)
+            }
+            let id = try tb_insert_html(p, tk)
+            p.mode = M_IN_HEAD_NOSCRIPT
+            ret (false, ok)
+        }
+        if str.eq(name, "script") {
+            try tb_text_element(p, tk, TS_SCRIPT)
+            ret (false, ok)
+        }
+        if str.eq(name, "template") {
+            let id = try tb_insert_html(p, tk)
+            try tb_fmt_marker(p)
+            p.frameset_ok = false
+            p.mode = M_IN_TEMPLATE
+            if p.ntmodes < 64usize {
+                p.tmodes[p.ntmodes] = M_IN_TEMPLATE
+                p.ntmodes += 1usize
+            }
+            ret (false, ok)
+        }
+        if str.eq(name, "head") { ret (false, ok) }
+    }
+    if tk.kind == .End {
+        let name = tk.name
+        if str.eq(name, "head") {
+            tb_pop(p)
+            p.mode = M_AFTER_HEAD
+            ret (false, ok)
+        }
+        if str.eq(name, "template") {
+            if !tb_open_has(p, "template") { ret (false, ok) }
+            tb_implied_all(p)
+            tb_pop_until(p, "template")
+            tb_fmt_clear_to_marker(p)
+            if p.ntmodes > 0usize { p.ntmodes -= 1usize }
+            tb_reset_mode(p)
+            ret (false, ok)
+        }
+        if !nm_in(",body,html,br,", name) { ret (false, ok) }
+    }
+    tb_pop(p)
+    p.mode = M_AFTER_HEAD
+    ret (true, ok)
+}
+
+fn tm_in_head_noscript(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Comment {
+        let again = try tm_in_head(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Chars {
+        let w = ws_prefix(tk.data)
+        if w > 0usize { try tb_insert_chars(p, tk.data[..w]) }
+        if w == tk.data.len { ret (false, ok) }
+        tk.data = tk.data[w..]
+    }
+    if tk.kind == .Start {
+        if str.eq(tk.name, "html") {
+            let again = try tm_in_body(p, tk)
+            ret (again, ok)
+        }
+        if nm_in(",basefont,bgsound,link,meta,noframes,style,", tk.name) {
+            let again = try tm_in_head(p, tk)
+            ret (again, ok)
+        }
+        if nm_in(",head,noscript,", tk.name) { ret (false, ok) }
+    }
+    if tk.kind == .End {
+        if str.eq(tk.name, "noscript") {
+            tb_pop(p)
+            p.mode = M_IN_HEAD
+            ret (false, ok)
+        }
+        if !str.eq(tk.name, "br") { ret (false, ok) }
+    }
+    tb_pop(p)
+    p.mode = M_IN_HEAD
+    ret (true, ok)
+}
+
+fn tm_after_head(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let w = ws_prefix(tk.data)
+        if w > 0usize { try tb_insert_chars(p, tk.data[..w]) }
+        if w == tk.data.len { ret (false, ok) }
+        tk.data = tk.data[w..]
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Start {
+        let name = tk.name
+        if str.eq(name, "html") {
+            let again = try tm_in_body(p, tk)
+            ret (again, ok)
+        }
+        if str.eq(name, "body") {
+            let id = try tb_insert_html(p, tk)
+            p.frameset_ok = false
+            p.mode = M_IN_BODY
+            ret (false, ok)
+        }
+        if str.eq(name, "frameset") {
+            let id = try tb_insert_html(p, tk)
+            p.mode = M_IN_FRAMESET
+            ret (false, ok)
+        }
+        if nm_in(",base,basefont,bgsound,link,meta,noframes,script,style,template,title,", name) {
+            try tb_push(p, p.head)
+            let again = try tm_in_head(p, tk)
+            let (head_at, head_open) = tb_open_index(p, p.head)
+            if head_open { tb_open_remove_at(p, head_at) }
+            ret (again, ok)
+        }
+        if str.eq(name, "head") { ret (false, ok) }
+    }
+    if tk.kind == .End {
+        if str.eq(tk.name, "template") {
+            let again = try tm_in_head(p, tk)
+            ret (again, ok)
+        }
+        if !nm_in(",body,html,br,", tk.name) { ret (false, ok) }
+    }
+    let id = try tb_insert_named(p, "body")
+    p.mode = M_IN_BODY
+    ret (true, ok)
+}
+
+// --- In body.
+
+fn tm_in_body(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let data = try tb_strip_nul(p, tk.data)
+        if data.len == 0usize { ret (false, ok) }
+        try tb_reconstruct(p)
+        try tb_insert_chars(p, data)
+        if ws_prefix(data) != data.len { p.frameset_ok = false }
+        ret (false, ok)
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Eof {
+        if p.ntmodes > 0usize {
+            let again = try tm_in_template(p, tk)
+            ret (again, ok)
+        }
+        p.stopped = true
+        ret (false, ok)
+    }
+    if tk.kind == .Start {
+        let again = try tm_body_start(p, tk)
+        ret (again, ok)
+    }
+    let again = try tm_body_end(p, tk)
+    ret (again, ok)
+}
+
+fn tm_body_start(p: *Ps, tk: *Tok) -> (bool, err) {
+    let name = tk.name
+    if str.eq(name, "html") {
+        if tb_open_has(p, "template") { ret (false, ok) }
+        try tb_merge_attrs(p, p.open[0usize], tk.attrs)
+        ret (false, ok)
+    }
+    if nm_in(",base,basefont,bgsound,link,meta,noframes,script,style,template,title,", name) {
+        let again = try tm_in_head(p, tk)
+        ret (again, ok)
+    }
+    if str.eq(name, "body") {
+        if p.nopen < 2usize || !pn_is(p, p.open[1usize], "body") || tb_open_has(p, "template") { ret (false, ok) }
+        p.frameset_ok = false
+        try tb_merge_attrs(p, p.open[1usize], tk.attrs)
+        ret (false, ok)
+    }
+    if str.eq(name, "frameset") {
+        if p.nopen < 2usize || !pn_is(p, p.open[1usize], "body") || !p.frameset_ok { ret (false, ok) }
+        pn_detach(p, p.open[1usize])
+        p.nopen = 1usize
+        let id = try tb_insert_html(p, tk)
+        p.mode = M_IN_FRAMESET
+        ret (false, ok)
+    }
+    if nm_in(",address,article,aside,blockquote,center,details,dialog,dir,div,dl,fieldset,figcaption,figure,footer,header,hgroup,main,menu,nav,ol,p,search,section,summary,ul,", name) {
+        if tb_in_scope(p, "p", SC_BUTTON) { tb_close_p(p) }
+        let id = try tb_insert_html(p, tk)
+        ret (false, ok)
+    }
+    if nm_in(",h1,h2,h3,h4,h5,h6,", name) {
+        if tb_in_scope(p, "p", SC_BUTTON) { tb_close_p(p) }
+        if pn_in(p, tb_cur(p), ",h1,h2,h3,h4,h5,h6,") { tb_pop(p) }
+        let id = try tb_insert_html(p, tk)
+        ret (false, ok)
+    }
+    if nm_in(",pre,listing,", name) {
+        if tb_in_scope(p, "p", SC_BUTTON) { tb_close_p(p) }
+        let id = try tb_insert_html(p, tk)
+        p.ignore_lf = true
+        p.frameset_ok = false
+        ret (false, ok)
+    }
+    if str.eq(name, "form") {
+        let templated = tb_open_has(p, "template")
+        if p.form != NONE && !templated { ret (false, ok) }
+        if tb_in_scope(p, "p", SC_BUTTON) { tb_close_p(p) }
+        let id = try tb_insert_html(p, tk)
+        if !templated { p.form = id }
+        ret (false, ok)
+    }
+    if str.eq(name, "li") || nm_in(",dd,dt,", name) {
+        p.frameset_ok = false
+        var i = p.nopen
+        while i > 0usize {
+            i -= 1usize
+            let nd = p.open[i]
+            if str.eq(name, "li") && pn_is(p, nd, "li") {
+                tb_implied(p, "li")
+                tb_pop_until(p, "li")
+                break
+            }
+            if !str.eq(name, "li") && (pn_is(p, nd, "dd") || pn_is(p, nd, "dt")) {
+                let which = p.nodes[usize(nd)].name
+                tb_implied(p, which)
+                tb_pop_until(p, which)
+                break
+            }
+            if tb_special(p, nd) && !pn_in(p, nd, ",address,div,p,") { break }
+        }
+        if tb_in_scope(p, "p", SC_BUTTON) { tb_close_p(p) }
+        let id = try tb_insert_html(p, tk)
+        ret (false, ok)
+    }
+    if str.eq(name, "plaintext") {
+        if tb_in_scope(p, "p", SC_BUTTON) { tb_close_p(p) }
+        let id = try tb_insert_html(p, tk)
+        p.ts = TS_PLAINTEXT
+        ret (false, ok)
+    }
+    if str.eq(name, "button") {
+        if tb_in_scope(p, "button", SC_DEFAULT) {
+            tb_implied(p, "")
+            tb_pop_until(p, "button")
+        }
+        try tb_reconstruct(p)
+        let id = try tb_insert_html(p, tk)
+        p.frameset_ok = false
+        ret (false, ok)
+    }
+    if str.eq(name, "a") {
+        var i = p.nfmt
+        while i > 0usize {
+            i -= 1usize
+            let entry = p.fmt[i]
+            if entry == NONE { break }
+            if pn_is(p, entry, "a") {
+                let other = try tb_adoption(p, "a")
+                if other { tb_any_other_end(p, "a") }
+                let (at, still) = tb_fmt_index(p, entry)
+                if still { tb_fmt_remove_at(p, at) }
+                let (open_at, open_still) = tb_open_index(p, entry)
+                if open_still { tb_open_remove_at(p, open_at) }
+                break
+            }
+        }
+        try tb_reconstruct(p)
+        let id = try tb_insert_html(p, tk)
+        try tb_fmt_push(p, id)
+        ret (false, ok)
+    }
+    if nm_in(",b,big,code,em,font,i,s,small,strike,strong,tt,u,", name) {
+        try tb_reconstruct(p)
+        let id = try tb_insert_html(p, tk)
+        try tb_fmt_push(p, id)
+        ret (false, ok)
+    }
+    if str.eq(name, "nobr") {
+        try tb_reconstruct(p)
+        if tb_in_scope(p, "nobr", SC_DEFAULT) {
+            let other = try tb_adoption(p, "nobr")
+            if other { tb_any_other_end(p, "nobr") }
+            try tb_reconstruct(p)
+        }
+        let id = try tb_insert_html(p, tk)
+        try tb_fmt_push(p, id)
+        ret (false, ok)
+    }
+    if nm_in(",applet,marquee,object,", name) {
+        try tb_reconstruct(p)
+        let id = try tb_insert_html(p, tk)
+        try tb_fmt_marker(p)
+        p.frameset_ok = false
+        ret (false, ok)
+    }
+    if str.eq(name, "table") {
+        if p.quirks != Q_QUIRKS && tb_in_scope(p, "p", SC_BUTTON) { tb_close_p(p) }
+        let id = try tb_insert_html(p, tk)
+        p.frameset_ok = false
+        p.mode = M_IN_TABLE
+        ret (false, ok)
+    }
+    if nm_in(",area,br,embed,img,keygen,wbr,", name) {
+        try tb_reconstruct(p)
+        let id = try tb_insert_html(p, tk)
+        tb_pop(p)
+        p.frameset_ok = false
+        ret (false, ok)
+    }
+    if str.eq(name, "input") {
+        try tb_reconstruct(p)
+        let id = try tb_insert_html(p, tk)
+        tb_pop(p)
+        let (kind, has) = tk_attr(tk, "type")
+        if !has || !ascii_eq_fold(kind, "hidden") { p.frameset_ok = false }
+        ret (false, ok)
+    }
+    if nm_in(",param,source,track,", name) {
+        let id = try tb_insert_html(p, tk)
+        tb_pop(p)
+        ret (false, ok)
+    }
+    if str.eq(name, "hr") {
+        if tb_in_scope(p, "p", SC_BUTTON) { tb_close_p(p) }
+        let id = try tb_insert_html(p, tk)
+        tb_pop(p)
+        p.frameset_ok = false
+        ret (false, ok)
+    }
+    if str.eq(name, "image") {
+        tk.name = "img"
+        let again = try tm_body_start(p, tk)
+        ret (again, ok)
+    }
+    if str.eq(name, "textarea") {
+        let id = try tb_insert_html(p, tk)
+        p.ignore_lf = true
+        p.ts = TS_RCDATA
+        p.orig_mode = p.mode
+        p.frameset_ok = false
+        p.mode = M_TEXT
+        ret (false, ok)
+    }
+    if str.eq(name, "xmp") {
+        if tb_in_scope(p, "p", SC_BUTTON) { tb_close_p(p) }
+        try tb_reconstruct(p)
+        p.frameset_ok = false
+        try tb_text_element(p, tk, TS_RAWTEXT)
+        ret (false, ok)
+    }
+    if str.eq(name, "iframe") {
+        p.frameset_ok = false
+        try tb_text_element(p, tk, TS_RAWTEXT)
+        ret (false, ok)
+    }
+    if str.eq(name, "noembed") || (p.scripting && str.eq(name, "noscript")) {
+        try tb_text_element(p, tk, TS_RAWTEXT)
+        ret (false, ok)
+    }
+    if str.eq(name, "select") {
+        try tb_reconstruct(p)
+        let id = try tb_insert_html(p, tk)
+        p.frameset_ok = false
+        if p.mode == M_IN_TABLE || p.mode == M_IN_CAPTION || p.mode == M_IN_TBODY || p.mode == M_IN_ROW || p.mode == M_IN_CELL {
+            p.mode = M_IN_SELECT_TABLE
+        } else {
+            p.mode = M_IN_SELECT
+        }
+        ret (false, ok)
+    }
+    if nm_in(",optgroup,option,", name) {
+        if pn_is(p, tb_cur(p), "option") { tb_pop(p) }
+        try tb_reconstruct(p)
+        let id = try tb_insert_html(p, tk)
+        ret (false, ok)
+    }
+    if nm_in(",rb,rtc,", name) {
+        if tb_in_scope(p, "ruby", SC_DEFAULT) { tb_implied(p, "") }
+        let id = try tb_insert_html(p, tk)
+        ret (false, ok)
+    }
+    if nm_in(",rp,rt,", name) {
+        if tb_in_scope(p, "ruby", SC_DEFAULT) { tb_implied(p, "rtc") }
+        let id = try tb_insert_html(p, tk)
+        ret (false, ok)
+    }
+    if str.eq(name, "math") || str.eq(name, "svg") {
+        try tb_reconstruct(p)
+        var ns: Namespace = .MathMl
+        if str.eq(name, "svg") { ns = .Svg }
+        let attrs = try tb_adjust_attrs(p, tk.attrs, ns)
+        let id = try tb_insert_element(p, ns, name, attrs)
+        if tk.self_closing { tb_pop(p) }
+        ret (false, ok)
+    }
+    if nm_in(",caption,col,colgroup,frame,head,tbody,td,tfoot,th,thead,tr,", name) { ret (false, ok) }
+    try tb_reconstruct(p)
+    let id = try tb_insert_html(p, tk)
+    ret (false, ok)
+}
+
+fn tm_body_end(p: *Ps, tk: *Tok) -> (bool, err) {
+    let name = tk.name
+    if str.eq(name, "template") {
+        let again = try tm_in_head(p, tk)
+        ret (again, ok)
+    }
+    if str.eq(name, "body") {
+        if tb_in_scope(p, "body", SC_DEFAULT) { p.mode = M_AFTER_BODY }
+        ret (false, ok)
+    }
+    if str.eq(name, "html") {
+        if tb_in_scope(p, "body", SC_DEFAULT) {
+            p.mode = M_AFTER_BODY
+            ret (true, ok)
+        }
+        ret (false, ok)
+    }
+    if nm_in(",address,article,aside,blockquote,button,center,details,dialog,dir,div,dl,fieldset,figcaption,figure,footer,header,hgroup,listing,main,menu,nav,ol,pre,search,section,summary,ul,", name) {
+        if !tb_in_scope(p, name, SC_DEFAULT) { ret (false, ok) }
+        tb_implied(p, "")
+        tb_pop_until(p, name)
+        ret (false, ok)
+    }
+    if str.eq(name, "form") {
+        if !tb_open_has(p, "template") {
+            let node_form = p.form
+            p.form = NONE
+            if node_form == NONE { ret (false, ok) }
+            if !tb_in_scope_id(p, node_form, SC_DEFAULT) { ret (false, ok) }
+            tb_implied(p, "")
+            let (at, found) = tb_open_index(p, node_form)
+            if found { tb_open_remove_at(p, at) }
+            ret (false, ok)
+        }
+        if !tb_in_scope(p, "form", SC_DEFAULT) { ret (false, ok) }
+        tb_implied(p, "")
+        tb_pop_until(p, "form")
+        ret (false, ok)
+    }
+    if str.eq(name, "p") {
+        if !tb_in_scope(p, "p", SC_BUTTON) {
+            let id = try tb_insert_named(p, "p")
+        }
+        tb_close_p(p)
+        ret (false, ok)
+    }
+    if str.eq(name, "li") {
+        if !tb_in_scope(p, "li", SC_LIST) { ret (false, ok) }
+        tb_implied(p, "li")
+        tb_pop_until(p, "li")
+        ret (false, ok)
+    }
+    if nm_in(",dd,dt,", name) {
+        if !tb_in_scope(p, name, SC_DEFAULT) { ret (false, ok) }
+        tb_implied(p, name)
+        tb_pop_until(p, name)
+        ret (false, ok)
+    }
+    if nm_in(",h1,h2,h3,h4,h5,h6,", name) {
+        if !tb_in_scope_set(p, ",h1,h2,h3,h4,h5,h6,", SC_DEFAULT) { ret (false, ok) }
+        tb_implied(p, "")
+        tb_pop_until_set(p, ",h1,h2,h3,h4,h5,h6,")
+        ret (false, ok)
+    }
+    if nm_in(",a,b,big,code,em,font,i,nobr,s,small,strike,strong,tt,u,", name) {
+        let other = try tb_adoption(p, name)
+        if other { tb_any_other_end(p, name) }
+        ret (false, ok)
+    }
+    if nm_in(",applet,marquee,object,", name) {
+        if !tb_in_scope(p, name, SC_DEFAULT) { ret (false, ok) }
+        tb_implied(p, "")
+        tb_pop_until(p, name)
+        tb_fmt_clear_to_marker(p)
+        ret (false, ok)
+    }
+    if str.eq(name, "br") {
+        tk.kind = .Start
+        tk.attrs = no_attrs()
+        let again = try tm_body_start(p, tk)
+        ret (again, ok)
+    }
+    tb_any_other_end(p, name)
+    ret (false, ok)
+}
+
+// --- Text (RCDATA, RAWTEXT, script data).
+
+fn tm_text(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        try tb_insert_chars(p, tk.data)
+        ret (false, ok)
+    }
+    if tk.kind == .Eof {
+        tb_pop(p)
+        p.mode = p.orig_mode
+        ret (true, ok)
+    }
+    if tk.kind == .End {
+        tb_pop(p)
+        p.mode = p.orig_mode
+    }
+    ret (false, ok)
+}
+
+// --- Tables.
+
+fn tb_cell_close(p: *Ps) {
+    tb_implied(p, "")
+    tb_pop_until_set(p, ",td,th,")
+    tb_fmt_clear_to_marker(p)
+    p.mode = M_IN_ROW
+}
+
+fn tm_in_table(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars && pn_in(p, tb_cur(p), ",table,tbody,template,tfoot,thead,tr,") {
+        p.npend = 0usize
+        p.orig_mode = p.mode
+        p.mode = M_IN_TABLE_TEXT
+        ret (true, ok)
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Start {
+        let name = tk.name
+        if str.eq(name, "caption") {
+            tb_clear_to(p, ",table,template,html,")
+            try tb_fmt_marker(p)
+            let id = try tb_insert_html(p, tk)
+            p.mode = M_IN_CAPTION
+            ret (false, ok)
+        }
+        if str.eq(name, "colgroup") {
+            tb_clear_to(p, ",table,template,html,")
+            let id = try tb_insert_html(p, tk)
+            p.mode = M_IN_COLGROUP
+            ret (false, ok)
+        }
+        if str.eq(name, "col") {
+            tb_clear_to(p, ",table,template,html,")
+            let id = try tb_insert_named(p, "colgroup")
+            p.mode = M_IN_COLGROUP
+            ret (true, ok)
+        }
+        if nm_in(",tbody,tfoot,thead,", name) {
+            tb_clear_to(p, ",table,template,html,")
+            let id = try tb_insert_html(p, tk)
+            p.mode = M_IN_TBODY
+            ret (false, ok)
+        }
+        if nm_in(",td,th,tr,", name) {
+            tb_clear_to(p, ",table,template,html,")
+            let id = try tb_insert_named(p, "tbody")
+            p.mode = M_IN_TBODY
+            ret (true, ok)
+        }
+        if str.eq(name, "table") {
+            if !tb_in_scope(p, "table", SC_TABLE) { ret (false, ok) }
+            tb_pop_until(p, "table")
+            tb_reset_mode(p)
+            ret (true, ok)
+        }
+        if nm_in(",style,script,template,", name) {
+            let again = try tm_in_head(p, tk)
+            ret (again, ok)
+        }
+        if str.eq(name, "input") {
+            let (kind, has) = tk_attr(tk, "type")
+            if has && ascii_eq_fold(kind, "hidden") {
+                let id = try tb_insert_html(p, tk)
+                tb_pop(p)
+                ret (false, ok)
+            }
+        }
+        if str.eq(name, "form") {
+            if tb_open_has(p, "template") || p.form != NONE { ret (false, ok) }
+            let id = try tb_insert_html(p, tk)
+            p.form = id
+            tb_pop(p)
+            ret (false, ok)
+        }
+    }
+    if tk.kind == .End {
+        let name = tk.name
+        if str.eq(name, "table") {
+            if !tb_in_scope(p, "table", SC_TABLE) { ret (false, ok) }
+            tb_pop_until(p, "table")
+            tb_reset_mode(p)
+            ret (false, ok)
+        }
+        if nm_in(",body,caption,col,colgroup,html,tbody,td,tfoot,th,thead,tr,", name) { ret (false, ok) }
+        if str.eq(name, "template") {
+            let again = try tm_in_head(p, tk)
+            ret (again, ok)
+        }
+    }
+    if tk.kind == .Eof {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    p.foster = true
+    let again = try tm_in_body(p, tk)
+    p.foster = false
+    ret (again, ok)
+}
+
+fn tm_in_table_text(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let data = try tb_strip_nul(p, tk.data)
+        if p.pend.len == 0usize { p.pend = try mem.alloc[u8](p.a, p.src.len * 3usize + 16usize) }
+        if p.npend + data.len > p.pend.len { ret (false, TooLarge) }
+        mem.copy[u8](p.pend[p.npend..p.npend + data.len], data)
+        p.npend += data.len
+        ret (false, ok)
+    }
+    if p.npend > 0usize {
+        let copy = try mem.alloc[u8](p.a, p.npend)
+        mem.copy[u8](copy, p.pend[..p.npend])
+        p.npend = 0usize
+        if ws_prefix(copy) != copy.len {
+            p.foster = true
+            try tb_reconstruct(p)
+            try tb_insert_chars(p, copy)
+            p.foster = false
+            p.frameset_ok = false
+        } else {
+            try tb_insert_chars(p, copy)
+        }
+    }
+    p.mode = p.orig_mode
+    ret (true, ok)
+}
+
+fn tm_in_caption(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .End && str.eq(tk.name, "caption") {
+        if !tb_in_scope(p, "caption", SC_TABLE) { ret (false, ok) }
+        tb_implied(p, "")
+        tb_pop_until(p, "caption")
+        tb_fmt_clear_to_marker(p)
+        p.mode = M_IN_TABLE
+        ret (false, ok)
+    }
+    if (tk.kind == .Start && nm_in(",caption,col,colgroup,tbody,td,tfoot,th,thead,tr,", tk.name)) || (tk.kind == .End && str.eq(tk.name, "table")) {
+        if !tb_in_scope(p, "caption", SC_TABLE) { ret (false, ok) }
+        tb_implied(p, "")
+        tb_pop_until(p, "caption")
+        tb_fmt_clear_to_marker(p)
+        p.mode = M_IN_TABLE
+        ret (true, ok)
+    }
+    if tk.kind == .End && nm_in(",body,col,colgroup,html,tbody,td,tfoot,th,thead,tr,", tk.name) { ret (false, ok) }
+    let again = try tm_in_body(p, tk)
+    ret (again, ok)
+}
+
+fn tm_in_colgroup(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let w = ws_prefix(tk.data)
+        if w > 0usize { try tb_insert_chars(p, tk.data[..w]) }
+        if w == tk.data.len { ret (false, ok) }
+        tk.data = tk.data[w..]
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Start && str.eq(tk.name, "html") {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Start && str.eq(tk.name, "col") {
+        let id = try tb_insert_html(p, tk)
+        tb_pop(p)
+        ret (false, ok)
+    }
+    if tk.kind == .End && str.eq(tk.name, "colgroup") {
+        if !pn_is(p, tb_cur(p), "colgroup") { ret (false, ok) }
+        tb_pop(p)
+        p.mode = M_IN_TABLE
+        ret (false, ok)
+    }
+    if tk.kind == .End && str.eq(tk.name, "col") { ret (false, ok) }
+    if (tk.kind == .Start || tk.kind == .End) && str.eq(tk.name, "template") {
+        let again = try tm_in_head(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Eof {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if !pn_is(p, tb_cur(p), "colgroup") { ret (false, ok) }
+    tb_pop(p)
+    p.mode = M_IN_TABLE
+    ret (true, ok)
+}
+
+fn tm_in_tbody(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Start {
+        if str.eq(tk.name, "tr") {
+            tb_clear_to(p, ",tbody,tfoot,thead,template,html,")
+            let id = try tb_insert_html(p, tk)
+            p.mode = M_IN_ROW
+            ret (false, ok)
+        }
+        if nm_in(",th,td,", tk.name) {
+            tb_clear_to(p, ",tbody,tfoot,thead,template,html,")
+            let id = try tb_insert_named(p, "tr")
+            p.mode = M_IN_ROW
+            ret (true, ok)
+        }
+        if nm_in(",caption,col,colgroup,tbody,tfoot,thead,", tk.name) {
+            if !tb_in_scope_set(p, ",tbody,thead,tfoot,", SC_TABLE) { ret (false, ok) }
+            tb_clear_to(p, ",tbody,tfoot,thead,template,html,")
+            tb_pop(p)
+            p.mode = M_IN_TABLE
+            ret (true, ok)
+        }
+    }
+    if tk.kind == .End {
+        if nm_in(",tbody,tfoot,thead,", tk.name) {
+            if !tb_in_scope(p, tk.name, SC_TABLE) { ret (false, ok) }
+            tb_clear_to(p, ",tbody,tfoot,thead,template,html,")
+            tb_pop(p)
+            p.mode = M_IN_TABLE
+            ret (false, ok)
+        }
+        if str.eq(tk.name, "table") {
+            if !tb_in_scope_set(p, ",tbody,thead,tfoot,", SC_TABLE) { ret (false, ok) }
+            tb_clear_to(p, ",tbody,tfoot,thead,template,html,")
+            tb_pop(p)
+            p.mode = M_IN_TABLE
+            ret (true, ok)
+        }
+        if nm_in(",body,caption,col,colgroup,html,td,th,tr,", tk.name) { ret (false, ok) }
+    }
+    let again = try tm_in_table(p, tk)
+    ret (again, ok)
+}
+
+fn tm_in_row(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Start {
+        if nm_in(",th,td,", tk.name) {
+            tb_clear_to(p, ",tr,template,html,")
+            let id = try tb_insert_html(p, tk)
+            p.mode = M_IN_CELL
+            try tb_fmt_marker(p)
+            ret (false, ok)
+        }
+        if nm_in(",caption,col,colgroup,tbody,tfoot,thead,tr,", tk.name) {
+            if !tb_in_scope(p, "tr", SC_TABLE) { ret (false, ok) }
+            tb_clear_to(p, ",tr,template,html,")
+            tb_pop(p)
+            p.mode = M_IN_TBODY
+            ret (true, ok)
+        }
+    }
+    if tk.kind == .End {
+        if str.eq(tk.name, "tr") {
+            if !tb_in_scope(p, "tr", SC_TABLE) { ret (false, ok) }
+            tb_clear_to(p, ",tr,template,html,")
+            tb_pop(p)
+            p.mode = M_IN_TBODY
+            ret (false, ok)
+        }
+        if str.eq(tk.name, "table") {
+            if !tb_in_scope(p, "tr", SC_TABLE) { ret (false, ok) }
+            tb_clear_to(p, ",tr,template,html,")
+            tb_pop(p)
+            p.mode = M_IN_TBODY
+            ret (true, ok)
+        }
+        if nm_in(",tbody,tfoot,thead,", tk.name) {
+            if !tb_in_scope(p, tk.name, SC_TABLE) { ret (false, ok) }
+            if !tb_in_scope(p, "tr", SC_TABLE) { ret (false, ok) }
+            tb_clear_to(p, ",tr,template,html,")
+            tb_pop(p)
+            p.mode = M_IN_TBODY
+            ret (true, ok)
+        }
+        if nm_in(",body,caption,col,colgroup,html,td,th,", tk.name) { ret (false, ok) }
+    }
+    let again = try tm_in_table(p, tk)
+    ret (again, ok)
+}
+
+fn tm_in_cell(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .End {
+        if nm_in(",td,th,", tk.name) {
+            if !tb_in_scope(p, tk.name, SC_TABLE) { ret (false, ok) }
+            tb_implied(p, "")
+            tb_pop_until(p, tk.name)
+            tb_fmt_clear_to_marker(p)
+            p.mode = M_IN_ROW
+            ret (false, ok)
+        }
+        if nm_in(",body,caption,col,colgroup,html,", tk.name) { ret (false, ok) }
+        if nm_in(",table,tbody,tfoot,thead,tr,", tk.name) {
+            if !tb_in_scope(p, tk.name, SC_TABLE) { ret (false, ok) }
+            if !tb_in_scope_set(p, ",td,th,", SC_TABLE) { ret (false, ok) }
+            tb_cell_close(p)
+            ret (true, ok)
+        }
+    }
+    if tk.kind == .Start && nm_in(",caption,col,colgroup,tbody,td,tfoot,th,thead,tr,", tk.name) {
+        if !tb_in_scope_set(p, ",td,th,", SC_TABLE) { ret (false, ok) }
+        tb_cell_close(p)
+        ret (true, ok)
+    }
+    let again = try tm_in_body(p, tk)
+    ret (again, ok)
+}
+
+// --- Select.
+
+fn tm_in_select(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let data = try tb_strip_nul(p, tk.data)
+        if data.len == 0usize { ret (false, ok) }
+        try tb_reconstruct(p)
+        try tb_insert_chars(p, data)
+        ret (false, ok)
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Eof {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Start {
+        let name = tk.name
+        if str.eq(name, "html") {
+            let again = try tm_in_body(p, tk)
+            ret (again, ok)
+        }
+        if str.eq(name, "option") {
+            if pn_is(p, tb_cur(p), "option") { tb_pop(p) }
+            try tb_reconstruct(p)
+            let id = try tb_insert_html(p, tk)
+            ret (false, ok)
+        }
+        if str.eq(name, "optgroup") {
+            if pn_is(p, tb_cur(p), "option") { tb_pop(p) }
+            if pn_is(p, tb_cur(p), "optgroup") { tb_pop(p) }
+            try tb_reconstruct(p)
+            let id = try tb_insert_html(p, tk)
+            ret (false, ok)
+        }
+        if str.eq(name, "hr") {
+            if pn_is(p, tb_cur(p), "option") { tb_pop(p) }
+            if pn_is(p, tb_cur(p), "optgroup") { tb_pop(p) }
+            let id = try tb_insert_html(p, tk)
+            tb_pop(p)
+            ret (false, ok)
+        }
+        if str.eq(name, "select") {
+            if !tb_open_has(p, "select") { ret (false, ok) }
+            tb_pop_until(p, "select")
+            tb_reset_mode(p)
+            ret (false, ok)
+        }
+        if str.eq(name, "input") {
+            if !tb_open_has(p, "select") { ret (false, ok) }
+            tb_pop_until(p, "select")
+            tb_reset_mode(p)
+            ret (true, ok)
+        }
+        if nm_in(",script,template,", name) {
+            let again = try tm_in_head(p, tk)
+            ret (again, ok)
+        }
+    }
+    if tk.kind == .End {
+        let name = tk.name
+        if str.eq(name, "optgroup") {
+            if pn_is(p, tb_cur(p), "option") && p.nopen >= 2usize && pn_is(p, p.open[p.nopen - 2usize], "optgroup") { tb_pop(p) }
+            if pn_is(p, tb_cur(p), "optgroup") { tb_pop(p) }
+            ret (false, ok)
+        }
+        if str.eq(name, "option") {
+            if pn_is(p, tb_cur(p), "option") { tb_pop(p) }
+            ret (false, ok)
+        }
+        if str.eq(name, "select") {
+            if !tb_open_has(p, "select") { ret (false, ok) }
+            tb_pop_until(p, "select")
+            tb_reset_mode(p)
+            ret (false, ok)
+        }
+        if str.eq(name, "template") {
+            let again = try tm_in_head(p, tk)
+            ret (again, ok)
+        }
+    }
+    let again = try tm_in_body(p, tk)
+    ret (again, ok)
+}
+
+fn tm_in_select_table(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Start && nm_in(",caption,table,tbody,tfoot,thead,tr,td,th,", tk.name) {
+        tb_pop_until(p, "select")
+        tb_reset_mode(p)
+        ret (true, ok)
+    }
+    if tk.kind == .End && nm_in(",caption,table,tbody,tfoot,thead,tr,td,th,", tk.name) {
+        if !tb_in_scope(p, tk.name, SC_TABLE) { ret (false, ok) }
+        tb_pop_until(p, "select")
+        tb_reset_mode(p)
+        ret (true, ok)
+    }
+    let again = try tm_in_select(p, tk)
+    ret (again, ok)
+}
+
+// --- Template.
+
+fn tb_template_switch(p: *Ps, mode: u8) {
+    if p.ntmodes > 0usize { p.ntmodes -= 1usize }
+    if p.ntmodes < 64usize {
+        p.tmodes[p.ntmodes] = mode
+        p.ntmodes += 1usize
+    }
+    p.mode = mode
+}
+
+fn tm_in_template(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars || tk.kind == .Comment || tk.kind == .Doctype {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Start {
+        let name = tk.name
+        if nm_in(",base,basefont,bgsound,link,meta,noframes,script,style,template,title,", name) {
+            let again = try tm_in_head(p, tk)
+            ret (again, ok)
+        }
+        if nm_in(",caption,colgroup,tbody,tfoot,thead,", name) {
+            tb_template_switch(p, M_IN_TABLE)
+            ret (true, ok)
+        }
+        if str.eq(name, "col") {
+            tb_template_switch(p, M_IN_COLGROUP)
+            ret (true, ok)
+        }
+        if str.eq(name, "tr") {
+            tb_template_switch(p, M_IN_TBODY)
+            ret (true, ok)
+        }
+        if nm_in(",td,th,", name) {
+            tb_template_switch(p, M_IN_ROW)
+            ret (true, ok)
+        }
+        tb_template_switch(p, M_IN_BODY)
+        ret (true, ok)
+    }
+    if tk.kind == .End {
+        if str.eq(tk.name, "template") {
+            let again = try tm_in_head(p, tk)
+            ret (again, ok)
+        }
+        ret (false, ok)
+    }
+    if !tb_open_has(p, "template") {
+        p.stopped = true
+        ret (false, ok)
+    }
+    tb_pop_until(p, "template")
+    tb_fmt_clear_to_marker(p)
+    if p.ntmodes > 0usize { p.ntmodes -= 1usize }
+    tb_reset_mode(p)
+    ret (true, ok)
+}
+
+// --- After body, framesets.
+
+fn tm_after_body(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let w = ws_prefix(tk.data)
+        if w == tk.data.len {
+            let again = try tm_in_body(p, tk)
+            ret (again, ok)
+        }
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, p.open[0usize])
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Start && str.eq(tk.name, "html") {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .End && str.eq(tk.name, "html") {
+        if !p.fragment { p.mode = M_AFTER_AFTER_BODY }
+        ret (false, ok)
+    }
+    if tk.kind == .Eof {
+        p.stopped = true
+        ret (false, ok)
+    }
+    p.mode = M_IN_BODY
+    ret (true, ok)
+}
+
+fn tm_in_frameset(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let kept = try tb_ws_only(p, tk.data)
+        if kept.len > 0usize { try tb_insert_chars(p, kept) }
+        ret (false, ok)
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Start {
+        if str.eq(tk.name, "html") {
+            let again = try tm_in_body(p, tk)
+            ret (again, ok)
+        }
+        if str.eq(tk.name, "frameset") {
+            let id = try tb_insert_html(p, tk)
+            ret (false, ok)
+        }
+        if str.eq(tk.name, "frame") {
+            let id = try tb_insert_html(p, tk)
+            tb_pop(p)
+            ret (false, ok)
+        }
+        if str.eq(tk.name, "noframes") {
+            let again = try tm_in_head(p, tk)
+            ret (again, ok)
+        }
+    }
+    if tk.kind == .End && str.eq(tk.name, "frameset") {
+        if p.nopen == 1usize { ret (false, ok) }
+        tb_pop(p)
+        if !p.fragment && !pn_is(p, tb_cur(p), "frameset") { p.mode = M_AFTER_FRAMESET }
+        ret (false, ok)
+    }
+    if tk.kind == .Eof { p.stopped = true }
+    ret (false, ok)
+}
+
+fn tm_after_frameset(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let kept = try tb_ws_only(p, tk.data)
+        if kept.len > 0usize { try tb_insert_chars(p, kept) }
+        ret (false, ok)
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Start && str.eq(tk.name, "html") {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .End && str.eq(tk.name, "html") {
+        p.mode = M_AFTER_AFTER_FRAMESET
+        ret (false, ok)
+    }
+    if tk.kind == .Start && str.eq(tk.name, "noframes") {
+        let again = try tm_in_head(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Eof { p.stopped = true }
+    ret (false, ok)
+}
+
+fn tm_after_after_body(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Comment {
+        try tb_comment_doc(p, tk)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype || (tk.kind == .Start && str.eq(tk.name, "html")) {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Chars && ws_prefix(tk.data) == tk.data.len {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Eof {
+        p.stopped = true
+        ret (false, ok)
+    }
+    p.mode = M_IN_BODY
+    ret (true, ok)
+}
+
+fn tm_after_after_frameset(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Comment {
+        try tb_comment_doc(p, tk)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype || (tk.kind == .Start && str.eq(tk.name, "html")) {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Chars {
+        let kept = try tb_ws_only(p, tk.data)
+        if kept.len > 0usize {
+            let again = try tm_in_body(p, tk)
+            ret (again, ok)
+        }
+        ret (false, ok)
+    }
+    if tk.kind == .Start && str.eq(tk.name, "noframes") {
+        let again = try tm_in_head(p, tk)
+        ret (again, ok)
+    }
+    if tk.kind == .Eof { p.stopped = true }
+    ret (false, ok)
+}
+
+// The white space bytes of `s`, in order.
+fn tb_ws_only(p: *Ps, s: str) -> (str, err) {
+    var count = 0usize
+    var i = 0usize
+    while i < s.len {
+        if ws_byte(s[i]) { count += 1usize }
+        i += 1usize
+    }
+    if count == s.len { ret (s, ok) }
+    let out = try mem.alloc[u8](p.a, count)
+    var at = 0usize
+    i = 0usize
+    while i < s.len {
+        if ws_byte(s[i]) {
+            out[at] = s[i]
+            at += 1usize
+        }
+        i += 1usize
+    }
+    ret (out[..at], ok)
+}
+
+// --- Foreign content.
+
+fn tm_foreign(p: *Ps, tk: *Tok) -> (bool, err) {
+    if tk.kind == .Chars {
+        let data = try tk_clean(p, tk.data, false)
+        try tb_insert_chars(p, data)
+        var solid = false
+        var k = 0usize
+        while k < tk.data.len {
+            if tk.data[k] != 0u8 && !ws_byte(tk.data[k]) { solid = true }
+            k += 1usize
+        }
+        if solid { p.frameset_ok = false }
+        ret (false, ok)
+    }
+    if tk.kind == .Comment {
+        try tb_insert_comment(p, tk.data, NONE)
+        ret (false, ok)
+    }
+    if tk.kind == .Doctype { ret (false, ok) }
+    if tk.kind == .Start {
+        var breakout = nm_in(",b,big,blockquote,body,br,center,code,dd,div,dl,dt,em,embed,h1,h2,h3,h4,h5,h6,head,hr,i,img,li,listing,menu,meta,nobr,ol,p,pre,ruby,s,small,span,strong,strike,sub,sup,table,tt,u,ul,var,", tk.name)
+        if str.eq(tk.name, "font") {
+            let (_, has_color) = tk_attr(tk, "color")
+            let (_, has_face) = tk_attr(tk, "face")
+            let (_, has_size) = tk_attr(tk, "size")
+            if has_color || has_face || has_size { breakout = true }
+        }
+        if breakout {
+            while p.nopen > 0usize {
+                let top = tb_cur(p)
+                if p.nodes[usize(top)].namespace == .Html || tb_mathml_text_ip(p, top) || tb_html_ip(p, top) { break }
+                tb_pop(p)
+            }
+            if p.fragment && p.nopen == 1usize {
+                // Nothing left to pop but the foreign context element: the HTML rules take it.
+                let again = try tb_mode(p, tk, p.mode)
+                ret (again, ok)
+            }
+            ret (true, ok)
+        }
+        let adj = tb_adjusted(p)
+        let ns = p.nodes[usize(adj)].namespace
+        var name = tk.name
+        if ns == .Svg { name = tb_svg_name(name) }
+        let attrs = try tb_adjust_attrs(p, tk.attrs, ns)
+        let id = try tb_insert_element(p, ns, name, attrs)
+        if tk.self_closing { tb_pop(p) }
+        ret (false, ok)
+    }
+    // An end tag.
+    if nm_in(",br,p,", tk.name) {
+        while p.nopen > 0usize {
+            let cur_top = tb_cur(p)
+            if p.nodes[usize(cur_top)].namespace == .Html || tb_mathml_text_ip(p, cur_top) || tb_html_ip(p, cur_top) { break }
+            tb_pop(p)
+        }
+        if p.fragment && p.nopen == 1usize {
+            let again = try tb_mode(p, tk, p.mode)
+            ret (again, ok)
+        }
+        ret (true, ok)
+    }
+    let top = tb_cur(p)
+    if str.eq(tk.name, "script") && p.nodes[usize(top)].namespace == .Svg && str.eq(p.nodes[usize(top)].name, "script") {
+        tb_pop(p)
+        ret (false, ok)
+    }
+    var i = p.nopen - 1usize
+    while true {
+        if i == 0usize { ret (false, ok) }
+        if ascii_eq_fold(p.nodes[usize(p.open[i])].name, tk.name) {
+            p.nopen = i
+            ret (false, ok)
+        }
+        i -= 1usize
+        if p.nodes[usize(p.open[i])].namespace == .Html { break }
+    }
+    let again = try tb_mode(p, tk, p.mode)
+    ret (again, ok)
+}
+
+// --- The dispatcher.
+
+fn tb_mode(p: *Ps, tk: *Tok, mode: u8) -> (bool, err) {
+    if mode == M_INITIAL {
+        let again = try tm_initial(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_BEFORE_HTML {
+        let again = try tm_before_html(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_BEFORE_HEAD {
+        let again = try tm_before_head(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_HEAD {
+        let again = try tm_in_head(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_HEAD_NOSCRIPT {
+        let again = try tm_in_head_noscript(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_AFTER_HEAD {
+        let again = try tm_after_head(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_BODY {
+        let again = try tm_in_body(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_TEXT {
+        let again = try tm_text(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_TABLE {
+        let again = try tm_in_table(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_TABLE_TEXT {
+        let again = try tm_in_table_text(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_CAPTION {
+        let again = try tm_in_caption(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_COLGROUP {
+        let again = try tm_in_colgroup(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_TBODY {
+        let again = try tm_in_tbody(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_ROW {
+        let again = try tm_in_row(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_CELL {
+        let again = try tm_in_cell(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_SELECT {
+        let again = try tm_in_select(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_SELECT_TABLE {
+        let again = try tm_in_select_table(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_TEMPLATE {
+        let again = try tm_in_template(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_AFTER_BODY {
+        let again = try tm_after_body(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_IN_FRAMESET {
+        let again = try tm_in_frameset(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_AFTER_FRAMESET {
+        let again = try tm_after_frameset(p, tk)
+        ret (again, ok)
+    }
+    if mode == M_AFTER_AFTER_BODY {
+        let again = try tm_after_after_body(p, tk)
+        ret (again, ok)
+    }
+    let again = try tm_after_after_frameset(p, tk)
+    ret (again, ok)
+}
+
+fn tb_use_foreign(p: *Ps, tk: *Tok) -> bool {
+    if p.nopen == 0usize || tk.kind == .Eof { ret false }
+    let adj = tb_adjusted(p)
+    if p.nodes[usize(adj)].namespace == .Html { ret false }
+    if tb_mathml_text_ip(p, adj) {
+        if tk.kind == .Start && !nm_in(",mglyph,malignmark,", tk.name) { ret false }
+        if tk.kind == .Chars { ret false }
+    }
+    if p.nodes[usize(adj)].namespace == .MathMl && str.eq(p.nodes[usize(adj)].name, "annotation-xml") && tk.kind == .Start && str.eq(tk.name, "svg") { ret false }
+    if tb_html_ip(p, adj) && (tk.kind == .Start || tk.kind == .Chars) { ret false }
+    ret true
+}
+
+fn tb_process(p: *Ps, tk: *Tok) -> err {
+    if p.ignore_lf {
+        p.ignore_lf = false
+        if tk.kind == .Chars && tk.data.len > 0usize && tk.data[0usize] == 10u8 {
+            tk.data = tk.data[1usize..]
+            if tk.data.len == 0usize { ret ok }
+        }
+    }
+    var rounds = 0usize
+    while rounds < 64usize {
+        rounds += 1usize
+        var again = false
+        if tb_use_foreign(p, tk) {
+            again = try tm_foreign(p, tk)
+        } else {
+            again = try tb_mode(p, tk, p.mode)
+        }
+        if !again { break }
+    }
+    ret ok
+}
+
+// --- Entry points.
+
+fn normalize_newlines(a: *mem.Arena, s: str) -> (str, err) {
+    var has_cr = false
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 13u8 { has_cr = true }
+        i += 1usize
+    }
+    if !has_cr { ret (s, ok) }
+    let out = try mem.alloc[u8](a, s.len)
+    var at = 0usize
+    i = 0usize
+    while i < s.len {
+        if s[i] == 13u8 {
+            out[at] = 10u8
+            at += 1usize
+            if i + 1usize < s.len && s[i + 1usize] == 10u8 { i += 1usize }
+        } else {
+            out[at] = s[i]
+            at += 1usize
+        }
+        i += 1usize
+    }
+    ret (out[..at], ok)
+}
+
+fn ps_new(a: *mem.Arena, source: str, options: Options) -> (Ps, err) {
+    if source.len > options.max_bytes { ret (zero, TooLarge) }
+    if !utf8_valid(source) { ret (zero, InvalidEncoding) }
+    var src = source
+    if src.len >= 3usize && src[0usize] == 239u8 && src[1usize] == 187u8 && src[2usize] == 191u8 { src = src[3usize..] }
+    src = try normalize_newlines(a, src)
+    let nodes = try mem.alloc[Node](a, options.max_nodes)
+    let open = try mem.alloc[NodeId](a, usize(options.max_depth) + 1usize)
+    let fmt_list = try mem.alloc[NodeId](a, usize(options.max_depth) + 1usize)
+    var p = Ps { a: a, src: src, pos: 0usize, nodes: nodes, used: 0usize, options: options, ts: TS_DATA, last_start: "", open: open, nopen: 0usize, fmt: fmt_list, nfmt: 0usize, tmodes: zero, ntmodes: 0usize, mode: M_INITIAL, orig_mode: M_INITIAL, head: NONE, form: NONE, ctx: NONE, fragment: false, frameset_ok: true, foster: false, quirks: Q_NO, ignore_lf: false, stopped: false, scripting: false, pend: zero, npend: 0usize }
+    ret (p, ok)
+}
+
+fn tb_run(p: *Ps) -> err {
+    var tk: Tok = zero
+    while !p.stopped {
+        try tk_next(p, &tk)
+        try tb_process(p, &tk)
+        if tk.kind == .Eof { break }
+    }
+    ret ok
+}
+
+// --- <selectedcontent>: a clone of the selected option's content, filled when parsing ends.
+
+fn tb_clone_deep(p: *Ps, id: NodeId) -> (NodeId, err) {
+    let (copy, copy_error) = pn_new(p, p.nodes[usize(id)].kind, p.nodes[usize(id)].namespace, p.nodes[usize(id)].name, p.nodes[usize(id)].value)
+    if copy_error != ok { ret (NONE, copy_error) }
+    p.nodes[usize(copy)].attributes = p.nodes[usize(id)].attributes
+    var child = p.nodes[usize(id)].first_child
+    while child != NONE {
+        let (inner, inner_error) = tb_clone_deep(p, child)
+        if inner_error != ok { ret (NONE, inner_error) }
+        pn_insert(p, copy, inner, NONE)
+        child = p.nodes[usize(child)].next_sibling
+    }
+    ret (copy, ok)
+}
+
+// The next node after `id` in tree order inside `root`, or NONE.
+fn tb_walk_next(p: *Ps, root: NodeId, id: NodeId) -> NodeId {
+    let first = p.nodes[usize(id)].first_child
+    if first != NONE { ret first }
+    var cur = id
+    while cur != root && cur != NONE {
+        let sibling = p.nodes[usize(cur)].next_sibling
+        if sibling != NONE { ret sibling }
+        cur = p.nodes[usize(cur)].parent
+    }
+    ret NONE
+}
+
+fn tb_selectedcontent(p: *Ps) -> err {
+    let total = p.used
+    var i = 0usize
+    while i < total {
+        let select_id = u32(i)
+        i += 1usize
+        if p.nodes[usize(select_id)].kind != .Element || !pn_is(p, select_id, "select") { continue }
+        var chosen = NONE
+        var first_option = NONE
+        var cur = tb_walk_next(p, select_id, select_id)
+        while cur != NONE {
+            if p.nodes[usize(cur)].kind == .Element && pn_is(p, cur, "option") {
+                if first_option == NONE { first_option = cur }
+                let (_, picked) = attribute(&p.nodes[usize(cur)], "selected")
+                if picked { chosen = cur }
+            }
+            cur = tb_walk_next(p, select_id, cur)
+        }
+        if chosen == NONE { chosen = first_option }
+        if chosen == NONE { continue }
+        cur = tb_walk_next(p, select_id, select_id)
+        while cur != NONE {
+            if p.nodes[usize(cur)].kind == .Element && pn_is(p, cur, "selectedcontent") {
+                while p.nodes[usize(cur)].first_child != NONE { pn_detach(p, p.nodes[usize(cur)].first_child) }
+                var child = p.nodes[usize(chosen)].first_child
+                while child != NONE {
+                    let copy = try tb_clone_deep(p, child)
+                    pn_insert(p, cur, copy, NONE)
+                    child = p.nodes[usize(child)].next_sibling
+                }
+            }
+            cur = tb_walk_next(p, select_id, cur)
+        }
+    }
+    ret ok
+}
+
+fn parse(a: *mem.Arena, source: str, options: Options) -> (Document, err) {
+    let (parsed, parse_error) = parse_with(a, source, options, false)
+    ret (parsed, parse_error)
+}
+
+// `scripting`: whether scripting is enabled, which makes `noscript` hold raw text.
+fn parse_with(a: *mem.Arena, source: str, options: Options, scripting: bool) -> (Document, err) {
+    let (made, made_error) = ps_new(a, source, options)
+    if made_error != ok { ret (zero, made_error) }
+    var p = made
+    p.scripting = scripting
+    let (doc, doc_error) = pn_new(&p, .Document, .Html, "", "")
+    if doc_error != ok { ret (zero, doc_error) }
+    let run_error = tb_run(&p)
+    if run_error != ok { ret (zero, run_error) }
+    let fill_error = tb_selectedcontent(&p)
+    if fill_error != ok { ret (zero, fill_error) }
+    ret (Document { nodes: p.nodes[..p.used], root: doc, quirks: p.quirks }, ok)
+}
+
+// Parses `source` as the children of an element named `context` in `context_ns`
+// (innerHTML). The result's root is a synthetic `html` element holding the fragment.
+fn parse_fragment(a: *mem.Arena, source: str, context: str, context_ns: Namespace, options: Options) -> (Document, err) {
+    let (parsed, parse_error) = parse_fragment_with(a, source, context, context_ns, options, false)
+    ret (parsed, parse_error)
+}
+
+fn parse_fragment_with(a: *mem.Arena, source: str, context: str, context_ns: Namespace, options: Options, scripting: bool) -> (Document, err) {
+    let (made, made_error) = ps_new(a, source, options)
+    if made_error != ok { ret (zero, made_error) }
+    var p = made
+    p.scripting = scripting
+    let (doc, doc_error) = pn_new(&p, .Document, .Html, "", "")
+    if doc_error != ok { ret (zero, doc_error) }
+    let (root, root_error) = pn_element(&p, .Html, "html", no_attrs())
+    if root_error != ok { ret (zero, root_error) }
+    pn_insert(&p, doc, root, NONE)
+    let push_error = tb_push(&p, root)
+    if push_error != ok { ret (zero, push_error) }
+    let (ctx_node, ctx_error) = pn_element(&p, context_ns, context, no_attrs())
+    if ctx_error != ok { ret (zero, ctx_error) }
+    p.ctx = ctx_node
+    p.fragment = true
+    if context_ns == .Html {
+        if nm_in(",title,textarea,", context) { p.ts = TS_RCDATA }
+        if nm_in(",style,xmp,iframe,noembed,noframes,", context) { p.ts = TS_RAWTEXT }
+        if str.eq(context, "script") { p.ts = TS_SCRIPT }
+        if scripting && str.eq(context, "noscript") { p.ts = TS_RAWTEXT }
+        if str.eq(context, "plaintext") { p.ts = TS_PLAINTEXT }
+        if str.eq(context, "template") {
+            p.tmodes[0usize] = M_IN_TEMPLATE
+            p.ntmodes = 1usize
+        }
+    }
+    tb_reset_mode(&p)
+    let run_error = tb_run(&p)
+    if run_error != ok { ret (zero, run_error) }
+    let fill_error = tb_selectedcontent(&p)
+    if fill_error != ok { ret (zero, fill_error) }
+    ret (Document { nodes: p.nodes[..p.used], root: root, quirks: p.quirks }, ok)
+}
+
+// A DOCTYPE node's identifiers: its value is the public id, a NUL, then the system id.
+fn doctype_public(n: *const Node) -> str {
+    let (at, found) = str.find(n.value, "\x00")
+    if !found { ret "" }
+    ret n.value[..at]
+}
+
+fn doctype_system(n: *const Node) -> str {
+    let (at, found) = str.find(n.value, "\x00")
+    if !found { ret "" }
+    ret n.value[at + 1usize..]
 }

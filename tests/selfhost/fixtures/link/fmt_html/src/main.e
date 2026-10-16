@@ -75,8 +75,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let ul_id = first_named(&document, body_id, "ul")
     if count_named(&document, ul_id, "li") != 2usize { os.exit(13) }
     let table_id = first_named(&document, body_id, "table")
-    if count_named(&document, table_id, "tr") != 2usize { os.exit(14) }
-    let tr_id = first_named(&document, table_id, "tr")
+    // The tree builder puts the rows in an implied tbody, as the WHATWG algorithm does.
+    let tbody_id = first_named(&document, table_id, "tbody")
+    if tbody_id == html.NONE || count_named(&document, tbody_id, "tr") != 2usize { os.exit(14) }
+    let tr_id = first_named(&document, tbody_id, "tr")
     if count_named(&document, tr_id, "td") != 2usize { os.exit(15) }
     let img_id = first_named(&document, body_id, "img")
     let (src, has_src) = html.attribute(html.node(&document, img_id), "src")
