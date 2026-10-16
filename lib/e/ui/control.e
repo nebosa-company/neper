@@ -14540,8 +14540,19 @@ fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title
     var heading = text_options()
     heading.wrap = .None
     heading.weight = 700u32
-    let (head_node, head_error) = colored_text(a, 0u64, title, &bold_t, heading, title_ink)
+    let (head_shaped, head_error) = colored_text(a, 0u64, title, &bold_t, heading, title_ink)
     if head_error != ok { ret (zero, head_error) }
+    var head_node = head_shaped
+    // round 13: v3's GDI sets the bold caption on whole pixel hdmx advances (the shaped run was 1 to 2 px short: Interface (F2) ends at
+    // 95, not 93 of the capture)
+    if t.tokens.profile == .Windows && t.tokens.palette != .Dark {
+        var hinted_options = heading
+        hinted_options.face = 8u32
+        hinted_options.size = 11.0
+        let (hinted_row, hinted_w, hinted_before, hinted_mark, hinted_ok, hinted_error) = windows_hinted_row(a, &dialog_t, hinted_options, title, title.len, title_ink, false)
+        if hinted_error != ok { ret (zero, hinted_error) }
+        if hinted_ok { head_node = hinted_row }
+    }
     var side = text_options()
     side.wrap = .None
     let (side_node, side_error) = colored_text(a, 0u64, aside, &dialog_t, side, aside_ink)
@@ -14551,7 +14562,7 @@ fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title
     // Both labels are 17 tall, their text vertically centred.
     var tall = style.defaults()
     tall.height = style.Length { Px: 17.0 }
-    nodes[1usize] = widget.positioned(0u64, 4.8, 3.75, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, tall, widget_one_of(a, head_node))))
+    nodes[1usize] = widget.positioned(0u64, 4.8, 2.75, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, tall, widget_one_of(a, head_node))))
     nodes[2usize] = widget.positioned(0u64, span - 181.5, 3.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 0.0 }, sized_style(153.0, 17.0), widget_one_of(a, side_node))))
     var holder = sized_style(span, 24.0)
     ret (widget.stack(key, holder, nodes[0usize..3usize]), ok)
