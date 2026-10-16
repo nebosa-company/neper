@@ -19,17 +19,17 @@ use e.ui.widget
 fn margin_px() -> f32 { ret 5.0 }
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn t_captions() -> [36]str { ret [36]str{ "search rest", "pressed search ok", "pressed search cancel", "pressed sort ok", "pressed sort clear", "pressed filter ok", "pressed filter clear", "pressed filter all", "focused filter invert", "pressed msc ok", "pressed af ok", "pressed af open", "pressed cf ok", "focused cf apply", "disabled cf edit rule", "pressed stats close", "pressed about ok", "pressed opt ok", "pressed opt cancel", "pressed opt apply", "focused opt cancel", "focused opt apply", "pressed opt pw change", "focused opt pw change", "pressed opt sc set", "pressed opt sc reset", "pressed opt art validate", "pressed dp ok", "pressed dl close", "pressed dl standard", "focused dl modern", "75x32 rest", "75x32 default", "75x32 focus", "75x32 pressed", "125x40 default" } }
-fn t_words() -> [36]str { ret [36]str{ "OK", "OK", "Cancel", "OK", "Clear", "OK", "C&lear", "All", "Invert", "OK", "OK", "&Open...", "OK", "OK", "&Edit Rule...", "Close", "OK", "OK", "Cancel", "&Apply", "Cancel", "&Apply", "C&hange", "C&hange", "&Set", "&Reset", "&Validate", "OK", "Close", "&Standard", "&Modern", "Cancel", "OK", "Cancel", "OK", "Apply" } }
-fn t_widths() -> [36]f32 { ret [36]f32{ 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 85.0, 85.0, 125.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 125.0 } }
-fn t_heights() -> [36]f32 { ret [36]f32{ 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 25.0, 25.0, 25.0, 25.0, 25.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 32.0, 32.0, 32.0, 32.0, 40.0 } }
-fn t_drives() -> [36]u8 { ret [36]u8{ 0u8, 1u8, 1u8, 1u8, 1u8, 1u8, 1u8, 1u8, 2u8, 1u8, 1u8, 1u8, 1u8, 2u8, 0u8, 1u8, 1u8, 1u8, 1u8, 1u8, 2u8, 2u8, 1u8, 2u8, 1u8, 1u8, 1u8, 1u8, 1u8, 1u8, 2u8, 0u8, 0u8, 2u8, 1u8, 0u8 } }
-fn t_defaults() -> [36]bool { ret [36]bool{ true, true, false, true, false, true, false, false, false, true, true, false, true, true, false, false, true, true, false, false, false, false, false, false, false, false, false, true, true, false, false, false, true, false, true, true } }
-fn t_enabled() -> [36]bool { ret [36]bool{ true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true } }
-fn t_faces() -> [36]u32 { ret [36]u32{ 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF9F9F9u32, 0xF9F9F9u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32 } }
-fn t_glyphs() -> [36]bool { ret [36]bool{ false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false } }
-fn t_shift_x() -> [36]f32 { ret [36]f32{ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.38, 0.36, 0.42, 0.48, 0.44, 0.48, 0.18, 0.18, 0.42, 0.48, 0.36, 0.14, 0.36, 0.04, 0.10, 0.00, 0.00, 0.00, 0.00, 0.00 } }
-fn t_shift_y() -> [36]f32 { ret [36]f32{ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.46, 0.48, 0.48, 0.48, 0.50, 0.50, 0.26, 0.26, 0.44, 0.46, 0.44, 0.48, 0.48, 0.06, 0.06, 0.00, 0.00, 0.00, 0.00, 0.00 } }
+fn t_captions() -> [42]str { ret [42]str{ "search rest", "pressed search ok", "pressed search cancel", "pressed sort ok", "pressed sort clear", "pressed filter ok", "pressed filter clear", "pressed filter all", "focused filter invert", "pressed msc ok", "pressed af ok", "pressed af open", "pressed cf ok", "focused cf apply", "disabled cf edit rule", "pressed stats close", "pressed about ok", "pressed opt ok", "pressed opt cancel", "pressed opt apply", "focused opt cancel", "focused opt apply", "pressed opt pw change", "focused opt pw change", "pressed opt sc set", "pressed opt sc reset", "pressed opt art validate", "pressed dp ok", "pressed dl close", "pressed dl standard", "focused dl modern", "hover opt ok", "hover opt cancel", "hover opt apply", "hover opt pw change", "hover opt sc set", "hover opt sc reset", "75x32 rest", "75x32 default", "75x32 focus", "75x32 pressed", "125x40 default" } }
+fn t_words() -> [42]str { ret [42]str{ "OK", "OK", "Cancel", "OK", "Clear", "OK", "C&lear", "All", "Invert", "OK", "OK", "&Open...", "OK", "OK", "&Edit Rule...", "Close", "OK", "OK", "Cancel", "&Apply", "Cancel", "&Apply", "C&hange", "C&hange", "&Set", "&Reset", "&Validate", "OK", "Close", "&Standard", "&Modern", "OK", "Cancel", "&Apply", "C&hange", "&Set", "&Reset", "Cancel", "OK", "Cancel", "OK", "Apply" } }
+fn t_widths() -> [42]f32 { ret [42]f32{ 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 85.0, 85.0, 125.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 125.0 } }
+fn t_heights() -> [42]f32 { ret [42]f32{ 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 25.0, 25.0, 25.0, 25.0, 25.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 32.0, 32.0, 32.0, 32.0, 40.0 } }
+fn t_drives() -> [42]u8 { ret [42]u8{ 0u8, 1u8, 1u8, 1u8, 1u8, 1u8, 1u8, 1u8, 2u8, 1u8, 1u8, 1u8, 1u8, 2u8, 0u8, 1u8, 1u8, 1u8, 1u8, 1u8, 2u8, 2u8, 1u8, 2u8, 1u8, 1u8, 1u8, 1u8, 1u8, 1u8, 2u8, 3u8, 3u8, 3u8, 3u8, 3u8, 3u8, 0u8, 0u8, 2u8, 1u8, 0u8 } }
+fn t_defaults() -> [42]bool { ret [42]bool{ true, true, false, true, false, true, false, false, false, true, true, false, true, true, false, false, true, true, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, false, false, false, false, false, true, false, true, true } }
+fn t_enabled() -> [42]bool { ret [42]bool{ true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true } }
+fn t_faces() -> [42]u32 { ret [42]u32{ 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF9F9F9u32, 0xF9F9F9u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32 } }
+fn t_glyphs() -> [42]bool { ret [42]bool{ false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false } }
+fn t_shift_x() -> [42]f32 { ret [42]f32{ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.38, 0.36, 0.42, 0.48, 0.44, 0.48, 0.18, 0.18, 0.42, 0.48, 0.36, 0.14, 0.36, 0.04, 0.10, 0.36, 0.42, 0.48, 0.18, 0.42, 0.48, 0.00, 0.00, 0.00, 0.00, 0.00 } }
+fn t_shift_y() -> [42]f32 { ret [42]f32{ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.46, 0.48, 0.48, 0.48, 0.50, 0.50, 0.26, 0.26, 0.44, 0.46, 0.44, 0.48, 0.48, 0.06, 0.06, 0.48, 0.48, 0.48, 0.20, 0.42, 0.42, 0.00, 0.00, 0.00, 0.00, 0.00 } }
 
 // The holder of a cell: odd wide and even tall (so the cell centres it on whole pixels in 133 x 40), the dialog face
 // behind, the visible box (the control rect less 2 wide, 1 tall) at (margin, margin).
@@ -63,7 +63,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let shift_x = t_shift_x()
     let shift_y = t_shift_y()
     var i = 0usize
-    while i < 36 {
+    while i < 42 {
         var options = control.button_options()
         options.width = widths[i]
         options.height = heights[i]
@@ -88,13 +88,14 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var drive: looks.Drive = .None
         if drives[i] == 1u8 { drive = .Press }
         if drives[i] == 2u8 { drive = .Focus }
+        if drives[i] == 3u8 { drive = .Hover }
         cells[i] = looks.Cell { caption: captions[i], node: held, drive: drive }
         i += 1usize
     }
-    ret (36, ok)
+    ret (42, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "button_states", cells: 36usize, columns: 4usize, cell_w: 133.0, cell_h: 40.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "button_states", cells: 42usize, columns: 4usize, cell_w: 133.0, cell_h: 40.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

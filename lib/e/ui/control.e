@@ -2556,7 +2556,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     var face: u32 = 0u32
     if corners.top_left == 0.0 && corners.top_right == 0.0 && options.variant != .Plain && t.tokens.palette == .Light {
         rk = 0u32
-        if variant == .Default || state.focus_visible || state.focused || selected { rk = 1u32 }
+        if variant == .Default || state.focus_visible || state.focused || selected || (state.hovered && !state.pressed && options.enabled) { rk = 1u32 }
         if state.pressed && !state.disabled && !selected { rk = 3u32 }
         if state.disabled { rk = 2u32 }
         face = windows_rgb(look.background)

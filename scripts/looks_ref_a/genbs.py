@@ -29,7 +29,7 @@ open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'bs_tables.txt'),'w
  arr('t_words','str',[q(c['text']) for c in cells]),
  arr('t_widths','f32',['%d.0'%c['w'] for c in cells]),
  arr('t_heights','f32',['%d.0'%c['h'] for c in cells]),
- arr('t_drives','u8',['%du8'%{'N':0,'P':1,'F':2}[c['d']] for c in cells]),
+ arr('t_drives','u8',['%du8'%{'N':0,'P':1,'F':2,'H':3}[c['d']] for c in cells]),
  arr('t_defaults','bool',['true' if c['df'] else 'false' for c in cells]),
  arr('t_enabled','bool',['true' if c['en'] else 'false' for c in cells]),
  arr('t_faces','u32',['0x%06Xu32'%c['bg'] for c in cells]),

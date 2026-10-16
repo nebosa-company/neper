@@ -32,4 +32,10 @@ SPEC=[
 ('button-pressed-deck-legality-close','dialog-deck-legality-rest','Close',460,448,75,23,'P',1,1),
 ('button-pressed-deck-legality-standard','dialog-deck-legality-rest','&Standard',41,66,75,23,'P',0,1),
 ('button-focused-deck-legality-modern','dialog-deck-legality-rest','&Modern',122,66,75,23,'F',0,1),
+('hover-button-options-ok','dialog-options-interface-rest','OK',468,456,75,23,'H',1,1),
+('hover-button-options-cancel','dialog-options-interface-rest','Cancel',552,456,75,23,'H',0,1),
+('hover-button-options-apply','dialog-options-interface-rest','&Apply',636,456,75,23,'H',0,1),
+('hover-button-options-password-change','dialog-options-passwords-rest','C&hange',215,232,75,23,'H',0,1),
+('hover-button-options-shortcut-set','dialog-options-shortcuts-rest','&Set',550,412,75,23,'H',0,1),
+('hover-button-options-shortcut-reset','dialog-options-shortcuts-rest','&Reset',634,412,75,23,'H',0,1),
 ]

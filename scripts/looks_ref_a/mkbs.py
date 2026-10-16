@@ -80,6 +80,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var drive: looks.Drive = .None
         if drives[i] == 1u8 { drive = .Press }
         if drives[i] == 2u8 { drive = .Focus }
+        if drives[i] == 3u8 { drive = .Hover }
         cells[i] = looks.Cell { caption: captions[i], node: held, drive: drive }
         i += 1usize
     }
@@ -91,5 +92,5 @@ fn main(a: *mem.Arena, args: []str) -> err {
     ret looks.run_all(a, &sheet)
 }
 '''
-n=36
+n=42
 open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','..','examples','looks','button_states.e'),'w').write(src%(5,tables,n,n,n))
