@@ -27,7 +27,7 @@ for c in cells:
     s=c['stem'].replace('button-','').replace('dialog-','').replace('-rest',' rest').replace('conditional-formatting','cf').replace('deck-legality','dl').replace('deck-properties','dp').replace('options-','opt ').replace('missing-set-cards','msc').replace('advanced-filter','af').replace('-',' ')
     s=s.replace('password','pw').replace('shortcut','sc').replace('cardart','art').replace('statistics','stats').replace('hover ','hot ').replace('conditional','cond'); caps.append(s[:24])
 def ph(c,k): return '%.2f'%PH.get(c['stem'],[0,0])[k]
-open(os.path.join(HERE,'bs_tables.txt'),'w').write('\n'.join([
+open(os.path.join(HERE,'bs_tables.txt'),'w',newline=chr(10)).write('\n'.join([
  arr('t_captions','str',[q(s) for s in caps]),
  arr('t_words','str',[q(c['text']) for c in cells]),
  arr('t_widths','f32',['%d.0'%c['w'] for c in cells]),

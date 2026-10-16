@@ -101,6 +101,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     ret looks.run_all(a, &sheet)
 }
 '''%dict(what=what,files=('button-*' if SHEET=='states' else 'hover-button-*'),drives=('Pressed and focused cells are driven (Drive.Press, Drive.Focus), the rest are plain; the last five cells have no capture (the ring at 75x32 and 125x40).' if SHEET=='states' else 'Every cell is driven with the pointer on it (Drive.Hover; a pressed one with the button held).'),tables=tables,n=n,sheet=SHEET)
-open(os.path.join(HERE,'..','..','examples','looks','button_%s.e'%SHEET),'w').write(src)
+open(os.path.join(HERE,'..','..','examples','looks','button_%s.e'%SHEET),'w',newline=chr(10)).write(src)
 os.remove(os.path.join(HERE,'bs_tables.txt'))
 print('wrote button_%s.e with %d cells'%(SHEET,n))
