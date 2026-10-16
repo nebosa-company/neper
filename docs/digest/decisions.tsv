@@ -2745,4 +2745,13 @@ D5109	1233	Looks architecture: profiles, status overlays, the e.ui.looks harness
 D5110	1008	The Windows reference is captured live from a launched copy of v3
 D5111	718	Status definitions and the audit rule for looks
 D5112	865	Baked pixel tiles for exact chrome, parametric drawing for the rest
-D5113	740	Popup menu widths follow GDI's Tahoma, not the shaper
+D5113	741	Popup menu widths follow GDI's Tahoma, not the shaper
+D5114	919	The browser is `e.web.*` (engine), `e.ui.browser` (control) and `x.web.*` (drivers) (browser K1)
+D5115	832	The JavaScript engine is written in Neper; QuickJS is not embedded (browser K2)
+D5116	463	Text goes through `e.text.shape` and `e.text.layout`; Ahem is the test font (browser K3)
+D5117	472	Browser memory model: arenas, index tables, own JS heap (browser K4)
+D5118	559	Paint is a display list lowered to `scene.Builder` in viewport tiles (browser K5)
+D5119	689	Vaper is frozen as a test oracle before it is retired (browser K6)
+D5120	393	What is not ported from Vaper (browser K7)
+D5121	550	The control is one browsing context; the shell is an app layer (browser K8)
+D5122	669	`docs/browser-progress.html` is a hand-maintained exception; milestones are queue items L166 to L171 (browser K9)

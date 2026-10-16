@@ -344,6 +344,30 @@ Requirement added by the owner 2026-10-13 (docs/grid.md section 1.1): the grid U
 
 Plan docs/ui/looks-plan.md, decision D5108, progress docs/ui/looks-progress.html (docs/ui/looks/status.json). Acceptance: (1) Profile.Windows and style.windows from the v3 captures; (2) e.ui.looks renders every control's states offscreen per look at 100% and 150% into docs/ui/looks/<look>/<control>.png beside the v3 reference; (3) the ~30 controls of the plan each reach ready (Windows PNG within tolerance of docs/ui/looks/ref/windows at both scales); (4) CupertinoLike and MaterialLike get tokens and idiom branches (later); (5) controls with no Neper equivalent are listed, not built. PART (D5108, D5109 to D5113; state at audit 2, 2026-10-16): items 1 and 2 done. All 30 controls render under Neper and Windows at 100% and 150% (45 sheet apps in examples/looks, scripts/render_looks_all.sh). The v3 reference is now captured live from a launched copy of v3 by posted window messages (scripts/grab_v3_*.ps1, about 250 state and dialog captures in docs/ui/looks/ref/windows). Audit 2 (docs/ui/looks/audit.md, an independent recompute against those captures, tolerance 2 levels per channel) counts 0 matched, 0 ready, 25 review and 5 started (date_edit, memo, token_edit, progress_bar, hint have no v3 capture); six controls self-reported matched were downgraded. Known gaps: hover and toolbar states cannot be captured without the real pointer (the optional GetCursorPos hook is not done), 81 of 200 captured states have no sheet cell, the baked button ring and edit chrome tiles go dotted at 1.5x, open-list sheets and the data grid are far off. IN FLIGHT: hover captures and round 5 matching. NOT DONE: any control at matched or ready, dark and high-contrast sheets beyond the button, Cupertino and Material.
 
+### L166 — Browser M1: e.ui.browser shows a static page (no JS) (10%)
+
+Plan docs/browser-progress.html, decisions D5114 to D5122. Acceptance: (1) tracker phase P0 (0.1 to 0.8): oracle frozen, html5lib, WPT reftest, pixel-probe and render-tool harnesses, Ahem asset, baselines; (2) P1 parse and style core: 1.1 to 1.14, html5lib at least Dart's 1549 of 1791; (3) P2 2.1 to 2.3 block and inline layout over e.text; (4) P3 3.1 to 3.6 and 3.11 display list, scene tiling, backgrounds, borders, text, images; (5) P4 4.1 and 4.2 loader and HTTP/1.1; (6) 7.1 lib/e/ui/browser.e loads an HTTP(S) page, scrolls, follows links; Hacker News within the pixel tolerance of the Dart golden. Not yet: all of it. PART: landed pieces that M1 reuses, not yet checked against the oracle: e.fmt.html, e.fmt.css.syntax/selector/match/cascade/container, e.gfx.cssvalue (L038, L040), e.fmt.woff and woff2 (D2346), e.net.policy and ssrf (D2351).
+
+### L167 — Browser M2: modern CSS layout (0%)
+
+Plan docs/browser-progress.html. Needs L166. Acceptance: (1) P2 2.4 to 2.15: floats, positioned and sticky, tables, flex, grid, multicolumn, intrinsic sizing, overflow, transforms, replaced elements, form controls, hit testing and geometry; (2) P3 3.4, 3.5, 3.8, 3.9 gradients, shadows, clip-path, mask, filters; (3) 9.2 WPT CSS reftests reproduce at least Dart's 116 of 122 and the six known failures are triaged; (4) the Dart layout pixel-probe expectations carried over as fixtures and green. Not yet: all of it.
+
+### L168 — Browser M3: the real web without JavaScript (0%)
+
+Plan docs/browser-progress.html. Needs L167. Acceptance: (1) Wikipedia with its 12k-node table, MDN with web fonts, craigslist and abv.bg match the Dart goldens within the per-site tolerance; (2) P3 3.13, 3.15, 3.16 SVG, web fonts; (3) P4 4.3 HTTP/2 transport, 4.4 and 4.5 TLS 1.3 interop and TLS 1.2, 4.8 HTTP cache, 4.11 to 4.14 cookies, CORS, SSRF, CSP, 4.17 filter lists; (4) core N.1 and N.2 scene limits and glyph cache as measured by these pages; (5) 7.2 to 7.6 control API, input, thread split, form widgets, accessibility; (6) a shell with tabs, history and bookmarks (7.7). Not yet: all of it.
+
+### L169 — Browser M4: JavaScript engine and DOM bindings (0%)
+
+Plan docs/browser-progress.html, decision D5115. Needs L166; engine work (5.1 to 5.16) can start in parallel with L167. Acceptance: (1) P5 5.1 to 5.16: parser, compiler, VM, heap and GC, object model, builtins, ECMAScript RegExp, Promise and microtasks, modules, test262 runner with feature-gated pass targets, benchmarks against QuickJS; (2) P6 6.1 to 6.8 and 6.14 bindings: DOM, CSSOM, events, timers, fetch, storage, forms; (3) 6.17 iframes; (4) jQuery 3.5.1 initialises, AJAX re-renders, timers and events work, getBoundingClientRect feeds layout; (5) 9.4 test262 targets, 9.6 real-site sweep including JS-app pages. Not yet: all of it.
+
+### L170 — Browser M5: Dart parity reached, NeperOS Browser replaced (0%)
+
+Plan docs/browser-progress.html. Needs L168 and L169. Acceptance: (1) every tracker row with track mig is done; (2) html5lib at 100 percent (1.3, 9.1); (3) 7.15 neperos/src/browser.e replaced by e.ui.browser and C159 closed; (4) 4.8 and 4.9 cache gaps, 4.10 encrypted cache, 7.8 to 7.12 shell items; (5) 9.7 performance and memory budgets met against the 0.7 baselines; (6) 9.8 fixtures registered in run.ps1 and run.sh, module-apis.md and modules.json current; (7) the Dart repository archived with the oracle artifacts. Not yet: all of it.
+
+### L171 — Browser M6: beyond Vaper (gap items) (0%)
+
+Plan docs/browser-progress.html. Needs L170; individual gap rows may start earlier when nothing blocks them. Acceptance: every tracker row with track gap or core is done or explicitly deferred with a decision: Shadow DOM and custom elements (6.16), Workers and Service Workers (6.18, 6.19), contenteditable and Selection (6.11, 6.12), process isolation and OS sandbox (8.1 to 8.3, N.6), DevTools (7.13), WebAssembly (5.17), vertical writing modes (2.16, N.5), audio (3.19), backdrop-filter and blend modes (N.3), colour emoji and CFF (N.4), HSTS and clickjacking protections (4.15, 4.16), fuzzing (8.4). Not yet: all of it.
+
 ## Implemented
 
 ### C001 — Lexer over the closed token registry

@@ -84,3 +84,9 @@ G010	library	0	286	export + clipboard (+ print hand-off)	Proposed by docs/grid.m
 G011	library	0	298	MTG Studio reference app: card-pool/deck/collection views over a 150k fixture	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G012	library	0.85	3700	pixel-perfect parity with the v3 grid: reference recordings, state catalogue, metric tokens, visual and behavioural diff ledger	Requirement added by the owner 2026-10-13 (docs/grid.md section 1.1): the grid UI and behaviour must be a pixel-perfect equivalent of MTG Studio v3 (many visual inconsistencies in v5/cardgrid).
 L165	library	0.4	1714	UI looks: one widget set in a Windows (MTG Studio v3) look, then macOS/iOS and Android	any control at matched or ready, dark and high-contrast sheets beyond the button, Cupertino and Material.
+L166	library	0.1	850	Browser M1: e.ui.browser shows a static page (no JS)	all of it. PART: landed pieces that M1 reuses, not yet checked against the oracle: e.fmt.html, e.fmt.css.syntax/selector/match/cascade/container, e.gfx.cssvalue (L038, L040), e.fmt.woff and woff2 (D23
+L167	library	0	515	Browser M2: modern CSS layout	all of it.
+L168	library	0	603	Browser M3: the real web without JavaScript	all of it.
+L169	library	0	640	Browser M4: JavaScript engine and DOM bindings	all of it.
+L170	library	0	541	Browser M5: Dart parity reached, NeperOS Browser replaced	all of it.
+L171	library	0	623	Browser M6: beyond Vaper (gap items)	all of it.

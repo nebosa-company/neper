@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>e.ui.browser migration tracker</title>
+<style>
+:root{color-scheme:light dark;--bg:#fff;--panel:#f5f7fa;--ink:#111827;--muted:#667085;--track:#d8e1ee;--rule:#e4e7ec;--mig:#007dbc;--gap:#b36137;--core:#8269ba;--ok:#00885b;--part:#93731f;--wip:#007dbc;--todo:#667085;--blk:#c0392b}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1319;--panel:#171d26;--ink:#e8edf4;--muted:#9aa7b5;--track:#293444;--rule:#29313d;--mig:#5cb8ff;--gap:#f59a6d;--core:#bea2f8;--ok:#50c591;--part:#d2ab57;--wip:#5cb8ff;--todo:#9aa7b5;--blk:#f27b6e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:76rem;margin:auto;padding:clamp(1.5rem,5vw,4rem) 1.25rem}
+.mono,.eyebrow,footer,code,.sz,.id{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
+.eyebrow{margin:0 0 .5rem;color:var(--muted);font-size:.75rem;letter-spacing:.14em;text-transform:uppercase}
+h1{margin:0 0 .5rem;font-size:clamp(1.8rem,4.5vw,3rem);line-height:1.1}h2{margin:2.5rem 0 .75rem;font-size:1.35rem}h3{margin:1.2rem 0 .4rem;font-size:1.05rem}
+p{margin:.4rem 0}.lead{color:var(--muted);max-width:55rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:1rem;margin-top:1.25rem}
+.card{padding:1.1rem 1.25rem;border:1px solid var(--rule);border-left:.4rem solid var(--accent,var(--muted));border-radius:.75rem;background:var(--panel)}
+.card .lab{color:var(--accent,var(--muted));font-size:.85rem;font-weight:700}.card .val{margin:.3rem 0;font-size:2.4rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.bar{height:.5rem;margin:.55rem 0;background:var(--track);border-radius:1rem;overflow:hidden;display:flex}.bar i{display:block;height:100%}
+.sub{color:var(--muted);font-size:.78rem}
+table{width:100%;border-collapse:collapse;font-size:.84rem}th,td{padding:.4rem .55rem;border-top:1px solid var(--rule);vertical-align:top;text-align:left}th{color:var(--muted);font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;border-top:0}
+.wrap{overflow-x:auto;border:1px solid var(--rule);border-radius:.75rem;background:var(--panel);padding:.25rem .5rem}
+.pill{display:inline-block;padding:.05rem .5rem;border-radius:1rem;font-size:.72rem;font-weight:700;color:#fff;white-space:nowrap}
+.s-done{background:var(--ok)}.s-partial{background:var(--part)}.s-wip{background:var(--wip)}.s-todo{background:var(--todo)}.s-blocked{background:var(--blk)}.s-deferred{background:#8a8f98}
+.t-mig{color:var(--mig)}.t-gap{color:var(--gap)}.t-core{color:var(--core)}
+.t{font-weight:700;font-size:.78rem}
+.filters{display:flex;flex-wrap:wrap;gap:.5rem;margin:.75rem 0}select,input{font:inherit;padding:.3rem .5rem;border:1px solid var(--rule);border-radius:.4rem;background:var(--bg);color:var(--ink)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(22rem,1fr));gap:1rem}
+.box{padding:1rem 1.2rem;border:1px solid var(--rule);border-radius:.75rem;background:var(--panel)}.box h3{margin-top:0}
+.layers{display:grid;gap:.4rem}.layer{padding:.55rem .8rem;border:1px solid var(--rule);border-left:.3rem solid var(--c,var(--mig));border-radius:.5rem;background:var(--bg);font-size:.84rem}.layer b{color:var(--c,var(--mig))}
+ul{margin:.3rem 0 .3rem 1.1rem;padding:0}li{margin:.2rem 0}
+code{font-size:.82em;background:var(--bg);padding:.05rem .3rem;border-radius:.25rem;border:1px solid var(--rule)}
+details{margin:.4rem 0}summary{cursor:pointer;font-weight:600}
+footer{color:var(--muted);font-size:.78rem;margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule)}
+.legend span{margin-right:.9rem;white-space:nowrap}
+</style>
+</head>
+<body>
+<main>
+<p class="eyebrow">neper · docs · hand-maintained</p>
+<h1>e.ui.browser — migration tracker</h1>
+<p class="lead">Vaper (pure-Dart browser, frozen, never released) is being re-implemented in Neper as the <code>e.ui.browser</code> control plus an engine in <code>e.web.*</code>. This page tracks (1) <b class="t-mig">migration</b> of what the Dart version already does, (2) <b class="t-gap">gaps</b> the Dart version never completed, which are built directly in Neper, and (3) <b class="t-core">core</b> Neper language/stdlib work the browser needs. Dart will not be continued, so every gap is a Neper task.</p>
+<p class="sub mono">Plan written 2026-10-16 · Dart baseline (REQUIREMENTS.md, last measured): 83/128 requirements (65%), WPT CSS reftests 116/122 (95%), html5lib 1549/1791 (86%), overall 78% · Dart size: ~48.5k lib LOC, ~44k test LOC, ~270 test files, 1.4k C (QuickJS shim).</p>
+
+<div class="cards" id="cards"></div>
+
+<h2>Progress by phase</h2>
+<div class="wrap"><table id="phases"><thead><tr><th>Phase</th><th>Scope</th><th style="width:30%">Progress</th><th>Items</th></tr></thead><tbody></tbody></table></div>
+<p class="sub legend" style="margin-top:.6rem">Weights for the percentages: <span>done = 1</span><span>partial = 0.5 (landed in Neper, not yet verified against the Dart oracle or incomplete)</span><span>wip = 0.25</span><span>todo/blocked = 0</span><span>deferred items are excluded from the totals</span></p>
+
+<h2>Target architecture</h2>
+<div class="grid2">
+<div class="box"><h3>Layers (bottom up)</h3>
+<div class="layers">
+<div class="layer" style="--c:var(--mig)"><b>e.ui.browser</b> (<code>lib/e/ui/browser.e</code>) — one browsing context as a control: <code>widget.Custom</code> for paint, <code>Region</code> for pointer/wheel, <code>Scope</code> for keys/focus, <code>Edit</code> for text/IME/clipboard. Exposes navigate / history / find / zoom / events. Contains no engine logic.</div>
+<div class="layer" style="--c:var(--gap)"><b>e.web.page</b> — browsing contexts, event loop (HTML processing model), navigation, session history + bfcache, iframes, workers.</div>
+<div class="layer" style="--c:var(--mig)"><b>e.web.js</b> — JavaScript engine written in Neper: parser, bytecode, VM, own GC heap, builtins, ES-semantics RegExp, modules. <b>e.web.bind</b> — host-object bindings (DOM, CSSOM, fetch, timers, storage).</div>
+<div class="layer" style="--c:var(--mig)"><b>e.web.dom · e.web.style · e.web.layout · e.web.paint</b> — arena node tables, style resolver, CSS box layout, display list lowered to <code>e.gfx.scene.Builder</code>.</div>
+<div class="layer" style="--c:var(--core)"><b>Existing Neper libs reused</b> — <code>e.fmt.html</code>, <code>e.fmt.css.*</code>, <code>e.gfx.cssvalue</code>, <code>e.text.shape/layout/bidi/segment</code>, image/font decoders, <code>e.gfx.svg/filter/scene</code>, <code>e.net.*</code> (http, tls, cookie, ws, idna, policy, ssrf), <code>e.crypto.*</code>, <code>e.db</code>, <code>e.os</code>, <code>e.thread/channel</code>.</div>
+<div class="layer" style="--c:var(--blk)"><b>x.web.*</b> (drivers) — renderer process + OS sandbox, profile storage, credential store, platform keychains.</div>
+</div></div>
+<div class="box"><h3>Threads and data flow</h3>
+<ul>
+<li><b>Engine thread</b> owns DOM, JS heap, style, layout. Per-document arena + per-frame arena; nodes are indices into tables (no pointers across mutation).</li>
+<li><b>UI thread</b> runs <code>e.ui.app</code>; <code>Custom.paint</code> lowers the latest immutable display list to <code>scene.Builder</code>. Hand-off through <code>e.channel</code>, double-buffered arenas, tiled to the scene limits.</li>
+<li><b>Net</b> runs on <code>e.task</code> pool; responses arrive as events on the engine thread.</li>
+<li>Later (P8) the engine thread moves into a sandboxed renderer process with the same display-list protocol over pipes/shared memory.</li>
+<li>Dart's isolate boundary and <code>RenderTreeSnapshot</code> protocol (2.1k lines) are <i>not</i> ported; the in-process hand-off replaces it.</li>
+</ul></div>
+</div>
+
+<h2>Key decisions (to be recorded as D-entries in docs/decisions.md)</h2>
+<div class="wrap"><table>
+<thead><tr><th style="width:3rem">#</th><th style="width:16rem">Decision</th><th>Rationale / consequence</th></tr></thead>
+<tbody>
+<tr><td class="id">K1</td><td>Engine in <code>e.web.*</code> (pure, deterministic, fixture-tested); control in <code>e.ui.browser</code>; platform/process code in <code>x.web.*</code>.</td><td>Follows the repo rule in <code>docs/vaper.md</code> (pure → <code>e</code>, platform → <code>x</code>). Keeps the control thin enough to review and lets the engine run headless in tests and the render tool.</td></tr>
+<tr><td class="id">K2</td><td>Write the JS engine in Neper; do not embed QuickJS.</td><td>Neper cannot link C objects or static archives with its own linker, cannot export symbols for callbacks, and the product claim is 100% self-hosted. D2148 already states this. QuickJS-ng in <code>vaper/native</code> stays a <i>dev-time differential oracle only</i>. This is the largest single cost in the plan (see P5).</td></tr>
+<tr><td class="id">K3</td><td>All text goes through <code>e.text.shape</code> / <code>e.text.layout</code>; remove every dependency on <code>dart:ui</code> Paragraph.</td><td>Removes Dart's biggest portability risk and allows vertical writing modes, which were blocked in Dart. Tests use the Ahem font as an asset for deterministic metrics.</td></tr>
+<tr><td class="id">K4</td><td>Memory: arena per document and per frame; index-based DOM/box tables; the JS engine owns its heap and a mark-sweep GC over a byte arena.</td><td>Neper has no GC and no global allocator. Index tables survive mutation and cross the thread hand-off cheaply.</td></tr>
+<tr><td class="id">K5</td><td>Paint = Dart-style display list, lowered to <code>e.gfx.scene.Builder</code> in viewport tiles.</td><td>The scene has hard limits (bounded <code>SCENE_BYTES</code>, <code>MAX_EDGES</code> per command, 8 clip masks, 4 opacity layers, <code>TooLarge</code> result). A full page cannot be one scene. Missing scene features (blend, backdrop read-back, glyph cache) are core tasks (track "core").</td></tr>
+<tr><td class="id">K6</td><td>Freeze Vaper as an oracle, then stop touching it.</td><td>Before retirement capture an offline site corpus, Dart render PNGs, node dumps and display-list dumps, and export test vectors as language-neutral fixtures (P0). Neper results are compared against these, not against a live Dart build.</td></tr>
+<tr><td class="id">K7</td><td>Do not port: <code>package:html</code> wrapper, siphash/hkdf/chacha (Neper's <code>e.crypto</code> has vectors), Brotli and IDNA (exist), isolates, FFI, Flutter shell/render widgets.</td><td>Each has a Neper equivalent or is Dart-specific.</td></tr>
+<tr><td class="id">K8</td><td>Scope of the control: one browsing context. Tabs, omnibox, bookmarks, history, downloads and DevTools are an app layer on top (NeperOS Browser, C159, then a desktop shell).</td><td><code>e.ui.app</code> allows one window per app today; multi-window needs a core change or one process per window.</td></tr>
+<tr><td class="id">K9</td><td>This page is hand-maintained and sits beside <code>docs/progress.html</code>.</td><td><code>AGENTS.md</code> makes <code>progress.html</code> the only readiness document and generated. This tracker is an explicit exception for one large programme; work is still sequenced through <code>docs/work-queue.json</code> items (a queue entry per milestone, referencing the IDs below). <code>docs/vaper.md</code> is superseded for layout, paint and JS.</td></tr>
+</tbody></table></div>
+
+<h2>Milestones</h2>
+<div class="wrap"><table>
+<thead><tr><th style="width:3rem">#</th><th style="width:14rem">Milestone</th><th>Exit criteria (all measurable)</th></tr></thead>
+<tbody>
+<tr><td class="id">M1</td><td>Static page in the control</td><td><code>e.ui.browser</code> loads an HTTP(S) page, no JS: block + inline layout, images, links, scrolling. Hacker News matches the Dart golden within pixel tolerance. html5lib runner exists. Covers P0, P1 (parse/style core), P2.1–2.3, P3.1–3.3, 4.1–4.2, 7.1.</td></tr>
+<tr><td class="id">M2</td><td>Modern CSS layout</td><td>Floats, positioned, table, flex, grid, multicolumn, transforms, gradients, shadows. WPT CSS reftests ≥ 116/122 (Dart parity); layout pixel-probe suite carried over and green.</td></tr>
+<tr><td class="id">M3</td><td>Real web without JS</td><td>Wikipedia (12k-node table), MDN (web fonts), craigslist, abv.bg match Dart goldens; SVG, filters, caching, CORS/CSP, cookies, HTTP/2, TLS interop with real servers; shell with tabs and history.</td></tr>
+<tr><td class="id">M4</td><td>JavaScript</td><td>Engine passes the agreed test262 subset; DOM bindings complete enough for jQuery 3.5.1 init, AJAX re-render, timers, events, iframes; JS and layout feedback loop (<code>getBoundingClientRect</code>).</td></tr>
+<tr><td class="id">M5</td><td>Dart parity and retirement</td><td>Every <i>mig</i> item done; html5lib at least 86% (target 100%); NeperOS <code>browser.e</code> replaced by the control (C159 closed); Dart repo archived with the oracle artifacts.</td></tr>
+<tr><td class="id">M6</td><td>Beyond Dart</td><td>All <i>gap</i> items: Shadow DOM and custom elements, Workers and Service Workers, contenteditable, process isolation and sandbox, DevTools, WebAssembly, vertical text, audio/video, SPA support.</td></tr>
+</tbody></table></div>
+
+<h2>Items</h2>
+<p class="sub">Track: <b class="t-mig">mig</b> = done in Dart (partly or fully), port it; <b class="t-gap">gap</b> = missing or unfinished in Dart, build in Neper; <b class="t-core">core</b> = Neper language/library prerequisite. “Dart” column says where Dart stands. “Neper home” is the intended module or the existing module that already covers part of it. Size: S ≤ 1 day of agent work, M ≈ 2–4, L ≈ 1–2 weeks, XL = multi-week programme.</p>
+<div class="filters">
+<select id="fp"></select><select id="ft"><option value="">all tracks</option><option>mig</option><option>gap</option><option>core</option></select>
+<select id="fs"><option value="">all statuses</option><option>done</option><option>partial</option><option>wip</option><option>todo</option><option>blocked</option><option>deferred</option></select>
+<input id="fq" placeholder="search…" size="24"><span class="sub" id="fcount"></span>
+</div>
+<div class="wrap"><table id="items"><thead><tr><th>ID</th><th>Track</th><th>Item</th><th>Status</th><th>Dart</th><th>Neper home / notes</th><th>Size</th></tr></thead><tbody></tbody></table></div>
+
+<h2>Test oracles</h2>
+<div class="wrap"><table>
+<thead><tr><th>Area</th><th>Oracle</th><th>Baseline to match</th></tr></thead>
+<tbody>
+<tr><td>HTML parser</td><td>html5lib tree-construction: 58 <code>.dat</code> files in <code>vaper_engine_core/test/fixtures/html5lib</code>, ~1799 cases</td><td>Dart 1549/1791 (86.5%); target 100%</td></tr>
+<tr><td>CSS reftests</td><td>208 vendored WPT files (<code>apps/vaper/test/fixtures/wpt-reftests</code>), 800×600, match/mismatch pixel compare, Ahem font</td><td>Dart 116/122 (95%) with a hard-coded regression floor</td></tr>
+<tr><td>CSS units</td><td>~144 engine_core test files + 77 layout test files (display-list geometry asserts)</td><td>All carried over as fixtures; export vectors with the <code>scripts/gen_*_test.py</code> + reference pattern</td></tr>
+<tr><td>Real sites</td><td>Frozen offline corpus + Dart PNG / node-dump goldens (HN, Wikipedia, MDN, craigslist, abv.bg)</td><td>Pixel tolerance per site agreed in P0.3</td></tr>
+<tr><td>Net policy</td><td>CORS, CSP, cookies, cache, private-network vectors from <code>engine_core/test/net</code></td><td>Existing <code>e.net.policy</code>/<code>ssrf</code> differential (D2351) is the model</td></tr>
+<tr><td>JavaScript</td><td>test262 (subset by feature), jQuery 3.5.1, QuickJS-ng as a differential reference</td><td>Dart: QuickJS ES2023-ish ceiling, no Wasm</td></tr>
+<tr><td>Performance</td><td><code>benchmarks/</code> harness: parse, style, layout, raster, JS</td><td>No Dart numbers recorded; P0.7 records them before retirement</td></tr>
+</tbody></table></div>
+
+<h2>Risks</h2>
+<div class="wrap"><table>
+<thead><tr><th style="width:15rem">Risk</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>JS engine size and speed (interpreter only, no JIT, own GC, UTF-16 strings on a UTF-8 language)</td><td>Phase it (ES5 core → ES2015+ → async/modules); bytecode + shapes + inline caches from the start; record benchmarks against QuickJS early; test262 gates each stage.</td></tr>
+<tr><td>Scene limits and CPU raster speed on full pages</td><td>Tile by viewport, cull, glyph cache, damage regions (already in the scene); decide on the Vulkan backend by M3 measurements.</td></tr>
+<tr><td>Layout fidelity depends on text metrics that move from <code>dart:ui</code> to <code>e.text</code></td><td>Ahem in tests; port the pixel-probe harness first; accept per-site tolerance rather than bit-exact goldens.</td></tr>
+<tr><td><code>e.fmt.html</code> conformance unknown (no adoption agency, foster parenting or template yet)</td><td>Run html5lib in P0 before anything else depends on it.</td></tr>
+<tr><td>No TLS 1.2, HTTP/2 only as codecs, no HTTP/3 transport</td><td>TLS 1.2 and HTTP/2 transport are P4 prerequisites for M3; HTTP/3 deferred.</td></tr>
+<tr><td>Neper repo discipline: one queue item at a time, shared working tree, Windows suite never green end to end, no closures, no name shadowing</td><td>Each phase maps to queue items with acceptance lists; callbacks use fn pointer + context; add fixtures to <code>run.ps1</code> / <code>run.sh</code> per module; keep module surfaces in <code>docs/module-apis.md</code> and <code>docs/modules.json</code>.</td></tr>
+<tr><td>Single window per <code>e.ui.app</code></td><td>Core item N.8; until then shell multi-window = one process per window.</td></tr>
+</tbody></table></div>
+
+<h2>How to update this page</h2>
+<ul>
+<li>Edit the <code>ITEMS</code> array below: change a status and, when closing, put the commit or D-number in the notes. No generator; the page recomputes everything on load.</li>
+<li>Status meanings: <b>done</b> verified against the named oracle; <b>partial</b> code exists in Neper but is unverified or incomplete; <b>wip</b> a session is on it; <b>todo</b>; <b>blocked</b> waits on another item; <b>deferred</b> deliberately out of the programme.</li>
+<li>New work discovered while porting is appended as a new row, never silently folded into an old one.</li>
+</ul>
+
+<footer>Sources: Vaper docs/REQUIREMENTS.md and docs/STATUS.md; Neper lib/, neperos/src/browser.e, docs/work-queue.json (C159), docs/vaper.md, decisions D192, D470, D2148, D2346, D2351. Statuses marked partial were taken from module presence, not from running Neper's suites.</footer>
+</main>
+
+<script>
+// [id, phase, track, title, status, dart, home/notes, size]
+const PHASES={
+P0:"Foundations and oracle",P1:"Parse, DOM, style",P2:"Layout",P3:"Paint and media",P4:"Network and web security",
+P5:"JavaScript engine",P6:"Web platform APIs",P7:"Control and shell",P8:"Hardening and isolation",P9:"Conformance and performance",CORE:"Neper core prerequisites"};
+const ITEMS=[
+["0.1","P0","mig","Decide module layout (e.web.*, e.ui.browser, x.web.*) and record K1–K9 in decisions.md","todo","n/a","next free D-number; add queue items per milestone","S"],
+["0.2","P0","mig","Supersede docs/vaper.md for layout, paint and JS","done","n/a","note added to the top of docs/vaper.md","S"],
+["0.3","P0","mig","Freeze Vaper oracle: tag the repo, capture offline corpus (HN, Wikipedia, MDN, craigslist, abv.bg, jQuery pages) with assets, Dart PNGs, node dumps, display-list dumps","todo","render_url_tool.dart exists","store under tests/ fixtures with a manifest and licences","M"],
+["0.4","P0","mig","Export Dart test vectors to language-neutral fixtures (css tokenizer/selector/value, layout geometry, net policy, a11y)","todo","~270 test files, 44k LOC","reference + gen_*_test.py pattern","L"],
+["0.5","P0","mig","Ahem and test fonts as assets; deterministic text-measure mode in e.text","todo","Ahem from flutter_test","tests/assets","S"],
+["0.6","P0","mig","Neper test harnesses: html5lib runner, WPT reftest runner (800×600 pixel compare), layout pixel-probe, URL→PNG render tool","todo","html5lib_runner.dart, wpt_reftest_test.dart, render_url_tool.dart","tools/render_page.e; run headless via e.ui.testing","L"],
+["0.7","P0","mig","Record performance baselines (parse, style, layout, raster, JS) on the corpus before Dart is retired","todo","no numbers kept","benchmarks/","M"],
+["1.1","P1","mig","HTML tokenizer and entity table","partial","package:html wrapper (45 lines)","e.fmt.html (tokenizer + entities present); verify against html5lib tokenizer tests","M"],
+["1.2","P1","mig","HTML tree builder to Dart parity (86.5% html5lib)","partial","1549/1791","e.fmt.html tree builder as arena table; no adoption agency, foster parenting, template","L"],
+["1.3","P1","gap","HTML tree builder to 100%: adoption agency, foster parenting, template modes, foreign content (SVG/MathML), scripting, fragment parsing, quirks","todo","fails ~242 cases","e.fmt.html","L"],
+["1.4","P1","mig","Encoding sniffing and decoding (BOM, meta charset, HTTP header)","partial","dart:convert","e.text.encoding present; wire to loader","S"],
+["1.5","P1","mig","URL parsing, origin, site_for_url","partial","site_for_url (110), idna (89)","e.fmt.uri + e.net.idna (superset); verify WHATWG URL cases","M"],
+["1.6","P1","gap","Public suffix list and registrable-domain logic","todo","none","e.net.psl; also needed by cookies","M"],
+["1.7","P1","mig","DOM core: arena node tables, tree mutation, attributes, classList, dataset, namespaces, live collections, TreeWalker","todo","package:html + curated JS bridge","e.web.dom","L"],
+["1.8","P1","mig","Event dispatch model (capture/bubble, composed path, passive/once)","todo","JS prelude in C shim","e.web.dom","M"],
+["1.9","P1","mig","CSS tokenizer and parser (Syntax L3, never aborts)","partial","css_tokenizer/css_syntax/css_parser ~2k lines","e.fmt.css.syntax (L038 landed); run Dart vectors","M"],
+["1.10","P1","mig","Selectors L4 parser and matcher (is/where/not/has, An+B, specificity)","partial","selector_* ~1.2k lines","e.fmt.css.selector + e.fmt.css.match","M"],
+["1.11","P1","mig","Cascade kernels: origin, importance, layers, order, @scope, @container","partial","@container/@scope done in Dart","e.fmt.css.cascade/container (L040 landed)","M"],
+["1.12","P1","mig","CSS values: colors (lab/oklch/light-dark), lengths, calc/min/max/clamp, angles, time","partial","vaper_css_values 2.4k lines","e.gfx.cssvalue (2.5k lines)","M"],
+["1.13","P1","mig","Style resolver: inheritance, shorthands, var(), @media/@supports/@property/@font-face/@keyframes, state pseudo-classes, ::before/::after, UA stylesheet","todo","style_resolver 4.4k + computed_style 0.9k","e.web.style","XL"],
+["1.14","P1","mig","Render-tree builder: DOM + style → box inputs (form controls, replaced elements, generated content, counters, lists)","todo","snapshot_builder 2.4k lines","e.web.style/layout input","L"],
+["1.15","P1","mig","Animations and transitions engine, interpolation","partial","keyframes + transitions, interpolate.dart","e.ui.animation overlap to diff first; e.web.style","L"],
+["1.16","P1","gap","Animation gaps: auto lengths, px↔% mixed stops/endpoints for margin/padding/inset","todo","open in §13","e.web.style","M"],
+["1.17","P1","gap","Scroll-driven animations","todo","blocked on dart:ui","needs compositor (3.16)","M"],
+["1.18","P1","gap","ICC @color-profile / color(<profile>) and gamut mapping","todo","blocked, sRGB-only","e.gfx.cssvalue + new ICC reader","M"],
+["1.19","P1","gap","Incremental style invalidation (:has, attribute/class changes, dirty bits)","todo","full recompute","e.web.style","L"],
+["1.20","P1","mig","Accessibility tree builder (roles, accName precedence)","partial","accessibility_builder 637 lines","e.fmt.html.accessible + e.ui.accessibility","M"],
+["1.21","P1","gap","Full ARIA: aria-describedby, live regions, select option semantics, table cell indices","todo","open in §12","e.web.a11y","M"],
+["2.1","P2","mig","Box tree generation, anonymous boxes, display types, list markers, ::first-line / ::first-letter","todo","layout_engine.dart 7.1k lines (single file)","e.web.layout.box — split by formatting context, not one file","L"],
+["2.2","P2","mig","Block formatting: margin collapsing, BFC, clearance","todo","included","e.web.layout.block","L"],
+["2.3","P2","mig","Inline formatting: line boxes, vertical-align, shaping, bidi, line breaking, white-space, hyphenation, ellipsis, ruby, spacing","todo","Paragraph/TextPainter from dart:ui","e.web.layout.inline over e.text.shape/layout/bidi/segment/hyphen","XL"],
+["2.4","P2","mig","Floats","todo","included","e.web.layout.float","M"],
+["2.5","P2","mig","Positioned layout: relative, absolute, fixed, sticky","todo","included","e.web.layout.position","L"],
+["2.6","P2","mig","Tables: rowspan/colspan, collapse, fixed layout","todo","incl. 12k-node Wikipedia table","e.web.layout.table","L"],
+["2.7","P2","mig","Flexbox","todo","included","e.web.layout.flex (do not reuse e.ui.layout)","L"],
+["2.8","P2","mig","Grid","todo","included","e.web.layout.grid","XL"],
+["2.9","P2","mig","Multicolumn fragmentation","todo","column-count works","e.web.layout.multicol","M"],
+["2.10","P2","mig","Intrinsic sizing, aspect-ratio, min/max, box-sizing, calc with percentages","todo","incl. border-box intrinsic fix","e.web.layout","M"],
+["2.11","P2","mig","Overflow and scroll containers, scrollbars, sticky offsets","todo","included","e.web.layout + control scroll","M"],
+["2.12","P2","mig","Transforms 2D, stacking contexts","todo","included","e.web.layout/paint","M"],
+["2.13","P2","mig","Replaced elements: img, svg, canvas, iframe, object sizing","todo","included","e.web.layout.replaced","M"],
+["2.14","P2","mig","Form control layout (input, select, textarea, button, range, checkbox)","todo","app-side widgets in Flutter","e.web.layout.form with e.ui controls as overlays","L"],
+["2.15","P2","mig","Hit testing and geometry (elementFromPoint, getBoundingClientRect, offset*), layout ↔ JS feedback loop","todo","live geometry bridge","e.web.layout.geom","M"],
+["2.16","P2","gap","writing-mode: vertical-*, text-orientation","todo","blocked on dart:ui","e.text.layout vertical support — needed in core too","L"],
+["2.17","P2","gap","Pixel-spacing fidelity against a reference browser, border-box inline-flow gap","todo","partial in Dart","per-site tolerance in P9","M"],
+["2.18","P2","gap","3D transforms and perspective","todo","none","e.web.layout/paint","M"],
+["2.19","P2","gap","Incremental layout (dirty bits), layout caching, large-table performance","todo","full layout each time","e.web.layout","L"],
+["2.20","P2","gap","Shape-outside, subgrid, scroll snap, @page / print fragmentation","todo","none","low priority","L"],
+["3.1","P3","mig","Display list model and stacking-context paint order","todo","display_list.dart 903 lines","e.web.paint","M"],
+["3.2","P3","gap","Opacity-group flattening over escaping out-of-flow content","todo","open in §5","needs paint tree, not flat list","M"],
+["3.3","P3","mig","Lower display list to e.gfx.scene.Builder in viewport tiles within scene limits","todo","CanvasReplayer 3.0k lines","e.web.paint.lower; handles TooLarge, 8 clips, 4 opacity layers","L"],
+["3.4","P3","mig","Backgrounds (layers, size/position/repeat, clip), borders, radius, outline, box-shadow, text-shadow, border-image","todo","included","e.web.paint","L"],
+["3.5","P3","mig","Gradients: linear, radial, conic, repeating, interpolation color spaces","todo","included","e.gfx.paint brushes","M"],
+["3.6","P3","mig","Text painting: decorations, selection highlight, caret, background-clip:text","todo","included","e.web.paint.text","M"],
+["3.7","P3","gap","-webkit-text-stroke, stroked text","todo","blocked","scene stroke of glyph outlines","S"],
+["3.8","P3","mig","clip-path and mask (luminance etc.)","todo","included","e.gfx.scene clips","M"],
+["3.9","P3","mig","Filters (blur, drop-shadow, color matrix), blend modes","partial","included","e.gfx.filter exists; blend needs core N.3","M"],
+["3.10","P3","gap","backdrop-filter","todo","blocked, no read-back","core N.3","M"],
+["3.11","P3","mig","Image pipeline: PNG/JPEG/GIF/WebP decode, srcset/picture, object-fit, decode cache and memory budget, animation","partial","dart:ui codecs only","e.fmt.png/jpeg/gif/webp exist","L"],
+["3.12","P3","gap","ICO (favicon) and AVIF decoders","todo","hand-written favicon codec only","e.fmt.ico, e.fmt.avif","M"],
+["3.13","P3","mig","SVG: paths, arcs, gradients, transforms, clip, mask, pattern, use, viewBox, inline SVG styling","partial","CanvasReplayer SVG, hardened 2026-07-12","e.gfx.svg (3.8k lines): diff against Dart probes","L"],
+["3.14","P3","gap","SVG text: per-glyph x/y lists, rotate, textLength, stroked text, textPath","todo","open in §10","e.gfx.svg","M"],
+["3.15","P3","mig","Web fonts: @font-face fetch, WOFF/WOFF2 → sfnt, registration","done","woff_decoder, woff2_decoder","e.fmt.woff, e.fmt.woff2 (D2346, 480-case differential); registration remains in 3.16","S"],
+["3.16","P3","mig","Font registry: TrueType registration, unicode-range, font-display, fallback chains, variable fonts","todo","FontDataReady","e.text.shape fonts","L"],
+["3.17","P3","gap","CFF/OpenType outlines and colour emoji (COLR/CBDT)","todo","engine handled by Skia","core N.4","L"],
+["3.18","P3","mig","Canvas 2D API","todo","canvas polyfill in quickjs_engine","e.gfx.scene via bindings (6.18)","L"],
+["3.19","P3","gap","<audio> playback (mp3/opus/flac/wav decode exists)","todo","blocked on dart:ui","e.audio + media element","L"],
+["3.20","P3","gap","<video> playback (H.264/VP9/AV1 decoders do not exist)","deferred","blocked","revisit after M6","XL"],
+["3.21","P3","gap","WebGL / WebGPU","deferred","out of scope","e.gpu","XL"],
+["3.22","P3","gap","Compositor: scroll layers, fixed/sticky layers, compositor-driven animation","todo","none","e.web.paint.layers","L"],
+["3.23","P3","gap","Glyph cache and raster performance work","todo","Skia","core N.2","M"],
+["4.1","P4","mig","Resource loader and request pipeline: priority, redirects, referrer policy, MIME sniffing, nosniff, content-encoding gzip/br/zstd","partial","loaders ~0.5k lines","e.net.http + e.fmt.brotli/gzip/zstd","L"],
+["4.2","P4","mig","HTTP/1.1 client with pool and keep-alive over TLS","partial","dart:io HttpClient","e.net.http (1.7k lines)","M"],
+["4.3","P4","mig","HTTP/2 transport: streams, flow control, settings","todo","package:http2","e.net.http2 is codec/HPACK only","L"],
+["4.4","P4","mig","TLS 1.3 client, roots, hoststore","partial","dart:io","e.net.tls narrow profile; interop-test against real sites","M"],
+["4.5","P4","gap","TLS 1.2 (many servers still need it), session resumption","todo","platform TLS","e.net.tls","L"],
+["4.6","P4","gap","TLS hardening: OCSP hard-fail, Certificate Transparency, minimum TLS 1.3 toggle","todo","open in §9","e.net.tls","M"],
+["4.7","P4","gap","HTTP/3 and QUIC (QUIC crypto absent)","deferred","blocked","e.net.http3/quic codecs only","XL"],
+["4.8","P4","mig","HTTP cache RFC 9111: freshness, age, conditional, request Cache-Control, must-revalidate, stale-if-error, partitioning, bfcache","todo","http_cache, cached_loader, bfcache ~0.8k","e.net.cache","L"],
+["4.9","P4","gap","Cache gaps: full Vary, stale-while-revalidate, Range/206, transactional on-disk index, priority eviction, per-profile location","todo","open in §17","e.net.cache","L"],
+["4.10","P4","mig","Encrypted cache at rest and secure memory","todo","secure_cache + chacha/hkdf/siphash","use e.crypto.aead/kdf; do not port primitives","M"],
+["4.11","P4","mig","Cookies RFC 6265bis: prefixes, CHIPS, SameSite, caps, persistence","partial","cookie_jar 422","e.net.cookie present; policy side per docs/vaper.md D1","M"],
+["4.12","P4","mig","CORS and preflight","partial","cors.dart 475","e.net.policy (L046); verify against Dart vectors","M"],
+["4.13","P4","mig","Private-network / SSRF classification","done","private_network.dart","e.net.ssrf, e.net.policy (D2351 differential)","S"],
+["4.14","P4","mig","CSP parse and enforce incl. host wildcards, nonces, hashes","todo","csp_policy 162","e.net.csp","M"],
+["4.15","P4","gap","frame-ancestors / X-Frame-Options clickjacking protection; COOP/COEP/CORP","todo","COOP/COEP/CORP done in Dart, frame-ancestors open","e.net.policy","M"],
+["4.16","P4","gap","HSTS with preload list, mixed-content upgrade, HTTPS-first","todo","none","e.net.hsts","M"],
+["4.17","P4","mig","Request blocker and ABP filter lists","partial","request_blocker + filter_list_*","e.net.policy filter subset (L046)","M"],
+["4.18","P4","mig","WebSocket and SSE transport","partial","websocket.dart 790","e.net.ws, e.fmt.sse","S"],
+["4.19","P4","gap","DoH / DNSSEC, preconnect, dns-prefetch, Early Hints 103","todo","open in §8/§17","e.net.dns","M"],
+["4.20","P4","mig","Proxy and authentication (SOCKS, HTTP auth)","partial","dart:io","e.net.socks, e.net.http.auth","S"],
+["4.21","P4","gap","WebRTC","deferred","out of scope","—","XL"],
+["5.1","P5","gap","Engine design record: value representation, heap layout, shapes, bytecode, GC, host-object protocol without closures","todo","QuickJS (C)","docs + D-entry before code","M"],
+["5.2","P5","gap","Lexer and parser to ES2024 (ASI, templates, classes, private fields, destructuring, optional chaining, async/generators, modules)","todo","QuickJS","e.web.js.parse","XL"],
+["5.3","P5","gap","Scope analysis, early errors, bytecode compiler","todo","QuickJS","e.web.js.compile","XL"],
+["5.4","P5","gap","VM: calls, closures, exceptions, generators and async as coroutines","todo","QuickJS","e.web.js.vm","XL"],
+["5.5","P5","gap","Heap and mark-sweep GC, WeakRef / FinalizationRegistry, memory limits","todo","QuickJS","e.web.js.heap","XL"],
+["5.6","P5","gap","Object model: shapes, inline caches, property attributes, prototypes, Proxy/Reflect, Symbol","todo","QuickJS","e.web.js.object","L"],
+["5.7","P5","gap","Builtins core: Object, Function, Array, String, Number, Boolean, Math, Error, JSON","todo","QuickJS","e.web.js.builtin","XL"],
+["5.8","P5","gap","Map/Set/WeakMap/WeakSet, ArrayBuffer, TypedArrays, DataView, BigInt","todo","QuickJS","e.web.js.builtin","L"],
+["5.9","P5","gap","Date with time zones and an Intl subset (DateTimeFormat, NumberFormat, Collator, PluralRules, Segmenter)","todo","QuickJS","e.tz, e.text.locale/collate/segment as backends","L"],
+["5.10","P5","gap","ECMAScript RegExp: backtracking, backreferences, lookaround, named groups, unicode sets, sticky","todo","QuickJS libregexp","e.text.regex is Pike and refuses these — new engine in e.web.js.regexp","L"],
+["5.11","P5","gap","Promise, microtasks, async/await, async iterators, job queue integrated with the event loop","todo","QuickJS","e.web.js + e.web.page","L"],
+["5.12","P5","mig","ES modules: static/dynamic import, import maps, top-level await, graph prefetch","todo","JsModuleCapable, module loader in C shim","e.web.js.module","L"],
+["5.13","P5","gap","UTF-16 JS strings on a UTF-8 language: dual representation, ropes, interning","todo","QuickJS","e.web.js.str","M"],
+["5.14","P5","gap","test262 runner and feature-gated pass targets","todo","none","tools/test262; fixtures subset checked in","M"],
+["5.15","P5","gap","JS performance: benchmarks, inline caches, string builders; target recorded against QuickJS","todo","QuickJS interpreter","benchmarks/","L"],
+["5.16","P5","gap","Debugger and profiler hooks (DevTools prerequisite)","todo","none","e.web.js.debug","M"],
+["5.17","P5","gap","WebAssembly: decoder, validator, interpreter, JS API","todo","QuickJS has none","e.web.wasm","XL"],
+["5.18","P5","gap","ES2024+ features beyond the QuickJS ceiling (iterator helpers, Set methods, Temporal)","todo","engine ceiling","e.web.js","L"],
+["5.19","P5","mig","QuickJS-ng as dev-time differential oracle (not shipped)","todo","native/quickjs-ng","script-run only, outside the build","S"],
+["6.1","P6","mig","Host-object binding layer (table-driven, fn pointer + context, wrapper identity, GC integration)","todo","C shim prelude + dom_bridge.dart","e.web.bind","L"],
+["6.2","P6","mig","Window globals: location, history with session history, navigator, screen, console, dialogs","partial","quickjs_engine polyfills, bfcache","e.web.page","M"],
+["6.3","P6","mig","DOM API complete: querySelector(All), createElement/TextNode, cloneNode, insertBefore, removeChild, parentNode linking, innerHTML, insertAdjacentHTML, DOMParser, template","todo","curated subset only; jQuery 3.5.1 ok","e.web.bind.dom","XL"],
+["6.4","P6","mig","CSSOM: getComputedStyle, style object, CSSStyleSheet/insertRule, matchMedia","todo","partial","e.web.bind.cssom","L"],
+["6.5","P6","mig","Events and input: keyboard, pointer, wheel, touch, composition, focus, CustomEvent","partial","dispatch in prelude","e.web.bind.events","L"],
+["6.6","P6","mig","Event loop, timers, requestAnimationFrame, requestIdleCallback, task sources","partial","engine_isolate loop","e.web.page.loop","M"],
+["6.7","P6","mig","fetch, XHR, AbortController, Headers/Request/Response, streams, FormData, URL, Blob/File, WebSocket, EventSource, sendBeacon","partial","fetch + WebSocket polyfills","e.web.bind.net","L"],
+["6.8","P6","mig","Web storage and cookies API","partial","localStorage via shell","e.web.bind.storage over e.store","M"],
+["6.9","P6","gap","IndexedDB, Cache API, StorageManager quotas","todo","none","e.db / x.sqlite","L"],
+["6.10","P6","gap","MutationObserver, IntersectionObserver, ResizeObserver, PerformanceObserver, Performance API","todo","partial","e.web.bind.observe","L"],
+["6.11","P6","gap","Selection API, Range, Clipboard API","todo","open in §11","e.web.bind.selection","L"],
+["6.12","P6","gap","contenteditable and editing commands (selection model, undo, IME)","todo","open in §11","e.web.edit over e.ui Edit","XL"],
+["6.13","P6","gap","Drag and drop","todo","open in §11","e.ui.window data offers","M"],
+["6.14","P6","mig","Forms: validation, submission (GET); native POST navigation","partial","POST not natively navigable","e.web.page + bind","M"],
+["6.15","P6","gap","Native-style date/color/file inputs and real file picker","todo","blocked","e.ui controls","M"],
+["6.16","P6","gap","Shadow DOM, slots, custom elements, ElementInternals","todo","none (§7)","e.web.dom + style scoping","XL"],
+["6.17","P6","mig","iframes: nested browsing contexts, sandbox, srcdoc, postMessage","partial","nested docs render; interactivity open","e.web.page","L"],
+["6.18","P6","gap","Web Workers, SharedWorker, structured clone, MessageChannel, BroadcastChannel","todo","none","e.thread + e.channel","L"],
+["6.19","P6","gap","Service Workers","todo","none (§8)","e.web.page.sw","XL"],
+["6.20","P6","gap","Web Animations API (Element.animate)","todo","none","e.web.style","M"],
+["6.21","P6","gap","Web Crypto, TextEncoder/Decoder, Compression Streams","todo","none","e.crypto, e.text.encoding, e.fmt.*","M"],
+["6.22","P6","gap","Permissions, geolocation, notifications, media devices hooks to the host","deferred","none","through control events (7.2)","M"],
+["6.23","P6","gap","Sanitizer API and Trusted Types","todo","none","e.fmt.html.sanitize","M"],
+["7.1","P7","mig","e.ui.browser v0: fetch + parse + style + layout + paint in a widget.Custom, wheel scroll, link taps, no JS","todo","vaper_render RenderWebView 2.3k lines","lib/e/ui/browser.e; milestone M1","L"],
+["7.2","P7","mig","Control API and events: navigate/reload/stop/back/forward; load, title, favicon, progress, new-window, download, dialog, permission, context-menu; zoom; find-in-page; save as PNG","todo","FindController, web_view_surface","browser.e","L"],
+["7.3","P7","mig","Input plumbing: hover/cursor, focus and tab order, text input via Edit + IME, clipboard, kinetic scroll, scrollbars","todo","included","Region/Scope/Edit wrappers","L"],
+["7.4","P7","mig","Engine/UI thread split with channel hand-off, frame pacing, cancel on navigation","todo","isolates + SendPort snapshot","e.thread, e.channel","L"],
+["7.5","P7","mig","Embedded form widgets and popups (select dropdown, date picker) via overlays","todo","Flutter widgets","e.ui.overlay","M"],
+["7.6","P7","mig","Accessibility bridge to e.ui.accessibility; prefers-color-scheme / reduced-motion","partial","semantics assembly","e.ui.accessibility","M"],
+["7.7","P7","mig","Shell app: tabs, omnibox, bookmarks, history search, downloads, favicons, settings","todo","apps/vaper 3.3k lines","neperos browser rewrite, then desktop app","XL"],
+["7.8","P7","mig","Chrome bookmark import","todo","done in Dart","x.web.import","S"],
+["7.9","P7","gap","Chrome password import (DPAPI/Keychain/libsecret)","todo","open","x.web.import","M"],
+["7.10","P7","gap","Password manager and autofill; reader mode","todo","open in §14","x.web.cred, e.web.reader","L"],
+["7.11","P7","mig","TLS error interstitial; proceed-anyway","partial","proceed deferred","browser shell","S"],
+["7.12","P7","gap","Incognito, profiles, search engines and suggestions, per-site permissions","todo","C159 remainder","shell","M"],
+["7.13","P7","gap","DevTools: element inspector, network panel, console, JS debugger","todo","open in §15","tools/ or panel in shell","XL"],
+["7.14","P7","mig","about: pages, new-tab page, error pages","todo","about_pages 684 lines","shell","S"],
+["7.15","P7","mig","Replace neperos/src/browser.e (2.3k lines) with e.ui.browser; close C159","todo","n/a","neperos","L"],
+["7.16","P7","gap","Extensions and account sync","deferred","out of scope","—","XL"],
+["8.1","P8","gap","Renderer process separation: spawn, IPC over pipes + shared memory, display-list transport","todo","none","x.web.proc using e.os.spawn / map_file","XL"],
+["8.2","P8","gap","OS sandbox: Windows AppContainer/job objects, Linux seccomp/namespaces, macOS Seatbelt","todo","none","core N.6","XL"],
+["8.3","P8","gap","Site isolation, out-of-process iframes","todo","site_for_url logic only","x.web.proc","XL"],
+["8.4","P8","gap","Fuzzing of HTML, CSS, JS, image and font decoders; safe-by-construction bound checks","todo","none","fuzz corpora from fmt fixtures","L"],
+["8.5","P8","gap","Fingerprinting resistance: canvas/WebGL/audio noise, font, timer, screen clamping","todo","none","e.web.bind","M"],
+["8.6","P8","gap","Credential manager (Argon2id), WebAuthn, breach detection","todo","none","e.crypto.kdf, x.web.cred","L"],
+["8.7","P8","gap","Supply chain: signed/reproducible builds, tamper-evident audit log, published threat model","todo","none","byte-identical compiler fixed point already exists","L"],
+["9.1","P9","mig","html5lib at least 86% then 100%","todo","1549/1791","after 1.2/1.3","M"],
+["9.2","P9","mig","WPT CSS reftests reproduce 116/122; list and triage the 6 known failures (:visited, JS scrollTop, @color-profile, -webkit-text-stroke, background-attachment:local)","todo","116/122","after M2","M"],
+["9.3","P9","gap","Broader WPT subsets: dom, html, fetch, url","todo","none","tools","L"],
+["9.4","P9","gap","test262 pass-rate targets per stage","todo","none","after 5.14","M"],
+["9.5","P9","gap","Acid2 visual regression","todo","open in §16","tests","S"],
+["9.6","P9","mig","Real-site corpus golden diff; then live sweep, SPA / JS-app support (largest real-web gap)","todo","static HTML only for JS apps","after M4","L"],
+["9.7","P9","gap","Performance and memory budgets per tab; regression gate in benchmarks/","todo","none recorded","after 0.7","M"],
+["9.8","P9","mig","Fixtures registered in tests/selfhost/run.ps1 and run.sh, module-apis.md and modules.json per module","todo","n/a","per module, ongoing","M"],
+["N.1","CORE","core","Raise or tile scene limits (SCENE_BYTES, MAX_EDGES, 8 clips, 4 opacity layers)","todo","n/a","lib/e/gfx/scene.e","M"],
+["N.2","CORE","core","Glyph cache in the rasteriser (glyphs are re-flattened every render today)","todo","n/a","lib/e/gfx/scene.e","M"],
+["N.3","CORE","core","Scene commands for blend modes and backdrop read-back","todo","n/a","lib/e/gfx/scene.e","L"],
+["N.4","CORE","core","CFF / OpenType outlines and colour glyph tables in e.text.shape","todo","n/a","lib/e/text/shape.e","L"],
+["N.5","CORE","core","Vertical text support in e.text.layout","todo","n/a","lib/e/text/layout.e","M"],
+["N.6","CORE","core","e.os.sandbox: restricted tokens/AppContainer, seccomp, Seatbelt","todo","n/a","lib/e/os*.e","XL"],
+["N.7","CORE","core","UTF-16 string helpers for the JS engine","todo","n/a","lib/e/text","S"],
+["N.8","CORE","core","Multiple windows per e.ui.app","todo","one window per app today","lib/e/ui/app.e","L"],
+["N.9","CORE","core","Confirm or add: arena-heavy cyclic structures and graph handles without closures (design review for the JS heap)","todo","n/a","language review with K4","M"]
+];
+
+const W={done:1,partial:.5,wip:.25,todo:0,blocked:0};
+const $=s=>document.querySelector(s);
+const act=ITEMS.filter(i=>i[4]!=="deferred");
+const pct=a=>a.length?Math.round(100*a.reduce((s,i)=>s+W[i[4]],0)/a.length):0;
+const cnt=(a,st)=>a.filter(i=>i[4]===st).length;
+function bar(a){const n=a.length||1;const seg=(st,c)=>`<i style="width:${100*cnt(a,st)/n}%;background:var(--${c})"></i>`;return `<div class="bar">${seg("done","ok")}${seg("partial","part")}${seg("wip","wip")}</div>`}
+function card(lab,a,acc){return `<div class="card" style="--accent:var(--${acc})"><div class="lab">${lab}</div><div class="val">${pct(a)}<span class="sub">%</span></div>${bar(a)}<div class="sub mono">${cnt(a,"done")} done · ${cnt(a,"partial")} partial · ${a.length} items</div></div>`}
+$("#cards").innerHTML=card("Overall",act,"ok")+card("Migration (done in Dart)",act.filter(i=>i[2]==="mig"),"mig")+card("Gaps (unfinished in Dart)",act.filter(i=>i[2]==="gap"),"gap")+card("Neper core prerequisites",act.filter(i=>i[2]==="core"),"core");
+$("#phases tbody").innerHTML=Object.keys(PHASES).map(p=>{const a=act.filter(i=>i[1]===p);const all=ITEMS.filter(i=>i[1]===p);return `<tr><td class="id"><b>${p}</b></td><td>${PHASES[p]}</td><td>${bar(a)}<span class="sub mono">${pct(a)}%</span></td><td class="mono">${cnt(a,"done")}/${a.length}${all.length-a.length?` <span class="sub">(+${all.length-a.length} deferred)</span>`:""}</td></tr>`}).join("");
+$("#fp").innerHTML='<option value="">all phases</option>'+Object.keys(PHASES).map(p=>`<option value="${p}">${p} ${PHASES[p]}</option>`).join("");
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+function draw(){const p=$("#fp").value,t=$("#ft").value,s=$("#fs").value,q=$("#fq").value.toLowerCase();
+const r=ITEMS.filter(i=>(!p||i[1]===p)&&(!t||i[2]===t)&&(!s||i[4]===s)&&(!q||i.join(" ").toLowerCase().includes(q)));
+$("#fcount").textContent=r.length+" of "+ITEMS.length;
+$("#items tbody").innerHTML=r.map(i=>`<tr><td class="id">${i[0]}</td><td class="t t-${i[2]}">${i[2]}</td><td>${esc(i[3])}</td><td><span class="pill s-${i[4]}">${i[4]}</span></td><td class="sub">${esc(i[5])}</td><td class="sub">${esc(i[6])}</td><td class="sz">${i[7]}</td></tr>`).join("")}
+["#fp","#ft","#fs"].forEach(s=>$(s).onchange=draw);$("#fq").oninput=draw;draw();
+</script>
+</body>
+</html>

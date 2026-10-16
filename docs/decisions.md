@@ -41587,3 +41587,39 @@ Where the v3 pixels are the spec (button ring, edit frame and spin buttons, chec
 ## D5113 — Popup menu widths follow GDI's Tahoma, not the shaper
 
 v3 sets menu text with GDI: Tahoma 12 px (11 px for the status bar) at 100 % has hinted whole-pixel advances, summed per glyph with no kerning and a wider word gap. `navigation.e` carries the advance tables (`windows_gdi_regular`, `windows_gdi_bold`, `windows_gdi_regular_11`) and draws menu glyphs one by one at those pitches. A menu column is the widest row (label in GDI advances, plus 14 and the shortcut's width when it has one) plus 46 for frame, picture slot and padding, found by fitting the ten captured menus; a title is its GDI width plus 6 each side. The shaper's own advances give widths that are off by several pixels and must not be used for Windows menus.
+
+## D5114 — The browser is `e.web.*` (engine), `e.ui.browser` (control) and `x.web.*` (drivers) (browser K1)
+
+Vaper, the Dart/Flutter browser, is not continued and not released; the whole browser is re-implemented here. Pure, deterministic, fixture-testable engine code lives in `e.web.*` (`dom`, `style`, `layout`, `paint`, `js`, `bind`, `page`); the control is `lib/e/ui/browser.e`, one browsing context built from `widget.Custom` (paint) wrapped in `Region` (pointer, wheel), `Scope` (keys, focus) and `Edit` (text, IME, clipboard), with no engine logic in it; platform and process code (renderer process, OS sandbox, credential store, importers) lives in `x.web.*`. This follows the rule in `docs/vaper.md` (pure to `e`, platform to `x`). The plan, the item list (IDs such as `1.13`, `5.10`) and the status are in `docs/browser-progress.html`; `docs/vaper.md` is superseded for layout, paint, JS and the control.
+
+## D5115 — The JavaScript engine is written in Neper; QuickJS is not embedded (browser K2)
+
+Neper cannot link C objects or static archives with its own linker (`--linker=system` only), cannot export a symbol for a C library to call back (D192, spec §5), and is 100 % self-hosted; D2148 already said the browser needs a JavaScript engine in Neper. So `e.web.js` is a parser, bytecode compiler, VM, own heap and GC, builtins, an ECMAScript RegExp engine (`e.text.regex` is a Pike VM that refuses backreferences and lookaround, so it cannot serve), modules, and test262 as the gate, built in stages (ES5 core, ES2015+, async and modules). QuickJS-ng under `vaper/native` is a dev-time differential reference run from a script, never part of a build. The cost is the largest single item of the programme (tracker phase P5); no JIT.
+
+## D5116 — Text goes through `e.text.shape` and `e.text.layout`; Ahem is the test font (browser K3)
+
+Vaper delegated all text to `dart:ui` Paragraph. The browser layout engine measures and breaks text only with `e.text.shape`, `layout`, `bidi`, `segment` and `hyphen`. The Ahem font is a test asset so layout and WPT reftests have exact, deterministic metrics. This also makes vertical writing modes possible, which Dart could not do (tracker 2.16, core N.5).
+
+## D5117 — Browser memory model: arenas, index tables, own JS heap (browser K4)
+
+Neper has no GC and no global allocator. The engine uses one arena per document and one per frame. DOM nodes and boxes are rows in index tables, never pointers, so they survive mutation and cross the engine-to-UI hand-off. The JS engine manages its own heap with a mark-sweep collector over a byte arena. Host callbacks are a function pointer plus a context, since there are no closures.
+
+## D5118 — Paint is a display list lowered to `scene.Builder` in viewport tiles (browser K5)
+
+The page is painted from a display list (the Dart `DisplayList` model) that is lowered to `e.gfx.scene.Builder` per viewport tile. The scene has hard limits (`SCENE_BYTES`, `MAX_EDGES` per command, 8 clip masks, 4 opacity layers, a `TooLarge` result), so a page can never be one scene. Missing scene features are core work, not browser work: tile or raise the limits, a glyph cache, blend and backdrop commands, CFF and colour glyph tables (tracker N.1 to N.4).
+
+## D5119 — Vaper is frozen as a test oracle before it is retired (browser K6)
+
+Before the Dart repository is archived, an offline site corpus (Hacker News, Wikipedia with its 12k-node table, MDN, craigslist, abv.bg, jQuery pages) is captured with its assets, together with Dart PNGs, node dumps and display-list dumps, and the Dart test vectors (about 270 test files) are exported as language-neutral fixtures with the `gen_*_test.py` and reference pattern. The Neper results are compared with these and with html5lib (Dart: 1549 of 1791), the 208 vendored WPT reftests (Dart: 116 of 122) and test262, not with a running Dart build. Performance baselines are recorded in the same step.
+
+## D5120 — What is not ported from Vaper (browser K7)
+
+Not ported: the `package:html` wrapper (replaced by `e.fmt.html`), siphash, hkdf and chacha20-poly1305 (`e.crypto` has them with vectors), Brotli and IDNA (exist), the isolate boundary and `RenderTreeSnapshot` protocol, `dart:ffi` bindings, and the Flutter shell and render widgets. The encrypted cache uses `e.crypto.aead` and `kdf`.
+
+## D5121 — The control is one browsing context; the shell is an app layer (browser K8)
+
+`e.ui.browser` owns one page: navigate, history, find, zoom, scroll, input, events (load, title, favicon, progress, new window, download, dialog, permission, context menu). Tabs, omnibox, bookmarks, history search, downloads and DevTools are built on top, first as the NeperOS Browser (C159, replacing `neperos/src/browser.e`), then a desktop shell. `e.ui.app` allows one window per app, so a multi-window shell needs core item N.8 or one process per window.
+
+## D5122 — `docs/browser-progress.html` is a hand-maintained exception; milestones are queue items L166 to L171 (browser K9)
+
+`AGENTS.md` makes the generated `docs/progress.html` the only readiness document. The browser programme has about 170 items, too many for queue rows, so `docs/browser-progress.html` tracks them by hand (edit its `ITEMS` array), and the queue carries one item per milestone (L166 M1 to L171 M6) whose acceptance lists name the tracker IDs. They are appended after the existing rows, so the NeperOS and chart priorities (D2119, D2125) are unchanged. A session picking an L166 to L171 item updates both its queue evidence and the tracker rows.

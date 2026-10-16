@@ -1,5 +1,7 @@
 # vaper → neper migration plan
 
+> **Superseded for layout, paint, JS and the control (2026-10-16).** Vaper is no longer continued; the whole browser moves to Neper as `e.ui.browser` + `e.web.*`. The "never" and "out of scope" rows below for layout, paint, render and JS no longer hold. See `docs/browser-progress.html`. The landed items (A1–A3, F1, L046) stand.
+
 Status: plan. Source: `d:\repos\vaper` (Dart/Flutter browser, engine 0.1.0). Target: neper `lib/e` (pure stdlib), `lib/x` (drivers), tools.
 
 Rule: pure + deterministic + fixture-testable → `e.*`; socket/credential/platform → `x.*`; app workflow → tool/recipe, never `e.*`. Isolate-safe pure Dart only: no `dart:ui`/Flutter/`dart:ffi` in `e.*`. No weaker duplicate crypto (vaper `siphash/hkdf/chacha` carry no RFC vectors; neper already covers them). `docs/progress.html` stays the only readiness record; this file is the work plan.
