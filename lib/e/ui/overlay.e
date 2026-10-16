@@ -7800,7 +7800,7 @@ fn windows_close_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         ink = style.hex(16777215u32)
     }
     // looks3: the X is the capture's own pixels (e.ui.winchrome), 33 wide on a dialog's lone close button.
-    let (glyph, glyph_error) = winchrome.glyph_node(a, 2u32, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), 1.0, 33.0)
+    let (glyph, glyph_error) = winchrome.glyph_node(a, 2u32, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), 1.0, 33.0, control.device_snap(t))
     if glyph_error != ok { ret (zero, glyph_error) }
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = fill
@@ -7852,7 +7852,9 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     bar_parts[1usize] = widget.positioned(0u64, width - 33.0, 0.0, style.defaults(), x_held[0usize..1usize])
     let (icon_held, icon_held_error) = mem.alloc[widget.Node](a, 1usize)
     if icon_held_error != ok { ret (zero, TooLarge) }
-    icon_held[0usize] = winchrome.icon_node()
+    let (icon_node, icon_node_error) = winchrome.icon_node(a, control.device_snap(t))
+    if icon_node_error != ok { ret (zero, icon_node_error) }
+    icon_held[0usize] = icon_node
     bar_parts[2usize] = widget.positioned(0u64, 10.0, 7.0, style.defaults(), icon_held[0usize..1usize])
     var bar = control.sized_style(width, bar_h)
     bar.background = paint.Brush { Solid: style.windows_caption_face(true) }
@@ -7921,13 +7923,19 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // laid over it, every one a node already positioned in window coordinates (the caption among them, a title bar from
 // e.ui.navigation). v3 forms are laid out by hand in the DFM, so there is no flow: the caller places the controls.
 fn windows_window(a: *mem.Arena, t: *const control.Theme, width: f32, height: f32, children: []const widget.Node) -> (widget.Node, err) {
+    let (win, win_error) = windows_window_with(a, t, width, height, children, false)
+    ret (win, win_error)
+}
+
+// looks5: `bottom` adds the #F5F5F5 row the last row of the Deck Legality, Deck Properties, About, Options and Customization captures is.
+fn windows_window_with(a: *mem.Arena, t: *const control.Theme, width: f32, height: f32, children: []const widget.Node, bottom: bool) -> (widget.Node, err) {
     var face = control.sized_style(width, height)
     face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     // The row under the caption is #F5F5F5 across the whole width in every captured form (the DWM client edge); a page or list
     // covering it (About's page control, Options' category list) overpaints it, as the captures show.
     var edge = control.sized_style(width, 1.0)
     edge.background = paint.Brush { Solid: style.hex(0xF5F5F5u32) }
-    let (all, all_error) = mem.alloc[widget.Node](a, children.len + 1usize)
+    let (all, all_error) = mem.alloc[widget.Node](a, children.len + 2usize)
     if all_error != ok { ret (zero, TooLarge) }
     all[0usize] = widget.positioned(0u64, 0.0, style.windows_caption_height(), style.defaults(), mem_one_box(a, edge))
     var i = 0usize
@@ -7935,7 +7943,12 @@ fn windows_window(a: *mem.Arena, t: *const control.Theme, width: f32, height: f3
         all[i + 1usize] = children[i]
         i += 1usize
     }
-    ret (widget.stack(0u64, face, all[0usize..children.len + 1usize]), ok)
+    var count = children.len + 1usize
+    if bottom {
+        all[count] = widget.positioned(0u64, 0.0, height - 1.0, style.defaults(), mem_one_box(a, edge))
+        count += 1usize
+    }
+    ret (widget.stack(0u64, face, all[0usize..count]), ok)
 }
 
 fn mem_one_box(a: *mem.Arena, look: style.Style) -> []const widget.Node {

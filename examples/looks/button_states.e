@@ -3,7 +3,9 @@
 // surroundings (the dialog's own face: the Filter dialog is #F9F9F9, the others #F0F0F0) so a soft ring row that blends
 // with the dialog shows the same pixels. Pressed and focused cells are driven (Drive.Press / Drive.Focus); the rest
 // are plain. The tables below are generated from the capture list by scripts/looks_ref_a/genbs.py and mkbs.py: caption,
-// caption word, control rect size, drive, default, enabled, dialog face, picture. Hover has no capture.
+// caption word, control rect size, drive, default, enabled, dialog face, picture, and the sub-pixel shift (dx, dy) of the
+// four DPI-scaled forms (Options, Deck Properties, Deck Legality, About), whose buttons v3 draws resampled by that offset:
+// the phase fitted to each capture (scripts/looks_ref_a/fitshift.py), a crisp button moved by it. Hover has no capture.
 // Run from the repository root; see docs/ui/looks-howto.md.
 
 use e.gfx.paint
@@ -26,6 +28,8 @@ fn t_defaults() -> [36]bool { ret [36]bool{ true, true, false, true, false, true
 fn t_enabled() -> [36]bool { ret [36]bool{ true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true } }
 fn t_faces() -> [36]u32 { ret [36]u32{ 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF9F9F9u32, 0xF9F9F9u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32, 0xF0F0F0u32 } }
 fn t_glyphs() -> [36]bool { ret [36]bool{ false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false } }
+fn t_shift_x() -> [36]f32 { ret [36]f32{ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.38, 0.36, 0.42, 0.48, 0.44, 0.48, 0.18, 0.18, 0.42, 0.48, 0.36, 0.14, 0.36, 0.04, 0.10, 0.00, 0.00, 0.00, 0.00, 0.00 } }
+fn t_shift_y() -> [36]f32 { ret [36]f32{ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.46, 0.48, 0.48, 0.48, 0.50, 0.50, 0.26, 0.26, 0.44, 0.46, 0.44, 0.48, 0.48, 0.06, 0.06, 0.00, 0.00, 0.00, 0.00, 0.00 } }
 
 // The holder of a cell: odd wide and even tall (so the cell centres it on whole pixels in 133 x 40), the dialog face
 // behind, the visible box (the control rect less 2 wide, 1 tall) at (margin, margin).
@@ -56,12 +60,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let enabled = t_enabled()
     let faces = t_faces()
     let glyphs = t_glyphs()
+    let shift_x = t_shift_x()
+    let shift_y = t_shift_y()
     var i = 0usize
     while i < 36 {
         var options = control.button_options()
         options.width = widths[i]
         options.height = heights[i]
         options.enabled = enabled[i]
+        options.shift_x = shift_x[i]
+        options.shift_y = shift_y[i]
         if defaults[i] { options.variant = .Default }
         var node: widget.Node = zero
         var node_error: err = ok

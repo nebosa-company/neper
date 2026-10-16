@@ -5,7 +5,9 @@ src='''// Every captured button state of the live v3 grabs (docs/ui/looks/ref/wi
 // surroundings (the dialog's own face: the Filter dialog is #F9F9F9, the others #F0F0F0) so a soft ring row that blends
 // with the dialog shows the same pixels. Pressed and focused cells are driven (Drive.Press / Drive.Focus); the rest
 // are plain. The tables below are generated from the capture list by scripts/looks_ref_a/genbs.py and mkbs.py: caption,
-// caption word, control rect size, drive, default, enabled, dialog face, picture. Hover has no capture.
+// caption word, control rect size, drive, default, enabled, dialog face, picture, and the sub-pixel shift (dx, dy) of the
+// four DPI-scaled forms (Options, Deck Properties, Deck Legality, About), whose buttons v3 draws resampled by that offset:
+// the phase fitted to each capture (scripts/looks_ref_a/fitshift.py), a crisp button moved by it. Hover has no capture.
 // Run from the repository root; see docs/ui/looks-howto.md.
 
 use e.gfx.paint
@@ -50,12 +52,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let enabled = t_enabled()
     let faces = t_faces()
     let glyphs = t_glyphs()
+    let shift_x = t_shift_x()
+    let shift_y = t_shift_y()
     var i = 0usize
     while i < %d {
         var options = control.button_options()
         options.width = widths[i]
         options.height = heights[i]
         options.enabled = enabled[i]
+        options.shift_x = shift_x[i]
+        options.shift_y = shift_y[i]
         if defaults[i] { options.variant = .Default }
         var node: widget.Node = zero
         var node_error: err = ok

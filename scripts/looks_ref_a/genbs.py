@@ -11,6 +11,12 @@ for (stem,rest,t,x,y,w,h,d,df,en) in SPEC:
 for (nm,t,w,h,d,df) in (('75x32 rest','Cancel',75,32,'N',0),('75x32 default','OK',75,32,'N',1),('75x32 focus','Cancel',75,32,'F',0),('75x32 pressed','OK',75,32,'P',1),('125x40 default','Apply',125,40,'N',1)):
     cells.append(dict(stem=nm,rest='',text=t,x=0,y=0,w=w,h=h,d=d,df=df,en=1,bg=0xF0F0F0,glyph=False))
 N=len(cells)
+PH={}
+PHF=os.path.join(os.path.dirname(os.path.abspath(__file__)),'phases.json')
+if os.path.exists(PHF):
+    import json
+    PH=json.load(open(PHF))
+
 def arr(name,ty,vals):
     return 'fn %s() -> [%d]%s { ret [%d]%s{ %s } }'%(name,len(vals),ty,len(vals),ty,', '.join(vals))
 def q(s): return '"'+s+'"'
@@ -28,5 +34,7 @@ open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'bs_tables.txt'),'w
  arr('t_enabled','bool',['true' if c['en'] else 'false' for c in cells]),
  arr('t_faces','u32',['0x%06Xu32'%c['bg'] for c in cells]),
  arr('t_glyphs','bool',['true' if c['glyph'] else 'false' for c in cells]),
+ arr('t_shift_x','f32',['%.2f'%PH.get(str(i),[0,0])[0] for i in range(N)]),
+ arr('t_shift_y','f32',['%.2f'%PH.get(str(i),[0,0])[1] for i in range(N)]),
 ]))
 print(N)

@@ -1012,3 +1012,8 @@ fn windows_caption_close(pressed: bool) -> paint.Color {
 
 // looks3: the live 96 DPI captures put the dark caption at 31 rows (y 0 to 30).
 fn windows_caption_height() -> f32 { ret 31.0 }
+
+// looks5: the light caption of v3's DevExpress dialogs (Advanced Filter, Conditional Formatting Rules Manager, the Customization
+// tool window): #F0F4F8 with black text and glyphs, as the live captures show (the capture varies by one level, a Mica wash).
+fn windows_caption_light_face() -> paint.Color { ret hex(0xF0F4F8u32) }
+fn windows_caption_light_ink() -> paint.Color { ret hex(0u32) }

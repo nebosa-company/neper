@@ -35,7 +35,10 @@ use e.ui.winmark
 type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str, runtime: *widget.Runtime }
 // A button's look: its fill, whether it takes presses, and whether it is busy with
 // what it started (the label hidden in place under a progress ring, D942).
-type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32 }
+// looks5 (Windows look): `shift_x`, `shift_y` the sub-pixel offset v3's DPI-scaled forms (Options, Deck Properties, Deck Legality, About) draw
+// their buttons at (see e.ui.winbutton); zero for the crisp dialogs. `focused` draws the keyboard focus on it without the keyboard (a
+// window that has just opened has its default button focused: v3's About), for the looks sheets.
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool }
 // (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
 // theme's fonts that match best lead the fallback chain (`text_style_faced`).
 // (D1458) `size`, when above 0, sets the text's size in place of its role's,
@@ -2303,7 +2306,7 @@ fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
 // ------------------------------------------------------- the button family (D818, P1-06)
 
 fn button_options() -> ButtonOptions {
-    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0 }
+    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false }
 }
 
 // The control state of a keyed element under the page's runtime, with what the
@@ -2481,7 +2484,7 @@ fn device_snap(t: *const Theme) -> f32 {
 // with the dotted focus rectangle laid over it while the keyboard has the focus. `ring` below 3 is the
 // pixel-exact native ring (e.ui.winbutton) drawn under everything in the whole box, and the focus rectangle
 // is then v3's: the control rect (the box plus 1 above and left) less 3 on every side.
-fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32) -> (widget.Node, err) {
+fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32, shift_x: f32, shift_y: f32) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     inner[0usize] = row
@@ -2491,7 +2494,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     fill.min_height = style.Length { Px: max_zero(look.min_height - (look.border_width + look.padding_y) * 2.0) }
     let ringed = ring < 4u32
     // v3's caption sits 1 px left of and above the centre of the box (measured on Cancel and Apply).
-    if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
+    if ringed { fill.padding = style.EdgeLengths { left: style.Length { Px: shift_x }, top: style.Length { Px: shift_y }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 2.0 } } }
     let centred = widget.aligned(0u64, .Center, .Center, fill, inner[0usize..1usize])
     // A pressed button is focused too: v3 shows the dotted rectangle on it (states/button-pressed-*).
     let focus = (state.focus_visible || state.focused || state.pressed) && enabled
@@ -2500,7 +2503,13 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     if layers_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     if ringed {
-        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, device_snap(t))
+        // a button of a DPI-scaled form draws its focus rectangle with the ring, shifted with it
+        var dots_kind = 0u32
+        if focus && (shift_x != 0.0 || shift_y != 0.0) {
+            dots_kind = 1u32
+            if state.pressed { dots_kind = 2u32 }
+        }
+        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, device_snap(t), shift_x, shift_y, dots_kind)
         if face_error != ok { ret (zero, face_error) }
         layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, face_node))
         n += 1usize
@@ -2508,17 +2517,18 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     layers[n] = centred
     n += 1usize
     if focus {
-        if ringed {
+        if ringed && shift_x == 0.0 && shift_y == 0.0 {
             let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, device_snap(t))
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
+            n += 1usize
         }
         if !ringed {
             let (dots, dots_error) = windows_dots(a, style.color(t.tokens, .Text), max_of(max_zero(look.min_width - edge * 2.0), content_w), max_zero(look.min_height - (look.border_width + look.padding_y) * 2.0))
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = dots
+            n += 1usize
         }
-        n += 1usize
     }
     ret (widget.stack(0u64, style.defaults(), layers[0usize..n]), ok)
 }
@@ -2531,7 +2541,8 @@ fn windows_rgb(c: paint.Color) -> u32 {
 // A Windows button: `picture` (when `has_icon`) then the caption (when `show_label`; `label` still
 // names it in the tree), `selected` the toggled-on face, `corners` nonzero for a split's head.
 fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, show_label: bool, selected: bool, corners: style.Corners, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
-    let state = control_state(t, key, options.enabled, selected)
+    var state = control_state(t, key, options.enabled, selected)
+    if options.focused && options.enabled { state.focus_visible = true }
     // v3's default button gives its accent ring to whichever other button holds the focus (states/button-focused-options-*).
     var variant = options.variant
     if variant == .Default && mem.address_of(t.runtime) != 0usize {
@@ -2630,7 +2641,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         row = widget.stack(0u64, style.defaults(), layers[1usize..3usize])
         states = accessibility.STATE_BUSY
     }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face)
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, options.shift_x, options.shift_y)
     if shown_error != ok { ret (zero, shown_error) }
     let (node, node_error) = pressable_states(a, key, t, 3u8, label, look, options.enabled, selected, states, 0u32, 0u64, action, shown)
     ret (node, node_error)
@@ -2652,7 +2663,7 @@ fn windows_split(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ac
     look.padding = 3.0
     let (chevron, chevron_error) = icon_square(a, look.foreground, .ChevronDown, 12.0)
     if chevron_error != ok { ret (zero, chevron_error) }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32)
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32, 0.0, 0.0)
     if shown_error != ok { ret (zero, shown_error) }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }

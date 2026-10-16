@@ -44,6 +44,8 @@ for name,(cn,en,a0,a9) in P.items():
             if name!='normal':
                 pass
             LN={'normal':(0xD0,0xD0,0xD0),'default':(0x00,0x78,0xD4),'pressed':(0x00,0x54,0x99)}[name]
+            if max(abs(o9[j]-o0[j]) for j in range(3))<=1 and any(o0[j]!=240 for j in range(3)):
+                newc.append(0xFF000000|(o0[0]<<16)|(o0[1]<<8)|o0[2]); continue
             if all(o0[j]<=240 for j in range(3)) and 0<max(240-o0[j] for j in range(3))<=8:
                 a=sum((240-o0[j])/(240-LN[j]) for j in range(3))/3
                 a=max(0.0,min(1.0,a))

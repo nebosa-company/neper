@@ -8419,6 +8419,8 @@ fn ribbon_key_budget(tab: *const RibbonTab) -> usize {
 type TitleBarOptions = struct {
     platform: win.Platform, mode: win.Mode, frameless: bool, minimizable: bool, maximizable: bool, resizable: bool,
     icon: bool, rtl: bool, active: bool, glyph: control.GlyphKind,
+    // looks5 (Windows look): the light caption of v3's DevExpress dialogs, and the tool window's (no icon, title at 8, red close box)
+    light: bool, tool: bool,
     minimize: widget.Submit, maximize: widget.Submit, close: widget.Submit, move: widget.Submit, toggle: widget.Submit,
 }
 
@@ -8496,14 +8498,17 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
         if slot.kind == .Maximize { which = 1u32 }
         if slot.kind == .Close { which = 2u32 }
         // a dialog's 33 wide close button on an odd pixel draws its X half a pixel left (winchrome.cross_cover_odd)
-        if slot.kind == .Close && slot.rect.width < 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 { which = 3u32 }
+        if slot.kind == .Close && slot.rect.width < 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 {
+            which = 3u32
+            if active { which = 7u32 }
+        }
         // the 46 wide buttons of a window of odd width start on an odd pixel and draw all three glyphs half a pixel right
         if slot.rect.width > 40.0 && (u32(slot.rect.x + 0.5) % 2u32) == 1u32 {
             if slot.kind == .Minimize { which = 4u32 }
             if slot.kind == .Maximize { which = 5u32 }
             if slot.kind == .Close { which = 6u32 }
         }
-        let (shape, shape_error) = winchrome.glyph_node(a, which, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), ink.alpha, slot.rect.width)
+        let (shape, shape_error) = winchrome.glyph_node(a, which, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), ink.alpha, slot.rect.width, control.device_snap(t))
         ret (shape, shape_error)
     }
     var glyph: control.GlyphKind = .Dash
@@ -8586,6 +8591,7 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     let windows = t.tokens.profile == .Windows && options.platform == .Windows
     if windows {
         ink = style.windows_caption_ink(options.active)
+        if options.light || options.tool { ink = style.windows_caption_light_ink() }
         words.size = 12.0
         words.weight = 400u32
     }
@@ -8593,6 +8599,17 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     if metrics_error != ok { ret (zero, metrics_error) }
     var caption = win.caption_layout(width, caption_options, advance)
     if windows { caption = windows_caption_v3(caption, width) }
+    if windows && options.tool {
+        // the tool window: the title from x = 8, no icon, no caption buttons (the red close box is drawn below)
+        var k = 0usize
+        while k < caption.count {
+            caption.slots[k].rect = geometry.rect(0.0, 0.0, 0.0, 0.0)
+            k += 1usize
+        }
+        caption.drag = geometry.rect(8.0, 0.0, width - 8.0 - 22.0, caption.bar.height)
+        caption.title = caption.drag
+        caption.icon = geometry.rect(0.0, 0.0, 0.0, 0.0)
+    }
     if caption.bar.height == 0.0 {
         var sem: widget.Semantics = zero
         sem.role = 2u8
@@ -8627,7 +8644,11 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
         let (icon, icon_error) = control.stroked_glyph(a, ink, options.glyph, 16.0, 1.5)
         if icon_error != ok { ret (zero, icon_error) }
         var mark = icon
-        if windows { mark = winchrome.icon_node() }
+        if windows {
+            let (win_icon, win_icon_error) = winchrome.icon_node(a, control.device_snap(t))
+            if win_icon_error != ok { ret (zero, win_icon_error) }
+            mark = win_icon
+        }
         parts[n] = widget.positioned(key + 5u64, caption.icon.x, caption.icon.y, style.defaults(), mem_one(a, mark))
         n += 1usize
     }
@@ -8687,10 +8708,17 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
         n += 1usize
         i += 1usize
     }
+    if windows && options.tool {
+        let (box, box_error) = winchrome.tool_close_node(a, control.device_snap(t))
+        if box_error != ok { ret (zero, box_error) }
+        parts[n] = widget.positioned(0u64, width - 22.0, 7.0, style.defaults(), mem_one(a, box))
+        n += 1usize
+    }
     var bar = control.sized_style(width, caption.bar.height)
     bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
     if !options.active { bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) } }
     if windows { bar.background = paint.Brush { Solid: style.windows_caption_face(options.active) } }
+    if windows && (options.light || options.tool) { bar.background = paint.Brush { Solid: style.windows_caption_light_face() } }
     let (bar_cell, bar_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if bar_cell_error != ok { ret (zero, TooLarge) }
     bar_cell[0usize] = widget.stack(0u64, bar, parts[0usize..n])
