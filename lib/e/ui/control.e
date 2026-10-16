@@ -2514,7 +2514,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
             dots_kind = 1u32
             if state.pressed { dots_kind = 2u32 }
         }
-        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, shift_x, shift_y, dots_kind)
+        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, shift_x, shift_y, dots_kind, t.tokens.palette == .Dark)
         if face_error != ok { ret (zero, face_error) }
         layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, face_node))
         n += 1usize
@@ -2523,7 +2523,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     n += 1usize
     if focus {
         if ringed && shift_x == 0.0 && shift_y == 0.0 {
-            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height)
+            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, t.tokens.palette == .Dark)
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
             n += 1usize
@@ -2560,10 +2560,19 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     // The native ring (looks3 group a): a whole button, not a split's head, not the plain one.
     var rk: u32 = 9u32
     var face: u32 = 0u32
-    if corners.top_left == 0.0 && corners.top_right == 0.0 && options.variant != .Plain && t.tokens.palette == .Light {
+    if corners.top_left == 0.0 && corners.top_right == 0.0 && options.variant != .Plain && (t.tokens.palette == .Light || t.tokens.palette == .Dark) {
         rk = 0u32
-        if variant == .Default || state.focus_visible || state.focused || selected || (state.hovered && !state.pressed && options.enabled) { rk = 1u32 }
-        if state.pressed && !state.disabled && !selected { rk = 3u32 }
+        // Light: a hovered button wears the accent ring (measured). Dark: only the face changes (Windows 11 dark).
+        let accent_hover = t.tokens.palette == .Light && state.hovered && !state.pressed && options.enabled
+        if variant == .Default || state.focus_visible || state.focused || selected || accent_hover { rk = 1u32 }
+        if state.pressed && !state.disabled && !selected {
+            rk = 3u32
+            // Dark: a pressed plain button keeps its grey stroke, a default one its accent.
+            if t.tokens.palette == .Dark {
+                rk = 0u32
+                if variant == .Default { rk = 1u32 }
+            }
+        }
         if state.disabled { rk = 2u32 }
         face = windows_rgb(look.background)
         look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -3997,7 +4006,7 @@ type Phase = struct { context: u32, x: f32, y: f32 }
 fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
     // looks4: rest and pressed are painted pixel for pixel from the live captures (e.ui.winmark); hover,
     // disabled and mixed have no capture and keep the drawn mark below.
-    if t.tokens.palette == .Light && !state.disabled && !mixed {
+    if (t.tokens.palette == .Light || t.tokens.palette == .Dark) && !state.disabled && !mixed {
         var kind: u32 = 0u32
         if round { kind = 4u32 }
         if chosen { kind += 2u32 }
@@ -4011,7 +4020,7 @@ fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chose
         }
         var at_y = phase.y
         if at_y >= 0.0 { at_y += f32(i32((high - 14.0) * 0.5 + 0.5)) }
-        let (baked, baked_error) = winmark.mark_node(a, phase.context, kind, at_y)
+        let (baked, baked_error) = winmark.mark_node(a, phase.context, kind, at_y, t.tokens.palette == .Dark)
         if baked_error != ok { ret (zero, baked_error) }
         let (cell, cell_error) = mem.alloc[widget.Node](a, 1usize)
         if cell_error != ok { ret (zero, TooLarge) }
@@ -6165,7 +6174,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     if focused { chrome_state = 1u32 }
     if !options.enabled { chrome_state = 2u32 }
     if options.chrome_pressed && options.enabled { chrome_state = 3u32 }
-    let (rim, rim_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim)
+    let (rim, rim_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim, t.tokens.palette == .Dark)
     if rim_error != ok { ret (zero, rim_error) }
     stacked[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, rim))
     var layers_at = 2usize
@@ -6188,7 +6197,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 {
         var zone = 0u32
         if options.chrome_hover > 1u32 { zone = options.chrome_hover - 1u32 }
-        let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y)
+        let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y, t.tokens.palette == .Dark)
         if veil_error != ok { ret (zero, veil_error) }
         stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, veil))
         layers_at += 1usize
@@ -6341,7 +6350,7 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
         frame_style.border = style.Border { width: 1.0, color: style.color(t.tokens, .Surface) }
         frame_style.radius = 0.0
         frame_style.padding = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 3.0 }, bottom: style.Length { Px: 3.0 } }
-        let (rim, rim_error) = winedit.token_chrome(a, width, height, state.focused)
+        let (rim, rim_error) = winedit.token_chrome(a, width, height, state.focused, t.tokens.palette == .Dark)
         if rim_error != ok { ret (zero, rim_error) }
         let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
         if stacked_error != ok { ret (zero, TooLarge) }

@@ -42,7 +42,7 @@ fn ring_pressed_edges() -> [8]u32 { ret [8]u32{ 0xAA005499u32, 0xFF88B4D8u32, 0x
 // Which ring: 0 rest, 1 default (accent), 2 disabled, 3 pressed.
 // `dx`, `dy` (looks5): the sub-pixel shift of v3's DPI-scaled forms, `dots` the focus rectangle drawn with the ring (0 none, 1
 // normal, 2 pressed) when it is shifted too.
-type Ring = struct { kind: u32, face: u32, tint: u32, dx: f32, dy: f32, dots: u32 }
+type Ring = struct { kind: u32, face: u32, tint: u32, dx: f32, dy: f32, dots: u32, dark: bool }
 
 // `value` is 0xAARRGGBB; an alpha byte of 0 (a plain 0xRRGGBB) is opaque. looks5: the outer rows and corner cells of a
 // ring carry the share of ring over the dialog face they sit on (v3's Filter dialog is #F9F9F9, the others #F0F0F0).
@@ -145,8 +145,55 @@ fn ring_line(kind: u32) -> u32 {
 
 // The inner rows next to the face (edges 1 and 2: top1 and bottom1) are the ring line over the face it was captured on: the same
 // re-facing as a corner cell, so a hovered button (face #E0EEF9) shows them over its own face.
+
+// ---- the dark palette ---------------------------------------------------------------------------------------------------
+// A dark ring is the same tables with the colours mapped (winpx.dark_argb, family 2): the ring line of a plain button becomes the
+// #6B6B6B stroke, an accent line (default, focused) the dark accent #4CC2FF, the disabled line #3A3A3A; a corner cell or inner
+// row keeps its share of line over face and re-faces to `d.face` (the dark face of the state).
+fn ring_line_dark(kind: u32) -> u32 {
+    if kind == 1u32 || kind == 3u32 { ret 0x4CC2FFu32 }
+    if kind == 2u32 { ret 0x3A3A3Au32 }
+    ret 0x6B6B6Bu32
+}
+
+// An outer-row or side value of the ring: the table's own, or in the dark palette its mapped colour (alpha kept).
+fn ring_edge_c(d: *const Ring, which: usize) -> u32 {
+    let v = ring_edge(d.kind, which)
+    if !d.dark { ret v }
+    ret winpx.dark_argb(v, 2u32, d.face)
+}
+
+// A corner cell or inner row `value` re-faced to the ring's face: the light share of line over face (read from the red channel, the
+// channel that tells every line from its face), painted as the same share of the dark line over the dark face.
+fn ring_cell_c(d: *const Ring, value: u32) -> u32 {
+    if !d.dark { ret ring_pick(value, ring_baked(d.kind), ring_line(d.kind), d.face) }
+    let line = ring_line(d.kind)
+    let baked = ring_baked(d.kind)
+    let vr = i32((value >> 16u32) & 255u32)
+    let er = i32((line >> 16u32) & 255u32)
+    let br = i32((baked >> 16u32) & 255u32)
+    var share: i32 = 256
+    if br != er { share = ((vr - er) * 256) / (br - er) }
+    if share < 0 { share = 0 }
+    if share > 256 { share = 256 }
+    let edge = ring_line_dark(d.kind)
+    var alpha = value / 16777216u32
+    if alpha == 0u32 { alpha = 255u32 }
+    let r = darkmix((edge >> 16u32) & 255u32, (d.face >> 16u32) & 255u32, share)
+    let g = darkmix((edge >> 8u32) & 255u32, (d.face >> 8u32) & 255u32, share)
+    let b = darkmix(edge & 255u32, d.face & 255u32, share)
+    ret alpha * 16777216u32 + r * 65536u32 + g * 256u32 + b
+}
+
+fn darkmix(edge: u32, face: u32, share: i32) -> u32 {
+    let v = i32(edge) + ((i32(face) - i32(edge)) * share + 128) / 256
+    if v < 0 { ret 0u32 }
+    if v > 255 { ret 255u32 }
+    ret u32(v)
+}
+
 fn ring_edge_faced(d: *const Ring, which: usize) -> u32 {
-    ret ring_pick(ring_edge(d.kind, which), ring_baked(d.kind), ring_line(d.kind), d.face)
+    ret ring_cell_c(d, ring_edge(d.kind, which))
 }
 
 fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
@@ -161,15 +208,13 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, h - 2.0, d.face)
     try ring_rect(b, x0 + 1.0, y0 + 6.0, 5.0, h - 12.0, d.face)
     try ring_rect(b, x0 + w - 6.0, y0 + 6.0, 5.0, h - 12.0, d.face)
-    try ring_rect(b, x0 + 6.0, y0, w - 12.0, 1.0, ring_edge(d.kind, 0usize))
+    try ring_rect(b, x0 + 6.0, y0, w - 12.0, 1.0, ring_edge_c(d, 0usize))
     try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, 1.0, ring_edge_faced(d, 1usize))
     // bottom: edge 2 is the row h - 2, edge 3 the row h - 1
     try ring_rect(b, x0 + 6.0, y0 + h - 2.0, w - 12.0, 1.0, ring_edge_faced(d, 2usize))
-    try ring_rect(b, x0 + 6.0, y0 + h - 1.0, w - 12.0, 1.0, ring_edge(d.kind, 3usize))
-    try ring_rect(b, x0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 4usize))
-    try ring_rect(b, x0 + w - 1.0, y0 + 6.0, 1.0, h - 12.0, ring_edge(d.kind, 7usize))
-    let baked = ring_baked(d.kind)
-    let line = ring_line(d.kind)
+    try ring_rect(b, x0 + 6.0, y0 + h - 1.0, w - 12.0, 1.0, ring_edge_c(d, 3usize))
+    try ring_rect(b, x0, y0 + 6.0, 1.0, h - 12.0, ring_edge_c(d, 4usize))
+    try ring_rect(b, x0 + w - 1.0, y0 + 6.0, 1.0, h - 12.0, ring_edge_c(d, 7usize))
     var c = 0usize
     while c < 4usize {
         var ox: f32 = 0.0
@@ -180,7 +225,7 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         while k < 36usize {
             let cell = ring_cell(d.kind, c * 36usize + k)
             if cell != 0u32 {
-                try ring_rect(b, x0 + ox + f32(k % 6usize), y0 + oy + f32(k / 6usize), 1.0, 1.0, ring_pick(cell, baked, line, d.face))
+                try ring_rect(b, x0 + ox + f32(k % 6usize), y0 + oy + f32(k / 6usize), 1.0, 1.0, ring_cell_c(d, cell))
             }
             k += 1usize
         }
@@ -225,17 +270,17 @@ fn ring_value(d: *const Ring, x: i32, y: i32, w: i32, h: i32) -> u32 {
     if corner >= 0 {
         let cell = ring_cell(d.kind, usize(corner * 36 + cy * 6 + cx))
         if cell == 0u32 { ret 0u32 }
-        ret ring_pick(cell, ring_baked(d.kind), ring_line(d.kind), d.face)
+        ret ring_cell_c(d, cell)
     }
     if y < 6 || y >= h - 6 {
-        if y == 0 { ret ring_edge(d.kind, 0usize) }
+        if y == 0 { ret ring_edge_c(d, 0usize) }
         if y == 1 { ret ring_edge_faced(d, 1usize) }
         if y == h - 2 { ret ring_edge_faced(d, 2usize) }
-        if y == h - 1 { ret ring_edge(d.kind, 3usize) }
+        if y == h - 1 { ret ring_edge_c(d, 3usize) }
         ret face
     }
-    if x == 0 { ret ring_edge(d.kind, 4usize) }
-    if x == w - 1 { ret ring_edge(d.kind, 7usize) }
+    if x == 0 { ret ring_edge_c(d, 4usize) }
+    if x == w - 1 { ret ring_edge_c(d, 7usize) }
     ret face
 }
 
@@ -251,6 +296,12 @@ fn dot_value(d: *const Ring, x: i32, y: i32, w: i32, h: i32) -> u32 {
         light = 0xFF99A1A8u32
         dark_corner = 0xFF615B55u32
         light_corner = 0xFF919BA4u32
+    }
+    if d.dark {
+        dark = winpx.dark_argb(dark, 3u32, 0u32)
+        light = winpx.dark_argb(light, 3u32, 0u32)
+        dark_corner = winpx.dark_argb(dark_corner, 3u32, 0u32)
+        light_corner = winpx.dark_argb(light_corner, 3u32, 0u32)
     }
     let rx = x + 1
     let ry = y + 1
@@ -368,10 +419,10 @@ fn ring_paint_shifted(d: *const Ring, b: *scene.Builder, area: geometry.Rect) ->
 }
 
 // The ring, `width` x `height` (the visible box), over a face 0xRRGGBB; `kind` as in `Ring`. A node to put under a button's label.
-fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32, dx: f32, dy: f32, dots: u32) -> (widget.Node, err) {
+fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32, dx: f32, dy: f32, dots: u32, dark: bool) -> (widget.Node, err) {
     let (rings, rings_error) = mem.alloc[Ring](a, 1usize)
     if rings_error != ok { ret (zero, rings_error) }
-    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32, dx: dx, dy: dy, dots: dots }
+    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32, dx: dx, dy: dy, dots: dots, dark: dark }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: height }
@@ -400,7 +451,7 @@ fn mnemonic(a: *mem.Arena, label: str) -> (str, usize, err) {
 // and 4 (and h - 4 and h - 3) of dots every 2 px from x = 6 to w - 7, two columns at x = 3 and w - 4 that alternate
 // per row, and four corner cells that are blends. The dot colours depend on the face: grey #555555 / #AAAAAA on the
 // #FDFDFD face, #665E57 / #99A1A8 on the pressed face.
-type FocusDots = struct { pressed: bool }
+type FocusDots = struct { pressed: bool, dark: bool }
 
 fn focus_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -424,6 +475,12 @@ fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         light = 0x99A1A8u32
         dark_corner = 0x615B55u32
         light_corner = 0x919BA4u32
+    }
+    if d.dark {
+        dark = winpx.dark_argb(dark, 3u32, 0u32)
+        light = winpx.dark_argb(light, 3u32, 0u32)
+        dark_corner = winpx.dark_argb(dark_corner, 3u32, 0u32)
+        light_corner = winpx.dark_argb(light_corner, 3u32, 0u32)
     }
     // the top rows: x = 4 and w - 5 are the corner cells
     try focus_px(b, area, 4.0, 3.0, dark_corner)
@@ -458,10 +515,10 @@ fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 // The focus rectangle over a ring box of `width` x `height` (the visible box); `pressed` for the pressed face.
-fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32) -> (widget.Node, err) {
+fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32, dark: bool) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[FocusDots](a, 1usize)
     if dots_error != ok { ret (zero, dots_error) }
-    dots[0usize] = FocusDots { pressed: pressed }
+    dots[0usize] = FocusDots { pressed: pressed, dark: dark }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: height }
