@@ -91,7 +91,7 @@ def thumb(path):
     if Image is None:
         return ""
     st = path.stat()
-    key = hashlib.sha1(("%s|%d|%d|150" % (path, st.st_mtime_ns, st.st_size)).encode()).hexdigest()
+    key = hashlib.sha1(("%s|%d|%d|150q" % (path, st.st_mtime_ns, st.st_size)).encode()).hexdigest()
     hit = CACHE / (key + ".txt")
     try:
         return hit.read_text(encoding="ascii")
@@ -101,6 +101,7 @@ def thumb(path):
     h = 150
     if im.height > h:
         im = im.resize((max(1, round(im.width * h / im.height)), h), Image.LANCZOS)
+    im = im.quantize(colors=96, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)  # UI shots: a small palette keeps the page light
     out = io.BytesIO()
     im.save(out, "PNG", optimize=True)
     uri = "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
