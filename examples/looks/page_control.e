@@ -84,7 +84,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 // `page_control.exe filter` and `page_control.exe custom` write page_control_filter.png and
 // page_control_custom.png, which compare pixel for pixel with ref/windows/page_control_*.png
 // (scripts/looks_refs_d.py).
-fn build_native(a: *mem.Arena, cells: []looks.Cell, t: *const control.Theme, labels: []const str, selected: usize, width: f32, drive: looks.Drive, high: f32) -> (usize, err) {
+fn build_native(a: *mem.Arena, cells: []looks.Cell, t: *const control.Theme, labels: []const str, selected: usize, width: f32, drive: looks.Drive, high: f32, cell_wide: f32) -> (usize, err) {
     let (actions, actions_error) = mem.alloc[widget.Submit](a, labels.len)
     if actions_error != ok { ret (0usize, actions_error) }
     var k = 0usize
@@ -101,20 +101,20 @@ fn build_native(a: *mem.Arena, cells: []looks.Cell, t: *const control.Theme, lab
     if parts_error != ok { ret (0usize, parts_error) }
     parts[0usize] = bar
     parts[1usize] = widget.spacer(0u64, 0.0)
-    var column = looks.size_style(width, high)
+    var column = looks.size_style(cell_wide, high)
     cells[0usize] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..1usize]), drive: drive }
     ret (1usize, ok)
 }
 
 fn build_filter(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
-    let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 0usize, 229.0, .Focus, 22.0)
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 0usize, 229.0, .Focus, 22.0, 229.0)
     ret (made, made_error)
 }
 
 fn build_custom(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let labels = [2]str{ "Bands", "Columns" }
-    let (made, made_error) = build_native(a, cells, t, labels[0usize..2usize], 1usize, 96.0, .None, 22.0)
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..2usize], 1usize, 96.0, .None, 22.0, 96.0)
     ret (made, made_error)
 }
 
@@ -241,29 +241,29 @@ fn build_t11(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
 
 fn build_p2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
-    let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 1usize, 229.0, .None, 22.0)
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 1usize, 229.0, .Focus, 22.0, 318.0)
     ret (made, made_error)
 }
 
 fn build_p3(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let labels = [3]str{ "Blocks / Formats / Editions", "Cards", "Options" }
-    let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 2usize, 229.0, .None, 22.0)
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..3usize], 2usize, 229.0, .Focus, 22.0, 407.0)
     ret (made, made_error)
 }
 
 fn build_p4(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let labels = [2]str{ "Bands", "Columns" }
-    let (made, made_error) = build_native(a, cells, t, labels[0usize..2usize], 0usize, 96.0, .None, 22.0)
+    let (made, made_error) = build_native(a, cells, t, labels[0usize..2usize], 0usize, 96.0, .None, 22.0, 96.0)
     ret (made, made_error)
 }
 
 fn run_tab(a: *mem.Arena, which: usize) -> err {
     if which == 12usize {
-        let sheet = looks.Sheet { name: "page_control_cards", cells: 1usize, columns: 1usize, cell_w: 229.0, cell_h: 22.0, ctx: zero, build: build_p2 }
+        let sheet = looks.Sheet { name: "page_control_cards", cells: 1usize, columns: 1usize, cell_w: 318.0, cell_h: 22.0, ctx: zero, build: build_p2 }
         ret looks.run_all(a, &sheet)
     }
     if which == 13usize {
-        let sheet = looks.Sheet { name: "page_control_options", cells: 1usize, columns: 1usize, cell_w: 229.0, cell_h: 22.0, ctx: zero, build: build_p3 }
+        let sheet = looks.Sheet { name: "page_control_options", cells: 1usize, columns: 1usize, cell_w: 407.0, cell_h: 22.0, ctx: zero, build: build_p3 }
         ret looks.run_all(a, &sheet)
     }
     if which == 14usize {
@@ -326,8 +326,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret looks.run_all(a, &custom)
         }
     }
+    if args.len == 2usize && args[1usize][0usize] == 107u8 {
+        let two = looks.Sheet { name: "page_control_bottom_hover2", cells: 1usize, columns: 1usize, cell_w: 110.0, cell_h: 29.0, ctx: zero, build: build_k2 }
+        ret looks.run_all(a, &two)
+    }
+    if args.len == 2usize && args[1usize][0usize] == 98u8 {
+        // `b1`, `b2`: the v3 main window's card strip at (8, 546), 282 x 29, the first or the second tab chosen.
+        var maker: looks.Build = build_b1
+        var name = "page_control_bottom"
+        if args[1usize].len > 1usize && args[1usize][1usize] == 50u8 {
+            maker = build_b2
+            name = "page_control_bottom2"
+        }
+        var strip = looks.Sheet { name: name, cells: 1usize, columns: 1usize, cell_w: 282.0, cell_h: 29.0, ctx: zero, build: maker }
+        if name.len > 19usize {
+            strip.cell_w = 192.0
+            strip.cell_h = 23.0
+        }
+        ret looks.run_all(a, &strip)
+    }
     if args.len > 1usize {
-        let bottom = looks.Sheet { name: "page_control_bottom", cells: 4usize, columns: 2usize, cell_w: 300.0, cell_h: 60.0, ctx: zero, build: build_bottom }
+        let bottom = looks.Sheet { name: "page_control_bottom_states", cells: 4usize, columns: 2usize, cell_w: 300.0, cell_h: 60.0, ctx: zero, build: build_bottom }
         ret looks.run_all(a, &bottom)
     }
     let sheet = looks.Sheet { name: "page_control", cells: 6usize, columns: 3usize, cell_w: 310.0, cell_h: 90.0, ctx: zero, build: build }
@@ -368,4 +387,96 @@ fn build_bottom(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
         i += 1usize
     }
     ret (4usize, ok)
+}
+
+fn build_bottom_one(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, selected: usize, framed: bool) -> (usize, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 2usize)
+    if actions_error != ok { ret (0usize, actions_error) }
+    actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    actions[1usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    let pictures = [2]control.GlyphKind{ .Picture, .Calendar }
+    let blank = [2]str{ "", "" }
+    var options = control.tabs_options()
+    options.bottom = true
+    options.width = 280.0
+    if !framed { options.width = 192.0 }
+    options.icons = pictures[0usize..2usize]
+    let (bar, bar_error) = control.tabs_of(a, 1000u64, t, blank[0usize..2usize], selected, actions[0usize..2usize], options)
+    if bar_error != ok { ret (0usize, bar_error) }
+    // The rows round the strip in the capture belong to the neighbouring grid frame: three above, three below.
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = rule(0.0, 0.0, 1.0, 12763842u32)
+    parts[1usize] = rule(1.0, 0.0, 277.0, 14934492u32)
+    parts[2usize] = rule(0.0, 1.0, 280.0, 16448250u32)
+    parts[3usize] = rule(0.0, 26.0, 280.0, 16448250u32)
+    parts[4usize] = rule(0.0, 28.0, 280.0, 13948116u32)
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (0usize, held_error) }
+    held[0usize] = bar
+    parts[5usize] = widget.positioned(0u64, 0.0, 3.0, style.defaults(), held[0usize..1usize])
+    if !framed {
+        // The second tab chosen, as captured: only the strip's own rows (the data navigator stands at its right).
+        cells[0usize] = looks.Cell { caption: "", node: widget.positioned(0u64, 0.0, 0.0, looks.size_style(192.0, 23.0), held[0usize..1usize]), drive: .None }
+        ret (1usize, ok)
+    }
+    var strip = looks.size_style(282.0, 29.0)
+    strip.background = paint.Brush { Solid: style.hex(15790320u32) }
+    cells[0usize] = looks.Cell { caption: "", node: widget.stack(0u64, strip, parts[0usize..6usize]), drive: .None }
+    ret (1usize, ok)
+}
+
+fn rule(x: f32, y: f32, w: f32, rgb: u32) -> widget.Node {
+    var line = looks.size_style(w, 1.0)
+    line.background = paint.Brush { Solid: style.hex(rgb) }
+    ret widget.positioned(0u64, x, y, line, zero)
+}
+
+fn build_b1(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_bottom_one(a, t, cells, 0usize, true)
+    ret (m, e)
+}
+
+fn build_b2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_bottom_one(a, t, cells, 1usize, false)
+    ret (m, e)
+}
+
+// The card strip under the pointer (ref/windows/states/hover-tab-left-first and ...-second, which are pixel for pixel the rest
+// strip): `page_control.exe k2` hovers the second tab (the cell is 110 wide so that the pointer, at its middle, lands on it; the
+// first tab's hover is the rest strip, page_control_bottom). The rows round the strip are the neighbouring grid's, as in page_control_bottom.
+fn build_hover_strip(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, wide: f32) -> (usize, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 2usize)
+    if actions_error != ok { ret (0usize, actions_error) }
+    actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    actions[1usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    let pictures = [2]control.GlyphKind{ .Picture, .Calendar }
+    let blank = [2]str{ "", "" }
+    var options = control.tabs_options()
+    options.bottom = true
+    options.width = 282.0
+    options.icons = pictures[0usize..2usize]
+    let (bar, bar_error) = control.tabs_of(a, 1000u64, t, blank[0usize..2usize], 0usize, actions[0usize..2usize], options)
+    if bar_error != ok { ret (0usize, bar_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = rule(0.0, 0.0, 1.0, 12763842u32)
+    parts[1usize] = rule(1.0, 0.0, 281.0, 14934492u32)
+    parts[2usize] = rule(0.0, 1.0, 282.0, 16448250u32)
+    parts[3usize] = rule(0.0, 26.0, 282.0, 16448250u32)
+    parts[4usize] = rule(0.0, 28.0, 282.0, 13948116u32)
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (0usize, held_error) }
+    held[0usize] = bar
+    parts[5usize] = widget.positioned(0u64, 0.0, 3.0, looks.size_style(282.0, 26.0), held[0usize..1usize])
+    var strip = looks.size_style(wide, 29.0)
+    strip.overflow = .Clip
+    strip.background = paint.Brush { Solid: style.hex(15790320u32) }
+    cells[0usize] = looks.Cell { caption: "", node: widget.stack(0u64, strip, parts[0usize..6usize]), drive: .Hover }
+    ret (1usize, ok)
+}
+
+fn build_k2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hover_strip(a, t, cells, 110.0)
+    ret (m, e)
 }

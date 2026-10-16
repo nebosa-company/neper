@@ -56,6 +56,8 @@ def open_src(src):
     path = os.path.join(DLG, src + "@1x.png")
     if not os.path.exists(path):
         path = os.path.join(STATES, src + "@1x.png")
+    if not os.path.exists(path):
+        path = os.path.join(ROOT, "docs/ui/looks/ref/windows", src + "@1x.png")
     return Image.open(path).convert("RGB")
 
 
@@ -195,10 +197,11 @@ for _n, _src in [("combo_box_held", "combo-box-drop-button-pressed-options-row-c
 # image combo (TcxImageComboBox) heads and their popup lists, 15 px rows
 for _n, _head, _hx, _hy, _hw, _list, _lw, _lh, _with_head in [
     ("image_combo_box_open_auth", "combo-box-open-dialog-options-auth-type", 371, 71, 189, "combo-box-open-list-options-auth-type", 189, 32, True),
-    ("image_combo_box_open_auth2", "combo-box-open-dialog-options-auth-type-row2", 371, 71, 189, "combo-box-open-list-options-auth-type-row2", 189, 32, False),
+    ("image_combo_box_open_auth2", "combo-box-open-dialog-options-auth-type-row2", 371, 71, 189, "combo-box-open-list-options-auth-type-row2", 189, 32, True),
     ("image_combo_box_open_art", "combo-box-open-dialog-options-card-art-position", 406, 278, 151, "combo-box-open-list-options-card-art-position", 151, 47, True),
+    ("image_combo_box_open_art2", "combo-box-open-dialog-options-card-art-position-row2", 406, 278, 151, "combo-box-open-list-options-card-art-position-row2", 151, 47, True),
     ("image_combo_box_open_condition", "combo-box-open-dialog-options-condition", 371, 99, 335, "combo-box-open-list-options-condition", 335, 227, True),
-    ("image_combo_box_open_condition2", "combo-box-open-dialog-options-condition-row2", 371, 99, 335, "combo-box-open-list-options-condition-row2", 335, 227, False),
+    ("image_combo_box_open_condition2", "combo-box-open-dialog-options-condition-row2", 371, 99, 335, "combo-box-open-list-options-condition-row2", 335, 227, True),
 ]:
     _parts = [(_list, 0, 0, _lw, _lh, 4, 25, "RB" if ("condition" in _list or "card-art" in _list) else "")]
     if _with_head:
@@ -212,11 +215,75 @@ PARTS["list_box_blur"] = (164, 300, [("list-box-row-selected-unfocused-customiza
 
 for _k in range(1, 12):
     PARTS["page_control_stats_%d" % _k] = (905, 24, [("tab-selected-statistics-%d" % _k, 8, 31, 905, 24, 0, 0)])
-PARTS["page_control_cards"] = (229, 22, [("tab-selected-filter-cards", 8, 31, 229, 22, 0, 0)])
-PARTS["page_control_options"] = (229, 22, [("tab-selected-filter-options", 8, 31, 229, 22, 0, 0)])
+PARTS["page_control_cards"] = (318, 22, [("tab-selected-filter-cards", 8, 31, 229, 22, 0, 0)])
+PARTS["page_control_options"] = (407, 22, [("tab-selected-filter-options", 8, 31, 229, 22, 0, 0)])
 PARTS["page_control_held"] = (96, 22, [("tab-pressed-customization-columns", 12, 33, 96, 22, 0, 0)])
 
 
+PARTS["combo_box_flat"] = (188, 28, [("main-window", 604, 56, 188, 28, 0, 0)])
+PARTS["page_control_bottom"] = (282, 29, [("main-window", 8, 546, 282, 29, 0, 0)])
+PARTS["page_control_bottom2"] = (192, 23, [("tab-selected-second-main-left", 8, 549, 192, 23, 0, 0)])
+PARTS["splitter_live"] = (8, 463, [("main-window", 287, 109, 8, 463, 0, 0)])
+PARTS["splitter_live_across"] = (497, 8, [("main-window", 295, 322, 497, 8, 0, 0)])
+PARTS["splitter_live_held"] = (8, 463, [("splitter-pressed-main-vertical", 208, 109, 8, 463, 0, 0)])
+PARTS["splitter_live_across_held"] = (574, 8, [("splitter-pressed-main-horizontal", 218, 322, 574, 8, 0, 0)])
+PARTS["splitter_live_hover"] = (8, 463, [("hover-splitter-vertical", 208, 109, 8, 463, 0, 0)])
+PARTS["splitter_live_across_hover"] = (574, 8, [("hover-splitter-horizontal", 218, 322, 574, 8, 0, 0)])
+PARTS["splitter_dialog_held"] = (24, 387, [("splitter-pressed-filter", 320, 55, 24, 387, 0, 0)])
+
+# the popup windows on their own, exact captures
+for _n, _src, _w, _h in [
+    ("combo_box_list_color", "combo-box-open-list-options-row-color", 389, 41),
+    ("combo_box_list_color2", "combo-box-open-list-options-row-color-row2", 389, 41),
+    ("combo_box_list_size", "combo-box-open-list-options-font-size", 389, 54),
+    ("combo_box_list_size2", "combo-box-open-list-options-font-size-row2", 389, 54),
+    ("combo_box_list_show", "combo-box-open-list-conditional-formatting-show", 143, 106),
+    ("combo_box_list_show2", "combo-box-open-list-conditional-formatting-show-row2", 143, 106),
+    ("image_combo_box_list_auth", "combo-box-open-list-options-auth-type", 189, 32),
+    ("image_combo_box_list_auth2", "combo-box-open-list-options-auth-type-row2", 189, 32),
+    ("image_combo_box_list_art", "combo-box-open-list-options-card-art-position", 151, 47),
+    ("image_combo_box_list_art2", "combo-box-open-list-options-card-art-position-row2", 151, 47),
+    ("image_combo_box_list_condition", "combo-box-open-list-options-condition", 335, 227),
+    ("image_combo_box_list_condition2", "combo-box-open-list-options-condition-row2", 335, 227),
+    ("image_combo_box_list_sort", "image-combo-box-open-list-sort", 153, 56),
+]:
+    PARTS[_n] = (_w, _h, [(_src, 0, 0, _w, _h, 0, 0)])
+PARTS["image_combo_box_cell"] = (155, 21, [("image-combo-box-cell-editor-sort", 175, 98, 155, 21, 0, 0)])
+PARTS["image_combo_box_cell_held"] = (155, 21, [("image-combo-box-open-dialog-sort", 175, 98, 155, 21, 0, 0)])
+
+# the open heads on their own: exact crops of the dialog captures (rectangle plus the bleed column and row)
+for _n, _src, _x, _y, _w in [
+    ("combo_box_open_color_head", "combo-box-open-dialog-options-row-color", 321, 71, 389),
+    ("combo_box_open_color2_head", "combo-box-open-dialog-options-row-color-row2", 321, 71, 389),
+    ("combo_box_open_size_head", "combo-box-open-dialog-options-font-size", 321, 159, 389),
+    ("combo_box_open_size2_head", "combo-box-open-dialog-options-font-size-row2", 321, 159, 389),
+    ("combo_box_open_show_head", "combo-box-open-dialog-conditional-formatting-show", 149, 41, 143),
+    ("combo_box_open_show2_head", "combo-box-open-dialog-conditional-formatting-show-row2", 149, 41, 143),
+    ("image_combo_box_open_auth_head", "combo-box-open-dialog-options-auth-type", 371, 71, 189),
+    ("image_combo_box_open_auth2_head", "combo-box-open-dialog-options-auth-type-row2", 371, 71, 189),
+    ("image_combo_box_open_art_head", "combo-box-open-dialog-options-card-art-position", 406, 278, 151),
+    ("image_combo_box_open_art2_head", "combo-box-open-dialog-options-card-art-position-row2", 406, 278, 151),
+    ("image_combo_box_open_condition_head", "combo-box-open-dialog-options-condition", 371, 99, 335),
+    ("image_combo_box_open_condition2_head", "combo-box-open-dialog-options-condition-row2", 371, 99, 335),
+]:
+    PARTS[_n] = (_w + 1, 22, [(_src, _x, _y, _w + 1, 22, 0, 0)])
+PARTS["combo_box_flat_hover"] = (356, 28, [("hover-toolbar-combo-mode", 604, 56, 188, 28, 0, 0)])
+PARTS["combo_box_flat_card"] = (186, 28, [("main-window-rest", 14, 56, 186, 28, 0, 0)])
+PARTS["combo_box_flat_card_hover"] = (294, 28, [("hover-toolbar-combo-card-drop", 14, 56, 186, 28, 0, 0)])
+PARTS["image_combo_box_hover_drop"] = (360, 22, [("hover-combo-box-drop-options-auth-type", 371, 71, 190, 22, 0, 0)])
+PARTS["image_combo_box_hover_edit"] = (190, 22, [("hover-combo-box-edit-options-auth-type", 371, 71, 190, 22, 0, 0)])
+PARTS["page_control_bottom_hover2"] = (110, 29, [("hover-tab-left-second", 8, 546, 110, 29, 0, 0)])
+
+# the hint windows on their own (exact captures)
+for _n, _src, _w, _h in [
+    ("hint_toolbar_cards_expand", "hover-hint-toolbar-cards-expand", 210, 20),
+    ("hint_toolbar_cards_f", "hover-hint-toolbar-cards-f", 180, 20),
+    ("hint_toolbar_help_home", "hover-hint-toolbar-help-home", 188, 20),
+    ("hint_toolbar_search_binoculars", "hover-hint-toolbar-search-binoculars", 185, 20),
+    ("hint_toolbar_search_filter", "hover-hint-toolbar-search-filter", 255, 20),
+    ("hint_grid_header_name", "hover-hint-grid-header-name", 285, 25),
+]:
+    PARTS[_n] = (_w, _h, [(_src, 0, 0, _w, _h, 0, 0)])
 PARTS["combo_box_search_held"] = (297, 29, [("combo-box-drop-button-pressed-search", 20, 70, 289, 22, 4, 4)])
 
 
