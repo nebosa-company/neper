@@ -27,6 +27,7 @@ use e.fmt.woff as woff
 use e.fmt.woff2 as woff2
 use e.gfx.image as image
 use e.gfx.scene as scene
+use e.gfx.svg as svg
 use e.io
 use e.mem
 use e.net.fetch as fetch
@@ -41,7 +42,7 @@ error LoadFailed
 
 // state 0: not tried, 1: decoded, 2: failed.
 type ImageEntry = struct {
-    url: str, state: u8, width: u32, height: u32, img: image.Image,
+    url: str, state: u8, width: u32, height: u32, img: image.Image, svg: str,
     texture: scene.TextureId, uploaded: bool
 }
 
@@ -394,7 +395,18 @@ fn image_entry(p: *Page, abs: str) -> *ImageEntry {
                 good = true
             }
         }
-        if good {
+        if !good && looks_svg(b) {
+            let text: str = b
+            let (sw, sh, has_size) = svg.size(text)
+            e.state = 1u8
+            e.svg = text
+            e.width = 300u32
+            e.height = 150u32
+            if has_size {
+                e.width = u32(sw + 0.5f32)
+                e.height = u32(sh + 0.5f32)
+            }
+        } else if good {
             e.state = 1u8
             e.img = decoded
             e.width = decoded.width
@@ -403,6 +415,18 @@ fn image_entry(p: *Page, abs: str) -> *ImageEntry {
     }
     let pushed = list.push[ImageEntry](&p.images, e)
     ret &p.images.items[p.images.len - 1usize]
+}
+
+// An SVG document: `<svg` within the first kilobyte of text.
+fn looks_svg(b: []const u8) -> bool {
+    var n = b.len
+    if n > 1024usize { n = 1024usize }
+    var i = 0usize
+    while i + 4usize <= n {
+        if b[i] == 60u8 && b[i + 1usize] == 115u8 && b[i + 2usize] == 118u8 && b[i + 3usize] == 103u8 { ret true }
+        i += 1usize
+    }
+    ret false
 }
 
 // The URL of the picture an `<img>` shows: `src`, else the first `srcset` candidate.
@@ -575,6 +599,7 @@ fn parse_float(s: str) -> (f64, bool) {
 
 fn upload(p: *Page, e: *ImageEntry) -> cpaint.ImageRef {
     if e.state != 1u8 { ret zero }
+    if e.svg.len > 0usize { ret cpaint.ImageRef { found: true, texture: zero, width: f32(e.width), height: f32(e.height), svg: e.svg } }
     if !e.uploaded {
         if !p.has_renderer { ret zero }
         let ci = image.ConstImage { pixels: e.img.pixels, width: e.img.width, height: e.img.height, stride: e.img.stride, format: e.img.format, alpha: e.img.alpha }
@@ -583,7 +608,7 @@ fn upload(p: *Page, e: *ImageEntry) -> cpaint.ImageRef {
         e.texture = tex
         e.uploaded = true
     }
-    ret cpaint.ImageRef { found: true, texture: e.texture, width: f32(e.width), height: f32(e.height) }
+    ret cpaint.ImageRef { found: true, texture: e.texture, width: f32(e.width), height: f32(e.height), svg: "" }
 }
 
 fn paint_image_of(ctx: *void, node: html.NodeId) -> cpaint.ImageRef {
@@ -597,7 +622,10 @@ fn paint_image_of(ctx: *void, node: html.NodeId) -> cpaint.ImageRef {
 
 fn paint_url_image_of(ctx: *void, u: str) -> cpaint.ImageRef {
     let p = mem.cast[*Page](ctx)
-    let e = image_entry(p, u)
+    // Inline style attributes are not rewritten like sheets are, so resolve here.
+    let (abs, good) = resolve_against(p.pa, &p.base, u)
+    if !good { ret zero }
+    let e = image_entry(p, abs)
     ret upload(p, e)
 }
 

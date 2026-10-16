@@ -41707,3 +41707,7 @@ The painter reads `background-image`, `-position`, `-size`, `-repeat`, `-origin`
 ## D5143 — Web fonts are fetched at page load and registered with the font set and renderer (browser 3.15)
 
 `e.web.page.load` runs every collected sheet through the CSS loader, fetches each `@font-face` URL (already absolutized), unpacks WOFF/WOFF2 with `e.fmt.woff*.to_sfnt` and adds the face to the shared `fontset.Set` before the view opens, so layout measures with the real face. `attach_renderer` registers every face with the scene renderer (registering an id twice replaces it). Limits: no unicode-range or font-display, the first usable `src` only, and the renderer's 16-font cap silently drops further faces.
+
+## D5144 — SVG images are vector image refs painted by e.gfx.svg (browser 3.13)
+
+`e.fmt.css.paint.ImageRef` gains `svg` text; when set, `<img>`, object-fit sizing and CSS `url()` background tiling draw it with `e.gfx.svg.draw` into the page scene at the destination rectangle (currentColor is black) instead of sampling a texture, so SVGs stay sharp at any size and need no raster upload. `e.web.page` recognises an SVG body by an `<svg` in its first kilobyte, takes its intrinsic size from the viewBox (300x150 otherwise) and resolves relative `url()` of inline style attributes against the page base. Reftests svg-img-001 and svg-bg-001 pin both paths.

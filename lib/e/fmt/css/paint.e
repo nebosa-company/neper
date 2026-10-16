@@ -21,12 +21,23 @@ use e.gfx.cssvalue as cv
 use e.gfx.geometry as geo
 use e.gfx.paint as pt
 use e.gfx.scene as scene
+use e.gfx.svg as svg
 use e.math
 use e.mem
 use e.str
 use e.text.layout as tl
 
-type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, height: f32 }
+// A vector image has `svg` text instead of a texture.
+type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, height: f32, svg: str }
+
+// Draws `img` into the destination rectangle.
+fn draw_ref(p: *Painter, img: ImageRef, dx: f64, dy: f64, dw: f64, dh: f64) {
+    if img.svg.len > 0usize {
+        if p.status == ok { p.status = svg.draw(p.a, p.b, img.svg, grect(dx, dy, dw, dh), pt.rgba(0.0, 0.0, 0.0, 1.0)) }
+        ret
+    }
+    emit(p, scene.Command { Image: scene.DrawImage { texture: img.texture, source: geo.rect(0.0f32, 0.0f32, img.width, img.height), destination: grect(dx, dy, dw, dh), opacity: 1.0f32 } })
+}
 
 // `text` returns the shaped layout of a run in the style's font (an address of 0: nothing to draw); `image` the texture
 // of a replaced element's picture.
@@ -704,7 +715,7 @@ fn paint_replaced(p: *Painter, b: u32, x: f64, y: f64) {
     let dy = cy + (ch - dh) * fy
     save(p)
     emit(p, scene.Command { Clip: scene.Clip { Rect: grect(cx, cy, cw, ch) } })
-    emit(p, scene.Command { Image: scene.DrawImage { texture: img.texture, source: geo.rect(0.0f32, 0.0f32, img.width, img.height), destination: grect(dx, dy, dw, dh), opacity: 1.0f32 } })
+    draw_ref(p, img, dx, dy, dw, dh)
     restore(p)
 }
 
@@ -1698,7 +1709,7 @@ fn paint_layers(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f
         // Tile size.
         var iw = 0.0f64
         var ih = 0.0f64
-        var tex = ImageRef { found: false, texture: zero, width: 0.0f32, height: 0.0f32 }
+        var tex = ImageRef { found: false, texture: zero, width: 0.0f32, height: 0.0f32, svg: "" }
         var natural = false
         if layer.kind == 4u8 {
             let env = p.env
@@ -1820,7 +1831,7 @@ fn paint_layers(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f
             while count < 4000usize {
                 if tx + tw > cx && tx < cx + cw && ty + th > cy && ty < cy + ch {
                     if layer.kind == 4u8 {
-                        emit(p, scene.Command { Image: scene.DrawImage { texture: tex.texture, source: geo.rect(0.0f32, 0.0f32, tex.width, tex.height), destination: grect(tx, ty, tw, th), opacity: 1.0f32 } })
+                        draw_ref(p, tex, tx, ty, tw, th)
                     } else {
                         let parts = cv.split_top_level_commas(p.a, layer.body)
                         if layer.kind == 1u8 { fill_linear(p, s, parts, layer.repeating, tx, ty, tw, th) } else { fill_radial(p, s, parts, layer.repeating, tx, ty, tw, th) }

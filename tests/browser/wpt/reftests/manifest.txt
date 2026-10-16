@@ -122,3 +122,5 @@ css-overflow__max-content-with-float-scrollable-descendant.html | css-overflow__
 css-overflow__max-content-with-multiple-scrollable-descendants.html | css-overflow__max-content-with-multiple-scrollable-descendants-ref.html | match
 css-text__text-stroke-width-subpixel.html | css-text__text-stroke-width-subpixel-notref.html | mismatch
 css-text__zwnj-renders-invisible.html | css-text__blank.html | match
+svg-img-001.html | svg-img-001-ref.html | match
+svg-bg-001.html | svg-bg-001-ref.html | match
