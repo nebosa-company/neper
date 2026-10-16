@@ -4607,11 +4607,12 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             thumb_left -= 1.0
         }
         if lk.dialog_lines {
+            // pressed or under the pointer: a 6 px pill (live captures, Sort and Shortcuts)
+            let widened = thumb_w > 5.0
             thumb_w = 2.0
             track_w = lk.scroll_width - 1.0
             thumb_left = 7.0
-            // pressed: a 6 px pill (live capture, Sort and Shortcuts)
-            if control.control_state(t, track_key, true, false).pressed {
+            if widened || control.control_state(t, track_key, true, false).pressed {
                 thumb_w = 6.0
                 thumb_left = 5.0
             }
@@ -5957,7 +5958,9 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         // looks3-e: v3's 16 wide bar beside header and rows, as tall as both
         var row_pitch = row_height_of
         if !(row_pitch > 0.0) { row_pitch = gl.v3().row_height }
+        control.set_scroll_bar_crisp(true)
         let (bar, bar_error) = control.windows_scroll_bar(a, key + 3300u64, t, true, head_height + 1.0 + options.height - 1.0, options.height, f32(table_total) * row_pitch, options.offset)
+        control.set_scroll_bar_crisp(false)
         if bar_error != ok { ret (zero, bar_error) }
         let (beside, beside_error) = mem.alloc[widget.Node](a, 2usize)
         if beside_error != ok { ret (zero, TooLarge) }

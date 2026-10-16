@@ -219,7 +219,7 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key, focus_tw
     columns[0usize] = collection.Column { title: "        Abbr.", width: 85.0 }
     columns[1usize] = collection.Column { title: "ES", width: 20.0 }
     columns[2usize] = collection.Column { title: "Block/Edition", width: 119.0 }
-    columns[3usize] = collection.Column { title: "Released", width: 65.0 }
+    columns[3usize] = collection.Column { title: "Released", width: 64.0 }
     let (picked, picked_error) = mem.alloc[widget.Key](a, 1usize)
     if picked_error != ok { ret (zero, picked_error) }
     picked[0usize] = 1u64
