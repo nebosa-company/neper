@@ -2779,4 +2779,5 @@ D5143	621	Web fonts are fetched at page load and registered with the font set an
 D5144	658	SVG images are vector image refs painted by e.gfx.svg (browser 3.13)
 D5145	631	GitHub's home page loaded once the render tool's arenas were big enough; style memory is the gap (browser 1.13h)
 D5146	933	Style data is indexed by hash and parsed in scratch memory (browser 1.13h)
-D5147	654	color-mix() and contrast-color() resolve against the element's colour (browser 1.13g)
+D5147	655	color-mix() and contrast-color() resolve against the element's colour (browser 1.13g)
+D5148	873	The JavaScript front end is a flat-tree lexer and parser checked against test262 (browser 5.2, 5.14)
