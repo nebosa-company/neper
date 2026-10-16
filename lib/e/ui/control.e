@@ -2660,7 +2660,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         var hinted_before: f32 = 0.0
         var hinted_mark: f32 = 0.0
         if t.tokens.profile == .Windows {
-            let (hrow, hw, hbefore, hmark, hok, hrow_error) = windows_hinted_row(a, t, caption, shown_label, mark_at, ink)
+            let (hrow, hw, hbefore, hmark, hok, hrow_error) = windows_hinted_row(a, t, caption, shown_label, mark_at, ink, false)
             if hrow_error != ok { ret (zero, hrow_error) }
             if hok {
                 word_node = hrow
@@ -2811,7 +2811,7 @@ fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Glyp
 // and `underline` (fsUnderline: the hot-link style) underlines the whole run. One line unless `width` is above 0,
 // which wraps the words in that width (Properties.WordWrap).
 fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink: paint.Color, underline: bool, width: f32) -> (widget.Node, err) {
-    let (node, node_error) = windows_label_faced(a, t, value, size, weight, ink, underline, width, 8u32, 0.0, 0.0)
+    let (node, node_error) = windows_label_faced(a, t, value, size, weight, ink, underline, width, 8u32, 0.0, 0.0, false)
     ret (node, node_error)
 }
 
@@ -2821,7 +2821,7 @@ fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: 
 // `box_w` above 0 centres the one-line label in a box of that width on a whole pixel (GDI's DT_CENTER halves with an integer
 // division), the hinted advances being whole pixels. `phase` (0 to 1) is the fraction of a pixel the underline sits below its row, for the
 // labels of v3's DPI-scaled forms (Options, About), whose captures draw it as two rows of 1 - phase and phase of the ink.
-fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink_in: paint.Color, underline: bool, width: f32, face: u32, box_w: f32, phase: f32) -> (widget.Node, err) {
+fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink_in: paint.Color, underline: bool, width: f32, face: u32, box_w: f32, phase: f32, linear: bool) -> (widget.Node, err) {
     // Windows 11 dark: a label colour the author chose dark (v3's #33486C, #336CCC) is lifted toward white so it reads on #202020.
     var ink = ink_in
     if t.tokens.palette == .Dark && ink_in.red * 0.299 + ink_in.green * 0.587 + ink_in.blue * 0.114 < 0.5 { ink = style.mix(ink_in, style.hex_raw(0xFFFFFFu32), 0.55) }
@@ -2840,7 +2840,7 @@ fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, we
     var mark_x: f32 = 0.0
     var mark_w: f32 = 0.0
     if width <= 0.0 {
-        let (row, row_w, before_w, at_w, row_ok, row_error) = windows_hinted_row(a, t, options, shown, mark_at, ink)
+        let (row, row_w, before_w, at_w, row_ok, row_error) = windows_hinted_row(a, t, options, shown, mark_at, ink, linear)
         if row_error != ok { ret (zero, row_error) }
         hinted = row
         has_hinted = row_ok
@@ -2906,7 +2906,7 @@ fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, we
 // looks5: `shown` as one text node per glyph, each at the running sum of the font's hdmx advances (v3's GDI pixel widths:
 // winhint.e). Answers the row, its width, the x of the byte `mark_at` (the mnemonic) and that glyph's width, and
 // whether it could (an ASCII run in a font with an hdmx record for the size; otherwise the caller keeps the shaped run).
-fn windows_hinted_row(a: *mem.Arena, t: *const Theme, options: TextOptions, shown: str, mark_at: usize, ink: paint.Color) -> (widget.Node, f32, f32, f32, bool, err) {
+fn windows_hinted_row(a: *mem.Arena, t: *const Theme, options: TextOptions, shown: str, mark_at: usize, ink: paint.Color, linear: bool) -> (widget.Node, f32, f32, f32, bool, err) {
     if t.fonts.len == 0usize || shown.len == 0usize { ret (zero, 0.0, 0.0, 0.0, false, ok) }
     let (look, look_error) = text_style_faced(a, t, options)
     if look_error != ok { ret (zero, 0.0, 0.0, 0.0, false, look_error) }
@@ -2921,7 +2921,17 @@ fn windows_hinted_row(a: *mem.Arena, t: *const Theme, options: TextOptions, show
     var i = 0usize
     while i < shown.len {
         if shown[i] >= 128u8 { ret (zero, 0.0, 0.0, 0.0, false, ok) }
-        let (step, has_step) = winhint.advance(font, ppem, u32(shown[i]))
+        var step = 0u32
+        var has_step = false
+        if linear {
+            let (rounded, has_rounded) = winhint.advance_linear(font, ppem, u32(shown[i]))
+            step = rounded
+            has_step = has_rounded
+        } else {
+            let (hinted_step, has_hinted_step) = winhint.advance(font, ppem, u32(shown[i]))
+            step = hinted_step
+            has_step = has_hinted_step
+        }
         if !has_step { ret (zero, 0.0, 0.0, 0.0, false, ok) }
         widths[i] = f32(step)
         if i == mark_at {
@@ -5430,7 +5440,8 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
             parts[n] = black
             n += 1usize
         }
-        let done = share * inner_w
+        // the native fill ends on a whole pixel (105 of 176 for 60 %: the capture truncates, no antialiased edge)
+        let done = math.floor[f32](share * inner_w)
         if done > 0.0 {
             var fill = sized_style(done, inner_h)
             fill.background = paint.Brush { Solid: fill_color }
@@ -9215,7 +9226,7 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
     if one_line {
         var tahoma_px: f32 = 12.0
         if grid { tahoma_px = 11.0 }
-        let (hinted_said, hinted_error) = windows_label(a, t, hint_text, tahoma_px, 400u32, ink, false, 0.0)
+        let (hinted_said, hinted_error) = windows_label_faced(a, t, hint_text, tahoma_px, 400u32, ink, false, 0.0, 8u32, 0.0, 0.0, grid)
         said_node = hinted_said
         said_error = hinted_error
     } else {
@@ -19014,3 +19025,73 @@ fn linux_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, pic
     ret (node, node_error)
 }
 // ---- end the Linux look ---------------------------------------------------------------------------------
+
+// ---- round 11: the native Windows 11 light tooltip (ref/windows-native/light/tooltip-rest@1x, 126 x 20) ----------------------
+// A uxtheme window v3 never shows (its hint is the cxHint of win5_hint): a #F9F9F9 face in a 1 px #E5E5E5 frame with 4 px rounded corners,
+// Segoe UI 12 px. The corners are the capture's own 6 x 6 pixels (alpha 0 = outside the window region).
+fn native_tooltip_corner() -> [36]u32 {
+    ret [36]u32{ 0u32, 0xFFF9F9F9u32, 0xFFEAEAEAu32, 0xFFE5E5E5u32, 0xFFE5E5E5u32, 0xFFE5E5E5u32,
+        0xFFF9F9F9u32, 0xFFE6E6E6u32, 0xFFF1F1F1u32, 0xFFF8F8F8u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32,
+        0xFFEAEAEAu32, 0xFFF1F1F1u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32,
+        0xFFE5E5E5u32, 0xFFF8F8F8u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32,
+        0xFFE5E5E5u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32,
+        0xFFE5E5E5u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32, 0xFFF9F9F9u32 }
+}
+
+// The corner `which` (0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right) as a 6 x 6 tile node.
+fn native_tooltip_corner_node(a: *mem.Arena, which: usize) -> (widget.Node, err) {
+    let base = native_tooltip_corner()
+    let (px, px_error) = mem.alloc[u32](a, 36usize)
+    if px_error != ok { ret (zero, TooLarge) }
+    var r = 0usize
+    while r < 6usize {
+        var c = 0usize
+        while c < 6usize {
+            var sr = r
+            var sc = c
+            if which == 1usize || which == 3usize { sc = 5usize - c }
+            if which == 2usize || which == 3usize { sr = 5usize - r }
+            px[r * 6usize + c] = base[sr * 6usize + sc]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let (tile, tile_error) = wintile.tile_node(a, 6usize, 6usize, px[0usize..36usize])
+    ret (tile, tile_error)
+}
+
+fn win_native_tooltip(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, width: f32, height: f32) -> (widget.Node, err) {
+    let frame = sized_style(width, height)
+    var line = sized_style(width - 12.0, 1.0)
+    line.background = paint.Brush { Solid: style.hex_raw(0xE5E5E5u32) }
+    var column = sized_style(1.0, height - 12.0)
+    column.background = paint.Brush { Solid: style.hex_raw(0xE5E5E5u32) }
+    var face = sized_style(width - 2.0, height - 2.0)
+    face.background = paint.Brush { Solid: style.hex_raw(0xF9F9F9u32) }
+    var words = text_options()
+    words.size = 12.0
+    words.wrap = .None
+    let (said, said_error) = colored_text(a, 0u64, hint_text, t, words, style.hex_raw(0x000000u32))
+    if said_error != ok { ret (zero, said_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 10usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.positioned(0u64, 1.0, 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, face, zero)))
+    parts[1usize] = widget.positioned(0u64, 5.0, 1.0, style.defaults(), mem_one_node(a, said))
+    parts[2usize] = widget.positioned(0u64, 6.0, 0.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+    parts[3usize] = widget.positioned(0u64, 6.0, height - 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+    parts[4usize] = widget.positioned(0u64, 0.0, 6.0, style.defaults(), mem_one_node(a, widget.box(0u64, column, zero)))
+    parts[5usize] = widget.positioned(0u64, width - 1.0, 6.0, style.defaults(), mem_one_node(a, widget.box(0u64, column, zero)))
+    var i = 0usize
+    while i < 4usize {
+        let (corner, corner_error) = native_tooltip_corner_node(a, i)
+        if corner_error != ok { ret (zero, corner_error) }
+        var cx: f32 = 0.0
+        var cy: f32 = 0.0
+        if i == 1usize || i == 3usize { cx = width - 6.0 }
+        if i >= 2usize { cy = height - 6.0 }
+        parts[6usize + i] = widget.positioned(0u64, cx, cy, style.defaults(), mem_one_node(a, corner))
+        i += 1usize
+    }
+    ret (widget.stack(key, frame, parts[0usize..10usize]), ok)
+}
+// ---- end the native tooltip ------------------------------------------------------------------------------------------

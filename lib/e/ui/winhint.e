@@ -31,3 +31,25 @@ fn advance(font: shape.Font, ppem: u32, scalar: u32) -> (u32, bool) {
     }
     ret (0u32, false)
 }
+
+// round 11: the width of `scalar` at `ppem` as the linear advance rounded to a whole pixel (hmtx x ppem / unitsPerEm), which is how the
+// grid header hint of v3 (Tahoma 11 px) is spaced in the capture: its 'i', 'l' and 'm' are 3, 3 and 9 wide where hdmx lists 2, 2 and 8.
+fn advance_linear(font: shape.Font, ppem: u32, scalar: u32) -> (u32, bool) {
+    let (hmtx, has_hmtx) = shape.find_table(font, shape.TAG_HMTX)
+    let (head, has_head) = shape.find_table(font, shape.TAG_HEAD)
+    let (hhea, has_hhea) = shape.find_table(font, shape.TAG_HHEA)
+    let (cmap, has_cmap) = shape.find_table(font, tag_cmap())
+    if !has_hmtx || !has_head || !has_hhea || !has_cmap { ret (0u32, false) }
+    let d = font.data
+    let (sub, has_sub) = shape.cmap_subtable(d, cmap)
+    if !has_sub { ret (0u32, false) }
+    let gid = shape.glyph_of(d, sub, scalar)
+    if gid == 0u32 { ret (0u32, false) }
+    let metrics = usize(shape.u16_at(d, hhea.at + 34usize))
+    var row = usize(gid)
+    if row >= metrics && metrics > 0usize { row = metrics - 1usize }
+    let units = shape.u16_at(d, head.at + 18usize)
+    if units == 0u32 { ret (0u32, false) }
+    let adv = shape.u16_at(d, hmtx.at + 4usize * row)
+    ret ((adv * ppem + units / 2u32) / units, true)
+}
