@@ -99,6 +99,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let held = looks.Sheet { name: "splitter_dialog_held", cells: 1usize, columns: 1usize, cell_w: 24.0, cell_h: 387.0, ctx: zero, build: build_dialog_held }
         ret looks.run_all(a, &held)
     }
+    if args.len == 2usize && args[1usize][0usize] == 120u8 {
+        // `x` and `y`: the main window's strips under the pointer (hover-splitter-vertical, ...-horizontal).
+        let hover = looks.Sheet { name: "splitter_live_hover", cells: 1usize, columns: 1usize, cell_w: 8.0, cell_h: 463.0, ctx: zero, build: build_live_hover }
+        ret looks.run_all(a, &hover)
+    }
+    if args.len == 2usize && args[1usize][0usize] == 121u8 {
+        let hover = looks.Sheet { name: "splitter_live_across_hover", cells: 1usize, columns: 1usize, cell_w: 574.0, cell_h: 8.0, ctx: zero, build: build_lying_hover }
+        ret looks.run_all(a, &hover)
+    }
     if args.len == 2usize && args[1usize][0usize] == 118u8 {
         let held = looks.Sheet { name: "splitter_live_held", cells: 1usize, columns: 1usize, cell_w: 8.0, cell_h: 463.0, ctx: zero, build: build_live_held }
         ret looks.run_all(a, &held)
@@ -195,6 +204,16 @@ fn build_live(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
 
 fn build_lying(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (m, e) = build_clipped(a, t, cells, true, .None, 497.0)
+    ret (m, e)
+}
+
+fn build_live_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_clipped(a, t, cells, false, .Hover, 463.0)
+    ret (m, e)
+}
+
+fn build_lying_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_clipped(a, t, cells, true, .Hover, 574.0)
     ret (m, e)
 }
 

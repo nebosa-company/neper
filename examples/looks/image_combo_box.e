@@ -442,8 +442,44 @@ fn run_head(a: *mem.Arena, n: usize) -> err {
     ret looks.run_all(a, &sheet)
 }
 
+// The Internet Authentication combo under the pointer (ref/windows/states/hover-combo-box-drop-* and ...-edit-*, 190 x 22 at
+// (371, 71)): `image_combo_box.exe D` over the drop button (the cell is wide so that the harness's pointer, at its middle,
+// lands on it), `image_combo_box.exe P` over the text (as at rest).
+fn build_hover_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, over_button: bool) -> (usize, err) {
+    let (toggle, toggle_error) = pick_actions(a, 1usize)
+    if toggle_error != ok { ret (0usize, toggle_error) }
+    var none: []const widget.Node = zero
+    let (head, head_error) = control.win_head(a, 100u64, t, "Head", "No Authentication", true, false, &toggle[0usize], true, none, 189.0, 71.0, 371.0)
+    if head_error != ok { ret (0usize, head_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (0usize, held_error) }
+    held[0usize] = head
+    var wide: f32 = 190.0
+    if over_button { wide = 360.0 }
+    cells[0usize] = looks.Cell { caption: "", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, looks.size_style(wide, 22.0), held[0usize..1usize]), drive: .Hover }
+    ret (1usize, ok)
+}
+
+fn build_hover_drop(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hover_n(a, t, cells, true)
+    ret (m, e)
+}
+
+fn build_hover_edit(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hover_n(a, t, cells, false)
+    ret (m, e)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 2usize && args[1usize][0usize] == 111u8 { ret run_open(a, usize(args[1usize][1usize]) - 48usize) }
+    if args.len == 2usize && args[1usize][0usize] == 68u8 {
+        let hover = looks.Sheet { name: "image_combo_box_hover_drop", cells: 1usize, columns: 1usize, cell_w: 360.0, cell_h: 22.0, ctx: zero, build: build_hover_drop }
+        ret looks.run_all(a, &hover)
+    }
+    if args.len == 2usize && args[1usize][0usize] == 80u8 {
+        let hover = looks.Sheet { name: "image_combo_box_hover_edit", cells: 1usize, columns: 1usize, cell_w: 190.0, cell_h: 22.0, ctx: zero, build: build_hover_edit }
+        ret looks.run_all(a, &hover)
+    }
     if args.len == 2usize && args[1usize][0usize] == 67u8 {
         let cell = looks.Sheet { name: "image_combo_box_cell", cells: 1usize, columns: 1usize, cell_w: 155.0, cell_h: 21.0, ctx: zero, build: build_cell }
         ret looks.run_all(a, &cell)

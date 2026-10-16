@@ -143,6 +143,22 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
     surface[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, plate, parts[0usize..n])
+    if windows {
+        // looks5 group d: v3's toolbar hint window (#FFFFE1, bevelled), the shortcut in parentheses after the text.
+        var hint_line = text
+        if shortcut.len > 0usize {
+            let (joined, joined_error) = mem.alloc[u8](a, text.len + shortcut.len + 3usize)
+            if joined_error != ok { ret (zero, TooLarge) }
+            var at = control.copy_text(joined, text)
+            at += control.copy_text(joined[at..joined.len], " (")
+            at += control.copy_text(joined[at..joined.len], shortcut)
+            at += control.copy_text(joined[at..joined.len], ")")
+            hint_line = joined[0usize..at]
+        }
+        let (hint, hint_error) = control.win5_hint(a, 0u64, t, hint_line, false, 0.0, 0.0)
+        if hint_error != ok { ret (zero, hint_error) }
+        surface[0usize] = hint
+    }
     var sem: widget.Semantics = zero
     sem.role = 27u8
     sem.label = text

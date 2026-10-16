@@ -212,26 +212,93 @@ fn bar_line(x: f32, y: f32, w: f32, rgb: u32) -> widget.Node {
 }
 
 // `build_flat` is the toolbar strip of the live main window (crop 604,56 188x28): the toolbar's
-// own rows, and the Mode combo at (58, 6), 127 wide. `build_flat_states` are the three states.
-fn build_flat(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// own rows, and the Mode combo at (58, 6), 127 wide. `variant`: 0 at rest, 1 under the pointer (ref/windows/states/
+// hover-toolbar-combo-mode), 2 the card name combo (empty, 146 wide at (7, 6) of the crop 14,56 186x28), 3 that one under the
+// pointer (hover-toolbar-combo-card-drop and ...-edit, the same pixels). `build_flat_states` are the three states.
+fn build_flat_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, variant: usize) -> (usize, err) {
     let colors = [4]str{ "Collection from Pool", "Collection from Deck", "Pool", "Deck" }
     var options = control.field_options()
     options.flat = true
     options.width = 127.0
-    let (combo, combo_error) = one(a, t, 100u64, "Collection from Pool", colors[0usize..4usize], 0usize, false, options, 0.0, 0.0, 17.0, 127.0)
+    var value = "Collection from Pool"
+    var at_x: f32 = 58.0
+    var cw: f32 = 188.0
+    if variant >= 2usize {
+        options.width = 146.0
+        value = ""
+        at_x = 7.0
+        cw = 186.0
+    }
+    let (combo, combo_error) = one(a, t, 100u64, value, colors[0usize..4usize], 0usize, false, options, 0.0, 0.0, 17.0, options.width)
     if combo_error != ok { ret (0usize, combo_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 12usize)
     if parts_error != ok { ret (0usize, parts_error) }
-    parts[0usize] = bar_line(0.0, 0.0, 188.0, 14606046u32)
-    parts[1usize] = bar_line(0.0, 1.0, 188.0, 16119285u32)
-    parts[2usize] = bar_line(0.0, 26.0, 188.0, 12434877u32)
-    parts[3usize] = bar_line(59.0, 27.0, 129.0, 13882323u32)
+    parts[0usize] = bar_line(0.0, 0.0, cw, 14606046u32)
+    parts[1usize] = bar_line(0.0, 1.0, cw, 16119285u32)
+    parts[2usize] = bar_line(0.0, 26.0, cw, 12434877u32)
+    parts[3usize] = bar_line(59.0, 27.0, cw - 59.0, 13882323u32)
     parts[5usize] = bar_line(0.0, 27.0, 59.0, 14474460u32)
-    parts[4usize] = widget.positioned(0u64, 58.0, 6.0, style.defaults(), widget_one(a, combo))
-    var strip = looks.size_style(188.0, 28.0)
+    parts[4usize] = widget.positioned(0u64, at_x, 6.0, style.defaults(), widget_one(a, combo))
+    var count = 6usize
+    if variant < 2usize {
+        // the toolbar's separator right of the Mode combo
+        parts[6usize] = grip(187.0, 6.0, 17.0, 12961221u32)
+        count = 7usize
+    } else {
+        // the toolbar's grip at the left of the card name combo and the foot row of that bar
+        parts[3usize] = bar_line(0.0, 27.0, cw, 14474460u32)
+        parts[5usize] = bar_line(0.0, 27.0, 1.0, 14474460u32)
+        parts[6usize] = grip(0.0, 2.0, 22.0, 10526880u32)
+        parts[7usize] = grip(1.0, 2.0, 22.0, 16777215u32)
+        parts[8usize] = grip(3.0, 2.0, 22.0, 10526880u32)
+        parts[9usize] = grip(4.0, 2.0, 22.0, 15724527u32)
+        count = 10usize
+    }
+    var strip = looks.size_style(cw, 28.0)
     strip.background = paint.Brush { Solid: style.hex(15790320u32) }
-    cells[0usize] = looks.Cell { caption: "", node: widget.stack(0u64, strip, parts[0usize..6usize]), drive: .None }
+    var drive = looks.Drive.None
+    if variant == 1usize || variant == 3usize { drive = .Hover }
+    var node = widget.stack(0u64, strip, parts[0usize..count])
+    if drive == .Hover {
+        // The harness puts the pointer at the middle of the cell: the cell is wide enough for it to land on the drop button.
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (0usize, held_error) }
+        held[0usize] = node
+        node = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, looks.size_style(hover_cell(variant), 28.0), held[0usize..1usize])
+    }
+    cells[0usize] = looks.Cell { caption: "", node: node, drive: drive }
     ret (1usize, ok)
+}
+
+fn grip(x: f32, y: f32, h: f32, rgb: u32) -> widget.Node {
+    var line = looks.size_style(1.0, h)
+    line.background = paint.Brush { Solid: style.hex(rgb) }
+    ret widget.positioned(0u64, x, y, line, zero)
+}
+
+fn hover_cell(variant: usize) -> f32 {
+    if variant >= 2usize { ret 294.0 }
+    ret 356.0
+}
+
+fn build_flat(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_flat_n(a, t, cells, 0usize)
+    ret (m, e)
+}
+
+fn build_flat_hot(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_flat_n(a, t, cells, 1usize)
+    ret (m, e)
+}
+
+fn build_flat_card(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_flat_n(a, t, cells, 2usize)
+    ret (m, e)
+}
+
+fn build_flat_card_hot(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_flat_n(a, t, cells, 3usize)
+    ret (m, e)
 }
 
 fn widget_one(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
@@ -597,6 +664,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret looks.run_all(a, &focus)
         }
         if first == 111u8 { ret run_open(a, usize(args[1usize][1usize]) - 48usize) }
+        if first == 70u8 {
+            // `F1` Mode under the pointer, `F2` the card name combo, `F3` that one under the pointer.
+            let kind = usize(args[1usize][1usize]) - 48usize
+            if kind == 1usize {
+                let sheet = looks.Sheet { name: "combo_box_flat_hover", cells: 1usize, columns: 1usize, cell_w: 356.0, cell_h: 28.0, ctx: zero, build: build_flat_hot }
+                ret looks.run_all(a, &sheet)
+            }
+            if kind == 2usize {
+                let sheet = looks.Sheet { name: "combo_box_flat_card", cells: 1usize, columns: 1usize, cell_w: 186.0, cell_h: 28.0, ctx: zero, build: build_flat_card }
+                ret looks.run_all(a, &sheet)
+            }
+            let sheet = looks.Sheet { name: "combo_box_flat_card_hover", cells: 1usize, columns: 1usize, cell_w: 294.0, cell_h: 28.0, ctx: zero, build: build_flat_card_hot }
+            ret looks.run_all(a, &sheet)
+        }
         if first == 69u8 { ret run_head(a, usize(args[1usize][1usize]) - 48usize) }
         if first == 76u8 { ret run_listed(a, usize(args[1usize][1usize]) - 48usize) }
         if first == 100u8 {

@@ -58,6 +58,7 @@ def diff(ref, got, top=14, quiet=False):
     a, b = ref.load(), got.load()
     bad = 0
     total = 0
+    worst = 0
     pairs = defaultdict(list)
     for y in range(h):
         for x in range(w):
@@ -65,20 +66,38 @@ def diff(ref, got, top=14, quiet=False):
                 continue
             total += 1
             p, q = a[x, y], b[x, y]
-            if max(abs(p[0] - q[0]), abs(p[1] - q[1]), abs(p[2] - q[2])) > 2:
+            d = max(abs(p[0] - q[0]), abs(p[1] - q[1]), abs(p[2] - q[2]))
+            if d > 2:
                 bad += 1
+                worst = max(worst, d)
                 pairs[(p, q)].append((x, y))
     if not quiet:
-        print("structural px %d, off %d" % (total, bad))
+        print("structural px %d, off %d, max level %d" % (total, bad, worst))
         for (p, q), pts in sorted(pairs.items(), key=lambda kv: -len(kv[1]))[:top]:
             xs = [pt[0] for pt in pts]
             ys = [pt[1] for pt in pts]
             print("  %3d x  ref %02x%02x%02x -> ours %02x%02x%02x  at x %d-%d y %d-%d" % (len(pts), *p, *q, min(xs), max(xs), min(ys), max(ys)))
-    return bad
+    return bad, total, worst
+
+
+def table(names):
+    """One line per sheet: structural px, px more than 2 levels off, the worst level."""
+    for name in names:
+        refp = os.path.join(ROOT, "docs/ui/looks/ref/windows", name + ".png")
+        gotp = os.path.join(ROOT, "docs/ui/looks/windows", name + ".png")
+        if not (os.path.exists(refp) and os.path.exists(gotp)):
+            continue
+        ref = Image.open(refp).convert("RGB")
+        got = Image.open(gotp).convert("RGB")
+        got = got.crop((0, 0) + ref.size)
+        bad, total, worst = diff(ref, got, quiet=True)
+        print("%-40s structural %6d  off %5d  max %3d" % (name, total, bad, worst))
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "sheet":
+    if sys.argv[1] == "table":
+        table(sys.argv[2:])
+    elif sys.argv[1] == "sheet":
         name = sys.argv[2]
         ref = Image.open(os.path.join(ROOT, "docs/ui/looks/ref/windows", name + ".png")).convert("RGB")
         got = Image.open(os.path.join(ROOT, "docs/ui/looks/windows", name + ".png")).convert("RGB")

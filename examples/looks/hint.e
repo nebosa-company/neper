@@ -63,7 +63,66 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (5usize, ok)
 }
 
+// The hint windows of the captures on their own (ref/windows/states/hover-hint-*, exact crops of the hint windows): `hint.exe T<n>`:
+// 1 to 5 the toolbar hints (Add cards, Add Foil cards, Visit MTG Studio, incremental search, Filter), 6 the grid header's.
+type Hinted = struct { name: str, text: str, width: f32, high: f32, grid: bool }
+
+fn hinted_spec(n: usize) -> Hinted {
+    if n == 1usize { ret Hinted { name: "hint_toolbar_cards_expand", text: "Add cards to your collection (Ins / +)", width: 210.0, high: 20.0, grid: false } }
+    if n == 2usize { ret Hinted { name: "hint_toolbar_cards_f", text: "Add Foil cards to your collection", width: 180.0, high: 20.0, grid: false } }
+    if n == 3usize { ret Hinted { name: "hint_toolbar_help_home", text: "Visit MTG Studio online resources", width: 188.0, high: 20.0, grid: false } }
+    if n == 4usize { ret Hinted { name: "hint_toolbar_search_binoculars", text: "Start incremental search (Ctrl+F)", width: 185.0, high: 20.0, grid: false } }
+    if n == 5usize { ret Hinted { name: "hint_toolbar_search_filter", text: "Filter top grid cards by various properties (F3)", width: 255.0, high: 20.0, grid: false } }
+    ret Hinted { name: "hint_grid_header_name", text: "Name - the card's name appears in the upper left corner.", width: 285.0, high: 25.0, grid: true }
+}
+
+fn build_hinted_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n: usize) -> (usize, err) {
+    let o = hinted_spec(n)
+    let (node, node_error) = control.win5_hint(a, 100u64, t, o.text, o.grid, o.width, o.high)
+    if node_error != ok { ret (0usize, node_error) }
+    cells[0usize] = looks.Cell { caption: "", node: node, drive: .None }
+    ret (1usize, ok)
+}
+
+fn build_t1(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hinted_n(a, t, cells, 1usize)
+    ret (m, e)
+}
+fn build_t2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hinted_n(a, t, cells, 2usize)
+    ret (m, e)
+}
+fn build_t3(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hinted_n(a, t, cells, 3usize)
+    ret (m, e)
+}
+fn build_t4(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hinted_n(a, t, cells, 4usize)
+    ret (m, e)
+}
+fn build_t5(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hinted_n(a, t, cells, 5usize)
+    ret (m, e)
+}
+fn build_t6(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hinted_n(a, t, cells, 6usize)
+    ret (m, e)
+}
+
+fn run_hinted(a: *mem.Arena, n: usize) -> err {
+    let o = hinted_spec(n)
+    var maker: looks.Build = build_t1
+    if n == 2usize { maker = build_t2 }
+    if n == 3usize { maker = build_t3 }
+    if n == 4usize { maker = build_t4 }
+    if n == 5usize { maker = build_t5 }
+    if n == 6usize { maker = build_t6 }
+    let sheet = looks.Sheet { name: o.name, cells: 1usize, columns: 1usize, cell_w: o.width, cell_h: o.high, ctx: zero, build: maker }
+    ret looks.run_all(a, &sheet)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len == 2usize && args[1usize][0usize] == 84u8 { ret run_hinted(a, usize(args[1usize][1usize]) - 48usize) }
     let sheet = looks.Sheet { name: "hint", cells: 5usize, columns: 3usize, cell_w: 260.0, cell_h: 110.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

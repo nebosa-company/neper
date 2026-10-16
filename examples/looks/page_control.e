@@ -326,6 +326,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret looks.run_all(a, &custom)
         }
     }
+    if args.len == 2usize && args[1usize][0usize] == 107u8 {
+        let two = looks.Sheet { name: "page_control_bottom_hover2", cells: 1usize, columns: 1usize, cell_w: 110.0, cell_h: 29.0, ctx: zero, build: build_k2 }
+        ret looks.run_all(a, &two)
+    }
     if args.len == 2usize && args[1usize][0usize] == 98u8 {
         // `b1`, `b2`: the v3 main window's card strip at (8, 546), 282 x 29, the first or the second tab chosen.
         var maker: looks.Build = build_b1
@@ -435,5 +439,44 @@ fn build_b1(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.C
 
 fn build_b2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (m, e) = build_bottom_one(a, t, cells, 1usize, false)
+    ret (m, e)
+}
+
+// The card strip under the pointer (ref/windows/states/hover-tab-left-first and ...-second, which are pixel for pixel the rest
+// strip): `page_control.exe k2` hovers the second tab (the cell is 110 wide so that the pointer, at its middle, lands on it; the
+// first tab's hover is the rest strip, page_control_bottom). The rows round the strip are the neighbouring grid's, as in page_control_bottom.
+fn build_hover_strip(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, wide: f32) -> (usize, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 2usize)
+    if actions_error != ok { ret (0usize, actions_error) }
+    actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    actions[1usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    let pictures = [2]control.GlyphKind{ .Picture, .Calendar }
+    let blank = [2]str{ "", "" }
+    var options = control.tabs_options()
+    options.bottom = true
+    options.width = 282.0
+    options.icons = pictures[0usize..2usize]
+    let (bar, bar_error) = control.tabs_of(a, 1000u64, t, blank[0usize..2usize], 0usize, actions[0usize..2usize], options)
+    if bar_error != ok { ret (0usize, bar_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    if parts_error != ok { ret (0usize, parts_error) }
+    parts[0usize] = rule(0.0, 0.0, 1.0, 12763842u32)
+    parts[1usize] = rule(1.0, 0.0, 281.0, 14934492u32)
+    parts[2usize] = rule(0.0, 1.0, 282.0, 16448250u32)
+    parts[3usize] = rule(0.0, 26.0, 282.0, 16448250u32)
+    parts[4usize] = rule(0.0, 28.0, 282.0, 13948116u32)
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (0usize, held_error) }
+    held[0usize] = bar
+    parts[5usize] = widget.positioned(0u64, 0.0, 3.0, looks.size_style(282.0, 26.0), held[0usize..1usize])
+    var strip = looks.size_style(wide, 29.0)
+    strip.overflow = .Clip
+    strip.background = paint.Brush { Solid: style.hex(15790320u32) }
+    cells[0usize] = looks.Cell { caption: "", node: widget.stack(0u64, strip, parts[0usize..6usize]), drive: .Hover }
+    ret (1usize, ok)
+}
+
+fn build_k2(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (m, e) = build_hover_strip(a, t, cells, 110.0)
     ret (m, e)
 }

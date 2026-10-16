@@ -227,6 +227,8 @@ PARTS["splitter_live"] = (8, 463, [("main-window", 287, 109, 8, 463, 0, 0)])
 PARTS["splitter_live_across"] = (497, 8, [("main-window", 295, 322, 497, 8, 0, 0)])
 PARTS["splitter_live_held"] = (8, 463, [("splitter-pressed-main-vertical", 208, 109, 8, 463, 0, 0)])
 PARTS["splitter_live_across_held"] = (574, 8, [("splitter-pressed-main-horizontal", 218, 322, 574, 8, 0, 0)])
+PARTS["splitter_live_hover"] = (8, 463, [("hover-splitter-vertical", 208, 109, 8, 463, 0, 0)])
+PARTS["splitter_live_across_hover"] = (574, 8, [("hover-splitter-horizontal", 218, 322, 574, 8, 0, 0)])
 PARTS["splitter_dialog_held"] = (24, 387, [("splitter-pressed-filter", 320, 55, 24, 387, 0, 0)])
 
 # the popup windows on their own, exact captures
@@ -265,6 +267,23 @@ for _n, _src, _x, _y, _w in [
     ("image_combo_box_open_condition2_head", "combo-box-open-dialog-options-condition-row2", 371, 99, 335),
 ]:
     PARTS[_n] = (_w + 1, 22, [(_src, _x, _y, _w + 1, 22, 0, 0)])
+PARTS["combo_box_flat_hover"] = (356, 28, [("hover-toolbar-combo-mode", 604, 56, 188, 28, 0, 0)])
+PARTS["combo_box_flat_card"] = (186, 28, [("main-window-rest", 14, 56, 186, 28, 0, 0)])
+PARTS["combo_box_flat_card_hover"] = (294, 28, [("hover-toolbar-combo-card-drop", 14, 56, 186, 28, 0, 0)])
+PARTS["image_combo_box_hover_drop"] = (360, 22, [("hover-combo-box-drop-options-auth-type", 371, 71, 190, 22, 0, 0)])
+PARTS["image_combo_box_hover_edit"] = (190, 22, [("hover-combo-box-edit-options-auth-type", 371, 71, 190, 22, 0, 0)])
+PARTS["page_control_bottom_hover2"] = (110, 29, [("hover-tab-left-second", 8, 546, 110, 29, 0, 0)])
+
+# the hint windows on their own (exact captures)
+for _n, _src, _w, _h in [
+    ("hint_toolbar_cards_expand", "hover-hint-toolbar-cards-expand", 210, 20),
+    ("hint_toolbar_cards_f", "hover-hint-toolbar-cards-f", 180, 20),
+    ("hint_toolbar_help_home", "hover-hint-toolbar-help-home", 188, 20),
+    ("hint_toolbar_search_binoculars", "hover-hint-toolbar-search-binoculars", 185, 20),
+    ("hint_toolbar_search_filter", "hover-hint-toolbar-search-filter", 255, 20),
+    ("hint_grid_header_name", "hover-hint-grid-header-name", 285, 25),
+]:
+    PARTS[_n] = (_w, _h, [(_src, 0, 0, _w, _h, 0, 0)])
 PARTS["combo_box_search_held"] = (297, 29, [("combo-box-drop-button-pressed-search", 20, 70, 289, 22, 4, 4)])
 
 
