@@ -14849,6 +14849,9 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     let enabled = options.enabled
     let state_edit = control_state(t, key, enabled, false)
     let state_button = control_state(t, key + 1u64, enabled, false)
+    // Round 6: an edit takes no hover, so a list-style combo has a hover-only region round its frame (`key + 1048650`); the
+    // capture of the pointer over its text (hover-combo-box-edit-options-row-color) is the hot frame, as over its drop button.
+    let state_over = control_state(t, key + 1048650u64, enabled, false)
     let focused = enabled && (state_edit.focused || state_button.focused)
     // looks3 group d: an editable combo with the focus (or its list open) is the square frame with
     // the accent line under it; a list-style (read-only) one keeps the rounded frame and shows
@@ -14857,7 +14860,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     var edge_look = 0u32
     if enabled && !square && open { edge_look = 1u32 }
     if enabled && !square && state_button.pressed { edge_look = 2u32 }
-    if enabled && !square && !open && !state_button.pressed && state_button.hovered { edge_look = 4u32 }
+    if enabled && !square && !open && !state_button.pressed && (state_button.hovered || (options.read_only && state_over.hovered)) { edge_look = 4u32 }
     let c = win_look(t, state_edit.hovered || state_button.hovered, false, false, false, enabled, options.read_only)
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -14923,10 +14926,10 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     layers[1usize] = widget.positioned(0u64, 3.0, 0.0, style.defaults(), held_text[0usize..1usize])
     layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), row_parts[1usize..2usize])
     var count = 3usize
-    if square && state_button.pressed {
-        // looks4 group d: an editable combo's held drop button is a boxed #CCE4F7 button (measured on
-        // ref/windows/states/combo-box-drop-button-pressed-search), under the chevron.
-        let (box_node, box_error) = win4_held_box(a)
+    if square && state_button.hovered && !state_button.pressed {
+        // Round 6: the drop button of the focused editable combo under the pointer is boxed in pale blue
+        // (states/hover-combo-box-drop-search), under the chevron.
+        let (box_node, box_error) = win4_held_box(a, 1.0)
         if box_error != ok { ret (zero, box_error) }
         let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
         if box_held_error != ok { ret (zero, TooLarge) }
@@ -14935,7 +14938,19 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), box_held[0usize..1usize])
         count = 4usize
     }
-    if focused && options.read_only && edge_look == 0u32 {
+    if square && state_button.pressed {
+        // looks4 group d: an editable combo's held drop button is a boxed #CCE4F7 button (measured on
+        // ref/windows/states/combo-box-drop-button-pressed-search), under the chevron.
+        let (box_node, box_error) = win4_held_box(a, 0.0)
+        if box_error != ok { ret (zero, box_error) }
+        let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if box_held_error != ok { ret (zero, TooLarge) }
+        box_held[0usize] = box_node
+        layers[3usize] = layers[2usize]
+        layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), box_held[0usize..1usize])
+        count = 4usize
+    }
+    if focused && options.read_only && (edge_look == 0u32 || edge_look == 4u32) {
         let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(options.width - 22.0), 16.0)
         if dots_error != ok { ret (zero, dots_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
@@ -14944,7 +14959,13 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         layers[count] = widget.positioned(0u64, 3.0, 3.0, style.defaults(), held[0usize..1usize])
         count += 1usize
     }
-    ret (widget.stack(key + 1048701u64, sized_style(options.width, 21.0), layers[0usize..count]), ok)
+    let framed = widget.stack(key + 1048701u64, sized_style(options.width, 21.0), layers[0usize..count])
+    if !options.read_only { ret (framed, ok) }
+    var no_gesture: widget.GestureAction = zero
+    let (over, over_error) = mem.alloc[widget.Node](a, 1usize)
+    if over_error != ok { ret (zero, TooLarge) }
+    over[0usize] = framed
+    ret (widget.region(key + 1048650u64, widget.Region { gesture: no_gesture, gestures: 4u8, enabled: enabled, focusable: false }, sized_style(options.width, 21.0), over[0usize..1usize]), ok)
 }
 // A list box (TcxListBox): v3 has none of its own, so this is the list its customization window
 // shows (TcxCustomGridItemsInnerListBox, measured on ref/windows/dialogs/view-show-columns at
@@ -16058,33 +16079,64 @@ fn win4_hot_corner(f: *const Win3Frame, b: *scene.Builder, face: paint.Color, st
 
 // The held drop button of an editable combo: 17 wide, 22 tall (its bottom row is the frame's bleed).
 fn win4_held_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let lines = mem.cast[*Win3Lines](ctx)
     let x = area.x
     let y = area.y
-    let frame = style.hex(24503u32)
+    // Round 6: shade 1 is the pointer over the drop button of the focused editable combo (states/hover-combo-box-drop-search):
+    // the same box in #E5F1FB inside the #0078D4 frame, its rows 0, 1, 20 and 21 measured as the held one's.
+    var frame = style.hex(24503u32)
+    var face = style.hex(13427959u32)
+    if lines.shade > 0.5 {
+        frame = style.hex(30932u32)
+        face = style.hex(15069691u32)
+    }
     var row: f32 = 0.0
     while row < 22.0 {
         var left = frame
-        var mid = style.hex(13427959u32)
+        var mid = face
         var right = frame
-        if row == 0.0 {
-            left = style.hex(12045793u32)
-            mid = style.hex(5279690u32)
-            right = style.hex(11717601u32)
-        }
-        if row == 1.0 {
-            left = style.hex(4228806u32)
-            mid = style.hex(8960226u32)
-            right = style.hex(3965892u32)
-        }
-        if row == 20.0 {
-            left = style.hex(25530u32)
-            mid = style.hex(4492236u32)
-            right = style.hex(1141950u32)
-        }
-        if row == 21.0 {
-            left = style.hex(10535647u32)
-            mid = style.hex(10535133u32)
-            right = style.hex(11126496u32)
+        if lines.shade > 0.5 {
+            if row == 0.0 {
+                left = style.hex(12047335u32)
+                mid = style.hex(5284061u32)
+                right = style.hex(11719143u32)
+            }
+            if row == 1.0 {
+                left = style.hex(4233435u32)
+                mid = style.hex(10078702u32)
+                right = style.hex(3970778u32)
+            }
+            if row == 20.0 {
+                left = style.hex(28874u32)
+                mid = style.hex(5021921u32)
+                right = style.hex(1145549u32)
+            }
+            if row == 21.0 {
+                left = style.hex(10535904u32)
+                mid = style.hex(10537191u32)
+                right = style.hex(11127268u32)
+            }
+        } else {
+            if row == 0.0 {
+                left = style.hex(12045793u32)
+                mid = style.hex(5279690u32)
+                right = style.hex(11717601u32)
+            }
+            if row == 1.0 {
+                left = style.hex(4228806u32)
+                mid = style.hex(8960226u32)
+                right = style.hex(3965892u32)
+            }
+            if row == 20.0 {
+                left = style.hex(25530u32)
+                mid = style.hex(4492236u32)
+                right = style.hex(1141950u32)
+            }
+            if row == 21.0 {
+                left = style.hex(10535647u32)
+                mid = style.hex(10535133u32)
+                right = style.hex(11126496u32)
+            }
         }
         try win3_rect(b, x, y + row, 1.0, 1.0, left)
         try win3_rect(b, x + 1.0, y + row, 15.0, 1.0, mid)
@@ -16094,10 +16146,10 @@ fn win4_held_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     ret ok
 }
 
-fn win4_held_box(a: *mem.Arena) -> (widget.Node, err) {
+fn win4_held_box(a: *mem.Arena, shade: f32) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[Win3Lines](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
-    cells[0usize] = Win3Lines { shade: 0.0 }
+    cells[0usize] = Win3Lines { shade: shade }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win4_held_paint, state: widget.bytes_of[Win3Lines](&cells[0usize]) } }, style: sized_style(17.0, 22.0), children: none }, ok)
 }
