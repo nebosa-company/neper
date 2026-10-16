@@ -180,3 +180,13 @@ calls `looks.run_linux` and names its sheet like the control (`button`, as the C
   when a run of pixels of the 1.0 render is not twice as long in the 2.0 render.
 - `examples/looks/scale_tiles.e` (`scale_button`, `scale_marks`, `scale_edits`) puts the controls
   on fractional positions: review its `@1.5x` PNGs by eye after touching a tile painter.
+
+## Native Windows 11 references (round 10)
+
+`docs/ui/looks/ref/windows-native/{light,dark}/` holds real uxtheme captures of the Win32 controls (README there). The Windows Dark look is matched
+to the dark ones; the light ones fill the states v3 never showed. Pixel tables read from them are baked by `python -I scripts/gen_winnative.py`
+into `lib/e/ui/winnative.e` (do not edit): the dark button ring corners (`nring_*`, painted by `winbutton.ring_paint_native`), the check box and
+radio marks (`nmark`, 13 x 13 ARGB, drawn by `e.ui.wintile`), the spin edit's up-down (`nspin`) and the combo chevron (`nchev`). The edit frame and the combos
+are painted from measured lines (`winedit.native_chrome`, `winedit.native_combo`). A control picks them when `t.tokens.palette == .Dark`; light uses
+the native tiles only for disabled and indeterminate marks. To compare, crop the native capture and the same state of the sheet, cut the same plain rows
+the painter cuts (`nspin_row`) and diff outside the text.
