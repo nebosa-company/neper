@@ -86,7 +86,7 @@ type NsData = struct { entries: []const NsEntry }
 // The Proxy internal methods live in b_proxy.e; `op` is one of PX_* (see the end of this file).
 type ProxyHook = fn(*Interp, u8, *Obj, Key, Value, Value) -> (Value, err)
 
-type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool, is_var: bool, captured: bool }
+type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool, is_var: bool, captured: bool, in_params: bool, owns_arguments: bool }
 
 // Binding flags.
 const B_CONST: u8 = 1u8
@@ -2984,6 +2984,9 @@ fn bind_function(it: *Interp, f: *Frame, fo: *Obj, n: ast.Node, args: []const Va
         if !f.strict { try define_data(it, ao, key_of("callee"), obj_value(fo), P_HIDDEN) }
         try declare(it, f.env, "arguments", obj_value(ao), 0u8)
     }
+    f.env.in_params = !simple
+    f.env.is_var = true
+    f.env.owns_arguments = !is_arrow
     if !simple {
         // Parameters are in their temporal dead zone until bound, so a default can not read its own or a later parameter.
         var t = 0usize
@@ -3011,6 +3014,7 @@ fn bind_function(it: *Interp, f: *Frame, fo: *Obj, n: ast.Node, args: []const Va
         }
         i += 1usize
     }
+    f.env.in_params = false
     // Hoisted `var`s. With a non-simple parameter list the body has a variable scope of its own, seeded from same-named parameters.
     f.env.is_var = true
     var param_env = null_env()
@@ -5829,19 +5833,31 @@ fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
         let z = null_env()
         while tgt.parent != z && !env_is_var_scope(it, tgt) { tgt = tgt.parent }
     }
+    // An eval in a parameter expression gets a variable scope of its own, and may not redeclare `arguments`.
+    let var_limit = tgt
+    var param_eval = false
+    if !g.strict && tgt.in_params {
+        param_eval = true
+        g.env.is_var = true
+        tgt = g.env
+    }
     if !g.strict {
         // EvalDeclarationInstantiation: a `var` / function name may not collide with a lexical binding between here and the variable scope.
         var ch = 0usize
         while ch < usize(root.hoist_count) {
             let cnode = prog.nodes[usize(prog.kids[usize(root.hoist_first) + ch])]
             let cname = cnode.text
+            if param_eval && str.eq(cname, "arguments") {
+                let (aat, afound) = env_index(var_limit, "arguments")
+                if afound || var_limit.owns_arguments { ret (undefv(), throw_syntax(it, "Identifier 'arguments' has already been declared")) }
+            }
             var ce2 = f.env
             if cnode.kind == ast.N_FUNC && cnode.op == 2u8 { ce2 = null_env() }
             let zv = null_env()
             while ce2 != zv {
                 let (cat, cfound) = env_index(ce2, cname)
                 if cfound && (ce2.vars.items[cat].flags & B_LEX) != 0u8 { ret (undefv(), throw_syntax(it, str_concat3(it, "Identifier '", cname, "' has already been declared"))) }
-                if ce2 == tgt { break }
+                if ce2 == var_limit { break }
                 ce2 = ce2.parent
             }
             ch += 1usize
