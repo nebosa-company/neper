@@ -16,6 +16,7 @@ Auto entry: a control with no entry for a look, whose picture docs/ui/looks/<loo
 `sheet`; Linux sheets are named like the control, as the Cupertino and Android ones are), is shown as `started` (rendered from the platform palette, not compared with a real screen).
 An overlay or base entry always wins.
 """
+import time
 import base64
 import hashlib
 import io
@@ -219,7 +220,7 @@ def main():
     p.append('<p class="mut">One widget set, five platform flavors in priority order (Windows, Linux, Neper, macOS / iOS, Android), each in a Light and a Dark look (docs/ui/looks-plan.md). Generated from '
              'docs/ui/looks/status.json and status.d by scripts/render_looks.py; updated %s. %d Delphi-equivalent controls and %d platform idiom controls. '
              'A look with no status entry whose picture exists is shown as started: rendered from the platform palette, not compared with a real screen.</p>'
-             % (escape(data.get("updated", "")), len(controls), len(extra_rows)))
+             % (escape(time.strftime("%Y-%m-%d %H:%M:%S")), len(controls), len(extra_rows)))
     # completion over the Delphi-equivalent controls only (the platform idiom rows exist for some looks only)
     done = {}
     for l in looks:
