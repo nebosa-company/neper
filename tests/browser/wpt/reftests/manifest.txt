@@ -144,3 +144,4 @@ ch-unit-001.html | ch-unit-001-ref.html | match
 anon-table-cells-001.html | anon-table-cells-001-ref.html | match
 body-overflow-propagation-001.html | body-overflow-propagation-001-ref.html | match
 abspos-static-border-001.html | abspos-static-border-001-ref.html | match
+letter-spacing-paint-001.html | letter-spacing-paint-001-ref.html | match

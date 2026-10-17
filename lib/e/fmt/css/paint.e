@@ -720,6 +720,26 @@ fn paint_decoration_line(p: *Painter, x: f64, y: f64, w: f64, t: f64, c: u32, ho
     }
 }
 
+// Text with `letter-spacing` / `word-spacing`: one character at a time, each followed by the extra space (no kerning or joining).
+fn paint_spaced(p: *Painter, ts: *const style.Style, text: str, x: f64, y: f64) {
+    let env = p.env
+    var cx = x
+    var i = 0usize
+    while i < text.len {
+        var j = i + 1usize
+        while j < text.len && (text[j] & 192u8) == 128u8 { j += 1usize }
+        let ch = text[i..j]
+        let cl = env.text(env.ctx, ts, ch)
+        if mem.address_of(cl) != 0usize {
+            emit(p, scene.Command { Text: scene.DrawText { layout: cl, origin: geo.Point { x: f32(cx), y: f32(y) }, brush: solid(ts.color) } })
+            cx += f64(cl.bounds.width)
+        }
+        cx += ts.letter_spacing
+        if text[i] == 32u8 { cx += ts.word_spacing }
+        i = j
+    }
+}
+
 fn paint_text_run(p: *Painter, text_box: u32, text: str, x: f64, y: f64, w: f64) {
     if layout.st(p.l, p.l.boxes.items[usize(text_box)].style).visibility != .Visible { ret }
     if text.len > 0usize {
@@ -733,6 +753,8 @@ fn paint_text_run(p: *Painter, text_box: u32, text: str, x: f64, y: f64, w: f64)
                 emit(p, scene.Command { Transform: geo.Transform { m00: 0.0f32, m01: -1.0f32, m02: f32(x + w), m10: 1.0f32, m11: 0.0f32, m12: f32(y) } })
                 emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: 0.0f32, y: 0.0f32 }, brush: solid(ts0.color) } })
                 restore(p)
+            } else if ts0.letter_spacing != 0.0f64 || ts0.word_spacing != 0.0f64 {
+                paint_spaced(p, ts0, text, x, y)
             } else {
                 emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: f32(x), y: f32(y) }, brush: solid(ts0.color) } })
             }
