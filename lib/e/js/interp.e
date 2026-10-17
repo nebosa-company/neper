@@ -2427,7 +2427,62 @@ fn proto_value_of(it: *Interp, ctor: *Obj, fallback: *Obj) -> (*Obj, err) {
     let (pv, pe) = get_prop(it, ctor, key_of("prototype"), obj_value(ctor))
     if pe != ok { ret (fallback, pe) }
     if is_object(pv) { ret (as_object(pv), ok) }
-    ret (fallback, ok)
+    ret (realm_proto(it, ctor, fallback), ok)
+}
+
+// The function's realm (a bound function's target, a proxy's target).
+fn function_realm(it: *Interp, f: *Obj) -> *Interp {
+    var cur = f
+    var guard = 0u32
+    while guard < 64u32 {
+        guard += 1u32
+        if cur.class == C_BOUND { cur = cur.bound_target } else { break }
+    }
+    if cur.realm == null_interp() { ret it }
+    ret cur.realm
+}
+
+// `p` is an intrinsic prototype of `it`; the same intrinsic of the realm of `ctor`.
+fn realm_proto(it: *Interp, ctor: *Obj, p: *Obj) -> *Obj {
+    let rl = function_realm(it, ctor)
+    if rl == it { ret p }
+    if p == it.protos.object { ret rl.protos.object }
+    if p == it.protos.function { ret rl.protos.function }
+    if p == it.protos.array { ret rl.protos.array }
+    if p == it.protos.string { ret rl.protos.string }
+    if p == it.protos.number { ret rl.protos.number }
+    if p == it.protos.boolean { ret rl.protos.boolean }
+    if p == it.protos.symbol { ret rl.protos.symbol }
+    if p == it.protos.error_proto { ret rl.protos.error_proto }
+    if p == it.protos.type_error { ret rl.protos.type_error }
+    if p == it.protos.range_error { ret rl.protos.range_error }
+    if p == it.protos.syntax_error { ret rl.protos.syntax_error }
+    if p == it.protos.reference_error { ret rl.protos.reference_error }
+    if p == it.protos.eval_error { ret rl.protos.eval_error }
+    if p == it.protos.uri_error { ret rl.protos.uri_error }
+    if p == it.protos.iterator { ret rl.protos.iterator }
+    if p == it.protos.generator { ret rl.protos.generator }
+    if p == it.protos.promise { ret rl.protos.promise }
+    if p == it.protos.regexp { ret rl.protos.regexp }
+    if p == it.protos.date { ret rl.protos.date }
+    if p == it.protos.map { ret rl.protos.map }
+    if p == it.protos.set { ret rl.protos.set }
+    if p == it.protos.bigint { ret rl.protos.bigint }
+    if p == it.protos.gen_function { ret rl.protos.gen_function }
+    if p == it.protos.async_function { ret rl.protos.async_function }
+    if p == it.protos.async_generator { ret rl.protos.async_generator }
+    if p == it.protos.async_gen_function { ret rl.protos.async_gen_function }
+    if p == it.protos.weakmap { ret rl.protos.weakmap }
+    if p == it.protos.weakset { ret rl.protos.weakset }
+    if p == it.protos.array_buffer { ret rl.protos.array_buffer }
+    if p == it.protos.data_view { ret rl.protos.data_view }
+    if p == it.protos.aggregate_error { ret rl.protos.aggregate_error }
+    var k = 0usize
+    while k < 12usize {
+        if p == it.ta_protos[k] { ret rl.ta_protos[k] }
+        k += 1usize
+    }
+    ret p
 }
 
 fn count_params_length(f: *const Frame, fid: u32) -> f64 { ret f.prog.nodes[usize(fid)].num }
@@ -5927,8 +5982,11 @@ fn new_promise(it: *Interp) -> (*Obj, err) {
     ret (p, e)
 }
 
+// Realms made from another (frames, $262.createRealm) share the job queue of the realm at the root of the chain.
 fn enqueue_job(it: *Interp, j: Job) {
-    let pe = list.push[Job](&it.jobs, j)
+    var root = it
+    while root.donor != null_interp() { root = root.donor }
+    let pe = list.push[Job](&root.jobs, j)
 }
 
 fn trigger_reactions(it: *Interp, reactions: list.List[Reaction], arg: Value) {

@@ -974,12 +974,22 @@ fn host_eval_script(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 
 fn host_gc(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (js.undefv(), ok) }
 
+// $262.createRealm(): a new realm that shares the well-known symbols and the job queue of this one.
+fn host_create_realm(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (r, re) = new_realm_with(it.a, it)
+    if re != ok { ret (js.undefv(), js.throw_range(it, "could not create a realm")) }
+    let (h, he) = js.get_prop(it, r.global, js.key_of("$262"), js.obj_value(r.global))
+    if he != ok { ret (js.undefv(), he) }
+    ret (h, ok)
+}
+
 fn install_host(it: *js.Interp) {
     let h = js.new_plain(it)
     let e0 = js.define_data(it, it.global, js.key_of("$262"), js.obj_value(h), js.P_HIDDEN)
     it.last = h
     js.add_method(it, it.last, "evalScript", 1u32, host_eval_script)
     js.add_method(it, it.last, "gc", 0u32, host_gc)
+    js.add_method(it, it.last, "createRealm", 0u32, host_create_realm)
     let e1 = js.define_data(it, it.last, js.key_of("global"), js.obj_value(it.global), js.P_HIDDEN)
 }
 
