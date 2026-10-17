@@ -1078,7 +1078,24 @@ fn shown_in_pane(a: *mem.Arena, grid: *Grid, body: widget.Node, body_height: f32
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, control.TooLarge) }
         pair[0usize] = shown
-        pair[1usize] = widget.box(0u64, control.sized_style(1.0, grid.tail_gap), zero)
+        var strip_style = control.sized_style(1.0, grid.tail_gap)
+        var strip_inner: []const widget.Node = zero
+        if win_look(grid) && grid.look.group_flat {
+            // round 17: v3 paints the strip white under a #EEEEEE row line that starts after the indicator column
+            strip_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+            strip_style.width = style.Length { Percent: 100.0 }
+            if grid.bar_on && grid.hpane > grid.look.scroll_width { strip_style.width = style.Length { Px: grid.hpane - grid.look.scroll_width } }
+            var hair = style.defaults()
+            hair.width = style.Length { Percent: 100.0 }
+            hair.height = style.Length { Px: 1.0 }
+            hair.background = paint.Brush { Solid: gl.rgb(0xEEEEEEu32) }
+            strip_inner = one(a, widget.padded(0u64, 12.0, 0.0, 0.0, 0.0, style.defaults(), one(a, widget.box(0u64, hair, zero))))
+        }
+        if win_look(grid) && grid.look.group_flat {
+            pair[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, strip_style, strip_inner)
+        } else {
+            pair[1usize] = widget.box(0u64, strip_style, zero)
+        }
         shown = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
     }
     ret (shown, ok)
@@ -8050,7 +8067,12 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
             // looks4-e: v3's own arrow, 1 in and 6 down in the 19 px row
             let (long_pic, long_error) = gl.pixels(a, gl.gx_row_arrow_long(), gl.gx_row_arrow_long_w(), gl.gx_row_arrow_long_h())
             if long_error != ok { ret long_error }
-            *out = widget.padded(0u64, 1.0, 6.0, 0.0, 0.0, style.defaults(), one(a, long_pic))
+            var long_top: f32 = 6.0
+            // round 17: the ungrouped top grid's arrow stands 3 px higher in the live capture
+            if !grid.look.group_counts && win_look(grid) { long_top = 3.0 }
+            // the capture with the fourth row current (data_grid_top) has it one row of pixels higher than the first-row captures
+            if !grid.look.group_counts && win_look(grid) && row > 0usize { long_top = 2.0 }
+            *out = widget.padded(0u64, 1.0, long_top, 0.0, 0.0, style.defaults(), one(a, long_pic))
             ret ok
         }
         var arrow_shape = gl.Shape.Right

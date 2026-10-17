@@ -2378,6 +2378,18 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
     if look.on { rule.background = paint.Brush { Solid: look.header_line } }
     parts[1usize] = widget.box(0u64, rule, zero)
+    // round 17: the live grid's rule under the header stops short of the row indicator's header cell (it stays white there)
+    if look.on && look.soft_lines && t.tokens.profile == .Windows && t.tokens.palette != .Dark && columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 && columns[0usize].width > 2.0 {
+        let (white_rule, white_rule_error) = mem.alloc[widget.Node](a, 2usize)
+        if white_rule_error != ok { ret (zero, TooLarge) }
+        var white_cell = control.sized_style(columns[0usize].width - 2.0, t.tokens.sizes.divider)
+        white_cell.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        var full_rule = rule
+        full_rule.width = style.Length { Percent: 100.0 }
+        white_rule[0usize] = widget.box(0u64, full_rule, zero)
+        white_rule[1usize] = widget.positioned(0u64, lead, 0.0, style.defaults(), one_node(a, widget.box(0u64, white_cell, zero)))
+        parts[1usize] = widget.stack(0u64, style.defaults(), white_rule[0usize..2usize])
+    }
     // round 12: under a hot or pressed header the rule takes its tint over that column (live hover and pressed grabs)
     if hot_has {
         var from_x = lead
