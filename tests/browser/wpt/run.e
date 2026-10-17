@@ -58,6 +58,7 @@ fn render(a: *mem.Arena, env: *Env, address: str, out: []u32) -> bool {
     if pe != ok { ret false }
     if gpu.read_image(env.q, img, out) != ok { ret false }
     let released = scene.release_scene(env.renderer, id)
+    page.release_fonts(pg)
     ret true
 }
 

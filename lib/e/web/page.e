@@ -58,7 +58,7 @@ type Page = struct {
     url: str, status: u16, charset: str, title: str, mime: str,
     base: url.Url, tree: dom.Dom, sheets: []const str,
     images: list.List[ImageEntry],
-    renderer: *scene.Renderer, has_renderer: bool,
+    renderer: *scene.Renderer, has_renderer: bool, font_base: usize,
     view: *view.View,
     ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32,
     box_map: []u32, box_rev: u64, has_box_map: bool
@@ -993,6 +993,7 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     }
     p.title = find_title(p)
     p.sheets = collect_sheets(p)
+    p.font_base = fonts.faces.len
     load_web_fonts(p)
     // The view's private arena.
     let (backing, be) = mem.alloc[u8](a, view_bytes)
@@ -1006,6 +1007,11 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     p.view_height = height
     start_scripts(p)
     ret (p, ok)
+}
+
+// Drops the web fonts the page added (the font set outlives pages; the renderer keeps at most 16 faces).
+fn release_fonts(p: *Page) {
+    if p.fonts.faces.len > p.font_base { p.fonts.faces.len = p.font_base }
 }
 
 // Lets the page upload decoded images to `r` the first time it paints them.
