@@ -1,7 +1,7 @@
 // Renders a web page to a PNG file (browser tracker 0.6, the render tool): loads the URL through `e.web.page`, paints the
 // first `height` pixels (or the whole page with `--full`) into the CPU renderer and writes the pixels.
 //
-//   tests/browser/tools/render.sh URL OUT.png [--width N] [--height N] [--full] [--scroll N]
+//   tests/browser/tools/render.sh URL OUT.png [--width N] [--height N] [--full] [--scroll N] [--no-scripts]
 //
 // Fonts: the Windows system fonts when present (Arial, Times New Roman, Courier New, Verdana, Georgia, Segoe UI, Tahoma),
 // else the Cantarell faces in docs/ui/looks/ref/linux/fonts. `serif`, `sans-serif` and `monospace` map to Times, Arial and
@@ -193,6 +193,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if str.eq(args[i], "--height") {
             i += 1usize
             height = parse_number(args[i], height)
+        } else if str.eq(args[i], "--no-scripts") {
+            page.set_scripts(false)
         } else if str.eq(args[i], "--scroll") {
             i += 1usize
             scroll = parse_number(args[i], 0usize)
@@ -251,7 +253,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (cl, client_error) = fetch.client(a, config, 256usize)
     if client_error != ok { os.exit(6i32) }
     var client = cl
-    let (pg, load_error) = page.load(a, &client, &fonts, address, f32(width), f32(height), 1073741824usize)
+    let (pg, load_error) = page.load(a, &client, &fonts, address, f32(width), f32(height), 3221225472usize)
     if load_error != ok {
         var why = "other"
         if load_error == fetch.BadUrl { why = "bad url" } else if load_error == fetch.NoAddress { why = "no address" } else if load_error == fetch.NetworkError { why = "network error" } else if load_error == fetch.TooManyRedirects { why = "too many redirects" } else if load_error == fetch.RedirectRefused { why = "redirect refused" } else if load_error == fetch.TooLarge { why = "too large" } else if load_error == fetch.BadEncoding { why = "bad encoding" } else if load_error == fetch.UnsupportedScheme { why = "unsupported scheme" } else if load_error == page.LoadFailed { why = "decode or parse" } else if load_error == page.NotRenderable { why = "not renderable" } else if load_error == mem.Full { why = "arena full" } else if load_error == layout.TooBig { why = "layout too big" }

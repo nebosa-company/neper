@@ -883,7 +883,13 @@ fn refresh(p: *Page) {
     let re = view.resize(v, p.view_width, p.view_height)
 }
 
+// Page scripts run unless a tool turns them off (a page whose scripts exhaust the arena still renders as static markup).
+var scripts_enabled: bool = true
+
+fn set_scripts(enabled: bool) { scripts_enabled = enabled }
+
 fn start_scripts(p: *Page) {
+    if !scripts_enabled { ret }
     let v = p.view
     let (ctx, xe) = script.new_context(p.pa, &v.tree, p.url)
     if xe != ok { ret }
