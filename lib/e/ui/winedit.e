@@ -839,6 +839,41 @@ fn nspin_row_paint(b: *scene.Builder, table: []const u32, dim_table: []const u32
     ret ok
 }
 
+// Round 17 (derived, no dark capture): v3's ellipsis button is a 4 px rounded soft button with faint 3 x 2 px dots; here the
+// corners are the native dark button's ring corner (docs/ui/looks/ref/windows-native/dark/button-rest, rows 13 to 16 of the
+// crop) and the dots are v3's coverage (d8 c3 ea / e6 d9 f1 on fd) laid over the dark face.
+fn nmix(bg: u32, line: u32, face: u32, wl: u32, wf: u32) -> u32 {
+    var out = 0u32
+    var c = 0u32
+    while c < 3u32 {
+        let sh = c * 8u32
+        let vb = (bg >> sh) & 255u32
+        let vl = (line >> sh) & 255u32
+        let vf = (face >> sh) & 255u32
+        let v = (vb * (100u32 - wl - wf) + vl * wl + vf * wf + 50u32) / 100u32
+        out = out | (v << sh)
+        c += 1u32
+    }
+    ret out
+}
+
+fn nedit_corner(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, line: u32, face: u32) -> err {
+    let wl = [16]u32{ 0u32, 6u32, 55u32, 90u32, 6u32, 80u32, 60u32, 10u32, 55u32, 60u32, 0u32, 0u32, 90u32, 10u32, 0u32, 0u32 }
+    let wf = [16]u32{ 0u32, 0u32, 0u32, 0u32, 0u32, 20u32, 40u32, 90u32, 0u32, 40u32, 100u32, 100u32, 0u32, 90u32, 100u32, 100u32 }
+    var k = 0usize
+    while k < 16usize {
+        let cx = f32(k % 4usize)
+        let cy = f32(k / 4usize)
+        let v = nmix(0x202020u32, line, face, wl[k], wf[k])
+        try nrect(b, x + cx, y + cy, 1.0, 1.0, v)
+        try nrect(b, x + w - 1.0 - cx, y + cy, 1.0, 1.0, v)
+        try nrect(b, x + cx, y + h - 1.0 - cy, 1.0, 1.0, v)
+        try nrect(b, x + w - 1.0 - cx, y + h - 1.0 - cy, 1.0, 1.0, v)
+        k += 1usize
+    }
+    ret ok
+}
+
 // The ellipsis button of a button edit: 16 wide, the edit's height less 5, 1 px from its end (rect (W - 17, 2)).
 fn nedit_ellipsis(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, state: u32, pressed: bool) -> err {
     var line = 0x9B9B9Bu32
@@ -847,13 +882,24 @@ fn nedit_ellipsis(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, state: u32,
     if state == 2u32 { line = 0x404040u32 }
     try nrect(b, x, y, w, h, line)
     try nrect(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, face)
+    try nedit_corner(b, x, y, w, h, line, face)
     var ink = 0xFFFFFFu32
     if state == 2u32 { ink = 0x7A7A7Au32 }
-    let cx = x + f32(i32(w * 0.5))
-    let cy = y + f32(i32(h * 0.5)) + 1.0
-    try nrect(b, cx - 4.0, cy, 2.0, 2.0, ink)
-    try nrect(b, cx - 1.0, cy, 2.0, 2.0, ink)
-    ret nrect(b, cx + 2.0, cy, 2.0, 2.0, ink)
+    // coverage in percent of the three columns of one dot, upper and lower row
+    let top = [3]u32{ 15u32, 23u32, 8u32 }
+    let low = [3]u32{ 9u32, 14u32, 4u32 }
+    var d = 0usize
+    while d < 3usize {
+        var c = 0usize
+        while c < 3usize {
+            let px = x + 4.0 + f32(d * 3usize + c)
+            try nrect(b, px, y + 8.0, 1.0, 1.0, nmix(face, ink, ink, top[c], 0u32))
+            try nrect(b, px, y + 9.0, 1.0, 1.0, nmix(face, ink, ink, low[c], 0u32))
+            c += 1usize
+        }
+        d += 1usize
+    }
+    ret ok
 }
 
 fn nedit_paint(ctx: *void, b: *scene.Builder, raw: geometry.Rect) -> err {
