@@ -24,11 +24,12 @@ from scipy import ndimage
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOOKS = os.path.join(HERE, "..", "docs", "ui", "looks")
 NATIVE = os.path.join(LOOKS, "ref", "windows-native")
+GLYPHS = bool(os.environ.get("LOOKS_GLYPHS"))  # 1: glyph pixels are counted too (nothing is excluded as text)
 OURS = (os.environ.get("LOOKS_OURS") or os.path.join(LOOKS, "windows-dark")).rstrip("/\\")
 
 # capture prefix -> dark sheets (by name prefix) that may hold it, besides every native_dark* sheet
 SHEETS = {
-    "label": ["label", "syslink"], "syslink": ["label", "syslink"], "button": ["button"],
+    "radio": ["radio"], "label": ["label", "syslink"], "syslink": ["label", "syslink"], "button": ["button"],
     "edit": ["text_edit", "edits", "memo", "spin_edit", "mask_edit"], "spin": ["spin_edit", "edits"],
     "combo": ["combo_box", "image_combo_box"], "menu-popup": ["popup_menu"], "tooltip": ["hint"],
 }
@@ -121,7 +122,7 @@ def check(capture, meta, cache, rects=None):
     x0, y0, x1, y1 = crop_of(meta, rects)
     a = ref[y0:y1, x0:x1]
     flat = flat_mask(a)
-    txt = text_zone(a)
+    txt = np.zeros(a.shape[:2], bool) if GLYPHS else text_zone(a)
     use = flat & ~txt
     h, w = a.shape[:2]
     best = None
