@@ -58,9 +58,26 @@ fn glyph_rect(b: *scene.Builder, area: geometry.Rect, x: f32, y: f32, w: f32, h:
 // The close X: 10 columns by 11 rows of coverage (0 to 255) at (18, 10) of the 46 x 31 button, from the capture.
 fn cross_cover() -> [110]u32 { ret [110]u32{ 50u32, 8u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 8u32, 51u32, 170u32, 128u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 128u32, 170u32, 25u32, 189u32, 128u32, 8u32, 0u32, 0u32, 8u32, 128u32, 189u32, 25u32, 0u32, 25u32, 175u32, 128u32, 0u32, 0u32, 128u32, 175u32, 25u32, 0u32, 0u32, 0u32, 25u32, 189u32, 133u32, 133u32, 189u32, 25u32, 0u32, 0u32, 0u32, 0u32, 0u32, 25u32, 214u32, 214u32, 25u32, 0u32, 0u32, 0u32, 0u32, 0u32, 8u32, 128u32, 200u32, 200u32, 128u32, 8u32, 0u32, 0u32, 0u32, 0u32, 128u32, 175u32, 25u32, 25u32, 175u32, 128u32, 0u32, 0u32, 8u32, 128u32, 189u32, 25u32, 0u32, 0u32, 25u32, 189u32, 128u32, 8u32, 127u32, 175u32, 25u32, 0u32, 0u32, 0u32, 0u32, 25u32, 175u32, 127u32, 154u32, 24u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 25u32, 152u32 } }
 
-fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+fn glyph_paint(ctx: *void, b: *scene.Builder, plain_area: geometry.Rect) -> err {
     let g = mem.cast[*Glyph](ctx)
-    if g.kind == 2u32 {
+    // round 15: the native dark caption (window-active, dialog-active of ref/windows-native/dark) sets every glyph 2 px left of
+    // and 1 px below v3's live windows (a Glyph kind of 16 or more)
+    let kind = g.kind % 16u32
+    var area = plain_area
+    if g.kind >= 16u32 {
+        area = geometry.Rect { x: plain_area.x - 2.0, y: plain_area.y + 1.0, width: plain_area.width, height: plain_area.height }
+    }
+    if kind == 8u32 {
+        // round 15: the native dark dialog's lone close X (dialog-active), 11 x 11 coverage from (16, 10) of the 46 wide button
+        let x46 = native_dialog_cross()
+        var u = 0usize
+        while u < 121usize {
+            if x46[u] != 0u32 { try glyph_rect(b, area, 16.0 + f32(u % 11usize), 10.0 + f32(u / 11usize), 1.0, 1.0, g.ink, g.alpha * f32(x46[u]) / 255.0) }
+            u += 1usize
+        }
+        ret ok
+    }
+    if kind == 2u32 {
         let cover = cross_cover()
         var i = 0usize
         while i < 110usize {
@@ -73,7 +90,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     // #1F2022: a full line is 191 = 0.75), 11 columns from x = 16 of the 46 wide button; the square 11 rows from y = 10.
     // looks4: the close X of a 33 wide dialog caption whose button starts on an odd pixel (About, Options) is a half pixel
     // to the left of the one on an even pixel (Search for Card): 12 columns from x = 11 of the button, 11 rows from y = 10.
-    if g.kind == 4u32 {
+    if kind == 4u32 {
         var e = 0usize
         while e < 10usize {
             try glyph_rect(b, area, 17.0 + f32(e), 15.0, 1.0, 1.0, g.ink, g.alpha * 191.0 / 255.0)
@@ -81,7 +98,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         }
         ret ok
     }
-    if g.kind == 5u32 {
+    if kind == 5u32 {
         let box = square_cover_odd()
         var m = 0usize
         while m < 110usize {
@@ -90,7 +107,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         }
         ret ok
     }
-    if g.kind == 6u32 {
+    if kind == 6u32 {
         let wide = cross46_cover_odd()
         var n = 0usize
         while n < 121usize {
@@ -99,9 +116,9 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         }
         ret ok
     }
-    if g.kind == 3u32 || g.kind == 7u32 {
+    if kind == 3u32 || kind == 7u32 {
         var odd = cross_cover_odd()
-        if g.kind == 7u32 { odd = cross_cover_odd_active() }
+        if kind == 7u32 { odd = cross_cover_odd_active() }
         var k = 0usize
         while k < 132usize {
             if odd[k] != 0u32 { try glyph_rect(b, area, 11.0 + f32(k % 12usize), 10.0 + f32(k / 12usize), 1.0, 1.0, g.ink, g.alpha * f32(odd[k]) / 255.0) }
@@ -109,7 +126,7 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         }
         ret ok
     }
-    if g.kind == 0u32 {
+    if kind == 0u32 {
         let dash = dash_cover()
         var d = 0usize
         while d < 11usize {
@@ -126,6 +143,8 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     }
     ret ok
 }
+
+fn native_dialog_cross() -> [121]u32 { ret [121]u32{ 14u32,39u32,0u32,0u32,0u32,0u32,0u32,0u32,0u32,25u32,44u32,39u32,204u32,75u32,0u32,0u32,0u32,0u32,0u32,25u32,189u32,116u32,0u32,75u32,205u32,65u32,0u32,0u32,0u32,25u32,176u32,130u32,0u32,0u32,0u32,65u32,205u32,75u32,0u32,25u32,189u32,130u32,8u32,0u32,0u32,0u32,0u32,75u32,205u32,76u32,176u32,130u32,0u32,0u32,0u32,0u32,0u32,0u32,0u32,76u32,229u32,164u32,8u32,0u32,0u32,0u32,0u32,0u32,0u32,25u32,176u32,164u32,205u32,65u32,0u32,0u32,0u32,0u32,0u32,25u32,189u32,130u32,8u32,65u32,205u32,75u32,0u32,0u32,0u32,25u32,176u32,130u32,0u32,0u32,0u32,75u32,205u32,65u32,0u32,25u32,189u32,130u32,8u32,0u32,0u32,0u32,0u32,65u32,205u32,74u32,44u32,116u32,0u32,0u32,0u32,0u32,0u32,0u32,0u32,74u32,129u32 } }
 
 fn cross_cover_odd() -> [132]u32 { ret [132]u32{ 14u32, 41u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 26u32, 43u32, 0u32, 39u32, 207u32, 75u32, 0u32, 0u32, 0u32, 0u32, 0u32, 26u32, 189u32, 119u32, 0u32, 0u32, 75u32, 206u32, 67u32, 0u32, 0u32, 0u32, 26u32, 178u32, 130u32, 0u32, 0u32, 0u32, 0u32, 67u32, 206u32, 75u32, 0u32, 26u32, 190u32, 130u32, 9u32, 0u32, 0u32, 0u32, 0u32, 0u32, 75u32, 206u32, 78u32, 178u32, 130u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 78u32, 230u32, 164u32, 9u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 26u32, 178u32, 164u32, 206u32, 67u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 26u32, 190u32, 130u32, 9u32, 67u32, 206u32, 75u32, 0u32, 0u32, 0u32, 0u32, 26u32, 178u32, 130u32, 0u32, 0u32, 0u32, 75u32, 206u32, 67u32, 0u32, 0u32, 26u32, 189u32, 130u32, 9u32, 0u32, 0u32, 0u32, 0u32, 67u32, 206u32, 72u32, 0u32, 46u32, 119u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 73u32, 129u32, 0u32 } }
 
