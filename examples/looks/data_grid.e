@@ -687,6 +687,25 @@ fn build_states_pressed(ctx: *void, a: *mem.Arena, t: *const control.Theme, cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize {
+        // `data_grid.exe states`: the Neper look's states sheets (the Windows looks' come from data_grid_top.exe states and pressed, which runs after this); the states sheet alone (every sheet takes its own rigs; one run holds only so many)
+        let (only, only_error) = mem.alloc[States](a, 1usize)
+        if only_error != ok { ret only_error }
+        var only_seed: States = zero
+        only_seed.a = a
+        only[0usize] = only_seed
+        if strs.eq(args[1usize], "pressed") {
+            let (held_s, held_s_error) = mem.alloc[States](a, 1usize)
+            if held_s_error != ok { ret held_s_error }
+            var held_seed: States = zero
+            held_seed.a = a
+            held_s[0usize] = held_seed
+            let pressed = looks.Sheet { name: "data_grid_states_pressed", cells: 1usize, columns: 1usize, cell_w: 892.0, cell_h: 179.0, ctx: mem.cast[*void](&held_s[0usize]), build: build_states_pressed }
+            ret looks.run_all(a, &pressed)
+        }
+        let quick = looks.Sheet { name: "data_grid_states", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 179.0, ctx: mem.cast[*void](&only[0usize]), build: build_states }
+        ret looks.run_all(a, &quick)
+    }
     let (apps, apps_error) = mem.alloc[App](a, 1usize)
     if apps_error != ok { ret apps_error }
     var seed: App = zero
