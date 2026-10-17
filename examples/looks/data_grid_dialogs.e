@@ -63,7 +63,12 @@ fn sort_name(row: usize) -> str {
 }
 
 // The Sort Order cell: the sort glyph's slot (about 40 px) is blank spaces here.
-fn sort_order(row: usize) -> str {
+fn sort_order(row: usize, windows: bool) -> str {
+    // round 15: the live Sort dialog sorts one column, ES, descending (states/grid-row-selected-focused-sort)
+    if windows {
+        if row == 1usize { ret "           Descending" }
+        ret "           None"
+    }
     if row == 4usize { ret "           Descending" }
     if row == 7usize { ret "           Ascending" }
     ret "           None"
@@ -99,8 +104,10 @@ fn miss_ink(ctx: *void, row: usize) -> (paint.Color, bool) {
 // cell is white and the caption starts 29 px in; the others are plain.
 fn sort_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err {
     var caption = "None"
-    if row == 4usize { caption = "Descending" }
-    if row == 7usize { caption = "Ascending" }
+    let windows = t.tokens.profile == .Windows
+    if row == 4usize && !windows { caption = "Descending" }
+    if row == 7usize && !windows { caption = "Ascending" }
+    if row == 1usize && windows { caption = "Descending" }
     let (label, label_error) = control.text(a, 0u64, caption, t, control.text_options())
     if label_error != ok { ret label_error }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
@@ -108,8 +115,11 @@ fn sort_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spe
     held[0usize] = label
     var cell = looks.size_style(155.0, 19.0)
     let app = mem.cast[*App](ctx)
-    if (row == 4usize || row == 7usize) && !app.sort_grid.has_selection { cell.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
-    cell.padding = style.EdgeLengths { left: style.Length { Px: 29.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 2.0 } }
+    if ((row == 4usize || row == 7usize) || (row == 1usize && windows)) && !app.sort_grid.has_selection { cell.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
+    var caption_x: f32 = 29.0
+    // round 15: the live Sort dialog's captions start 6 px further left
+    if t.tokens.profile == .Windows { caption_x = 23.0 }
+    cell.padding = style.EdgeLengths { left: style.Length { Px: caption_x }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 2.0 } }
     *out = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell, held[0usize..1usize])
     ret ok
 }
@@ -127,7 +137,7 @@ fn load(a: *mem.Arena, app: *App) -> err {
         let (got, append_error) = table.append_row(&app.sort_table)
         if append_error != ok { ret append_error }
         try table.set_str(&app.sort_table, 0usize, got, sort_name(row))
-        try table.set_str(&app.sort_table, 1usize, got, sort_order(row))
+        try table.set_str(&app.sort_table, 1usize, got, sort_order(row, app.windows))
         row += 1usize
     }
     table.end_load(&app.sort_table)

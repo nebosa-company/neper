@@ -1953,7 +1953,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         body[0usize] = title_node
         var glyph_header = false
         // a picture column (2) has no side padding; a star column (1) shows the star as its title
-        if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 2u8 { glyph_header = true }
+        // round 15: a dialog grid's picture column (the Sort dialog's Sort Order) keeps its left aligned title
+        if look.on && !look.dialog_lines && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 2u8 { glyph_header = true }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 1u8 {
             glyph_header = true
             // a column marked with the favourite star shows it in place of a title
@@ -1970,7 +1971,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             body[0usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one_node(a, glyph_node))
         }
         var b = 1usize
-        if sorted || state.hovered {
+        // round 15: the Options Shortcuts grid's hot header shows no filter button (live hover grabs)
+        var hot_glyph = state.hovered
+        if look.on && look.top_edge_on && t.tokens.profile == .Windows { hot_glyph = false }
+        if sorted || hot_glyph {
             if !sorted { ink = control.with_alpha(muted, 0.5) }
             let (arrow, arrow_error) = control.icon_square(a, ink, .ArrowUp, t.tokens.sizes.icon_sm)
             if arrow_error != ok { ret (zero, arrow_error) }
@@ -2055,6 +2059,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         // a centred caption is centred before the 23 px they reserve once there is a glyph
         let win_glyphs = look.on && look.soft_lines && t.tokens.profile == .Windows && !look.dialog_lines && !glyph_header && !numeric_column(numeric, i)
         var win_hot = state.hovered || state.pressed
+        // round 15: the Shortcuts grid's hot header has no filter button
+        if look.top_edge_on { win_hot = state.pressed }
         if win_glyphs {
             if b == 2usize { b = 1usize }
             if (sorted || win_hot) && numeric_column(look.center_head, i) {
@@ -2104,7 +2110,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         // the row indicator's header is a button: no handle, the cell takes the whole column
         var grip_here = grip
         // round 12: the Windows grid's header fills its whole column up to the two-pixel line (hot and pressed colours reach it)
-        if look.on && look.soft_lines && t.tokens.profile == .Windows && !look.dialog_lines { grip_here = 2.0 }
+        if look.on && look.soft_lines && t.tokens.profile == .Windows { grip_here = 2.0 }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 {
             grip_here = 0.0
             // looks4-e: the indicator's header still ends in the two-pixel line
@@ -2255,6 +2261,18 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if look.dialog_lines { first_line.background = paint.Brush { Solid: dk(t, 0xFFFFFFu32) } }
             var second_line = control.sized_style(1.0, inner)
             second_line.background = paint.Brush { Solid: dk(t, 0xFAFAFAu32) }
+            // round 15: a dialog grid's header line (live Sort dialog): #E5E5E5 after a white pixel, none at the last column, and the hot
+            // or pressed header's colour runs through both
+            if look.dialog_lines && t.tokens.profile == .Windows {
+                second_line.background = paint.Brush { Solid: dk(t, 0xE5E5E5u32) }
+                if i + 1usize == columns.len { second_line.background = paint.Brush { Solid: dk(t, 0xFFFFFFu32) } }
+                if state.hovered || state.pressed {
+                    var dialog_hot = look.header_hover
+                    if state.pressed { dialog_hot = gl.rgb(0xBCDCF4u32) }
+                    first_line.background = paint.Brush { Solid: dialog_hot }
+                    second_line.background = paint.Brush { Solid: dialog_hot }
+                }
+            }
             // looks9-w1: the live header's two line pixels drift together along the row (#E8 #FC at the first line to #F1 #F3 at x = 563)
             if look.soft_a0 > 0.0 && !look.dialog_lines && t.tokens.profile == .Windows {
                 var line_sum: f32 = 0.0
