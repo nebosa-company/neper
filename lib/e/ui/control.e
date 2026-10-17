@@ -8790,7 +8790,7 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             var tab_icon: GlyphKind = .Picture
             let has_icon = i < options.icons.len
             if has_icon { tab_icon = options.icons[i] }
-            let (tab, sep, tab_error) = windows_tab(a, t, tab_key, labels[i], chosen, enabled, state, &picks[i], i + 1usize < labels.len && i + 1usize != selected && !chosen, options.bottom, has_icon, tab_icon)
+            let (tab, sep, tab_error) = windows_tab(a, t, tab_key, labels[i], chosen, enabled, state, &picks[i], i + 1usize < labels.len && i + 1usize != selected && !chosen, options.bottom, i == 0usize, has_icon, tab_icon)
             if tab_error != ok { ret (zero, tab_error) }
             items[windex] = tab
             items[windex + 1usize] = sep
@@ -14583,7 +14583,7 @@ fn v3_tab_line() -> style.Style {
 
 // One tab and the hairline that follows it (`with_sep`; else a 1 px gap carrying only the
 // strip's bottom line). Both are 22 tall.
-fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, chosen: bool, enabled: bool, raw_state: style.ControlState, action: *const widget.Submit, with_sep: bool, bottom: bool, has_icon: bool, picture_kind: GlyphKind) -> (widget.Node, widget.Node, err) {
+fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, chosen: bool, enabled: bool, raw_state: style.ControlState, action: *const widget.Submit, with_sep: bool, bottom: bool, first: bool, has_icon: bool, picture_kind: GlyphKind) -> (widget.Node, widget.Node, err) {
     // looks5 group d: a tab under the pointer is as at rest (ref/windows/states/hover-tab-left-*).
     var state = raw_state
     state.hovered = false
@@ -14655,13 +14655,28 @@ fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, 
     held[0usize] = press
     var tab = press
     if bottom && chosen {
-        var frame = style.defaults()
-        frame.background = paint.Brush { Solid: style.hex(394758u32) }
-        frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 0.0 } }
-        held[1usize] = widget.box(0u64, frame, held[0usize..1usize])
+        // looks15: the frame columns run one row lower than the face (the strip's first rule row crosses their top), through
+        // the third row; the left one is #010101, the right one #060606.
+        held[1usize] = press
         held[2usize] = v3_tab_rule(10329501u32)
         held[3usize] = v3_tab_rule(5789784u32)
-        tab = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), held[1usize..4usize])
+        let middle = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), held[1usize..4usize])
+        let (cols, cols_error) = mem.alloc[widget.Node](a, 3usize)
+        if cols_error != ok { ret (zero, zero, TooLarge) }
+        var left_rgb = 65793u32
+        var right_rgb = 394758u32
+        if !first {
+            left_rgb = 394758u32
+            right_rgb = 657930u32
+        }
+        let (left_edge, left_error) = v3_tab_edge(a, left_rgb)
+        if left_error != ok { ret (zero, zero, left_error) }
+        let (right_edge, right_error) = v3_tab_edge(a, right_rgb)
+        if right_error != ok { ret (zero, zero, right_error) }
+        cols[0usize] = left_edge
+        cols[1usize] = middle
+        cols[2usize] = right_edge
+        tab = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), cols[0usize..3usize])
     } else if bottom {
         held[1usize] = v3_tab_rule(10132122u32)
         held[2usize] = v3_tab_rule(5987163u32)
@@ -14683,6 +14698,13 @@ fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, 
     mark.height = style.Length { Px: 14.0 }
     mark.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 3.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 4.0 } }
     if with_sep { mark.background = paint.Brush { Solid: style.hex(11579568u32) } }
+    if bottom && chosen {
+        // looks15: right of a chosen bottom tab the strip has a pale #F9F9F9 column (20 rows) instead of the hairline.
+        mark.height = style.Length { Px: 20.0 }
+        mark.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        mark.background = paint.Brush { Solid: style.hex(16382457u32) }
+        if !first { mark.background = paint.Brush { Solid: style.hex(16053492u32) } }
+    }
     var column = style.defaults()
     column.width = style.Length { Px: 1.0 }
     if bottom {
@@ -14700,6 +14722,21 @@ fn windows_tab(a: *mem.Arena, t: *const Theme, tab_key: widget.Key, label: str, 
 }
 
 // A 1 px tall rule of colour `rgb` (a bottom strip's rule rows, two grays as the capture shows them).
+// looks15: a 1 px column of a chosen bottom tab's frame: the strip's first rule row, 20 rows of `rgb`, the strip's second rule row.
+fn v3_tab_edge(a: *mem.Arena, rgb: u32) -> (widget.Node, err) {
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize)
+    if rows_error != ok { ret (zero, rows_error) }
+    var dark = style.defaults()
+    dark.height = style.Length { Px: 20.0 }
+    dark.background = paint.Brush { Solid: style.hex(rgb) }
+    rows[0usize] = v3_tab_rule(10132122u32)
+    rows[1usize] = widget.box(0u64, dark, zero)
+    rows[2usize] = v3_tab_rule(5789784u32)
+    var column = style.defaults()
+    column.width = style.Length { Px: 1.0 }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column, rows[0usize..3usize]), ok)
+}
+
 fn v3_tab_rule(rgb: u32) -> widget.Node {
     var s = style.defaults()
     s.height = style.Length { Px: 1.0 }
