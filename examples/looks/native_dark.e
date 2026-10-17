@@ -281,7 +281,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if at < 1000usize {
         let (buffer, buffer_error) = mem.alloc[u8](a, 128usize)
         if buffer_error != ok { ret (0usize, buffer_error) }
-        let n = control.copy_text(buffer, "Line one\nLine two\nLine three\nLine four\nLine five\nLine six")
+        let n = control.copy_text(buffer, "Line one\nLine two\nLine three\nLine four\nLine five\nLine six\nLine seven\nLine eight")
         var options = control.field_options()
         options.width = 167.0
         options.height = 90.0

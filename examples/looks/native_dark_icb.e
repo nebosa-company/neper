@@ -11,6 +11,7 @@ use e.ui.style
 use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
+fn noop_change(ctx: *void, value: str) -> err { ret ok }
 
 fn cell_w() -> f32 { ret 200.0 }
 fn cell_h() -> f32 { ret 100.0 }
@@ -73,10 +74,34 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
-    ret (5usize, ok)
+    // button edit (the ellipsis kind) at the native edit's 150 x 24, text as the edit captures: rest, hover, disabled, read-only, then focused
+    // (last: the focus lands on the first focusable of the sheet's last driven cell)
+    let edit_captions = [5]str{ "edit-rest", "edit-hover", "edit-disabled", "edit-readonly", "edit-focus" }
+    var k = 0usize
+    while k < 5usize {
+        let (buffer, buffer_error) = mem.alloc[u8](a, 64usize)
+        if buffer_error != ok { ret (0usize, buffer_error) }
+        let n = control.copy_text(buffer, "Text value")
+        var options = control.field_options()
+        options.width = 149.0
+        if k == 2usize { options.enabled = false }
+        if k == 3usize { options.read_only = true }
+        let action = widget.Submit { ctx: zero, invoke: noop_submit }
+        let actions = [1]widget.Submit{ action }
+        let (edit, edit_error) = control.button_edit(a, u64(1000usize + 100usize * k), t, "Folder", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, action, &actions[0usize], "Browse", options)
+        if edit_error != ok { ret (0usize, edit_error) }
+        let (node, node_error) = placed(a, edit, 25.0, 38.0)
+        if node_error != ok { ret (0usize, node_error) }
+        var drive: looks.Drive = .None
+        if k == 1usize { drive = .Hover }
+        if k == 4usize { drive = .Focus }
+        cells[5usize + k] = looks.Cell { caption: edit_captions[k], node: node, drive: drive }
+        k += 1usize
+    }
+    ret (10usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark_icb", cells: 5usize, columns: 5usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark_icb", cells: 10usize, columns: 5usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

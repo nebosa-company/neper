@@ -6644,6 +6644,16 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         layers[at] = hint_node
         at += 1usize
     }
+    // round 15: the native dark multi-line edit with its bar (DarkMode_Explorer, edit-multiline-explorer): a 17 wide #171717 column with a
+    // 2 wide thumb, shown when the text has more lines than the box; the thin Neper bar is then off
+    var bar_lines = 1usize
+    var bar_at = 0usize
+    while bar_at < len {
+        if buffer[bar_at] == 10u8 { bar_lines += 1usize }
+        bar_at += 1usize
+    }
+    let dark_bar = win_dark(t) && multiline && bar_lines > usize(options.rows)
+    var bar_first = 0usize
     if multiline {
         // A viewport `rows` lines tall that scrolls its overflow, keeping the caret's line in view.
         var caret_line = 0usize
@@ -6659,19 +6669,22 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         }
         var first_line = 0usize
         if caret_line + 1usize > usize(options.rows) { first_line = caret_line + 1usize - usize(options.rows) }
+        bar_first = first_line
+        var inner_w = inner
+        if dark_bar { inner_w = max_zero(inner - 17.0) }
         var scrolled_style = editor_style
-        scrolled_style.width = style.Length { Px: inner }
+        scrolled_style.width = style.Length { Px: inner_w }
         let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
         if scrolled_error != ok { ret (zero, TooLarge) }
         let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: edit_caret, untabbed: false, ringed: false }, scrolled_style))
         if scrolled_named_error != ok { ret (zero, scrolled_named_error) }
         scrolled[0usize] = scrolled_named
         var viewport = style.defaults()
-        viewport.width = style.Length { Px: inner }
+        viewport.width = style.Length { Px: inner_w }
         viewport.height = style.Length { Px: max_zero(h - 8.0) }
         if win_dark(t) { viewport.height = style.Length { Px: max_zero(h - 4.0) } }
         viewport.overflow = .Clip
-        layers[at] = widget.scroll(key + 1048612u64, widget.Scroll { axis: .Vertical, offset: f32(first_line) * line, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, viewport, scrolled[0usize..1usize])
+        layers[at] = widget.scroll(key + 1048612u64, widget.Scroll { axis: .Vertical, offset: f32(first_line) * line, overscroll: .Clamp, momentum: false, scrollbar: !dark_bar, thumb: with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, viewport, scrolled[0usize..1usize])
     } else {
         layers[at] = named
     }
@@ -6754,6 +6767,18 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y, t.tokens.palette == .Dark)
         if veil_error != ok { ret (zero, veil_error) }
         stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, veil))
+        layers_at += 1usize
+    }
+    if dark_bar {
+        let (bars, bars_error) = mem.alloc[WinDarkBar](a, 1usize)
+        if bars_error != ok { ret (zero, TooLarge) }
+        bars[0usize] = WinDarkBar { first: u32(bar_first), rows: options.rows, lines: u32(bar_lines) }
+        var bar_none: []const widget.Node = zero
+        let bar_node = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&bars[0usize]), measure: win3_measure, paint: win_dark_bar_paint, state: widget.bytes_of[WinDarkBar](&bars[0usize]) } }, style: sized_style(17.0, max_zero(h - 4.0)), children: bar_none }
+        let (bar_held, bar_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if bar_held_error != ok { ret (zero, TooLarge) }
+        bar_held[0usize] = bar_node
+        stacked[layers_at] = widget.positioned(0u64, w - 18.0, 2.0, style.defaults(), bar_held[0usize..1usize])
         layers_at += 1usize
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
@@ -20386,4 +20411,22 @@ fn one_widget(a: *mem.Arena, node: widget.Node) -> []widget.Node {
     if nodes_error != ok { ret zero }
     nodes[0usize] = node
     ret nodes[0usize..1usize]
+}
+
+// ---- round 15: the dark multi-line edit's scroll column -----------------------------------------------------------------
+// Measured on ref/windows-native/dark/edit-multiline-explorer: a 17 wide #171717 column (x 149 of the 168 wide edit, rows 2 to 87), the
+// thumb 2 wide at x 157 (#959595, its end rows #858585); its length is the track (the column less two 17 px arrow rows) times the
+// visible lines over all lines (33 rows for 5 of 8), its top the track times the first line over all lines.
+type WinDarkBar = struct { first: u32, rows: u32, lines: u32 }
+
+fn win_dark_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*WinDarkBar](ctx)
+    try win3_rect(b, area.x, area.y, area.width, area.height, style.hex_raw(0x171717u32))
+    let track = area.height - 34.0
+    var long = f32(u32(track * f32(m.rows) / f32(m.lines) + 0.5))
+    if long < 8.0 { long = 8.0 }
+    let top = area.y + 17.0 + f32(u32(track * f32(m.first) / f32(m.lines) + 0.5))
+    try win3_rect(b, area.x + 8.0, top, 2.0, long, style.hex_raw(0x959595u32))
+    try win3_rect(b, area.x + 8.0, top, 2.0, 1.0, style.hex_raw(0x858585u32))
+    ret win3_rect(b, area.x + 8.0, top + long - 1.0, 2.0, 1.0, style.hex_raw(0x858585u32))
 }
