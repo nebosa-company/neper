@@ -29,7 +29,8 @@ const R_BACKREF: u8 = 12u8
 const R_LOOK: u8 = 13u8
 const R_NAMEDREF: u8 = 14u8
 
-type Node = struct { kind: u8, a: u32, b: u32, c: u32, d: u32, greedy: bool, neg: bool, back: bool }
+// `mods`: bit 0 set when a modifier group `(?ims-ims:...)` governs the node, then bit 1 ignore-case, bit 2 multiline, bit 3 dot-all.
+type Node = struct { kind: u8, a: u32, b: u32, c: u32, d: u32, greedy: bool, neg: bool, back: bool, mods: u8 }
 
 type Range = struct { lo: u32, hi: u32 }
 
@@ -45,7 +46,7 @@ type Regex = struct {
 type Parse = struct {
     a: *mem.Arena, src: []const u16, i: usize, nodes: list.List[Node], kids: list.List[u32], ranges: list.List[Range],
     classes: list.List[Class], names: list.List[str], refs: list.List[str], groups: u32, unicode: bool, named: bool, message: str, ignore_case: bool,
-    total_groups: u32
+    total_groups: u32, multiline: bool, dot_all: bool, mods: u8
 }
 
 error SyntaxErr
@@ -56,7 +57,7 @@ fn fail(p: *Parse, m: str) -> err {
 }
 
 fn mk(p: *Parse, kind: u8) -> (u32, err) {
-    let n = Node { kind: kind, a: 0u32, b: 0u32, c: 0u32, d: 0u32, greedy: true, neg: false, back: false }
+    let n = Node { kind: kind, a: 0u32, b: 0u32, c: 0u32, d: 0u32, greedy: true, neg: false, back: false, mods: p.mods }
     let id = u32(p.nodes.len)
     try list.push[Node](&p.nodes, n)
     ret (id, ok)
@@ -758,6 +759,72 @@ fn parse_term(p: *Parse) -> (u32, err) {
                     nd(p, gid).b = body3
                     atom = gid
                 }
+            } else if k1 == 105i64 || k1 == 109i64 || k1 == 115i64 || k1 == 45i64 {
+                // A modifier group (?ims-ims:...).
+                p.i += 1usize
+                var add_i = false
+                var add_m = false
+                var add_s = false
+                var del_i = false
+                var del_m = false
+                var del_s = false
+                var removing = false
+                var seen_dash = false
+                while true {
+                    let fc = peek(p)
+                    if fc == 58i64 { break }
+                    if fc == 45i64 {
+                        if seen_dash { ret (NONE, fail(p, "Invalid group")) }
+                        seen_dash = true
+                        removing = true
+                        p.i += 1usize
+                        continue
+                    }
+                    if fc == 105i64 {
+                        if add_i || del_i { ret (NONE, fail(p, "Repeated flag in modifiers")) }
+                        if removing { del_i = true } else { add_i = true }
+                    } else if fc == 109i64 {
+                        if add_m || del_m { ret (NONE, fail(p, "Repeated flag in modifiers")) }
+                        if removing { del_m = true } else { add_m = true }
+                    } else if fc == 115i64 {
+                        if add_s || del_s { ret (NONE, fail(p, "Repeated flag in modifiers")) }
+                        if removing { del_s = true } else { add_s = true }
+                    } else {
+                        ret (NONE, fail(p, "Invalid group"))
+                    }
+                    p.i += 1usize
+                }
+                p.i += 1usize
+                if seen_dash && !(del_i || del_m || del_s) && !(add_i || add_m || add_s) { ret (NONE, fail(p, "Invalid group")) }
+                if (add_i && del_i) || (add_m && del_m) || (add_s && del_s) { ret (NONE, fail(p, "Repeated flag in modifiers")) }
+                var cur_i = p.ignore_case
+                var cur_m = p.multiline
+                var cur_s = p.dot_all
+                if (p.mods & 1u8) != 0u8 {
+                    cur_i = (p.mods & 2u8) != 0u8
+                    cur_m = (p.mods & 4u8) != 0u8
+                    cur_s = (p.mods & 8u8) != 0u8
+                }
+                if add_i { cur_i = true }
+                if add_m { cur_m = true }
+                if add_s { cur_s = true }
+                if del_i { cur_i = false }
+                if del_m { cur_m = false }
+                if del_s { cur_s = false }
+                let saved_mods = p.mods
+                var nm = 1u8
+                if cur_i { nm = nm | 2u8 }
+                if cur_m { nm = nm | 4u8 }
+                if cur_s { nm = nm | 8u8 }
+                p.mods = nm
+                let bodym = try parse_disjunction(p)
+                p.mods = saved_mods
+                if !eat(p, 41u8) { ret (NONE, fail(p, "Unterminated group")) }
+                let (gidm, gmem) = mk(p, R_GROUP)
+                if gmem != ok { ret (NONE, gmem) }
+                nd(p, gidm).a = NONE
+                nd(p, gidm).b = bodym
+                atom = gidm
             } else if k1 == 60i64 {
                 p.i += 2usize
                 let (name, ne) = parse_group_name(p)
@@ -1042,6 +1109,9 @@ fn compile(a: *mem.Arena, pattern: []const u16, flags: str) -> (Regex, str, err)
     if seen[4usize] && seen[7usize] { ret (re, "Invalid regular expression flags", SyntaxErr) }
     p.unicode = re.unicode
     p.ignore_case = re.ignore_case
+    p.multiline = re.multiline
+    p.dot_all = re.dot_all
+    p.mods = 0u8
     let (nl, nle) = list.init[Node](a, 16usize)
     p.nodes = nl
     let (kl, kle) = list.init[u32](a, 16usize)
@@ -1123,8 +1193,24 @@ type M = struct {
     end: i64, found: bool
 }
 
-fn canon(m: *const M, c: u32) -> u32 {
-    if !m.re.ignore_case { ret c }
+// The effective flags of a node: its own modifier group, else the regular expression's.
+fn eff_i(m: *const M, n: *const Node) -> bool {
+    if (n.mods & 1u8) != 0u8 { ret (n.mods & 2u8) != 0u8 }
+    ret m.re.ignore_case
+}
+
+fn eff_m(m: *const M, n: *const Node) -> bool {
+    if (n.mods & 1u8) != 0u8 { ret (n.mods & 4u8) != 0u8 }
+    ret m.re.multiline
+}
+
+fn eff_s(m: *const M, n: *const Node) -> bool {
+    if (n.mods & 1u8) != 0u8 { ret (n.mods & 8u8) != 0u8 }
+    ret m.re.dot_all
+}
+
+fn canon(m: *const M, c: u32, ic: bool) -> u32 {
+    if !ic { ret c }
     if m.re.unicode {
         // Simple case folding: lowercase of the uppercase form.
         ret unicode.to_lower_simple(unicode.to_upper_simple(c))
@@ -1164,7 +1250,7 @@ fn char_before(m: *const M, pos: i64) -> (u32, i64) {
     ret (u, 1i64)
 }
 
-fn class_has(m: *const M, cid: u32, c: u32) -> bool {
+fn class_has(m: *const M, cid: u32, c: u32, ic: bool) -> bool {
     let cls = m.re.classes[usize(cid)]
     var hit = false
     var i = 0usize
@@ -1181,8 +1267,8 @@ fn class_has(m: *const M, cid: u32, c: u32) -> bool {
         }
         i += 1usize
     }
-    if !hit && m.re.ignore_case {
-        let cc = canon(m, c)
+    if !hit && ic {
+        let cc = canon(m, c, ic)
         // Test the canonical form and the other case variants.
         var j = 0usize
         while j < usize(cls.count) && !hit {
@@ -1195,13 +1281,13 @@ fn class_has(m: *const M, cid: u32, c: u32) -> bool {
             if cc >= r2.lo && cc <= r2.hi { hit = true }
             let lo = unicode.to_lower_simple(c)
             let up = unicode.to_upper_simple(c)
-            if canon(m, lo) == cc && lo >= r2.lo && lo <= r2.hi { hit = true }
-            if canon(m, up) == cc && up >= r2.lo && up <= r2.hi { hit = true }
+            if canon(m, lo, ic) == cc && lo >= r2.lo && lo <= r2.hi { hit = true }
+            if canon(m, up, ic) == cc && up >= r2.lo && up <= r2.hi { hit = true }
             // A range may contain a character that canonicalises to cc.
             if !hit && r2.hi - r2.lo < 256u32 {
                 var x = r2.lo
                 while x <= r2.hi {
-                    if canon(m, x) == cc {
+                    if canon(m, x, ic) == cc {
                         hit = true
                         break
                     }
@@ -1412,7 +1498,8 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
             c = cf
             l = lf }
         if l == 0i64 { ret false }
-        if canon(m, c) != canon(m, n.a) { ret false }
+        let ic1 = eff_i(m, &n)
+        if canon(m, c, ic1) != canon(m, n.a, ic1) { ret false }
         if back { ret call_cont(m, k, pos - l) }
         ret call_cont(m, k, pos + l)
     }
@@ -1425,7 +1512,7 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
             c2 = cf2
             l2 = lf2 }
         if l2 == 0i64 { ret false }
-        if !m.re.dot_all && is_line_term(c2) { ret false }
+        if !eff_s(m, &n) && is_line_term(c2) { ret false }
         if back { ret call_cont(m, k, pos - l2) }
         ret call_cont(m, k, pos + l2)
     }
@@ -1438,7 +1525,7 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
             c3 = cf3
             l3 = lf3 }
         if l3 == 0i64 { ret false }
-        if !class_has(m, n.a, c3) { ret false }
+        if !class_has(m, n.a, c3, eff_i(m, &n)) { ret false }
         if back { ret call_cont(m, k, pos - l3) }
         ret call_cont(m, k, pos + l3)
     }
@@ -1465,7 +1552,7 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
     if kind == R_REPEAT { ret repeat_step(m, id, 0u32, pos, k, back) }
     if kind == R_BOL {
         if pos == 0i64 { ret call_cont(m, k, pos) }
-        if m.re.multiline {
+        if eff_m(m, &n) {
             let (cb4, lb4) = char_before(m, pos)
             if lb4 > 0i64 && is_line_term(cb4) { ret call_cont(m, k, pos) }
         }
@@ -1473,7 +1560,7 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
     }
     if kind == R_EOL {
         if pos == i64(m.input.len) { ret call_cont(m, k, pos) }
-        if m.re.multiline {
+        if eff_m(m, &n) {
             let (cf4, lf4) = char_at(m, pos)
             if lf4 > 0i64 && is_line_term(cf4) { ret call_cont(m, k, pos) }
         }
@@ -1484,12 +1571,12 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
         var after = false
         if pos > 0i64 {
             var cp = u32(m.input[usize(pos) - 1usize])
-            if m.re.ignore_case && m.re.unicode && (cp == 383u32 || cp == 8490u32) { cp = 97u32 }
+            if eff_i(m, &n) && m.re.unicode && (cp == 383u32 || cp == 8490u32) { cp = 97u32 }
             before = is_word(cp)
         }
         if pos < i64(m.input.len) {
             var cn = u32(m.input[usize(pos)])
-            if m.re.ignore_case && m.re.unicode && (cn == 383u32 || cn == 8490u32) { cn = 97u32 }
+            if eff_i(m, &n) && m.re.unicode && (cn == 383u32 || cn == 8490u32) { cn = 97u32 }
             after = is_word(cn)
         }
         var at_boundary = before != after
@@ -1507,7 +1594,7 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
             if pos - len < 0i64 { ret false }
             var i2 = 0i64
             while i2 < len {
-                if canon(m, u32(m.input[usize(s + i2)])) != canon(m, u32(m.input[usize(pos - len + i2)])) { ret false }
+                if canon(m, u32(m.input[usize(s + i2)]), eff_i(m, &n)) != canon(m, u32(m.input[usize(pos - len + i2)]), eff_i(m, &n)) { ret false }
                 i2 += 1i64
             }
             ret call_cont(m, k, pos - len)
@@ -1515,7 +1602,7 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
         if pos + len > i64(m.input.len) { ret false }
         var i3 = 0i64
         while i3 < len {
-            if canon(m, u32(m.input[usize(s + i3)])) != canon(m, u32(m.input[usize(pos + i3)])) { ret false }
+            if canon(m, u32(m.input[usize(s + i3)]), eff_i(m, &n)) != canon(m, u32(m.input[usize(pos + i3)]), eff_i(m, &n)) { ret false }
             i3 += 1i64
         }
         ret call_cont(m, k, pos + len)
