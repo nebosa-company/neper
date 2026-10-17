@@ -4060,9 +4060,20 @@ fn flex_place_item(l: *Layout, id: u32, w: f64, hspec: f64) {
         ret
     }
     bb.w = w + ex_h
-    let auto_h = layout_in_new_bfc(l, id, w, hspec)
+    // An automatic height follows the aspect ratio from the width the item was given.
+    var spec = hspec
+    var ratio_h = -1.0f64
+    if spec < 0.0f64 {
+        let (rh, has_r) = ratio_height(l, id, w)
+        if has_r {
+            ratio_h = rh
+            spec = rh
+        }
+    }
+    let auto_h = layout_in_new_bfc(l, id, w, spec)
     var h = auto_h
-    if hspec >= 0.0f64 { h = hspec }
+    if spec >= 0.0f64 { h = spec }
+    if ratio_h >= 0.0f64 { h = maxf(ratio_h, auto_h) }
     h = maxf(0.0f64, clamp_height_auto(l, id, h, -1.0f64, auto_h))
     let nb = bx(l, id)
     nb.overflow_w = maxf(nb.overflow_w, w)
@@ -4176,6 +4187,34 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             if row { basis = to_content_w(l, id, fv) } else { basis = to_content_h(l, id, fv) }
         } else if spec_main >= 0.0f64 {
             basis = spec_main
+        }
+        // A box with a preferred aspect ratio takes its main size from its definite cross size.
+        if basis < 0.0f64 && ib.inner != .Replaced {
+            let (rr, has_rr) = box_ratio(l, id)
+            if has_rr {
+                if row && ks.height.kind == .Px {
+                    let (hv3, g3) = resolve_len(ks.height, -1.0f64)
+                    if g3 {
+                        let (rw3, ok3) = ratio_width(l, id, to_content_h(l, id, hv3))
+                        if ok3 { basis = rw3 }
+                    }
+                } else if row && ks.height.kind != .Px && items[i].align == .Stretch && ch >= 0.0f64 && ks.margin[0usize].kind != .Auto && ks.margin[2usize].kind != .Auto {
+                    // Stretched in a container of definite height: that height is the item's cross size.
+                    let stretched = maxf(0.0f64, ch - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
+                    let (rw4, ok4) = ratio_width(l, id, stretched)
+                    if ok4 { basis = rw4 }
+                } else if !row && ks.width.kind == .Px {
+                    let (wv3, g4) = resolve_len(ks.width, -1.0f64)
+                    if g4 {
+                        let cwv = to_content_w(l, id, wv3)
+                        if ks.box_sizing == .BorderBox {
+                            basis = maxf(0.0f64, (cwv + horizontal_extras(ib)) / rr - vertical_extras(ib))
+                        } else {
+                            basis = cwv / rr
+                        }
+                    }
+                }
+            }
         }
         if row {
             if ib.inner == .Replaced {
