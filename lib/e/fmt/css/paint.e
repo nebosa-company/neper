@@ -72,9 +72,24 @@ fn solid(c: u32) -> pt.Brush { ret pt.Brush { Solid: color_of(c) } }
 
 fn grect(x: f64, y: f64, w: f64, h: f64) -> geo.Rect { ret geo.rect(f32(x), f32(y), f32(w), f32(h)) }
 
+// A box edge lands on a device pixel (the nearer one), like the other engines: a rectangle keeps at least the pixels its
+// snapped edges enclose.
+fn snap(v: f64) -> f64 { ret f64(i64(floor_f(v + 0.5f64))) }
+
+fn floor_f(v: f64) -> f64 {
+    let t = f64(i64(v))
+    if t > v { ret t - 1.0f64 }
+    ret t
+}
+
 fn fill(p: *Painter, x: f64, y: f64, w: f64, h: f64, c: u32) {
     if w <= 0.0f64 || h <= 0.0f64 || alpha_of(c) == 0u32 { ret }
-    emit(p, scene.Command { FillRect: scene.FillRect { rect: grect(x, y, w, h), brush: solid(c) } })
+    let x0 = snap(x)
+    let y0 = snap(y)
+    let x1 = snap(x + w)
+    let y1 = snap(y + h)
+    if x1 <= x0 || y1 <= y0 { ret }
+    emit(p, scene.Command { FillRect: scene.FillRect { rect: grect(x0, y0, x1 - x0, y1 - y0), brush: solid(c) } })
 }
 
 fn save(p: *Painter) {
