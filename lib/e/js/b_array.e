@@ -1127,6 +1127,18 @@ fn install_array(it: *js.Interp) {
     js.add_method(it, it.last, "from", 1u32, array_from_fn)
     let sg = js.make_native(it, "get [Symbol.species]", 0u32, array_species_getter)
     let e4 = js.define_accessor_raw(it, it.last, js.key_of_symbol(it.sym_species), sg, js.null_obj(), js.P_CONFIGURABLE)
+    let unsc = js.new_obj(it, js.C_OBJECT, js.null_obj())
+    let unames = "at,copyWithin,entries,fill,find,findIndex,findLast,findLastIndex,flat,flatMap,includes,keys,toReversed,toSorted,toSpliced,values,"
+    var us = 0usize
+    var ui = 0usize
+    while ui < unames.len {
+        if unames[ui] == 44u8 {
+            let ue = js.define_data(it, unsc, js.key_of(unames[us..ui]), js.bool_value(true), js.P_DEFAULT)
+            us = ui + 1usize
+        }
+        ui += 1usize
+    }
+    let eu = js.define_data(it, proto, js.key_of_symbol(it.sym_unscopables), js.obj_value(unsc), js.P_CONFIGURABLE)
     js.add_method(it, it.protos.array, "push", 1u32, array_push_m)
     js.add_method(it, it.protos.array, "pop", 0u32, array_pop)
     js.add_method(it, it.protos.array, "shift", 0u32, array_shift)
