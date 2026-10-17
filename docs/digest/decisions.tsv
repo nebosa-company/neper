@@ -2790,4 +2790,5 @@ D5154	902	BigInt, Proxy and ES modules live in the interpreter, modules in a mod
 D5155	726	Annex B function hoisting is decided in the early-error pass; direct eval inherits its caller's context (browser 5.2, 5.14)
 D5156	901	A frame is a context of its own sharing the arena; calls into the other realm switch interpreters (browser 6.17)
 D5157	707	Forms are written in JavaScript on slot state, with validity computed from the tree (browser 6.14)
-D5158	709	Shadow trees and custom elements are written in JavaScript over the same table (browser 6.16)
+D5158	710	Shadow trees and custom elements are written in JavaScript over the same table (browser 6.16)
+D5159	1135	Vertical writing modes are laid out in a transposed frame and mapped back (browser 1.13i, 9.2)
