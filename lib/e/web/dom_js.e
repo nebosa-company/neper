@@ -388,7 +388,7 @@ fn part1(b: *str.Builder) -> err {
     try str.push(b, "function getTheParent(target, event) {\n")
     try str.push(b, "  if (target === global) return null;\n")
     try str.push(b, "  const s = slotOf(target);\n")
-    try str.push(b, "  if (s && s.getTheParent) return s.getTheParent(event);\n")
+    try str.push(b, "  if (s && s.getTheParent) return apply(s.getTheParent, target, [event]);\n")
     try str.push(b, "  return null;\n")
     try str.push(b, "}\n")
     try str.push(b, "function dispatch(event, target, legacyTargetOverride, legacyOutput) {\n")
@@ -415,7 +415,7 @@ fn part1(b: *str.Builder) -> err {
     try str.push(b, "      if (isSlotable(parent) && assignedSlotOf(parent)) slotable = parent;\n")
     try str.push(b, "      relatedTarget = retarget(s.relatedTarget, parent);\n")
     try str.push(b, "      const touch = [];\n")
-    try str.push(b, "      if (isWindowLike(parent) || (isNodeObject(parent) && isNodeObject(targetOverride) && sameShadowIncludingRoot(targetOverride, parent))) {\n")
+    try str.push(b, "      if (isWindowLike(parent) || (isNodeObject(parent) && isNodeObject(targetOverride) && isShadowIncludingInclusiveAncestor(rootOf(targetOverride), parent))) {\n")
     try str.push(b, "        if (isActivationEvent && s.bubbles && activationTarget === null && hasActivationBehavior(parent)) activationTarget = parent;\n")
     try str.push(b, "        appendToPath(s, parent, null, relatedTarget, touch, slotInClosedTree);\n")
     try str.push(b, "      } else if (parent === relatedTarget) {\n")
@@ -779,7 +779,14 @@ fn part3(b: *str.Builder) -> err {
     try str.push(b, "  return { isNode: true, isTarget: true, listeners: [], id, nodeType, doc, getTheParent: nodeGetTheParent, registrations: null };\n")
     try str.push(b, "}\n")
     try str.push(b, "function nodeGetTheParent(event) {\n")
-    try str.push(b, "  const s = slotOf(this);\n")
+    try str.push(b, "  const p = parentNode(this);\n")
+    try str.push(b, "  if (p !== null) return p;\n")
+    try str.push(b, "  if (isShadowRoot(this)) {\n")
+    try str.push(b, "    const path = slotOf(event).path;\n")
+    try str.push(b, "    if (slotOf(event).composed || (path.length && rootNode(path[0].invocationTarget) !== this)) return shadowHost(this);\n")
+    try str.push(b, "    return null;\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  if (nodeType(this) === DOCUMENT_NODE && slotOf(event).type !== 'load' && slotOf(this).browsingContext) return global;\n")
     try str.push(b, "  return null;\n")
     try str.push(b, "}\n")
     try str.push(b, "function register(wrapper, id) { apply(mapSet, wrappers, [id, wrapper]); return wrapper; }\n")
@@ -1009,6 +1016,10 @@ fn part3(b: *str.Builder) -> err {
     try str.push(b, "  },\n")
     try str.push(b, "  appendChild(node) {\n")
     try str.push(b, "    nodeSlot(this);\n")
+    ret ok
+}
+
+fn part4(b: *str.Builder) -> err {
     try str.push(b, "    required(arguments, 1, 'appendChild');\n")
     try str.push(b, "    if (!isNode(node)) throw new TypeError(\"Failed to execute 'appendChild' on 'Node': parameter 1 is not of type 'Node'.\");\n")
     try str.push(b, "    return preInsert(node, this, null);\n")
@@ -1016,10 +1027,6 @@ fn part3(b: *str.Builder) -> err {
     try str.push(b, "  replaceChild(node, child) {\n")
     try str.push(b, "    nodeSlot(this);\n")
     try str.push(b, "    required(arguments, 2, 'replaceChild');\n")
-    ret ok
-}
-
-fn part4(b: *str.Builder) -> err {
     try str.push(b, "    if (!isNode(node)) throw new TypeError(\"Failed to execute 'replaceChild' on 'Node': parameter 1 is not of type 'Node'.\");\n")
     try str.push(b, "    if (!isNode(child)) throw new TypeError(\"Failed to execute 'replaceChild' on 'Node': parameter 2 is not of type 'Node'.\");\n")
     try str.push(b, "    return replaceChild(node, child, this);\n")
@@ -1263,6 +1270,10 @@ fn part4(b: *str.Builder) -> err {
     try str.push(b, "  const count = nodes.length;\n")
     try str.push(b, "  if (count === 0) return;\n")
     try str.push(b, "  const parentDoc = ownerDocOrSelf(parent);\n")
+    ret ok
+}
+
+fn part5(b: *str.Builder) -> err {
     try str.push(b, "  if (nodeType(node) === DOCUMENT_FRAGMENT_NODE) {\n")
     try str.push(b, "    for (const n of nodes) removeNode(n, true);\n")
     try str.push(b, "    if (!suppressObservers) queueMutationRecord('childList', node, null, null, null, [], nodes, null, null);\n")
@@ -1270,10 +1281,6 @@ fn part4(b: *str.Builder) -> err {
     try str.push(b, "  if (child !== null) {\n")
     try str.push(b, "    for (const r of liveRanges) rangeInsertAdjust(r, parent, child, count);\n")
     try str.push(b, "  }\n")
-    ret ok
-}
-
-fn part5(b: *str.Builder) -> err {
     try str.push(b, "  const previous = child === null ? lastChild(parent) : previousSibling(child);\n")
     try str.push(b, "  for (const n of nodes) {\n")
     try str.push(b, "    adopt(n, parentDoc);\n")
@@ -1517,6 +1524,10 @@ fn part5(b: *str.Builder) -> err {
     try str.push(b, "    nodeSlot(this);\n")
     try str.push(b, "    const parent = parentNode(this);\n")
     try str.push(b, "    if (parent === null) return;\n")
+    ret ok
+}
+
+fn part6(b: *str.Builder) -> err {
     try str.push(b, "    const viableNext = viableSibling(this, nodes, true);\n")
     try str.push(b, "    const node = nodesIntoNode(nodes, ownerDocOrSelf(this));\n")
     try str.push(b, "    preInsert(node, parent, viableNext);\n")
@@ -1524,10 +1535,6 @@ fn part5(b: *str.Builder) -> err {
     try str.push(b, "  replaceWith(...nodes) {\n")
     try str.push(b, "    nodeSlot(this);\n")
     try str.push(b, "    const parent = parentNode(this);\n")
-    ret ok
-}
-
-fn part6(b: *str.Builder) -> err {
     try str.push(b, "    if (parent === null) return;\n")
     try str.push(b, "    let viableNext = viableSibling(this, nodes, true);\n")
     try str.push(b, "    const node = nodesIntoNode(nodes, ownerDocOrSelf(this));\n")
@@ -1771,6 +1778,10 @@ fn part6(b: *str.Builder) -> err {
     try str.push(b, "      return Reflect.set(t, key, value, receiver);\n")
     try str.push(b, "    },\n")
     try str.push(b, "    has(t, key) {\n")
+    ret ok
+}
+
+fn part7(b: *str.Builder) -> err {
     try str.push(b, "      const idx = canonicalIndex(key);\n")
     try str.push(b, "      if (idx >= 0) return spec.item(idx) !== null;\n")
     try str.push(b, "      if (typeof key === 'string' && spec.named && spec.named(key) !== undefined) return true;\n")
@@ -1778,10 +1789,6 @@ fn part6(b: *str.Builder) -> err {
     try str.push(b, "    },\n")
     try str.push(b, "    getOwnPropertyDescriptor(t, key) {\n")
     try str.push(b, "      const idx = canonicalIndex(key);\n")
-    ret ok
-}
-
-fn part7(b: *str.Builder) -> err {
     try str.push(b, "      if (idx >= 0) {\n")
     try str.push(b, "        const v = spec.item(idx);\n")
     try str.push(b, "        if (v === null) return undefined;\n")
@@ -2025,6 +2032,10 @@ fn part7(b: *str.Builder) -> err {
     try str.push(b, "function removeAttribute(attr) {\n")
     try str.push(b, "  const as = slotOf(attr);\n")
     try str.push(b, "  const el = as.element;\n")
+    ret ok
+}
+
+fn part8(b: *str.Builder) -> err {
     try str.push(b, "  const list = attrsOf(el);\n")
     try str.push(b, "  const idx = list.indexOf(attr);\n")
     try str.push(b, "  attributeChangedSteps(el, as.localName, as.value, null, as.namespaceURI);\n")
@@ -2032,10 +2043,6 @@ fn part7(b: *str.Builder) -> err {
     try str.push(b, "  as.element = null;\n")
     try str.push(b, "  N.attrDelAt(slotOf(el).id, idx);\n")
     try str.push(b, "}\n")
-    ret ok
-}
-
-fn part8(b: *str.Builder) -> err {
     try str.push(b, "function replaceAttribute(oldAttr, newAttr_) {\n")
     try str.push(b, "  const os = slotOf(oldAttr), ns_ = slotOf(newAttr_);\n")
     try str.push(b, "  const el = os.element;\n")
@@ -2279,6 +2286,10 @@ fn part8(b: *str.Builder) -> err {
     try str.push(b, "installNonDocumentTypeChildNode(Element.prototype);\n")
     try str.push(b, "installParentNode(Element.prototype);\n")
     try str.push(b, "attributes(Element.prototype, {\n")
+    ret ok
+}
+
+fn part9(b: *str.Builder) -> err {
     try str.push(b, "  namespaceURI: { get() { return elSlot(this).namespaceURI; } },\n")
     try str.push(b, "  prefix: { get() { return elSlot(this).prefix; } },\n")
     try str.push(b, "  localName: { get() { return elSlot(this).localName; } },\n")
@@ -2286,10 +2297,6 @@ fn part8(b: *str.Builder) -> err {
     try str.push(b, "  id: { get() { elSlot(this); const v = getAttributeValue(this, 'id'); return v === null ? '' : v; }, set(v) { elSlot(this); setAttributeValue(this, 'id', toDOMString(v)); } },\n")
     try str.push(b, "  className: { get() { elSlot(this); const v = getAttributeValue(this, 'class'); return v === null ? '' : v; }, set(v) { elSlot(this); setAttributeValue(this, 'class', toDOMString(v)); } },\n")
     try str.push(b, "  classList: { get() { return classListOf(this); }, set(v) { elSlot(this); this.classList.value = v; } },\n")
-    ret ok
-}
-
-fn part9(b: *str.Builder) -> err {
     try str.push(b, "  slot: { get() { elSlot(this); const v = getAttributeValue(this, 'slot'); return v === null ? '' : v; }, set(v) { elSlot(this); setAttributeValue(this, 'slot', toDOMString(v)); } },\n")
     try str.push(b, "  attributes: { get() { return namedNodeMapOf(this); } },\n")
     try str.push(b, "  innerHTML: {\n")
@@ -2332,8 +2339,7 @@ fn part9(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "  return tmp;\n")
     try str.push(b, "}\n")
-    try str.push(b, "function setInnerHTML(el, markup) {\n")
-    try str.push(b, "  let ctx = el;\n")
+    try str.push(b, "function setInnerHTML(el, markup, ctx = el) {\n")
     try str.push(b, "  const frag = parseFragment(ctx, markup);\n")
     try str.push(b, "  replaceAllWith(el, frag);\n")
     try str.push(b, "}\n")
@@ -2534,16 +2540,16 @@ fn part9(b: *str.Builder) -> err {
     try str.push(b, "  register(w, id);\n")
     try str.push(b, "  return w;\n")
     try str.push(b, "};\n")
+    ret ok
+}
+
+fn part10(b: *str.Builder) -> err {
     try str.push(b, "isHTMLDocument = function (doc) { return doc === null ? true : slotOf(doc).docType === 'html'; };\n")
     try str.push(b, "(function () {\n")
     try str.push(b, "  const id = N.root();\n")
     try str.push(b, "  const w = create(HTMLDocument.prototype);\n")
     try str.push(b, "  const s = setSlot(w, newNodeSlot(id, DOCUMENT_NODE, null));\n")
     try str.push(b, "  initDocumentSlot(s, true);\n")
-    ret ok
-}
-
-fn part10(b: *str.Builder) -> err {
     try str.push(b, "  s.url = N.base();\n")
     try str.push(b, "  s.browsingContext = true;\n")
     try str.push(b, "  s.readyState = 'loading';\n")
@@ -2788,16 +2794,16 @@ fn part10(b: *str.Builder) -> err {
     try str.push(b, "    preInsert(createElementInternal(doc, 'body', HTML_NS, null, null, false), html, null);\n")
     try str.push(b, "    ds.url = 'about:blank';\n")
     try str.push(b, "    ds.origin = slotOf(s.doc).origin;\n")
+    ret ok
+}
+
+fn part11(b: *str.Builder) -> err {
     try str.push(b, "    return doc;\n")
     try str.push(b, "  },\n")
     try str.push(b, "  hasFeature() { implSlot(this); return true; }\n")
     try str.push(b, "});\n")
     try str.push(b, "function matchesTagName(el, qualifiedName_, htmlDoc) {\n")
     try str.push(b, "  const s = slotOf(el);\n")
-    ret ok
-}
-
-fn part11(b: *str.Builder) -> err {
     try str.push(b, "  if (qualifiedName_ === '*') return true;\n")
     try str.push(b, "  const q = s.prefix === null ? s.localName : s.prefix + ':' + s.localName;\n")
     try str.push(b, "  if (htmlDoc) {\n")
@@ -3042,16 +3048,16 @@ fn part11(b: *str.Builder) -> err {
     try str.push(b, "const htmlInterfaces = {};   // interface name -> constructor\n")
     try str.push(b, "const htmlTagInterface = {}; // tag name -> interface name\n")
     try str.push(b, "function defineHTMLInterface(name, tags, setup) {\n")
+    ret ok
+}
+
+fn part12(b: *str.Builder) -> err {
     try str.push(b, "  const ctor = { [name]: function () {\n")
     try str.push(b, "    if (new.target === undefined) throw new TypeError(\"Failed to construct '\" + name + \"': Please use the 'new' operator\");\n")
     try str.push(b, "    return constructCustomElement(new.target, ctor);\n")
     try str.push(b, "  } }[name];\n")
     try str.push(b, "  iface(name, ctor, HTMLElement);\n")
     try str.push(b, "  htmlInterfaces[name] = ctor;\n")
-    ret ok
-}
-
-fn part12(b: *str.Builder) -> err {
     try str.push(b, "  for (const t of tags) htmlTagInterface[t] = name;\n")
     try str.push(b, "  if (setup) setup(ctor.prototype, ctor);\n")
     try str.push(b, "  return ctor;\n")
@@ -3296,16 +3302,16 @@ fn part12(b: *str.Builder) -> err {
     try str.push(b, "  const parts = [];\n")
     try str.push(b, "  for (let i = 0; i <= text.length; i++) {\n")
     try str.push(b, "    const c = text[i];\n")
+    ret ok
+}
+
+fn part13(b: *str.Builder) -> err {
     try str.push(b, "    if (quote) { if (c === '\\\\') i++; else if (c === quote) quote = ''; continue; }\n")
     try str.push(b, "    if (c === '\"' || c === \"'\") { quote = c; continue; }\n")
     try str.push(b, "    if (c === '(') depth++;\n")
     try str.push(b, "    else if (c === ')') { if (depth > 0) depth--; }\n")
     try str.push(b, "    else if ((c === ';' && depth === 0) || i === text.length) { parts.push(text.slice(start, i)); start = i + 1; }\n")
     try str.push(b, "  }\n")
-    ret ok
-}
-
-fn part13(b: *str.Builder) -> err {
     try str.push(b, "  for (const part of parts) {\n")
     try str.push(b, "    const colon = part.indexOf(':');\n")
     try str.push(b, "    if (colon < 0) continue;\n")
@@ -3550,16 +3556,192 @@ fn part13(b: *str.Builder) -> err {
     try str.push(b, "    pathname: { get() { elSlot(this); const c = hyperlinkURL(this); return c === null ? '' : c[7]; }, set(v) { elSlot(this); setHyperlinkComponent(this, 'pathname', v); } },\n")
     try str.push(b, "    search: { get() { elSlot(this); const c = hyperlinkURL(this); return c === null ? '' : c[8]; }, set(v) { elSlot(this); setHyperlinkComponent(this, 'search', v); } },\n")
     try str.push(b, "    hash: { get() { elSlot(this); const c = hyperlinkURL(this); return c === null ? '' : c[9]; }, set(v) { elSlot(this); setHyperlinkComponent(this, 'hash', v); } }\n")
+    ret ok
+}
+
+fn part14(b: *str.Builder) -> err {
     try str.push(b, "  });\n")
     try str.push(b, "}\n")
     try str.push(b, "installHyperlinkUtils(HTMLAnchorElement.prototype);\n")
     try str.push(b, "installHyperlinkUtils(htmlInterfaces.HTMLAreaElement.prototype);\n")
     try str.push(b, "operations(HTMLAnchorElement.prototype, { toString() { elSlot(this); const c = hyperlinkURL(this); const v = getAttributeValue(this, 'href'); return c === null ? (v === null ? '' : v) : c[0]; } });\n")
     try str.push(b, "operations(htmlInterfaces.HTMLAreaElement.prototype, { toString() { elSlot(this); const c = hyperlinkURL(this); const v = getAttributeValue(this, 'href'); return c === null ? (v === null ? '' : v) : c[0]; } });\n")
-    ret ok
-}
-
-fn part14(b: *str.Builder) -> err {
+    try str.push(b, "function ShadowRoot() { throw new TypeError('Illegal constructor'); }\n")
+    try str.push(b, "iface('ShadowRoot', ShadowRoot, DocumentFragment);\n")
+    try str.push(b, "defineHandlerAttrs(ShadowRoot.prototype, ['slotchange']);\n")
+    try str.push(b, "function srSlot(o) { const s = slotOf(o); if (!s || s.isShadowRoot !== true) illegal(); return s; }\n")
+    try str.push(b, "isShadowRoot = o => { if (!isObject(o) || o === global) return false; const s = slotOf(o); return !!s && s.isShadowRoot === true; };\n")
+    try str.push(b, "shadowMode = o => slotOf(o).mode;\n")
+    try str.push(b, "shadowHost = o => slotOf(o).host;\n")
+    try str.push(b, "isShadowIncludingInclusiveAncestor = (a, b) => hostIncludingInclusiveAncestor(a, b);\n")
+    try str.push(b, "sameShadowIncludingRoot = (a, b) => shadowIncludingRoot(a) === shadowIncludingRoot(b);\n")
+    try str.push(b, "function shadowIncludingRoot(n) { let r = rootNode(n); while (isShadowRoot(r)) r = rootNode(shadowHost(r)); return r; }\n")
+    try str.push(b, "isConnected = function (o) { return nodeType(shadowIncludingRoot(o)) === DOCUMENT_NODE; };\n")
+    try str.push(b, "shadowIncludingInclusiveDescendants = function (n) {\n")
+    try str.push(b, "  const out = [];\n")
+    try str.push(b, "  (function walk(x) {\n")
+    try str.push(b, "    apply(arrayPush, out, [x]);\n")
+    try str.push(b, "    const s = slotOf(x);\n")
+    try str.push(b, "    if (s.shadowRoot) walk(s.shadowRoot);\n")
+    try str.push(b, "    for (const k of childrenOf(x)) walk(k);\n")
+    try str.push(b, "  })(n);\n")
+    try str.push(b, "  return out;\n")
+    try str.push(b, "};\n")
+    try str.push(b, "const shadowHostNames = ['article', 'aside', 'blockquote', 'body', 'div', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'main', 'nav', 'p', 'section', 'span'];\n")
+    try str.push(b, "function attachShadowRoot(el, mode, delegatesFocus, slotAssignment, clonable, serializable) {\n")
+    try str.push(b, "  const es = slotOf(el);\n")
+    try str.push(b, "  const id = N.mkFragment();\n")
+    try str.push(b, "  const w = create(ShadowRoot.prototype);\n")
+    try str.push(b, "  const s = setSlot(w, newNodeSlot(id, DOCUMENT_FRAGMENT_NODE, es.doc));\n")
+    try str.push(b, "  s.isShadowRoot = true; s.mode = mode; s.host = el; s.delegatesFocus = delegatesFocus; s.slotAssignment = slotAssignment;\n")
+    try str.push(b, "  s.clonable = clonable; s.serializable = serializable;\n")
+    try str.push(b, "  register(w, id);\n")
+    try str.push(b, "  es.shadowRoot = w;\n")
+    try str.push(b, "  return w;\n")
+    try str.push(b, "}\n")
+    try str.push(b, "operations(Element.prototype, {\n")
+    try str.push(b, "  attachShadow(init) {\n")
+    try str.push(b, "    const es = elSlot(this);\n")
+    try str.push(b, "    required(arguments, 1, 'attachShadow');\n")
+    try str.push(b, "    if (!isObject(init)) throw new TypeError(\"Failed to execute 'attachShadow' on 'Element': The provided value is not of type 'ShadowRootInit'.\");\n")
+    try str.push(b, "    const mode = init.mode === undefined ? undefined : String(init.mode);\n")
+    try str.push(b, "    if (mode !== 'open' && mode !== 'closed') throw new TypeError(\"Failed to execute 'attachShadow' on 'Element': The provided value '\" + mode + \"' is not a valid enum value of type ShadowRootMode.\");\n")
+    try str.push(b, "    const sa = init.slotAssignment === undefined ? 'named' : String(init.slotAssignment);\n")
+    try str.push(b, "    if (sa !== 'named' && sa !== 'manual') throw new TypeError(\"Failed to execute 'attachShadow' on 'Element': The provided value '\" + sa + \"' is not a valid enum value of type SlotAssignmentMode.\");\n")
+    try str.push(b, "    if (es.namespaceURI !== HTML_NS || !(shadowHostNames.indexOf(es.localName) >= 0 || isValidCustomElementName(es.localName))) throw domError('NotSupportedError', 'This element does not support attachShadow');\n")
+    try str.push(b, "    if (es.customDefinition && es.customDefinition.disableShadow) throw domError('NotSupportedError', 'Shadow roots are disabled for this custom element');\n")
+    try str.push(b, "    if (es.shadowRoot) throw domError('NotSupportedError', 'Shadow root cannot be created on a host which already hosts a shadow tree.');\n")
+    try str.push(b, "    return attachShadowRoot(this, mode, !!init.delegatesFocus, sa, !!init.clonable, !!init.serializable);\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "attributes(Element.prototype, {\n")
+    try str.push(b, "  shadowRoot: { get() { const es = elSlot(this); return es.shadowRoot && slotOf(es.shadowRoot).mode === 'open' ? es.shadowRoot : null; } }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "attributes(ShadowRoot.prototype, {\n")
+    try str.push(b, "  mode: { get() { return srSlot(this).mode; } },\n")
+    try str.push(b, "  host: { get() { return srSlot(this).host; } },\n")
+    try str.push(b, "  delegatesFocus: { get() { return srSlot(this).delegatesFocus; } },\n")
+    try str.push(b, "  slotAssignment: { get() { return srSlot(this).slotAssignment; } },\n")
+    try str.push(b, "  clonable: { get() { return srSlot(this).clonable; } },\n")
+    try str.push(b, "  serializable: { get() { return srSlot(this).serializable; } },\n")
+    try str.push(b, "  innerHTML: {\n")
+    try str.push(b, "    get() { const s = srSlot(this); return N.innerGet(s.id); },\n")
+    try str.push(b, "    set(v) { const s = srSlot(this); setInnerHTML(this, v === null ? '' : toDOMString(v), s.host); }\n")
+    try str.push(b, "  },\n")
+    try str.push(b, "  activeElement: { get() { srSlot(this); return null; } }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "function isSlotElement(n) { const s = slotOf(n); return s.nodeType === ELEMENT_NODE && s.localName === 'slot' && s.namespaceURI === HTML_NS; }\n")
+    try str.push(b, "function slotsIn(sr) { return descendantsOf(sr).filter(isSlotElement); }\n")
+    try str.push(b, "function slotNameOf(slot) { const v = getAttributeValue(slot, 'name'); return v === null ? '' : v; }\n")
+    try str.push(b, "function slottableNameOf(n) { if (nodeType(n) !== ELEMENT_NODE) return ''; const v = getAttributeValue(n, 'slot'); return v === null ? '' : v; }\n")
+    try str.push(b, "isSlotable = o => { if (!isObject(o) || o === global) return false; const s = slotOf(o); return !!s && s.isNode === true && (s.nodeType === ELEMENT_NODE || s.nodeType === TEXT_NODE); };\n")
+    try str.push(b, "function findSlot(node, open, slots) {\n")
+    try str.push(b, "  const p = parentNode(node);\n")
+    try str.push(b, "  if (p === null || nodeType(p) !== ELEMENT_NODE) return null;\n")
+    try str.push(b, "  const sr = slotOf(p).shadowRoot;\n")
+    try str.push(b, "  if (!sr) return null;\n")
+    try str.push(b, "  if (open && slotOf(sr).mode !== 'open') return null;\n")
+    try str.push(b, "  const list = slots || slotsIn(sr);\n")
+    try str.push(b, "  if (slotOf(sr).slotAssignment === 'manual') {\n")
+    try str.push(b, "    for (const sl of list) { const m = slotOf(sl).manual; if (m && m.indexOf(node) >= 0) return sl; }\n")
+    try str.push(b, "    return null;\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  const name = slottableNameOf(node);\n")
+    try str.push(b, "  for (const sl of list) if (slotNameOf(sl) === name) return sl;\n")
+    try str.push(b, "  return null;\n")
+    try str.push(b, "}\n")
+    try str.push(b, "assignedSlotOf = o => findSlot(o, false);\n")
+    try str.push(b, "assignedSlotOfNode = o => { nodeSlot(o); return findSlot(o, true); };\n")
+    try str.push(b, "const signalSlots = [];\n")
+    try str.push(b, "function signalSlotChange(slot) {\n")
+    try str.push(b, "  if (signalSlots.indexOf(slot) < 0) apply(arrayPush, signalSlots, [slot]);\n")
+    try str.push(b, "  queueMicrotaskForObservers();\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function fireSlotChanges() {\n")
+    try str.push(b, "  const list = signalSlots.splice(0, signalSlots.length);\n")
+    try str.push(b, "  for (const sl of list) fireSimple(sl, 'slotchange', true);\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function assignSlotsOfShadow(sr) {\n")
+    try str.push(b, "  const host = slotOf(sr).host;\n")
+    try str.push(b, "  const slots = slotsIn(sr);\n")
+    try str.push(b, "  const lists = new Map();\n")
+    try str.push(b, "  for (const sl of slots) lists.set(sl, []);\n")
+    try str.push(b, "  for (const c of childrenOf(host)) {\n")
+    try str.push(b, "    if (!isSlotable(c)) continue;\n")
+    try str.push(b, "    const sl = findSlot(c, false, slots);\n")
+    try str.push(b, "    if (sl !== null) apply(arrayPush, lists.get(sl), [c]);\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  for (const sl of slots) {\n")
+    try str.push(b, "    const s = slotOf(sl), now = lists.get(sl), old = s.assigned || [];\n")
+    try str.push(b, "    s.assigned = now;\n")
+    try str.push(b, "    if (now.length !== old.length || now.some((x, i) => x !== old[i])) signalSlotChange(sl);\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "}\n")
+    try str.push(b, "isShadowHostWithSlots = o => nodeType(o) === ELEMENT_NODE && !!slotOf(o).shadowRoot;\n")
+    try str.push(b, "assignSlotablesForTree = host => assignSlotsOfShadow(slotOf(host).shadowRoot);\n")
+    try str.push(b, "childrenChanged = function (parent) {\n")
+    try str.push(b, "  const root = rootNode(parent);\n")
+    try str.push(b, "  if (isShadowRoot(root)) {\n")
+    try str.push(b, "    if (nodeType(parent) === ELEMENT_NODE && isSlotElement(parent) && (slotOf(parent).assigned || []).length === 0) signalSlotChange(parent);\n")
+    try str.push(b, "    assignSlotsOfShadow(root);\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  const ps = slotOf(parent);\n")
+    try str.push(b, "  if (ps.nodeType === ELEMENT_NODE && ps.shadowRoot) assignSlotsOfShadow(ps.shadowRoot);\n")
+    try str.push(b, "};\n")
+    try str.push(b, "elementAttributeChanged = function (el, name, oldValue, value) {\n")
+    try str.push(b, "  if (name === 'name' && isSlotElement(el)) {\n")
+    try str.push(b, "    const root = rootNode(el);\n")
+    try str.push(b, "    if (isShadowRoot(root)) assignSlotsOfShadow(root);\n")
+    try str.push(b, "  } else if (name === 'slot') {\n")
+    try str.push(b, "    const p = parentNode(el);\n")
+    try str.push(b, "    if (p !== null && nodeType(p) === ELEMENT_NODE && slotOf(p).shadowRoot) assignSlotsOfShadow(slotOf(p).shadowRoot);\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "};\n")
+    try str.push(b, "function flattenSlottables(slot, out) {\n")
+    try str.push(b, "  const assigned = slotOf(slot).assigned || [];\n")
+    try str.push(b, "  const items = assigned.length ? assigned : childrenOf(slot).filter(isSlotable);\n")
+    try str.push(b, "  for (const n of items) {\n")
+    try str.push(b, "    if (nodeType(n) === ELEMENT_NODE && isSlotElement(n) && isShadowRoot(rootNode(n))) flattenSlottables(n, out);\n")
+    try str.push(b, "    else apply(arrayPush, out, [n]);\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function slotElementSlot(o) { const s = slotOf(o); if (!s || s.localName !== 'slot' || s.nodeType !== ELEMENT_NODE) illegal(); return s; }\n")
+    try str.push(b, "operations(P('HTMLSlotElement'), {\n")
+    try str.push(b, "  assignedNodes(options = undefined) {\n")
+    try str.push(b, "    const s = slotElementSlot(this);\n")
+    try str.push(b, "    if (options && options.flatten) { const out = []; flattenSlottables(this, out); return out; }\n")
+    try str.push(b, "    return (s.assigned || []).slice();\n")
+    try str.push(b, "  },\n")
+    try str.push(b, "  assignedElements(options = undefined) {\n")
+    try str.push(b, "    const s = slotElementSlot(this);\n")
+    try str.push(b, "    let list;\n")
+    try str.push(b, "    if (options && options.flatten) { list = []; flattenSlottables(this, list); } else list = (s.assigned || []).slice();\n")
+    try str.push(b, "    return list.filter(n => nodeType(n) === ELEMENT_NODE);\n")
+    try str.push(b, "  },\n")
+    try str.push(b, "  assign(...nodes) {\n")
+    try str.push(b, "    const s = slotElementSlot(this);\n")
+    try str.push(b, "    for (const n of nodes) if (!isNode(n) || (nodeType(n) !== ELEMENT_NODE && nodeType(n) !== TEXT_NODE)) throw new TypeError(\"Failed to execute 'assign' on 'HTMLSlotElement': parameter is not of type 'Element or Text'.\");\n")
+    try str.push(b, "    const root = rootNode(this);\n")
+    try str.push(b, "    s.manual = [];\n")
+    try str.push(b, "    for (const n of nodes) {\n")
+    try str.push(b, "      for (const sl of isShadowRoot(root) ? slotsIn(root) : []) {\n")
+    try str.push(b, "        const m = slotOf(sl).manual;\n")
+    try str.push(b, "        if (m && sl !== this) { const i = m.indexOf(n); if (i >= 0) m.splice(i, 1); }\n")
+    try str.push(b, "      }\n")
+    try str.push(b, "      if (s.manual.indexOf(n) < 0) apply(arrayPush, s.manual, [n]);\n")
+    try str.push(b, "    }\n")
+    try str.push(b, "    if (isShadowRoot(root)) assignSlotsOfShadow(root);\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "function cloneShadow(node, copy) {\n")
+    try str.push(b, "  const s = slotOf(node);\n")
+    try str.push(b, "  if (s.nodeType !== ELEMENT_NODE || !s.shadowRoot || !slotOf(s.shadowRoot).clonable) return;\n")
+    try str.push(b, "  const ss = slotOf(s.shadowRoot);\n")
+    try str.push(b, "  const sr = attachShadowRoot(copy, ss.mode, ss.delegatesFocus, ss.slotAssignment, true, ss.serializable);\n")
+    try str.push(b, "  for (const c of childrenOf(s.shadowRoot)) appendNodeSimple(sr, cloneNode(c, slotOf(copy).doc, true));\n")
+    try str.push(b, "  assignSlotsOfShadow(sr);\n")
+    try str.push(b, "}\n")
+    try str.push(b, "attributes(Element.prototype, { assignedSlot: { get() { elSlot(this); return findSlot(this, true); } } });\n")
     try str.push(b, "const documentAttrs = {\n")
     try str.push(b, "  title: {\n")
     try str.push(b, "    get() {\n")
@@ -3628,6 +3810,10 @@ fn part14(b: *str.Builder) -> err {
     try str.push(b, "  referrer: { get() { return docSlot(this).referrer || ''; } },\n")
     try str.push(b, "  domain: { get() { const s = docSlot(this); try { return new URL(s.url).hostname; } catch (_) { return ''; } }, set(v) {} },\n")
     try str.push(b, "  lastModified: { get() { return '01/01/1970 00:00:00'; } },\n")
+    ret ok
+}
+
+fn part15(b: *str.Builder) -> err {
     try str.push(b, "  readyState: { get() { return docSlot(this).readyState; } },\n")
     try str.push(b, "  location: { get() { const s = docSlot(this); return s.browsingContext ? global.location : null; }, set(v) { const s = docSlot(this); if (s.browsingContext) global.location.href = v; } },\n")
     try str.push(b, "  defaultView: { get() { return docSlot(this).browsingContext ? global : null; } },\n")
@@ -3810,10 +3996,6 @@ fn part14(b: *str.Builder) -> err {
     try str.push(b, "    const s = urlSlot(this);\n")
     try str.push(b, "    const c = N.urlSet(s.c[0], component, toUSVString(v));\n")
     try str.push(b, "    if (c !== null) {\n")
-    ret ok
-}
-
-fn part15(b: *str.Builder) -> err {
     try str.push(b, "      s.c = c;\n")
     try str.push(b, "      if (component === 'search' && s.searchParams !== null) updateSearchParamsFromURL(this);\n")
     try str.push(b, "    }\n")
@@ -3882,6 +4064,10 @@ fn part15(b: *str.Builder) -> err {
     try str.push(b, "  const bytes = [];\n")
     try str.push(b, "  for (let i = 0; i < s.length; i++) {\n")
     try str.push(b, "    const c = s.charCodeAt(i);\n")
+    ret ok
+}
+
+fn part16(b: *str.Builder) -> err {
     try str.push(b, "    if (c === 37 && i + 2 < s.length + 0 && /^[0-9a-fA-F]{2}$/.test(s.slice(i + 1, i + 3))) { bytes.push(parseInt(s.slice(i + 1, i + 3), 16)); i += 2; }\n")
     try str.push(b, "    else if (c < 128) bytes.push(c);\n")
     try str.push(b, "    else { const enc = encodeUTF8(s[i] + (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length ? s[++i] : '')); for (const b of enc) bytes.push(b); }\n")
@@ -4064,10 +4250,6 @@ fn part15(b: *str.Builder) -> err {
     try str.push(b, "  pathname: locAttr(7, 'pathname'), search: locAttr(8, 'search'), hash: locAttr(9, 'hash')\n")
     try str.push(b, "});\n")
     try str.push(b, "operations(Location.prototype, {\n")
-    ret ok
-}
-
-fn part16(b: *str.Builder) -> err {
     try str.push(b, "  assign(url) { if (this !== locationObject) illegal(); required(arguments, 1, 'assign'); navigateTo(toUSVString(url)); },\n")
     try str.push(b, "  replace(url) { if (this !== locationObject) illegal(); required(arguments, 1, 'replace'); navigateTo(toUSVString(url)); },\n")
     try str.push(b, "  reload() { if (this !== locationObject) illegal(); },\n")
@@ -4136,6 +4318,10 @@ fn part16(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "function TextEncoder() {\n")
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'TextEncoder': Please use the 'new' operator\");\n")
+    ret ok
+}
+
+fn part17(b: *str.Builder) -> err {
     try str.push(b, "  setSlot(this, { isEncoder: true });\n")
     try str.push(b, "}\n")
     try str.push(b, "iface('TextEncoder', TextEncoder, null);\n")
@@ -4318,10 +4504,6 @@ fn part16(b: *str.Builder) -> err {
     try str.push(b, "  value: {\n")
     try str.push(b, "    run() {\n")
     try str.push(b, "      const s = slotOf(mainDocument);\n")
-    ret ok
-}
-
-fn part17(b: *str.Builder) -> err {
     try str.push(b, "      runParsedScripts();\n")
     try str.push(b, "      this.interactive();\n")
     try str.push(b, "      for (const run of deferredScripts.splice(0, deferredScripts.length)) { try { run(); } catch (e) { reportException(e); } N.runJobs(); }\n")
@@ -4347,6 +4529,59 @@ fn part17(b: *str.Builder) -> err {
     try str.push(b, "  },\n")
     try str.push(b, "  writable: true, configurable: true\n")
     try str.push(b, "});\n")
+    try str.push(b, "const namedDefined = new Set();\n")
+    try str.push(b, "const namedByName = ['embed', 'form', 'iframe', 'img', 'object'];\n")
+    try str.push(b, "function firstNamed(name) {\n")
+    try str.push(b, "  const byId = apply(documentGetElementById, mainDocument, [name]);\n")
+    try str.push(b, "  if (byId !== null) return byId;\n")
+    try str.push(b, "  for (const d of descendantsOf(mainDocument)) {\n")
+    try str.push(b, "    if (nodeType(d) !== ELEMENT_NODE) continue;\n")
+    try str.push(b, "    const s = slotOf(d);\n")
+    try str.push(b, "    if (s.namespaceURI === HTML_NS && namedByName.indexOf(s.localName) >= 0 && getAttributeValue(d, 'name') === name) return d;\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  return null;\n")
+    try str.push(b, "}\n")
+    try str.push(b, "const documentGetElementById = Document.prototype.getElementById;\n")
+    try str.push(b, "function refreshNamed(name) {\n")
+    try str.push(b, "  if (typeof name !== 'string' || name === '') return;\n")
+    try str.push(b, "  const found = firstNamed(name);\n")
+    try str.push(b, "  if (found === null) {\n")
+    try str.push(b, "    if (namedDefined.has(name)) { delete global[name]; namedDefined.delete(name); }\n")
+    try str.push(b, "    return;\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  if (namedDefined.has(name) || hasOwn.call(global, name)) return;\n")
+    try str.push(b, "  defineProperty(global, name, {\n")
+    try str.push(b, "    get() { return firstNamed(name); },\n")
+    try str.push(b, "    set(v) { delete global[name]; namedDefined.delete(name); defineProperty(global, name, { value: v, writable: true, enumerable: true, configurable: true }); },\n")
+    try str.push(b, "    enumerable: false, configurable: true\n")
+    try str.push(b, "  });\n")
+    try str.push(b, "  namedDefined.add(name);\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function refreshNamedFor(el) {\n")
+    try str.push(b, "  if (nodeType(el) !== ELEMENT_NODE) return;\n")
+    try str.push(b, "  refreshNamed(getAttributeValue(el, 'id'));\n")
+    try str.push(b, "  if (namedByName.indexOf(slotOf(el).localName) >= 0) refreshNamed(getAttributeValue(el, 'name'));\n")
+    try str.push(b, "}\n")
+    try str.push(b, "const prevInserted = elementInserted;\n")
+    try str.push(b, "elementInserted = function (el) {\n")
+    try str.push(b, "  prevInserted(el);\n")
+    try str.push(b, "  if (shadowIncludingRoot(el) === mainDocument) refreshNamedFor(el);\n")
+    try str.push(b, "};\n")
+    try str.push(b, "const prevRemoved = elementRemoved;\n")
+    try str.push(b, "elementRemoved = function (el, parent) {\n")
+    try str.push(b, "  prevRemoved(el, parent);\n")
+    try str.push(b, "  refreshNamedFor(el);\n")
+    try str.push(b, "};\n")
+    ret ok
+}
+
+fn part18(b: *str.Builder) -> err {
+    try str.push(b, "const prevAttrChanged = elementAttributeChanged;\n")
+    try str.push(b, "elementAttributeChanged = function (el, name, oldValue, value) {\n")
+    try str.push(b, "  prevAttrChanged(el, name, oldValue, value);\n")
+    try str.push(b, "  if ((name === 'id' || name === 'name') && shadowIncludingRoot(el) === mainDocument) { refreshNamed(oldValue); refreshNamed(value); }\n")
+    try str.push(b, "};\n")
+    try str.push(b, "for (const d of descendantsOf(mainDocument)) refreshNamedFor(d);\n")
     try str.push(b, "function AbstractRange() { throw new TypeError('Illegal constructor'); }\n")
     try str.push(b, "iface('AbstractRange', AbstractRange, null);\n")
     try str.push(b, "function Range() {\n")
@@ -4572,10 +4807,6 @@ fn part17(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "function deleteRangeContents(range) {\n")
     try str.push(b, "  const s = slotOf(range);\n")
-    ret ok
-}
-
-fn part18(b: *str.Builder) -> err {
     try str.push(b, "  if (s.startNode === s.endNode && s.startOffset === s.endOffset) return;\n")
     try str.push(b, "  const originalStartNode = s.startNode, originalStartOffset = s.startOffset, originalEndNode = s.endNode, originalEndOffset = s.endOffset;\n")
     try str.push(b, "  if (originalStartNode === originalEndNode && isCharacterData(nodeType(originalStartNode))) {\n")
@@ -4595,6 +4826,10 @@ fn part18(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "  if (isCharacterData(nodeType(originalStartNode))) replaceData(originalStartNode, originalStartOffset, nodeLength(originalStartNode) - originalStartOffset, '');\n")
     try str.push(b, "  for (const n of nodesToRemove) removeNode(n, false);\n")
+    ret ok
+}
+
+fn part19(b: *str.Builder) -> err {
     try str.push(b, "  if (isCharacterData(nodeType(originalEndNode))) replaceData(originalEndNode, 0, originalEndOffset, '');\n")
     try str.push(b, "  s.startNode = newNode; s.startOffset = newOffset; s.endNode = newNode; s.endOffset = newOffset;\n")
     try str.push(b, "}\n")
@@ -4826,10 +5061,6 @@ fn part18(b: *str.Builder) -> err {
     try str.push(b, "    } else {\n")
     try str.push(b, "      if (before) { node = precedingInRoot(node, s.root); if (node === null) return null; } else before = true;\n")
     try str.push(b, "    }\n")
-    ret ok
-}
-
-fn part19(b: *str.Builder) -> err {
     try str.push(b, "    const result = filterNode(iterator, node);\n")
     try str.push(b, "    if (result === FILTER_ACCEPT) break;\n")
     try str.push(b, "  }\n")
@@ -4849,6 +5080,10 @@ fn part19(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "    if (next !== null && isInclusiveAncestor(s.root, next)) { s.reference = next; return; }\n")
     try str.push(b, "    s.pointerBefore = false;\n")
+    ret ok
+}
+
+fn part20(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "  const prev = previousSibling(toBeRemoved);\n")
     try str.push(b, "  if (prev === null) s.reference = parentNode(toBeRemoved);\n")
@@ -5070,6 +5305,7 @@ fn part19(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "function notifyMutationObservers() {\n")
     try str.push(b, "  mutationObserverMicrotaskQueued = false;\n")
+    try str.push(b, "  const signals = signalSlots.length > 0;\n")
     try str.push(b, "  const notify = observerNotifyList.splice(0, observerNotifyList.length);\n")
     try str.push(b, "  for (const mo of notify) {\n")
     try str.push(b, "    const s = slotOf(mo);\n")
@@ -5080,13 +5316,10 @@ fn part19(b: *str.Builder) -> err {
     try str.push(b, "      if (regs) for (let i = regs.length - 1; i >= 0; i--) if (regs[i].observer === mo && regs[i].source !== null) regs.splice(i, 1);\n")
     try str.push(b, "    }\n")
     try str.push(b, "    if (records.length > 0) {\n")
-    ret ok
-}
-
-fn part20(b: *str.Builder) -> err {
     try str.push(b, "      try { apply(s.callback, mo, [records, mo]); } catch (e) { reportException(e); }\n")
     try str.push(b, "    }\n")
     try str.push(b, "  }\n")
+    try str.push(b, "  if (signals) fireSlotChanges();\n")
     try str.push(b, "}\n")
     try str.push(b, "queueMutationRecord = function (type, target, name, namespace, oldValue, added, removed, previousSibling_, nextSibling_) {\n")
     try str.push(b, "  const interested = [];\n")
@@ -5101,6 +5334,10 @@ fn part20(b: *str.Builder) -> err {
     try str.push(b, "      if (node !== target && !o.subtree) continue;\n")
     try str.push(b, "      if (type === 'attributes' && !o.attributes) continue;\n")
     try str.push(b, "      if (type === 'attributes' && o.attributeFilter !== undefined && (namespace !== null || o.attributeFilter.indexOf(name) < 0)) continue;\n")
+    ret ok
+}
+
+fn part21(b: *str.Builder) -> err {
     try str.push(b, "      if (type === 'characterData' && !o.characterData) continue;\n")
     try str.push(b, "      if (type === 'childList' && !o.childList) continue;\n")
     try str.push(b, "      let entry = null;\n")
@@ -5334,10 +5571,6 @@ fn part20(b: *str.Builder) -> err {
     try str.push(b, "  const s = setSlot(this, { isHeaders: true, list: [], guard: 'none' });\n")
     try str.push(b, "  if (init !== undefined && init !== null) fillHeaders(this, init);\n")
     try str.push(b, "}\n")
-    ret ok
-}
-
-fn part21(b: *str.Builder) -> err {
     try str.push(b, "iface('Headers', Headers, null);\n")
     try str.push(b, "function hSlot(o) { const s = slotOf(o); if (!s || !s.isHeaders) illegal(); return s; }\n")
     try str.push(b, "function fillHeaders(h, init) {\n")
@@ -5355,6 +5588,10 @@ fn part21(b: *str.Builder) -> err {
     try str.push(b, "        if (d !== undefined && d.enumerable) appendHeader(h, key, toDOMString(init[key]));\n")
     try str.push(b, "      }\n")
     try str.push(b, "    }\n")
+    ret ok
+}
+
+fn part22(b: *str.Builder) -> err {
     try str.push(b, "  } else throw new TypeError(\"Failed to construct 'Headers': The provided value is not of type '(sequence<sequence<ByteString>> or record<ByteString, ByteString>)'.\");\n")
     try str.push(b, "}\n")
     try str.push(b, "function appendHeader(h, name, value) {\n")
@@ -5588,10 +5825,6 @@ fn part21(b: *str.Builder) -> err {
     try str.push(b, "    const r = new Response(null, { status: s.status === 0 ? 200 : s.status, statusText: s.statusText });\n")
     try str.push(b, "    const rs = slotOf(r);\n")
     try str.push(b, "    rs.status = s.status; rs.type = s.type; rs.url = s.url; rs.redirected = s.redirected;\n")
-    ret ok
-}
-
-fn part22(b: *str.Builder) -> err {
     try str.push(b, "    rs.headers = new Headers(s.headers); slotOf(rs.headers).guard = slotOf(s.headers).guard;\n")
     try str.push(b, "    rs.body = s.body === null ? null : { bytes: s.body.bytes, type: s.body.type };\n")
     try str.push(b, "    return r;\n")
@@ -5609,6 +5842,10 @@ fn part22(b: *str.Builder) -> err {
     try str.push(b, "    slotOf(r.headers).guard = 'immutable';\n")
     try str.push(b, "    return r;\n")
     try str.push(b, "  },\n")
+    ret ok
+}
+
+fn part23(b: *str.Builder) -> err {
     try str.push(b, "  json(data, init = undefined) {\n")
     try str.push(b, "    const text = JSON.stringify(data);\n")
     try str.push(b, "    if (text === undefined) throw new TypeError(\"Failed to execute 'json' on 'Response': The data is not JSON serializable\");\n")
@@ -5842,10 +6079,6 @@ fn part22(b: *str.Builder) -> err {
     try str.push(b, "      if (!s.async && s.state !== 0) throw domError('InvalidAccessError', 'Synchronous requests from a document must not set a response type.');\n")
     try str.push(b, "      s.responseType = t;\n")
     try str.push(b, "    }\n")
-    ret ok
-}
-
-fn part23(b: *str.Builder) -> err {
     try str.push(b, "  },\n")
     try str.push(b, "  responseURL: { get() { const s = xhrSlot(this); return s.state === 4 && !s.errorFlag ? (s.responseUrl || s.url) : ''; } },\n")
     try str.push(b, "  status: { get() { return xhrSlot(this).status; } },\n")
@@ -5863,6 +6096,10 @@ fn part23(b: *str.Builder) -> err {
     try str.push(b, "      const s = xhrSlot(this);\n")
     try str.push(b, "      if (s.responseType !== '' && s.responseType !== 'document') throw domError('InvalidStateError', \"Failed to read the 'responseXML' property from 'XMLHttpRequest': The value is only accessible if the object's 'responseType' is '' or 'document' (was '\" + s.responseType + \"').\");\n")
     try str.push(b, "      if (s.state !== 4) return null;\n")
+    ret ok
+}
+
+fn part24(b: *str.Builder) -> err {
     try str.push(b, "      const ct = xhrContentType(s);\n")
     try str.push(b, "      if (!/html|xml/i.test(ct)) return null;\n")
     try str.push(b, "      try { return new DOMParser().parseFromString(xhrResponseText(s), /html/i.test(ct) ? 'text/html' : 'application/xml'); } catch (e) { return null; }\n")
@@ -6096,10 +6333,6 @@ fn part23(b: *str.Builder) -> err {
     try str.push(b, "        if (selfClosing) { nsStack.pop(); defaultNS.pop(); }\n")
     try str.push(b, "        else { open.push({ name }); parent = el; }\n")
     try str.push(b, "      }\n")
-    ret ok
-}
-
-fn part24(b: *str.Builder) -> err {
     try str.push(b, "    } else {\n")
     try str.push(b, "      const end = text.indexOf('<', pos);\n")
     try str.push(b, "      const raw = text.slice(pos, end < 0 ? n : end);\n")
@@ -6117,6 +6350,10 @@ fn part24(b: *str.Builder) -> err {
     try str.push(b, "  if (root === null) fail('no root element');\n")
     try str.push(b, "}\n")
     try str.push(b, "function DOMParser() {\n")
+    ret ok
+}
+
+fn part25(b: *str.Builder) -> err {
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'DOMParser': Please use the 'new' operator\");\n")
     try str.push(b, "  setSlot(this, { isDOMParser: true });\n")
     try str.push(b, "}\n")
@@ -6278,6 +6515,7 @@ fn part24(b: *str.Builder) -> err {
     try str.push(b, "  content: { get() { elSlot(this); return templateContent(this); } }\n")
     try str.push(b, "});\n")
     try str.push(b, "cloningSteps = function (node, copy, document, cloneChildren) {\n")
+    try str.push(b, "  cloneShadow(node, copy);\n")
     try str.push(b, "  const s = slotOf(node);\n")
     try str.push(b, "  if (s.nodeType === ELEMENT_NODE && s.localName === 'template' && s.namespaceURI === HTML_NS && cloneChildren) {\n")
     try str.push(b, "    const src = templateContent(node), dst = templateContent(copy);\n")
@@ -6350,10 +6588,6 @@ fn part24(b: *str.Builder) -> err {
     try str.push(b, "defineProperty(MessagePort.prototype, 'onmessage', { get: portOnMessage.get, set(v) { portOnMessage.set.call(this, v); const s = portSlot(this); s.enabled = true; this.start(); }, enumerable: true, configurable: true });\n")
     try str.push(b, "function MessageChannel() {\n")
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'MessageChannel': Please use the 'new' operator\");\n")
-    ret ok
-}
-
-fn part25(b: *str.Builder) -> err {
     try str.push(b, "  const a = newPort(), b = newPort();\n")
     try str.push(b, "  slotOf(a).peer = b; slotOf(b).peer = a;\n")
     try str.push(b, "  setSlot(this, { isChannel: true, port1: a, port2: b });\n")
@@ -6370,6 +6604,10 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "  const n = toDOMString(name);\n")
     try str.push(b, "  setSlot(this, { listeners: [], isTarget: true, isBC: true, name: n, closed: false });\n")
     try str.push(b, "  if (!broadcastChannels.has(n)) broadcastChannels.set(n, []);\n")
+    ret ok
+}
+
+fn part26(b: *str.Builder) -> err {
     try str.push(b, "  broadcastChannels.get(n).push(this);\n")
     try str.push(b, "}\n")
     try str.push(b, "iface('BroadcastChannel', BroadcastChannel, EventTarget);\n")
@@ -6557,7 +6795,7 @@ fn part25(b: *str.Builder) -> err {
 }
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 357688)
+    var b = try str.builder(a, 369732)
     try part0(&b)
     try part1(&b)
     try part2(&b)
@@ -6584,5 +6822,6 @@ fn source(a: *mem.Arena) -> (str, err) {
     try part23(&b)
     try part24(&b)
     try part25(&b)
+    try part26(&b)
     ret (str.done(&b), ok)
 }
