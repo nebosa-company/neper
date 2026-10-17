@@ -107,7 +107,7 @@ type Obj = struct {
     prog: *const ast.Program, node: u32, env: *Env, native: NativeFn, has_native: bool, ctor_kind: u8, home: *Obj, has_home: bool,
     fields: *Obj, has_fields: bool, this_val: Value, bound_target: *Obj, bound_this: Value, bound_args: []const Value,
     // primitive wrappers, dates, internal slots
-    prim: Value, data: *void, num: f64, text: str, aux: *Obj, id: u64
+    prim: Value, data: *void, num: f64, text: str, aux: *Obj, id: u64, realm: *Interp
 }
 
 // Constructor kinds of a function object.
@@ -129,7 +129,7 @@ type Interp = struct {
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_match: *Sym, sym_replace: *Sym,
     sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
-    pending_module_body: bool
+    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp
 }
 
 fn null_interp() -> *Interp {
@@ -895,6 +895,7 @@ fn new_obj(it: *Interp, class: u8, proto: *Obj) -> *Obj {
     o.bound_target = z
     o.fields = z
     o.aux = z
+    o.realm = it
     ret o
 }
 
@@ -2540,6 +2541,16 @@ fn call_function(it: *Interp, fv: Value, this_val: Value, args: []const Value) -
             ret (pr, pe)
         }
         if fo.class != C_FUNCTION { ret (undefv(), throw_type(it, "not a function")) }
+        if fo.realm != it && fo.realm != null_interp() {
+            // A function of another realm (a frame's window) runs in its own realm; its exception comes back through `thrown`.
+            let rl = fo.realm
+            rl.caller = it
+            rl.has_caller = true
+            let (cr, cre) = call_function(rl, fv, this_val, args)
+            rl.has_caller = false
+            if cre == Throw { it.thrown = rl.thrown }
+            ret (cr, cre)
+        }
         it.depth += 1u32
         if it.depth > it.max_depth {
             it.depth -= 1u32
@@ -2609,6 +2620,15 @@ fn construct(it: *Interp, fv: Value, args: []const Value, new_target: Value) -> 
         if strict_equals(new_target, fv) { nt = obj_value(fo.bound_target) }
         let (r, re) = construct(it, obj_value(fo.bound_target), cell[0usize..total], nt)
         ret (r, re)
+    }
+    if fo.realm != it && fo.realm != null_interp() {
+        let rl2 = fo.realm
+        rl2.caller = it
+        rl2.has_caller = true
+        let (xr, xre) = construct(rl2, fv, args, new_target)
+        rl2.has_caller = false
+        if xre == Throw { it.thrown = rl2.thrown }
+        ret (xr, xre)
     }
     it.depth += 1u32
     if it.depth > it.max_depth {

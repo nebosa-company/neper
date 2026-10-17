@@ -71,7 +71,8 @@ type Layout = struct {
     boxes: list.List[Box], lines: list.List[Line], frags: list.List[Frag], anon: list.List[style.Style],
     root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64,
     floats: list.List[FloatRec], tables: list.List[TableData],
-    counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize
+    counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize,
+    vmode: u8, tr1: []style.Style, tr2: []style.Style
 }
 
 // A float placed in a block formatting context, in the coordinates of the context's root content box.
@@ -80,6 +81,9 @@ type FloatRec = struct { box: u32, x: f64, y: f64, w: f64, h: f64, left: bool, r
 // --- Accessors.
 
 fn st(l: *const Layout, id: u32) -> *const style.Style {
+    // Inside an orthogonal flow every style is read in that flow's logical frame (see `transpose_style`).
+    if l.vmode == 1u8 && usize(id) < l.tr1.len { ret &l.tr1[usize(id)] }
+    if l.vmode == 2u8 && usize(id) < l.tr2.len { ret &l.tr2[usize(id)] }
     if usize(id) < l.styles.len { ret &l.styles[usize(id)] }
     ret &l.anon.items[usize(id) - l.styles.len]
 }
@@ -194,7 +198,7 @@ fn apply_first_letter(l: *Layout, b: u32, ps: *const style.Style) {
         if !seen_letter {
             if is_punct(c) {
                 at += usize(d.width)
-            } else if is_space_byte(u8(c)) && c < 128u32 {
+            } else if c < 128u32 && is_space_byte(u8(c)) {
                 done = true
             } else {
                 seen_letter = true
@@ -624,7 +628,7 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
         let ms = s.pseudo[2usize]
         if mem.address_of(ms) != 0usize { marker_style = push_style(l, ms) }
         let m = new_box(l, .Marker, s.list_style_position == .Inside, true, node, marker_style)
-        bx(l, m).aux = list_ordinal(l, node)
+        bx(l, m).aux = u32(list_ordinal(l, node) & 4294967295i64)
         if mem.address_of(ms) != 0usize {
             let (custom, has_custom) = eval_content(l, ms, node)
             if has_custom {
@@ -643,11 +647,11 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
 }
 
 // The value of a list item's counter: `value`, else the previous sibling item's plus one, from `start` (or 1).
-fn list_ordinal(l: *Layout, node: u32) -> u32 {
+fn list_ordinal(l: *Layout, node: u32) -> i64 {
     let (value, has_value) = dom.get_attribute(l.d, node, "value")
     if has_value {
         let (n, good) = str.parse_i64(value)
-        if good == ok { ret u32(n) }
+        if good == ok { ret n }
     }
     let parent = l.d.nodes[usize(node)].parent
     var reversed = false
@@ -677,10 +681,10 @@ fn list_ordinal(l: *Layout, node: u32) -> u32 {
             }
             var first = total
             if has_start_attr(l, parent) { first = start }
-            ret u32(first - count)
+            ret first - count
         }
     }
-    ret u32(start + count)
+    ret start + count
 }
 
 fn has_start_attr(l: *Layout, parent: u32) -> bool {
@@ -952,6 +956,60 @@ fn to_content_h(l: *const Layout, b: u32, outer: f64) -> f64 {
     ret outer
 }
 
+// The `aspect-ratio` of a box (`auto`-only and unparsable values give none): width divided by height.
+fn box_ratio(l: *const Layout, b: u32) -> (f64, bool) {
+    let s = bstyle(l, b)
+    var text: str = ""
+    var found = false
+    var i = 0usize
+    while i < s.extras.len {
+        if str.eq(s.extras[i].name, "aspect-ratio") {
+            text = s.extras[i].value
+            found = true
+        }
+        i += 1usize
+    }
+    if !found { ret (0.0f64, false) }
+    var t = str.trim(text)
+    if str.starts_with(t, "auto") { t = str.trim(t[4usize..]) }
+    if t.len == 0usize { ret (0.0f64, false) }
+    var slash = t.len
+    var k = 0usize
+    while k < t.len {
+        if t[k] == 47u8 { slash = k }
+        k += 1usize
+    }
+    let (num, ne) = str.parse_f64(str.trim(t[0usize..slash]))
+    if ne != ok || num <= 0.0f64 { ret (0.0f64, false) }
+    var den = 1.0f64
+    if slash < t.len {
+        let (d2, de) = str.parse_f64(str.trim(t[slash + 1usize..]))
+        if de != ok || d2 <= 0.0f64 { ret (0.0f64, false) }
+        den = d2
+    }
+    ret (num / den, true)
+}
+
+// The content height the ratio gives box `b` of content width `cw` (border-box width `bb.w`): false when it has no ratio.
+fn ratio_height(l: *const Layout, b: u32, cw: f64) -> (f64, bool) {
+    let (r, has) = box_ratio(l, b)
+    if !has { ret (0.0f64, false) }
+    let s = bstyle(l, b)
+    let bb = &l.boxes.items[usize(b)]
+    if s.box_sizing == .BorderBox { ret (maxf(0.0f64, bb.w / r - vertical_extras(bb)), true) }
+    ret (cw / r, true)
+}
+
+// The content width the ratio gives a box of content height `ch`.
+fn ratio_width(l: *const Layout, b: u32, ch: f64) -> (f64, bool) {
+    let (r, has) = box_ratio(l, b)
+    if !has { ret (0.0f64, false) }
+    let s = bstyle(l, b)
+    let bb = &l.boxes.items[usize(b)]
+    if s.box_sizing == .BorderBox { ret (maxf(0.0f64, (ch + vertical_extras(bb)) * r - horizontal_extras(bb)), true) }
+    ret (ch * r, true)
+}
+
 // min-width / max-width applied to a content width.
 fn clamp_width(l: *const Layout, b: u32, w: f64, cbw: f64) -> f64 {
     let s = bstyle(l, b)
@@ -1107,7 +1165,15 @@ fn apply_transform(l: *const Layout, s: *const style.Style, text: str) -> str {
 fn process_text(l: *const Layout, b: u32, ends_space: *Flag) -> str {
     let s = bstyle(l, b)
     let raw = apply_transform(l, s, l.boxes.items[usize(b)].text)
-    let (out, e) = mem.alloc[u8](l.a, raw.len * 2usize + 8usize)
+    // Each tab may expand to `tab-size` spaces.
+    var tabs = 0usize
+    var tk = 0usize
+    while tk < raw.len {
+        if raw[tk] == 9u8 { tabs += 1usize }
+        tk += 1usize
+    }
+    let tab_cells = usize(maxf(1.0f64, s.tab_size))
+    let (out, e) = mem.alloc[u8](l.a, raw.len * 2usize + 8usize + tabs * tab_cells)
     if e != ok { ret "" }
     var n = 0usize
     var i = 0usize
@@ -1418,7 +1484,8 @@ fn marker_string(l: *const Layout, b: u32) -> str {
     if l.boxes.items[usize(b)].aux2 == 1u32 { ret l.boxes.items[usize(b)].text }
     let s = bstyle(l, b)
     let kind = s.list_style_type
-    let n = i64(l.boxes.items[usize(b)].aux)
+    var n = i64(l.boxes.items[usize(b)].aux)
+    if n >= 2147483648i64 { n -= 4294967296i64 }
     if str.eq(kind, "none") { ret "" }
     if str.eq(kind, "disc") { ret "\xe2\x80\xa2 " }
     if str.eq(kind, "circle") { ret "\xe2\x97\xa6 " }
@@ -2289,6 +2356,8 @@ fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool {
     if cb.inner != .Flow || cb.inline_level { ret false }
     let s = st(l, cb.style)
     if is_bfc_root(l, c) { ret false }
+    let (ratio_known, has_ratio) = box_ratio(l, c)
+    if has_ratio { ret false }
     if s.height.kind == .Px {
         let (hv, good) = resolve_len(s.height, -1.0f64)
         if !good || hv != 0.0f64 { if s.height.pct == 0.0f64 { ret false } }
@@ -2461,7 +2530,20 @@ fn layout_atomic(l: *Layout, b: u32, cbw: f64, cbh: f64) {
     }
     var cw = 0.0f64
     let (wv, has_w) = resolve_len(s.width, base)
-    if s.width.kind == .Px && has_w {
+    var from_ratio = false
+    if !(s.width.kind == .Px && has_w) && s.height.kind == .Px {
+        let (hv2, has_h2) = resolve_len(s.height, cbh)
+        if has_h2 {
+            let (rw, has_rw) = ratio_width(l, b, to_content_h(l, b, hv2))
+            if has_rw {
+                cw = rw
+                from_ratio = true
+            }
+        }
+    }
+    if from_ratio {
+        // width taken from the ratio
+    } else if s.width.kind == .Px && has_w {
         cw = to_content_w(l, b, wv)
     } else {
         let (mn, mx) = content_widths(l, b)
@@ -2482,10 +2564,19 @@ fn layout_contents_height(l: *Layout, b: u32, cw: f64, cbh: f64) {
     var spec = -1.0f64
     let (hv, has_h) = resolve_len(s.height, cbh)
     if s.height.kind == .Px && has_h { spec = to_content_h(l, b, hv) }
+    var ratio_h = -1.0f64
+    if spec < 0.0f64 && bb.inner != .Replaced {
+        let (rh, has_r) = ratio_height(l, b, cw)
+        if has_r {
+            ratio_h = rh
+            spec = rh
+        }
+    }
     let first_line = l.lines.len
     let auto_h = layout_in_new_bfc(l, b, cw, spec)
     var h = auto_h
     if spec >= 0.0f64 { h = spec }
+    if ratio_h >= 0.0f64 && s.overflow_x == .Visible && s.overflow_y == .Visible { h = maxf(ratio_h, auto_h) }
     h = maxf(0.0f64, clamp_height_auto(l, b, h, cbh, auto_h))
     bb.overflow_w = maxf(bb.overflow_w, cw)
     bb.overflow_h = maxf(bb.overflow_h, auto_h)
@@ -2598,7 +2689,8 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     // Width, and the room beside floats for a context root.
     var avail = cw
     var shift_x = 0.0f64
-    let bfc = is_bfc_root(l, c)
+    let orth = is_orthogonal(l, c)
+    let bfc = is_bfc_root(l, c) || orth
     // The collapsed margin above the border edge, through first children and empty blocks.
     var m_chain = peek_top(l, c, cw)
     if consumed.v { m_chain = no_margin() }
@@ -2649,9 +2741,25 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     var spec_h = -1.0f64
     let (hv, has_h) = resolve_len(s.height, ch)
     if s.height.kind == .Px && has_h { spec_h = to_content_h(l, c, hv) }
+    var ratio_h = -1.0f64
+    if spec_h < 0.0f64 && cb4.inner != .Replaced {
+        let (rh, has_r) = ratio_height(l, c, content_w)
+        if has_r {
+            ratio_h = rh
+            spec_h = rh
+        }
+    }
     var auto_h = 0.0f64
     var out_margin = no_margin()
-    if bfc || cb4.inner != .Flow {
+    if orth {
+        spec_h = -1.0f64
+        ratio_h = -1.0f64
+        layout_orthogonal(l, c, cw, ch)
+        let ob = bx(l, c)
+        auto_h = maxf(0.0f64, ob.h - vertical_extras(ob))
+        // The root of a vertical-rl document starts at the right edge.
+        if mode_code(bstyle(l, c)) == 1u8 && l.boxes.items[usize(p)].parent == NONE { ob.x = ox0 + maxf(0.0f64, cw - ob.w) }
+    } else if bfc || cb4.inner != .Flow {
         auto_h = layout_in_new_bfc(l, c, content_w, spec_h)
     } else {
         var sub = Flow { base: fc.base, ox: content_ox, oy: content_oy }
@@ -2661,6 +2769,8 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     }
     var ch_used = auto_h
     if spec_h >= 0.0f64 { ch_used = spec_h }
+    // A ratio-derived height is a preferred size: the content (min-height: auto) can make it larger.
+    if ratio_h >= 0.0f64 && (s.overflow_x == .Visible && s.overflow_y == .Visible) { ch_used = maxf(ratio_h, auto_h) }
     ch_used = maxf(0.0f64, clamp_height_auto(l, c, ch_used, ch, auto_h))
     let cb5 = bx(l, c)
     cb5.h = ch_used + vertical_extras(cb5)
@@ -2730,6 +2840,15 @@ fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64) {
         ret
     }
     used_width_block(l, c, cbw, offer)
+    // A definite height and a ratio give an automatic width (instead of filling the container).
+    let s2 = bstyle(l, c)
+    if s2.width.kind != .Px && s2.height.kind == .Px && s2.height.pct == 0.0f64 {
+        let b2 = bx(l, c)
+        if b2.inner == .Flow {
+            let (rw, has_rw) = ratio_width(l, c, to_content_h(l, c, s2.height.px))
+            if has_rw { b2.w = maxf(0.0f64, clamp_width(l, c, rw, cbw)) + horizontal_extras(b2) }
+        }
+    }
 }
 
 // `position: relative` shifts the box after layout; sticky and the rest stay in place.
@@ -5344,6 +5463,9 @@ fn containing_block_of(l: *const Layout, b: u32, fixed: bool) -> u32 {
 }
 
 fn layout_abs(l: *Layout, b: u32) {
+    // A vertical box is solved in its own logical frame (see the orthogonal flows) and mapped back at the end.
+    let swap_code = mode_code(bstyle(l, b))
+    l.vmode = swap_code
     let s = bstyle(l, b)
     let fixed = s.position == .Fixed
     let cbid = containing_block_of(l, b, fixed)
@@ -5358,6 +5480,12 @@ fn layout_abs(l: *Layout, b: u32) {
         pad_y = 0.0f64
         cb_w = l.viewport_width
         cb_h = l.viewport_height
+    }
+    let phys_cb_w = cb_w
+    let phys_cb_h = cb_h
+    if swap_code != 0u8 {
+        cb_w = phys_cb_h
+        cb_h = phys_cb_w
     }
     let bb = bx(l, b)
     resolve_edges(l, b, cb_w)
@@ -5375,6 +5503,11 @@ fn layout_abs(l: *Layout, b: u32) {
         let (px, py) = abs_origin(l, bb.parent)
         static_x = px + bb.x - pad_x
         static_y = py + bb.y - pad_y
+    }
+    if swap_code != 0u8 {
+        let (sx, sy, sw0, sh0) = remap_rect(0u8, swap_code, phys_cb_w, phys_cb_h, static_x, static_y, 0.0f64, 0.0f64)
+        static_x = sx
+        static_y = sy
     }
     let has_l = s.inset[3usize].kind != .Auto
     let has_r = s.inset[1usize].kind != .Auto
@@ -5402,7 +5535,20 @@ fn layout_abs(l: *Layout, b: u32) {
         cw = to_content_w(l, b, wv)
         w_auto = false
     }
-    if w_auto {
+    var ratio_w = false
+    if w_auto && !(has_l && has_r) && s.height.kind == .Px {
+        let (hv0, has_hv0) = resolve_len(s.height, cb_h)
+        if has_hv0 {
+            let (rw0, has_rw0) = ratio_width(l, b, to_content_h(l, b, hv0))
+            if has_rw0 {
+                cw = rw0
+                ratio_w = true
+            }
+        }
+    }
+    if ratio_w {
+        // the width came from the ratio
+    } else if w_auto {
         if has_l && has_r {
             cw = cb_w - lv - rv - ml - mr - extras_h
         } else {
@@ -5445,12 +5591,21 @@ fn layout_abs(l: *Layout, b: u32) {
     } else if has_t && has_b {
         spec_h = maxf(0.0f64, cb_h - tv - bv - mt - mb - extras_v)
     }
+    var ratio_h_abs = -1.0f64
+    if spec_h < 0.0f64 && bb.inner != .Replaced {
+        let (rh0, has_rh0) = ratio_height(l, b, cw)
+        if has_rh0 {
+            ratio_h_abs = rh0
+            spec_h = rh0
+        }
+    }
     var content_h = 0.0f64
     if bb.inner != .Replaced {
         content_h = layout_in_new_bfc(l, b, cw, spec_h)
     }
     var h = content_h
     if spec_h >= 0.0f64 { h = spec_h }
+    if ratio_h_abs >= 0.0f64 && s.overflow_x == .Visible && s.overflow_y == .Visible { h = maxf(ratio_h_abs, content_h) }
     h = maxf(0.0f64, clamp_height_auto(l, b, h, cb_h, content_h))
     let bbh = bx(l, b)
     bbh.h = h + extras_v
@@ -5471,10 +5626,28 @@ fn layout_abs(l: *Layout, b: u32) {
         top = cb_h - bv - bbh.h - mb - mt
     }
     // To the parent's border box.
-    let (qx, qy) = abs_origin(l, bbh.parent)
-    bbh.x = pad_x + left + ml - qx
-    bbh.y = pad_y + top + mt - qy
-    bbh.aux = 4u32
+    var rx = left + ml
+    var ry = top + mt
+    if swap_code != 0u8 {
+        l.vmode = 0u8
+        let tw = bbh.w
+        let th = bbh.h
+        let (nx, ny, nw, nh) = remap_rect(swap_code, 0u8, cb_w, cb_h, rx, ry, tw, th)
+        remap_children(l, b, tw, th, swap_code, 0u8)
+        let b9 = bx(l, b)
+        b9.border = remap_edges(swap_code, 0u8, b9.border)
+        b9.padding = remap_edges(swap_code, 0u8, b9.padding)
+        b9.margin = remap_edges(swap_code, 0u8, b9.margin)
+        b9.w = nw
+        b9.h = nh
+        rx = nx
+        ry = ny
+    }
+    let bf = bx(l, b)
+    let (qx, qy) = abs_origin(l, bf.parent)
+    bf.x = pad_x + rx - qx
+    bf.y = pad_y + ry - qy
+    bf.aux = 4u32
 }
 
 fn positioned_pass(l: *Layout, b: u32) {
@@ -5506,6 +5679,233 @@ fn extent_pass(l: *Layout, b: u32, ox: f64, oy: f64) {
 }
 
 // The layout of a styled tree for a viewport. `styles[i]` is the style of node `i`.
+// --- Orthogonal flows (writing-mode: vertical-rl / vertical-lr).
+//
+// A box whose writing mode runs perpendicular to its container's is laid out in its own logical frame: `l.vmode` names the
+// frame (1: vertical-rl, 2: vertical-lr, 0: horizontal), `st` then returns styles transposed into it (width and height,
+// margins, padding, borders and insets swap, so the horizontal layout code reads the block axis as "vertical" and the inline
+// axis as "horizontal"). When the subtree is done its geometry is mapped back into the frame of the container by `remap_children`.
+
+fn mode_code(s: *const style.Style) -> u8 {
+    if s.writing_mode == .VerticalRl || s.writing_mode == .SidewaysRl { ret 1u8 }
+    if s.writing_mode == .VerticalLr || s.writing_mode == .SidewaysLr { ret 2u8 }
+    ret 0u8
+}
+
+// The physical side that logical side `i` (top, right, bottom, left) of frame `code` reads.
+fn frame_side(code: u8, i: usize) -> usize {
+    if code == 1u8 {
+        if i == 0usize { ret 1usize }
+        if i == 1usize { ret 2usize }
+        if i == 2usize { ret 3usize }
+        ret 0usize
+    }
+    if i == 0usize { ret 3usize }
+    if i == 1usize { ret 2usize }
+    if i == 2usize { ret 1usize }
+    ret 0usize
+}
+
+fn transpose_style(s: style.Style, code: u8) -> style.Style {
+    var t = s
+    t.width = s.height
+    t.height = s.width
+    t.min_width = s.min_height
+    t.min_height = s.min_width
+    t.max_width = s.max_height
+    t.max_height = s.max_width
+    t.overflow_x = s.overflow_y
+    t.overflow_y = s.overflow_x
+    var i = 0usize
+    while i < 4usize {
+        let src = frame_side(code, i)
+        t.inset[i] = s.inset[src]
+        t.margin[i] = s.margin[src]
+        t.padding[i] = s.padding[src]
+        t.border_width[i] = s.border_width[src]
+        t.border_style[i] = s.border_style[src]
+        t.border_color[i] = s.border_color[src]
+        t.border_current[i] = s.border_current[src]
+        i += 1usize
+    }
+    ret t
+}
+
+fn style_value(l: *const Layout, k: usize) -> style.Style {
+    if k < l.styles.len { ret l.styles[k] }
+    ret l.anon.items[k - l.styles.len]
+}
+
+fn build_transposed(l: *Layout) {
+    var any1 = false
+    var any2 = false
+    var i = 0usize
+    let total = l.styles.len + l.anon.len
+    while i < total {
+        let sv = style_value(l, i)
+        let code = mode_code(&sv)
+        if code == 1u8 { any1 = true }
+        if code == 2u8 { any2 = true }
+        i += 1usize
+    }
+    if any1 {
+        let (arr, e) = mem.alloc[style.Style](l.a, total)
+        if e == ok {
+            var k = 0usize
+            while k < total {
+                arr[k] = transpose_style(style_value(l, k), 1u8)
+                k += 1usize
+            }
+            l.tr1 = arr
+        }
+    }
+    if any2 {
+        let (arr2, e2) = mem.alloc[style.Style](l.a, total)
+        if e2 == ok {
+            var k2 = 0usize
+            while k2 < total {
+                arr2[k2] = transpose_style(style_value(l, k2), 2u8)
+                k2 += 1usize
+            }
+            l.tr2 = arr2
+        }
+    }
+}
+
+// Whether `b` runs perpendicular to the current frame.
+fn is_orthogonal(l: *const Layout, b: u32) -> bool {
+    if l.tr1.len == 0usize && l.tr2.len == 0usize { ret false }
+    let bb = &l.boxes.items[usize(b)]
+    if bb.inner == .Text || bb.inner == .Break || bb.inner == .Marker || bb.inline_level { ret false }
+    let code = mode_code(st(l, bb.style))
+    ret (code != 0u8) != (l.vmode != 0u8)
+}
+
+// Maps a rectangle between frames (`from` -> `to`, one of them 0) given the size (`sw`, `sh`) of its container in the source frame.
+fn remap_rect(from: u8, to: u8, sw: f64, sh: f64, x: f64, y: f64, w: f64, h: f64) -> (f64, f64, f64, f64) {
+    if to == 0u8 {
+        if from == 1u8 { ret (sh - (y + h), x, h, w) }
+        ret (y, x, h, w)
+    }
+    if to == 1u8 { ret (y, sw - x - w, h, w) }
+    ret (y, x, h, w)
+}
+
+fn remap_edges(from: u8, to: u8, e: [4]f64) -> [4]f64 {
+    var out: [4]f64 = zero
+    var i = 0usize
+    if to == 0u8 {
+        while i < 4usize {
+            out[frame_side(from, i)] = e[i]
+            i += 1usize
+        }
+    } else {
+        while i < 4usize {
+            out[i] = e[frame_side(to, i)]
+            i += 1usize
+        }
+    }
+    ret out
+}
+
+// Maps the geometry of everything below `p` (whose border box is `sw` x `sh` in the `from` frame) into the `to` frame.
+fn remap_children(l: *Layout, p: u32, sw: f64, sh: f64, from: u8, to: u8) {
+    let pb = &l.boxes.items[usize(p)]
+    // Lines are placed in the content box.
+    let cw_src = sw - (pb.border[1usize] + pb.border[3usize] + pb.padding[1usize] + pb.padding[3usize])
+    let ch_src = sh - (pb.border[0usize] + pb.border[2usize] + pb.padding[0usize] + pb.padding[2usize])
+    var li = 0usize
+    while li < usize(pb.line_count) {
+        let ln = &l.lines.items[usize(pb.line_first) + li]
+        let (lx, ly, lw, lh) = remap_rect(from, to, cw_src, ch_src, ln.x, ln.y, ln.w, ln.h)
+        var fi = 0usize
+        while fi < usize(ln.frag_count) {
+            let fr = &l.frags.items[usize(ln.frag_first) + fi]
+            let (fx, fy, fw, fh) = remap_rect(from, to, cw_src, ch_src, fr.x, fr.y, fr.w, fr.h)
+            fr.x = fx
+            fr.y = fy
+            fr.w = fw
+            fr.h = fh
+            fi += 1usize
+        }
+        ln.x = lx
+        ln.y = ly
+        ln.w = lw
+        ln.h = lh
+        li += 1usize
+    }
+    var kid = pb.first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        let kw = kb.w
+        let kh = kb.h
+        let (nx, ny, nw, nh) = remap_rect(from, to, sw, sh, kb.x, kb.y, kw, kh)
+        remap_children(l, kid, kw, kh, from, to)
+        let kb2 = &l.boxes.items[usize(kid)]
+        kb2.x = nx
+        kb2.y = ny
+        kb2.w = nw
+        kb2.h = nh
+        kb2.margin = remap_edges(from, to, kb2.margin)
+        kb2.border = remap_edges(from, to, kb2.border)
+        kb2.padding = remap_edges(from, to, kb2.padding)
+        let ow = kb2.overflow_w
+        kb2.overflow_w = kb2.overflow_h
+        kb2.overflow_h = ow
+        kid = kb2.next
+    }
+}
+
+// Lays out block `c`, which is orthogonal to the current frame, as a formatting context root. Its edges (resolved in the
+// frame of the container) are kept; the result is its border box in that frame with every descendant mapped into it.
+// `pbase` is the percentage base and `pch` the definite height of the container (negative: none).
+fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64) {
+    let old = l.vmode
+    let code = mode_code(bstyle(l, c))
+    let bb = bx(l, c)
+    let pm = bb.margin
+    var room = pch
+    if room < 0.0f64 {
+        room = l.viewport_height
+        if old != 0u8 { room = l.viewport_width }
+    }
+    // The edges along the container's block axis are the box's inline edges.
+    let outer_i = pm[0usize] + pm[2usize] + bb.border[0usize] + bb.border[2usize] + bb.padding[0usize] + bb.padding[2usize]
+    l.vmode = code
+    resolve_edges(l, c, pbase)
+    let s = bstyle(l, c)
+    let bb2 = bx(l, c)
+    let ext_i = horizontal_extras(bb2)
+    let ext_b = vertical_extras(bb2)
+    var inline = 0.0f64
+    let (wv, has_w) = resolve_len(s.width, pbase)
+    if s.width.kind == .Px && has_w {
+        inline = to_content_w(l, c, wv)
+    } else {
+        inline = maxf(0.0f64, room - outer_i)
+    }
+    inline = maxf(0.0f64, clamp_width(l, c, inline, pbase))
+    var spec_b = -1.0f64
+    if s.height.kind == .Px && s.height.pct == 0.0f64 { spec_b = to_content_h(l, c, s.height.px) }
+    let auto_b = layout_in_new_bfc(l, c, inline, spec_b)
+    var block = auto_b
+    if spec_b >= 0.0f64 { block = spec_b }
+    block = maxf(0.0f64, clamp_height_auto(l, c, block, -1.0f64, auto_b))
+    let tw = inline + ext_i
+    let th = block + ext_b
+    l.vmode = old
+    remap_children(l, c, tw, th, code, old)
+    let bb3 = bx(l, c)
+    bb3.border = remap_edges(code, old, bb3.border)
+    bb3.padding = remap_edges(code, old, bb3.padding)
+    bb3.margin = pm
+    bb3.w = th
+    bb3.h = tw
+    bb3.overflow_w = th
+    bb3.overflow_h = tw
+    bb3.has_baseline = false
+}
+
 fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure, viewport_width: f64, viewport_height: f64) -> (Layout, err) {
     var cap = d.used * 2usize + 64usize
     let (boxes, e1) = list.init[Box](a, cap)
@@ -5516,13 +5916,14 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (tables, e6) = list.init[TableData](a, 8usize)
     let (counters, e7) = list.init[CounterInst](a, 16usize)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, vmode: 0u8, tr1: zero, tr2: zero }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))
     l.root = vp
     gen_node(&l, root_el, vp, d.root)
     fix_anonymous(&l, vp)
+    build_transposed(&l)
     let vb = bx(&l, vp)
     vb.w = viewport_width
     vb.h = viewport_height

@@ -887,8 +887,26 @@ fn symbol_to_primitive(it: *js.Interp, this_val: js.Value, args: []const js.Valu
     ret (js.Value { Sym: s }, ok)
 }
 
+// A realm made for a frame shares the well-known symbols of the realm that made it, so arrays and iterators cross between them.
+fn donor_symbol(d: *js.Interp, name: str) -> *js.Sym {
+    if str.eq(name, "iterator") { ret d.sym_iterator }
+    if str.eq(name, "asyncIterator") { ret d.sym_async_iterator }
+    if str.eq(name, "hasInstance") { ret d.sym_has_instance }
+    if str.eq(name, "toPrimitive") { ret d.sym_to_primitive }
+    if str.eq(name, "toStringTag") { ret d.sym_to_string_tag }
+    if str.eq(name, "species") { ret d.sym_species }
+    if str.eq(name, "isConcatSpreadable") { ret d.sym_is_concat_spreadable }
+    if str.eq(name, "unscopables") { ret d.sym_unscopables }
+    if str.eq(name, "match") { ret d.sym_match }
+    if str.eq(name, "matchAll") { ret d.sym_match_all }
+    if str.eq(name, "replace") { ret d.sym_replace }
+    if str.eq(name, "search") { ret d.sym_search }
+    ret d.sym_split
+}
+
 fn well_known(it: *js.Interp, ctor: *js.Obj, name: str) -> *js.Sym {
-    let s = js.new_symbol(it, js.str_concat(it, "Symbol.", name), true)
+    var s: *js.Sym = zero
+    if it.donor != js.null_interp() { s = donor_symbol(it.donor, name) } else { s = js.new_symbol(it, js.str_concat(it, "Symbol.", name), true) }
     let e = js.define_data(it, ctor, js.key_of(name), js.Value { Sym: s }, 0u8)
     ret s
 }
@@ -985,13 +1003,22 @@ fn global_eval(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
 }
 
 fn new_realm(a: *mem.Arena) -> (*js.Interp, err) {
+    let (it, e) = new_realm_with(a, js.null_interp())
+    ret (it, e)
+}
+
+fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
     let (cell, ce) = mem.alloc[js.Interp](a, 1usize)
     if ce != ok { ret (js.null_interp(), ce) }
     var blank_it: js.Interp = zero
     cell[0usize] = blank_it
     let it = &cell[0usize]
     it.a = a
+    it.donor = donor
     it.max_depth = 160u32
+    // Objects and symbols of every realm sharing one arena get ids from disjoint ranges.
+    it.next_object = u64(mem.mark(a)) << 12u64
+    it.next_symbol = u32(mem.mark(a) >> 20usize) * 50000u32
     it.thrown = js.undefv()
     it.new_target = js.undefv()
     let (reg, re) = list.init[*js.Sym](a, 8usize)

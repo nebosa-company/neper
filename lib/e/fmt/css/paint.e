@@ -572,7 +572,15 @@ fn paint_text_run(p: *Painter, text_box: u32, text: str, x: f64, y: f64, w: f64)
         let lay = env.text(env.ctx, layout.st(p.l, p.l.boxes.items[usize(text_box)].style), text)
         let ts0 = layout.st(p.l, p.l.boxes.items[usize(text_box)].style)
         if mem.address_of(lay) != 0usize {
-            emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: f32(x), y: f32(y) }, brush: solid(ts0.color) } })
+            if ts0.writing_mode != .HorizontalTb {
+                // Vertical text is set sideways: the run is turned a quarter clockwise about its top-right corner.
+                save(p)
+                emit(p, scene.Command { Transform: geo.Transform { m00: 0.0f32, m01: -1.0f32, m02: f32(x + w), m10: 1.0f32, m11: 0.0f32, m12: f32(y) } })
+                emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: 0.0f32, y: 0.0f32 }, brush: solid(ts0.color) } })
+                restore(p)
+            } else {
+                emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: f32(x), y: f32(y) }, brush: solid(ts0.color) } })
+            }
         }
     }
     let ts = layout.st(p.l, p.l.boxes.items[usize(text_box)].style)

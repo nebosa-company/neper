@@ -34,7 +34,8 @@ type Host = struct {
     d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool,
     fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool,
     view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool,
-    net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32
+    net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32,
+    parent: *js.Interp, has_parent: bool, children: list.List[*js.Interp]
 }
 
 fn host_of(it: *js.Interp) -> *Host { ret mem.cast[*Host](it.host) }
@@ -815,6 +816,115 @@ fn n_run_module(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     ret (js.bool_value(true), ok)
 }
 
+// --- frames
+//
+// An iframe is a context of its own (a document and a realm that share the arena); the parent keeps the child's interpreter
+// so its event loop turns with the parent's, and the scripts of either reach the other's global through ordinary property
+// access: calls into a function of the other realm run in that realm (js.call_function).
+
+fn child_of(h: *Host, g: js.Value) -> (*js.Interp, bool) {
+    var i = 0usize
+    while i < h.children.len {
+        let c = h.children.items[i]
+        if js.is_object(g) && js.strict_equals(js.obj_value(c.global), g) { ret (c, true) }
+        i += 1usize
+    }
+    ret (js.null_interp(), false)
+}
+
+// frameCreate(markup, url): a new context over the document parsed from `markup`; answers its global object.
+fn n_frame_create(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    let (markup, me) = sarg(it, args, 0usize)
+    if me != ok { ret (js.undefv(), me) }
+    let (address, ue) = sarg(it, args, 1usize)
+    if ue != ok { ret (js.undefv(), ue) }
+    let (cell, ce) = mem.alloc[dom.Dom](it.a, 1usize)
+    if ce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    let (tree, pe) = dom.parse(it.a, markup, parse_options(), 1024usize)
+    if pe != ok { ret (js.undefv(), js.throw_range(it, "could not parse the frame document")) }
+    cell[0usize] = tree
+    let (cit, xe) = new_context_in(it.a, &cell[0usize], address, it)
+    if xe != ok { ret (js.undefv(), js.throw_range(it, "could not create the frame context")) }
+    let ch = host_of(cit)
+    ch.fetch_ctx = h.fetch_ctx
+    ch.fetch_fn = h.fetch_fn
+    ch.has_fetch = h.has_fetch
+    ch.net_ctx = h.net_ctx
+    ch.net_fn = h.net_fn
+    ch.has_net = h.has_net
+    ch.now = h.now
+    ch.parent = it
+    ch.has_parent = true
+    try list.push[*js.Interp](&h.children, cit)
+    ret (js.obj_value(cit.global), ok)
+}
+
+// frameStart(window): runs the frame document's scripts and fires its load events.
+fn n_frame_start(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    let (c, found) = child_of(h, arg(args, 0usize))
+    if !found { ret (js.bool_value(false), ok) }
+    lifecycle(c, "run")
+    let nx = pump_once(c)
+    ret (js.bool_value(true), ok)
+}
+
+// frameDrop(window): the browsing context is discarded; its timers stop.
+fn n_frame_drop(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    var i = 0usize
+    while i < h.children.len {
+        if js.is_object(arg(args, 0usize)) && js.strict_equals(js.obj_value(h.children.items[i].global), arg(args, 0usize)) {
+            var j = i
+            while j + 1usize < h.children.len {
+                h.children.items[j] = h.children.items[j + 1usize]
+                j += 1usize
+            }
+            h.children.len -= 1usize
+            ret (js.bool_value(true), ok)
+        }
+        i += 1usize
+    }
+    ret (js.bool_value(false), ok)
+}
+
+fn n_parent_window(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    if h.has_parent { ret (js.obj_value(h.parent.global), ok) }
+    ret (js.obj_value(it.global), ok)
+}
+
+fn n_top_window(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    var cur = it
+    var guard = 0u32
+    while host_of(cur).has_parent && guard < 64u32 {
+        cur = host_of(cur).parent
+        guard += 1u32
+    }
+    ret (js.obj_value(cur.global), ok)
+}
+
+// callerWindow(): the global of the realm whose script called into this one, or this one's own.
+fn n_caller_window(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    if it.has_caller { ret (js.obj_value(it.caller.global), ok) }
+    ret (js.obj_value(it.global), ok)
+}
+
+// frameCount(): how many frames are children of this window.
+fn n_frame_count(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    ret (js.num_value(f64(host_of(it).children.len)), ok)
+}
+
+// realmOf(object): the global of the realm the object was made in when that is not this one, else undefined.
+fn n_realm_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let v = arg(args, 0usize)
+    if !js.is_object(v) { ret (js.undefv(), ok) }
+    let o = js.as_object(v)
+    if o.realm == it || o.realm == js.null_interp() { ret (js.undefv(), ok) }
+    ret (js.obj_value(o.realm.global), ok)
+}
+
 fn n_base(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     ret (js.str_value(host_of(it).base), ok)
 }
@@ -951,6 +1061,14 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "fetchText", 1u32, n_fetch_text)
     js.add_method(it, n, "geom", 2u32, n_geom)
     js.add_method(it, n, "runModule", 2u32, n_run_module)
+    js.add_method(it, n, "frameCreate", 2u32, n_frame_create)
+    js.add_method(it, n, "frameStart", 1u32, n_frame_start)
+    js.add_method(it, n, "frameDrop", 1u32, n_frame_drop)
+    js.add_method(it, n, "parentWindow", 0u32, n_parent_window)
+    js.add_method(it, n, "topWindow", 0u32, n_top_window)
+    js.add_method(it, n, "callerWindow", 0u32, n_caller_window)
+    js.add_method(it, n, "frameCount", 0u32, n_frame_count)
+    js.add_method(it, n, "realmOf", 1u32, n_realm_of)
     js.add_method(it, n, "utf8Encode", 1u32, n_utf8_encode)
     js.add_method(it, n, "utf8Decode", 1u32, n_utf8_decode)
     js.add_method(it, n, "net", 4u32, n_net)
@@ -963,7 +1081,14 @@ fn install_natives(it: *js.Interp) {
 
 // A realm bound to `d`. `base` is the document's URL (location.href).
 fn new_context(a: *mem.Arena, d: *dom.Dom, base: str) -> (*js.Interp, err) {
-    let it = try realm.new_realm(a)
+    let (it0, e0) = new_context_in(a, d, base, js.null_interp())
+    ret (it0, e0)
+}
+
+// As `new_context`, for a frame: the realm shares the well-known symbols of `donor`, the embedder's realm.
+fn new_context_in(a: *mem.Arena, d: *dom.Dom, base: str, donor: *js.Interp) -> (*js.Interp, err) {
+    let (it, rne) = realm.new_realm_with(a, donor)
+    if rne != ok { ret (it, rne) }
     let (cell, ce) = mem.alloc[Host](a, 1usize)
     if ce != ok { ret (it, ce) }
     var blank: Host = zero
@@ -973,6 +1098,8 @@ fn new_context(a: *mem.Arena, d: *dom.Dom, base: str) -> (*js.Interp, err) {
     let (l, le) = list.init[str](a, 64usize)
     if le != ok { ret (it, le) }
     cell[0usize].log = l
+    let (kids, ke) = list.init[*js.Interp](a, 4usize)
+    cell[0usize].children = kids
     let mie = module.install(it, load_module_hook)
     it.host = mem.cast[*void](&cell[0usize])
     install_natives(it)
@@ -1065,6 +1192,22 @@ fn lifecycle(it: *js.Interp, name: str) {
 // One turn of the event loop at the current clock: promise jobs, then the timers that are due. Answers the clock time of the
 // next pending timer, or -1 when nothing is scheduled.
 fn pump_once(it: *js.Interp) -> f64 {
+    var best = -1.0f64
+    var ci = 0usize
+    let hh = host_of(it)
+    while ci < hh.children.len {
+        let c = hh.children.items[ci]
+        host_of(c).now = hh.now
+        let cn = pump_once(c)
+        if cn >= 0.0f64 && (best < 0.0f64 || cn < best) { best = cn }
+        ci += 1usize
+    }
+    let own = pump_self(it)
+    if own >= 0.0f64 && (best < 0.0f64 || own < best) { best = own }
+    ret best
+}
+
+fn pump_self(it: *js.Interp) -> f64 {
     let je = js.run_jobs(it)
     let (run, re) = js.get_prop(it, it.global, js.key_of("__runTimers"), js.obj_value(it.global))
     if re != ok || !js.is_callable(run) { ret -1.0f64 }
@@ -1104,17 +1247,25 @@ fn set_clock(it: *js.Interp, ms: f64) {
 
 // The clock time of the next pending timer, or -1.
 fn next_due(it: *js.Interp) -> f64 {
+    var best = -1.0f64
+    let hh = host_of(it)
+    var ci = 0usize
+    while ci < hh.children.len {
+        let cn = next_due(hh.children.items[ci])
+        if cn >= 0.0f64 && (best < 0.0f64 || cn < best) { best = cn }
+        ci += 1usize
+    }
     let (nd, ne) = js.get_prop(it, it.global, js.key_of("__nextTimer"), js.obj_value(it.global))
-    if ne != ok || !js.is_callable(nd) { ret -1.0f64 }
+    if ne != ok || !js.is_callable(nd) { ret best }
     let (v, ve) = js.call_function(it, nd, js.obj_value(it.global), js.zero_args())
-    if ve != ok { ret -1.0f64 }
+    if ve != ok { ret best }
     switch v {
     case .Num as n:
-        ret n
+        if n >= 0.0f64 && (best < 0.0f64 || n < best) { best = n }
     default:
-        ret -1.0f64
+        best = best
     }
-    ret -1.0f64
+    ret best
 }
 
 // Delivers a mouse event of `kind` at (x, y) to node `node`; false when a handler cancelled it.
