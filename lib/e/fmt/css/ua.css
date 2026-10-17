@@ -87,3 +87,6 @@ iframe { border: 2px inset; }
 img, video, audio, canvas, embed, object { overflow: clip; }
 video { object-fit: contain; }
 img:is([alt]) { }
+[popover]:not(:popover-open):not(dialog[open]) { display: none; }
+[popover]:popover-open { position: fixed; inset: 0; width: fit-content; height: fit-content; margin: auto; border: solid; padding: 0.25em; overflow: auto; color: CanvasText; background-color: Canvas; }
+dialog:modal { position: fixed; inset-block: 0; max-width: calc(100% - 6px - 2em); max-height: calc(100% - 6px - 2em); }

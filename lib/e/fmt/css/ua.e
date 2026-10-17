@@ -10,7 +10,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 5226)
+    var b = try str.builder(a, 5615)
     try str.push(&b, "/* The user agent style sheet of e.fmt.css.ua, after the HTML Standard's rendering section (15) and Vaper's ua_stylesheet.\n")
     try str.push(&b, "   Edit this file, then run: python scripts/gen_css_ua.py (it writes lib/e/fmt/css/ua.e). */\n")
     try str.push(&b, "/* Display */\n")
@@ -94,6 +94,9 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "img, video, audio, canvas, embed, object { overflow: clip; }\n")
     try str.push(&b, "video { object-fit: contain; }\n")
     try str.push(&b, "img:is([alt]) { }\n")
+    try str.push(&b, "[popover]:not(:popover-open):not(dialog[open]) { display: none; }\n")
+    try str.push(&b, "[popover]:popover-open { position: fixed; inset: 0; width: fit-content; height: fit-content; margin: auto; border: solid; padding: 0.25em; overflow: auto; color: CanvasText; background-color: Canvas; }\n")
+    try str.push(&b, "dialog:modal { position: fixed; inset-block: 0; max-width: calc(100% - 6px - 2em); max-height: calc(100% - 6px - 2em); }\n")
     ret (str.done(&b), ok)
 }
 
@@ -104,7 +107,7 @@ fn rules(a: *mem.Arena, env: sheet.MediaEnv) -> (sheet.Loaded, err) {
 }
 
 fn quirks_source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 5765)
+    var b = try str.builder(a, 6154)
     try str.push(&b, "/* The user agent style sheet of e.fmt.css.ua, after the HTML Standard's rendering section (15) and Vaper's ua_stylesheet.\n")
     try str.push(&b, "   Edit this file, then run: python scripts/gen_css_ua.py (it writes lib/e/fmt/css/ua.e). */\n")
     try str.push(&b, "/* Display */\n")
@@ -188,6 +191,9 @@ fn quirks_source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "img, video, audio, canvas, embed, object { overflow: clip; }\n")
     try str.push(&b, "video { object-fit: contain; }\n")
     try str.push(&b, "img:is([alt]) { }\n")
+    try str.push(&b, "[popover]:not(:popover-open):not(dialog[open]) { display: none; }\n")
+    try str.push(&b, "[popover]:popover-open { position: fixed; inset: 0; width: fit-content; height: fit-content; margin: auto; border: solid; padding: 0.25em; overflow: auto; color: CanvasText; background-color: Canvas; }\n")
+    try str.push(&b, "dialog:modal { position: fixed; inset-block: 0; max-width: calc(100% - 6px - 2em); max-height: calc(100% - 6px - 2em); }\n")
     try str.push(&b, "/* Rules that apply only in quirks mode, after the Quirks Mode Standard and the engines' quirks sheets.\n")
     try str.push(&b, "   Edit this file, then run: python scripts/gen_css_ua.py (it writes them into lib/e/fmt/css/ua.e). */\n")
     try str.push(&b, "/* A table does not inherit the font and text properties of its container (the table-cell font quirk). */\n")
