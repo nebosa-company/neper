@@ -4512,7 +4512,7 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
 // Segoe UI 12 px at x 16 (its ink starts at 17) with the cap top on row 6, white (#CCCCCC disabled), and while focused the dotted
 // rectangle (DrawFocusRect: pixels where x + y is odd from the corner, #DFDFDF over the #202020 page) from (15, 2), 17 high and the
 // text's advance + 3 wide, behind the caption.
-type DarkDots = struct { w: f32, h: f32, rgb: u32 }
+type DarkDots = struct { w: f32, h: f32, rgb: u32, phase: i32 }
 
 fn dark_dots_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -4528,20 +4528,20 @@ fn dark_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     var i: i32 = 0
     while i < w {
         var top = dark
-        if i % 2 == 1 { top = lit }
+        if (i + d.phase) % 2 == 1 { top = lit }
         try winpx.fill(b, area.x + f32(i), area.y, 1.0, 1.0, top)
         var low = dark
-        if (i + h - 1) % 2 == 1 { low = lit }
+        if (i + h - 1 + d.phase) % 2 == 1 { low = lit }
         try winpx.fill(b, area.x + f32(i), area.y + f32(h - 1), 1.0, 1.0, low)
         i += 1
     }
     var j: i32 = 1
     while j < h - 1 {
         var left = dark
-        if j % 2 == 1 { left = lit }
+        if (j + d.phase) % 2 == 1 { left = lit }
         try winpx.fill(b, area.x, area.y + f32(j), 1.0, 1.0, left)
         var right = dark
-        if (j + w - 1) % 2 == 1 { right = lit }
+        if (j + w - 1 + d.phase) % 2 == 1 { right = lit }
         try winpx.fill(b, area.x + f32(w - 1), area.y + f32(j), 1.0, 1.0, right)
         j += 1
     }
@@ -4549,9 +4549,15 @@ fn dark_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 fn dark_dots(a: *mem.Arena, w: f32, h: f32, rgb: u32) -> (widget.Node, err) {
+    let (node, node_error) = dark_dots_phase(a, w, h, rgb, 0)
+    ret (node, node_error)
+}
+
+// round 15: `phase` 1 lights the even pixels from the corner (the SysLink's focus rectangle), 0 the odd ones (a check box's).
+fn dark_dots_phase(a: *mem.Arena, w: f32, h: f32, rgb: u32, phase: i32) -> (widget.Node, err) {
     let (made, made_error) = mem.alloc[DarkDots](a, 1usize)
     if made_error != ok { ret (zero, TooLarge) }
-    made[0usize] = DarkDots { w: w, h: h, rgb: rgb }
+    made[0usize] = DarkDots { w: w, h: h, rgb: rgb, phase: phase }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: dark_dots_measure, paint: dark_dots_paint, state: widget.bytes_of[DarkDots](&made[0usize]) } }, style: sized_style(w, h), children: none }, ok)
 }
@@ -4587,7 +4593,9 @@ fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
         layers[n] = widget.positioned(0u64, 15.0, 2.0, style.defaults(), mem_one_node(a, dots))
         n += 1usize
     }
-    layers[n] = widget.positioned(0u64, 16.0, 3.0, style.defaults(), mem_one_node(a, words))
+    // round 15: half a row up of the shaped run's line box: the native caption's baseline is a whole row, ours a fraction lower (the
+    // rows 15 to 24 of every capture: 2.5 beats 2.4 and 2.6 on the flat pixels beside the glyphs)
+    layers[n] = widget.positioned(0u64, 16.0, 2.5, style.defaults(), mem_one_node(a, words))
     n += 1usize
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
@@ -20364,4 +20372,82 @@ fn one_widget(a: *mem.Arena, node: widget.Node) -> []widget.Node {
     if nodes_error != ok { ret zero }
     nodes[0usize] = node
     ret nodes[0usize..1usize]
+}
+
+// ---- round 15: the native Windows 11 SysLink (syslink-* of docs/ui/looks/ref/windows-native/{light,dark}) -----------------------------------
+// "Text with a link and another." in Segoe UI 12 px, 15 high, cap top on row 3: the plain runs white (dark) or black (light), grey #6D6D6D
+// when disabled in the dark gallery (light disabled is its rest look), the two links #0066CC in every state with a one row underline
+// 13 under the top across the whole run; focused, the first link carries the dotted rectangle (DrawFocusRect over the run, 15 high,
+// the page colour and black on every other pixel from the corner, even pixels lit). Each run starts on the whole pixel after the
+// advance of the runs before it.
+fn windows_syslink(a: *mem.Arena, t: *const Theme, lead: str, first: str, mid: str, second: str, tail: str, focus_first: bool, enabled: bool) -> (widget.Node, err) {
+    let (ft, ft_error) = windows_edit_theme(a, t, 13.0)
+    if ft_error != ok { ret (zero, ft_error) }
+    var options = text_options()
+    options.face = 7u32
+    options.size = 12.0
+    options.weight = 400u32
+    options.wrap = .None
+    var plain = style.hex_raw(0x000000u32)
+    var page: u32 = 0xF0F0F0u32
+    if t.tokens.palette == .Dark {
+        plain = style.hex_raw(0xFFFFFFu32)
+        if !enabled { plain = style.hex_raw(0x6D6D6Du32) }
+        page = 0xDFDFDFu32
+    }
+    let link_ink = style.hex_raw(0x0066CCu32)
+    let runs = [5]str{ lead, first, mid, second, tail }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 8usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var x: f32 = 0.0
+    var focus_at: f32 = 0.0
+    var focus_w: f32 = 0.0
+    var i = 0usize
+    while i < 5usize {
+        let is_link = i == 1usize || i == 3usize
+        var ink = plain
+        if is_link { ink = link_ink }
+        let (words, words_error) = colored_text(a, 0u64, runs[i], &ft, options, ink)
+        if words_error != ok { ret (zero, words_error) }
+        var (advance, fit, base, metrics_error) = run_metrics_faced(a, &ft, options, runs[i])
+        if metrics_error != ok { ret (zero, metrics_error) }
+        // GDI sets a run on the font's whole pixel advances where it has them
+        let (look, look_error) = text_style_faced(a, &ft, options)
+        if look_error != ok { ret (zero, look_error) }
+        if look.fonts.len != 0usize {
+            var whole: f32 = 0.0
+            var whole_ok = true
+            var k = 0usize
+            while k < runs[i].len {
+                let (step, has_step) = winhint.advance(look.fonts[0usize].font, u32(look.fonts[0usize].size + 0.5), u32(runs[i][k]))
+                if !has_step { whole_ok = false }
+                whole += f32(step)
+                k += 1usize
+            }
+            if whole_ok { advance = whole }
+        }
+        let at = f32(i32(x + 0.5))
+        layers[n] = widget.positioned(0u64, at, 0.0 - 1.0, style.defaults(), mem_one_node(a, words))
+        n += 1usize
+        if is_link {
+            var line = sized_style(f32(i32(advance + 0.5)), 1.0)
+            line.background = paint.Brush { Solid: ink }
+            layers[n] = widget.positioned(0u64, at, 13.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+            n += 1usize
+            if i == 1usize {
+                focus_at = at
+                focus_w = f32(i32(advance + 0.5))
+            }
+        }
+        x += advance
+        i += 1usize
+    }
+    if focus_first && enabled {
+        let (dots, dots_error) = dark_dots_phase(a, focus_w, 15.0, page, 1)
+        if dots_error != ok { ret (zero, dots_error) }
+        layers[n] = widget.positioned(0u64, focus_at, 0.0, style.defaults(), mem_one_node(a, dots))
+        n += 1usize
+    }
+    ret (widget.stack(0u64, sized_style(x + 2.0, 15.0), layers[0usize..n]), ok)
 }
