@@ -874,6 +874,8 @@ fn style_hook(ctx: *void, node: u32, prop: str) -> (str, bool) {
 // After scripts changed the document: style sheets, title and layout follow.
 fn refresh(p: *Page) {
     let v = p.view
+    // Scripts grow the view's copy of the tree (node count, version); the page's own copy must follow before it is read.
+    p.tree = v.tree
     p.seen_version = v.tree.version
     p.title = find_title(p)
     p.sheets = collect_sheets(p)

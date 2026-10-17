@@ -900,6 +900,17 @@ fn new_obj(it: *Interp, class: u8, proto: *Obj) -> *Obj {
     ret o
 }
 
+// Room for `n` properties / elements up front: growing a list by doubling leaves each outgrown buffer in the arena.
+fn reserve_props(it: *Interp, o: *Obj, n: usize) {
+    let (v, ve) = list.init[Prop](it.a, n)
+    if ve == ok { o.props = v }
+}
+
+fn reserve_elems(it: *Interp, o: *Obj, n: usize) {
+    let (v, ve) = list.init[Value](it.a, n)
+    if ve == ok { o.elems = v }
+}
+
 fn new_plain(it: *Interp) -> *Obj { ret new_obj(it, C_OBJECT, it.protos.object) }
 
 fn make_error(it: *Interp, proto: *Obj, message: str) -> Value {
@@ -2596,12 +2607,14 @@ fn make_function(it: *Interp, f: *Frame, fid: u32) -> (*Obj, err) {
     }
     fo.ctor_kind = K_NONE
     if !is_arrow && !is_method && !is_gen && !is_async { fo.ctor_kind = K_BASE }
+    if fo.ctor_kind == K_BASE || is_gen { reserve_props(it, fo, 3usize) } else { reserve_props(it, fo, 2usize) }
     try define_data(it, fo, key_of("length"), num_value(n.num), P_CONFIGURABLE)
     var fn_name = n.text
     if str.eq(n.text, "*default*") { fn_name = "default" }
     try define_data(it, fo, key_of("name"), str_value(fn_name), P_CONFIGURABLE)
     if fo.ctor_kind == K_BASE {
         let proto = new_plain(it)
+        reserve_props(it, proto, 1usize)
         try define_data(it, proto, key_of("constructor"), obj_value(fo), P_HIDDEN)
         try define_data(it, fo, key_of("prototype"), obj_value(proto), P_WRITABLE)
     } else if is_gen {
@@ -3931,6 +3944,7 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
     }
     if k == ast.N_ARRAY {
         let arr = new_array(it)
+        reserve_elems(it, arr, usize(n.b))
         var i = 0usize
         while i < usize(n.b) {
             let eid = f.prog.kids[usize(n.a) + i]
@@ -4409,6 +4423,7 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
 
 fn eval_object(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
     let o = new_plain(it)
+    if n.b <= 12u32 { reserve_props(it, o, usize(n.b)) }
     var i = 0usize
     while i < usize(n.b) {
         let pid = f.prog.kids[usize(n.a) + i]
