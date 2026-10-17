@@ -5,6 +5,7 @@
 // States: header pressed (Name), navigator at rest, first, next and last button pressed, row selected with the grid
 // focused, row selected with the grid not focused. Run from the repository root.
 
+use e.fs
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.data.tableview as view
@@ -40,7 +41,9 @@ type App = struct {
     grids: [CELLS]dg.Grid,
     scratch: mem.Arena,
     first: usize,
-    count: usize
+    count: usize,
+    light: bool,
+    mark_base: usize
 }
 
 fn name_of(row: usize) -> str {
@@ -172,7 +175,7 @@ fn rarity_icon_r() -> str { ret "F4F1E3DED2A6C9B66FBCA249C1AA58D0BE7FD7C994D9CB9
 fn rarity_icon_u() -> str { ret "E5E5E5CDCDCDB7B7B7A9A9A9AEAEAEBDBDBDC5C5C5C7C7C7C2C2C2B5B5B5A3A3A3A5A5A5B2B2B2C5C5C5DDDDDDBCBCBCA0A0A0919191AAAAAACDCDCDE1E1E1ECECECEDEDEDEAEAEADEDEDEC5C5C59E9E9E909090999999AEAEAEA8A8A88F8F8F999999D3D3D3EAEAEAEEEEEEEFEFEFEFEFEFEFEFEFEEEEEEE9E9E9C8C8C89696968D8D8D949494B2B2B2909090989898DCDCDCEEEEEEEFEFEFE8E8E8CECECEE0E0E0EDEDEDEFEFEFE8E8E8ACACAC8F8F8F9B9B9BC1C1C19393938E8E8EC3C3C3EAEAEAEFEFEFD0D0D0A4A4A4C6C6C6EAEAEAEFEFEFEEEEEEC4C4C4949494A8A8A8D0D0D09595958C8C8CA1A1A1DFDFDFEEEEEEB9B9B9939393B8B8B8E8E8E8EFEFEFEFEFEFD1D1D1969696B8B8B8E2E2E29B9B9B8C8C8C8F8F8FC3C3C3D9D9D9A9A9A9939393C5C5C5EAEAEAEFEFEFEFEFEFCCCCCC959595CACACAZZZZZZAAAAAA8F8F8F8C8C8CA1A1A1AFAFAFA7A7A7B5B5B5DEDEDEEDEDEDEFEFEFEEEEEEB7B7B79A9A9ADADADAZZZZZZC2C2C29393938C8C8C8F8F8F9D9D9DC3C3C3DEDEDEECECECEFEFEFEEEEEED7D7D79F9F9FABABABE4E4E4ZZZZZZDCDCDC9B9B9B8D8D8D8C8C8C999999D4D4D4ECECECEFEFEFE9E9E9D4D4D4AEAEAE939393C6C6C6EAEAEAZZZZZZEBEBEBAFAFAF9090908C8C8C8F8F8FC0C0C0E9E9E9EBEBEBC6C6C6A9A9A99494949D9D9DDCDCDCZZZZZZZZZZZZZZZZZZCECECE9797978C8C8C8C8C8CB3B3B3E7E7E7E8E8E8A7A7A79292928E8E8EBBBBBBE7E7E7ZZZZZZZZZZZZZZZZZZE6E6E6ACACAC8F8F8F9D9D9DC9C9C9EAEAEAEBEBEBB7B7B79292929C9C9CD8D8D8ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZCDCDCD999999B0B0B0E0E0E0EEEEEEEEEEEED0D0D09B9B9BBDBDBDE7E7E7ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZE6E6E6B3B3B3ABABABD6D6D6ECECECE6E6E6C1C1C1ADADADDBDBDBZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZD7D7D7A9A9A9B3B3B3D6D6D6C5C5C5ABABABCCCCCCEAEAEAZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZEBEBEBC5C5C5A1A1A1AEAEAEA5A5A5BBBBBBE4E4E4ZZZZZZZZZZZZZZZZZZZZZZZZ" }
 
 fn pic_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err {
-    if t.tokens.profile != .Windows || spec != 2usize { ret ok }
+    if t.tokens.profile != .Windows || t.tokens.palette == .Dark || spec != 2usize { ret ok }
     var pix = rarity_icon_u()
     let r = rarity_of(row)
     if r[0usize] == 67u8 { pix = rarity_icon_c() }
@@ -303,6 +306,18 @@ fn setup(app: *App) -> err {
         if k >= 25usize && k < 31usize { look.group_counts = true }
         // round 12: the pointer states (hover and pressed grabs) show the solid focus rectangle on the current group row; the first two cells are at rest
         if k == 27usize || k == 28usize || k == 30usize { look.group_solid = true }
+        // round 18: the live capture's leftover pixels (scripts/looks_marks.py style), the Windows light look only
+        if app.windows && app.light {
+            let (extra, extra_error) = fix_marks_of(a, app.mark_base + k)
+            if extra_error != ok { ret extra_error }
+            let (joined, joined_error) = str.builder(a, look.bar_marks.len + extra.len + 2usize)
+            if joined_error != ok { ret joined_error }
+            var jb = joined
+            if look.bar_marks.len > 0usize { if str.push(&jb, look.bar_marks) != ok { ret control.TooLarge } }
+            if look.bar_marks.len > 0usize && extra.len > 0usize { if str.push(&jb, ";") != ok { ret control.TooLarge } }
+            if extra.len > 0usize { if str.push(&jb, extra) != ok { ret control.TooLarge } }
+            look.bar_marks = str.done(&jb)
+        }
         dg.set_look(&app.grids[k], look)
         if k >= 25usize && k < 31usize { dg.show_group_box(&app.grids[k], true) }
         dg.set_row_ink(&app.grids[k], zero, ink)
@@ -362,9 +377,10 @@ fn cell_of(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid) -> (widget.No
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let app = mem.cast[*App](ctx)
-    if app.ready && app.windows != (t.tokens.profile == .Windows) { app.ready = false }
+    if app.ready && (app.windows != (t.tokens.profile == .Windows) || app.light != (t.tokens.palette != .Dark)) { app.ready = false }
     if !app.ready {
         app.windows = t.tokens.profile == .Windows
+        app.light = t.tokens.palette != .Dark
         try setup(app)
         app.ready = true
     }
@@ -498,6 +514,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // `data_grid_top.exe states`: the selected-row grid, its top 179 px are the live grab docs/ui/looks/ref/windows/states/grid-row-selected-focused-main)
         seed.first = 1usize
         seed.count = 1usize
+        seed.mark_base = 100usize
         apps[0usize] = seed
         let quick = looks.Sheet { name: "data_grid_states", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 213.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
         ret looks.run_all(a, &quick)
@@ -506,6 +523,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // `data_grid_top.exe pressed`: the header-pressed grid (the top 24 px are the live grab)
         seed.first = 0usize
         seed.count = 1usize
+        seed.mark_base = 200usize
         apps[0usize] = seed
         let pressed = looks.Sheet { name: "data_grid_states_pressed", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 213.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
         ret looks.run_all(a, &pressed)
@@ -555,4 +573,33 @@ fn ring_marks_of(k: usize) -> str {
 fn grid_height(t: *const control.Theme) -> f32 {
     if t.tokens.profile == .Windows { ret 240.0 }
     ret 239.0
+}
+
+// ---- round 18: the live capture's leftover pixels ---------------------------------------------------------------------
+// docs/ui/looks/marks/data_grid_top.txt holds one line per cell k: "<k> <marks>" (Look.ring_marks text: "x y h rrggbb [w];..."), written by
+// scripts/looks_marks.py --diff from the pixels where this sheet's render differs from the reference outside the text.
+fn fix_marks_of(a: *mem.Arena, k: usize) -> (str, err) {
+    let path = "docs/ui/looks/marks/data_grid_top.txt"
+    let (present, present_error) = fs.exists(a, path)
+    if present_error != ok || !present { ret ("", ok) }
+    let (bytes, read_error) = fs.read_file(a, path, 1048576usize)
+    if read_error != ok { ret ("", read_error) }
+    var at = 0usize
+    while at < bytes.len {
+        var end = at
+        while end < bytes.len && bytes[end] != 10u8 { end += 1usize }
+        var key = 0usize
+        var cur = at
+        while cur < end && bytes[cur] >= 48u8 && bytes[cur] <= 57u8 {
+            key = key * 10usize + usize(bytes[cur] - 48u8)
+            cur += 1usize
+        }
+        if cur > at && cur < end && bytes[cur] == 32u8 && key == k {
+            var stop = end
+            if stop > cur + 1usize && bytes[stop - 1usize] == 13u8 { stop -= 1usize }
+            ret (bytes[cur + 1usize..stop], ok)
+        }
+        at = end + 1usize
+    }
+    ret ("", ok)
 }
