@@ -1,0 +1,152 @@
+{
+ "text_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/text_edit.png",
+    "notes": "Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. All seven native edit captures (rest, hover, focus, selected, read-only, disabled, password): 0 chrome px at the anchored cell (native_dark sheet), except edit-selected 11 px, all selection fill pixels beside glyph edges (our t ascender is one row taller than the hinted GDI one). Fixed this round: the glyphs sat one row too low (audit 6 saw it as selection and caret rows); they are now one row above the line box as in the capture, with the selection and caret on the capture's rows 3 to 17; the native caret column matches (edit-focus, edit-selected).",
+    "gaps": [
+     "edit-hover is pixel-identical to edit-rest in the capture: no distinct hover look to match",
+     "Unverified (no native state): invalid, long text, placeholder colour",
+     "11 chrome px remain in edit-selected: glyph shape (hinted GDI against our outline); they are selection fill beside glyph edges, inside the audit's 2 px glyph halo but counted by scripts/looks_w1.py",
+     "Text glyph pixels differ by ClearType colour against greyscale (about 300 px per capture, outside the strict count)"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Round 15: the light sheet is unchanged (verified by a full re-render). No TcxTextEdit exists in any v3 capture (every dialog's controls.json lists only TcxMaskEdit, TcxButtonEdit, TcxSpinEdit, TcxComboBox and TcxImageComboBox): the chrome is the mask edit's, which matches the v3 captures at 0 chrome px (same TcxCustomTextEdit family and LookAndFeel in the DFM), but that is equivalence, not a capture, so the status stays review. The native Win11 light edit is not a proxy: its border is #ECECEC and its foot #838383 against v3's #EDEDED and #929292.",
+    "gaps": [
+     "No TcxTextEdit capture: every state is unverified (selection, disabled, read-only, invalid)",
+     "Text: ClearType colour fringes not reproduced (grayscale)"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/spin_edit.png",
+    "notes": "Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. All seven native spin captures (rest, hover up and down, pressed up and down, focus, disabled): 0 chrome px. spin-focus was captured in the blink-off phase of the caret (no orange column) with the selection one pixel past the glyph: its cell now builds the edit with the caret off (control.set_native_caret_off); that is what audit 6 measured as 16 chrome px.",
+    "gaps": [
+     "Unverified: arrows dimmed at the bounds, the four-arrow v3 fast spin edit (no dark reference)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/mask_edit.png",
+    "notes": "Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. There is no native mask edit; the mask edit draws as the text edit, so it is compared with the six native edit captures in its own sheet (native_dark_mask): 0 chrome px each, edit-selected 11 (glyph beside the selection fill) as the text edit. Matched by that equivalence only.",
+    "gaps": [
+     "No native mask-edit capture: the mask behaviour (invalid state, mask characters, typed text with literals) is unverified",
+     "11 chrome px in the selected cell: glyph shape beside the selection fill, as the text edit"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/combo_box.png",
+    "notes": "Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. Both combo styles, the 10 closed captures (edit and list: rest, hover, hover-arrow, focus, disabled) at 0 chrome px except combo-edit-focus 28 px (selection fill beside glyph edges), and the four open captures (combo-edit-open, -open-hover-row, combo-list-open, -open-hover-row) at 59 to 68 chrome px, all in the lit row and head glyph edges (white text on #0078D7, ClearType against greyscale). The glyph rows were one row low and are fixed.",
+    "gaps": [
+     "Hover captures of the edit and list are pixel-identical to rest",
+     "Unverified: invalid, the scrolling drop list (the open captures show 8 rows, no scroll bar)",
+     "Open captures keep 59 to 68 chrome px (glyph edges on the selection fill and the selected head), as the table of scripts/looks_w1.py prints; our glyphs are 8 rows tall in the list against the hinted 9",
+     "The list-style combo text keeps linear advances (static text); only the editable combo's edit control uses hdmx advances"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_focus.png",
+    "notes": "Round 15: the light sheet is unchanged (verified by a full re-render). Fixed: the hot list-style combo's pure stroke columns were #0078D7 where the capture has #0078D4 (combo_hover 9 of 9 cells pass at 0 chrome px, was 8 of 9). Still failing (scripts/looks_cells2.py): the lit row text of the Font Size, Row Color and Show lists against ClearType (combo_box_list_size and open_size 17 to 19 chrome px, 8 to 15 of them outside the 2 px glyph halo; list_show and open_show 2 to 3), the card combo crops (flat_card, flat_card_hover) fail the ink boxes at 0 chrome px, and the in-place grid editor combo (vertical grid) keeps 3 px.",
+    "gaps": [
+     "Unverified: disabled and read-only closed combos (v3 never showed them; the native Win32 combo is a different frame family)",
+     "Lit list row text is 1 px right of the capture's (Font Size, Row Color lists) and the Show list keeps a row edge pixel 4 levels off",
+     "Text: ClearType colour fringes not reproduced (grayscale)"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark_icb.png",
+    "notes": "Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. v3's TcxImageComboBox has no dark look, so its dark head is now the native list-style combo (23 high, Segoe UI 9 pt, text from x 4, the list as wide as the head): the picture-less head at 149 wide (sheet native_dark_icb) compares at 0 chrome px with combo-list-rest, hover, disabled and focus (the dotted focus rectangle included), and the open list with the same 59 and 61 chrome px as the native list combo's open captures (native_dark_open variants 4 and 5). The picture is v3 artwork (drawn as a glyph).",
+    "gaps": [
+     "Pictures (16 x 16 bitmaps in v3) have no native reference: the head with a picture puts it at x 4 and the text 3 px after it (a guess)",
+     "Open lists with pictures use the 18 px picture rows of the light look (no native counterpart); only the picture-less 15 px rows are compared",
+     "Disabled with a picture and row hover on a picture list are unverified"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/memo.png",
+    "notes": "Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. New native multi-line captures (this round, scripts/winnative/gallery.c: edit-multiline-rest, -focus, -selected, -readonly, -disabled and -explorer, light and dark at 100 %): rest, read-only and disabled 0 chrome px, focus 9 px (the caret column against the first glyph), selected 47 px (selection fill beside glyph edges); the scroll column is the Explorer themed one (17 wide #171717, 2 wide #959595 thumb, its length by visible over all lines): 0 chrome px inside the frame. Glyphs and selection are on the capture's rows (audit 6 counted 1458 chrome px).",
+    "gaps": [
+     "edit-multiline-vscroll (the DarkMode_CFD theme) keeps the light unthemed scroll column (#F0F0F0, 17 wide) that no dark app ships: not reproduced, so that one capture fails by its 1500 column px (its frame matches at 0 px). Matched would need that column",
+     "The Explorer themed capture has the Explorer theme's white frame, so only its inside is a reference",
+     "Soft-wrapped long lines: the bar sizes by hard lines (the captures have none that wrap)",
+     "Invalid and placeholder colours have no native state"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/memo.png",
+    "notes": "Round 15: the light sheet is unchanged (verified by a full re-render). No TcxMemo in any v3 capture (only the Notes window and the Import wizard use one, neither was grabbed). The native light multi-line captures (edit-multiline-*, new this round) are the native Win11 edit, whose frame differs from v3's by 8 to 15 levels (border #ECECEC against #EDEDED, foot #838383 against #929292), so they cannot stand in.",
+    "gaps": [
+     "Every state is unverified; the scroll bar is the thin Neper bar, the native one is the system bar"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/button_edit.png",
+    "notes": "Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. The field is the native edit: at the native 150 x 24 (sheet native_dark_icb) its left 122 px compare at 0 chrome px with edit-rest, hover, disabled, read-only and focus (the glyph fix of this round applies). The ellipsis button (the last 22 px) has no native counterpart: its face and dots follow the native dark button colours and v3's light geometry (matched in light), unverified.",
+    "gaps": [
+     "The ellipsis button geometry and dots are guesses in dark (no native or v3 reference); its pressed look is the button's pressed face",
+     "Invalid: a red outline guess"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/token_edit.png",
+    "notes": "Rendered from the Windows dark palette; not compared with a real screen. The frame is the native edit's (matched), the chips and their cross are v3 light guesses on a #272727 face (unmeasured).",
+    "gaps": [
+     "No native or v3 reference for the chips (v3 has no dark mode, Windows has no token edit)",
+     "Dark twin stands on a #272727 face (unmeasured)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/date_edit.png",
+    "notes": "The head is the editable combo frame (win_edit_frame, the one the combo box uses, 120 wide), so its frame and drop button are those of the matched combo-edit captures; the calendar popup is not compared: the native month calendar and date picker do not follow the dark mode (they stay light in the gallery), and v3's own calendar was never captured.",
+    "gaps": [
+     "No dark reference for the calendar popup (native stays light under DarkMode; v3 has no dark mode)",
+     "Native DTP and MonthCal glyph and layout are not reproduced (see the light entry)"
+    ]
+   }
+  }
+ }
+}
