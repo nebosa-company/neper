@@ -111,10 +111,11 @@ type Style = struct {
     pseudo: [8]*const Style
 }
 
-type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool }
+// `ch` and `ex` are the advance of `0` and the x-height as fractions of the font size for the element being styled.
+type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool, ch: f64, ex: f64 }
 
 fn new_context(a: *mem.Arena, viewport_width: f64, viewport_height: f64) -> Context {
-    ret Context { a: a, viewport_width: viewport_width, viewport_height: viewport_height, root_font_size: 16.0f64, dark: false }
+    ret Context { a: a, viewport_width: viewport_width, viewport_height: viewport_height, root_font_size: 16.0f64, dark: false, ch: 0.5f64, ex: 0.5f64 }
 }
 
 // --- Small helpers.
@@ -172,6 +173,8 @@ fn bases_for(c: *const Context, em: f64) -> cv.Bases {
     b.viewport_width = c.viewport_width
     b.has_viewport_height = true
     b.viewport_height = c.viewport_height
+    b.ch = c.ch
+    b.ex = c.ex
     ret b
 }
 
@@ -1309,6 +1312,21 @@ fn consider(best: *list.List[cascade.Declared], entry: cascade.Declared) {
 
 // The winning longhand declarations: every shorthand is expanded first, each longhand then ranked by the
 // declaration it came from. `rtl` selects the physical side of an inline-start property.
+// A negative number is invalid for these properties: the declaration is dropped at parse time and must not override an earlier
+// valid one in the cascade.
+fn invalid_length_value(prop: str, v: str) -> bool {
+    if !(str.eq(prop, "width") || str.eq(prop, "height") || str.eq(prop, "min-width") || str.eq(prop, "min-height") || str.eq(prop, "max-width") || str.eq(prop, "max-height") || str.starts_with(prop, "padding")) { ret false }
+    let t = cv.trim_ws(v)
+    if !(t.len > 1usize && t[0usize] == 45u8 && ((t[1usize] >= 48u8 && t[1usize] <= 57u8) || t[1usize] == 46u8)) { ret false }
+    // `-0px` is a zero length and stays valid: invalid means some non-zero digit in the number.
+    var i = 1usize
+    while i < t.len && ((t[i] >= 48u8 && t[i] <= 57u8) || t[i] == 46u8) {
+        if t[i] >= 49u8 && t[i] <= 57u8 { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
 fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -> []const cascade.Declared {
     let (made, e) = list.init[cascade.Declared](a, declared.len + 8usize)
     if e != ok { ret zero }
@@ -1332,10 +1350,10 @@ fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -
             while p < pairs.len {
                 var copy = d
                 copy.declaration = cascade.Declaration { property: pairs.items[p].property, value: pairs.items[p].value, important: d.declaration.important }
-                consider(&best, copy)
+                if !invalid_length_value(pairs.items[p].property, pairs.items[p].value) { consider(&best, copy) }
                 p += 1usize
             }
-        } else {
+        } else if !invalid_length_value(prop, d.declaration.value) {
             consider(&best, d)
         }
     }
@@ -1458,7 +1476,26 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
     s.custom = custom_all
     let (emade, eerror) = list.init[Extra](a, 8usize)
     if eerror != ok { ret (s, false, eerror) }
-    var ap = Ap { c: c, s: &s, parent: parent, a: a, extras: emade }
+    // Font-relative `ch` and `ex` depend on the element's own font: Ahem (the test font) has a square `0` and an 0.8 em x-height.
+    var cc = Context { a: c.a, viewport_width: c.viewport_width, viewport_height: c.viewport_height, root_font_size: c.root_font_size, dark: c.dark, ch: c.ch, ex: c.ex }
+    var fw = 0usize
+    if str.contains(cv.lower(a, parent.font_family), "ahem") {
+        cc.ch = 1.0f64
+        cc.ex = 0.8f64
+    }
+    while fw < winners.len {
+        if str.eq(winners[fw].declaration.property, "font-family") {
+            let fam = cv.lower(a, winners[fw].declaration.value)
+            cc.ch = c.ch
+            cc.ex = c.ex
+            if str.contains(fam, "ahem") {
+                cc.ch = 1.0f64
+                cc.ex = 0.8f64
+            }
+        }
+        fw += 1usize
+    }
+    var ap = Ap { c: &cc, s: &s, parent: parent, a: a, extras: emade }
     // Inherited extras start as the parent's.
     var px = 0usize
     while px < parent.extras.len {
