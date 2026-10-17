@@ -1,0 +1,206 @@
+{
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "Round 15 (looks/status strict metric: a reference flat pixel is off when ours differs by more than 2 levels, nothing ANDed with ours): 76 crops of the v3 menu grabs (every popup_menu_* reference, the main menus, the Alt-menu switch, the selected and hovered rows, the cascades and the Deck Legality dialog menu) compared with scripts/looks_strict.py --lum --cols 3,26. Chrome px off: 0 in 64 crops (of 76); 4 px (7 levels at most, the hyphen of the disabled shortcut \"Num -\" at 186,212) in the 11 Cards menu crops; 5 px (icon bitmap art right of the labels, 240 levels, at 233,390) in popup_menu_dialog. Excluded: x 3 to 26 of every menu crop (v3's coloured icon bitmaps, placeholders here) and, in popup_menu_dialog, the icon bitmaps right of the row labels. Text is 557 px in all, up to 255 levels (ClearType against greyscale glyphs).",
+    "gaps": [
+     "Disabled items beyond the captured menus are unverified",
+     "Icon bitmaps are v3 artwork (placeholders here) and masked",
+     "The ink boxes of the long search and view menu rows agree to 1 px only on luminance: ClearType fringes make a 2 px wider run at the 100 level (a text artefact)",
+     "Cascade open on a hover is not captured (v3 reads the real pointer)"
+    ]
+   },
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark5.png",
+    "notes": "Round 15: the dark popup menu is the native Windows 11 dark flyout (windows_dark_menu_at in navigation.e; v3 has no dark menu): a 1 px #808080 line round a #2B2B2B face, 22 px rows (#2C2C2C) 5 px in, Segoe UI 12 px, a 9 px band with a #3E3E3E rule for a separator, the capture's own 10 x 7 check, 5 x 9 chevron and rounded white keyboard outline (corner pixels), a cascade under its parent (clipped 6 px), the hovered child row #353535. All six captures (menu-popup-rest, -keyboard-first, -keyboard-checked, -keyboard-disabled, -submenu-keyboard-item, -submenu; native_dark5 sheet, scripts/looks_strict13.py metric: flat px of the reference off, other px off) are 0 flat and 0 other px off, the parent and the child of the cascade compared apart (202 x 134 and 158 x 50); only the text zone (ClearType, 1644 px within 2 px of the glyphs) differs.",
+    "gaps": [
+     "The hovered row fill (#353535) is read from the child row of menu-popup-submenu; a hovered row of the parent menu has no capture",
+     "Pictures and radio dots (v3 menu images) sit in the check column at a guessed place; the native capture has none",
+     "A disabled keyboard row keeps the outline (menu-popup-keyboard-disabled): matched",
+     "The mouse-hover fill of a parent row, the scroll arrows of a clipped menu and group headers are not drawn natively"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/page_control_stats_1-vs-ref.png",
+    "notes": "Round 15: the bottom strip is rebuilt from the v3 grabs: a chosen tab's two frame columns run one row lower than its face (the strip's first rule row crosses their top) through the third row, with the capture's greys (#010101 left and #060606 right for the first tab, #060606 and #0A0A0A for a later one) and the pale column after it (#F9F9F9, #F4F4F4), where it was one #060606 box a row high. looks_strict.py --lum over the 21 page_control_* references: 0 chrome px off in 21 of 21 crops. Excluded rectangles (v3 artwork and crop edges): the tab picture bitmaps (bottom: x 27 to 41 and 59 to 76, y 35 to 54; options: x 19 to 145, 158 to 186 and 194 to 241, y 35 to 51), rows 32 and 33 of the bottom grabs (v3 content above the strip bleeding into the crop) and columns 291 and 292 of page_control_bottom (the grab's edge). Left unmatched and not excluded: the 22 px inner #EAEAEA column of the second chosen bottom tab (6 levels). Scale 1.25 to 2.0 at 99.3 to 100 % on page_control_bottom, bottom2 and bottom_hover2.",
+    "gaps": [
+     "Disabled tab and scroll buttons have no capture",
+     "Native tab-disabled shows no disabled look; tab-hot equals rest",
+     "The 1 px column inside the left frame of the second chosen bottom tab (#EAEAEA, 22 px, 6 levels) is not drawn",
+     "Tab text ink boxes differ at the 100 and 150 levels where the text sits beside an icon bitmap (artwork)"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/page_control.png",
+    "notes": "Round 15: no real dark reference exists for this control (the native tab control stays light under DarkMode). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: page_control sheets 0 px outside the text zone (stats 250 to 470 off, all inside 2 px of text), bottom strips 1 to 2 px, page_control_bottom_states 28 px outside the text zone The round 15 bottom-strip frame columns follow in dark.",
+    "gaps": [
+     "No native dark reference exists",
+     "The tab outlines are 2.4 : 1 against the page: below the 3 : 1 bar for every state"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "Round 15: scripts/looks_strict.py --lum over the 16 crops of group_box_dialog (the Deck Legality frame, the six Options title bars with their icon art, the three header bars): chrome px off 0 and text px off 0 in all 16 (the icon from x 436 of the third header is v3 artwork). The ink-box test at the 100 and 150 levels still fails on the bold Tahoma captions of the header bars (ends 82, 60, 58 against 83, 61, 59 at the 60 level): ClearType fringes against greyscale, no flat pixel is involved.",
+    "gaps": [
+     "Disabled: native has no distinct look; the dimmed caption is a guess",
+     "Focus has no capture",
+     "The header bars' bold captions end 1 px short at the 60 level and 5 to 6 px at the 100 level (ClearType text, no chrome)"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/group_box.png",
+    "notes": "Round 15: no real dark reference exists for this control (the native group box frame stays light #DCDCDC in dark). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: group_box 1 px outside the text zone of 1880 off px, group_box_dialog 1512 of 7961 The frame (#333333 against the page 1.29 : 1) is below the 3 : 1 border bar.",
+    "gaps": [
+     "No native dark reference: the capture is the unthemed light frame",
+     "The frame is below the 3 : 1 border bar, so the status stays started"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/scroll_bar_main.png",
+    "notes": "Round 15: scripts/looks_strict.py --lum over the four scroll bar references: scroll_bar_main 11 of 11 crops, scroll_bar_main_h 3 of 3, scroll_bar_live 3 of 3 at 0 chrome px; scroll_bar_native 2 of 4 (the disabled vertical and horizontal bars at 0): the pressed-upper-arrow crop differs by 344 px (the 2 px native thumb at x 395 to 398, y 48 to 123 against v3's three-column thumb, kept: v3 is the truth for the light look, the native crop is there for the arrow, which matches) and by the first column (#FFFFFF native, #F7F7F7 v3, 8 levels, 170 px at x 388); the arrow itself and both disabled bars are 0 px off.",
+    "gaps": [
+     "The pressed-arrow crop is native: its thumb (2 px line) and first column (white) are not v3's and are not copied",
+     "Native light hover-arrow captures are pixel-identical to rest (README): no separate state",
+     "Horizontal arrow states (the held left arrow, hot arrows) have no capture of v3 and are not drawn",
+     "The dialog and tree bars (Options Shortcuts, Sort, Filter tree) are compared inside their grid sheets"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark2.png",
+    "notes": "Round 15: the balloon's icon is the capture's own 16 x 16 pixels (the blue disc with the white i; 0 px off in the icon box) where a plain disc stood; scripts/looks_strict13.py --two: tooltip-rest 0 flat and 0 other px off (910 flat), tooltip-balloon 0 flat and 0 other px off (8287 flat), 990 text-zone px (ClearType) apart.",
+    "gaps": [
+     "The balloon is only reached through win_native_balloon: the app's hint keeps the square tip",
+     "Multi-line text and placements have no capture"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/title_bar_native.png",
+    "notes": "Round 15: the caption against the native dark captures (window-active, window-inactive, dialog-active, dialog-inactive, 31 rows): the three buttons of the window caption are 0 px off (the glyphs sit 2 px left of and 1 px below v3's live windows: a Glyph kind of 16 or more in winchrome), the dialog's lone close button is now the native 46 wide one with its own asymmetric X (1 px off in dialog-active, 0 in dialog-inactive); the rest of each caption is the title text (ClearType) and the program icon (artwork). The message box and the task dialog stay light natively (no dark reference), the caption's 1 px #6A6A6A line under row 30 is a window frame feature.",
+    "gaps": [
+     "Dark message box and task dialog: no native dark reference (the native ones stay light), best dark look from the palette",
+     "The native 1 px #6A6A6A line under the caption (row 31 of the captures, x 8 to 287 of a dialog) is a window-frame line and is not drawn",
+     "Hot and pressed caption buttons: the native hot captures equal rest",
+     "Dialog bodies (client area, label, OK button) are app content: the OK button is the button control"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog_message.png",
+    "notes": "Round 15: unchanged at 78 of 107 crops: the title bars and captions pass (title_bar 15 of 16 crops at 0 chrome px, title_bar_hover 5 of 6, the failing crop of each 1 px of 11 levels), the dialog bodies of dialog, dialog_more*, dialog_wide are application content (grids, web view, tool window) that no Neper control composes, so those crops cannot match.",
+    "gaps": [
+     "Dialog bodies are application content, not composed",
+     "Dialog close button: v3's 33 wide one kept",
+     "Caption pressed, resize, disabled: no capture",
+     "Task dialog (command links, footer, verification box) is captured natively but has no Neper control",
+     "Info, warning and error message box bitmaps were not captured"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/splitter.png",
+    "notes": "Round 15: no real dark reference exists for this control (there is no native splitter control and no dark app splitter capture). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: splitter 0 px off in all 9 sheets but the main one (40 px, 0 outside the text zone)",
+    "gaps": [
+     "No native or live dark reference exists"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/progress_bar.png",
+    "notes": "Round 15: no real dark reference exists for this control (the native progress bar is the light one: uxtheme has no dark progress bar). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: progress_bar 429 px off, 0 outside the text zone",
+    "gaps": [
+     "No native dark reference exists",
+     "Paused and error tones are not measured"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Round 15: unchanged. v3's own bar (cxbsGradient teal, 148 x 21 or 14 in the status bar) was never captured, the report window's frames show none; the sheet draws the native Windows 11 bar scaled to v3's 21 px, whose native captures are 178 x 16, so the sizes differ and the native captures cannot be compared pixel for pixel.",
+    "gaps": [
+     "Every state: no v3 capture",
+     "Height 21 (v3 DFM default) against the native 16",
+     "Marquee: the native block is at least 126 wide and overdraws the frame edge; the 0.6 segment is a guess",
+     "Percent text (v3 cxtsText) has no native counterpart",
+     "Native disabled progress is drawn identical to enabled (green); we do the same"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/toolbar_button.png",
+    "notes": "Round 15: no usable dark reference: the native dark toolbar (toolbar-rest .. toolbar-dropdown-hot of ref/windows-native/dark) draws dim text on #202020 and keeps the light hot and checked faces (#E5F3FF), so it is not a look to copy. The dark sheet is the palette's: icon and text #CECECE on the #3C3C3C hot face (7.0 : 1), unmeasured washes.",
+    "gaps": [
+     "Hot, pressed, checked and disabled washes are guesses from the Windows 11 ramp",
+     "The native dark toolbar is broken (dim text, light hot faces): nothing to match"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/menu_bar.png",
+    "notes": "Round 15: no usable dark reference: the native menu bar stays white under DarkMode (menubar-rest, -hot-*, -open of ref/windows-native/dark). Dark sheet = titles white on #202020 (16.3 : 1), hot and open washes unmeasured. The open menu under a title now is the native dark flyout (see popup_menu).",
+    "gaps": [
+     "Hot/open washes are guesses; title paddings are v3's",
+     "The native menu bar capture is white: nothing to match"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/status_bar.png",
+    "notes": "Round 15: no usable dark reference: the native status bar stays light under DarkMode. Dark sheet = text white on #2B2B2B 13.5 to 14.2 : 1, no drawn border.",
+    "gaps": [
+     "No native dark reference exists",
+     "Panel hover is none (as v3); the progress fill is a guess"
+    ]
+   }
+  }
+ }
+}
