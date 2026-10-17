@@ -1685,6 +1685,13 @@ fn parse_for(p: *Parser) -> (u32, err) {
 fn parse_if_body(p: *Parser) -> (u32, err) {
     if !is_k(p, "function") || p.strict {
         let r = try parse_statement(p)
+        var inner = r
+        var guard = 0u32
+        while node(p, inner).kind == ast.N_LABELED && guard < 100u32 {
+            inner = node(p, inner).a
+            guard += 1u32
+        }
+        if node(p, inner).kind == ast.N_FUNC && (node(p, inner).flags & ast.F_DECL) != 0u16 { ret (ast.NONE, fail(p, "function declaration is not allowed as an if body here")) }
         ret (r, ok)
     }
     let (bid, me) = mk(p, ast.N_BLOCK)
@@ -1695,6 +1702,7 @@ fn parse_if_body(p: *Parser) -> (u32, err) {
     p.blk += 1u32
     let s = try parse_statement(p)
     p.blk -= 1u32
+    if (node(p, s).flags & (ast.F_GENERATOR | ast.F_ASYNC)) != 0u16 { ret (ast.NONE, fail(p, "generator or async function declaration is not allowed as an if body")) }
     try list.push[u32](&ids, s)
     let (first, ke) = commit(p, &ids)
     if ke != ok { ret (ast.NONE, ke) }
