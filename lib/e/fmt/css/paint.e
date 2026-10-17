@@ -1082,7 +1082,8 @@ fn collect(p: *Painter, root: u32, out: *list.List[Entry]) {
             let ks = layout.st(p.l, kb.style)
             if geom.is_stacking_context(p.a, p.l, kid) {
                 var z = 0i64
-                if ks.position != .Static && !ks.z_index_auto { z = ks.z_index }
+                let pin = p.l.boxes.items[usize(p.l.boxes.items[usize(kid)].parent)].inner
+                if !ks.z_index_auto && (ks.position != .Static || pin == .Flex || pin == .Grid) { z = ks.z_index }
                 let pushed = list.push[Entry](out, Entry { box: kid, z: z, real: true })
             } else if ks.position != .Static {
                 let pushed = list.push[Entry](out, Entry { box: kid, z: 0i64, real: false })

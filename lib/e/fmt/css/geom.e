@@ -306,6 +306,8 @@ fn is_stacking_context(a: *mem.Arena, l: *const layout.Layout, b: u32) -> bool {
     if s.opacity < 1.0f64 { ret true }
     if (s.position == .Absolute || s.position == .Relative) && !s.z_index_auto { ret true }
     if s.position == .Fixed || s.position == .Sticky { ret true }
+    // A flex or grid item with a z-index is a stacking context whether or not it is positioned.
+    if !s.z_index_auto && l.boxes.items[usize(bb.parent)].parent != layout.NONE && (l.boxes.items[usize(bb.parent)].inner == .Flex || l.boxes.items[usize(bb.parent)].inner == .Grid) { ret true }
     let (_t, has) = box_transform(a, l, b)
     if has { ret true }
     let (flt, has_f) = extra_of(s, "filter")

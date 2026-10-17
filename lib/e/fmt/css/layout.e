@@ -6460,6 +6460,53 @@ fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64) {
     bb3.has_baseline = false
 }
 
+// Flex and grid items are laid out and painted in `order` order (stable): reorder the sibling lists once, after generation.
+fn order_items(l: *Layout, b: u32) {
+    let inner = l.boxes.items[usize(b)].inner
+    if inner == .Flex || inner == .Grid {
+        var any = false
+        var k = l.boxes.items[usize(b)].first
+        while k != NONE {
+            if st(l, l.boxes.items[usize(k)].style).order != 0i64 { any = true }
+            k = l.boxes.items[usize(k)].next
+        }
+        if any {
+            // Stable insertion sort into a new chain.
+            var head = NONE
+            var tail = NONE
+            var cur = l.boxes.items[usize(b)].first
+            while cur != NONE {
+                let nxt = l.boxes.items[usize(cur)].next
+                let ord = st(l, l.boxes.items[usize(cur)].style).order
+                // Find the last box in the chain whose order is <= ord.
+                var at = tail
+                while at != NONE && st(l, l.boxes.items[usize(at)].style).order > ord { at = l.boxes.items[usize(at)].prev }
+                if at == NONE {
+                    l.boxes.items[usize(cur)].prev = NONE
+                    l.boxes.items[usize(cur)].next = head
+                    if head != NONE { l.boxes.items[usize(head)].prev = cur }
+                    head = cur
+                    if tail == NONE { tail = cur }
+                } else {
+                    let after = l.boxes.items[usize(at)].next
+                    l.boxes.items[usize(cur)].prev = at
+                    l.boxes.items[usize(cur)].next = after
+                    l.boxes.items[usize(at)].next = cur
+                    if after != NONE { l.boxes.items[usize(after)].prev = cur } else { tail = cur }
+                }
+                cur = nxt
+            }
+            l.boxes.items[usize(b)].first = head
+            l.boxes.items[usize(b)].last = tail
+        }
+    }
+    var kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        order_items(l, kid)
+        kid = l.boxes.items[usize(kid)].next
+    }
+}
+
 fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure, viewport_width: f64, viewport_height: f64) -> (Layout, err) {
     var cap = d.used * 2usize + 64usize
     let (boxes, e1) = list.init[Box](a, cap)
@@ -6478,6 +6525,7 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     l.root = vp
     gen_node(&l, root_el, vp, d.root)
     fix_anonymous(&l, vp)
+    order_items(&l, vp)
     build_transposed(&l)
     let vb = bx(&l, vp)
     vb.w = viewport_width
