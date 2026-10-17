@@ -585,6 +585,11 @@ fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Dec
             if str.eq(align, "left") { push_hint(&out, "float", "left") }
             if str.eq(align, "right") { push_hint(&out, "float", "right") }
         }
+        let (csraw, have_cs) = match.attr(m, el, "cellspacing")
+        if have_cs {
+            let (cs, good) = try_int(str.trim(csraw))
+            if good && cs >= 0i64 { push_hint(&out, "border-spacing", join3(a, int_text(a, cs), "px", "")) }
+        }
         let (braw, have_b) = match.attr(m, el, "border")
         let bv = str.trim(braw)
         if have_b && !str.eq(bv, "0") {
