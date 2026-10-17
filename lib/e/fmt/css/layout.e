@@ -6200,9 +6200,15 @@ fn layout_abs(l: *Layout, b: u32) {
     static_x = px + bb.x - pad_x
     static_y = py + bb.y - pad_y
     // Beside inline content in a block container the box has no flow position yet: use the content edge.
-    if bb.aux == 0u32 && bb.x == 0.0f64 && bb.y == 0.0f64 && pb.inner == .Flow && !pb.inline_level {
+    var rect_w = -1.0f64
+    var rect_h = -1.0f64
+    if bb.aux == 0u32 && bb.x == 0.0f64 && bb.y == 0.0f64 && (pb.inner == .Flow || pb.inner == .Grid) && !pb.inline_level {
         static_x += pb.border[3usize] + pb.padding[3usize]
         static_y += pb.border[0usize] + pb.padding[0usize]
+        if pb.inner == .Grid && !grid_cb && swap_code == 0u8 {
+            rect_w = pb.w - pb.border[3usize] - pb.border[1usize] - pb.padding[3usize] - pb.padding[1usize]
+            rect_h = pb.h - pb.border[0usize] - pb.border[2usize] - pb.padding[0usize] - pb.padding[2usize]
+        }
     }
     // In a grid area the static position is the area's start corner.
     if grid_cb {
@@ -6284,6 +6290,10 @@ fn layout_abs(l: *Layout, b: u32) {
         left = lv
     } else if has_r {
         left = cb_w - rv - bb.w - mr - ml
+    } else if rect_w >= 0.0f64 {
+        var ja = s.justify_self
+        if ja == .Auto { ja = bstyle(l, bb.parent).justify_items }
+        left += static_align_offset(ja, rect_w - bb.w - ml - mr, true)
     }
     // Height.
     var spec_h = -1.0f64
@@ -6330,6 +6340,10 @@ fn layout_abs(l: *Layout, b: u32) {
         top = tv
     } else if has_b {
         top = cb_h - bv - bbh.h - mb - mt
+    } else if rect_h >= 0.0f64 {
+        var aa = s.align_self
+        if aa == .Auto { aa = bstyle(l, bbh.parent).align_items }
+        top += static_align_offset(aa, rect_h - bbh.h - mt - mb, false)
     }
     // To the parent's border box.
     var rx = left + ml
@@ -6354,6 +6368,14 @@ fn layout_abs(l: *Layout, b: u32) {
     bf.x = pad_x + rx - qx
     bf.y = pad_y + ry - qy
     bf.aux = 4u32
+}
+
+// How far an absolutely positioned box moves inside its static-position rectangle for alignment `a`, `room` being the free space.
+fn static_align_offset(a: style.Align, room: f64, inline_axis: bool) -> f64 {
+    if a == .Center { ret room / 2.0f64 }
+    if a == .End || a == .FlexEnd || a == .SelfEnd { ret room }
+    if a == .Right && inline_axis { ret room }
+    ret 0.0f64
 }
 
 fn positioned_pass(l: *Layout, b: u32) {
