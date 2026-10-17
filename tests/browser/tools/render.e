@@ -183,6 +183,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var height = 800usize
     var full = false
     var scroll = 0usize
+    var run_ms = 0usize
     var dump_path = ""
     var i = 1usize
     while i < args.len {
@@ -195,6 +196,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if str.eq(args[i], "--scroll") {
             i += 1usize
             scroll = parse_number(args[i], 0usize)
+        } else if str.eq(args[i], "--run") {
+            i += 1usize
+            run_ms = parse_number(args[i], 0usize)
         } else if str.eq(args[i], "--dump") {
             i += 1usize
             dump_path = args[i]
@@ -253,6 +257,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if load_error == fetch.BadUrl { why = "bad url" } else if load_error == fetch.NoAddress { why = "no address" } else if load_error == fetch.NetworkError { why = "network error" } else if load_error == fetch.TooManyRedirects { why = "too many redirects" } else if load_error == fetch.RedirectRefused { why = "redirect refused" } else if load_error == fetch.TooLarge { why = "too large" } else if load_error == fetch.BadEncoding { why = "bad encoding" } else if load_error == fetch.UnsupportedScheme { why = "unsupported scheme" } else if load_error == page.LoadFailed { why = "decode or parse" } else if load_error == page.NotRenderable { why = "not renderable" } else if load_error == mem.Full { why = "arena full" } else if load_error == layout.TooBig { why = "layout too big" }
         let printed = io.printf["load failed: {}\n"](why)
         os.exit(7i32)
+    }
+    if run_ms > 0usize {
+        // The page's event loop on a virtual clock: timers and promise jobs run until the time is up or nothing is pending.
+        var now = 0.0f64
+        var guard = 0u32
+        while guard < 100000u32 {
+            guard += 1u32
+            let changed = page.tick(pg, now)
+            let next = page.next_wakeup(pg)
+            if next < 0.0f64 || next > f64(run_ms) { break }
+            if next > now { now = next } else { now = now + 1.0f64 }
+        }
     }
     let doc_h = usize(view.document_height(pg.view))
     if full {

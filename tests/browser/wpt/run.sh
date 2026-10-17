@@ -5,7 +5,7 @@ set -eu
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
 case "$(uname -s)" in
   Linux) os=linux; compiler="$repo/build/linux/neper-try"; exe="$repo/build/linux/run-wpt" ;;
-  *)     os=windows; compiler="$repo/build/windows/neper-try.exe"; exe="$repo/build/windows/run-wpt.exe" ;;
+  *)     os=windows; compiler="$repo/build/windows/neper-try.exe"; exe="${WPT_EXE:-$repo/build/windows/run-wpt.exe}" ;;
 esac
 [ -x "$compiler" ] || { echo "no $compiler: run scripts/check-fixture.sh <any fixture> once to build it" >&2; exit 2; }
 cd "$repo"

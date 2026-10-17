@@ -32,7 +32,7 @@ fi
 rm -rf "$out"; mkdir -p "$out"
 split -l "$chunk" -a 4 "$list" "$out/c_"
 ls "$out"/c_* | xargs -P "$jobs" -I{} bash -c "cd '$repo'; timeout 300 '$exe' '$root' {} --show > {}.out 2>&1; echo \"exit \$?\" >> {}.out"
-cat "$out"/c_*.out | grep '^FILE ' | sort -u
-cat "$out"/c_*.out | grep '^wpt ' | awk '{f+=$2; s+=$4; p+=$6} END {print "wpt", f, "files", s, "subtests", p, "pass"}'
-bad=$(grep -L '^wpt ' "$out"/c_*.out | wc -l)
+cat "$out"/c_*.out | grep -a '^FILE ' | sort -u
+cat "$out"/c_*.out | grep -a '^wpt ' | awk '{f+=$2; s+=$4; p+=$6} END {print "wpt", f, "files", s, "subtests", p, "pass"}'
+bad=$(grep -aL '^wpt ' "$out"/c_*.out | wc -l)
 echo "chunks without a result: $bad"

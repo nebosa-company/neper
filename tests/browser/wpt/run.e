@@ -70,6 +70,15 @@ fn same_pixels(x: []const u32, y: []const u32) -> bool {
     ret true
 }
 
+fn all_white(x: []const u32) -> bool {
+    var i = 0usize
+    while i < x.len {
+        if x[i] != 4294967295u32 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn write_png(a: *mem.Arena, path: str, px: []const u32) {
     let (rgba, e1) = mem.alloc[u8](a, W * H * 4usize)
     if e1 != ok { ret }
@@ -170,12 +179,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if cwd_error != ok { os.exit(9i32) }
     let (abs_dir_a, ad) = str.concat(a, cwd, "/")
     if ad != ok { os.exit(9i32) }
-    let (abs_dir, ad2) = str.concat(a, abs_dir_a, dir)
+    let (abs_dir_c, ad2) = str.concat(a, abs_dir_a, dir)
     if ad2 != ok { os.exit(9i32) }
+    // A manifest given by absolute path (`D:/...` or `/...`) names its directory as it is.
+    var abs_dir = abs_dir_c
+    if dir.len > 1usize && (dir[0usize] == 47u8 || dir[1usize] == 58u8) { abs_dir = dir }
     let mark = mem.mark(a)
     var total = 0usize
     var passed = 0usize
     var broken = 0usize
+    var blank = 0usize
     var pos = 0usize
     while pos < text.len {
         var end = pos
@@ -206,6 +219,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if ok_a && ok_b {
             let same = same_pixels(ta, tb)
             good = same
+            if same && all_white(ta) { blank += 1usize }
             if str.eq(kind, "mismatch") { good = !same }
         } else {
             broken += 1usize
@@ -215,7 +229,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if out_dir.len > 0usize && ok_a && ok_b {
                 let (p1, p1e) = str.concat(a, out_dir, "/")
                 if p1e == ok {
-                    let (p2, p2e) = str.concat(a, p1, test_name)
+                    var safe_buf: [256]u8 = zero
+                    var sn = 0usize
+                    while sn < test_name.len && sn < 255usize {
+                        var ch = test_name[sn]
+                        if ch == 47u8 { ch = 95u8 }
+                        safe_buf[sn] = ch
+                        sn += 1usize
+                    }
+                    let (p2, p2e) = str.concat(a, p1, safe_buf[0usize..sn])
                     if p2e == ok {
                         let (p3, p3e) = str.concat(a, p2, ".test.png")
                         let (p4, p4e) = str.concat(a, p2, ".ref.png")
@@ -230,7 +252,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         mem.reset(a, work)
     }
     mem.reset(a, mark)
-    try io.printf["wpt reftests {} pass {} (unloadable {})\n"](total, passed, broken)
+    try io.printf["wpt reftests {} pass {} (unloadable {}, blank pairs {})\n"](total, passed, broken, blank)
     if passed < floor { os.exit(1i32) }
     ret ok
 }

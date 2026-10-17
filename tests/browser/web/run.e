@@ -136,6 +136,56 @@ fn fetch_file(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
     ret (body, 200u16, true)
 }
 
+fn mime_of(path: str) -> str {
+    if str.ends_with(path, ".json") { ret "application/json" }
+    if str.ends_with(path, ".js") { ret "text/javascript" }
+    if str.ends_with(path, ".html") || str.ends_with(path, ".htm") { ret "text/html" }
+    if str.ends_with(path, ".xhtml") { ret "application/xhtml+xml" }
+    if str.ends_with(path, ".xml") { ret "application/xml" }
+    if str.ends_with(path, ".svg") { ret "image/svg+xml" }
+    if str.ends_with(path, ".css") { ret "text/css" }
+    if str.ends_with(path, ".png") { ret "image/png" }
+    if str.ends_with(path, ".txt") { ret "text/plain" }
+    ret "application/octet-stream"
+}
+
+// Requests from XMLHttpRequest and fetch are answered from the checkout too.
+fn net_file(ctx: *void, method: str, u: str, header_lines: str, body: []const u8, out: *script.NetResult) -> bool {
+    let fc = mem.cast[*FetchCtx](ctx)
+    var path: str = u
+    let (sch, has_scheme) = str.find(u, "://")
+    if has_scheme {
+        let rest: str = u[sch + 3usize..]
+        let (sl, has_slash) = str.find(rest, "/")
+        if has_slash { path = rest[sl..] } else { path = "/" }
+    }
+    var cut = path.len
+    var k = 0usize
+    while k < path.len {
+        if path[k] == 63u8 || path[k] == 35u8 {
+            cut = k
+            break
+        }
+        k += 1usize
+    }
+    path = path[0usize..cut]
+    let (txt, fe) = fs.read_file(fc.a, cat3(fc.a, fc.root, path, ""), 16777216usize)
+    out.url = u
+    if fe != ok {
+        out.status = 404u16
+        out.status_text = "Not Found"
+        out.headers = "content-type: text/plain"
+        let empty: []const u8 = zero
+        out.body = empty
+        ret true
+    }
+    out.status = 200u16
+    out.status_text = "OK"
+    out.headers = cat3(fc.a, "content-type: ", mime_of(path), "")
+    out.body = txt
+    ret true
+}
+
 type Counts = struct { subtests: usize, passed: usize, harness_ok: bool, done: bool }
 
 // Reads the reporter's lines out of the host log.
@@ -186,6 +236,7 @@ fn run_page(a: *mem.Arena, root: str, test_path: str, page_src: str, show: bool)
     if show { let pq = io.printf["  stage context {}\n"](test_path) }
     var fc = FetchCtx { a: a, root: root }
     script.set_fetch(it, mem.cast[*void](&fc), fetch_file)
+    script.set_net(it, mem.cast[*void](&fc), net_file)
     script.lifecycle(it, "run")
     script.pump(it, 120000.0f64)
     let counts = tally(it, show, test_path)
