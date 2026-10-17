@@ -339,6 +339,23 @@ static void case_edit(void) {
   begin(200, 110);
   e = ctl(L"Edit", L"Line one\r\nLine two\r\nLine three\r\nLine four\r\nLine five\r\nLine six\r\nLine seven\r\nLine eight", WS_TABSTOP | ES_MULTILINE | WS_VSCROLL | ES_AUTOVSCROLL, WS_EX_CLIENTEDGE, 16, 10, 168, 90);
   snap("edit-multiline-vscroll"); end();
+
+  /* round 15: the same multi-line edit with the scroll bar themed too (the CFD theme leaves the bar light; DarkMode_Explorer is what
+     dark apps put on a scrolling control), then the multi-line states without a bar */
+  begin(200, 110);
+  e = ctl(L"Edit", L"Line one\r\nLine two\r\nLine three\r\nLine four\r\nLine five\r\nLine six\r\nLine seven\r\nLine eight", WS_TABSTOP | ES_MULTILINE | WS_VSCROLL | ES_AUTOVSCROLL, WS_EX_CLIENTEDGE, 16, 10, 168, 90);
+  if (g_dark) dark_one(e, L"DarkMode_Explorer");
+  pump(100); snap("edit-multiline-explorer"); end();
+
+  begin(200, 110);
+  e = ctl(L"Edit", L"Line one\r\nLine two\r\nLine three", WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL, WS_EX_CLIENTEDGE, 16, 10, 168, 90);
+  snap("edit-multiline-rest");
+  focus(e); SendMessageW(e, EM_SETSEL, 0, 0); pump(100); snap("edit-multiline-focus");
+  SendMessageW(e, EM_SETSEL, 0, 8); pump(100); snap("edit-multiline-selected");
+  SendMessageW(e, EM_SETSEL, 0, 0); unfocus();
+  SendMessageW(e, EM_SETREADONLY, TRUE, 0); pump(60); snap("edit-multiline-readonly"); SendMessageW(e, EM_SETREADONLY, FALSE, 0);
+  enable(e, FALSE); snap("edit-multiline-disabled");
+  end();
 }
 
 static void case_label(void) {

@@ -6579,7 +6579,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var edit_ink = ink
     // round 13: the native dark edit's GDI caret and selection (widget.native_caret)
     var edit_caret: paint.Color = zero
-    if win_dark(t) { edit_caret = widget.native_caret(face) }
+    if win_dark(t) { edit_caret = native_caret_phase(face) }
     if bullets { edit_ink = with_alpha(ink, 0.0) }
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -6636,7 +6636,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
         pair[0usize] = named
-        pair[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, bullet_node))
+        pair[1usize] = widget.positioned(0u64, 0.0, 0.0 - 1.0, style.defaults(), widget_one_of(a, bullet_node))
         named = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
     }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
@@ -6652,6 +6652,16 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         layers[at] = hint_node
         at += 1usize
     }
+    // round 15: the native dark multi-line edit with its bar (DarkMode_Explorer, edit-multiline-explorer): a 17 wide #171717 column with a
+    // 2 wide thumb, shown when the text has more lines than the box; the thin Neper bar is then off
+    var bar_lines = 1usize
+    var bar_at = 0usize
+    while bar_at < len {
+        if buffer[bar_at] == 10u8 { bar_lines += 1usize }
+        bar_at += 1usize
+    }
+    let dark_bar = win_dark(t) && multiline && bar_lines > usize(options.rows)
+    var bar_first = 0usize
     if multiline {
         // A viewport `rows` lines tall that scrolls its overflow, keeping the caret's line in view.
         var caret_line = 0usize
@@ -6667,19 +6677,22 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         }
         var first_line = 0usize
         if caret_line + 1usize > usize(options.rows) { first_line = caret_line + 1usize - usize(options.rows) }
+        bar_first = first_line
+        var inner_w = inner
+        if dark_bar { inner_w = max_zero(inner - 17.0) }
         var scrolled_style = editor_style
-        scrolled_style.width = style.Length { Px: inner }
+        scrolled_style.width = style.Length { Px: inner_w }
         let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
         if scrolled_error != ok { ret (zero, TooLarge) }
         let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: highlight, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: highlighted, caret: edit_caret, untabbed: false, ringed: false }, scrolled_style))
         if scrolled_named_error != ok { ret (zero, scrolled_named_error) }
         scrolled[0usize] = scrolled_named
         var viewport = style.defaults()
-        viewport.width = style.Length { Px: inner }
+        viewport.width = style.Length { Px: inner_w }
         viewport.height = style.Length { Px: max_zero(h - 8.0) }
         if win_dark(t) { viewport.height = style.Length { Px: max_zero(h - 4.0) } }
         viewport.overflow = .Clip
-        layers[at] = widget.scroll(key + 1048612u64, widget.Scroll { axis: .Vertical, offset: f32(first_line) * line, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, viewport, scrolled[0usize..1usize])
+        layers[at] = widget.scroll(key + 1048612u64, widget.Scroll { axis: .Vertical, offset: f32(first_line) * line, overscroll: .Clamp, momentum: false, scrollbar: !dark_bar, thumb: with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, viewport, scrolled[0usize..1usize])
     } else {
         layers[at] = named
     }
@@ -6701,7 +6714,8 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var pad_y: f32 = 3.384
     if win_dark(t) { pad_y = 3.0 }
     if multiline { pad_y = 3.0 }
-    if multiline && win_dark(t) { pad_y = 2.0 }
+    // round 15: the glyphs sit one row above the line box (see widget.place_edit), so the box starts one row lower
+    if multiline && win_dark(t) { pad_y = 3.0 }
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: pad + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: pad + options.end_space }, bottom: style.Length { Px: pad_y } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
@@ -6761,6 +6775,18 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y, t.tokens.palette == .Dark)
         if veil_error != ok { ret (zero, veil_error) }
         stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, veil))
+        layers_at += 1usize
+    }
+    if dark_bar {
+        let (bars, bars_error) = mem.alloc[WinDarkBar](a, 1usize)
+        if bars_error != ok { ret (zero, TooLarge) }
+        bars[0usize] = WinDarkBar { first: u32(bar_first), rows: options.rows, lines: u32(bar_lines) }
+        var bar_none: []const widget.Node = zero
+        let bar_node = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&bars[0usize]), measure: win3_measure, paint: win_dark_bar_paint, state: widget.bytes_of[WinDarkBar](&bars[0usize]) } }, style: sized_style(17.0, max_zero(h - 4.0)), children: bar_none }
+        let (bar_held, bar_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if bar_held_error != ok { ret (zero, TooLarge) }
+        bar_held[0usize] = bar_node
+        stacked[layers_at] = widget.positioned(0u64, w - 18.0, 2.0, style.defaults(), bar_held[0usize..1usize])
         layers_at += 1usize
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
@@ -15568,13 +15594,21 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     // looks3 group d: the frame is the theme's bitmap (win3_frame); the head itself is bare.
     var head_w: f32 = 112.0
     if width > 0.0 { head_w = width }
-    var look = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: head_w, min_height: 21.0, corners: zero }
+    // round 15: the dark head is the native list-style combo (22 + 1 high, Segoe UI 9 pt, text from x 4), as `combo_box` draws it
+    var head_h: f32 = 21.0
+    var text_h: f32 = 21.0
+    if dark {
+        head_h = 23.0
+        text_h = 22.0
+    }
+    var look = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: head_w, min_height: head_h, corners: zero }
     var words = text_options()
     words.role = .BodyMedium
     words.wrap = .None
     var value_color = c.ink
     if !chosen && enabled { value_color = style.color(t.tokens, .TextMuted) }
-    let (bar_t, bar_error) = win3_dialog_theme(a, t)
+    var (bar_t, bar_error) = win3_dialog_theme(a, t)
+    if dark { (bar_t, bar_error) = windows_edit_theme(a, t, 15.0) }
     if bar_error != ok { ret (zero, bar_error) }
     let (value_node, value_error) = colored_text(a, 0u64, shown, &bar_t, words, value_color)
     if value_error != ok { ret (zero, value_error) }
@@ -15597,8 +15631,9 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     bits[1usize] = chevron
     var spread = style.defaults()
     spread.width = style.Length { Px: head_w }
-    spread.height = style.Length { Px: 21.0 }
+    spread.height = style.Length { Px: text_h }
     spread.padding = edges(3.0, 0.0, 0.0, 0.0)
+    if dark { spread.padding = edges(4.0, 0.0, 0.0, 0.0) }
     let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, spread, bits[0usize..2usize])
     var tone: f32 = 0.0
     if !enabled { tone = 0.5 }
@@ -15614,7 +15649,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         if focused { native_state = 1u32 }
         if open || state.pressed { native_state = 3u32 }
         if !enabled { native_state = 2u32 }
-        let (made_frame, made_error) = winedit.native_combo(a, 1u32, native_state, head_w, 21.0)
+        let (made_frame, made_error) = winedit.native_combo(a, 1u32, native_state, head_w, text_h)
         frame = made_frame
         frame_error = made_error
     } else {
@@ -15638,7 +15673,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         layers[2usize] = widget.positioned(0u64, 3.0, 3.0, style.defaults(), held[0usize..1usize])
         count = 3usize
     }
-    var zone_style = sized_style(17.0, 21.0)
+    var zone_style = sized_style(17.0, head_h)
     zone_style.overflow = .Visible
     let (zone_held, zone_held_error) = mem.alloc[widget.Node](a, 1usize)
     if zone_held_error != ok { ret (zero, TooLarge) }
@@ -15646,7 +15681,9 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     zone_held[0usize] = widget.region(key + 1048703u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](toggle), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: false }, zone_style, zone_none)
     layers[count] = widget.positioned(0u64, head_w - 17.0, 0.0, zone_style, zone_held[0usize..1usize])
     count += 1usize
-    let content = widget.stack(0u64, sized_style(head_w, 21.0), layers[0usize..count])
+    var content_w = head_w
+    if dark { content_w = head_w + 1.0 }
+    let content = widget.stack(0u64, sized_style(content_w, head_h), layers[0usize..count])
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
     let (head_node, head_error) = pressable_states(a, key, t, 3u8, shown, look, enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, content)
@@ -16351,7 +16388,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     // looks11: while the text has no selection it is drawn as v3's GDI sets it (whole-pixel Tahoma advances, ink boxes within 1 px of
     // the live captures) over the edit, whose own text is then transparent; a selection brings the edit's own text back.
     var combo_caret = win4_caret(options.read_only, c.face)
-    if dark && !options.read_only { combo_caret = widget.native_caret(c.face) }
+    if dark && !options.read_only { combo_caret = native_caret_phase(c.face) }
     var gdi_text = !dark && len > 0usize && win_edit_unselected(t, key)
     var edit_ink = c.ink
     if gdi_text { edit_ink = with_alpha(c.ink, 0.0) }
@@ -16432,7 +16469,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         text_x = 6.0
         text_y = 0.0 - 0.5
         if options.read_only { text_x = 4.0 }
-        if options.read_only { text_y = 1.0 }
+        if options.read_only { text_y = 0.0 }
     }
     layers[1usize] = widget.positioned(0u64, text_x, text_y, style.defaults(), held_text[0usize..1usize])
     layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), row_parts[1usize..2usize])
@@ -17755,9 +17792,14 @@ fn win4_hot_paint(f: *const Win3Frame, b: *scene.Builder, x: f32, y: f32, w: f32
     let rx = [5]f32{ 292.0, 557.0, 560.0, 706.0, 710.0 }
     let ri = [5]f32{ 1.0, 0.598, 0.595, 0.489, 0.486 }
     let ro = [5]f32{ 0.0, 0.404, 0.407, 0.513, 0.516 }
-    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke, win4_curve(wx, lx[0usize..5usize], lo[0usize..5usize])), alpha))
+    // round 15: a pure stroke column (weight 1: the left edge at x 149, the right one at 292) is the capture's #0078D4, not the mixed fit's #0078D7
+    var stroke_left = stroke
+    if f.look == 4u32 && win4_curve(wx, lx[0usize..5usize], lo[0usize..5usize]) > 0.999 { stroke_left = style.hex(30932u32) }
+    var stroke_right = stroke
+    if f.look == 4u32 && win4_curve(right, rx[0usize..5usize], ri[0usize..5usize]) > 0.999 { stroke_right = style.hex(30932u32) }
+    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke_left, win4_curve(wx, lx[0usize..5usize], lo[0usize..5usize])), alpha))
     try win3_rect(b, x + 1.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke, win4_curve(wx, lx[0usize..5usize], li[0usize..5usize])), alpha))
-    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke, win4_curve(right, rx[0usize..5usize], ri[0usize..5usize])), alpha))
+    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke_right, win4_curve(right, rx[0usize..5usize], ri[0usize..5usize])), alpha))
     try win3_rect(b, x + w - 1.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke, win4_curve(right, rx[0usize..5usize], ro[0usize..5usize])), alpha))
     try win4_hot_corner(f, b, face, stroke, win3_corner_tl(), x, y, false, false, alpha)
     try win4_hot_corner(f, b, face, stroke, win3_corner_tr(), x + w - 5.0, y, true, false, alpha)
@@ -19883,6 +19925,16 @@ fn win_list_dots(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
 var looks_caret_hidden: bool = false
 
 fn set_caret_hidden(hidden: bool) { looks_caret_hidden = hidden }
+
+// round 15: the native dark edit's own caret (a system overlay that blinks) in its off phase, for the next edits built.
+var looks_native_caret_off: bool = false
+
+fn set_native_caret_off(off: bool) { looks_native_caret_off = off }
+
+fn native_caret_phase(face: paint.Color) -> paint.Color {
+    if looks_native_caret_off { ret widget.native_caret_off(face) }
+    ret widget.native_caret(face)
+}
 // ---- end looks9 --------------------------------------------------------------------------------------------------
 
 // ---- looks9: the list-style combo's focus rectangle on its white face ------------------------------------------
@@ -20535,4 +20587,21 @@ fn raw_pixels(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
     cells[0usize] = RawPix { pix: pix, cols: usize(w) }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: mark_measure, paint: raw_pixels_paint, state: widget.bytes_of[RawPix](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
+
+// ---- round 15: the dark multi-line edit's scroll column -----------------------------------------------------------------
+// Measured on ref/windows-native/dark/edit-multiline-explorer: a 17 wide #171717 column (x 149 of the 168 wide edit, rows 2 to 87), the
+// thumb 2 wide at x 157 (#959595, its end rows #858585); its length is the track (the column less two 17 px arrow rows) times the
+// visible lines over all lines (33 rows for 5 of 8), its top the track times the first line over all lines.
+type WinDarkBar = struct { first: u32, rows: u32, lines: u32 }
+
+fn win_dark_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*WinDarkBar](ctx)
+    try win3_rect(b, area.x, area.y, area.width, area.height, style.hex_raw(0x171717u32))
+    let track = area.height - 34.0
+    var long = f32(u32(track * f32(m.rows) / f32(m.lines) + 0.5))
+    if long < 8.0 { long = 8.0 }
+    let top = area.y + 17.0 + f32(u32(track * f32(m.first) / f32(m.lines) + 0.5))
+    try win3_rect(b, area.x + 8.0, top, 2.0, long, style.hex_raw(0x959595u32))
+    try win3_rect(b, area.x + 8.0, top, 2.0, 1.0, style.hex_raw(0x858585u32))
+    ret win3_rect(b, area.x + 8.0, top + long - 1.0, 2.0, 1.0, style.hex_raw(0x858585u32))
 }

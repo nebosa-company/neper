@@ -200,3 +200,5 @@ radio marks (`nmark`, 13 x 13 ARGB, drawn by `e.ui.wintile`), the spin edit's up
 are painted from measured lines (`winedit.native_chrome`, `winedit.native_combo`). A control picks them when `t.tokens.palette == .Dark`; light uses
 the native tiles only for disabled and indeterminate marks. To compare, crop the native capture and the same state of the sheet, cut the same plain rows
 the painter cuts (`nspin_row`) and diff outside the text.
+
+`python -I scripts/looks_w1.py` (round 15) diffs every dark edit, spin, combo, open list, multi-line and picture-less image combo capture with the strict rule (more than 2 levels off; only pixels within 2 px of a glyph are set apart, never a selection fill, caret or scroll column) and prints per-capture counts: `native_dark` (cells in `native_dark.e`; the multi-line states are cells 55 to 59, the scroll bar cell 51), `native_dark_open<n>` (variants 4 and 5 are the image combo) and `native_dark_icb`. A native edit sets its glyphs one row above the line box that its selection and caret fill (`widget.place_edit`); the caret blinks, so a capture can lack it (`control.set_native_caret_off`).

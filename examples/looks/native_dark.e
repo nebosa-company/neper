@@ -189,7 +189,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     i = 0usize
     while i < 7usize {
         // spin: 0 rest, 1 hover up, 2 hover down, 3 pressed up, 4 pressed down, 5 focus, 6 disabled
+        // round 15: spin-focus was captured in the blink-off phase of the caret (no orange column); the edit captures show it
+        control.set_native_caret_off(i == 5usize)
         let (node, node_error) = spin_cell(a, t, i)
+        control.set_native_caret_off(false)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 1usize || i == 2usize { drive = .Hover }
@@ -278,7 +281,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if at < 1000usize {
         let (buffer, buffer_error) = mem.alloc[u8](a, 128usize)
         if buffer_error != ok { ret (0usize, buffer_error) }
-        let n = control.copy_text(buffer, "Line one\nLine two\nLine three\nLine four\nLine five\nLine six")
+        let n = control.copy_text(buffer, "Line one\nLine two\nLine three\nLine four\nLine five\nLine six\nLine seven\nLine eight")
         var options = control.field_options()
         options.width = 167.0
         options.height = 90.0
@@ -312,10 +315,33 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if held_boxed_error != ok { ret (0usize, held_boxed_error) }
     cells[at] = looks.Cell { caption: "button-hover-pressed", node: held_boxed, drive: .Press }
     at += 1usize
+    // round 15: the multi-line edit without a bar in its five states (edit-multiline-rest, -focus, -selected, -readonly, -disabled), 168 x 90
+    var m = 0usize
+    while m < 5usize {
+        let (buffer, buffer_error) = mem.alloc[u8](a, 64usize)
+        if buffer_error != ok { ret (0usize, buffer_error) }
+        let n = control.copy_text(buffer, "Line one\nLine two\nLine three")
+        var options = control.field_options()
+        options.width = 167.0
+        options.height = 90.0
+        options.rows = 5u32
+        if m == 3usize { options.read_only = true }
+        if m == 4usize { options.enabled = false }
+        let (memo, memo_error) = control.text_area(a, u64(4100usize + 10usize * m), t, "Notes", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, options)
+        if memo_error != ok { ret (0usize, memo_error) }
+        let (boxed, boxed_error) = placed(a, memo, 15.0, 5.0)
+        if boxed_error != ok { ret (0usize, boxed_error) }
+        var drive: looks.Drive = .None
+        if m == 1usize || m == 2usize { drive = .Focus }
+        if m == 2usize { select_all(t, u64(4100usize + 10usize * m), 8usize) }
+        cells[at] = looks.Cell { caption: "memo-state", node: boxed, drive: drive }
+        at += 1usize
+        m += 1usize
+    }
     ret (at, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark", cells: 55usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark", cells: 60usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

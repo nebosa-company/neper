@@ -2101,7 +2101,16 @@ fn native_caret(face: paint.Color) -> paint.Color {
 }
 
 fn native_caret_face(c: paint.Color) -> bool {
-    ret c.alpha > 0.0015 && c.alpha < 0.0025
+    ret c.alpha > 0.0015 && c.alpha < 0.0035
+}
+
+// round 15: the same native edit in the blink-off phase of its caret (the selection still runs one pixel past the last glyph).
+fn native_caret_off(face: paint.Color) -> paint.Color {
+    ret paint.rgba(face.red, face.green, face.blue, 0.003)
+}
+
+fn native_caret_blinked_off(c: paint.Color) -> bool {
+    ret c.alpha > 0.0027 && c.alpha < 0.0035
 }
 
 // An editor paints its selection under the text, then the text, then -- focused --
@@ -2144,7 +2153,10 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             }
         }
     }
-    try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: origin, brush: paint.Brush { Solid: ed.color } } })
+    // round 15: the native dark (GDI) edit sets its glyphs one row above the line box its selection and caret fill
+    var glyph_origin = origin
+    if native_caret_face(ed.caret) { glyph_origin = geometry.Point { x: origin.x, y: origin.y - 1.0 } }
+    try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
     if focused_here && ed.marked.alpha > 0.0 {
         // The selected glyphs again in their own colour, clipped to the selection.
         let (lo, hi) = selection_of(e)
@@ -2158,7 +2170,7 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
                 var restore: scene.Command = .Restore
                 try scene.push(b, save)
                 try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: origin.x + r.x, y: origin.y + r.y, width: r.width, height: r.height } } })
-                try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: origin, brush: paint.Brush { Solid: ed.marked } } })
+                try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.marked } } })
                 try scene.push(b, restore)
                 m += 1usize
             }
@@ -2196,6 +2208,7 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
                     if col < right { under = paint.rgba(ed.selection.red, ed.selection.green, ed.selection.blue, 1.0) }
                 }
             }
+            if native_caret_blinked_off(ed.caret) { ret ok }
             try push_rect(b, geometry.Rect { x: col - origin.x, y: c.y, width: 1.0, height: c.height }, origin, paint.rgba(1.0 - under.red, 1.0 - under.green, 1.0 - under.blue, 1.0))
             ret ok
         }
