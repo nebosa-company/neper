@@ -6571,7 +6571,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var edit_ink = ink
     // round 13: the native dark edit's GDI caret and selection (widget.native_caret)
     var edit_caret: paint.Color = zero
-    if win_dark(t) { edit_caret = widget.native_caret(face) }
+    if win_dark(t) { edit_caret = native_caret_phase(face) }
     if bullets { edit_ink = with_alpha(ink, 0.0) }
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -6583,7 +6583,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var pad: f32 = 3.0
     if win_dark(t) { pad = 6.0 }
     // the native multi-line edit sets its text one pixel further in (edit-multiline-vscroll: ink from x 7)
-    if win_dark(t) && multiline { pad = 6.0 }
+    if win_dark(t) && multiline { pad = 7.0 }
     let inner = max_zero(options.width - 2.0 - 2.0 * pad - options.start_space - options.end_space)
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
@@ -6628,7 +6628,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
         pair[0usize] = named
-        pair[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, bullet_node))
+        pair[1usize] = widget.positioned(0u64, 0.0, 0.0 - 1.0, style.defaults(), widget_one_of(a, bullet_node))
         named = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
     }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
@@ -16306,7 +16306,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     // looks11: while the text has no selection it is drawn as v3's GDI sets it (whole-pixel Tahoma advances, ink boxes within 1 px of
     // the live captures) over the edit, whose own text is then transparent; a selection brings the edit's own text back.
     var combo_caret = win4_caret(options.read_only, c.face)
-    if dark && !options.read_only { combo_caret = widget.native_caret(c.face) }
+    if dark && !options.read_only { combo_caret = native_caret_phase(c.face) }
     var gdi_text = !dark && len > 0usize && win_edit_unselected(t, key)
     var edit_ink = c.ink
     if gdi_text { edit_ink = with_alpha(c.ink, 0.0) }
@@ -16387,7 +16387,7 @@ fn win_edit_frame(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
         text_x = 6.0
         text_y = 0.0 - 0.5
         if options.read_only { text_x = 4.0 }
-        if options.read_only { text_y = 1.0 }
+        if options.read_only { text_y = 0.0 }
     }
     layers[1usize] = widget.positioned(0u64, text_x, text_y, style.defaults(), held_text[0usize..1usize])
     layers[2usize] = widget.positioned(0u64, options.width - 17.0, 0.0, style.defaults(), row_parts[1usize..2usize])
@@ -19838,6 +19838,16 @@ fn win_list_dots(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
 var looks_caret_hidden: bool = false
 
 fn set_caret_hidden(hidden: bool) { looks_caret_hidden = hidden }
+
+// round 15: the native dark edit's own caret (a system overlay that blinks) in its off phase, for the next edits built.
+var looks_native_caret_off: bool = false
+
+fn set_native_caret_off(off: bool) { looks_native_caret_off = off }
+
+fn native_caret_phase(face: paint.Color) -> paint.Color {
+    if looks_native_caret_off { ret widget.native_caret_off(face) }
+    ret widget.native_caret(face)
+}
 // ---- end looks9 --------------------------------------------------------------------------------------------------
 
 // ---- looks9: the list-style combo's focus rectangle on its white face ------------------------------------------
