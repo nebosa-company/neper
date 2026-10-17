@@ -107,6 +107,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var manifest = "tests/browser/wpt/reftests/manifest.txt"
     var floor = 0usize
     var show = false
+    var poison = false
     var only = ""
     var out_dir = ""
     var i = 1usize
@@ -117,6 +118,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if ne == ok { floor = usize(n) }
         } else if str.eq(args[i], "--show") {
             show = true
+        } else if str.eq(args[i], "--poison") {
+            poison = true
         } else if str.eq(args[i], "--only") {
             i += 1usize
             only = args[i]
@@ -248,6 +251,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             write_png(a, p4, tb)
                         }
                     }
+                }
+            }
+        }
+        // `--poison`: overwrite the memory the test used so any read of memory it never wrote shows up at once.
+        if poison {
+            let used = a.off - work
+            mem.reset(a, work)
+            let (junk, je) = mem.alloc[u8](a, used)
+            if je == ok {
+                var pq = 0usize
+                while pq < junk.len {
+                    junk[pq] = 170u8
+                    pq += 1usize
                 }
             }
         }

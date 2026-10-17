@@ -716,6 +716,43 @@ fn is_block_container(l: *const Layout, b: u32) -> bool {
     ret inner == .Flow || inner == .FlowRoot || inner == .Cell || inner == .Caption
 }
 
+fn is_table_part(inner: Inner) -> bool {
+    ret inner == .Cell || inner == .Row || inner == .RowGroup || inner == .Column || inner == .ColumnGroup
+}
+
+// Table cells, rows, row groups and columns outside a table get an anonymous table around each run of them (CSS 2.1 17.2.1).
+fn wrap_orphan_table_parts(l: *Layout, b: u32) {
+    var run_first = NONE
+    var run_last = NONE
+    var kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        let nxt = l.boxes.items[usize(kid)].next
+        let part = is_table_part(l.boxes.items[usize(kid)].inner)
+        if part {
+            if run_first == NONE { run_first = kid }
+            run_last = kid
+        } else if run_first != NONE {
+            // White space between the parts belongs to the run; anything else ends it.
+            let kb = &l.boxes.items[usize(kid)]
+            if kb.inner == .Text && is_ws_only(kb.text) && collapses(l, kid) {
+                // keep scanning
+            } else {
+                wrap_table_run(l, b, run_first, run_last, .Table, .Table)
+                let anon = l.boxes.items[usize(run_first)].parent
+                if anon != b && anon != NONE { fix_table_like(l, anon) }
+                run_first = NONE
+                run_last = NONE
+            }
+        }
+        kid = nxt
+    }
+    if run_first != NONE {
+        wrap_table_run(l, b, run_first, run_last, .Table, .Table)
+        let anon2 = l.boxes.items[usize(run_first)].parent
+        if anon2 != b && anon2 != NONE { fix_table_like(l, anon2) }
+    }
+}
+
 // A block container with block-level children wraps its inline-level runs in anonymous blocks; a container of only
 // inline-level children keeps them (one inline formatting context). White-space-only text between blocks goes.
 fn fix_anonymous(l: *Layout, b: u32) {
@@ -730,6 +767,7 @@ fn fix_anonymous(l: *Layout, b: u32) {
         ret
     }
     if !is_block_container(l, b) { ret }
+    wrap_orphan_table_parts(l, b)
     var has_block = false
     var kid = l.boxes.items[usize(b)].first
     while kid != NONE {
