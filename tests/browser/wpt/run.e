@@ -224,6 +224,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if str.eq(kind, "mismatch") { good = !same }
         } else {
             broken += 1usize
+            if show { let printed = io.printf["UNLOAD {} test={} ref={}\n"](test_name, ok_a, ok_b) }
         }
         if good { passed += 1usize } else {
             if show { let printed = io.printf["FAIL {} ({})\n"](test_name, kind) }

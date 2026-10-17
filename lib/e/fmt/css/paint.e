@@ -33,7 +33,10 @@ type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, heig
 // Draws `img` into the destination rectangle.
 fn draw_ref(p: *Painter, img: ImageRef, dx: f64, dy: f64, dw: f64, dh: f64) {
     if img.svg.len > 0usize {
-        if p.status == ok { p.status = svg.draw(p.a, p.b, img.svg, grect(dx, dy, dw, dh), pt.rgba(0.0, 0.0, 0.0, 1.0)) }
+        // A document the SVG drawer cannot handle leaves a blank image, not a failed page.
+        if p.status == ok {
+            let drawn = svg.draw(p.a, p.b, img.svg, grect(dx, dy, dw, dh), pt.rgba(0.0, 0.0, 0.0, 1.0))
+        }
         ret
     }
     emit(p, scene.Command { Image: scene.DrawImage { texture: img.texture, source: geo.rect(0.0f32, 0.0f32, img.width, img.height), destination: grect(dx, dy, dw, dh), opacity: 1.0f32 } })
