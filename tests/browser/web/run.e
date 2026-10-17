@@ -107,6 +107,35 @@ fn wrapper_page(a: *mem.Arena, test_path: str, source: str) -> str {
     ret page
 }
 
+type FetchCtx = struct { a: *mem.Arena, root: str }
+
+// The WPT server's files: urls map onto the checkout; testharnessreport.js is the reporter above.
+fn fetch_file(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
+    let fc = mem.cast[*FetchCtx](ctx)
+    var path: str = u
+    let (sch, has_scheme) = str.find(u, "://")
+    if has_scheme {
+        let rest: str = u[sch + 3usize..]
+        let (sl, has_slash) = str.find(rest, "/")
+        if has_slash { path = rest[sl..] } else { path = "/" }
+    }
+    var cut = path.len
+    var k = 0usize
+    while k < path.len {
+        if path[k] == 63u8 || path[k] == 35u8 {
+            cut = k
+            break
+        }
+        k += 1usize
+    }
+    path = path[0usize..cut]
+    if str.eq(path, "/resources/testharnessreport.js") { ret (reporter(), 200u16, true) }
+    let (txt, fe) = fs.read_file(fc.a, cat3(fc.a, fc.root, path, ""), 16777216usize)
+    if fe != ok { ret ("", 404u16, true) }
+    let body: str = txt
+    ret (body, 200u16, true)
+}
+
 type Counts = struct { subtests: usize, passed: usize, harness_ok: bool, done: bool }
 
 // Reads the reporter's lines out of the host log.
@@ -118,9 +147,9 @@ fn tally(it: *js.Interp, show: bool, test_path: str) -> Counts {
         let line = h.log.items[i]
         i += 1usize
         if !str.starts_with(line, "log: @@wpt\t") { continue }
-        let rest = line[11usize..]
+        let rest: str = line[11usize..]
         if str.starts_with(rest, "test\t") {
-            let body = rest[5usize..]
+            let body: str = rest[5usize..]
             c.subtests += 1usize
             if str.starts_with(body, "0\t") {
                 c.passed += 1usize
@@ -153,50 +182,11 @@ fn run_page(a: *mem.Arena, root: str, test_path: str, page_src: str, show: bool)
     }
     it.quiet = true
     it.step_limit = 400000000u64
+    it.mem_limit = mem.mark(a) + 2400000000usize
     if show { let pq = io.printf["  stage context {}\n"](test_path) }
-    // Scripts in document order.
-    let test_dir = dir_of(test_path)
-    var cur = dom.next_in_tree(&tree, tree.root, tree.root)
-    while cur != dom.NONE {
-        if dom.is_html_named(&tree, cur, "script") {
-            let (type_text, has_type) = dom.get_attribute(&tree, cur, "type")
-            var classic = true
-            if has_type && type_text.len > 0usize && !str.eq(type_text, "text/javascript") && !str.eq(type_text, "application/javascript") { classic = false }
-            if classic {
-                let (src_attr, has_src) = dom.get_attribute(&tree, cur, "src")
-                var code = ""
-                var name = test_path
-                var ok_code = true
-                if has_src {
-                    if str.eq(src_attr, "/resources/testharnessreport.js") {
-                        code = reporter()
-                    } else {
-                        let rel = resolve_src(a, test_dir, src_attr)
-                        let (txt, fe) = fs.read_file(a, cat3(a, root, rel, ""), 16777216usize)
-                        if fe != ok {
-                            ok_code = false
-                        } else {
-                            code = txt
-                        }
-                    }
-                    name = src_attr
-                } else {
-                    let (txt2, te) = dom.text_content(a, &tree, cur)
-                    if te == ok { code = txt2 }
-                }
-                if ok_code {
-                    let ran = script.run_script(it, code, name)
-                    let np = script.pump_once(it)
-                }
-            }
-        }
-        cur = dom.next_in_tree(&tree, tree.root, cur)
-    }
-    script.lifecycle(it, "interactive")
-    script.lifecycle(it, "domContentLoaded")
-    let np2 = script.pump_once(it)
-    script.lifecycle(it, "complete")
-    script.lifecycle(it, "load")
+    var fc = FetchCtx { a: a, root: root }
+    script.set_fetch(it, mem.cast[*void](&fc), fetch_file)
+    script.lifecycle(it, "run")
     script.pump(it, 120000.0f64)
     let counts = tally(it, show, test_path)
     ret (counts, true)
@@ -262,7 +252,8 @@ fn run_all(ctx: *Ctx) {
             passed += counts.passed
             var note = ""
             if !counts.done { note = " (no result)" }
-            let p = io.printf["FILE {} {}/{}{}\n"](path, counts.passed, counts.subtests, note)
+            let used = (mem.mark(a) - work) / 1048576usize
+            let p = io.printf["FILE {} {}/{}{} {}MB\n"](path, counts.passed, counts.subtests, note, used)
         }
         mem.reset(a, work)
     }

@@ -921,6 +921,11 @@ fn install_symbol(it: *js.Interp) {
 
 // --- print (the harness's output hook)
 
+// __mem(): bytes of the realm's arena in use, for measuring what an operation allocates.
+fn global_mem(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    ret (js.num_value(f64(mem.mark(it.a))), ok)
+}
+
 fn global_print(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     var line = ""
     var i = 0usize
@@ -1051,6 +1056,7 @@ fn new_realm(a: *mem.Arena) -> (*js.Interp, err) {
     b_misc.install_misc(it)
     b_proxy.install_proxy(it)
     js.add_method(it, it.global, "print", 1u32, global_print)
+    js.add_method(it, it.global, "__mem", 0u32, global_mem)
     let ev = js.make_native(it, "eval", 1u32, global_eval)
     it.eval_fn = ev
     let e5 = js.define_data(it, it.global, js.key_of("eval"), js.obj_value(ev), js.P_HIDDEN)

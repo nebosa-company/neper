@@ -110,7 +110,7 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize
 }
 
 fn null_interp() -> *Interp {
@@ -2418,6 +2418,7 @@ fn call_js(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_targe
     if is_class_ctor && !constructing { ret (undefv(), throw_type(it, "Class constructor cannot be invoked without 'new'")) }
     var f: Frame = zero
     f.prog = fo.prog
+    if it.mem_limit != 0usize && mem.mark(it.a) > it.mem_limit { ret (undefv(), throw_range(it, "out of memory")) }
     f.env = new_env(it, fo.env)
     if f.env == null_env() { ret (undefv(), throw_range(it, "out of memory")) }
     f.func = fo

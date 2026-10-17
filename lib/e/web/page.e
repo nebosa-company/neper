@@ -4,8 +4,11 @@
 // result. Images (`<img>`, CSS `url()` backgrounds) are fetched and decoded on demand while the page is laid out and painted,
 // sized for the layout, and uploaded to the renderer as textures when it first paints them.
 //
-// This is the static-page half of a browsing context: no scripts, no navigation history, no cache beyond the page's own
-// images; those are `e.web.*` above this and the control `e.ui.browser`. Loading blocks the caller.
+// Scripts: the page runs its classic scripts (`<script>` in document order, `src` fetched through the page's client, deferred
+// and async ones afterwards) in an `e.web.script` context bound to the view's document, fires DOMContentLoaded and load, and
+// lays the page out again when they changed it. `tick` is the page's event loop (timers, promise jobs), `click` delivers a
+// pointer click to the scripts. There is no navigation history and no cache beyond the page's own images; those are `e.web.*`
+// above this and the control `e.ui.browser`. Loading blocks the caller.
 //
 // Memory: the page, the document, the fetched resources and the images live in the arena given to `load`; the view gets a
 // private block carved from it (`view_bytes`) that it rewinds on every paint.
@@ -29,6 +32,7 @@ use e.gfx.image as image
 use e.gfx.scene as scene
 use e.gfx.svg as svg
 use e.io
+use e.js.interp as js
 use e.mem
 use e.net.fetch as fetch
 use e.net.http as http
@@ -36,6 +40,7 @@ use e.str
 use e.text.charset_cjk as cjk
 use e.text.fontset as fontset
 use e.ui.html_view as view
+use e.web.script as script
 
 error NotRenderable
 error LoadFailed
@@ -52,7 +57,8 @@ type Page = struct {
     base: url.Url, tree: dom.Dom, sheets: []const str,
     images: list.List[ImageEntry],
     renderer: *scene.Renderer, has_renderer: bool,
-    view: *view.View
+    view: *view.View,
+    ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32
 }
 
 // --- Small helpers.
@@ -690,6 +696,79 @@ fn collapse_space(a: *mem.Arena, s: str) -> str {
 }
 
 // Loads `address` and opens its view for a `width` x `height` viewport. `view_bytes` sizes the view's private arena.
+// --- Scripts.
+
+// A synchronous fetch for the page's scripts: the response body as UTF-8 text.
+fn fetch_text_hook(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
+    let p = mem.cast[*Page](ctx)
+    let (resp, fe) = fetch.fetch(p.client, get_request(u, p.url, fetch.Credentials.Include))
+    if fe != ok { ret ("", 0u16, false) }
+    let (text, de) = cjk.decode_sniffing_bom(p.pa, "UTF-8", resp.body)
+    if de != ok { ret ("", resp.status, true) }
+    ret (text, resp.status, true)
+}
+
+// After scripts changed the document: style sheets, title and layout follow.
+fn refresh(p: *Page) {
+    let v = p.view
+    p.seen_version = v.tree.version
+    p.title = find_title(p)
+    p.sheets = collect_sheets(p)
+    v.sheets = p.sheets
+    let re = view.resize(v, p.view_width, p.view_height)
+}
+
+fn start_scripts(p: *Page) {
+    let v = p.view
+    let (ctx, xe) = script.new_context(p.pa, &v.tree, p.url)
+    if xe != ok { ret }
+    p.ctx = ctx
+    p.scripted = true
+    script.set_fetch(ctx, mem.cast[*void](p), fetch_text_hook)
+    p.seen_version = v.tree.version
+    script.lifecycle(ctx, "run")
+    let next = script.pump_once(ctx)
+    if v.tree.version != p.seen_version { refresh(p) }
+}
+
+// The page's event loop: runs promise jobs and the timers that are due at `now_ms` (milliseconds on the host clock, any
+// origin as long as it only grows). Answers true when the page changed and was laid out again.
+fn tick(p: *Page, now_ms: f64) -> bool {
+    if !p.scripted { ret false }
+    script.set_clock(p.ctx, now_ms)
+    let next = script.pump_once(p.ctx)
+    if p.view.tree.version != p.seen_version {
+        refresh(p)
+        ret true
+    }
+    ret false
+}
+
+// When the next timer is due on the host clock, or -1 when none is pending.
+fn next_wakeup(p: *Page) -> f64 {
+    if !p.scripted { ret -1.0f64 }
+    ret script.next_due(p.ctx)
+}
+
+// A pointer click at viewport coordinates reaches the page's scripts; answers false when a handler cancelled the default
+// action (the caller then must not follow a link).
+fn click(p: *Page, x: f32, y: f32) -> bool {
+    if !p.scripted { ret true }
+    let v = p.view
+    let hit = view.node_at(v, x, y)
+    if hit == html.NONE { ret true }
+    let go = script.dispatch_mouse(p.ctx, hit, "click", f64(x), f64(y))
+    if v.tree.version != p.seen_version { refresh(p) }
+    ret go
+}
+
+// A location change the scripts asked for, if any.
+fn take_navigation(p: *Page) -> (str, bool) {
+    if !p.scripted { ret ("", false) }
+    let (dest, asked) = script.take_navigation(p.ctx)
+    ret (dest, asked)
+}
+
 fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str, width: f32, height: f32, view_bytes: usize) -> (*Page, err) {
     let (cell, ce) = mem.alloc[Page](a, 1usize)
     if ce != ok { ret (zero, ce) }
@@ -726,7 +805,7 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
         ret (zero, NotRenderable)
     }
     // The browser runs scripts, so <noscript> content is not rendered.
-    let (tree, pe) = dom.parse_with(a, source, view.parse_options(), 1024usize, true)
+    let (tree, pe) = dom.parse_with(a, source, view.parse_options(), 262144usize, true)
     if pe != ok { ret (zero, LoadFailed) }
     p.tree = tree
     // <base href> changes the base for relative references.
@@ -754,6 +833,9 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     let (v, ve) = view.open_tree(&p.va, p.tree, source, p.sheets, true, fonts, images, width, height)
     if ve != ok { ret (zero, ve) }
     p.view = v
+    p.view_width = width
+    p.view_height = height
+    start_scripts(p)
     ret (p, ok)
 }
 

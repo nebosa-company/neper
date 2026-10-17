@@ -16,8 +16,12 @@ use e.mem
 use e.str
 use e.web.dom_js as dom_js
 
+// A synchronous fetch supplied by the page: (context, url, referrer) -> (body text, status, reached the server).
+type FetchFn = fn(*void, str, str) -> (str, u16, bool)
+
 type Host = struct {
-    d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool
+    d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool,
+    fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool
 }
 
 fn host_of(it: *js.Interp) -> *Host { ret mem.cast[*Host](it.host) }
@@ -529,6 +533,26 @@ fn n_log(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Valu
     ret (js.undefv(), ok)
 }
 
+fn n_run_jobs(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let e = js.run_jobs(it)
+    if e != ok { ret (js.undefv(), e) }
+    ret (js.undefv(), ok)
+}
+
+// fetchText(url): [status, text] or null when the page has no network or the request failed.
+fn n_fetch_text(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    if !h.has_fetch { ret (js.null_value(), ok) }
+    let (u, ue) = sarg(it, args, 0usize)
+    if ue != ok { ret (js.undefv(), ue) }
+    let (text, status, reached) = h.fetch_fn(h.fetch_ctx, u, h.base)
+    if !reached { ret (js.null_value(), ok) }
+    let arr = js.new_array(it)
+    try js.array_push(it, arr, js.num_value(f64(status)))
+    try js.array_push(it, arr, js.str_value(text))
+    ret (js.obj_value(arr), ok)
+}
+
 fn n_base(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     ret (js.str_value(host_of(it).base), ok)
 }
@@ -661,6 +685,8 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "now", 0u32, n_now)
     js.add_method(it, n, "log", 2u32, n_log)
     js.add_method(it, n, "base", 0u32, n_base)
+    js.add_method(it, n, "runJobs", 0u32, n_run_jobs)
+    js.add_method(it, n, "fetchText", 1u32, n_fetch_text)
     js.add_method(it, n, "urlParse", 2u32, n_url_parse)
     js.add_method(it, n, "urlSet", 3u32, n_url_set)
     js.add_method(it, n, "navigate", 1u32, n_navigate)
@@ -689,6 +715,22 @@ fn new_context(a: *mem.Arena, d: *dom.Dom, base: str) -> (*js.Interp, err) {
     it.steps = 0u64
     if e != ok { ret (it, e) }
     ret (it, ok)
+}
+
+// Gives the page's network to scripts (script loading, XMLHttpRequest, fetch).
+fn set_fetch(it: *js.Interp, ctx: *void, f: FetchFn) {
+    let h = host_of(it)
+    h.fetch_ctx = ctx
+    h.fetch_fn = f
+    h.has_fetch = true
+}
+
+// The pending navigation requested by `location` assignments: (address, requested).
+fn take_navigation(it: *js.Interp) -> (str, bool) {
+    let h = host_of(it)
+    if !h.has_nav { ret ("", false) }
+    h.has_nav = false
+    ret (h.nav, true)
 }
 
 // --- running code
@@ -766,3 +808,46 @@ fn pump(it: *js.Interp, limit_ms: f64) {
 }
 
 fn advance(it: *js.Interp, ms: f64) { host_of(it).now += ms }
+
+// Moves the clock to `ms` (never back).
+fn set_clock(it: *js.Interp, ms: f64) {
+    let h = host_of(it)
+    if ms > h.now { h.now = ms }
+}
+
+// The clock time of the next pending timer, or -1.
+fn next_due(it: *js.Interp) -> f64 {
+    let (nd, ne) = js.get_prop(it, it.global, js.key_of("__nextTimer"), js.obj_value(it.global))
+    if ne != ok || !js.is_callable(nd) { ret -1.0f64 }
+    let (v, ve) = js.call_function(it, nd, js.obj_value(it.global), js.zero_args())
+    if ve != ok { ret -1.0f64 }
+    switch v {
+    case .Num as n:
+        ret n
+    default:
+        ret -1.0f64
+    }
+    ret -1.0f64
+}
+
+// Delivers a mouse event of `kind` at (x, y) to node `node`; false when a handler cancelled it.
+fn dispatch_mouse(it: *js.Interp, node: u32, kind: str, x: f64, y: f64) -> bool {
+    let (lc, le) = js.get_prop(it, it.global, js.key_of("__lifecycle"), js.obj_value(it.global))
+    if le != ok || !js.is_object(lc) { ret true }
+    let (f, fe) = js.get_prop(it, js.as_object(lc), js.key_of("mouse"), lc)
+    if fe != ok || !js.is_callable(f) { ret true }
+    let (cell, ce) = mem.alloc[js.Value](it.a, 4usize)
+    if ce != ok { ret true }
+    cell[0usize] = js.num_value(f64(node))
+    cell[1usize] = js.str_value(kind)
+    cell[2usize] = js.num_value(x)
+    cell[3usize] = js.num_value(y)
+    let (r, re) = js.call_function(it, f, lc, cell[0usize..4usize])
+    if re != ok {
+        report_thrown(it, "mouse")
+        ret true
+    }
+    let go = js.to_boolean(r)
+    let jr = js.run_jobs(it)
+    ret go
+}

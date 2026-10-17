@@ -9,7 +9,7 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
 root="${WPT_ROOT:-/d/Temp/wpt}"
 out="${TMPDIR:-/tmp}/web-run"
 jobs=3
-chunk=20
+chunk=8
 build=0
 while [ $# -gt 1 ]; do
   case "$1" in

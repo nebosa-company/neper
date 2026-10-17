@@ -162,6 +162,13 @@ fn link_at(v: *View, x: f32, y: f32) -> (str, bool) {
     ret ("", false)
 }
 
+// The node under a viewport point, or html.NONE.
+fn node_at(v: *View, x: f32, y: f32) -> html.NodeId {
+    let hit = geom.hit_test(v.arena, &v.lay, v.lay.root, f64(x + v.scroll_x), f64(y + v.scroll_y))
+    if hit == layout.NONE { ret html.NONE }
+    ret v.lay.boxes.items[usize(hit)].node
+}
+
 // --- The widget.
 
 fn measure_view(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
