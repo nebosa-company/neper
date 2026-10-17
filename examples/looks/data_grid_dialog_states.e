@@ -5,6 +5,7 @@
 // selected without focus, scroll thumb pressed (the shortcuts and sort grids). The artwork (the shortcut icons, the sort glyphs)
 // is not drawn. Run from the repository root.
 
+use e.fs
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.data.tableview as view
@@ -34,7 +35,8 @@ type App = struct {
     scratch: mem.Arena,
     hover: bool,
     first: usize,
-    name: str
+    name: str,
+    light: bool
 }
 
 fn sort_name(row: usize) -> str {
@@ -296,6 +298,19 @@ fn arrange(app: *App, k: usize) {
         // round 13: the Missing list's bar track keeps its white first column while the rows fit (live capture)
         if app.family == 2usize { look.bar_marks = "216 2 253 ffffff" }
     }
+    // round 18: the live capture's leftover pixels (docs/ui/looks/marks/data_grid_dialog_states.txt, scripts/looks_marks_diff.py), Windows light only
+    if app.light {
+        let (extra, extra_error) = fix_marks_of(app.a, app.name, k)
+        if extra_error == ok && extra.len > 0usize {
+            let (joined, joined_error) = strs.builder(app.a, look.bar_marks.len + extra.len + 2usize)
+            if joined_error == ok {
+                var jb = joined
+                var fits = true
+                if look.bar_marks.len > 0usize { if strs.push(&jb, look.bar_marks) != ok || strs.push(&jb, ";") != ok { fits = false } }
+                if fits && strs.push(&jb, extra) == ok { look.bar_marks = strs.done(&jb) }
+            }
+        }
+    }
     dg.set_look(&app.grids[k], look)
     dg.show_indicator(&app.grids[k], false)
     dg.set_grid_lines(&app.grids[k], dg.GridLines.Both)
@@ -382,9 +397,10 @@ fn cell_of(a: *mem.Arena, t: *const control.Theme, app: *App, k: usize, w: f32, 
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let app = mem.cast[*App](ctx)
-    if app.ready && app.windows != (t.tokens.profile == .Windows) { app.ready = false }
+    if app.ready && (app.windows != (t.tokens.profile == .Windows) || app.light != (t.tokens.palette != .Dark)) { app.ready = false }
     if !app.ready {
         app.windows = t.tokens.profile == .Windows
+        app.light = t.tokens.palette != .Dark
         try setup(app)
         app.ready = true
     }
@@ -589,3 +605,36 @@ fn dialog_marks(sheet: str, cell: usize) -> str {
     ret ""
 }
 // END GENERATED
+
+// round 18: "<sheet> <cell> <marks>" lines of docs/ui/looks/marks/data_grid_dialog_states.txt
+fn fix_marks_of(a: *mem.Arena, sheet: str, k: usize) -> (str, err) {
+    let path = "docs/ui/looks/marks/data_grid_dialog_states.txt"
+    let (present, present_error) = fs.exists(a, path)
+    if present_error != ok || !present { ret ("", ok) }
+    let (bytes, read_error) = fs.read_file(a, path, 4194304usize)
+    if read_error != ok { ret ("", read_error) }
+    var at = 0usize
+    while at < bytes.len {
+        var end = at
+        while end < bytes.len && bytes[end] != 10u8 { end += 1usize }
+        var cur = at
+        while cur < end && bytes[cur] != 32u8 { cur += 1usize }
+        if cur < end && strs.eq(bytes[at..cur], sheet) {
+            cur += 1usize
+            var key = 0usize
+            var digits = 0usize
+            while cur < end && bytes[cur] >= 48u8 && bytes[cur] <= 57u8 {
+                key = key * 10usize + usize(bytes[cur] - 48u8)
+                cur += 1usize
+                digits += 1usize
+            }
+            if digits > 0usize && cur < end && bytes[cur] == 32u8 && key == k {
+                var stop = end
+                if stop > cur + 1usize && bytes[stop - 1usize] == 13u8 { stop -= 1usize }
+                ret (bytes[cur + 1usize..stop], ok)
+            }
+        }
+        at = end + 1usize
+    }
+    ret ("", ok)
+}

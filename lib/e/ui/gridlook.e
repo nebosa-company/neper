@@ -1012,7 +1012,8 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
         let shown = rgb(ri * 65536u32 + gi * 256u32 + bi)
         let px = f32(col) - f32(m.skip)
         let py = f32(n / m.cols)
-        if col >= m.skip { try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, f32(run), 1.0, shown) }
+        // round 18: 'ZZZZZZ' is a transparent pixel
+        if col >= m.skip && m.pix[at] != 90u8 { try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, f32(run), 1.0, shown) }
         at += 6usize * run
         n += run
     }

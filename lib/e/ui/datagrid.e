@@ -9878,6 +9878,7 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     if chips_error != ok { ret (zero, control.TooLarge) }
     var i = 0usize
     while i < n {
+        var bare_title: widget.Node = zero
         var title: widget.Node = zero
         let title_error = text_node(a, grid, table.column_name(grid.t, grid.g.levels[i].column), false, .Text, &title)
         if title_error != ok { ret (zero, title_error) }
@@ -9888,6 +9889,7 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             chip_words.size = grid.look.text_size
             let (gdi_title, gdi_title_width, gdi_title_error) = control.choices_words(a, grid.theme, chip_words, style.color(grid.theme.tokens, .Text), table.column_name(grid.t, grid.g.levels[i].column))
             if gdi_title_error != ok { ret (zero, gdi_title_error) }
+            bare_title = gdi_title
             title = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one(a, gdi_title))
         }
         var triangle: widget.Node = zero
@@ -9962,6 +9964,8 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
             if parts_error != ok { ret (zero, control.TooLarge) }
             parts[0usize] = title
+            // round 18: the live chip's word sits 4 px above where the cross-centred title put it (bottom padding lifts it)
+            if grid.theme.tokens.palette != .Dark { parts[0usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 6.0, style.defaults(), one(a, bare_title)) }
             parts[1usize] = widget.box(0u64, control.sized_style(gap_before, 1.0), zero)
             parts[2usize] = tri_node
             if parts_n == 5usize {
@@ -10672,6 +10676,22 @@ fn ring_marks_over(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (wid
         parts[made] = footer_px(a, f32(field[0usize]), f32(field[1usize]), run_w, f32(field[2usize]), hex)
         made += 1usize
         if at < text.len && text[at] == 59u8 { at += 1usize }
+    }
+    // round 18: a stack holds at most 64 children, so the marks beyond 48 go into stacks of their own (positioned from the same origin)
+    if made > 56usize {
+        let groups = (made - 1usize + 47usize) / 48usize
+        let (outer, outer_error) = mem.alloc[widget.Node](a, groups + 1usize)
+        if outer_error != ok { ret (zero, outer_error) }
+        outer[0usize] = inner
+        var g = 0usize
+        while g < groups {
+            var from = 1usize + g * 48usize
+            var to = from + 48usize
+            if to > made { to = made }
+            outer[1usize + g] = widget.stack(0u64, style.defaults(), parts[from..to])
+            g += 1usize
+        }
+        ret (widget.stack(0u64, style.defaults(), outer[0usize..groups + 1usize]), ok)
     }
     ret (widget.stack(0u64, style.defaults(), parts[0usize..made]), ok)
 }

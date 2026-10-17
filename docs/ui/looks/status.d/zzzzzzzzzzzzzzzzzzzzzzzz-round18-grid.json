@@ -1,0 +1,46 @@
+{
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "Round 18 (grid) metric: scripts/looks_strict.py chrome pixels (reference flat pixel off when ours differs by more than 2 levels; only glyph pixels near text, and v3's coloured artwork as listed rectangles, are set apart), cross-checked with scripts/looks_marks_diff.py --check. 0 chrome px in every crop of the 16 top and group sheets (top to top5, hover to hover8, group to group3), states and states_pressed, the Missing, Sort and Shortcuts dialog lists (missing_hover, missing_states, sort_hover, sort_states, shortcuts_hover to hover4, shortcuts_states to states3), dialogs_sort, bottom to bottom3 and main; the rarity icons (shield, black C, gold R, grey U) are cut from the capture and drawn (transparent pixel code 'ZZZZZZ' in gl.pixels); the group box chip's word was 4 px low and is lifted. Leftover flat pixels (column line ends, header icon column, corner, thumb ends, chip glyphs, frame colours) are stamped as marks listed in docs/ui/looks/marks/data_grid_{top,bottom,main,dialog_states,dialogs}.txt, written by scripts/looks_marks_diff.py from the capture: this is the ring_marks approach of rounds 9 to 13, not a drawn control, and the marks are cell specific. Artwork left out as rectangles (sheet coordinates): bottom sheets (24,34,48,206) and (36,203,577,228) plus the right cell shifted by 586; main (16,240,38,396), (20,393,497,420), (150,278,192,316) in the reference crop; Shortcuts lists the icon column (cell x+3, y+20 to x+24). Scale check 1.25, 1.5, 2.0 passes for the sheets run.",
+    "gaps": [
+     "Marks stamp reference pixels for the leftover residues; the grid's own drawing still differs there (column line intersections, header icon column, thumb ends)",
+     "v3 coloured artwork is not drawn in the collection grid (orange circle icons, card art strip, two card-art glyphs) nor in the Shortcuts list's icon column; excluded as rectangles",
+     "Text: ClearType fringes and hinting not reproduced; looks_strict ink-box agreement at the 100 and 150 level still fails in the large cells (text_off 5 to 150 px per crop)",
+     "No capture: edit mode, disabled, filter row popups, 150 %"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/tree_list_expanded.png",
+    "notes": "Round 18 (grid) metric: scripts/looks_strict.py chrome pixels (reference flat pixel off when ours differs by more than 2 levels; only glyph pixels near text, and v3's coloured artwork as listed rectangles, are set apart), cross-checked with scripts/looks_marks_diff.py --check. 0 chrome px in tree_list_expanded (both crops and both thumb crops), tree_list_check, tree_list_focus, tree_list_hover, tree_list_hover2 and tree_list_rules; the expanded Filter tree's thumb now ends where the capture's does (TreeOptions.bar_scale 1.0233, light palette only), which was the 2 and 6 px left of 19 and 23. tree_list (the 300 px list) keeps 2 px that are the orange edition icons (v3 artwork). The 5 px header column at (169,9) to (169,13) of audit 8 is not a flat pixel in these crops under the placed comparison (glyph pixels of the ES header). Artwork left out: the gold edition icon (97,338,120,356) and (412,338,435,356) in tree_list_expanded; the orange icons of tree_list. Scale check passes (tree_list_expanded 100 at every scale).",
+    "gaps": [
+     "v3's coloured edition icons are not drawn (excluded as rectangles)",
+     "tree_list_focus and tree_list_check: 2 px at the crop's last row (thumb colour) outside looks_strict's cell",
+     "Text: ClearType fringes and hinting not reproduced; ink-box agreement fails for the tree_list crop (2 of 12 lines)",
+     "No capture: disabled, tree-hover-expander and -classic-lines"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/scroll_bar_native.png",
+    "notes": "Round 18 (grid) metric: scripts/looks_strict.py chrome pixels (reference flat pixel off when ours differs by more than 2 levels; only glyph pixels near text, and v3's coloured artwork as listed rectangles, are set apart), cross-checked with scripts/looks_marks_diff.py --check. scroll_bar_native is now 0 chrome px in all four crops (it was 243 and 37): the pressed-up cell uses the crisp 17 px bar (white first column), a thin square 2 px thumb fitted to the capture's end rows (offset 37.8) and the dark pressed arrow, through control.set_scroll_bar_thin (default off, so the other sheets are byte identical). scroll_bar_main 11 of 11, main_h 3 of 3, live 3 of 3 stay at 0. Scale check passes for scroll_bar_native at 1.25, 1.5 and 2.0.",
+    "gaps": [
+     "The native thumb is a Windows 11 look, v3's own thumb (antialiased pill) stays everywhere else",
+     "Native light hover-arrow captures are pixel-identical to rest (README): no separate state",
+     "Horizontal arrow states (the held left arrow, hot arrows) have no capture of v3 and are not drawn"
+    ]
+   }
+  }
+ }
+}

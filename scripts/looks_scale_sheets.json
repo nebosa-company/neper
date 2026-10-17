@@ -1178,6 +1178,12 @@
    "scroll_bar"
   ]
  ],
+ "scroll_bar_native": [
+  "scroll_bar",
+  [
+   "n"
+  ]
+ ],
  "scroll_bar_states": [
   "scroll_bar",
   [

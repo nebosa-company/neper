@@ -14894,6 +14894,9 @@ fn dark_arrow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // looks5-e: a dialog's list bar (the Filter tree): a white first pixel and the thumb on whole pixels, as the grids of the dialogs
 var scroll_bar_crisp: bool = false
 fn set_scroll_bar_crisp(on: bool) { scroll_bar_crisp = on }
+// round 18: the crisp bar held on an arrow keeps its thin thumb (the native pressed-up capture)
+var scroll_bar_thin: bool = false
+fn set_scroll_bar_thin(on: bool) { scroll_bar_thin = on }
 
 // ---- round 13: the native light bar's states v3 never showed (ref/windows-native/light/vscroll-disabled, hscroll-disabled, *-pressed-arrow) ----
 // Windows 11's disabled bar: a 17 wide (or high) bar of the face colour with a white first line and two light grey arrows 4 in from the
@@ -14996,6 +14999,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             pill_hot = pill_y >= pill_at && pill_y < pill_at + pill_len
         }
     }
+    if scroll_bar_thin { pill_hot = false }
     if state.hovered && vertical && pill_hot { w = 6.0 }
     if state.pressed && pill_hot { w = 6.0 }
     if state.pressed && !vertical { w = 12.0 }
@@ -15048,7 +15052,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
         var lift: f32 = 0.47
         if crisp {
             side = 8.0
-            if state.pressed || state.hovered { side = 6.0 }
+            if (state.pressed || state.hovered) && !scroll_bar_thin { side = 6.0 }
             lift = 0.0
         }
         if state.pressed && vertical && !crisp && pill_hot {
@@ -15121,7 +15125,7 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
     }
     // looks5-e: a vertical bar shows only the arrow the pointer is on (live captures; the thumb widens over the bar)
     var arrow_done = false
-    if state.pressed && vertical && !crisp && !pill_hot && mem.address_of(t.runtime) != 0usize {
+    if state.pressed && vertical && (!crisp || scroll_bar_thin) && !pill_hot && mem.address_of(t.runtime) != 0usize {
         // round 13: the lower end held down shows the pressed arrow (states/scroll-bar-arrow-pressed-main-vertical)
         let (held_box, has_held_box) = keyed_bounds(t.runtime, key)
         if has_held_box && widget.pointer_position(t.runtime).y - held_box.y < 16.0 {

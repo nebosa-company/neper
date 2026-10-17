@@ -229,9 +229,14 @@ fn build_native_bar(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: [
         // round 17: the native pressed-up capture has its 40 px thumb a third of the way down the track (y 51 to 91 of 170)
         if i == 2usize {
             view = 45.0
-            offset = 38.6
+            offset = 37.8
         }
+        // the native pressed-up capture has the crisp 17 px bar (white first column, square 2 px thumb)
+        control.set_scroll_bar_crisp(i == 2usize)
+        control.set_scroll_bar_thin(i == 2usize)
         let (bar, bar_error) = control.windows_scroll_bar(a, u64(22000usize + i), t, vertical, length, view, 154.0, offset)
+        control.set_scroll_bar_crisp(false)
+        control.set_scroll_bar_thin(false)
         control.set_scroll_bar_disabled(false)
         if bar_error != ok { ret (0usize, bar_error) }
         var drive: looks.Drive = .None

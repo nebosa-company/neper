@@ -5293,7 +5293,7 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // (D1538) An outline with `has_filter` stands a filter field over its rows
 // (`filter`, `filter_len`, reported through `filtering`) that narrows them by
 // `sort_text` (column 0).
-type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool, numbered: bool, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool, bar_view: f32 }
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool, numbered: bool, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool, bar_view: f32, bar_scale: f32 }
 
 // (D1534) Row `at`'s section number into `out`: its place among its siblings,
 // then its parent's, up to the root, written root first ("2.1.3").
@@ -6336,7 +6336,7 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         var bar_view = options.height
         if options.bar_view > 0.0 { bar_view = options.bar_view }
         control.set_scroll_bar_crisp(true)
-        let (bar, bar_error) = control.windows_scroll_bar(a, key + 3300u64, t, true, head_height + 1.0 + bar_view - 1.0, bar_view, f32(table_total) * row_pitch, options.offset)
+        let (bar, bar_error) = control.windows_scroll_bar(a, key + 3300u64, t, true, head_height + 1.0 + bar_view - 1.0, bar_view, f32(table_total) * row_pitch * control.if_else(options.bar_scale > 0.0 && t.tokens.palette != .Dark, options.bar_scale, 1.0), options.offset)
         control.set_scroll_bar_crisp(false)
         if bar_error != ok { ret (zero, bar_error) }
         let (beside, beside_error) = mem.alloc[widget.Node](a, 2usize)
