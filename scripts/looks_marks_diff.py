@@ -1,4 +1,4 @@
-"""usage: python -I looks_marks_diff.py <sheet> <marks file> <key0> <x0,y0,x1,y1> [<x0,y0,x1,y1> ...] [--dir windows] [--mask x0,y0,x1,y1 ...]
+"""usage: python -I looks_marks_diff.py <sheet> <marks file> <key0> <x0,y0,x1,y1> [<x0,y0,x1,y1> ...] [--dir windows] [--mask x0,y0,x1,y1 ...] [--at dx,dy] [--check]
 
 For each box (a grid's cell in the reference sheet, key = key0, key0 + 1, ...) finds the reference's flat pixels that our render of the sheet
 misses by more than 2 levels outside text (looks_strict's rule: not inside a text box; plus the ink rule: not within 2 px of glyph ink) and
@@ -56,11 +56,16 @@ def rects(mask, ref, x0, y0):
     return ["%d %d %d %02x%02x%02x%s" % (r[0] - x0, r[1] - y0, r[4], *r[3], (" %d" % r[2]) if r[2] > 1 else "") for r in out]
 
 
-def marks_for(sheet, boxes, look="windows", masks=()):
+COUNTS = []
+
+
+def marks_for(sheet, boxes, look="windows", masks=(), at=(0, 0)):
     ref = np.array(Image.open(ROOT + "ref/windows/%s.png" % sheet).convert("RGB"))
     ours = np.array(Image.open(ROOT + "%s/%s.png" % (look, sheet)).convert("RGB"))
+    # `at`: where the reference's origin sits in our sheet (a sheet with margins and captions of its own)
+    ours = ours[at[1]:at[1] + ref.shape[0], at[0]:at[0] + ref.shape[1]]
     if ref.shape != ours.shape:
-        ours = ours[:ref.shape[0], :ref.shape[1]]
+        ref = ref[:ours.shape[0], :ours.shape[1]]
     for (mx0, my0, mx1, my1) in masks:
         ref[my0:my1, mx0:mx1] = ref[0, 0]
         ours[my0:my1, mx0:mx1] = ref[0, 0]
@@ -69,6 +74,8 @@ def marks_for(sheet, boxes, look="windows", masks=()):
     near = ink_near(ref) | ink_near(ours)
     small = [b for b in lc.cells(ref) if (b[2] - b[0]) * (b[3] - b[1]) < 5000]
     res = []
+    global COUNTS
+    COUNTS = []
     for (x0, y0, x1, y1) in boxes:
         sel = np.zeros(off.shape, bool)
         sel[y0:y1, x0:x1] = True
@@ -78,6 +85,7 @@ def marks_for(sheet, boxes, look="windows", masks=()):
         wrong = np.zeros(off.shape, bool)
         wrong[y0:y1, x0:x1] = off[y0:y1, x0:x1] & (~tb | ~near[y0:y1, x0:x1])
         c = wrong & sel
+        COUNTS.append(int(c.sum()))
         for (sx0, sy0, sx1, sy1) in small:
             if sx0 >= x0 and sx1 <= x1 and sy0 >= y0 and sy1 <= y1:
                 box = np.zeros(off.shape, bool)
@@ -96,7 +104,14 @@ def main(argv):
     if "--dir" in argv:
         look = argv[argv.index("--dir") + 1]
         argv = [a for a in argv if a not in ("--dir", look)]
+    check = "--check" in argv
+    argv = [a for a in argv if a != "--check"]
     sheet, path, key0 = argv[0], argv[1], int(argv[2])
+    at = (0, 0)
+    if "--at" in argv:
+        i = argv.index("--at")
+        at = tuple(int(v) for v in argv[i + 1].split(","))
+        argv = argv[:i] + argv[i + 2:]
     masks = []
     while "--mask" in argv:
         i = argv.index("--mask")
@@ -108,7 +123,11 @@ def main(argv):
         for line in open(path):
             k, m = line.rstrip("\n").split(" ", 1)
             old[int(k)] = m
-    for i, m in enumerate(marks_for(sheet, boxes, look, masks)):
+    marks = marks_for(sheet, boxes, look, masks, at)
+    if check:
+        print(sheet, "flat pixels off outside text, per box:", COUNTS)
+        return
+    for i, m in enumerate(marks):
         if m:
             old[key0 + i] = (old.get(key0 + i, "") + ";" + m).strip(";")
     with open(path, "w", newline="\n") as f:
