@@ -5908,6 +5908,16 @@ fn remap_children(l: *Layout, p: u32, sw: f64, sh: f64, from: u8, to: u8) {
     }
 }
 
+// Forgets the cached intrinsic widths of `b` and everything below it (they depend on the frame they were measured in).
+fn clear_widths(l: *Layout, b: u32) {
+    l.boxes.items[usize(b)].has_c = false
+    var kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        clear_widths(l, kid)
+        kid = l.boxes.items[usize(kid)].next
+    }
+}
+
 // Lays out block `c`, which is orthogonal to the current frame, as a formatting context root. Its edges (resolved in the
 // frame of the container) are kept; the result is its border box in that frame with every descendant mapped into it.
 // `pbase` is the percentage base and `pch` the definite height of the container (negative: none).
@@ -5934,7 +5944,10 @@ fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64) {
     if s.width.kind == .Px && has_w {
         inline = to_content_w(l, c, wv)
     } else {
-        inline = maxf(0.0f64, room - outer_i)
+        // Automatic inline size of an orthogonal flow: shrink-to-fit against the container's block space (Writing Modes 3 7.3).
+        clear_widths(l, c)
+        let (mn, mx) = content_widths(l, c)
+        inline = minf(mx, maxf(mn, maxf(0.0f64, room - outer_i - ext_i)))
     }
     inline = maxf(0.0f64, clamp_width(l, c, inline, pbase))
     var spec_b = -1.0f64
@@ -5946,6 +5959,7 @@ fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64) {
     let tw = inline + ext_i
     let th = block + ext_b
     l.vmode = old
+    clear_widths(l, c)
     remap_children(l, c, tw, th, code, old)
     let bb3 = bx(l, c)
     bb3.border = remap_edges(code, old, bb3.border)
