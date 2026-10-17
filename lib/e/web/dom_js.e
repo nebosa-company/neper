@@ -9822,7 +9822,20 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "  bytes() { const s = blobSlot(this); return Promise.resolve(binaryToBytes(s.bytes)); },\n")
     try str.push(b, "  stream() { const s = blobSlot(this); return streamOfBytes(binaryToBytes(s.bytes)); }\n")
     try str.push(b, "});\n")
-    try str.push(b, "let streamOfBytes = u8 => null;\n")
+    try str.push(b, "function streamOfBytes(u8) {\n")
+    try str.push(b, "  return new ReadableStream({ type: 'bytes', start(controller) { if (u8.length > 0) controller.enqueue(u8.slice()); controller.close(); } });\n")
+    try str.push(b, "}\n")
+    try str.push(b, "async function readStreamBody(stream) {\n")
+    try str.push(b, "  const reader = stream.getReader();\n")
+    try str.push(b, "  let out = '';\n")
+    try str.push(b, "  for (;;) {\n")
+    try str.push(b, "    const r = await reader.read();\n")
+    try str.push(b, "    if (r.done) break;\n")
+    try str.push(b, "    if (!(r.value instanceof Uint8Array)) throw new TypeError('Failed to read the body: a chunk is not a Uint8Array');\n")
+    try str.push(b, "    out += bytesToBinary(r.value);\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  return out;\n")
+    try str.push(b, "}\n")
     try str.push(b, "function File(fileBits, fileName, options = undefined) {\n")
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'File': Please use the 'new' operator\");\n")
     try str.push(b, "  required(arguments, 2, 'File');\n")
@@ -9893,6 +9906,10 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "function fdValue(value, filename) {\n")
     try str.push(b, "  if (isObject(value) && slotOf(value) && slotOf(value).isBlob) {\n")
     try str.push(b, "    if (!slotOf(value).isFile || filename !== undefined) {\n")
+    ret ok
+}
+
+fn part39(b: *str.Builder) -> err {
     try str.push(b, "      const f = new File([value], filename !== undefined ? filename : (slotOf(value).isFile ? slotOf(value).name : 'blob'), { type: slotOf(value).type });\n")
     try str.push(b, "      return f;\n")
     try str.push(b, "    }\n")
@@ -9906,10 +9923,6 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "  get(name) { const s = fdSlot(this); required(arguments, 1, 'get'); const n = toUSVString(name); for (const e of s.entries) if (e[0] === n) return e[1]; return null; },\n")
     try str.push(b, "  getAll(name) { const s = fdSlot(this); required(arguments, 1, 'getAll'); const n = toUSVString(name); return s.entries.filter(e => e[0] === n).map(e => e[1]); },\n")
     try str.push(b, "  has(name) { const s = fdSlot(this); required(arguments, 1, 'has'); const n = toUSVString(name); return s.entries.some(e => e[0] === n); },\n")
-    ret ok
-}
-
-fn part39(b: *str.Builder) -> err {
     try str.push(b, "  set(name, value, filename = undefined) {\n")
     try str.push(b, "    const s = fdSlot(this);\n")
     try str.push(b, "    required(arguments, 2, 'set');\n")
@@ -10056,7 +10069,7 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "  if (isObject(object) && slotOf(object) && slotOf(object).isFormData) return multipartBody(slotOf(object).entries);\n")
     try str.push(b, "  const bs = bufferSourceBytes(object);\n")
     try str.push(b, "  if (bs !== null) return { bytes: bytesToBinary(bs), type: null };\n")
-    try str.push(b, "  if (isObject(object) && slotOf(object) && slotOf(object).isStream) return { stream: object, bytes: null, type: null };\n")
+    try str.push(b, "  if (isReadableStreamLike(object)) { if (isReadableStreamLocked(object) || slotOf(object).disturbed) throw new TypeError('The stream is locked or disturbed'); return { stream: object, bytes: null, type: null }; }\n")
     try str.push(b, "  return { bytes: N.utf8Encode(toUSVString(object)), type: 'text/plain;charset=UTF-8' };\n")
     try str.push(b, "}\n")
     try str.push(b, "function multipartBody(entries) {\n")
@@ -10075,8 +10088,9 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "  const take = (self, name) => {\n")
     try str.push(b, "    const s = slotOf(self);\n")
     try str.push(b, "    if (!s || !(s.isRequest || s.isResponse)) illegal();\n")
-    try str.push(b, "    if (s.bodyUsed || (s.body && s.body.stream && slotOf(s.body.stream).locked)) return Promise.reject(new TypeError(\"Failed to execute '\" + name + \"': body stream already read\"));\n")
+    try str.push(b, "    if (s.bodyUsed || (s.body && s.body.stream && (isReadableStreamLocked(s.body.stream) || slotOf(s.body.stream).disturbed))) return Promise.reject(new TypeError(\"Failed to execute '\" + name + \"': body stream already read\"));\n")
     try str.push(b, "    s.bodyUsed = true;\n")
+    try str.push(b, "    if (s.body !== null && s.body.stream) return readStreamBody(s.body.stream);\n")
     try str.push(b, "    return Promise.resolve(s.body === null || s.body.bytes === null ? '' : s.body.bytes);\n")
     try str.push(b, "  };\n")
     try str.push(b, "  operations(proto, {\n")
@@ -10146,6 +10160,10 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "      const b = extractBody(init.body);\n")
     try str.push(b, "      s.body = b;\n")
     try str.push(b, "      if (b.type !== null && !slotOf(s.headers).list.some(e => e[0] === 'content-type')) appendHeader(s.headers, 'Content-Type', b.type);\n")
+    ret ok
+}
+
+fn part40(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "  }\n")
     try str.push(b, "  if (s.signal === null) s.signal = newSignal();\n")
@@ -10160,10 +10178,6 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "  referrer: { get() { const s = reqSlot(this); return s.referrer === 'about:client' ? 'about:client' : s.referrer; } },\n")
     try str.push(b, "  referrerPolicy: { get() { return reqSlot(this).referrerPolicy; } },\n")
     try str.push(b, "  mode: { get() { return reqSlot(this).mode; } },\n")
-    ret ok
-}
-
-fn part40(b: *str.Builder) -> err {
     try str.push(b, "  credentials: { get() { return reqSlot(this).credentials; } },\n")
     try str.push(b, "  cache: { get() { return reqSlot(this).cache; } },\n")
     try str.push(b, "  redirect: { get() { return reqSlot(this).redirect; } },\n")
@@ -10400,6 +10414,10 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "    if (ex) ex[1] += ', ' + v; else s.requestHeaders.push([n, v]);\n")
     try str.push(b, "  },\n")
     try str.push(b, "  send(body = null) {\n")
+    ret ok
+}
+
+fn part41(b: *str.Builder) -> err {
     try str.push(b, "    const s = xhrSlot(this);\n")
     try str.push(b, "    if (s.state !== 1 || s.sendFlag) throw domError('InvalidStateError', \"Failed to execute 'send' on 'XMLHttpRequest': The object's state must be OPENED.\");\n")
     try str.push(b, "    let bytes = null;\n")
@@ -10414,10 +10432,6 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "      xhrFire(this, this, 'loadstart', 0, 0);\n")
     try str.push(b, "      const raw = xhrRun(this, bytes);\n")
     try str.push(b, "      if (raw === null) { s.errorFlag = true; s.state = 4; s.sendFlag = false; xhrReadyState(this, 4); xhrFire(this, this, 'error', 0, 0); xhrFire(this, this, 'loadend', 0, 0); throw domError('NetworkError', \"Failed to execute 'send' on 'XMLHttpRequest': Failed to load '\" + s.url + \"'.\"); }\n")
-    ret ok
-}
-
-fn part41(b: *str.Builder) -> err {
     try str.push(b, "      xhrComplete(this, raw, true);\n")
     try str.push(b, "      xhrReadyState(this, 4);\n")
     try str.push(b, "      xhrFire(this, this, 'load', s.responseBytes.length, s.responseBytes.length);\n")
@@ -10654,6 +10668,10 @@ fn part41(b: *str.Builder) -> err {
     try str.push(b, "        pos = end + 2;\n")
     try str.push(b, "      } else if (text[pos + 1] === '/') {\n")
     try str.push(b, "        pos += 2;\n")
+    ret ok
+}
+
+fn part42(b: *str.Builder) -> err {
     try str.push(b, "        const name = readName();\n")
     try str.push(b, "        skipSpace();\n")
     try str.push(b, "        if (text[pos] !== '>') fail('malformed end tag');\n")
@@ -10668,10 +10686,6 @@ fn part41(b: *str.Builder) -> err {
     try str.push(b, "        const name = readName();\n")
     try str.push(b, "        const attrs = [];\n")
     try str.push(b, "        while (true) {\n")
-    ret ok
-}
-
-fn part42(b: *str.Builder) -> err {
     try str.push(b, "          skipSpace();\n")
     try str.push(b, "          if (text[pos] === '>' || text[pos] === '/' || pos >= n) break;\n")
     try str.push(b, "          const an = readName();\n")
@@ -10908,6 +10922,10 @@ fn part42(b: *str.Builder) -> err {
     try str.push(b, "  cloneFormState(node, copy);\n")
     try str.push(b, "  const s = slotOf(node);\n")
     try str.push(b, "  if (s.nodeType === ELEMENT_NODE && s.localName === 'template' && s.namespaceURI === HTML_NS && cloneChildren) {\n")
+    ret ok
+}
+
+fn part43(b: *str.Builder) -> err {
     try str.push(b, "    const src = templateContent(node), dst = templateContent(copy);\n")
     try str.push(b, "    for (const c of childrenOf(src)) appendNodeSimple(dst, cloneNode(c, slotOf(dst).doc, true));\n")
     try str.push(b, "  }\n")
@@ -10922,10 +10940,6 @@ fn part42(b: *str.Builder) -> err {
     try str.push(b, "    let out;\n")
     try str.push(b, "    if (v instanceof Boolean) out = new Boolean(v.valueOf());\n")
     try str.push(b, "    else if (v instanceof Number) out = new Number(v.valueOf());\n")
-    ret ok
-}
-
-fn part43(b: *str.Builder) -> err {
     try str.push(b, "    else if (v instanceof String) out = new String(v.valueOf());\n")
     try str.push(b, "    else if (v instanceof Date) out = new Date(v.getTime());\n")
     try str.push(b, "    else if (v instanceof RegExp) out = new RegExp(v.source, v.flags);\n")
@@ -11162,6 +11176,10 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "const ceNodeLike = c => c === Node || c.prototype instanceof Node || c === DOMTokenList || c === NamedNodeMap || c === Range || c === DOMImplementation;\n")
     try str.push(b, "for (const c of allInterfaces) if (typeof c === 'function' && ceNodeLike(c)) ceWrapPrototype(c.prototype);\n")
+    ret ok
+}
+
+fn part44(b: *str.Builder) -> err {
     try str.push(b, "convertDeclarative(mainDocument);\n")
     try str.push(b, "scanHandlerAttributes();\n")
     try str.push(b, "for (const d of descendantsOf(mainDocument)) if (isIFrame(d)) frameInserted(d);\n")
@@ -11170,7 +11188,7 @@ fn part43(b: *str.Builder) -> err {
 }
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 606153)
+    var b = try str.builder(a, 606851)
     try part0(&b)
     try part1(&b)
     try part2(&b)
@@ -11215,5 +11233,6 @@ fn source(a: *mem.Arena) -> (str, err) {
     try part41(&b)
     try part42(&b)
     try part43(&b)
+    try part44(&b)
     ret (str.done(&b), ok)
 }
