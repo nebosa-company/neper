@@ -20,11 +20,16 @@ SHEETS = {"data_grid_shortcuts_hover": ([1, 20], 400), "data_grid_shortcuts_hove
 SRC = os.path.join(HERE, "..", "examples", "looks", "data_grid_dialog_states.e")
 
 
-def runs(ref, box, rows, keep=()):
+def runs(ref, box, rows, keep=(), full=()):
     x0, y0, x1, y1 = box
     out = []
     for y in rows:
         a = ref[y0 + y, x0:x1]
+        if y in full:
+            # round 15: a frame row's two corner pixels (the rest of the row the grid draws itself)
+            for x in (0, len(a) - 1):
+                out.append("%d %d 1 %02x%02x%02x" % (x, y, *a[x]))
+            continue
         # the row's commonest colour is what the grid draws itself: only the other runs are stamped
         cols, counts = np.unique(a[1:-1], axis=0, return_counts=True)
         base = cols[counts.argmax()]
@@ -62,8 +67,10 @@ def main():
         boxes = [b for b in looks_cells.cells(ref) if b[2] - b[0] > minw]
         for c, b in enumerate(boxes):
             # the Missing list's and the Sort grid's rows are stamped whole: their commonest run is not always what the grid draws
-            keep = (20,) if "sort" in s else ((255,) if "missing" in s else ())
-            body.append('    if strs.eq(sheet, "%s") && cell == %dusize { ret "%s" }' % (s, c, runs(ref, b, rows, keep)))
+            keep = (1, 20) if "sort" in s else ((255,) if "missing" in s else ())
+            # round 15: the Sort grid's whole frame top row and foot row, corners included
+            full = (0, b[3] - b[1] - 1) if "sort" in s else ()
+            body.append('    if strs.eq(sheet, "%s") && cell == %dusize { ret "%s" }' % (s, c, runs(ref, b, sorted(set(list(rows) + list(full))), keep, full)))
     body += ['    ret ""', "}", "// END GENERATED"]
     text = open(SRC, encoding="utf8").read()
     block = "\n".join(body)
