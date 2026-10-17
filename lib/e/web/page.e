@@ -702,6 +702,54 @@ fn collapse_space(a: *mem.Arena, s: str) -> str {
 // --- Scripts.
 
 // A synchronous fetch for the page's scripts: the response body as UTF-8 text.
+// The full request of XMLHttpRequest and fetch: the method, header lines and body come from the script, the response goes
+// back as text lines of headers and the body bytes.
+fn net_hook(ctx: *void, method: str, u: str, header_lines: str, body: []const u8, out: *script.NetResult) -> bool {
+    let p = mem.cast[*Page](ctx)
+    var m = http.Method.Get
+    if str.eq(method, "HEAD") { m = http.Method.Head }
+    if str.eq(method, "POST") { m = http.Method.Post }
+    if str.eq(method, "PUT") { m = http.Method.Put }
+    if str.eq(method, "PATCH") { m = http.Method.Patch }
+    if str.eq(method, "DELETE") { m = http.Method.Delete }
+    if str.eq(method, "OPTIONS") { m = http.Method.Options }
+    let (hl, hle) = list.init[http.Header](p.pa, 16usize)
+    if hle != ok { ret false }
+    var heads = hl
+    var pos = 0usize
+    while pos < header_lines.len {
+        var end = pos
+        while end < header_lines.len && header_lines[end] != 10u8 { end += 1usize }
+        let line = header_lines[pos..end]
+        pos = end + 1usize
+        let (name, value, found) = str.split_once(line, ":")
+        if found {
+            let pe = list.push[http.Header](&heads, http.Header { name: str.trim(name), value: str.trim(value) })
+        }
+    }
+    let none_body: []const u8 = zero
+    var req = fetch.Request { url: u, method: m, headers: list.slice_const[http.Header](&heads), body: body, redirect: fetch.Redirect.Follow, credentials: fetch.Credentials.SameOrigin, referrer: p.url }
+    if body.len == 0usize { req.body = none_body }
+    let (resp, fe) = fetch.fetch(p.client, req)
+    if fe != ok { ret false }
+    var lines = ""
+    var i = 0usize
+    while i < resp.headers.len {
+        let (l1, e1) = str.concat(p.pa, resp.headers[i].name, ": ")
+        let (l2, e2) = str.concat(p.pa, l1, resp.headers[i].value)
+        let (l3, e3) = str.concat(p.pa, l2, "\n")
+        let (all, e4) = str.concat(p.pa, lines, l3)
+        if e1 == ok && e2 == ok && e3 == ok && e4 == ok { lines = all }
+        i += 1usize
+    }
+    out.status = resp.status
+    out.status_text = resp.status_text
+    out.url = resp.url
+    out.headers = lines
+    out.body = resp.body
+    ret true
+}
+
 fn fetch_text_hook(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
     let p = mem.cast[*Page](ctx)
     let (resp, fe) = fetch.fetch(p.client, get_request(u, p.url, fetch.Credentials.Include))
@@ -840,6 +888,7 @@ fn start_scripts(p: *Page) {
     p.ctx = ctx
     p.scripted = true
     script.set_fetch(ctx, mem.cast[*void](p), fetch_text_hook)
+    script.set_net(ctx, mem.cast[*void](p), net_hook)
     script.set_view(ctx, mem.cast[*void](p), geom_hook, style_hook)
     p.seen_version = v.tree.version
     script.lifecycle(ctx, "run")

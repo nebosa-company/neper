@@ -11,6 +11,7 @@ use e.fmt.dom as dom
 use e.fmt.html as html
 use e.fmt.url as url
 use e.js.interp as js
+use e.js.module as module
 use e.js.realm as realm
 use e.mem
 use e.str
@@ -24,10 +25,16 @@ type FetchFn = fn(*void, str, str) -> (str, u16, bool)
 type GeomFn = fn(*void, u32, u8, []f64) -> bool
 type StyleFn = fn(*void, u32, str) -> (str, bool)
 
+// A full request for the page's network: (context, method, url, header lines "Name: value" joined by newlines, body bytes).
+// Fills the result and answers false when the request could not be made.
+type NetResult = struct { status: u16, status_text: str, url: str, headers: str, body: []const u8 }
+type NetFn = fn(*void, str, str, str, []const u8, *NetResult) -> bool
+
 type Host = struct {
     d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool,
     fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool,
-    view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool
+    view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool,
+    net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32
 }
 
 fn host_of(it: *js.Interp) -> *Host { ret mem.cast[*Host](it.host) }
@@ -591,6 +598,223 @@ fn n_computed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     ret (js.str_value(text), ok)
 }
 
+// --- binary strings: one code point (0..255) per byte, the form bodies take inside scripts
+
+fn latin1_to_bytes(a: *mem.Arena, s: str) -> ([]u8, err) {
+    let out = try mem.alloc[u8](a, s.len + 1usize)
+    var n = 0usize
+    var i = 0usize
+    while i < s.len {
+        let c = s[i]
+        if c < 128u8 {
+            out[n] = c
+            i += 1usize
+        } else if c == 194u8 && i + 1usize < s.len {
+            out[n] = s[i + 1usize]
+            i += 2usize
+        } else if c == 195u8 && i + 1usize < s.len {
+            out[n] = s[i + 1usize] + 64u8
+            i += 2usize
+        } else {
+            out[n] = 63u8
+            i += 1usize
+        }
+        n += 1usize
+    }
+    ret (out[0usize..n], ok)
+}
+
+fn bytes_to_latin1(a: *mem.Arena, b: []const u8) -> (str, err) {
+    var bb = try str.builder(a, b.len * 2usize + 8usize)
+    var i = 0usize
+    while i < b.len {
+        let c = b[i]
+        if c < 128u8 {
+            try str.push_byte(&bb, c)
+        } else if c < 192u8 {
+            try str.push_byte(&bb, 194u8)
+            try str.push_byte(&bb, c)
+        } else {
+            try str.push_byte(&bb, 195u8)
+            try str.push_byte(&bb, c - 64u8)
+        }
+        i += 1usize
+    }
+    ret (str.done(&bb), ok)
+}
+
+// UTF-8 decoding with U+FFFD for invalid sequences.
+fn decode_utf8_lossy(a: *mem.Arena, b: []const u8) -> (str, err) {
+    var bb = try str.builder(a, b.len + 16usize)
+    var i = 0usize
+    while i < b.len {
+        let c = b[i]
+        var len = 0usize
+        if c < 128u8 { len = 1usize } else if c >= 194u8 && c <= 223u8 { len = 2usize } else if c >= 224u8 && c <= 239u8 { len = 3usize } else if c >= 240u8 && c <= 244u8 { len = 4usize }
+        var good = len > 0usize && i + len <= b.len
+        if good && len > 1usize {
+            var k = 1usize
+            while k < len {
+                if (b[i + k] & 192u8) != 128u8 { good = false }
+                k += 1usize
+            }
+            if good && len == 3usize {
+                if c == 224u8 && b[i + 1usize] < 160u8 { good = false }
+                if c == 237u8 && b[i + 1usize] > 159u8 { good = false }
+            }
+            if good && len == 4usize {
+                if c == 240u8 && b[i + 1usize] < 144u8 { good = false }
+                if c == 244u8 && b[i + 1usize] > 143u8 { good = false }
+            }
+        }
+        if good {
+            var k2 = 0usize
+            while k2 < len {
+                try str.push_byte(&bb, b[i + k2])
+                k2 += 1usize
+            }
+            i += len
+        } else {
+            try str.push_byte(&bb, 239u8)
+            try str.push_byte(&bb, 191u8)
+            try str.push_byte(&bb, 189u8)
+            i += 1usize
+        }
+    }
+    ret (str.done(&bb), ok)
+}
+
+fn n_utf8_encode(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (s, se) = sarg(it, args, 0usize)
+    if se != ok { ret (js.undefv(), se) }
+    let (out, oe) = bytes_to_latin1(it.a, s)
+    if oe != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    ret (js.str_value(out), ok)
+}
+
+fn n_utf8_decode(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (s, se) = sarg(it, args, 0usize)
+    if se != ok { ret (js.undefv(), se) }
+    let (bytes, be) = latin1_to_bytes(it.a, s)
+    if be != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    let (out, oe) = decode_utf8_lossy(it.a, bytes)
+    if oe != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    ret (js.str_value(out), ok)
+}
+
+// net(method, url, headerLines, bodyBinary): the response as {status, statusText, url, headers: [[name, value]], body}, or null.
+fn n_net(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    if !h.has_net { ret (js.null_value(), ok) }
+    let (method, me) = sarg(it, args, 0usize)
+    if me != ok { ret (js.undefv(), me) }
+    let (u, ue) = sarg(it, args, 1usize)
+    if ue != ok { ret (js.undefv(), ue) }
+    let (hdrs, he) = sarg(it, args, 2usize)
+    if he != ok { ret (js.undefv(), he) }
+    let (body_text, be) = sarg(it, args, 3usize)
+    if be != ok { ret (js.undefv(), be) }
+    let (body, bye) = latin1_to_bytes(it.a, body_text)
+    if bye != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    var res: NetResult = zero
+    if !h.net_fn(h.net_ctx, method, u, hdrs, body, &res) { ret (js.null_value(), ok) }
+    let o = js.new_plain(it)
+    try js.set_named(it, o, "status", js.num_value(f64(res.status)))
+    try js.set_named(it, o, "statusText", js.str_value(res.status_text))
+    try js.set_named(it, o, "url", js.str_value(res.url))
+    let harr = js.new_array(it)
+    var pos = 0usize
+    while pos < res.headers.len {
+        var end = pos
+        while end < res.headers.len && res.headers[end] != 10u8 { end += 1usize }
+        let line = res.headers[pos..end]
+        pos = end + 1usize
+        let (name, value, found) = str.split_once(line, ":")
+        if found {
+            let pair = js.new_array(it)
+            try js.array_push(it, pair, js.str_value(str.trim(name)))
+            try js.array_push(it, pair, js.str_value(str.trim(value)))
+            try js.array_push(it, harr, js.obj_value(pair))
+        }
+    }
+    try js.set_named(it, o, "headers", js.obj_value(harr))
+    let (binary, ble) = bytes_to_latin1(it.a, res.body)
+    if ble != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    try js.set_named(it, o, "body", js.str_value(binary))
+    ret (js.obj_value(o), ok)
+}
+
+// --- modules
+
+// The module loader of a page: a specifier is a URL resolved against the referring module, fetched through the page.
+fn load_module_hook(it: *js.Interp, referrer: str, spec: str) -> (*void, err) {
+    let h = host_of(it)
+    if !h.has_fetch { ret (zero, js.throw_type(it, "modules cannot be loaded here")) }
+    var rel_ok = false
+    if spec.len > 0usize && spec[0usize] == 47u8 { rel_ok = true }
+    if spec.len > 1usize && spec[0usize] == 46u8 && (spec[1usize] == 47u8 || spec[1usize] == 46u8) { rel_ok = true }
+    if str.starts_with(spec, "http:") || str.starts_with(spec, "https:") || str.starts_with(spec, "file:") || str.starts_with(spec, "data:") || str.starts_with(spec, "blob:") { rel_ok = true }
+    if !rel_ok { ret (zero, js.throw_type(it, js.str_concat3(it, "Failed to resolve module specifier '", spec, "': relative references must start with / ./ or ../"))) }
+    var base = referrer
+    let (hash_at, has_hash) = str.find(referrer, "#")
+    if has_hash { base = referrer[0usize..hash_at] }
+    var none: url.Url = zero
+    let (b, be) = url.parse(it.a, base, &none, false)
+    if be != ok { ret (zero, js.throw_type(it, "invalid base URL")) }
+    let (u, ue) = url.parse(it.a, spec, &b, true)
+    if ue != ok { ret (zero, js.throw_type(it, js.str_concat3(it, "Failed to resolve module specifier '", spec, "'"))) }
+    let href = url.href(it.a, &u, true)
+    let (found, has) = module.find(it, href)
+    if has { ret (mem.cast[*void](found), ok) }
+    let (text, status, reached) = h.fetch_fn(h.fetch_ctx, href, referrer)
+    if !reached || status < 200u16 || status >= 300u16 { ret (zero, js.throw_type(it, js.str_concat3(it, "Failed to fetch dynamically imported module: ", href, ""))) }
+    let (m, me) = module.new_module(it, href, text)
+    if me != ok { ret (zero, me) }
+    ret (mem.cast[*void](m), ok)
+}
+
+fn module_rejected(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    it.thrown = arg(args, 0usize)
+    report_thrown(it, "module")
+    ret (js.undefv(), ok)
+}
+
+// runModule(url, source): runs the module at `url`, or the inline module `source` (named after the document); errors, also
+// those of its evaluation, are reported to the page. Answers true when it was started.
+fn n_run_module(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    let (u, ue) = sarg(it, args, 0usize)
+    if ue != ok { ret (js.undefv(), ue) }
+    var m: *module.Module = zero
+    if js.is_undefined(arg(args, 1usize)) {
+        let (mp, le) = load_module_hook(it, h.base, u)
+        if le != ok {
+            if le == js.Throw { report_thrown(it, u) }
+            ret (js.bool_value(false), ok)
+        }
+        m = module.module_of(mp)
+    } else {
+        let (src, se) = sarg(it, args, 1usize)
+        if se != ok { ret (js.undefv(), se) }
+        h.inline_modules += 1u32
+        let (nm, nme) = module.new_module(it, js.str_concat3(it, u, "#module", js.number_to_string(it.a, f64(h.inline_modules))), src)
+        if nme != ok {
+            if nme == js.Throw { report_thrown(it, u) }
+            ret (js.bool_value(false), ok)
+        }
+        m = nm
+    }
+    it.script_url = m.url
+    let (p, pe) = module.run_module(it, m)
+    if pe != ok {
+        if pe == js.Throw { report_thrown(it, u) }
+        ret (js.bool_value(false), ok)
+    }
+    let on_rej = js.make_native(it, "", 1u32, module_rejected)
+    let te = js.promise_then_raw(it, js.as_object(p), js.undefv(), js.obj_value(on_rej))
+    ret (js.bool_value(true), ok)
+}
+
 fn n_base(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     ret (js.str_value(host_of(it).base), ok)
 }
@@ -726,6 +950,10 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "runJobs", 0u32, n_run_jobs)
     js.add_method(it, n, "fetchText", 1u32, n_fetch_text)
     js.add_method(it, n, "geom", 2u32, n_geom)
+    js.add_method(it, n, "runModule", 2u32, n_run_module)
+    js.add_method(it, n, "utf8Encode", 1u32, n_utf8_encode)
+    js.add_method(it, n, "utf8Decode", 1u32, n_utf8_decode)
+    js.add_method(it, n, "net", 4u32, n_net)
     js.add_method(it, n, "computed", 2u32, n_computed)
     js.add_method(it, n, "urlParse", 2u32, n_url_parse)
     js.add_method(it, n, "urlSet", 3u32, n_url_set)
@@ -745,6 +973,7 @@ fn new_context(a: *mem.Arena, d: *dom.Dom, base: str) -> (*js.Interp, err) {
     let (l, le) = list.init[str](a, 64usize)
     if le != ok { ret (it, le) }
     cell[0usize].log = l
+    let mie = module.install(it, load_module_hook)
     it.host = mem.cast[*void](&cell[0usize])
     install_natives(it)
     let (src, se) = dom_js.source(a)
@@ -763,6 +992,14 @@ fn set_fetch(it: *js.Interp, ctx: *void, f: FetchFn) {
     h.fetch_ctx = ctx
     h.fetch_fn = f
     h.has_fetch = true
+}
+
+// Gives scripts the page's network (XMLHttpRequest, fetch).
+fn set_net(it: *js.Interp, ctx: *void, f: NetFn) {
+    let h = host_of(it)
+    h.net_ctx = ctx
+    h.net_fn = f
+    h.has_net = true
 }
 
 // Gives scripts the page's layout and style (getBoundingClientRect, getComputedStyle, offset and client sizes).
@@ -808,6 +1045,7 @@ fn report_thrown(it: *js.Interp, name: str) {
 
 // Evaluates a classic script; an uncaught exception goes to `window.__reportError`, then false is answered.
 fn run_script(it: *js.Interp, source: str, name: str) -> bool {
+    it.script_url = name
     let (v, e) = js.eval_source(it, source)
     if e == ok { ret true }
     report_thrown(it, name)
