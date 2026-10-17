@@ -203,7 +203,7 @@ fn part0(b: *str.Builder) -> err {
     try str.push(b, "    required(arguments, 1, 'initEvent');\n")
     try str.push(b, "    if (s.dispatch) return;\n")
     try str.push(b, "    s.stopProp = false; s.stopImmediate = false; s.canceled = false; s.isTrusted = false; s.target = null;\n")
-    try str.push(b, "    s.type = toDOMString(type); s.bubbles = !!bubbles; s.cancelable = !!cancelable;\n")
+    try str.push(b, "    s.type = toDOMString(type); s.bubbles = !!bubbles; s.cancelable = !!cancelable; s.initialized = true;\n")
     try str.push(b, "  }\n")
     try str.push(b, "});\n")
     try str.push(b, "attributes(Event.prototype, {\n")
@@ -6464,6 +6464,7 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "      this.interactive();\n")
     try str.push(b, "      for (const run of deferredScripts.splice(0, deferredScripts.length)) { try { run(); } catch (e) { reportException(e); } N.runJobs(); }\n")
     try str.push(b, "      this.domContentLoaded();\n")
+    try str.push(b, "      flushFrameLoads();\n")
     try str.push(b, "      this.complete();\n")
     try str.push(b, "      this.load();\n")
     try str.push(b, "      this.pageshow();\n")
@@ -6562,7 +6563,24 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "  refreshFrameIndexes();\n")
     try str.push(b, "  refreshNamedFor(el);\n")
     try str.push(b, "}\n")
+    try str.push(b, "function mimeOfAddress(address) {\n")
+    try str.push(b, "  const path = address.replace(/[?#].*$/, '');\n")
+    try str.push(b, "  if (/\\.xhtml?$/i.test(path)) return 'application/xhtml+xml';\n")
+    try str.push(b, "  if (/\\.xml$/i.test(path)) return 'application/xml';\n")
+    try str.push(b, "  if (/\\.svg$/i.test(path)) return 'image/svg+xml';\n")
+    try str.push(b, "  return 'text/html';\n")
+    try str.push(b, "}\n")
     try str.push(b, "function fireFrameLoad(el) { fireSimple(el, 'load', false); }\n")
+    try str.push(b, "const pendingFrameLoads = [];\n")
+    try str.push(b, "function frameTask(fn) {\n")
+    try str.push(b, "  const entry = { fn, done: false };\n")
+    try str.push(b, "  const run = () => { if (entry.done) return; entry.done = true; fn(); };\n")
+    try str.push(b, "  apply(arrayPush, pendingFrameLoads, [run]);\n")
+    try str.push(b, "  scheduleTimer(run, 0, false, []);\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function flushFrameLoads() {\n")
+    try str.push(b, "  while (pendingFrameLoads.length) { const run = pendingFrameLoads.shift(); try { run(); } catch (e) { reportException(e); } }\n")
+    try str.push(b, "}\n")
     try str.push(b, "function processFrameAttributes(el, st, initial) {\n")
     try str.push(b, "  const token = ++st.token;\n")
     try str.push(b, "  const srcdoc = getAttributeValue(el, 'srcdoc');\n")
@@ -6573,27 +6591,33 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "    const parsed = N.urlParse(src.trim(), documentBaseURL(mainDocument));\n")
     try str.push(b, "    if (parsed !== null) address = parsed[0];\n")
     try str.push(b, "    else {\n")
-    try str.push(b, "      scheduleTimer(() => { if (st.token === token && isConnected(el)) fireFrameLoad(el); }, 0, false, []);\n")
+    try str.push(b, "      frameTask(() => { if (st.token === token && isConnected(el)) fireFrameLoad(el); });\n")
     try str.push(b, "      return;\n")
     try str.push(b, "    }\n")
     try str.push(b, "  }\n")
     try str.push(b, "  if (address === 'about:blank' && markup === null) {\n")
-    try str.push(b, "    if (initial) scheduleTimer(() => { if (st.token === token && isConnected(el)) fireFrameLoad(el); }, 0, false, []);\n")
-    try str.push(b, "    else scheduleTimer(() => { if (st.token !== token || !isConnected(el)) return; attachFrameWindow(el, st, N.frameCreate(BLANK_DOCUMENT, 'about:blank')); N.frameStart(st.win); fireFrameLoad(el); }, 0, false, []);\n")
+    try str.push(b, "    if (initial) frameTask(() => { if (st.token === token && isConnected(el)) fireFrameLoad(el); });\n")
+    try str.push(b, "    else frameTask(() => { if (st.token !== token || !isConnected(el)) return; attachFrameWindow(el, st, N.frameCreate(BLANK_DOCUMENT, 'about:blank')); N.frameStart(st.win); fireFrameLoad(el); });\n")
     try str.push(b, "    return;\n")
     try str.push(b, "  }\n")
-    try str.push(b, "  scheduleTimer(() => {\n")
+    try str.push(b, "  frameTask(() => {\n")
     try str.push(b, "    if (st.token !== token || !isConnected(el)) return;\n")
     try str.push(b, "    let text = markup;\n")
     try str.push(b, "    if (text === null) {\n")
+    ret ok
+}
+
+fn part26(b: *str.Builder) -> err {
     try str.push(b, "      const r = N.fetchText(address);\n")
     try str.push(b, "      text = r === null ? '' : r[1];\n")
     try str.push(b, "    }\n")
-    try str.push(b, "    const win = N.frameCreate(text, address);\n")
+    try str.push(b, "    const mime = markup === null ? mimeOfAddress(address) : 'text/html';\n")
+    try str.push(b, "    const win = N.frameCreate(mime === 'text/html' ? text : BLANK_DOCUMENT, address);\n")
+    try str.push(b, "    if (mime !== 'text/html') win.__loadXML(text, mime);\n")
     try str.push(b, "    attachFrameWindow(el, st, win);\n")
     try str.push(b, "    N.frameStart(win);\n")
     try str.push(b, "    fireFrameLoad(el);\n")
-    try str.push(b, "  }, 0, false, []);\n")
+    try str.push(b, "  });\n")
     try str.push(b, "}\n")
     try str.push(b, "const prevInsertedFrames = elementInserted;\n")
     try str.push(b, "elementInserted = function (el) {\n")
@@ -6604,10 +6628,6 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "elementRemoved = function (el, parent) {\n")
     try str.push(b, "  prevRemovedFrames(el, parent);\n")
     try str.push(b, "  if (isIFrame(el)) frameRemoved(el);\n")
-    ret ok
-}
-
-fn part26(b: *str.Builder) -> err {
     try str.push(b, "};\n")
     try str.push(b, "const prevAttrFrames = elementAttributeChanged;\n")
     try str.push(b, "elementAttributeChanged = function (el, name, oldValue, value) {\n")
@@ -6838,6 +6858,10 @@ fn part26(b: *str.Builder) -> err {
     try str.push(b, "    const ca = commonAncestor(s.startNode, s.endNode);\n")
     try str.push(b, "    for (const n of descendantsOf(ca)) {\n")
     try str.push(b, "      if (nodeType(n) !== TEXT_NODE && nodeType(n) !== CDATA_SECTION_NODE && partiallyContained(n, this)) throw domError('InvalidStateError', 'The range partially selects a non-Text node');\n")
+    ret ok
+}
+
+fn part27(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "    const t = nodeType(newParent);\n")
     try str.push(b, "    if (t === DOCUMENT_NODE || t === DOCUMENT_TYPE_NODE || t === DOCUMENT_FRAGMENT_NODE) throw domError('InvalidNodeTypeError', 'The new parent has an invalid type');\n")
@@ -6858,10 +6882,6 @@ fn part26(b: *str.Builder) -> err {
     try str.push(b, "  isPointInRange(node, offset) {\n")
     try str.push(b, "    const s = rangeSlot(this);\n")
     try str.push(b, "    required(arguments, 2, 'isPointInRange');\n")
-    ret ok
-}
-
-fn part27(b: *str.Builder) -> err {
     try str.push(b, "    toNodeArg(node, 'isPointInRange');\n")
     try str.push(b, "    const off = toUnsignedLong(offset);\n")
     try str.push(b, "    if (rootNode(node) !== rootNode(s.startNode)) return false;\n")
@@ -7092,6 +7112,10 @@ fn part27(b: *str.Builder) -> err {
     try str.push(b, "    if (s.endNode === cur) { s.endNode = node; s.endOffset += length; }\n")
     try str.push(b, "    if (s.startNode === parent && s.startOffset === index) { s.startNode = node; s.startOffset = length; }\n")
     try str.push(b, "    if (s.endNode === parent && s.endOffset === index) { s.endNode = node; s.endOffset = length; }\n")
+    ret ok
+}
+
+fn part28(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "};\n")
     try str.push(b, "function StaticRange(init) {\n")
@@ -7112,10 +7136,6 @@ fn part27(b: *str.Builder) -> err {
     try str.push(b, "for (const [k, v] of Object.entries({\n")
     try str.push(b, "  FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3, SHOW_ALL: 0xFFFFFFFF, SHOW_ELEMENT: 0x1, SHOW_ATTRIBUTE: 0x2, SHOW_TEXT: 0x4,\n")
     try str.push(b, "  SHOW_CDATA_SECTION: 0x8, SHOW_ENTITY_REFERENCE: 0x10, SHOW_ENTITY: 0x20, SHOW_PROCESSING_INSTRUCTION: 0x40, SHOW_COMMENT: 0x80,\n")
-    ret ok
-}
-
-fn part28(b: *str.Builder) -> err {
     try str.push(b, "  SHOW_DOCUMENT: 0x100, SHOW_DOCUMENT_TYPE: 0x200, SHOW_DOCUMENT_FRAGMENT: 0x400, SHOW_NOTATION: 0x800\n")
     try str.push(b, "})) {\n")
     try str.push(b, "  defineProperty(NodeFilter, k, { value: v, writable: false, enumerable: true, configurable: false });\n")
@@ -7346,6 +7366,10 @@ fn part28(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "});\n")
     try str.push(b, "function MutationRecord() { throw new TypeError('Illegal constructor'); }\n")
+    ret ok
+}
+
+fn part29(b: *str.Builder) -> err {
     try str.push(b, "iface('MutationRecord', MutationRecord, null);\n")
     try str.push(b, "function mrSlot(o) { const s = slotOf(o); if (!s || !s.isMutationRecord) illegal(); return s; }\n")
     try str.push(b, "for (const key of ['type', 'target', 'addedNodes', 'removedNodes', 'previousSibling', 'nextSibling', 'attributeName', 'attributeNamespace', 'oldValue']) {\n")
@@ -7366,10 +7390,6 @@ fn part28(b: *str.Builder) -> err {
     try str.push(b, "  if (s.registrations === null || s.registrations === undefined) { if (!create_) return null; s.registrations = []; }\n")
     try str.push(b, "  return s.registrations;\n")
     try str.push(b, "}\n")
-    ret ok
-}
-
-fn part29(b: *str.Builder) -> err {
     try str.push(b, "operations(MutationObserver.prototype, {\n")
     try str.push(b, "  observe(target, options = {}) {\n")
     try str.push(b, "    const s = moSlot(this);\n")
@@ -7600,6 +7620,10 @@ fn part29(b: *str.Builder) -> err {
     try str.push(b, "operations(FileReader.prototype, {\n")
     try str.push(b, "  readAsArrayBuffer(blob) { frRead(this, blob, 'arraybuffer'); },\n")
     try str.push(b, "  readAsBinaryString(blob) { frRead(this, blob, 'binarystring'); },\n")
+    ret ok
+}
+
+fn part30(b: *str.Builder) -> err {
     try str.push(b, "  readAsText(blob, encoding = undefined) { frRead(this, blob, 'text', encoding); },\n")
     try str.push(b, "  readAsDataURL(blob) { frRead(this, blob, 'dataurl'); },\n")
     try str.push(b, "  abort() { const s = frSlot(this); if (s.readyState === 1) { s.readyState = 2; s.result = null; s.aborted = true; frFire(this, 'abort'); frFire(this, 'loadend'); } }\n")
@@ -7620,10 +7644,6 @@ fn part29(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "iface('FormData', FormData, null);\n")
     try str.push(b, "const constructEntryList = (form, submitter) => constructEntryListImpl(form, submitter);\n")
-    ret ok
-}
-
-fn part30(b: *str.Builder) -> err {
     try str.push(b, "function fdSlot(o) { const s = slotOf(o); if (!s || !s.isFormData) illegal(); return s; }\n")
     try str.push(b, "function fdValue(value, filename) {\n")
     try str.push(b, "  if (isObject(value) && slotOf(value) && slotOf(value).isBlob) {\n")
@@ -7854,6 +7874,10 @@ fn part30(b: *str.Builder) -> err {
     try str.push(b, "    s.headers = new Headers(); slotOf(s.headers).guard = 'request';\n")
     try str.push(b, "  }\n")
     try str.push(b, "  if (init !== undefined && init !== null) {\n")
+    ret ok
+}
+
+fn part31(b: *str.Builder) -> err {
     try str.push(b, "    if (!isObject(init)) throw new TypeError(\"Failed to construct 'Request': The provided value is not of type 'RequestInit'.\");\n")
     try str.push(b, "    if (init.method !== undefined) {\n")
     try str.push(b, "      const m = toDOMString(init.method);\n")
@@ -7874,10 +7898,6 @@ fn part30(b: *str.Builder) -> err {
     try str.push(b, "    if (init.headers !== undefined) { const h = new Headers(); slotOf(h).guard = 'request'; fillHeaders(h, init.headers); s.headers = h; }\n")
     try str.push(b, "    if (init.body !== undefined && init.body !== null) {\n")
     try str.push(b, "      if (s.method === 'GET' || s.method === 'HEAD') throw new TypeError(\"Failed to construct 'Request': Request with GET/HEAD method cannot have body.\");\n")
-    ret ok
-}
-
-fn part31(b: *str.Builder) -> err {
     try str.push(b, "      const b = extractBody(init.body);\n")
     try str.push(b, "      s.body = b;\n")
     try str.push(b, "      if (b.type !== null && !slotOf(s.headers).list.some(e => e[0] === 'content-type')) appendHeader(s.headers, 'Content-Type', b.type);\n")
@@ -8108,6 +8128,10 @@ fn part31(b: *str.Builder) -> err {
     try str.push(b, "    const m = toDOMString(method);\n")
     try str.push(b, "    if (!validHeaderName(m)) throw domError('SyntaxError', \"Failed to execute 'open' on 'XMLHttpRequest': '\" + m + \"' is not a valid HTTP method.\");\n")
     try str.push(b, "    const up = asciiUppercase(m);\n")
+    ret ok
+}
+
+fn part32(b: *str.Builder) -> err {
     try str.push(b, "    if (['CONNECT', 'TRACE', 'TRACK'].indexOf(up) >= 0) throw domError('SecurityError', \"Failed to execute 'open' on 'XMLHttpRequest': '\" + m + \"' HTTP method is unsupported.\");\n")
     try str.push(b, "    const parsed = N.urlParse(toUSVString(url), documentBaseURL(mainDocument));\n")
     try str.push(b, "    if (parsed === null) throw domError('SyntaxError', \"Failed to execute 'open' on 'XMLHttpRequest': Invalid URL\");\n")
@@ -8128,10 +8152,6 @@ fn part31(b: *str.Builder) -> err {
     try str.push(b, "    if (forbiddenRequestHeader(n)) return;\n")
     try str.push(b, "    const l = asciiLowercase(n);\n")
     try str.push(b, "    const ex = s.requestHeaders.find(h => asciiLowercase(h[0]) === l);\n")
-    ret ok
-}
-
-fn part32(b: *str.Builder) -> err {
     try str.push(b, "    if (ex) ex[1] += ', ' + v; else s.requestHeaders.push([n, v]);\n")
     try str.push(b, "  },\n")
     try str.push(b, "  send(body = null) {\n")
@@ -8362,6 +8382,10 @@ fn part32(b: *str.Builder) -> err {
     try str.push(b, "        let publicId = '', systemId = '';\n")
     try str.push(b, "        const readLiteral = () => { const q = text[pos]; if (q !== '\"' && q !== \"'\") fail('expected a quoted literal'); const end = text.indexOf(q, pos + 1); if (end < 0) fail('unterminated literal'); const v = text.slice(pos + 1, end); pos = end + 1; return v; };\n")
     try str.push(b, "        if (text.startsWith('PUBLIC', pos)) { pos += 6; skipSpace(); publicId = readLiteral(); skipSpace(); systemId = readLiteral(); skipSpace(); }\n")
+    ret ok
+}
+
+fn part33(b: *str.Builder) -> err {
     try str.push(b, "        else if (text.startsWith('SYSTEM', pos)) { pos += 6; skipSpace(); systemId = readLiteral(); skipSpace(); }\n")
     try str.push(b, "        if (text[pos] === '[') {\n")
     try str.push(b, "          const end = text.indexOf(']', pos);\n")
@@ -8382,10 +8406,6 @@ fn part32(b: *str.Builder) -> err {
     try str.push(b, "        if (!m || !isValidName(m[1]) || asciiLowercase(m[1]) === 'xml') fail('invalid processing instruction');\n")
     try str.push(b, "        appendNodeSimple(parent, createPI(doc, m[1], m[2] || ''));\n")
     try str.push(b, "        for (const ch of body) if (ch === '\\n') line++;\n")
-    ret ok
-}
-
-fn part33(b: *str.Builder) -> err {
     try str.push(b, "        pos = end + 2;\n")
     try str.push(b, "      } else if (text[pos + 1] === '/') {\n")
     try str.push(b, "        pos += 2;\n")
@@ -8616,6 +8636,10 @@ fn part33(b: *str.Builder) -> err {
     try str.push(b, "    required(arguments, 1, 'serializeToString');\n")
     try str.push(b, "    if (!isNode(root)) throw new TypeError(\"Failed to execute 'serializeToString' on 'XMLSerializer': parameter 1 is not of type 'Node'.\");\n")
     try str.push(b, "    return serializeXML(root, false, null, new Map([[XML_NS, ['xml']]]), { n: 0 });\n")
+    ret ok
+}
+
+fn part34(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "});\n")
     try str.push(b, "const templateContents = new WeakMap();\n")
@@ -8636,10 +8660,6 @@ fn part33(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "cloningSteps = function (node, copy, document, cloneChildren) {\n")
     try str.push(b, "  cloneShadow(node, copy);\n")
-    ret ok
-}
-
-fn part34(b: *str.Builder) -> err {
     try str.push(b, "  cloneFormState(node, copy);\n")
     try str.push(b, "  const s = slotOf(node);\n")
     try str.push(b, "  if (s.nodeType === ELEMENT_NODE && s.localName === 'template' && s.namespaceURI === HTML_NS && cloneChildren) {\n")
@@ -8870,6 +8890,10 @@ fn part34(b: *str.Builder) -> err {
     try str.push(b, "  media: { get() { const s = slotOf(this); if (!s || !s.isMQL) illegal(); return s.media; } },\n")
     try str.push(b, "  matches: { get() { const s = slotOf(this); if (!s || !s.isMQL) illegal(); const g = N.geom(N.root(), 4); return mediaMatches(s.media, g ? g[0] : 800, g ? g[1] : 600); } },\n")
     try str.push(b, "  onchange: eventHandlerAttribute('change')\n")
+    ret ok
+}
+
+fn part35(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "operations(MediaQueryList.prototype, {\n")
     try str.push(b, "  addListener(callback) { this.addEventListener('change', callback); },\n")
@@ -8890,10 +8914,6 @@ fn part34(b: *str.Builder) -> err {
     try str.push(b, "  rangeCount: { get() { return selSlot(this).range ? 1 : 0; } },\n")
     try str.push(b, "  type: { get() { const s = selSlot(this); if (!s.range) return 'None'; const r = slotOf(s.range); return r.startNode === r.endNode && r.startOffset === r.endOffset ? 'Caret' : 'Range'; } },\n")
     try str.push(b, "  direction: { get() { selSlot(this); return 'none'; } }\n")
-    ret ok
-}
-
-fn part35(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "operations(Selection.prototype, {\n")
     try str.push(b, "  getRangeAt(index) { const s = selSlot(this); if (toUnsignedLong(index) !== 0 || !s.range) throw domError('IndexSizeError', 'The index is out of range'); return s.range; },\n")
@@ -8915,15 +8935,32 @@ fn part35(b: *str.Builder) -> err {
     try str.push(b, "defineProperty(global, 'getSelection', { value: function getSelection() { return selectionObject; }, writable: true, enumerable: true, configurable: true });\n")
     try str.push(b, "Document.prototype.getSelection = function getSelection() { return selectionObject; };\n")
     try str.push(b, "defineProperty(Document.prototype, 'getSelection', { enumerable: true });\n")
+    try str.push(b, "defineProperty(global, '__loadXML', {\n")
+    try str.push(b, "  value: function (text, mime) {\n")
+    try str.push(b, "    const doc = mainDocument, s = slotOf(doc);\n")
+    try str.push(b, "    for (const k of childrenOf(doc)) removeNode(k, true);\n")
+    try str.push(b, "    setPrototypeOf(doc, XMLDocument.prototype);\n")
+    try str.push(b, "    s.docType = 'xml'; s.contentType = mime;\n")
+    try str.push(b, "    try { parseXML(doc, text); } catch (e) {\n")
+    try str.push(b, "      if (!e.xmlLine) throw e;\n")
+    try str.push(b, "      for (const k of childrenOf(doc)) removeNode(k, true);\n")
+    try str.push(b, "      const err = createElementWithDefinition(doc, 'parsererror', 'http://www.mozilla.org/newlayout/xml/parsererror.xml', null, null, false);\n")
+    try str.push(b, "      appendNodeSimple(err, createTextNode(doc, e.message));\n")
+    try str.push(b, "      appendNodeSimple(doc, err);\n")
+    try str.push(b, "    }\n")
+    try str.push(b, "  },\n")
+    try str.push(b, "  writable: true, enumerable: false, configurable: true\n")
+    try str.push(b, "});\n")
     try str.push(b, "const ceNodeLike = c => c === Node || c.prototype instanceof Node || c === DOMTokenList || c === NamedNodeMap || c === Range || c === DOMImplementation;\n")
     try str.push(b, "for (const c of allInterfaces) if (typeof c === 'function' && ceNodeLike(c)) ceWrapPrototype(c.prototype);\n")
     try str.push(b, "convertDeclarative(mainDocument);\n")
+    try str.push(b, "for (const d of descendantsOf(mainDocument)) if (isIFrame(d)) frameInserted(d);\n")
     try str.push(b, "})(this);\n")
     ret ok
 }
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 482729)
+    var b = try str.builder(a, 484349)
     try part0(&b)
     try part1(&b)
     try part2(&b)
