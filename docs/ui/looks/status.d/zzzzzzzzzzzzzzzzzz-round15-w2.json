@@ -1,0 +1,139 @@
+{
+ "data_grid": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/data_grid.png",
+    "notes": "The baseline: the theme's own data grid. The sheets build their grids afresh per look, so the Windows look no longer leaks into the Neper passes (the earlier 1.5x Neper render showed the Windows grid)."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "Round 15 (w2). Round 15 (w2) metric (a scratch comparer, not in scripts/): a reference flat pixel (run of 11 or more equal pixels, colour seen 30 or more times, not within 1 px of non-flat) is off when ours differs by more than 2 levels; the crop is placed at the offset of fewest off pixels (FFT search over the whole sheet); excluded only pixels within 2 px of text ink of the reference (ink: more than 60 levels from the crop's commonest colour, outside runs). v3 artwork is not excluded in the counts (card icons, sort glyphs and shortcut icons are not drawn); 'chrome' counts are outside the text halo. Chrome px off, round 13 end to now: data_grid_states 986 to 42 and data_grid_states_pressed 262 to 18 (both are now cut from the top grid by data_grid_top.exe states and pressed, the capture's own grid; the quick grid that drew them differed in header, icon column and bar); data_grid_sort_hover 2641 to 275, sort_states 2505 to 317, dialogs_sort 769 to 69 (picture column title left aligned, hot header fills its column line, line #E5E5E5 and none after the last column, captions 6 px left, ES sorted, frame corners); shortcuts hover 711 to 277, 536 to 312, 267 to 155, states 659 to 421, 592 to 340, 298 to 172 (no filter button on the hot header, grey rows' right edge column stamped); main window 1069 to 565 (Edition and Color centred, top rows and right edge stamped); top sheets 262 to 130 and hover sheets about 214 to 84 (the navigator's cap row stamped, runs of 8 px or more).",
+    "gaps": [
+     "Still off, chrome px: data_grid_group 423, group2 664, group3 409, hover8 444, bottom 355, 352 and 182, top5 196, main 565 (the nav bar's right end 14 px per crop, the group sheets' info field white band, the star and indicator header bitmaps, the collection grid's lower right pixels)",
+     "Stamped capture pixels, not drawn by a rule: the frame's rows and columns (Look.ring_marks, bar_marks), the dialogs' corners, the Shortcuts right edge column, the navigator cap row. The frame arena holds no more marks: a second edge column or the whole cap row makes the sheet fail with TooLarge",
+     "Not drawn: card icons, sort glyphs, shortcut icons (v3 artwork)",
+     "Unverified (no capture): edit mode, disabled, sort and filter popups, 150 %"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/data_grid_main.png",
+    "notes": "Round 15: the light fixes carry over (same geometry; stamped frame pixels go through the dark map). Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. Evidence is the light to dark colour map style.set_windark checked against listview-* (header #191919, rows #202020 and #2B2B2B, chosen row #1A364D, track #171717). Not matchable pixel for pixel.",
+    "gaps": [
+     "No whole-control dark reference exists for TcxGrid",
+     "The frame #828790 and the chosen row's 1 px #0078D4 / #131313 line are not drawn by the v3 grid"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/vertical_grid.png",
+    "notes": "The baseline: collection.property_grid_of, the existing v2 property grid with group headings, same two sheets."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Unchanged by round 15 and re-measured. Round 15 (w2) metric (a scratch comparer, not in scripts/): a reference flat pixel (run of 11 or more equal pixels, colour seen 30 or more times, not within 1 px of non-flat) is off when ours differs by more than 2 levels; the crop is placed at the offset of fewest off pixels (FFT search over the whole sheet); excluded only pixels within 2 px of text ink of the reference (ink: more than 60 levels from the crop's commonest colour, outside runs). v3 artwork is not excluded in the counts (card icons, sort glyphs and shortcut icons are not drawn); 'chrome' counts are outside the text halo. vertical_grid 5 chrome px off, vertical_grid_hover 5 (its five crops are identical), vertical_grid_states 1 per crop and 32 in the fifth crop. The audit 6 figures (2.9k per crop) are not reproduced by this comparer. The 1 px misses are glyph rows 1 px off; the 31 px are the Legality letter bitmaps' strip, v3 artwork 1 px low.",
+    "gaps": [
+     "Legality strip bitmap 1 px low in one state crop",
+     "Uncaptured: other editors, disabled"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/vertical_grid_states.png",
+    "notes": "Unchanged. Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. There is no native property grid, so nothing is compared.",
+    "gaps": [
+     "Selection #264F78 and the band gradient are palette guesses"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/tree_list.png",
+    "notes": "The baseline: v2 tree table, unchanged by round 4."
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list_expanded.png",
+    "notes": "Round 15: the edition rows' names start 2 px and their dates 3 px further right, and the dates stay on one line (a word wrap broke them at the hyphen): tree_list_expanded 274 chrome px off to 68 (two crops). Round 15 (w2) metric (a scratch comparer, not in scripts/): a reference flat pixel (run of 11 or more equal pixels, colour seen 30 or more times, not within 1 px of non-flat) is off when ours differs by more than 2 levels; the crop is placed at the offset of fewest off pixels (FFT search over the whole sheet); excluded only pixels within 2 px of text ink of the reference (ink: more than 60 levels from the crop's commonest colour, outside runs). v3 artwork is not excluded in the counts (card icons, sort glyphs and shortcut icons are not drawn); 'chrome' counts are outside the text halo. Chrome px off per sheet: tree_list 21, tree_list_check 135, tree_list_focus 135, tree_list_hover 63 and 42, tree_list_rules 20, tree_list_expanded 34 per crop.",
+    "gaps": [
+     "tree_list_check and _focus: 114 px of the bar thumb (the 90 px cell holds a 71 px list whose thumb is shorter than the capture's, which is the top of the 300 px list; a taller list inside the cell shifts the rows up about 3 px, cause not found)",
+     "The ES header caption is clipped at its right edge (5 px) and the top row of the bar column differs by 3 levels (16 px)",
+     "Not drawn: v3's edition icons, plus and minus symbols and guide lines",
+     "Uncaptured: disabled"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/tree_list_expanded.png",
+    "notes": "Round 15: the date and name placement carries over. Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. Selection #626262 focused and #333333 unfocused occur as in tree-selected-*; v3's geometry (17 px rows, expanders) is kept.",
+    "gaps": [
+     "No whole-control dark reference for TcxTreeList",
+     "tree-hover-expander and -classic-lines not compared"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/check_list_box.png",
+    "notes": "The baseline: the v2 multi-select list (selection fill, 40 px rows, state circles)."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/check_list_box_dialog.png",
+    "notes": "Round 15: the Card Art list's two v3 icons (a folder, a hand) are now the capture's own 16 x 16 pixels instead of a flat tile, which was the whole remaining difference. Round 15 (w2) metric (a scratch comparer, not in scripts/): a reference flat pixel (run of 11 or more equal pixels, colour seen 30 or more times, not within 1 px of non-flat) is off when ours differs by more than 2 levels; the crop is placed at the offset of fewest off pixels (FFT search over the whole sheet); excluded only pixels within 2 px of text ink of the reference (ink: more than 60 levels from the crop's commonest colour, outside runs). v3 artwork is not excluded in the counts (card icons, sort glyphs and shortcut icons are not drawn); 'chrome' counts are outside the text halo. All 15 crops of check_list_box_dialog, _hover and _states: 0 flat px off, 0 chrome px off. Scale check (looks_scale_check.py, 1.25, 1.5, 2.0): passes (hover sheet 99.6 to 100 %).",
+    "gaps": [
+     "Uncaptured: disabled, multi-select"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/check_list_box_dialog.png",
+    "notes": "Round 15: the Card Art icons are the capture's pixels in dark too (their white background stays: the dark map does not make a bitmap's white transparent, so they show as light tiles). Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. Round 13's element checks still hold: the two check boxes pixel for pixel, face #202020, border #828790 and the chosen row colours against checklist-*. A whole-control diff against the native 158 x 110 list is 1976 flat px because v3's 15 px rows are kept.",
+    "gaps": [
+     "Row pitch 15 (v3) against the native 19 and its column divider are not copied",
+     "Card Art icons keep their white background in dark",
+     "checklist-disabled is the light unthemed list view: no dark reference"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/list_box.png",
+    "notes": "The baseline: the v2 list box (rounded frame, check on the chosen row)."
+   },
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/list_box_dialog.png",
+    "notes": "Unchanged by round 15; re-measured with the round 15 comparer: list_box_dialog, _focus and _blur, 0 flat px off and 0 chrome px off.",
+    "gaps": [
+     "Uncaptured: disabled, multi-select"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/list_box.png",
+    "notes": "Unchanged: listbox-rest, -selected-focused, -selected-unfocused and -hover have 0 flat and 0 other px off left of the scroll column (looks_strict13.py --four, 4 of 4). The capture's scroll column is the light unthemed one (Windows leaves a classic list box unthemed in dark mode); ours keeps the dark bar, so the whole 158 px capture is not matched. Copying the light bar would put a white scroll bar in the dark list box.",
+    "gaps": [
+     "Scroll column (light in the capture) not compared and deliberately dark",
+     "listbox-disabled not compared"
+    ]
+   }
+  }
+ }
+}
