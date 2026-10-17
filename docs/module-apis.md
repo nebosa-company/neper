@@ -26832,6 +26832,144 @@ fn string_to_well_formed(it: *js.Interp, this_val: js.Value, args: []const js.Va
 fn install_misc(it: *js.Interp)
 ```
 
+### `e.js.b_proxy`
+
+```neper
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn args_of(it: *js.Interp, a: js.Value, b: js.Value, c: js.Value, d: js.Value, n: usize) -> ([]const js.Value, err)
+fn revoked_error(it: *js.Interp, what: str) -> err
+fn parts(it: *js.Interp, p: *js.Obj, what: str) -> (*js.Obj, *js.Obj, err)
+fn trap_of(it: *js.Interp, h: *js.Obj, name: str) -> (js.Value, bool, err)
+fn is_accessor_prop(p: js.Prop) -> bool
+fn prop_getter(p: js.Prop) -> js.Value
+fn prop_setter(p: js.Prop) -> js.Value
+fn compatible(ext: bool, d: js.Desc, has_cur: bool, cur: js.Prop) -> bool
+fn complete(d: js.Desc) -> js.Desc
+fn op_get(it: *js.Interp, p: *js.Obj, key: js.Key, receiver: js.Value) -> (js.Value, err)
+fn op_set(it: *js.Interp, p: *js.Obj, key: js.Key, val: js.Value, receiver: js.Value) -> (js.Value, err)
+fn op_has(it: *js.Interp, p: *js.Obj, key: js.Key) -> (js.Value, err)
+fn op_delete(it: *js.Interp, p: *js.Obj, key: js.Key) -> (js.Value, err)
+fn op_get_own(it: *js.Interp, p: *js.Obj, key: js.Key) -> (js.Value, err)
+fn op_define(it: *js.Interp, p: *js.Obj, key: js.Key, desc_obj: js.Value) -> (js.Value, err)
+fn op_keys(it: *js.Interp, p: *js.Obj) -> (js.Value, err)
+fn op_get_proto(it: *js.Interp, p: *js.Obj) -> (js.Value, err)
+fn op_set_proto(it: *js.Interp, p: *js.Obj, proto: js.Value) -> (js.Value, err)
+fn op_prevent(it: *js.Interp, p: *js.Obj) -> (js.Value, err)
+fn op_is_ext(it: *js.Interp, p: *js.Obj) -> (js.Value, err)
+fn list_of(it: *js.Interp, arr: js.Value) -> ([]const js.Value, err)
+fn op_call(it: *js.Interp, p: *js.Obj, this_val: js.Value, args_arr: js.Value) -> (js.Value, err)
+fn op_construct(it: *js.Interp, p: *js.Obj, args_arr: js.Value, new_target: js.Value) -> (js.Value, err)
+fn hook(it: *js.Interp, op: u8, p: *js.Obj, key: js.Key, a: js.Value, b: js.Value) -> (js.Value, err)
+fn create(it: *js.Interp, tgt: js.Value, handler: js.Value) -> (*js.Obj, err)
+fn proxy_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn revoke_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn proxy_revocable(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_proxy(it: *js.Interp)
+```
+
+### `e.js.prelude`
+
+```neper
+fn source(a: *mem.Arena) -> (str, err)
+```
+
+### `e.web.dom_js`
+
+```neper
+fn part0(b: *str.Builder) -> err
+fn part1(b: *str.Builder) -> err
+fn part2(b: *str.Builder) -> err
+fn part3(b: *str.Builder) -> err
+fn part4(b: *str.Builder) -> err
+fn part5(b: *str.Builder) -> err
+fn part6(b: *str.Builder) -> err
+fn part7(b: *str.Builder) -> err
+fn part8(b: *str.Builder) -> err
+fn part9(b: *str.Builder) -> err
+fn part10(b: *str.Builder) -> err
+fn part11(b: *str.Builder) -> err
+fn part12(b: *str.Builder) -> err
+fn part13(b: *str.Builder) -> err
+fn part14(b: *str.Builder) -> err
+fn part15(b: *str.Builder) -> err
+fn source(a: *mem.Arena) -> (str, err)
+```
+
+### `e.web.script`
+
+```neper
+type Host = struct
+fn host_of(it: *js.Interp) -> *Host
+fn arg(args: []const js.Value, i: usize) -> js.Value
+fn nid(v: js.Value) -> u32
+fn idv(id: u32) -> js.Value
+fn valid(h: *Host, id: u32) -> bool
+fn sarg(it: *js.Interp, args: []const js.Value, i: usize) -> (str, err)
+fn bad_node(it: *js.Interp) -> err
+fn code_of(e: err) -> f64
+fn n_kind(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_ns(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_name(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_value(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_set_value(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_set_name(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_parent(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_first(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_last(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_prev(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_root(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_version(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ns_of_code(c: f64) -> html.Namespace
+fn n_mk_element(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_mk_text(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_mk_comment(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_mk_fragment(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_mk_doctype(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_insert(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_remove(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_clone(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_attr_count(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn attr_at(it: *js.Interp, h: *Host, args: []const js.Value) -> (usize, bool, u32)
+fn n_attr_name(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_attr_value(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_attr_ns(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_attr_find(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_attr_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_attr_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_attr_put(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_attr_del_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_attr_set_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_text_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_text_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_inner_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_outer_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn parse_options() -> html.Options
+fn n_inner_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn collect(it: *js.Interp, h: *Host, ids: []dom.NodeId, n: usize) -> (js.Value, err)
+fn n_qs(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_qsa(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_matches(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_closest(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_now(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_log(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_base(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn url_components(it: *js.Interp, u: *const url.Url) -> (js.Value, err)
+fn n_url_parse(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_url_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_navigate(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_run_script(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_natives(it: *js.Interp)
+fn new_context(a: *mem.Arena, d: *dom.Dom, base: str) -> (*js.Interp, err)
+fn describe_thrown(it: *js.Interp) -> str
+fn report_thrown(it: *js.Interp, name: str)
+fn run_script(it: *js.Interp, source: str, name: str) -> bool
+fn lifecycle(it: *js.Interp, name: str)
+fn pump_once(it: *js.Interp) -> f64
+fn pump(it: *js.Interp, limit_ms: f64)
+fn advance(it: *js.Interp, ms: f64) { host_of(it).now += ms }
+```
+
 ### `e.fmt.html.template`
 
 ```neper

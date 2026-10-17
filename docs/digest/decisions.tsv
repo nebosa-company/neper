@@ -2784,4 +2784,5 @@ D5148	874	The JavaScript front end is a flat-tree lexer and parser checked again
 D5149	1224	The JavaScript interpreter: tree walker with thread-backed coroutines (browser 5.3-5.11)
 D5150	1134	RegExp as a continuation-chain backtracker over UTF-16 units; typed arrays as an exotic object (browser 5.8-5.10)
 D5151	1040	Early errors are a separate pass over the finished tree (browser 5.2)
-D5152	534	Function source text comes from the parser's source ranges (browser 5.7)
+D5152	535	Function source text comes from the parser's source ranges (browser 5.7)
+D5153	960	The DOM Standard is written in JavaScript over a small native node table (browser 6.1-6.3)

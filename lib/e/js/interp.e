@@ -2419,6 +2419,7 @@ fn call_js(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_targe
     var f: Frame = zero
     f.prog = fo.prog
     f.env = new_env(it, fo.env)
+    if f.env == null_env() { ret (undefv(), throw_range(it, "out of memory")) }
     f.func = fo
     f.has_func = true
     f.args = args

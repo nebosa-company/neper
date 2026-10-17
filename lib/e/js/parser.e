@@ -242,6 +242,8 @@ fn arrow_follows_paren(p: *Parser) -> (bool, err) {
     var depth = 0usize
     var result = false
     var done = false
+    var last_kind = lex.T_PUNCT
+    var last_text = "("
     while !done {
         if p.tok.kind == lex.T_EOF {
             done = true
@@ -258,17 +260,25 @@ fn arrow_follows_paren(p: *Parser) -> (bool, err) {
                         done = true
                     }
                 } else if (str.eq(t, "/") || str.eq(t, "/=")) {
-                    // A `/` inside parameters is a division or a regexp; neither affects the bracket depth unless a regexp holds
-                    // a bracket, so try reading it as a regexp when the previous token cannot end an expression.
-                    var lone = false
-                    if p.prev_end == m.tok.end { lone = true }
-                    if lone {
+                    // A `/` that cannot be a division (nothing before it ends an expression) opens a regular expression, whose
+                    // brackets and quotes must not be counted.
+                    var regex_ok = false
+                    if last_kind == lex.T_PUNCT {
+                        regex_ok = !str.eq(last_text, ")") && !str.eq(last_text, "]") && !str.eq(last_text, "}") && !str.eq(last_text, "++") && !str.eq(last_text, "--")
+                    } else if last_kind == lex.T_IDENT {
+                        regex_ok = str.eq(last_text, "return") || str.eq(last_text, "typeof") || str.eq(last_text, "instanceof") || str.eq(last_text, "in") || str.eq(last_text, "of") || str.eq(last_text, "new") || str.eq(last_text, "delete") || str.eq(last_text, "void") || str.eq(last_text, "throw") || str.eq(last_text, "case") || str.eq(last_text, "do") || str.eq(last_text, "else") || str.eq(last_text, "yield") || str.eq(last_text, "await")
+                    }
+                    if regex_ok {
                         let (rt, re) = lex.regex_at(&p.lx, p.tok.start)
                         if re == ok { p.tok = rt }
                     }
                 }
             }
-            if !done { try adv(p) }
+            if !done {
+                last_kind = p.tok.kind
+                last_text = p.tok.text
+                try adv(p)
+            }
         }
     }
     restore(p, m)
