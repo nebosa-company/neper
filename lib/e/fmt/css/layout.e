@@ -564,6 +564,8 @@ fn is_inline_level_display(d: style.Display) -> bool {
     ret d == .Inline || d == .InlineBlock || d == .InlineFlex || d == .InlineGrid || d == .InlineTable || d == .Ruby || d == .RubyText || d == .RubyBase || d == .RubyTextContainer || d == .RubyBaseContainer
 }
 
+fn is_abs_positioned(s: *const style.Style) -> bool { ret s.position == .Absolute || s.position == .Fixed }
+
 fn is_out_of_flow(s: *const style.Style) -> bool {
     ret s.floating != .None || s.position == .Absolute || s.position == .Fixed
 }
@@ -2210,7 +2212,7 @@ fn inline_widths(l: *Layout, cont: u32) -> (f64, f64) {
     while kid != NONE {
         let kb = &l.boxes.items[usize(kid)]
         if kb.inner != .Marker {
-            if kb.inline_level || kb.inner == .Text || kb.inner == .Break { collect_inline_intrinsic(&bd, kid, &ends) }
+            if kb.inline_level || kb.inner == .Text || kb.inner == .Break || (bstyle(l, kid).floating != .None && !is_abs_positioned(bstyle(l, kid))) { collect_inline_intrinsic(&bd, kid, &ends) }
         }
         kid = l.boxes.items[usize(kid)].next
     }
