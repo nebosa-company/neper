@@ -1708,6 +1708,17 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
         if p.kind == .Marker {
             needed = text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
         }
+        // Preserved spaces at the end of a pre-wrap line hang: they never make the line overflow.
+        var hangs = false
+        if p.kind == .Text && has_content && bstyle(l, p.box).white_space == .PreWrap {
+            hangs = p.text.len > 0usize
+            var hi = 0usize
+            while hi < p.text.len && hangs {
+                if p.text[hi] != 32u8 { hangs = false }
+                hi += 1usize
+            }
+        }
+        if hangs { needed = 0.0f64 }
         // Nothing fits beside the floats: the line moves down to where they end (CSS 2.1 9.5).
         if pos + needed > out.avail + 0.01f64 && !has_content && (lx > 0.0f64 || rx < x.cbw - 0.01f64) && !(p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord)) {
             let below = next_float_end(l, fc.base, fc.oy + x.y)
@@ -1729,7 +1740,7 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
             if split_piece(x, j, out.avail) { continue }
         }
         has_content = has_content || p.ink || p.kind == .Atomic || p.kind == .Marker
-        pos += needed
+        if hangs { pos += p.w } else { pos += needed }
         if p.soft { last_soft = u32(j) }
         pos += p.trail
         j += 1usize
@@ -3959,7 +3970,21 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
     }
     let tb3 = bx(l, t)
     tb3.overflow_w = maxf(tb3.overflow_w, grid_w)
+    // Row groups, rows, cells and captions can be relatively positioned too.
+    relative_table_parts(l, t, grid_w)
     ret cap_top + grid_h + cap_bottom
+}
+
+fn relative_table_parts(l: *Layout, b: u32, w: f64) {
+    var kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        let ki = l.boxes.items[usize(kid)].inner
+        if ki == .RowGroup || ki == .Row || ki == .Cell || ki == .Caption {
+            apply_relative(l, kid, w, -1.0f64)
+            relative_table_parts(l, kid, w)
+        }
+        kid = l.boxes.items[usize(kid)].next
+    }
 }
 
 // --- Flex layout (CSS Flexbox 9): items, flex lines, flexing lengths, cross sizing, alignment.
