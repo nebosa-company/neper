@@ -406,7 +406,7 @@ fn image_entry(p: *Page, abs: str) -> *ImageEntry {
         }
         if !good && looks_svg(b) {
             let text: str = b
-            let (sw, sh, has_size) = svg.size(text)
+            let (sw, sh, has_size) = svg.intrinsic_size(text)
             e.state = 1u8
             e.svg = text
             e.width = 300u32

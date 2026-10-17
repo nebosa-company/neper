@@ -77,6 +77,7 @@
 use e.math
 use e.mem
 use e.str
+use e.gfx.cssvalue as cssv
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -305,6 +306,19 @@ fn parse_paint(value: str, current: paint.Color) -> (paint.Color, u8) {
     if same(v, "blue") { ret (byte_color(0usize, 0usize, 255usize, 255usize), 1u8) }
     if same(v, "yellow") { ret (byte_color(255usize, 255usize, 0usize, 255usize), 1u8) }
     if same(v, "gray") || same(v, "grey") { ret (byte_color(128usize, 128usize, 128usize, 255usize), 1u8) }
+    // Any other CSS colour keyword (lime, aqua, orange, ...): packed as 0xAARRGGBB.
+    var lowered: [32]u8 = zero
+    if v.len > 0usize && v.len < 32usize && v[0usize] != 35u8 {
+        var li = 0usize
+        while li < v.len {
+            var ch = v[li]
+            if ch >= 65u8 && ch <= 90u8 { ch += 32u8 }
+            lowered[li] = ch
+            li += 1usize
+        }
+        let (packed, known) = cssv.named_color(lowered[0usize..v.len])
+        if known { ret (byte_color(usize((packed >> 16u32) & 255u32), usize((packed >> 8u32) & 255u32), usize(packed & 255u32), usize((packed >> 24u32) & 255u32)), 1u8) }
+    }
     if v[0usize] == 35u8 {
         var d: [8]usize = zero
         var n = 0usize
@@ -3191,6 +3205,20 @@ fn view_of(text: str) -> geometry.Rect {
 
 // The document's own size: the viewBox's width and height, else the `width` and `height`.
 fn size(text: str) -> (f32, f32, bool) {
+    let r = view_of(text)
+    if r.width > 0.0 && r.height > 0.0 { ret (r.width, r.height, true) }
+    ret (0.0, 0.0, false)
+}
+
+// The intrinsic size of a document as an image: the root's `width` and `height` when both are plain lengths, else its viewBox
+// (the ratio with a nominal size); false when it has neither.
+fn intrinsic_size(text: str) -> (f32, f32, bool) {
+    let open = find(text, 0usize, "<svg")
+    if open >= text.len { ret (0.0, 0.0, false) }
+    let tag = text[open + 1usize..tag_end(text, open)]
+    let w = length_of(tag, "width")
+    let h = length_of(tag, "height")
+    if w > 0.0 && h > 0.0 { ret (w, h, true) }
     let r = view_of(text)
     if r.width > 0.0 && r.height > 0.0 { ret (r.width, r.height, true) }
     ret (0.0, 0.0, false)
