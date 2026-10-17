@@ -2050,6 +2050,21 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
         if l.frags.items[fi].kind != .Atomic { l.frags.items[fi].y += x.y }
         fi += 1usize
     }
+    // Relatively positioned inline boxes (and atomics) move with their fragments.
+    fi = usize(first_frag)
+    while fi < l.frags.len {
+        let (rdx, rdy) = relative_chain(l, l.frags.items[fi].box, x.cont, scan.avail)
+        if rdx != 0.0f64 || rdy != 0.0f64 {
+            l.frags.items[fi].x += rdx
+            l.frags.items[fi].y += rdy
+            if l.frags.items[fi].kind == .Atomic {
+                let rab = &l.boxes.items[usize(l.frags.items[fi].box)]
+                rab.x += rdx
+                rab.y += rdy
+            }
+        }
+        fi += 1usize
+    }
     let overflow = used_w > scan.avail + 0.5f64 && cs.text_overflow == .Ellipsis && cs.overflow_x != .Visible
     let own_index = u32(l.lines.len)
     let own_pushed = list.push[u32](&x.own, own_index)
@@ -2852,6 +2867,43 @@ fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64) {
 }
 
 // `position: relative` shifts the box after layout; sticky and the rest stay in place.
+// The offset of a relatively positioned box from its `inset` (left wins over right, top over bottom).
+fn relative_offset(s: *const style.Style, cbw: f64, cbh: f64) -> (f64, f64) {
+    var dx = 0.0f64
+    var dy = 0.0f64
+    if s.position != .Relative { ret (dx, dy) }
+    if s.inset[3usize].kind != .Auto {
+        dx = resolve_or(s.inset[3usize], maxf(cbw, 0.0f64), 0.0f64)
+    } else if s.inset[1usize].kind != .Auto {
+        dx = -resolve_or(s.inset[1usize], maxf(cbw, 0.0f64), 0.0f64)
+    }
+    if s.inset[0usize].kind != .Auto {
+        dy = resolve_or(s.inset[0usize], cbh, 0.0f64)
+    } else if s.inset[2usize].kind != .Auto {
+        dy = -resolve_or(s.inset[2usize], cbh, 0.0f64)
+    }
+    ret (dx, dy)
+}
+
+// The summed relative offsets of `b` and its ancestors below `stop` (the inline container).
+fn relative_chain(l: *const Layout, b: u32, stop: u32, cbw: f64) -> (f64, f64) {
+    var dx = 0.0f64
+    var dy = 0.0f64
+    var cur = b
+    var guard = 0usize
+    while cur != NONE && cur != stop && guard < 64usize {
+        let s = st(l, l.boxes.items[usize(cur)].style)
+        if s.position == .Relative && l.boxes.items[usize(cur)].inner != .Text {
+            let (ox, oy) = relative_offset(s, cbw, -1.0f64)
+            dx += ox
+            dy += oy
+        }
+        cur = l.boxes.items[usize(cur)].parent
+        guard += 1usize
+    }
+    ret (dx, dy)
+}
+
 fn apply_relative(l: *Layout, c: u32, cbw: f64, cbh: f64) {
     let s = bstyle(l, c)
     if s.position != .Relative { ret }
