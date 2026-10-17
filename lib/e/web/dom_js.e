@@ -8971,6 +8971,74 @@ fn part35(b: *str.Builder) -> err {
     try str.push(b, "defineProperty(global, 'getSelection', { value: function getSelection() { return selectionObject; }, writable: true, enumerable: true, configurable: true });\n")
     try str.push(b, "Document.prototype.getSelection = function getSelection() { docSlot(this); return slotOf(this).browsingContext ? selectionObject : null; };\n")
     try str.push(b, "defineProperty(Document.prototype, 'getSelection', { enumerable: true });\n")
+    try str.push(b, "function DataTransfer() {\n")
+    try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'DataTransfer': Please use the 'new' operator\");\n")
+    try str.push(b, "  const s = setSlot(this, { isDataTransfer: true, items: [], dropEffect: 'none', effectAllowed: 'none' });\n")
+    try str.push(b, "  s.itemList = makeDataTransferItemList(s);\n")
+    try str.push(b, "}\n")
+    try str.push(b, "iface('DataTransfer', DataTransfer, null);\n")
+    try str.push(b, "function DataTransferItem() { throw new TypeError('Illegal constructor'); }\n")
+    try str.push(b, "iface('DataTransferItem', DataTransferItem, null);\n")
+    try str.push(b, "function DataTransferItemList() { throw new TypeError('Illegal constructor'); }\n")
+    try str.push(b, "iface('DataTransferItemList', DataTransferItemList, null);\n")
+    try str.push(b, "function dtSlot(o) { const s = slotOf(o); if (!s || !s.isDataTransfer) illegal(); return s; }\n")
+    try str.push(b, "function makeDataTransferItem(entry) {\n")
+    try str.push(b, "  const o = create(DataTransferItem.prototype);\n")
+    try str.push(b, "  setSlot(o, { isDTItem: true, entry });\n")
+    try str.push(b, "  return o;\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function makeDataTransferItemList(dt) {\n")
+    try str.push(b, "  const state = { isDTList: true, dt };\n")
+    try str.push(b, "  return legacyObject(DataTransferItemList.prototype, { length: () => dt.items.length, item: i => (i < dt.items.length ? dt.items[i].item : null) }, state);\n")
+    try str.push(b, "}\n")
+    try str.push(b, "attributes(DataTransfer.prototype, {\n")
+    try str.push(b, "  dropEffect: { get() { return dtSlot(this).dropEffect; }, set(v) { const s = dtSlot(this); const str = String(v); if (['none', 'copy', 'link', 'move'].indexOf(str) >= 0) s.dropEffect = str; } },\n")
+    try str.push(b, "  effectAllowed: { get() { return dtSlot(this).effectAllowed; }, set(v) { const s = dtSlot(this); const str = String(v); if (['none', 'copy', 'copyLink', 'copyMove', 'link', 'linkMove', 'move', 'all', 'uninitialized'].indexOf(str) >= 0) s.effectAllowed = str; } },\n")
+    try str.push(b, "  items: { get() { return dtSlot(this).itemList; } },\n")
+    try str.push(b, "  types: { get() { const s = dtSlot(this); const out = []; for (const e of s.items) out.push(e.kind === 'file' ? 'Files' : e.type); return out; } },\n")
+    try str.push(b, "  files: { get() { const s = dtSlot(this); const files = s.items.filter(e => e.kind === 'file').map(e => e.file); return makeFileListFrom(() => files); } }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "operations(DataTransfer.prototype, {\n")
+    try str.push(b, "  getData(format) { const s = dtSlot(this); const f = asciiLowercase(toDOMString(format)); for (const e of s.items) if (e.kind === 'string' && e.type === f) return e.data; return ''; },\n")
+    try str.push(b, "  setData(format, data) { const s = dtSlot(this); const f = asciiLowercase(toDOMString(format)); s.items = s.items.filter(e => !(e.kind === 'string' && e.type === f)); addStringItem(s, toDOMString(data), f); },\n")
+    try str.push(b, "  clearData(format = undefined) { const s = dtSlot(this); if (format === undefined) s.items = s.items.filter(e => e.kind === 'file'); else { const f = asciiLowercase(toDOMString(format)); s.items = s.items.filter(e => !(e.kind === 'string' && e.type === f)); } },\n")
+    try str.push(b, "  setDragImage() {}\n")
+    try str.push(b, "});\n")
+    try str.push(b, "function addStringItem(s, data, type) {\n")
+    try str.push(b, "  const entry = { kind: 'string', type, data };\n")
+    try str.push(b, "  entry.item = makeDataTransferItem(entry);\n")
+    try str.push(b, "  apply(arrayPush, s.items, [entry]);\n")
+    try str.push(b, "  return entry.item;\n")
+    try str.push(b, "}\n")
+    try str.push(b, "attributes(DataTransferItemList.prototype, { length: { get() { const st = slotOf(this); if (!st || !st.isDTList) illegal(); return st.dt.items.length; } } });\n")
+    try str.push(b, "operations(DataTransferItemList.prototype, {\n")
+    try str.push(b, "  add(data, type = undefined) {\n")
+    try str.push(b, "    const st = slotOf(this);\n")
+    try str.push(b, "    if (!st || !st.isDTList) illegal();\n")
+    try str.push(b, "    required(arguments, 1, 'add');\n")
+    try str.push(b, "    const dt = st.dt;\n")
+    try str.push(b, "    if (isObject(data) && slotOf(data) && slotOf(data).isFile) {\n")
+    try str.push(b, "      const entry = { kind: 'file', type: slotOf(data).type, file: data };\n")
+    try str.push(b, "      entry.item = makeDataTransferItem(entry);\n")
+    try str.push(b, "      apply(arrayPush, dt.items, [entry]);\n")
+    try str.push(b, "      return entry.item;\n")
+    try str.push(b, "    }\n")
+    try str.push(b, "    if (type === undefined) throw new TypeError(\"Failed to execute 'add' on 'DataTransferItemList': parameter 2 is required for strings.\");\n")
+    try str.push(b, "    const t = asciiLowercase(toDOMString(type));\n")
+    try str.push(b, "    for (const e of dt.items) if (e.kind === 'string' && e.type === t) throw domError('NotSupportedError', 'An item already exists for this type');\n")
+    try str.push(b, "    return addStringItem(dt, toDOMString(data), t);\n")
+    try str.push(b, "  },\n")
+    try str.push(b, "  remove(index) { const st = slotOf(this); if (!st || !st.isDTList) illegal(); required(arguments, 1, 'remove'); const i = toUnsignedLong(index); if (i < st.dt.items.length) st.dt.items.splice(i, 1); },\n")
+    try str.push(b, "  clear() { const st = slotOf(this); if (!st || !st.isDTList) illegal(); st.dt.items = []; }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "attributes(DataTransferItem.prototype, {\n")
+    try str.push(b, "  kind: { get() { const s = slotOf(this); if (!s || !s.isDTItem) illegal(); return s.entry.kind; } },\n")
+    try str.push(b, "  type: { get() { const s = slotOf(this); if (!s || !s.isDTItem) illegal(); return s.entry.type; } }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "operations(DataTransferItem.prototype, {\n")
+    try str.push(b, "  getAsFile() { const s = slotOf(this); if (!s || !s.isDTItem) illegal(); return s.entry.kind === 'file' ? s.entry.file : null; },\n")
+    try str.push(b, "  getAsString(callback) { const s = slotOf(this); if (!s || !s.isDTItem) illegal(); if (callback === null || callback === undefined) return; if (typeof callback !== 'function') throw new TypeError('callback is not a function'); if (s.entry.kind === 'string') scheduleTimer(() => callback(s.entry.data), 0, false, []); }\n")
+    try str.push(b, "});\n")
     try str.push(b, "function AbstractRange() { throw new TypeError('Illegal constructor'); }\n")
     try str.push(b, "iface('AbstractRange', AbstractRange, null);\n")
     try str.push(b, "function Range() {\n")
@@ -9076,6 +9144,10 @@ fn part35(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "    return comparePoints(thisNode, thisOffset, otherNode, otherOffset);\n")
     try str.push(b, "  },\n")
+    ret ok
+}
+
+fn part36(b: *str.Builder) -> err {
     try str.push(b, "  deleteContents() { const s = rangeSlot(this); deleteRangeContents(this); },\n")
     try str.push(b, "  extractContents() { rangeSlot(this); return extractRange(this); },\n")
     try str.push(b, "  cloneContents() { rangeSlot(this); return cloneRangeContents(this); },\n")
@@ -9144,10 +9216,6 @@ fn part35(b: *str.Builder) -> err {
     try str.push(b, "    if (off > nodeLength(node)) throw domError('IndexSizeError', 'The offset is larger than the node length');\n")
     try str.push(b, "    if (comparePoints(node, off, s.startNode, s.startOffset) === -1) return -1;\n")
     try str.push(b, "    if (comparePoints(node, off, s.endNode, s.endOffset) === 1) return 1;\n")
-    ret ok
-}
-
-fn part36(b: *str.Builder) -> err {
     try str.push(b, "    return 0;\n")
     try str.push(b, "  },\n")
     try str.push(b, "  intersectsNode(node) {\n")
@@ -9330,6 +9398,10 @@ fn part36(b: *str.Builder) -> err {
     try str.push(b, "  if (s.startNode === parent && s.startOffset > index) s.startOffset += count;\n")
     try str.push(b, "  if (s.endNode === parent && s.endOffset > index) s.endOffset += count;\n")
     try str.push(b, "};\n")
+    ret ok
+}
+
+fn part37(b: *str.Builder) -> err {
     try str.push(b, "rangeRemoveAdjust = function (r, node, parent, index) {\n")
     try str.push(b, "  const s = slotOf(r);\n")
     try str.push(b, "  if (isInclusiveAncestor(node, s.startNode)) { s.startNode = parent; s.startOffset = index; }\n")
@@ -9398,10 +9470,6 @@ fn part36(b: *str.Builder) -> err {
     try str.push(b, "  let result;\n")
     try str.push(b, "  try {\n")
     try str.push(b, "    if (typeof f === 'function') result = apply(f, undefined, [node]);\n")
-    ret ok
-}
-
-fn part37(b: *str.Builder) -> err {
     try str.push(b, "    else {\n")
     try str.push(b, "      const accept = f.acceptNode;\n")
     try str.push(b, "      if (typeof accept !== 'function') throw new TypeError('acceptNode is not a function');\n")
@@ -9584,6 +9652,10 @@ fn part37(b: *str.Builder) -> err {
     try str.push(b, "        sibling = nextSibling(temporary);\n")
     try str.push(b, "        if (sibling !== null) { node = sibling; break; }\n")
     try str.push(b, "        temporary = parentNode(temporary);\n")
+    ret ok
+}
+
+fn part38(b: *str.Builder) -> err {
     try str.push(b, "      }\n")
     try str.push(b, "      if (temporary === null || sibling === null) return null;\n")
     try str.push(b, "      result = filterNode(this, node);\n")
@@ -9652,10 +9724,6 @@ fn part37(b: *str.Builder) -> err {
     try str.push(b, "    };\n")
     try str.push(b, "    if (o.attributeFilter !== undefined) opts.attributeFilter = Array.from(o.attributeFilter, toDOMString);\n")
     try str.push(b, "    if ((opts.attributeOldValue !== undefined || opts.attributeFilter !== undefined) && opts.attributes === undefined) opts.attributes = true;\n")
-    ret ok
-}
-
-fn part38(b: *str.Builder) -> err {
     try str.push(b, "    if (opts.characterDataOldValue !== undefined && opts.characterData === undefined) opts.characterData = true;\n")
     try str.push(b, "    if (!opts.childList && !opts.attributes && !opts.characterData) throw new TypeError(\"Failed to execute 'observe' on 'MutationObserver': The options object must set at least one of 'attributes', 'characterData', or 'childList' to true.\");\n")
     try str.push(b, "    if (opts.attributeOldValue && !opts.attributes) throw new TypeError(\"Failed to execute 'observe' on 'MutationObserver': The options object may only set 'attributeOldValue' to true when 'attributes' is true or not present.\");\n")
@@ -9784,21 +9852,32 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "function Blob(blobParts = undefined, options = undefined) {\n")
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'Blob': Please use the 'new' operator\");\n")
+    try str.push(b, "  initBlob(this, blobParts, options, 'Blob');\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function initBlob(self, blobParts, options, who) {\n")
+    try str.push(b, "  let endings = 'transparent', type = '';\n")
+    try str.push(b, "  if (options !== undefined && options !== null) {\n")
+    try str.push(b, "    if (!isObject(options)) throw new TypeError(\"Failed to construct '\" + who + \"': The provided value is not of type 'BlobPropertyBag'.\");\n")
+    try str.push(b, "    if (options.endings !== undefined) {\n")
+    try str.push(b, "      endings = String(options.endings);\n")
+    try str.push(b, "      if (endings !== 'transparent' && endings !== 'native') throw new TypeError(\"Failed to construct '\" + who + \"': The provided value '\" + endings + \"' is not a valid enum value of type EndingType.\");\n")
+    try str.push(b, "    }\n")
+    try str.push(b, "    if (options.type !== undefined) { const t = toDOMString(options.type); type = /^[\\x20-\\x7E]*$/.test(t) ? asciiLowercase(t) : ''; }\n")
+    try str.push(b, "  }\n")
     try str.push(b, "  let bytes = '';\n")
     try str.push(b, "  if (blobParts !== undefined) {\n")
-    try str.push(b, "    if (!isObject(blobParts) || typeof blobParts[symIterator] !== 'function') throw new TypeError(\"Failed to construct 'Blob': The provided value cannot be converted to a sequence.\");\n")
+    try str.push(b, "    if (!isObject(blobParts) || typeof blobParts[symIterator] !== 'function') throw new TypeError(\"Failed to construct '\" + who + \"': The provided value cannot be converted to a sequence.\");\n")
     try str.push(b, "    for (const p of blobParts) {\n")
     try str.push(b, "      if (isObject(p) && slotOf(p) && slotOf(p).isBlob) bytes += slotOf(p).bytes;\n")
     try str.push(b, "      else if (bufferSourceBytes(p) !== null) bytes += bytesToBinary(bufferSourceBytes(p));\n")
-    try str.push(b, "      else bytes += N.utf8Encode(toUSVString(p));\n")
+    try str.push(b, "      else {\n")
+    try str.push(b, "        let str = toUSVString(p);\n")
+    try str.push(b, "        if (endings === 'native') str = str.replace(/\\r\\n|\\r|\\n/g, '\\n');\n")
+    try str.push(b, "        bytes += N.utf8Encode(str);\n")
+    try str.push(b, "      }\n")
     try str.push(b, "    }\n")
     try str.push(b, "  }\n")
-    try str.push(b, "  let type = '';\n")
-    try str.push(b, "  if (options !== undefined && options !== null) {\n")
-    try str.push(b, "    if (!isObject(options)) throw new TypeError(\"Failed to construct 'Blob': The provided value is not of type 'BlobPropertyBag'.\");\n")
-    try str.push(b, "    if (options.type !== undefined) { const t = toDOMString(options.type); type = /^[\\x20-\\x7E]*$/.test(t) ? asciiLowercase(t) : ''; }\n")
-    try str.push(b, "  }\n")
-    try str.push(b, "  setSlot(this, { isBlob: true, bytes, type });\n")
+    try str.push(b, "  setSlot(self, { isBlob: true, bytes, type });\n")
     try str.push(b, "}\n")
     try str.push(b, "iface('Blob', Blob, null);\n")
     try str.push(b, "function blobSlot(o) { const s = slotOf(o); if (!s || !s.isBlob) illegal(); return s; }\n")
@@ -9827,6 +9906,10 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "async function readStreamBody(stream) {\n")
     try str.push(b, "  const reader = stream.getReader();\n")
+    ret ok
+}
+
+fn part39(b: *str.Builder) -> err {
     try str.push(b, "  let out = '';\n")
     try str.push(b, "  for (;;) {\n")
     try str.push(b, "    const r = await reader.read();\n")
@@ -9839,7 +9922,7 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "function File(fileBits, fileName, options = undefined) {\n")
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'File': Please use the 'new' operator\");\n")
     try str.push(b, "  required(arguments, 2, 'File');\n")
-    try str.push(b, "  Reflect.apply(Blob, this, [fileBits, options]);\n")
+    try str.push(b, "  initBlob(this, fileBits, options, 'File');\n")
     try str.push(b, "  const s = slotOf(this);\n")
     try str.push(b, "  s.isFile = true;\n")
     try str.push(b, "  s.name = toUSVString(fileName);\n")
@@ -9906,10 +9989,6 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "function fdValue(value, filename) {\n")
     try str.push(b, "  if (isObject(value) && slotOf(value) && slotOf(value).isBlob) {\n")
     try str.push(b, "    if (!slotOf(value).isFile || filename !== undefined) {\n")
-    ret ok
-}
-
-fn part39(b: *str.Builder) -> err {
     try str.push(b, "      const f = new File([value], filename !== undefined ? filename : (slotOf(value).isFile ? slotOf(value).name : 'blob'), { type: slotOf(value).type });\n")
     try str.push(b, "      return f;\n")
     try str.push(b, "    }\n")
@@ -10081,6 +10160,10 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "    if (typeof value === 'string') out += N.utf8Encode('Content-Disposition: form-data; name=\"' + esc(name) + '\"\\r\\n\\r\\n' + value.replace(/\\r?\\n|\\r/g, '\\r\\n') + '\\r\\n');\n")
     try str.push(b, "    else out += N.utf8Encode('Content-Disposition: form-data; name=\"' + esc(name) + '\"; filename=\"' + esc(slotOf(value).name) + '\"\\r\\nContent-Type: ' + (slotOf(value).type || 'application/octet-stream') + '\\r\\n\\r\\n') + slotOf(value).bytes + '\\r\\n';\n")
     try str.push(b, "  }\n")
+    ret ok
+}
+
+fn part40(b: *str.Builder) -> err {
     try str.push(b, "  out += '--' + boundary + '--\\r\\n';\n")
     try str.push(b, "  return { bytes: out, type: 'multipart/form-data; boundary=' + boundary };\n")
     try str.push(b, "}\n")
@@ -10160,10 +10243,6 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "      const b = extractBody(init.body);\n")
     try str.push(b, "      s.body = b;\n")
     try str.push(b, "      if (b.type !== null && !slotOf(s.headers).list.some(e => e[0] === 'content-type')) appendHeader(s.headers, 'Content-Type', b.type);\n")
-    ret ok
-}
-
-fn part40(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "  }\n")
     try str.push(b, "  if (s.signal === null) s.signal = newSignal();\n")
@@ -10335,6 +10414,10 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "  setSlot(upload, { listeners: [], isTarget: true });\n")
     try str.push(b, "  setSlot(this, { listeners: [], isTarget: true, isXHR: true, state: 0, upload, timeout: 0, withCredentials: false, responseType: '', method: 'GET', url: '', async: true, requestHeaders: [], sendFlag: false, status: 0, statusText: '', responseHeaders: [], responseBytes: '', mimeOverride: null, errorFlag: false, token: 0, handlers: {} });\n")
     try str.push(b, "}\n")
+    ret ok
+}
+
+fn part41(b: *str.Builder) -> err {
     try str.push(b, "iface('XMLHttpRequest', XMLHttpRequest, XMLHttpRequestEventTarget);\n")
     try str.push(b, "constants(XMLHttpRequest, { UNSENT: 0, OPENED: 1, HEADERS_RECEIVED: 2, LOADING: 3, DONE: 4 });\n")
     try str.push(b, "function xhrSlot(o) { const s = slotOf(o); if (!s || !s.isXHR) illegal(); return s; }\n")
@@ -10414,10 +10497,6 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "    if (ex) ex[1] += ', ' + v; else s.requestHeaders.push([n, v]);\n")
     try str.push(b, "  },\n")
     try str.push(b, "  send(body = null) {\n")
-    ret ok
-}
-
-fn part41(b: *str.Builder) -> err {
     try str.push(b, "    const s = xhrSlot(this);\n")
     try str.push(b, "    if (s.state !== 1 || s.sendFlag) throw domError('InvalidStateError', \"Failed to execute 'send' on 'XMLHttpRequest': The object's state must be OPENED.\");\n")
     try str.push(b, "    let bytes = null;\n")
@@ -10589,6 +10668,10 @@ fn part41(b: *str.Builder) -> err {
     try str.push(b, "    while (pos < n && !isSpace(text[pos]) && '>/=<?!&\"\\''.indexOf(text[pos]) < 0) pos++;\n")
     try str.push(b, "    if (pos === start) fail('expected a name');\n")
     try str.push(b, "    const name = text.slice(start, pos);\n")
+    ret ok
+}
+
+fn part42(b: *str.Builder) -> err {
     try str.push(b, "    if (!isValidName(name)) fail('invalid name ' + name);\n")
     try str.push(b, "    return name;\n")
     try str.push(b, "  }\n")
@@ -10668,10 +10751,6 @@ fn part41(b: *str.Builder) -> err {
     try str.push(b, "        pos = end + 2;\n")
     try str.push(b, "      } else if (text[pos + 1] === '/') {\n")
     try str.push(b, "        pos += 2;\n")
-    ret ok
-}
-
-fn part42(b: *str.Builder) -> err {
     try str.push(b, "        const name = readName();\n")
     try str.push(b, "        skipSpace();\n")
     try str.push(b, "        if (text[pos] !== '>') fail('malformed end tag');\n")
@@ -10843,6 +10922,10 @@ fn part42(b: *str.Builder) -> err {
     try str.push(b, "        if (candidate !== null) {\n")
     try str.push(b, "          qualified = candidate + ':' + s.localName;\n")
     try str.push(b, "          if (localDefault !== null && localDefault !== XMLNS_NS) inherited = localDefault;\n")
+    ret ok
+}
+
+fn part43(b: *str.Builder) -> err {
     try str.push(b, "        } else if (prefix !== null) {\n")
     try str.push(b, "          if (local.has(prefix)) prefix = xmlGeneratePrefix(map, ns, counter); else xmlMapAdd(map, ns, prefix);\n")
     try str.push(b, "          qualified = prefix + ':' + s.localName;\n")
@@ -10922,10 +11005,6 @@ fn part42(b: *str.Builder) -> err {
     try str.push(b, "  cloneFormState(node, copy);\n")
     try str.push(b, "  const s = slotOf(node);\n")
     try str.push(b, "  if (s.nodeType === ELEMENT_NODE && s.localName === 'template' && s.namespaceURI === HTML_NS && cloneChildren) {\n")
-    ret ok
-}
-
-fn part43(b: *str.Builder) -> err {
     try str.push(b, "    const src = templateContent(node), dst = templateContent(copy);\n")
     try str.push(b, "    for (const c of childrenOf(src)) appendNodeSimple(dst, cloneNode(c, slotOf(dst).doc, true));\n")
     try str.push(b, "  }\n")
@@ -11097,6 +11176,10 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "    const e = intersectionEntry(io, t);\n")
     try str.push(b, "    let idx = 0;\n")
     try str.push(b, "    for (let i = 0; i < s.thresholds.length; i++) if (e.intersectionRatio >= s.thresholds[i] && (e.isIntersecting || s.thresholds[i] === 0 && false)) idx = i + 1;\n")
+    ret ok
+}
+
+fn part44(b: *str.Builder) -> err {
     try str.push(b, "    if (!e.isIntersecting) idx = 0;\n")
     try str.push(b, "    const state = e.isIntersecting ? idx : -1;\n")
     try str.push(b, "    if (last === undefined || last !== state) { s.targets.set(t, state); entries.push(e); }\n")
@@ -11176,10 +11259,6 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "const ceNodeLike = c => c === Node || c.prototype instanceof Node || c === DOMTokenList || c === NamedNodeMap || c === Range || c === DOMImplementation;\n")
     try str.push(b, "for (const c of allInterfaces) if (typeof c === 'function' && ceNodeLike(c)) ceWrapPrototype(c.prototype);\n")
-    ret ok
-}
-
-fn part44(b: *str.Builder) -> err {
     try str.push(b, "convertDeclarative(mainDocument);\n")
     try str.push(b, "scanHandlerAttributes();\n")
     try str.push(b, "for (const d of descendantsOf(mainDocument)) if (isIFrame(d)) frameInserted(d);\n")
@@ -11188,7 +11267,7 @@ fn part44(b: *str.Builder) -> err {
 }
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 606851)
+    var b = try str.builder(a, 612313)
     try part0(&b)
     try part1(&b)
     try part2(&b)
