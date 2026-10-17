@@ -1971,7 +1971,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             body[0usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one_node(a, glyph_node))
         }
         var b = 1usize
-        if sorted || state.hovered {
+        // round 15: the Options Shortcuts grid's hot header shows no filter button (live hover grabs)
+        var hot_glyph = state.hovered
+        if look.on && look.top_edge_on && t.tokens.profile == .Windows { hot_glyph = false }
+        if sorted || hot_glyph {
             if !sorted { ink = control.with_alpha(muted, 0.5) }
             let (arrow, arrow_error) = control.icon_square(a, ink, .ArrowUp, t.tokens.sizes.icon_sm)
             if arrow_error != ok { ret (zero, arrow_error) }
@@ -2056,6 +2059,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         // a centred caption is centred before the 23 px they reserve once there is a glyph
         let win_glyphs = look.on && look.soft_lines && t.tokens.profile == .Windows && !look.dialog_lines && !glyph_header && !numeric_column(numeric, i)
         var win_hot = state.hovered || state.pressed
+        // round 15: the Shortcuts grid's hot header has no filter button
+        if look.top_edge_on { win_hot = state.pressed }
         if win_glyphs {
             if b == 2usize { b = 1usize }
             if (sorted || win_hot) && numeric_column(look.center_head, i) {

@@ -20,6 +20,26 @@ SHEETS = {"data_grid_shortcuts_hover": ([1, 20], 400), "data_grid_shortcuts_hove
 SRC = os.path.join(HERE, "..", "examples", "looks", "data_grid_dialog_states.e")
 
 
+def cols(ref, box, xs, first_row=21):
+    """round 15: the pixels of the Shortcuts grid's frame columns that differ from the column's commonest colour (grey rows
+    have their own edge pixels), below the header."""
+    x0, y0, x1, y1 = box
+    out = []
+    for x in xs:
+        c = ref[y0 + first_row:y1 - 2, x0 + x]
+        vals, counts = np.unique(c, axis=0, return_counts=True)
+        base = vals[counts.argmax()]
+        y = first_row
+        while y < y1 - y0 - 2:
+            p = ref[y0 + y, x0 + x]
+            e = y
+            while e + 1 < y1 - y0 - 2 and (ref[y0 + e + 1, x0 + x] == p).all():
+                e += 1
+            out.append("%d %d %d %02x%02x%02x" % (x, y, e - y + 1, *p))
+            y = e + 1
+    return ";".join(out)
+
+
 def runs(ref, box, rows, keep=(), full=()):
     x0, y0, x1, y1 = box
     out = []
@@ -70,7 +90,10 @@ def main():
             keep = (1, 20) if "sort" in s else ((255,) if "missing" in s else ())
             # round 15: the Sort grid's whole frame top row and foot row, corners included
             full = (0, b[3] - b[1] - 1) if "sort" in s else ()
-            body.append('    if strs.eq(sheet, "%s") && cell == %dusize { ret "%s" }' % (s, c, runs(ref, b, sorted(set(list(rows) + list(full))), keep, full)))
+            extra = ""
+            if "shortcuts" in s:
+                extra = ";" + cols(ref, b, (b[2] - b[0] - 18,))
+            body.append('    if strs.eq(sheet, "%s") && cell == %dusize { ret "%s%s" }' % (s, c, runs(ref, b, sorted(set(list(rows) + list(full))), keep, full), extra))
     body += ['    ret ""', "}", "// END GENERATED"]
     text = open(SRC, encoding="utf8").read()
     block = "\n".join(body)
