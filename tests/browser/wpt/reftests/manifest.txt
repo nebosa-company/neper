@@ -132,3 +132,4 @@ aspect-ratio-001.html | aspect-ratio-001-ref.html | match
 float-in-empty-001.html | float-in-empty-001-ref.html | match
 bfc-beside-float-001.html | bfc-beside-float-001-ref.html | match
 no-break-at-run-end-001.html | no-break-at-run-end-001-ref.html | match
+collapse-001.html | collapse-001-ref.html | match

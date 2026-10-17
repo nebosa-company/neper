@@ -533,6 +533,143 @@ fn paint_box_shadow(p: *Painter, s: *const style.Style, x: f64, y: f64, w: f64, 
     }
 }
 
+// --- Collapsed table borders.
+
+fn edge_visible(e: layout.Edge) -> bool {
+    ret e.set && e.w > 0.0f64 && e.bs != .None && e.bs != .Hidden
+}
+
+fn edge_width_at(arr: []const layout.Edge, at: usize) -> f64 {
+    if edge_visible(arr[at]) { ret arr[at].w }
+    ret 0.0f64
+}
+
+// One edge segment: a band of width `w` centred on the line through (`cx`, `cy`), `len` long, `horizontal` or vertical.
+fn paint_edge_band(p: *Painter, e: layout.Edge, x: f64, y: f64, len: f64, horizontal: bool) {
+    let w = e.w
+    if len <= 0.0f64 || w <= 0.0f64 { ret }
+    var bx0 = x
+    var by0 = y
+    var bw = len
+    var bh = w
+    if horizontal {
+        by0 = y - w / 2.0f64
+    } else {
+        bx0 = x - w / 2.0f64
+        bw = w
+        bh = len
+    }
+    if e.bs == .Double && w >= 3.0f64 {
+        let t = w / 3.0f64
+        if horizontal {
+            fill(p, bx0, by0, bw, t, e.color)
+            fill(p, bx0, by0 + w - t, bw, t, e.color)
+        } else {
+            fill(p, bx0, by0, t, bh, e.color)
+            fill(p, bx0 + w - t, by0, t, bh, e.color)
+        }
+        ret
+    }
+    if e.bs == .Dashed || e.bs == .Dotted {
+        dashed_run(p, bx0, by0, len, w, horizontal, e.bs == .Dotted, e.color)
+        ret
+    }
+    fill(p, bx0, by0, bw, bh, e.color)
+}
+
+// Draws the resolved borders of table box `t` (border box at (x, y)) over its cells.
+fn paint_collapsed(p: *Painter, t: u32, x: f64, y: f64) {
+    let tb = &p.l.boxes.items[usize(t)]
+    if tb.aux2 == 0u32 { ret }
+    let td = p.l.tables.items[usize(tb.aux2 - 1u32)]
+    if !td.collapsed || td.cols == 0usize || td.rows == 0usize { ret }
+    let ncols = td.cols
+    let nrows = td.rows
+    let hw = ncols + 1usize
+    let (colx, ce) = mem.alloc[f64](p.a, ncols + 1usize)
+    let (rowy, re) = mem.alloc[f64](p.a, nrows + 1usize)
+    if ce != ok || re != ok { ret }
+    var k = 0usize
+    while k <= ncols {
+        colx[k] = -1000000.0f64
+        k += 1usize
+    }
+    k = 0usize
+    while k <= nrows {
+        rowy[k] = -1000000.0f64
+        k += 1usize
+    }
+    let (tox, toy) = layout.abs_origin(p.l, t)
+    var ci = 0usize
+    while ci < td.cells.len {
+        let info = td.cells.items[ci]
+        ci += 1usize
+        let (cox, coy) = layout.abs_origin(p.l, info.box)
+        let cb = &p.l.boxes.items[usize(info.box)]
+        let rx = cox - tox
+        let ry = coy - toy
+        if info.col < ncols + 1usize { colx[info.col] = rx }
+        if info.col + info.cs <= ncols { colx[info.col + info.cs] = rx + cb.w }
+        if info.row < nrows + 1usize { rowy[info.row] = ry }
+        if info.row + info.rs <= nrows { rowy[info.row + info.rs] = ry + cb.h }
+    }
+    // Lines no cell starts or ends at (empty columns or rows) follow their neighbours.
+    k = 1usize
+    while k <= ncols {
+        if colx[k] < -100000.0f64 { colx[k] = colx[k - 1usize] }
+        k += 1usize
+    }
+    k = 1usize
+    while k <= nrows {
+        if rowy[k] < -100000.0f64 { rowy[k] = rowy[k - 1usize] }
+        k += 1usize
+    }
+    if colx[0usize] < -100000.0f64 { colx[0usize] = 0.0f64 }
+    if rowy[0usize] < -100000.0f64 { rowy[0usize] = 0.0f64 }
+    // Horizontal edges, carried over the corners.
+    var r = 0usize
+    while r <= nrows {
+        var c = 0usize
+        while c < ncols {
+            let e = td.hedge[r * hw + c]
+            if edge_visible(e) {
+                var left = 0.0f64
+                var right = 0.0f64
+                if r > 0usize { left = maxf(left, edge_width_at(td.vedge, (r - 1usize) * hw + c)) }
+                if r < nrows { left = maxf(left, edge_width_at(td.vedge, r * hw + c)) }
+                if r > 0usize { right = maxf(right, edge_width_at(td.vedge, (r - 1usize) * hw + c + 1usize)) }
+                if r < nrows { right = maxf(right, edge_width_at(td.vedge, r * hw + c + 1usize)) }
+                let x0 = colx[c] - left / 2.0f64
+                let x1 = colx[c + 1usize] + right / 2.0f64
+                paint_edge_band(p, e, x + x0, y + rowy[r], x1 - x0, true)
+            }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    // Vertical edges between the horizontal ones.
+    r = 0usize
+    while r < nrows {
+        var j = 0usize
+        while j <= ncols {
+            let e2 = td.vedge[r * hw + j]
+            if edge_visible(e2) {
+                var top = 0.0f64
+                var bottom = 0.0f64
+                if j > 0usize { top = maxf(top, edge_width_at(td.hedge, r * hw + j - 1usize)) }
+                if j < ncols { top = maxf(top, edge_width_at(td.hedge, r * hw + j)) }
+                if j > 0usize { bottom = maxf(bottom, edge_width_at(td.hedge, (r + 1usize) * hw + j - 1usize)) }
+                if j < ncols { bottom = maxf(bottom, edge_width_at(td.hedge, (r + 1usize) * hw + j)) }
+                let y0 = rowy[r] + top / 2.0f64
+                let y1 = rowy[r + 1usize] - bottom / 2.0f64
+                paint_edge_band(p, e2, x + colx[j], y + y0, y1 - y0, false)
+            }
+            j += 1usize
+        }
+        r += 1usize
+    }
+}
+
 // Background, border and shadow of a box with its border box at (x, y).
 fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
     let bb = &p.l.boxes.items[usize(b)]
@@ -541,7 +678,7 @@ fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
     if s.visibility != .Visible { ret }
     paint_box_shadow(p, s, x, y, bb.w, bb.h)
     paint_background(p, b, s, x, y, bb.w, bb.h)
-    paint_borders(p, s, x, y, bb.w, bb.h)
+    if !bb.coll { paint_borders(p, s, x, y, bb.w, bb.h) }
 }
 
 // --- Text and inline content.
@@ -860,6 +997,7 @@ fn paint_block_backgrounds(p: *Painter, b: u32, ax: f64, ay: f64) {
                 if kb.inner == .Replaced { paint_replaced(p, kid, cx, cy) }
                 let clip = push_overflow_clip(p, kid, cx, cy)
                 paint_block_backgrounds(p, kid, cx, cy)
+                if kb.inner == .Table { paint_collapsed(p, kid, cx, cy) }
                 if clip { restore(p) }
             }
         }
@@ -926,6 +1064,7 @@ fn paint_atomic(p: *Painter, b: u32, x: f64, y: f64) {
     }
     let clip = push_overflow_clip(p, b, x, y)
     paint_block_backgrounds(p, b, x, y)
+    if bb.inner == .Table { paint_collapsed(p, b, x, y) }
     paint_floats(p, b, x, y)
     paint_inline_layer(p, b, x, y)
     if clip { restore(p) }
@@ -1081,6 +1220,7 @@ fn paint_context(p: *Painter, root: u32, x: f64, y: f64) {
     }
     if rb.inner == .Replaced { paint_replaced(p, root, x, y) }
     paint_block_backgrounds(p, root, x, y)
+    if rb.inner == .Table { paint_collapsed(p, root, x, y) }
     paint_floats(p, root, x, y)
     paint_inline_layer(p, root, x, y)
     i = 0usize

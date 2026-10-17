@@ -2791,4 +2791,5 @@ D5155	726	Annex B function hoisting is decided in the early-error pass; direct e
 D5156	901	A frame is a context of its own sharing the arena; calls into the other realm switch interpreters (browser 6.17)
 D5157	707	Forms are written in JavaScript on slot state, with validity computed from the tree (browser 6.14)
 D5158	710	Shadow trees and custom elements are written in JavaScript over the same table (browser 6.16)
-D5159	1135	Vertical writing modes are laid out in a transposed frame and mapped back (browser 1.13i, 9.2)
+D5159	1136	Vertical writing modes are laid out in a transposed frame and mapped back (browser 1.13i, 9.2)
+D5160	1057	Collapsed table borders are resolved per grid line and painted over the cells (browser 1.14, 9.2)

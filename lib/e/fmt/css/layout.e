@@ -54,7 +54,8 @@ type Box = struct {
     baseline: f64, has_baseline: bool,
     overflow_w: f64, overflow_h: f64,
     aux: u32, aux2: u32,
-    min_c: f64, max_c: f64, has_c: bool, in_layout: bool, proc: str
+    min_c: f64, max_c: f64, has_c: bool, in_layout: bool, proc: str,
+    coll: bool, cbd: [4]f64
 }
 
 type FragKind = enum u8 { Text, Segment, Atomic, Marker }
@@ -922,6 +923,13 @@ fn resolve_edges(l: *Layout, b: u32, cbw: f64) {
         if base < 0.0f64 { base = 0.0f64 }
         bb.padding[i] = maxf(0.0f64, resolve_or(s.padding[i], base, 0.0f64))
         i += 1usize
+    }
+    // A table, row, cell... of a collapsed-border table takes the half of each collapsed edge that falls inside it.
+    if bb.coll { bb.border = bb.cbd }
+    if bb.inner == .Table && s.border_collapse == .Collapse && !bb.coll {
+        let ti = build_table(l, b)
+        let bb2 = bx(l, b)
+        if bb2.coll { bb2.border = bb2.cbd }
     }
 }
 
@@ -2979,7 +2987,8 @@ type TableData = struct {
     cols: usize, rows: usize, cells: list.List[CellInfo],
     col_min: []f64, col_max: []f64, col_w: []f64, col_pct: []f64, col_spec: []f64,
     row_h: []f64, row_y: []f64, row_box: []u32, row_above: []f64, row_below: []f64,
-    sh: f64, sv: f64, sum_min: f64, sum_max: f64
+    sh: f64, sv: f64, sum_min: f64, sum_max: f64,
+    collapsed: bool, hedge: []Edge, vedge: []Edge
 }
 
 fn is_ws_text(l: *const Layout, k: u32) -> bool {
@@ -3209,6 +3218,15 @@ fn build_table(l: *Layout, t: u32) -> u32 {
         sh = 0.0f64
         sv = 0.0f64
     }
+    var hedge: []Edge = zero
+    var vedge: []Edge = zero
+    var collapsed = false
+    if ts.border_collapse == .Collapse {
+        let (he2, ve2) = collapse_edges(l, t, &cells, rb[0usize..nrows], nrows, ncols)
+        hedge = he2
+        vedge = ve2
+        collapsed = true
+    }
     // Per-cell content widths.
     var ci = 0usize
     while ci < cells.len {
@@ -3301,11 +3319,268 @@ fn build_table(l: *Layout, t: u32) -> u32 {
         sum_max += cmax[k]
         k += 1usize
     }
-    let td = TableData { cols: ncols, rows: nrows, cells: cells, col_min: cmin, col_max: cmax, col_w: cw, col_pct: cpct, col_spec: cspec, row_h: rh, row_y: ry, row_box: rb, row_above: rab, row_below: rbe, sh: sh, sv: sv, sum_min: sum_min, sum_max: sum_max }
+    let td = TableData { cols: ncols, rows: nrows, cells: cells, col_min: cmin, col_max: cmax, col_w: cw, col_pct: cpct, col_spec: cspec, row_h: rh, row_y: ry, row_box: rb, row_above: rab, row_below: rbe, sh: sh, sv: sv, sum_min: sum_min, sum_max: sum_max, collapsed: collapsed, hedge: hedge, vedge: vedge }
     let pushed = list.push[TableData](&l.tables, td)
     let index = u32(l.tables.len) - 1u32
     l.boxes.items[usize(t)].aux2 = index + 1u32
     ret index
+}
+
+// --- Collapsed borders (CSS 2.1 17.6.2).
+
+// One grid-line segment's border after conflict resolution; `prio` ranks the element it came from (cell 5, row 4, row group 3,
+// column 2, column group 1, table 0).
+type Edge = struct { w: f64, bs: style.BorderStyle, color: u32, prio: u8, set: bool }
+
+fn style_rank(b: style.BorderStyle) -> u8 {
+    if b == .Double { ret 9u8 }
+    if b == .Solid { ret 8u8 }
+    if b == .Dashed { ret 7u8 }
+    if b == .Dotted { ret 6u8 }
+    if b == .Ridge { ret 5u8 }
+    if b == .Outset { ret 4u8 }
+    if b == .Groove { ret 3u8 }
+    if b == .Inset { ret 2u8 }
+    ret 0u8
+}
+
+fn edge_of(l: *const Layout, b: u32, side: usize, prio: u8) -> Edge {
+    if b == NONE { ret Edge { w: 0.0f64, bs: .None, color: 0u32, prio: prio, set: false } }
+    let s = st(l, l.boxes.items[usize(b)].style)
+    var c = s.border_color[side]
+    if s.border_current[side] { c = s.color }
+    ret Edge { w: s.border_width[side], bs: s.border_style[side], color: c, prio: prio, set: s.border_style[side] != .None || s.border_width[side] > 0.0f64 }
+}
+
+// Whether `a` beats `b` for a shared grid line: hidden wins, then the wider, then the style, then the element's rank.
+fn edge_wins(a: Edge, b: Edge) -> bool {
+    if !a.set { ret false }
+    if !b.set { ret true }
+    if b.bs == .Hidden { ret false }
+    if a.bs == .Hidden { ret true }
+    if a.bs == .None { ret false }
+    if b.bs == .None { ret true }
+    if a.w != b.w { ret a.w > b.w }
+    let ra = style_rank(a.bs)
+    let rb = style_rank(b.bs)
+    if ra != rb { ret ra > rb }
+    ret a.prio > b.prio
+}
+
+fn put_edge(arr: []Edge, at: usize, e: Edge) {
+    if edge_wins(e, arr[at]) { arr[at] = e }
+}
+
+// Resolves the collapsed edges of table `t` (grid `ncols` x `nrows`, `rows[r]` the row boxes) into `hedge` ((nrows + 1) x ncols,
+// the line above row r) and `vedge` (nrows x (ncols + 1), the line left of column c), and gives every cell, row, group and the
+// table the half of each edge that lies inside it.
+fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: []const u32, nrows: usize, ncols: usize) -> ([]Edge, []Edge) {
+    let none = Edge { w: 0.0f64, bs: .None, color: 0u32, prio: 0u8, set: false }
+    let (hedge, he) = mem.alloc[Edge](l.a, (nrows + 1usize) * (ncols + 1usize))
+    let (vedge, ve) = mem.alloc[Edge](l.a, (nrows + 1usize) * (ncols + 1usize))
+    if he != ok || ve != ok { ret (zero, zero) }
+    var k = 0usize
+    while k < hedge.len {
+        hedge[k] = none
+        vedge[k] = none
+        k += 1usize
+    }
+    let hw = ncols + 1usize
+    // The table itself.
+    var c = 0usize
+    while c < ncols {
+        put_edge(hedge, c, edge_of(l, t, 0usize, 0u8))
+        put_edge(hedge, nrows * hw + c, edge_of(l, t, 2usize, 0u8))
+        c += 1usize
+    }
+    var r = 0usize
+    while r < nrows {
+        put_edge(vedge, r * hw, edge_of(l, t, 3usize, 0u8))
+        put_edge(vedge, r * hw + ncols, edge_of(l, t, 1usize, 0u8))
+        r += 1usize
+    }
+    // Column groups and columns.
+    var cursor = 0usize
+    var kid = l.boxes.items[usize(t)].first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        if kb.inner == .Column || kb.inner == .ColumnGroup {
+            var gstart = cursor
+            var gcols = 0usize
+            if kb.inner == .Column {
+                gcols = span_attr(l, kb.node, "span")
+            } else {
+                var cc = kb.first
+                while cc != NONE {
+                    if l.boxes.items[usize(cc)].inner == .Column { gcols += span_attr(l, l.boxes.items[usize(cc)].node, "span") }
+                    cc = l.boxes.items[usize(cc)].next
+                }
+                if gcols == 0usize { gcols = span_attr(l, kb.node, "span") }
+            }
+            var prio = 2u8
+            if kb.inner == .ColumnGroup { prio = 1u8 }
+            var j = 0usize
+            while j < gcols && gstart + j < ncols {
+                var rr = 0usize
+                while rr < nrows {
+                    if j == 0usize { put_edge(vedge, rr * hw + gstart, edge_of(l, kid, 3usize, prio)) }
+                    if j + 1usize == gcols { put_edge(vedge, rr * hw + gstart + j + 1usize, edge_of(l, kid, 1usize, prio)) }
+                    rr += 1usize
+                }
+                put_edge(hedge, gstart + j, edge_of(l, kid, 0usize, prio))
+                put_edge(hedge, nrows * hw + gstart + j, edge_of(l, kid, 2usize, prio))
+                j += 1usize
+            }
+            if kb.inner == .ColumnGroup {
+                // The columns inside a group add their own edges.
+                var cc2 = kb.first
+                var cj = gstart
+                while cc2 != NONE {
+                    if l.boxes.items[usize(cc2)].inner == .Column {
+                        let sp = span_attr(l, l.boxes.items[usize(cc2)].node, "span")
+                        var q = 0usize
+                        while q < sp && cj + q < ncols {
+                            var rr2 = 0usize
+                            while rr2 < nrows {
+                                if q == 0usize { put_edge(vedge, rr2 * hw + cj, edge_of(l, cc2, 3usize, 2u8)) }
+                                if q + 1usize == sp { put_edge(vedge, rr2 * hw + cj + q + 1usize, edge_of(l, cc2, 1usize, 2u8)) }
+                                rr2 += 1usize
+                            }
+                            put_edge(hedge, cj + q, edge_of(l, cc2, 0usize, 2u8))
+                            put_edge(hedge, nrows * hw + cj + q, edge_of(l, cc2, 2usize, 2u8))
+                            q += 1usize
+                        }
+                        cj += sp
+                    }
+                    cc2 = l.boxes.items[usize(cc2)].next
+                }
+                cursor += gcols
+            } else {
+                cursor += gcols
+            }
+        }
+        kid = kb.next
+    }
+    // Rows and row groups.
+    r = 0usize
+    while r < nrows {
+        let rb = rows[r]
+        if rb != NONE {
+            var cj2 = 0usize
+            while cj2 < ncols {
+                put_edge(hedge, r * hw + cj2, edge_of(l, rb, 0usize, 4u8))
+                put_edge(hedge, (r + 1usize) * hw + cj2, edge_of(l, rb, 2usize, 4u8))
+                cj2 += 1usize
+            }
+            put_edge(vedge, r * hw, edge_of(l, rb, 3usize, 4u8))
+            put_edge(vedge, r * hw + ncols, edge_of(l, rb, 1usize, 4u8))
+            let grp = l.boxes.items[usize(rb)].parent
+            if grp != NONE && grp != t && l.boxes.items[usize(grp)].inner == .RowGroup {
+                var first_row = r
+                while first_row > 0usize && rows[first_row - 1usize] != NONE && l.boxes.items[usize(rows[first_row - 1usize])].parent == grp { first_row -= 1usize }
+                var last_row = r
+                while last_row + 1usize < nrows && rows[last_row + 1usize] != NONE && l.boxes.items[usize(rows[last_row + 1usize])].parent == grp { last_row += 1usize }
+                var gj = 0usize
+                while gj < ncols {
+                    if r == first_row { put_edge(hedge, r * hw + gj, edge_of(l, grp, 0usize, 3u8)) }
+                    if r == last_row { put_edge(hedge, (r + 1usize) * hw + gj, edge_of(l, grp, 2usize, 3u8)) }
+                    gj += 1usize
+                }
+                put_edge(vedge, r * hw, edge_of(l, grp, 3usize, 3u8))
+                put_edge(vedge, r * hw + ncols, edge_of(l, grp, 1usize, 3u8))
+            }
+        }
+        r += 1usize
+    }
+    // Cells (document order: on a tie the earlier one stays).
+    var ci = 0usize
+    while ci < cells.len {
+        let info = cells.items[ci]
+        ci += 1usize
+        var j2 = 0usize
+        while j2 < info.cs && info.col + j2 < ncols {
+            put_edge(hedge, info.row * hw + info.col + j2, edge_of(l, info.box, 0usize, 5u8))
+            put_edge(hedge, (info.row + info.rs) * hw + info.col + j2, edge_of(l, info.box, 2usize, 5u8))
+            j2 += 1usize
+        }
+        var i2 = 0usize
+        while i2 < info.rs && info.row + i2 < nrows {
+            put_edge(vedge, (info.row + i2) * hw + info.col, edge_of(l, info.box, 3usize, 5u8))
+            put_edge(vedge, (info.row + i2) * hw + info.col + info.cs, edge_of(l, info.box, 1usize, 5u8))
+            i2 += 1usize
+        }
+    }
+    // Each cell's border is half of the widest edge along each of its sides; the table keeps half of the outer ones.
+    ci = 0usize
+    while ci < cells.len {
+        let info2 = cells.items[ci]
+        ci += 1usize
+        var top = 0.0f64
+        var bottom = 0.0f64
+        var left = 0.0f64
+        var right = 0.0f64
+        var j3 = 0usize
+        while j3 < info2.cs && info2.col + j3 < ncols {
+            let a = hedge[info2.row * hw + info2.col + j3]
+            let b2 = hedge[(info2.row + info2.rs) * hw + info2.col + j3]
+            if a.set && a.bs != .Hidden && a.bs != .None { top = maxf(top, a.w) }
+            if b2.set && b2.bs != .Hidden && b2.bs != .None { bottom = maxf(bottom, b2.w) }
+            j3 += 1usize
+        }
+        var i3 = 0usize
+        while i3 < info2.rs && info2.row + i3 < nrows {
+            let a2 = vedge[(info2.row + i3) * hw + info2.col]
+            let b3 = vedge[(info2.row + i3) * hw + info2.col + info2.cs]
+            if a2.set && a2.bs != .Hidden && a2.bs != .None { left = maxf(left, a2.w) }
+            if b3.set && b3.bs != .Hidden && b3.bs != .None { right = maxf(right, b3.w) }
+            i3 += 1usize
+        }
+        let cb = &l.boxes.items[usize(info2.box)]
+        cb.coll = true
+        cb.cbd[0usize] = top / 2.0f64
+        cb.cbd[1usize] = right / 2.0f64
+        cb.cbd[2usize] = bottom / 2.0f64
+        cb.cbd[3usize] = left / 2.0f64
+    }
+    var tt = 0.0f64
+    var tb = 0.0f64
+    var tl = 0.0f64
+    var tr = 0.0f64
+    c = 0usize
+    while c < ncols {
+        let a3 = hedge[c]
+        let b4 = hedge[nrows * hw + c]
+        if a3.set && a3.bs != .Hidden && a3.bs != .None { tt = maxf(tt, a3.w) }
+        if b4.set && b4.bs != .Hidden && b4.bs != .None { tb = maxf(tb, b4.w) }
+        c += 1usize
+    }
+    r = 0usize
+    while r < nrows {
+        let a4 = vedge[r * hw]
+        let b5 = vedge[r * hw + ncols]
+        if a4.set && a4.bs != .Hidden && a4.bs != .None { tl = maxf(tl, a4.w) }
+        if b5.set && b5.bs != .Hidden && b5.bs != .None { tr = maxf(tr, b5.w) }
+        r += 1usize
+    }
+    let tbx = &l.boxes.items[usize(t)]
+    tbx.coll = true
+    tbx.cbd[0usize] = tt / 2.0f64
+    tbx.cbd[1usize] = tr / 2.0f64
+    tbx.cbd[2usize] = tb / 2.0f64
+    tbx.cbd[3usize] = tl / 2.0f64
+    tbx.border = tbx.cbd
+    // Rows, row groups and columns have no border box of their own in the collapsing model.
+    r = 0usize
+    while r < nrows {
+        if rows[r] != NONE {
+            let rbx = &l.boxes.items[usize(rows[r])]
+            rbx.coll = true
+            let g = rbx.parent
+            if g != NONE && g != t && l.boxes.items[usize(g)].inner == .RowGroup { l.boxes.items[usize(g)].coll = true }
+        }
+        r += 1usize
+    }
+    ret (hedge, vedge)
 }
 
 // The min and max content widths of a table box's content: the columns plus the spacing.
