@@ -2984,6 +2984,14 @@ fn bind_function(it: *Interp, f: *Frame, fo: *Obj, n: ast.Node, args: []const Va
         if !f.strict { try define_data(it, ao, key_of("callee"), obj_value(fo), P_HIDDEN) }
         try declare(it, f.env, "arguments", obj_value(ao), 0u8)
     }
+    if !simple {
+        // Parameters are in their temporal dead zone until bound, so a default can not read its own or a later parameter.
+        var t = 0usize
+        while t < usize(n.b) {
+            try declare_pattern_names(it, f, f.prog.kids[usize(n.a) + t], B_TDZ)
+            t += 1usize
+        }
+    }
     i = 0usize
     while i < usize(n.b) {
         let pid = f.prog.kids[usize(n.a) + i]
@@ -3003,13 +3011,31 @@ fn bind_function(it: *Interp, f: *Frame, fo: *Obj, n: ast.Node, args: []const Va
         }
         i += 1usize
     }
-    // Hoisted `var`s.
+    // Hoisted `var`s. With a non-simple parameter list the body has a variable scope of its own, seeded from same-named parameters.
     f.env.is_var = true
+    var param_env = null_env()
+    if !simple {
+        param_env = f.env
+        let body_env = new_env(it, param_env)
+        if body_env == null_env() { ret throw_range(it, "out of memory") }
+        presize_env(it, body_env, usize(n.hoist_count) + 1usize)
+        body_env.is_var = true
+        f.env = body_env
+    }
     var h = 0usize
     while h < usize(n.hoist_count) {
         let hid = f.prog.kids[usize(n.hoist_first) + h]
         let hn = f.prog.nodes[usize(hid)]
-        if !(hn.kind == ast.N_FUNC && hn.op == 2u8) { try declare_var(it, f.env, hn.text) }
+        if !(hn.kind == ast.N_FUNC && hn.op == 2u8) {
+            try declare_var(it, f.env, hn.text)
+            if param_env != null_env() {
+                let (pat, pfound) = env_index(param_env, hn.text)
+                if pfound {
+                    let (bat, bfound) = env_index(f.env, hn.text)
+                    if bfound { f.env.vars.items[bat].value = param_env.vars.items[pat].value }
+                }
+            }
+        }
         h += 1usize
     }
     ret ok
