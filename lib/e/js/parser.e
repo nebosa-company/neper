@@ -1261,6 +1261,7 @@ fn parse_params(p: *Parser) -> (list.List[u32], err) {
 // Statements of a function body or program up to `end` (`}` or EOF), with the directive prologue.
 fn parse_statements(p: *Parser, closing: bool, ids: *list.List[u32]) -> err {
     var prologue = true
+    var octal_directive = false
     while true {
         if closing && is_p(p, "}") { break }
         if !closing && p.tok.kind == lex.T_EOF { break }
@@ -1268,7 +1269,11 @@ fn parse_statements(p: *Parser, closing: bool, ids: *list.List[u32]) -> err {
         if prologue {
             if p.tok.kind == lex.T_STR {
                 let raw = p.lx.src[p.tok.start..p.tok.end]
-                if raw.len == 12usize && (str.eq(raw, "\"use strict\"") || str.eq(raw, "'use strict'")) { p.strict = true }
+                if p.tok.legacy_octal { octal_directive = true }
+                if raw.len == 12usize && (str.eq(raw, "\"use strict\"") || str.eq(raw, "'use strict'")) {
+                    if octal_directive { ret fail(p, "octal escape in a directive before use strict") }
+                    p.strict = true
+                }
             } else {
                 prologue = false
             }
