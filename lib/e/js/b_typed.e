@@ -6,6 +6,7 @@
 
 use e.data.list as list
 use e.js.b_array as barr
+use e.js.bigint as bigint
 use e.js.interp as js
 use e.mem
 use e.str
@@ -174,6 +175,8 @@ fn kind_name(kind: u8) -> str {
     if kind == 6u8 { ret "Int32Array" }
     if kind == 7u8 { ret "Uint32Array" }
     if kind == 8u8 { ret "Float32Array" }
+    if kind == 10u8 { ret "BigInt64Array" }
+    if kind == 11u8 { ret "BigUint64Array" }
     ret "Float64Array"
 }
 
@@ -256,12 +259,13 @@ fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Va
         let src = js.ta_of(fo)
         if js.buf_of(src.buffer).detached { ret (js.undefv(), js.throw_type(it, "source typed array is detached")) }
         let n = js.ta_length(fo)
+        if (src.kind >= 10u8) != (kind >= 10u8) { ret (js.undefv(), js.throw_type(it, "Cannot mix BigInt and other types, use explicit conversions")) }
         let (o3, oe3) = create_typed(it, kind, proto, n)
         if oe3 != ok { ret (js.undefv(), oe3) }
         var i = 0usize
         while i < n {
             let v = js.ta_get_index(it, fo, i)
-            js.ta_set_raw(it, o3, i, js.value_to_raw(kind, js.num_of(v)))
+            js.ta_set_raw(it, o3, i, js.ta_raw_of_typed(kind, v))
             i += 1usize
         }
         ret (js.obj_value(o3), ok)
@@ -295,9 +299,9 @@ fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Va
     if oe4 != ok { ret (js.undefv(), oe4) }
     var j = 0usize
     while j < items.len {
-        let (nn, nne) = js.to_number(it, items[j])
+        let (rawj, nne) = js.ta_raw_of(it, kind, items[j])
         if nne != ok { ret (js.undefv(), nne) }
-        if j < js.ta_length(o4) { js.ta_set_raw(it, o4, j, js.value_to_raw(kind, nn)) }
+        if j < js.ta_length(o4) { js.ta_set_raw(it, o4, j, rawj) }
         j += 1usize
     }
     ret (js.obj_value(o4), ok)
@@ -318,6 +322,10 @@ fn ctor_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
 fn ctor_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 7u8, args)
     ret (r, e) }
 fn ctor_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 8u8, args)
+    ret (r, e) }
+fn ctor_bigint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 10u8, args)
+    ret (r, e) }
+fn ctor_biguint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 11u8, args)
     ret (r, e) }
 fn ctor_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 9u8, args)
     ret (r, e) }
@@ -409,9 +417,10 @@ fn ta_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Val
             tmp[i] = js.ta_get_index(it, so, i)
             i += 1usize
         }
+        if (js.ta_of(so).kind >= 10u8) != (kind >= 10u8) { ret (js.undefv(), js.throw_type(it, "Cannot mix BigInt and other types, use explicit conversions")) }
         var j = 0usize
         while j < n {
-            js.ta_set_raw(it, o, usize(offset) + j, js.value_to_raw(kind, js.num_of(tmp[j])))
+            js.ta_set_raw(it, o, usize(offset) + j, js.ta_raw_of_typed(kind, tmp[j]))
             j += 1usize
         }
         ret (js.undefv(), ok)
@@ -426,10 +435,10 @@ fn ta_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Val
         try js.tick(it)
         let (v, ve) = js.get_index(it, so2, k)
         if ve != ok { ret (js.undefv(), ve) }
-        let (nn, nne) = js.to_number(it, v)
+        let (rawk, nne) = js.ta_raw_of(it, kind, v)
         if nne != ok { ret (js.undefv(), nne) }
         let idx = usize(offset) + usize(k)
-        if idx < js.ta_length(o) { js.ta_set_raw(it, o, idx, js.value_to_raw(kind, nn)) }
+        if idx < js.ta_length(o) { js.ta_set_raw(it, o, idx, rawk) }
         k += 1.0f64
     }
     ret (js.undefv(), ok)
@@ -495,7 +504,7 @@ fn ta_fill(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     let (o, ve) = validate_ta(it, this_val)
     if ve != ok { ret (js.undefv(), ve) }
     let len = f64(js.ta_length(o))
-    let (nn, nne) = js.to_number(it, arg(args, 0usize))
+    let (raw, nne) = js.ta_raw_of(it, js.ta_of(o).kind, arg(args, 0usize))
     if nne != ok { ret (js.undefv(), nne) }
     let (first, fe) = barr.rel_index(it, arg(args, 1usize), len, 0.0f64)
     if fe != ok { ret (js.undefv(), fe) }
@@ -505,7 +514,6 @@ fn ta_fill(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     var end2 = fin
     let cur = f64(js.ta_length(o))
     if end2 > cur { end2 = cur }
-    let raw = js.value_to_raw(js.ta_of(o).kind, nn)
     var k = first
     while k < end2 {
         js.ta_set_raw(it, o, usize(k), raw)
@@ -569,6 +577,12 @@ fn ta_sort_compare(it: *js.Interp, cmp: js.Value, x: js.Value, y: js.Value) -> (
         if ne != ok { ret (0.0f64, ne) }
         if js.is_nan(n) { ret (0.0f64, ok) }
         ret (n, ok)
+    }
+    if js.is_bigint(x) && js.is_bigint(y) {
+        let c = bigint.cmp(js.big_of(x), js.big_of(y))
+        if c < 0i32 { ret (-1.0f64, ok) }
+        if c > 0i32 { ret (1.0f64, ok) }
+        ret (0.0f64, ok)
     }
     let a = js.num_of(x)
     let b = js.num_of(y)
@@ -647,7 +661,7 @@ fn ta_sort(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     let cur = js.ta_length(o)
     var i = 0usize
     while i < items.len && i < cur {
-        js.ta_set_raw(it, o, i, js.value_to_raw(js.ta_of(o).kind, js.num_of(items[i])))
+        js.ta_set_raw(it, o, i, js.ta_raw_of_typed(js.ta_of(o).kind, items[i]))
         i += 1usize
     }
     ret (this_val, ok)
@@ -664,7 +678,7 @@ fn ta_to_sorted(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     if re != ok { ret (js.undefv(), re) }
     var i = 0usize
     while i < items.len {
-        js.ta_set_raw(it, r, i, js.value_to_raw(js.ta_of(o).kind, js.num_of(items[i])))
+        js.ta_set_raw(it, r, i, js.ta_raw_of_typed(js.ta_of(o).kind, items[i]))
         i += 1usize
     }
     ret (js.obj_value(r), ok)
@@ -678,7 +692,7 @@ fn ta_to_reversed(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     if re != ok { ret (js.undefv(), re) }
     var i = 0usize
     while i < len {
-        js.ta_set_raw(it, r, i, js.value_to_raw(js.ta_of(o).kind, js.num_of(js.ta_get_index(it, o, len - 1usize - i))))
+        js.ta_set_raw(it, r, i, js.ta_raw_of_typed(js.ta_of(o).kind, js.ta_get_index(it, o, len - 1usize - i)))
         i += 1usize
     }
     ret (js.obj_value(r), ok)
@@ -692,16 +706,24 @@ fn ta_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     if ne != ok { ret (js.undefv(), ne) }
     var rel = js.to_integer(n)
     if rel < 0.0f64 { rel = len + rel }
-    let (nv, nve) = js.to_number(it, arg(args, 1usize))
-    if nve != ok { ret (js.undefv(), nve) }
+    var new_value = arg(args, 1usize)
+    if js.ta_of(o).kind >= 10u8 {
+        let (nb, nbe) = js.to_bigint(it, new_value)
+        if nbe != ok { ret (js.undefv(), nbe) }
+        new_value = js.big_value(nb)
+    } else {
+        let (nv, nve) = js.to_number(it, new_value)
+        if nve != ok { ret (js.undefv(), nve) }
+        new_value = js.num_value(nv)
+    }
     if !js.ta_valid_index(o, rel) { ret (js.undefv(), js.throw_range(it, "Invalid typed array index")) }
     let (r, re) = create_typed(it, js.ta_of(o).kind, ta_default_proto(it, js.ta_of(o).kind), usize(len))
     if re != ok { ret (js.undefv(), re) }
     var i = 0usize
     while f64(i) < len {
         var v = js.ta_get_index(it, o, i)
-        if f64(i) == rel { v = js.num_value(nv) }
-        js.ta_set_raw(it, r, i, js.value_to_raw(js.ta_of(o).kind, js.num_of(v)))
+        if f64(i) == rel { v = new_value }
+        js.ta_set_raw(it, r, i, js.ta_raw_of_typed(js.ta_of(o).kind, v))
         i += 1usize
     }
     ret (js.obj_value(r), ok)
@@ -951,11 +973,11 @@ fn install_typed_arrays(it: *js.Interp) {
     if atse == ok { let e7 = js.define_data(it, it.protos.typed_array, js.key_of("toString"), ats, js.P_HIDDEN) }
     // The concrete constructors.
     var kind = 1u8
-    while kind <= 9u8 {
+    while kind <= 11u8 {
         let proto = js.new_obj(it, js.C_OBJECT, it.protos.typed_array)
         it.ta_protos[usize(kind)] = proto
         var native: js.NativeFn = ctor_int8
-        if kind == 2u8 { native = ctor_uint8 } else if kind == 3u8 { native = ctor_uint8c } else if kind == 4u8 { native = ctor_int16 } else if kind == 5u8 { native = ctor_uint16 } else if kind == 6u8 { native = ctor_int32 } else if kind == 7u8 { native = ctor_uint32 } else if kind == 8u8 { native = ctor_float32 } else if kind == 9u8 { native = ctor_float64 }
+        if kind == 2u8 { native = ctor_uint8 } else if kind == 3u8 { native = ctor_uint8c } else if kind == 4u8 { native = ctor_int16 } else if kind == 5u8 { native = ctor_uint16 } else if kind == 6u8 { native = ctor_int32 } else if kind == 7u8 { native = ctor_uint32 } else if kind == 8u8 { native = ctor_float32 } else if kind == 9u8 { native = ctor_float64 } else if kind == 10u8 { native = ctor_bigint64 } else if kind == 11u8 { native = ctor_biguint64 }
         let c = js.make_native(it, kind_name(kind), 3u32, native)
         c.ctor_kind = js.K_BASE
         c.proto = it.last_abstract
@@ -1056,7 +1078,7 @@ fn dv_get(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) 
         raw = raw | (u64(b.bytes[d.offset + byte_at]) << u64(shift))
         i += 1usize
     }
-    ret (js.raw_to_value(kind, raw), ok)
+    ret (js.raw_to_value(it, kind, raw), ok)
 }
 
 fn dv_set(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err) {
@@ -1066,14 +1088,13 @@ fn dv_set(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) 
     if ne != ok { ret (js.undefv(), ne) }
     let idx = js.to_integer(n)
     if idx < 0.0f64 || js.is_infinite(idx) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
-    let (vn, vne) = js.to_number(it, arg(args, 1usize))
+    let (raw, vne) = js.ta_raw_of(it, kind, arg(args, 1usize))
     if vne != ok { ret (js.undefv(), vne) }
     let little = js.to_boolean(arg(args, 2usize))
     let b = js.buf_of(d.buffer)
     if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
     let size = js.ta_elem_size(kind)
     if idx + f64(size) > f64(d.length) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
-    let raw = js.value_to_raw(kind, vn)
     var i = 0usize
     while i < size {
         var shift = 8usize * i
@@ -1114,6 +1135,14 @@ fn dv_set_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     ret (r, e) }
 fn dv_set_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 8u8)
     ret (r, e) }
+fn dv_get_bigint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 10u8)
+    ret (r, e) }
+fn dv_get_biguint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 11u8)
+    ret (r, e) }
+fn dv_set_bigint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 10u8)
+    ret (r, e) }
+fn dv_set_biguint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 11u8)
+    ret (r, e) }
 fn dv_set_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 9u8)
     ret (r, e) }
 
@@ -1128,6 +1157,10 @@ fn install_data_view(it: *js.Interp) {
     js.add_getter(it, it.protos.data_view, "byteLength", dv_byte_length_getter)
     js.add_getter(it, it.protos.data_view, "byteOffset", dv_byte_offset_getter)
     let e4 = js.define_data(it, it.protos.data_view, js.key_of_symbol(it.sym_to_string_tag), js.str_value("DataView"), js.P_CONFIGURABLE)
+    js.add_method(it, it.protos.data_view, "getBigInt64", 1u32, dv_get_bigint64)
+    js.add_method(it, it.protos.data_view, "getBigUint64", 1u32, dv_get_biguint64)
+    js.add_method(it, it.protos.data_view, "setBigInt64", 2u32, dv_set_bigint64)
+    js.add_method(it, it.protos.data_view, "setBigUint64", 2u32, dv_set_biguint64)
     js.add_method(it, it.protos.data_view, "getInt8", 1u32, dv_get_int8)
     js.add_method(it, it.protos.data_view, "getUint8", 1u32, dv_get_uint8)
     js.add_method(it, it.protos.data_view, "getInt16", 1u32, dv_get_int16)

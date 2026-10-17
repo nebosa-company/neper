@@ -31,7 +31,7 @@ fn features_of(meta: str) -> str {
 
 fn skipped_feature(full_meta: str) -> bool {
     let meta = features_of(full_meta)
-    let feats = "BigInt|SharedArrayBuffer|Atomics|WeakRef|FinalizationRegistry|Intl|Temporal|IsHTMLDDA|resizable-arraybuffer|ShadowRealm|import-attributes|source-phase-imports|decorators|explicit-resource-management|json-modules|tail-call-optimization|Array.fromAsync|uint8array-base64|set-methods|regexp-v-flag|regexp-duplicate-named-groups|regexp-modifiers|Float16Array|Math.sumPrecise|RegExp.escape|await-dictionary|canonical-tz|iterator-includes|Iterator.prototype.join|iterator-chunking|upsert|joint-iteration|immutable-arraybuffer|Error.isError|promise-try|import-defer|cross-realm|regexp-unicode-property-escapes|"
+    let feats = "SharedArrayBuffer|Atomics|WeakRef|FinalizationRegistry|Intl|Temporal|IsHTMLDDA|resizable-arraybuffer|ShadowRealm|import-attributes|source-phase-imports|decorators|explicit-resource-management|json-modules|tail-call-optimization|Array.fromAsync|uint8array-base64|set-methods|regexp-v-flag|regexp-duplicate-named-groups|regexp-modifiers|Float16Array|Math.sumPrecise|RegExp.escape|await-dictionary|canonical-tz|iterator-includes|Iterator.prototype.join|iterator-chunking|upsert|joint-iteration|immutable-arraybuffer|Error.isError|promise-try|import-defer|cross-realm|regexp-unicode-property-escapes|"
     var start = 0usize
     var i = 0usize
     while i < feats.len {

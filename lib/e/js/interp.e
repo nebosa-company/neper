@@ -14,6 +14,7 @@
 use e.data.list as list
 use e.data.map as map
 use e.js.ast as ast
+use e.js.bigint as bigint
 use e.js.parser as jsparse
 use e.math
 use e.mem
@@ -61,7 +62,7 @@ const P_HIDDEN: u8 = 5u8
 
 type Sym = struct { description: str, has_description: bool, id: u32, registered: bool, private: bool }
 
-type Value = union enum u8 { Undefined, Null, Bool: bool, Num: f64, Str: str, Sym: *Sym, Obj: *Obj }
+type Value = union enum u8 { Undefined, Null, Bool: bool, Num: f64, Str: str, Sym: *Sym, Obj: *Obj, Big: bigint.Big }
 
 // A property key: a string name (`idx` >= 0 when it is a canonical array index) or a symbol.
 type Key = struct { name: str, sym: *Sym, idx: i64 }
@@ -753,6 +754,13 @@ fn strict_equals(x: Value, y: Value) -> bool {
         default:
             ret false
         }
+    case .Big as gx:
+        switch y {
+        case .Big as gy:
+            ret bigint.eq(gx, gy)
+        default:
+            ret false
+        }
     }
     ret false
 }
@@ -805,6 +813,8 @@ fn to_boolean(v: Value) -> bool {
         ret true
     case .Obj as o:
         ret true
+    case .Big as bg:
+        ret !bigint.is_zero(bg)
     }
     ret false
 }
@@ -826,6 +836,8 @@ fn type_of(v: Value) -> str {
     case .Obj as o:
         if is_callable(v) { ret "function" }
         ret "object"
+    case .Big as bt:
+        ret "bigint"
     }
     ret "undefined"
 }
@@ -1162,6 +1174,8 @@ fn proto_for_primitive(it: *Interp, v: Value) -> (*Obj, bool) {
         ret (it.protos.string, true)
     case .Sym as sy:
         ret (it.protos.symbol, true)
+    case .Big as bp:
+        ret (it.protos.bigint, true)
     default:
         ret (null_obj(), false)
     }
@@ -1266,9 +1280,9 @@ fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (boo
         if ro.class == C_TYPEDARRAY && !is_symbol_key(key) {
             let (is_num2, nv2) = numeric_index(it, key.name)
             if is_num2 {
-                let (nn, ne) = to_number(it, val)
+                let (rawv, ne) = ta_raw_of(it, ta_of(ro).kind, val)
                 if ne != ok { ret (false, ne) }
-                if ta_valid_index(ro, nv2) { ta_set_raw(it, ro, usize(nv2), value_to_raw(ta_of(ro).kind, nn)) }
+                if ta_valid_index(ro, nv2) { ta_set_raw(it, ro, usize(nv2), rawv) }
                 ret (true, ok)
             }
         }
@@ -1507,9 +1521,9 @@ fn define_own(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err) {
             if d.has_get || d.has_set { ret (false, ok) }
             if d.has_writable && !d.writable { ret (false, ok) }
             if d.has_value {
-                let (nn, ne) = to_number(it, d.value)
+                let (rawv, ne) = ta_raw_of(it, ta_of(o).kind, d.value)
                 if ne != ok { ret (false, ne) }
-                if ta_valid_index(o, nv) { ta_set_raw(it, o, usize(nv), value_to_raw(ta_of(o).kind, nn)) }
+                if ta_valid_index(o, nv) { ta_set_raw(it, o, usize(nv), rawv) }
             }
             ret (true, ok)
         }
@@ -1723,6 +1737,8 @@ fn to_number(it: *Interp, v: Value) -> (f64, err) {
         ret (string_to_number(it.a, s), ok)
     case .Sym as sy:
         ret (0.0f64, throw_type(it, "Cannot convert a Symbol value to a number"))
+    case .Big as bn:
+        ret (0.0f64, throw_type(it, "Cannot convert a BigInt value to a number"))
     case .Obj as o:
         let (p, pe) = to_primitive(it, v, "number")
         if pe != ok { ret (0.0f64, pe) }
@@ -1730,6 +1746,166 @@ fn to_number(it: *Interp, v: Value) -> (f64, err) {
         ret (n2, ne)
     }
     ret (0.0f64, ok)
+}
+
+// --- BigInt support
+
+fn to_bigint(it: *Interp, v: Value) -> (bigint.Big, err) {
+    let (p, pe) = to_primitive(it, v, "number")
+    if pe != ok { ret (bigint.zero_big(), pe) }
+    switch p {
+    case .Big as b:
+        ret (b, ok)
+    case .Bool as bo:
+        var bit = 0u64
+        if bo { bit = 1u64 }
+        let (r, e) = bigint.from_u64(it.a, bit)
+        if e != ok { ret (r, big_error(it, e)) }
+        ret (r, ok)
+    case .Str as s:
+        let (sb, valid) = string_to_bigint(it, s)
+        if !valid { ret (bigint.zero_big(), throw_syntax(it, str_concat3(it, "Cannot convert ", s, " to a BigInt"))) }
+        ret (sb, ok)
+    default:
+        ret (bigint.zero_big(), throw_type(it, "Cannot convert value to a BigInt"))
+    }
+    ret (bigint.zero_big(), ok)
+}
+
+fn big_value(b: bigint.Big) -> Value { ret Value { Big: b } }
+
+fn is_bigint(v: Value) -> bool {
+    switch v {
+    case .Big as b:
+        ret true
+    default:
+        ret false
+    }
+    ret false
+}
+
+fn big_of(v: Value) -> bigint.Big {
+    switch v {
+    case .Big as b:
+        ret b
+    default:
+        ret bigint.zero_big()
+    }
+    ret bigint.zero_big()
+}
+
+fn big_error(it: *Interp, e: err) -> err {
+    if e == bigint.DivideByZero { ret throw_range(it, "Division by zero") }
+    if e == bigint.TooBig { ret throw_range(it, "Maximum BigInt size exceeded") }
+    ret throw_range(it, "out of memory")
+}
+
+fn mix_error(it: *Interp) -> err { ret throw_type(it, "Cannot mix BigInt and other types, use explicit conversions") }
+
+// ToNumeric: a number or a BigInt.
+fn to_numeric(it: *Interp, v: Value) -> (Value, err) {
+    let (p, pe) = to_primitive(it, v, "number")
+    if pe != ok { ret (undefv(), pe) }
+    if is_bigint(p) { ret (p, ok) }
+    let (n, ne) = to_number(it, p)
+    if ne != ok { ret (undefv(), ne) }
+    ret (num_value(n), ok)
+}
+
+fn is_ws_byte_or_unicode(s: str, i: usize) -> usize {
+    let c = s[i]
+    if c == 32u8 || (c >= 9u8 && c <= 13u8) { ret 1usize }
+    if c == 194u8 && i + 1usize < s.len && s[i + 1usize] == 160u8 { ret 2usize }
+    ret 0usize
+}
+
+// StringToBigInt: whitespace trimmed, "" is 0n, decimal with an optional sign or 0x / 0o / 0b digits; false when invalid.
+fn string_to_bigint(it: *Interp, text: str) -> (bigint.Big, bool) {
+    var s = text
+    // Trim JavaScript whitespace (ASCII ones and U+00A0, U+FEFF, U+2028/9, U+3000, other spaces by the generic helper).
+    s = trim_js(s)
+    if s.len == 0usize { ret (bigint.zero_big(), true) }
+    var radix = 10u32
+    var digits = s
+    var neg = false
+    if s.len > 2usize && s[0usize] == 48u8 && (s[1usize] == 120u8 || s[1usize] == 88u8) {
+        radix = 16u32
+        digits = s[2usize..]
+    } else if s.len > 2usize && s[0usize] == 48u8 && (s[1usize] == 111u8 || s[1usize] == 79u8) {
+        radix = 8u32
+        digits = s[2usize..]
+    } else if s.len > 2usize && s[0usize] == 48u8 && (s[1usize] == 98u8 || s[1usize] == 66u8) {
+        radix = 2u32
+        digits = s[2usize..]
+    } else if s[0usize] == 43u8 {
+        digits = s[1usize..]
+    } else if s[0usize] == 45u8 {
+        neg = true
+        digits = s[1usize..]
+    }
+    let (b, good, e) = bigint.parse_digits(it.a, digits, radix)
+    if e != ok || !good { ret (bigint.zero_big(), false) }
+    if neg { ret (bigint.negate(b), true) }
+    ret (b, true)
+}
+
+fn number_to_bigint(it: *Interp, n: f64) -> (bigint.Big, err) {
+    if is_nan(n) || is_infinite(n) || n != f64(i64_trunc(n)) && n < 4503599627370496.0f64 && n > -4503599627370496.0f64 {
+        ret (bigint.zero_big(), throw_range(it, "The number cannot be converted to a BigInt because it is not an integer"))
+    }
+    let (b, e) = bigint.from_f64(it.a, n)
+    if e != ok { ret (b, big_error(it, e)) }
+    ret (b, ok)
+}
+
+fn i64_trunc(n: f64) -> i64 {
+    if n >= 9.2e18f64 || n <= -9.2e18f64 { ret 0i64 }
+    ret i64(n)
+}
+
+// The arithmetic and bitwise operators on two BigInts.
+fn bigint_binary(it: *Interp, op: u8, x: bigint.Big, y: bigint.Big) -> (Value, err) {
+    if op == ast.O_ADD {
+        let (r, e) = bigint.add(it.a, x, y)
+        if e != ok { ret (undefv(), big_error(it, e)) }
+        ret (big_value(r), ok)
+    }
+    if op == ast.O_SUB {
+        let (r2, e2) = bigint.sub(it.a, x, y)
+        if e2 != ok { ret (undefv(), big_error(it, e2)) }
+        ret (big_value(r2), ok)
+    }
+    if op == ast.O_MUL {
+        let (r3, e3) = bigint.mul(it.a, x, y)
+        if e3 != ok { ret (undefv(), big_error(it, e3)) }
+        ret (big_value(r3), ok)
+    }
+    if op == ast.O_DIV || op == ast.O_MOD {
+        let (q, rm, e4) = bigint.divrem(it.a, x, y)
+        if e4 != ok { ret (undefv(), big_error(it, e4)) }
+        if op == ast.O_DIV { ret (big_value(q), ok) }
+        ret (big_value(rm), ok)
+    }
+    if op == ast.O_EXP {
+        if y.neg { ret (undefv(), throw_range(it, "Exponent must be non-negative")) }
+        let (r5, e5) = bigint.pow(it.a, x, y)
+        if e5 != ok { ret (undefv(), big_error(it, e5)) }
+        ret (big_value(r5), ok)
+    }
+    if op == ast.O_SHL || op == ast.O_SHR {
+        var count = y
+        if op == ast.O_SHR { count = bigint.negate(y) }
+        let (r6, e6) = bigint.shift_by(it.a, x, count)
+        if e6 != ok { ret (undefv(), big_error(it, e6)) }
+        ret (big_value(r6), ok)
+    }
+    if op == ast.O_USHR { ret (undefv(), throw_type(it, "BigInts have no unsigned right shift, use >> instead")) }
+    var kind = 0u8
+    if op == ast.O_BITOR { kind = 1u8 }
+    if op == ast.O_BITXOR { kind = 2u8 }
+    let (r7, e7) = bigint.bitwise(it.a, x, y, kind)
+    if e7 != ok { ret (undefv(), big_error(it, e7)) }
+    ret (big_value(r7), ok)
 }
 
 fn to_string(it: *Interp, v: Value) -> (str, err) {
@@ -1747,6 +1923,10 @@ fn to_string(it: *Interp, v: Value) -> (str, err) {
         ret (s, ok)
     case .Sym as sy:
         ret ("", throw_type(it, "Cannot convert a Symbol value to a string"))
+    case .Big as bs:
+        let (txt, te) = bigint.to_string(it.a, bs, 10u32)
+        if te != ok { ret ("", big_error(it, te)) }
+        ret (txt, ok)
     case .Obj as o:
         let (p, pe) = to_primitive(it, v, "string")
         if pe != ok { ret ("", pe) }
@@ -1780,6 +1960,10 @@ fn to_object(it: *Interp, v: Value) -> (*Obj, err) {
         let w4 = new_obj(it, C_SYMBOL, it.protos.symbol)
         w4.prim = v
         ret (w4, ok)
+    case .Big as bo:
+        let w5 = new_obj(it, C_BIGINT, it.protos.bigint)
+        w5.prim = v
+        ret (w5, ok)
     }
     ret (null_obj(), ok)
 }
@@ -1900,10 +2084,33 @@ fn loose_equals(it: *Interp, x: Value, y: Value) -> (bool, err) {
         ret (is_nullish(y), ok)
     case .Null:
         ret (is_nullish(y), ok)
+    case .Big as gx:
+        switch y {
+        case .Big as gy:
+            ret (bigint.eq(gx, gy), ok)
+        case .Num as gn:
+            ret (bigint.cmp_f64(it.a, gx, gn) == 0i32, ok)
+        case .Str as gs:
+            let (gb, gv) = string_to_bigint(it, gs)
+            ret (gv && bigint.eq(gx, gb), ok)
+        case .Bool as gbo:
+            var bv = 0.0f64
+            if gbo { bv = 1.0f64 }
+            ret (bigint.cmp_f64(it.a, gx, bv) == 0i32, ok)
+        case .Obj as go:
+            let (gp, gpe) = to_primitive(it, y, "default")
+            if gpe != ok { ret (false, gpe) }
+            let (gr, gre) = loose_equals(it, x, gp)
+            ret (gr, gre)
+        default:
+            ret (false, ok)
+        }
     case .Num as nx:
         switch y {
         case .Num as ny:
             ret (nx == ny, ok)
+        case .Big as ngy:
+            ret (bigint.cmp_f64(it.a, ngy, nx) == 0i32, ok)
         case .Str as sy:
             ret (nx == string_to_number(it.a, sy), ok)
         case .Bool as by:
@@ -1922,6 +2129,9 @@ fn loose_equals(it: *Interp, x: Value, y: Value) -> (bool, err) {
         switch y {
         case .Str as sy2:
             ret (str.eq(sx, sy2), ok)
+        case .Big as sgy:
+            let (sgb, sgv) = string_to_bigint(it, sx)
+            ret (sgv && bigint.eq(sgb, sgy), ok)
         case .Num as ny2:
             ret (string_to_number(it.a, sx) == ny2, ok)
         case .Bool as by2:
@@ -2990,6 +3200,55 @@ fn compare_values(it: *Interp, x: Value, y: Value, left_first: bool) -> (i32, bo
         if compare_utf16(sx, sy) < 0i32 { ret (1i32, false, ok) }
         ret (0i32, false, ok)
     }
+    if is_bigint(px) || is_bigint(py) {
+        // BigInt against BigInt, number or string.
+        var xb = bigint.zero_big()
+        var yb = bigint.zero_big()
+        var xn = 0.0f64
+        var yn = 0.0f64
+        var x_big = false
+        var y_big = false
+        if is_bigint(px) {
+            xb = big_of(px)
+            x_big = true
+        } else if is_string(px) {
+            let (sb, sv) = string_to_bigint(it, value_str(px))
+            if !sv { ret (0i32, true, ok) }
+            xb = sb
+            x_big = true
+        } else {
+            let (nn, nne) = to_number(it, px)
+            if nne != ok { ret (0i32, false, nne) }
+            xn = nn
+        }
+        if is_bigint(py) {
+            yb = big_of(py)
+            y_big = true
+        } else if is_string(py) {
+            let (sb2, sv2) = string_to_bigint(it, value_str(py))
+            if !sv2 { ret (0i32, true, ok) }
+            yb = sb2
+            y_big = true
+        } else {
+            let (nn2, nne2) = to_number(it, py)
+            if nne2 != ok { ret (0i32, false, nne2) }
+            yn = nn2
+        }
+        var c = 0i32
+        if x_big && y_big {
+            c = bigint.cmp(xb, yb)
+        } else if x_big {
+            let cf = bigint.cmp_f64(it.a, xb, yn)
+            if cf == 2i32 { ret (0i32, true, ok) }
+            c = cf
+        } else {
+            let cf2 = bigint.cmp_f64(it.a, yb, xn)
+            if cf2 == 2i32 { ret (0i32, true, ok) }
+            c = 0i32 - cf2
+        }
+        if c < 0i32 { ret (1i32, false, ok) }
+        ret (0i32, false, ok)
+    }
     let (nx, ne1) = to_number(it, px)
     if ne1 != ok { ret (0i32, false, ne1) }
     let (ny, ne2) = to_number(it, py)
@@ -3059,6 +3318,20 @@ fn binary_op(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err) {
             if e4 != ok { ret (undefv(), e4) }
             ret (str_value(str_concat(it, sx, sy)), ok)
         }
+        if is_bigint(px) || is_bigint(py) {
+            if !(is_bigint(px) && is_bigint(py)) {
+                if is_bigint(px) {
+                    let (chk, ce5) = to_number(it, py)
+                    if ce5 != ok { ret (undefv(), ce5) }
+                } else {
+                    let (chk2, ce6) = to_number(it, px)
+                    if ce6 != ok { ret (undefv(), ce6) }
+                }
+                ret (undefv(), mix_error(it))
+            }
+            let (bsum, bse) = bigint_binary(it, op, big_of(px), big_of(py))
+            ret (bsum, bse)
+        }
         let (nx2, e5) = to_number(it, px)
         if e5 != ok { ret (undefv(), e5) }
         let (ny2, e6) = to_number(it, py)
@@ -3108,11 +3381,16 @@ fn binary_op(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err) {
         ret (bool_value(hr), ok)
     }
     // Arithmetic and bitwise.
-    let (nx3, e7) = to_number(it, x)
+    let (nvx, e7) = to_numeric(it, x)
     if e7 != ok { ret (undefv(), e7) }
-    let (ny3, e8) = to_number(it, y)
+    let (nvy, e8) = to_numeric(it, y)
     if e8 != ok { ret (undefv(), e8) }
-    ret (num_value(arith(it, op, nx3, ny3)), ok)
+    if is_bigint(nvx) || is_bigint(nvy) {
+        if !(is_bigint(nvx) && is_bigint(nvy)) { ret (undefv(), mix_error(it)) }
+        let (br, bre) = bigint_binary(it, op, big_of(nvx), big_of(nvy))
+        ret (br, bre)
+    }
+    ret (num_value(arith(it, op, num_of(nvx), num_of(nvy))), ok)
 }
 
 // --- calls from the evaluator
@@ -3248,6 +3526,44 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
     let n = f.prog.nodes[usize(id)]
     let k = n.kind
     if k == ast.N_NUM { ret (num_value(n.num), ok) }
+    if k == ast.N_BIGINT {
+        var digits = n.text
+        if digits.len > 0usize && digits[digits.len - 1usize] == 110u8 { digits = digits[0usize..digits.len - 1usize] }
+        var radix = 10u32
+        if digits.len > 2usize && digits[0usize] == 48u8 {
+            let p = digits[1usize]
+            if p == 120u8 || p == 88u8 {
+                radix = 16u32
+                digits = digits[2usize..]
+            } else if p == 111u8 || p == 79u8 {
+                radix = 8u32
+                digits = digits[2usize..]
+            } else if p == 98u8 || p == 66u8 {
+                radix = 2u32
+                digits = digits[2usize..]
+            }
+        }
+        var clean = digits
+        var has_sep = false
+        var si = 0usize
+        while si < digits.len {
+            if digits[si] == 95u8 { has_sep = true }
+            si += 1usize
+        }
+        if has_sep {
+            let (bb, be) = str.builder(it.a, digits.len)
+            var b2 = bb
+            var sj = 0usize
+            while sj < digits.len {
+                if digits[sj] != 95u8 { let pe = str.push_byte(&b2, digits[sj]) }
+                sj += 1usize
+            }
+            clean = str.done(&b2)
+        }
+        let (bv, good, pe2) = bigint.parse_digits(it.a, clean, radix)
+        if pe2 != ok || !good { ret (undefv(), throw_syntax(it, "Invalid BigInt literal")) }
+        ret (big_value(bv), ok)
+    }
     if k == ast.N_STR { ret (str_value(n.text), ok) }
     if k == ast.N_IDENT {
         if str.eq(n.text, "undefined") {
@@ -3608,10 +3924,24 @@ fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
     if e5 != ok { ret (undefv(), e5) }
     if n.op == ast.O_NOT { ret (bool_value(!to_boolean(v4)), ok) }
     if n.op == ast.O_VOID { ret (undefv(), ok) }
-    let (num, ne) = to_number(it, v4)
+    if n.op == ast.O_PLUS {
+        let (pnum, pne) = to_number(it, v4)
+        if pne != ok { ret (undefv(), pne) }
+        ret (num_value(pnum), ok)
+    }
+    let (nv, ne) = to_numeric(it, v4)
     if ne != ok { ret (undefv(), ne) }
+    if is_bigint(nv) {
+        if n.op == ast.O_NEG { ret (big_value(bigint.negate(big_of(nv))), ok) }
+        if n.op == ast.O_BITNOT {
+            let (bn2, bne2) = bigint.bit_not(it.a, big_of(nv))
+            if bne2 != ok { ret (undefv(), big_error(it, bne2)) }
+            ret (big_value(bn2), ok)
+        }
+        ret (undefv(), ok)
+    }
+    let num = num_of(nv)
     if n.op == ast.O_NEG { ret (num_value(-num), ok) }
-    if n.op == ast.O_PLUS { ret (num_value(num), ok) }
     if n.op == ast.O_BITNOT { ret (num_value(f64(~to_int32_value(num))), ok) }
     ret (undefv(), ok)
 }
@@ -3627,8 +3957,19 @@ fn eval_update(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         if he != ok { ret (undefv(), he) }
         let (old, oe) = get_in_scope(it, holder, tn.text)
         if oe != ok { ret (undefv(), oe) }
-        let (num, ne) = to_number(it, old)
+        let (numv, ne) = to_numeric(it, old)
         if ne != ok { ret (undefv(), ne) }
+        if is_bigint(numv) {
+            let (one, ioe) = bigint.from_i64(it.a, i64(delta))
+            if ioe != ok { ret (undefv(), big_error(it, ioe)) }
+            let (nb, nbe) = bigint.add(it.a, big_of(numv), one)
+            if nbe != ok { ret (undefv(), big_error(it, nbe)) }
+            let aeb = put_in_scope(it, f, holder, tn.text, big_value(nb))
+            if aeb != ok { ret (undefv(), aeb) }
+            if prefix { ret (big_value(nb), ok) }
+            ret (numv, ok)
+        }
+        let num = num_of(numv)
         let nv = num + delta
         let ae = put_in_scope(it, f, holder, tn.text, num_value(nv))
         if ae != ok { ret (undefv(), ae) }
@@ -5941,7 +6282,34 @@ fn read_unit(bytes: []const u8, at: usize, size: usize) -> u64 {
     ret v
 }
 
-fn raw_to_value(kind: u8, raw: u64) -> Value {
+// The element bits of `v` for a typed array of `kind`: converts like the element setters do (a number for the numeric kinds,
+// a BigInt for BigInt64Array and BigUint64Array).
+fn ta_raw_of(it: *Interp, kind: u8, v: Value) -> (u64, err) {
+    if kind >= 10u8 {
+        let (b, be) = to_bigint(it, v)
+        if be != ok { ret (0u64, be) }
+        ret (bigint.to_u64_wrapping(b), ok)
+    }
+    let (n, ne) = to_number(it, v)
+    if ne != ok { ret (0u64, ne) }
+    ret (value_to_raw(kind, n), ok)
+}
+
+// The same for a value that already has the element type (read back from a typed array): no conversion can fail.
+fn ta_raw_of_typed(kind: u8, v: Value) -> u64 {
+    if kind >= 10u8 { ret bigint.to_u64_wrapping(big_of(v)) }
+    ret value_to_raw(kind, num_of(v))
+}
+
+fn raw_to_value(it: *Interp, kind: u8, raw: u64) -> Value {
+    if kind == 10u8 {
+        let (b, e) = bigint.from_i64(it.a, mem.bitcast[i64](raw))
+        ret big_value(b)
+    }
+    if kind == 11u8 {
+        let (b2, e2) = bigint.from_u64(it.a, raw)
+        ret big_value(b2)
+    }
     if kind == 2u8 || kind == 3u8 { ret num_value(f64(raw & 255u64)) }
     if kind == 1u8 {
         var v = i64(raw & 255u64)
@@ -5990,7 +6358,8 @@ fn ta_get_index(it: *Interp, o: *Obj, idx: usize) -> Value {
     let t = ta_of(o)
     let b = buf_of(t.buffer)
     let size = ta_elem_size(t.kind)
-    ret raw_to_value(t.kind, read_unit(b.bytes, t.offset + idx * size, size))
+    if b.detached || t.offset + (idx + 1usize) * size > b.bytes.len { ret undefv() }
+    ret raw_to_value(it, t.kind, read_unit(b.bytes, t.offset + idx * size, size))
 }
 
 fn ta_set_raw(it: *Interp, o: *Obj, idx: usize, raw: u64) {

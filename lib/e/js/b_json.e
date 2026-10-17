@@ -293,8 +293,8 @@ fn quote(it: *js.Interp, s: str) -> str {
 fn ser(it: *js.Interp, st: *S, holder: *js.Obj, key: js.Key, value_in: js.Value, indent: str) -> (str, bool, err) {
     // (text, produced a value, error)
     var value = value_in
-    if js.is_object(value) {
-        let (tj, tje) = js.get_prop(it, js.as_object(value), js.key_of("toJSON"), value)
+    if js.is_object(value) || js.is_bigint(value) {
+        let (tj, tje) = js.get_value(it, value, js.key_of("toJSON"))
         if tje != ok { ret ("", false, tje) }
         if js.is_callable(tj) {
             let (r, re) = js.call_function(it, tj, value, js.one_arg(it, js.key_to_value(key)))
@@ -317,11 +317,13 @@ fn ser(it: *js.Interp, st: *S, holder: *js.Obj, key: js.Key, value_in: js.Value,
             let (s, se) = js.to_string(it, value)
             if se != ok { ret ("", false, se) }
             value = js.str_value(s)
-        } else if o.class == js.C_BOOLEAN {
+        } else if o.class == js.C_BOOLEAN || o.class == js.C_BIGINT {
             value = o.prim
         }
     }
     switch value {
+    case .Big as bigv:
+        ret ("", false, js.throw_type(it, "Do not know how to serialize a BigInt"))
     case .Null:
         ret ("null", true, ok)
     case .Bool as b:

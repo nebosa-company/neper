@@ -1373,6 +1373,8 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
             let (fid, fe) = mk(p, ast.N_FUNC)
             if fe != ok { ret (ast.NONE, fe) }
             node(p, fid).flags = ast.F_METHOD | ast.F_STRICT
+            node(p, fid).a = 0u32
+            node(p, fid).b = 0u32
             let saved_vars = p.vars.len
             let saved_fn = p.in_function
             p.in_function = true
@@ -1429,6 +1431,8 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
                 let (fid2, fe2) = mk(p, ast.N_FUNC)
                 if fe2 != ok { ret (ast.NONE, fe2) }
                 node(p, fid2).flags = ast.F_METHOD | ast.F_STRICT | ast.F_ARROW | ast.F_EXPR_BODY
+                node(p, fid2).a = 0u32
+                node(p, fid2).b = 0u32
                 let saved_fn2 = p.in_function
                 let saved_vars2 = p.vars.len
                 p.in_function = true

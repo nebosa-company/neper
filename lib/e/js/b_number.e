@@ -1,6 +1,7 @@
 // Number, Boolean, Math and the numeric global functions (browser tracker 5.7).
 
 use e.data.list as list
+use e.js.bigint as bigint
 use e.js.interp as js
 use e.math
 use e.mem
@@ -62,9 +63,9 @@ fn boolean_value_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 fn number_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     var n = 0.0f64
     if args.len > 0usize {
-        let (v, e) = js.to_number(it, args[0usize])
-        if e != ok { ret (js.undefv(), e) }
-        n = v
+        let (pv, pe0) = js.to_numeric(it, args[0usize])
+        if pe0 != ok { ret (js.undefv(), pe0) }
+        if js.is_bigint(pv) { n = bigint.to_f64(js.big_of(pv)) } else { n = js.num_of(pv) }
     }
     if !it.has_new_target { ret (js.num_value(n), ok) }
     let nto = js.as_object(it.new_target)

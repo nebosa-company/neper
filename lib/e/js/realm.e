@@ -8,6 +8,7 @@ use e.data.list as list
 use e.io
 use e.js.ast as ast
 use e.js.b_array as b_array
+use e.js.b_bigint as b_bigint
 use e.js.b_collections as b_collections
 use e.js.b_control as b_control
 use e.js.b_date as b_date
@@ -1039,6 +1040,7 @@ fn new_realm(a: *mem.Arena) -> (*js.Interp, err) {
     b_array.install_array(it)
     b_string.install_string(it)
     b_number.install_number(it)
+    b_bigint.install_bigint(it)
     b_number.install_math(it)
     b_json.install_json(it)
     b_control.install_generators(it)

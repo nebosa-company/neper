@@ -48,6 +48,15 @@ fn hash_value(v: js.Value) -> u64 {
         ret (u64(sy.id) *% 2654435761u64) +% 7u64
     case .Obj as o:
         ret o.id *% 11400714819323198485u64
+    case .Big as bg:
+        var h4 = 17u64
+        if bg.neg { h4 = 19u64 }
+        var li = 0usize
+        while li < bg.mag.len {
+            h4 = (h4 ^ u64(bg.mag[li])) *% 1099511628211u64
+            li += 1usize
+        }
+        ret h4
     }
     ret 0u64
 }
