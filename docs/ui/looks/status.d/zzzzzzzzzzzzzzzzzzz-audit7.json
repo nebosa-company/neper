@@ -1,0 +1,137 @@
+{
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar_main.png",
+    "notes": "Audit 7 (own comparer): 17 of 18 crops 0 flat px off, but scroll_bar_native crop 3 (the native vertical bar) finds no thumb at the native position (best placement 112 flat px, 2x36 thumb column and the 8x6 arrow end). The committed scroll_bar_states sheet is also not what master renders (488 px differ at 1.0). | Round 15: scripts/looks_strict.py --lum over the four scroll bar references: scroll_bar_main 11 of 11 crops, scroll_bar_main_h 3 of 3, scroll_bar_live 3 of 3 at 0 chrome px; scroll_bar_native 2 of 4 (the disabled vertical and horizontal bars at 0): the pressed-upper-arrow crop differs by 344 px (the 2 px native thumb at x 395 to 398, y 48 to 123 against v3's three-column thumb, kept: v3 is the truth for the light look, the native crop is there for the arrow, which matches) and by the first column (#FFFFFF native, #F7F7F7 v3, 8 levels, 170 px at x 388); the arrow itself and both disabled bars a",
+    "gaps": [
+     "The pressed-arrow crop is native: its thumb (2 px line) and first column (white) are not v3's and are not copied",
+     "Native light hover-arrow captures are pixel-identical to rest (README): no separate state",
+     "Horizontal arrow states (the held left arrow, hot arrows) have no capture of v3 and are not drawn",
+     "The dialog and tree bars (Options Shortcuts, Sort, Filter tree) are compared inside their grid sheets",
+     "Audit 7: 17 of 18 crops 0 flat px off, but scroll_bar_native crop 3 (the native vertical bar) finds no thumb at the native position (best placement 112 flat px, 2x36 thumb column and the 8x6 arrow end)"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/syslink.png",
+    "notes": "Audit 7 (own comparer, native dark captures, nothing cut): label-rest 2 and label-disabled 1 px, but the four syslink captures stay 8 to 10 px off (link glyph and underline pixels) at their best placement. Downgraded from matched. | Round 15 (own comparer, dark: 11 px runs plus 8-neighbour flat pixels, ink more than 60 levels from the background grown 2 px excluded): label-rest and label-disabled 0 flat px off (windows-dark/native_dark.png); the four SysLink captures that had no cell (syslink-rest, hover, focus, disabled) now have one (windows-dark/syslink.png, control.windows_syslink) and are 0 flat px off, glyph ink boxes within 1 px at the 40 and 100 level, underlines (row 27) and the focus rectangle (66,14)-(93,28) exact. Hover is the rest look in the capture. The sheet is rendered by examples/looks/syslink.e.",
+    "gaps": [
+     "Unverified: other backgrounds, rotated (no capture)",
+     "Round 15: the link and plain runs are grayscale and thinner than the ClearType captures; ink boxes agree within 1 px, glyph pixels do not within 2 levels (excluded within 2 px of ink)",
+     "Round 15: Neper has no link label: the sheet's Neper look shows the sentence as plain text",
+     "Audit 7: label-rest 2 and label-disabled 1 px, but the four syslink captures stay 8 to 10 px off (link glyph and underline pixels) at their best placement"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark3.png",
+    "notes": "Audit 7: 16 of 18 captures within 4 px; button-split-disabled has 9 px off (the arrow has bright #CCCCCC pixels in the capture that ours lacks) and button-icon-disabled 4. Downgraded from matched. | Round 15 recheck (own comparer, flat 8-neighbour or 11 px run, ink more than 60 levels): all 18 native dark button captures (rest, hover, pressed, focus, default, disabled, split, picture, hover-pressed) 0 flat px off. | Audit 6: all 17 native dark button captures (rest, hover, pressed, focus, default, disabled, split, picture) 0 chrome px, only text edge pixels differ (15 to 19, glyphs are lighter in grey scale). Confirmed matched.",
+    "gaps": [
+     "The picture is v3's artwork class (a bitmap in the capture): ours is the Info glyph, so the 16 x 16 picture area and its 2 px halo are excluded; the caption ink is within 1 px",
+     "Unverified: toggle, loading and plain kinds, a split button whose arrow part is pressed (the capture is the main part)",
+     "Audit 7: 16 of 18 captures within 4 px; button-split-disabled has 9 px off (the arrow has bright #CCCCCC pixels in the capture that ours lacks) and button-icon-disabled 4"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/text_edit.png",
+    "notes": "Audit 7: the seven single-line captures are 0 px off (selected and focus now match), but the five multi-line captures (rest, focus, selected, readonly, disabled) are 12 px off each, edit-multiline-explorer 1003 and edit-multiline-vscroll 2375 (the capture's light unthemed scroll column). Downgraded from matched. | Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. All seven native edit captures (rest, hover, focus, selected, read-only, disabled, password): 0 chrome px at the anchored cell (native_dark sheet), except edit-selected 11 px, all selection fill pixels beside glyph edges (our t ascender is one row taller than the hinted GDI one). Fi",
+    "gaps": [
+     "edit-hover is pixel-identical to edit-rest in the capture: no distinct hover look to match",
+     "Unverified (no native state): invalid, long text, placeholder colour",
+     "11 chrome px remain in edit-selected: glyph shape (hinted GDI against our outline); they are selection fill beside glyph edges, inside the audit's 2 px glyph halo but counted by scripts/looks_w1.py",
+     "Text glyph pixels differ by ClearType colour against greyscale (about 300 px per capture, outside the strict count)",
+     "Audit 7: the seven single-line captures are 0 px off (selected and focus now match), but the five multi-line captures (rest, focus, selected, readonly, disabled) are 12 px off each, edit-multiline-explorer 1003 and edit-multiline-vscroll 2375 (the capture's light unthemed scroll column)"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/spin_edit.png",
+    "notes": "Audit 7: rest, hover, disabled 22 to 23 px off, spin-pressed-up 51 chrome px (the pressed arrow cell and the digit), pressed-down 46, focus 34. Downgraded from matched. | Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. All seven native spin captures (rest, hover up and down, pressed up and down, focus, disabled): 0 chrome px. spin-focus was captured in the blink-off phase of the caret (no orange column) with the selection one pixel past the glyph: its cell now builds the edit with the caret off (c",
+    "gaps": [
+     "Unverified: arrows dimmed at the bounds, the four-arrow v3 fast spin edit (no dark reference)",
+     "Audit 7: rest, hover, disabled 22 to 23 px off, spin-pressed-up 51 chrome px (the pressed arrow cell and the digit), pressed-down 46, focus 34"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/combo_box.png",
+    "notes": "Audit 7: combo-edit-focus and the two open captures 18 flat px (30 chrome), combo-list-disabled 84 flat px (172 chrome); the committed combo_box_* dark sheets (31 of them) are not what master renders (up to 1926 px differ), so the claim cannot be reproduced from the committed pictures. Downgraded from matched. | Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. Both combo styles, the 10 closed captures (edit and list: rest, hover, hover-arrow, focus, disabled) at 0 chrome px except combo-edit-focus 28 px (selection fill beside glyph edges), and the four open captures (combo-edit-open, -open-hover-row, combo-list-open, -open-hover-row) at 5",
+    "gaps": [
+     "Hover captures of the edit and list are pixel-identical to rest",
+     "Unverified: invalid, the scrolling drop list (the open captures show 8 rows, no scroll bar)",
+     "Open captures keep 59 to 68 chrome px (glyph edges on the selection fill and the selected head), as the table of scripts/looks_w1.py prints; our glyphs are 8 rows tall in the list against the hinted 9",
+     "The list-style combo text keeps linear advances (static text); only the editable combo's edit control uses hdmx advances",
+     "Audit 7: combo-edit-focus and the two open captures 18 flat px (30 chrome), combo-list-disabled 84 flat px (172 chrome); the committed combo_box_* dark sheets (31 of them) are not what master renders (up to 1926 px differ), so the claim cannot be reproduced from the committed pictures"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark_icb.png",
+    "notes": "Audit 7: shares the combo captures (18 to 84 flat px off), and the committed image_combo_box_open_* and dialog dark sheets differ from a master render (up to 8419 px at 1.0). Downgraded from matched. | Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. v3's TcxImageComboBox has no dark look, so its dark head is now the native list-style combo (23 high, Segoe UI 9 pt, text from x 4, the list as wide as the head): the picture-less head at 149 wide (sheet native_dark_icb) compares at 0 chrome px with combo-list-rest, hover, disabled ",
+    "gaps": [
+     "Pictures (16 x 16 bitmaps in v3) have no native reference: the head with a picture puts it at x 4 and the text 3 px after it (a guess)",
+     "Open lists with pictures use the 18 px picture rows of the light look (no native counterpart); only the picture-less 15 px rows are compared",
+     "Disabled with a picture and row hover on a picture list are unverified",
+     "Audit 7: shares the combo captures (18 to 84 flat px off), and the committed image_combo_box_open_* and dialog dark sheets differ from a master render (up to 8419 px at 1.0)"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark5.png",
+    "notes": "Audit 7: all six menu-popup captures 6 to 43 flat px off (28 to 53 chrome px: the check mark, the submenu chevron and the first row text rows), best placement in native_dark5. Downgraded from matched. | Round 15: the dark popup menu is the native Windows 11 dark flyout (windows_dark_menu_at in navigation.e; v3 has no dark menu): a 1 px #808080 line round a #2B2B2B face, 22 px rows (#2C2C2C) 5 px in, Segoe UI 12 px, a 9 px band with a #3E3E3E rule for a separator, the capture's own 10 x 7 check, 5 x 9 chevron and rounded white keyboard outline (corner pixels), a cascade under its parent (clipped 6 px), the hovered child row #353535. All six captures (menu-popup-rest, -keyboard-first, -keyboard-checked, -keyboard-disabled, -submenu-keyboard-item, -submenu; native_dark5 sheet, scripts/looks_stri",
+    "gaps": [
+     "The hovered row fill (#353535) is read from the child row of menu-popup-submenu; a hovered row of the parent menu has no capture",
+     "Pictures and radio dots (v3 menu images) sit in the check column at a guessed place; the native capture has none",
+     "A disabled keyboard row keeps the outline (menu-popup-keyboard-disabled): matched",
+     "The mouse-hover fill of a parent row, the scroll arrows of a clipped menu and group headers are not drawn natively",
+     "Audit 7: all six menu-popup captures 6 to 43 flat px off (28 to 53 chrome px: the check mark, the submenu chevron and the first row text rows), best placement in native_dark5"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark2.png",
+    "notes": "Audit 7: tooltip-rest and tooltip-balloon cannot be placed in any dark sheet: best placements 1862 and 1956 flat px off. Downgraded from matched. | Round 15: the balloon's icon is the capture's own 16 x 16 pixels (the blue disc with the white i; 0 px off in the icon box) where a plain disc stood; scripts/looks_strict13.py --two: tooltip-rest 0 flat and 0 other px off (910 flat), tooltip-balloon 0 flat and 0 other px off (8287 flat), 990 text-zone px (ClearType) apart.",
+    "gaps": [
+     "The balloon is only reached through win_native_balloon: the app's hint keeps the square tip",
+     "Multi-line text and placements have no capture",
+     "Audit 7: tooltip-rest and tooltip-balloon cannot be placed in any dark sheet: best placements 1862 and 1956 flat px off"
+    ]
+   }
+  }
+ }
+}
