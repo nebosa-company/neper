@@ -9,6 +9,6 @@ case "$(uname -s)" in
 esac
 [ -x "$compiler" ] || { echo "no $compiler: run scripts/check-fixture.sh <any fixture> once to build it" >&2; exit 2; }
 cd "$repo"
-written=$("$compiler" emit-executable "$repo/tests/browser/wpt/run.e" "$repo" x64 "$os" "$exe" --arena 1g)
+written=$("$compiler" emit-executable "$repo/tests/browser/wpt/run.e" "$repo" x64 "$os" "$exe" --arena 2g)
 [ "$written" = 'executable written' ] || { echo "run.e did not emit: $written" >&2; exit 1; }
 "$exe" "$@"

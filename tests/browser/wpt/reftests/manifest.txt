@@ -139,3 +139,5 @@ grid-auto-fit-001.html | grid-auto-fit-001-ref.html | match
 flex-order-paint-001.html | flex-order-paint-001-ref.html | match
 line-clamp-001.html | line-clamp-001-ref.html | match
 invalid-negative-width-001.html | invalid-negative-width-001-ref.html | match
+prewrap-hang-001.html | prewrap-hang-001-ref.html | match
+ch-unit-001.html | ch-unit-001-ref.html | match
