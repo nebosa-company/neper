@@ -1,0 +1,155 @@
+{
+ "button_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/button_edit.png",
+    "notes": "Round 17 (w3): the ellipsis button is no longer a square native-style box with full white dots: it has v3's 4 px rounded shape (the native dark button's ring corner, button-rest rows 13 to 16) and v3's dot coverage (d8 c3 ea / e6 d9 f1 on fd, scaled onto the dark face). DERIVED from the light capture, not captured: neither v3 nor the native gallery has a dark ellipsis button. The field is still the native edit: scripts/looks_w1.py 0 chrome px in all five edit-state comparisons. Scale 1.25/1.5/2.0 pass. | Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. The field is the native edit: at the native 150 x 24 (sheet native_dark_icb) its left 122 px compare at 0 chrome px with edit-rest, hover, disabled, read-only and focus (the glyph fix of this round applies). The ellipsis button (the last 22 px) has no native counterpart: its face and dots follow the native dark button colours and v3's light geometry (matched in light), unverified.",
+    "gaps": [
+     "Round 17: the ellipsis button face, ring and dot ink are derived from v3 light and the native dark button; no capture exists",
+     "The ellipsis button geometry and dots are guesses in dark (no native or v3 reference); its pressed look is the button's pressed face",
+     "Invalid: a red outline guess"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/memo.png",
+    "notes": "Round 17 (w3), scripts/looks_w1.py: edit-multiline-rest, readonly, disabled 0 chrome px; focus 9 px and selected 47 px. Inspected: the 9 focus px are the caret column beside the first glyph (the capture's caret pixel carries ClearType colour from the glyph stem, #DFDF8B against our #DFDFDF); the 47 selected px are selection fill beside glyph edges (the crossbars of e and the stems of t and l, hinted GDI against our outline) and the caret column. Both are text-engine shape differences, not chrome; no narrow fix exists outside lib/e/text, so the status stays review. edit-multiline-vscroll skipped as instructed. | Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. New native multi-line captures (this round, scripts/winnative/gallery.c: edit-multiline-rest, -focus, -selected, -readonly, -disabled and -explorer, light and dark at 100 %): rest, read-only and disabled 0 chrome px, focus 9 px (the caret column against the first glyph), selected 47 px (selection fill beside glyph edges); the scroll column is the Explorer themed one (17 wide #171717, 2 wide #959595 thumb, its length by visible over all lines): 0 chrome px inside the frame. Glyphs and selection are on the capture's rows (audit 6 counted 1458 chrome px).",
+    "gaps": [
+     "Round 17: focus 9 px and selected 47 px are glyph hinting beside the caret and selection (text engine)",
+     "edit-multiline-vscroll (the DarkMode_CFD theme) keeps the light unthemed scroll column (#F0F0F0, 17 wide) that no dark app ships: not reproduced, so that one capture fails by its 1500 column px (its frame matches at 0 px). Matched would need that column",
+     "The Explorer themed capture has the Explorer theme's white frame, so only its inside is a reference",
+     "Soft-wrapped long lines: the bar sizes by hard lines (the captures have none that wrap)",
+     "Invalid and placeholder colours have no native state"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/memo.png",
+    "notes": "Round 17 (w3): unchanged. No TcxMemo capture; the native light multi-line edit has a frame 8 to 15 levels off v3's, so it cannot stand in. | Round 15: the light sheet is unchanged (verified by a full re-render). No TcxMemo in any v3 capture (only the Notes window and the Import wizard use one, neither was grabbed). The native light multi-line captures (edit-multiline-*, new this round) are the native Win11 edit, whose frame differs from v3's by 8 to 15 levels (border #ECECEC against #EDEDED, foot #838383 against #929292), so they cannot stand in.",
+    "gaps": [
+     "Every state is unverified; the scroll bar is the thin Neper bar, the native one is the system bar"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/data_grid_main.png",
+    "notes": "Round 17 (w3): the data grid's column lines were the light ramp (two near-white lines, #E3 to #EC and #F8) copied unmapped into the dark sheets, so every column edge showed as a bright #E7 / #F4 bar (seen at x 268, 436 and 500 of data_grid_main). The dark look now draws the single #414141 column line of the native dark list view (listview-*) and no second line (lib/e/ui/collection.e). 62 dark data grid PNGs re-rendered, all light and Neper sheets byte-identical. Still DERIVED: no whole-control dark reference exists for TcxGrid, so nothing is compared pixel for pixel. | Round 15: the light fixes carry over (same geometry; stamped frame pixels go through the dark map). Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. Evidence is the light to dark colour map style.set_windark checked against listview-* (header #191919, rows #202020 and #2B2B2B, chosen row #1A364D, track #171717). Not matchable pixel for pixel.",
+    "gaps": [
+     "Round 17: DERIVED dark; no capture of a dark DevExpress grid",
+     "No whole-control dark reference exists for TcxGrid",
+     "The frame #828790 and the chosen row's 1 px #0078D4 / #131313 line are not drawn by the v3 grid"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/text_edit.png",
+    "notes": "Round 17 (w3): unchanged. No TcxTextEdit capture exists; the strict metric has no reference here, so it stays review. The chrome equals the mask edit's, which holds at 0 flat px off against the v3 captures (same TcxCustomTextEdit family), that is equivalence, not a capture. | Round 15: the light sheet is unchanged (verified by a full re-render). No TcxTextEdit exists in any v3 capture (every dialog's controls.json lists only TcxMaskEdit, TcxButtonEdit, TcxSpinEdit, TcxComboBox and TcxImageComboBox): the chrome is the mask edit's, which matches the v3 captures at 0 chrome px (same TcxCustomTextEdit family and LookAndFeel in the DFM), but that is equivalence, not a capture, so the status stays review. The native Win11 light edit is not a proxy: its border is #ECECEC and its foot #838383 against v3's #EDEDED and #929292.",
+    "gaps": [
+     "No TcxTextEdit capture: every state is unverified (selection, disabled, read-only, invalid)",
+     "Text: ClearType colour fringes not reproduced (grayscale)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/date_edit.png",
+    "notes": "Round 17 (w3): unchanged. No capture of an editing date edit in v3 or in the native gallery (the native DTP is a different control). | Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): no capture.",
+    "gaps": [
+     "Audit 5 unverified (no capture): every state",
+     "Unverified: every state (no v3 capture of an editing date edit; its drop button, calendar popup, Today and Clear buttons are DevExpress-drawn and never shown)",
+     "Native DTP (160 x 26, #8D8D8D line, calendar icon and arrow glyph, #0078D4 focus frame) and MonthCal (Sun to Sat, right-aligned days, #979797 frame, Today row) are a different control and are not reproduced",
+     "No disabled cell: the date picker has no enabled option",
+     "Audit 4 uncaptured: every state"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/progress_bar.png",
+    "notes": "Round 17 (w3): unchanged. v3's own bar was never captured; the native bar is 16 px against our 21. | Round 15: unchanged. v3's own bar (cxbsGradient teal, 148 x 21 or 14 in the status bar) was never captured, the report window's frames show none; the sheet draws the native Windows 11 bar scaled to v3's 21 px, whose native captures are 178 x 16, so the sizes differ and the native captures cannot be compared pixel for pixel.",
+    "gaps": [
+     "Every state: no v3 capture",
+     "Height 21 (v3 DFM default) against the native 16",
+     "Marquee: the native block is at least 126 wide and overdraws the frame edge; the 0.6 segment is a guess",
+     "Percent text (v3 cxtsText) has no native counterpart",
+     "Native disabled progress is drawn identical to enabled (green); we do the same"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog_message.png",
+    "notes": "Round 17 (w3): unchanged at 78 of 107 crops. Re-measured with scripts/looks_strict.py: title_bar 15 of 16 and title_bar_hover 5 of 6, each failing crop one title glyph pixel 11 levels off (209,967 and 170,235), none under the audit 7 text rule. The dialog bodies are application content with no Neper control to compare. | Round 15: unchanged at 78 of 107 crops: the title bars and captions pass (title_bar 15 of 16 crops at 0 chrome px, title_bar_hover 5 of 6, the failing crop of each 1 px of 11 levels), the dialog bodies of dialog, dialog_more*, dialog_wide are application content (grids, web view, tool window) that no Neper control composes, so those crops cannot match.",
+    "gaps": [
+     "Dialog bodies are application content, not composed",
+     "Dialog close button: v3's 33 wide one kept",
+     "Caption pressed, resize, disabled: no capture",
+     "Task dialog (command links, footer, verification box) is captured natively but has no Neper control",
+     "Info, warning and error message box bitmaps were not captured"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/token_edit_dialog-vs-ref.png",
+    "notes": "Round 17 (w3): unchanged, 3 of 3 crops at 0 px (audit 5 and 7); only the empty rest state is captured. | Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 3/3 exact crops, 0 px off.",
+    "gaps": [
+     "Audit 5 unverified (no capture): focus, hover, disabled, tokens present",
+     "Unverified: focus, hover, disabled, tokens present (only the empty rest state is captured)",
+     "Dark twin stands on a #272727 face (unmeasured)",
+     "Audit 4 uncaptured: focus, hover, disabled, tokens present"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/tree_list_expanded.png",
+    "notes": "Round 17 (w3): unchanged. DERIVED from the light tree through the colour map; the native dark tree view is a different control. Not compared pixel for pixel. | Round 15: the date and name placement carries over. Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. Selection #626262 focused and #333333 unfocused occur as in tree-selected-*; v3's geometry (17 px rows, expanders) is kept.",
+    "gaps": [
+     "No whole-control dark reference for TcxTreeList",
+     "tree-hover-expander and -classic-lines not compared"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/vertical_grid_states.png",
+    "notes": "Round 17 (w3): unchanged and DERIVED. No dark property grid exists natively; the mana and legality bitmaps pass the grey map unchanged in hue. | Unchanged. Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. There is no native property grid, so nothing is compared.",
+    "gaps": [
+     "Selection #264F78 and the band gradient are palette guesses"
+    ]
+   }
+  }
+ }
+}
