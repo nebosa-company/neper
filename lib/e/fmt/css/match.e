@@ -695,16 +695,46 @@ fn control_invalid(m: *const Matcher, el: html.NodeId) -> bool {
     ret false
 }
 
+// Dynamic states a script keeps in `Node.flags` (e.web.script `setFlags`).
+const F_CHECKED_AUTH: u32 = 1u32
+const F_CHECKED: u32 = 2u32
+const F_INDETERMINATE: u32 = 4u32
+const F_POPOVER_OPEN: u32 = 8u32
+const F_DEFINED: u32 = 16u32
+const F_FOCUS: u32 = 32u32
+const F_FOCUS_WITHIN: u32 = 64u32
+const F_MODAL: u32 = 128u32
+
+fn looks_custom(name: str) -> bool {
+    if name.len < 3usize || name[0usize] < 97u8 || name[0usize] > 122u8 { ret false }
+    var i = 1usize
+    while i < name.len {
+        if name[i] == 45u8 { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
 fn matches_pseudo_class(m: *const Matcher, pseudo: str, el: html.NodeId) -> bool {
     let name = local_name(m, el)
+    let flags = m.doc.nodes[usize(el)].flags
+    if str.eq(pseudo, "popover-open") { ret (flags & F_POPOVER_OPEN) != 0u32 }
+    if str.eq(pseudo, "modal") { ret (flags & F_MODAL) != 0u32 }
+    if str.eq(pseudo, "defined") { ret !looks_custom(name) || (flags & F_DEFINED) != 0u32 }
+    if str.eq(pseudo, "indeterminate") { ret (flags & F_INDETERMINATE) != 0u32 || (str.eq(name, "progress") && !has_attr(m, el, "value")) }
+    if str.eq(pseudo, "open") { ret (str.eq(name, "details") || str.eq(name, "dialog")) && has_attr(m, el, "open") }
     if str.eq(pseudo, "scope") { ret m.state.has_scope && m.state.scope == el }
     if str.eq(pseudo, "hover") { ret m.state.has_hover && m.state.hover == el }
-    if str.eq(pseudo, "focus") || str.eq(pseudo, "focus-visible") { ret m.state.has_focus && m.state.focus == el }
-    if str.eq(pseudo, "focus-within") { ret in_ids(m.state.focus_within, el) }
+    if str.eq(pseudo, "focus") || str.eq(pseudo, "focus-visible") { ret (flags & F_FOCUS) != 0u32 || (m.state.has_focus && m.state.focus == el) }
+    if str.eq(pseudo, "focus-within") { ret (flags & F_FOCUS_WITHIN) != 0u32 || in_ids(m.state.focus_within, el) }
     if str.eq(pseudo, "active") { ret m.state.has_active && m.state.active == el }
     if str.eq(pseudo, "disabled") { ret has_attr(m, el, "disabled") }
     if str.eq(pseudo, "enabled") { ret is_formish(name) && !has_attr(m, el, "disabled") }
-    if str.eq(pseudo, "checked") || str.eq(pseudo, "default") { ret has_attr(m, el, "checked") || has_attr(m, el, "selected") }
+    if str.eq(pseudo, "checked") {
+        if (flags & F_CHECKED_AUTH) != 0u32 { ret (flags & F_CHECKED) != 0u32 }
+        ret has_attr(m, el, "checked") || has_attr(m, el, "selected")
+    }
+    if str.eq(pseudo, "default") { ret has_attr(m, el, "checked") || has_attr(m, el, "selected") }
     if str.eq(pseudo, "required") { ret has_attr(m, el, "required") }
     if str.eq(pseudo, "optional") {
         ret (str.eq(name, "input") || str.eq(name, "select") || str.eq(name, "textarea")) && !has_attr(m, el, "required")

@@ -944,6 +944,31 @@ fn n_parse_color(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     ret (js.str_value(str.done(&bb)), ok)
 }
 
+// flags(id) / setFlags(id, mask, on): the dynamic selector states of a node (checkedness, :popover-open, :defined, focus).
+fn n_flags(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    let id = nid(arg(args, 0usize))
+    if !valid(h, id) { ret (js.undefv(), bad_node(it)) }
+    ret (js.num_value(f64(h.d.nodes[usize(id)].flags)), ok)
+}
+
+fn n_set_flags(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    let id = nid(arg(args, 0usize))
+    if !valid(h, id) { ret (js.undefv(), bad_node(it)) }
+    let (mv, me) = js.to_number(it, arg(args, 1usize))
+    if me != ok { ret (js.undefv(), me) }
+    let mask = u32(mv)
+    let cur = h.d.nodes[usize(id)].flags
+    var next = cur & (4294967295u32 - mask)
+    if js.to_boolean(arg(args, 2usize)) { next = next | mask }
+    if next != cur {
+        h.d.nodes[usize(id)].flags = next
+        h.d.version += 1u64
+    }
+    ret (js.undefv(), ok)
+}
+
 fn n_base(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     ret (js.str_value(host_of(it).base), ok)
 }
@@ -1089,6 +1114,8 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "frameCount", 0u32, n_frame_count)
     js.add_method(it, n, "realmOf", 1u32, n_realm_of)
     js.add_method(it, n, "parseColor", 1u32, n_parse_color)
+    js.add_method(it, n, "flags", 1u32, n_flags)
+    js.add_method(it, n, "setFlags", 3u32, n_set_flags)
     js.add_method(it, n, "utf8Encode", 1u32, n_utf8_encode)
     js.add_method(it, n, "utf8Decode", 1u32, n_utf8_decode)
     js.add_method(it, n, "net", 4u32, n_net)

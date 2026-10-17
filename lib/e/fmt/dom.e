@@ -84,7 +84,7 @@ fn view(d: *const Dom) -> html.Document {
 fn new_node(d: *Dom, kind: html.NodeKind, ns: html.Namespace, name: str, value: str) -> (NodeId, err) {
     if d.used >= d.nodes.len { ret (NONE, Full) }
     let id = u32(d.used)
-    d.nodes[d.used] = html.Node { kind: kind, namespace: ns, name: name, value: value, attributes: zero, parent: NONE, first_child: NONE, last_child: NONE, previous_sibling: NONE, next_sibling: NONE }
+    d.nodes[d.used] = html.Node { kind: kind, namespace: ns, name: name, value: value, attributes: zero, parent: NONE, first_child: NONE, last_child: NONE, previous_sibling: NONE, next_sibling: NONE, flags: 0u32 }
     d.used += 1usize
     d.version += 1u64
     ret (id, ok)

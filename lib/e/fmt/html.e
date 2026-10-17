@@ -28,7 +28,8 @@ const NONE: NodeId = 4294967295u32
 type NodeKind = enum u8 { Document, Doctype, Element, Text, Comment }
 type Namespace = enum u8 { Html, Svg, MathMl, Xlink, Xml, Xmlns }
 type Attribute = struct { namespace: Namespace, name: str, value: str }
-type Node = struct { kind: NodeKind, namespace: Namespace, name: str, value: str, attributes: []const Attribute, parent: NodeId, first_child: NodeId, last_child: NodeId, previous_sibling: NodeId, next_sibling: NodeId }
+// `flags` are dynamic selector states a script keeps (see e.fmt.css.match): checkedness, :popover-open, :defined, focus.
+type Node = struct { kind: NodeKind, namespace: Namespace, name: str, value: str, attributes: []const Attribute, parent: NodeId, first_child: NodeId, last_child: NodeId, previous_sibling: NodeId, next_sibling: NodeId, flags: u32 }
 type Document = struct { nodes: []const Node, root: NodeId, quirks: u8 }
 type Children = struct { document: *const Document, next: NodeId }
 type Options = struct { max_bytes: usize, max_nodes: usize, max_attributes: usize, max_depth: u16, preserve_comments: bool }
@@ -747,7 +748,7 @@ fn nm_in(set: str, name: str) -> bool {
 fn pn_new(p: *Ps, kind: NodeKind, ns: Namespace, name: str, value: str) -> (NodeId, err) {
     if p.used >= p.nodes.len { ret (NONE, TooLarge) }
     let id = u32(p.used)
-    p.nodes[p.used] = Node { kind: kind, namespace: ns, name: name, value: value, attributes: zero, parent: NONE, first_child: NONE, last_child: NONE, previous_sibling: NONE, next_sibling: NONE }
+    p.nodes[p.used] = Node { kind: kind, namespace: ns, name: name, value: value, attributes: zero, parent: NONE, first_child: NONE, last_child: NONE, previous_sibling: NONE, next_sibling: NONE, flags: 0u32 }
     p.used += 1usize
     ret (id, ok)
 }
