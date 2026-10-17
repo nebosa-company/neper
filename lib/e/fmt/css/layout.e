@@ -2847,6 +2847,7 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
         cb2.x = ox0 + cb2.margin[3usize]
         cb2.y = oy0 + y + margin_value(Margin { pos: acc.pos, neg: acc.neg })
         cb2.h = 0.0f64
+        position_markers(l, c)
         ret y
     }
     // Width, and the room beside floats for a context root.

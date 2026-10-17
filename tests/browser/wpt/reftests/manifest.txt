@@ -146,3 +146,4 @@ body-overflow-propagation-001.html | body-overflow-propagation-001-ref.html | ma
 abspos-static-border-001.html | abspos-static-border-001-ref.html | match
 letter-spacing-paint-001.html | letter-spacing-paint-001-ref.html | match
 cellspacing-attr-001.html | cellspacing-attr-001-ref.html | match
+empty-list-item-marker-001.html | empty-list-item-marker-001-ref.html | match
