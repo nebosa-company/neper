@@ -716,6 +716,12 @@ fn is_block_container(l: *const Layout, b: u32) -> bool {
     ret inner == .Flow || inner == .FlowRoot || inner == .Cell || inner == .Caption
 }
 
+// The display of the anonymous table around orphan parts: inline inside an inline box.
+fn orphan_display(l: *const Layout, parent: u32) -> style.Display {
+    if l.boxes.items[usize(parent)].inline_level { ret .InlineTable }
+    ret .Table
+}
+
 fn is_table_part(inner: Inner) -> bool {
     ret inner == .Cell || inner == .Row || inner == .RowGroup || inner == .Column || inner == .ColumnGroup
 }
@@ -737,7 +743,7 @@ fn wrap_orphan_table_parts(l: *Layout, b: u32) {
             if kb.inner == .Text && is_ws_only(kb.text) && collapses(l, kid) {
                 // keep scanning
             } else {
-                wrap_table_run(l, b, run_first, run_last, .Table, .Table)
+                wrap_table_run(l, b, run_first, run_last, .Table, orphan_display(l, b))
                 let anon = l.boxes.items[usize(run_first)].parent
                 if anon != b && anon != NONE { fix_table_like(l, anon) }
                 run_first = NONE
@@ -747,7 +753,7 @@ fn wrap_orphan_table_parts(l: *Layout, b: u32) {
         kid = nxt
     }
     if run_first != NONE {
-        wrap_table_run(l, b, run_first, run_last, .Table, .Table)
+        wrap_table_run(l, b, run_first, run_last, .Table, orphan_display(l, b))
         let anon2 = l.boxes.items[usize(run_first)].parent
         if anon2 != b && anon2 != NONE { fix_table_like(l, anon2) }
     }
@@ -3109,7 +3115,7 @@ fn wrap_table_run(l: *Layout, parent: u32, first: u32, last: u32, inner: Inner, 
         }
         ret
     }
-    let anon = new_box(l, inner, false, true, NONE, anon_style(l, l.boxes.items[usize(parent)].style, display))
+    let anon = new_box(l, inner, display == .InlineTable, true, NONE, anon_style(l, l.boxes.items[usize(parent)].style, display))
     let prev = l.boxes.items[usize(first)].prev
     l.boxes.items[usize(anon)].parent = parent
     l.boxes.items[usize(anon)].prev = prev
