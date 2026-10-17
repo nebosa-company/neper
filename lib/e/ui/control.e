@@ -2791,6 +2791,14 @@ fn dark_split_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         y += 1.0
     }
     var row: f32 = 0.0
+    // round 17: a disabled arrow carries its emboss, the same triangle one pixel right and down in #CCCCCC (button-split-disabled)
+    if m.disabled {
+        while row < 5.0 {
+            try winpx.fill(b, area.x + 137.0 + row, area.y + 14.0 + row, 9.0 - 2.0 * row, 1.0, style.hex_raw(0xCCCCCCu32))
+            row += 1.0
+        }
+        row = 0.0
+    }
     while row < 5.0 {
         try winpx.fill(b, area.x + 136.0 + row, area.y + 13.0 + row, 9.0 - 2.0 * row, 1.0, glyph)
         row += 1.0
