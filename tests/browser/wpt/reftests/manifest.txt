@@ -134,3 +134,4 @@ bfc-beside-float-001.html | bfc-beside-float-001-ref.html | match
 no-break-at-run-end-001.html | no-break-at-run-end-001-ref.html | match
 collapse-001.html | collapse-001-ref.html | match
 float-intrinsic-001.html | float-intrinsic-001-ref.html | match
+rtl-overconstrained-001.html | rtl-overconstrained-001-ref.html | match

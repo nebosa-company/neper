@@ -2343,6 +2343,9 @@ fn used_width_block(l: *Layout, c: u32, cbw: f64, avail: f64) {
     let amr = auto_margin_h(s, 1usize)
     if !aml { ml = resolve_or(s.margin[3usize], base, 0.0f64) }
     if !amr { mr = resolve_or(s.margin[1usize], base, 0.0f64) }
+    // Which margin absorbs the slack follows the direction of the containing block, not of the box itself.
+    var cb_rtl = s.direction == .Rtl
+    if cb.parent != NONE { cb_rtl = st(l, l.boxes.items[usize(cb.parent)].style).direction == .Rtl }
     var cw = 0.0f64
     var w_auto = s.width.kind != .Px
     if s.width.kind == .MinContent || s.width.kind == .MaxContent || s.width.kind == .FitContent {
@@ -2371,7 +2374,7 @@ fn used_width_block(l: *Layout, c: u32, cbw: f64, avail: f64) {
         ml = maxf(0.0f64, rest)
     } else if amr {
         mr = maxf(0.0f64, rest)
-    } else if s.direction == .Rtl {
+    } else if cb_rtl {
         ml = avail - (mr + extras + cw)
     } else {
         mr = avail - (ml + extras + cw)
