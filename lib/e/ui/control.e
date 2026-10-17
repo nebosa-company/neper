@@ -15756,6 +15756,10 @@ fn win_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lit: boo
         if gdi_error != ok { ret (zero, gdi_error) }
         label_node = gdi_node
     }
+    // round 17: the native dark list sets its text one row higher than the line box centres it (combo-list-open: ink rows 71 to 79 in a 15 row)
+    if native_row && pic.len == 0usize {
+        label_node = widget.positioned(0u64, 0.0, 0.0 - 1.0, style.defaults(), widget_one_of(a, label_node))
+    }
     let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
     if bits_error != ok { ret (zero, TooLarge) }
     var used = 1usize
