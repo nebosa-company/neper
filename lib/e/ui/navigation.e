@@ -10953,7 +10953,7 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if plain_error != ok { ret (zero, plain_error) }
         let (said, said_error) = control.colored_text(a, 0u64, plain, t, caption, ink)
         if said_error != ok { ret (zero, said_error) }
-        let (parts, parts_error) = mem.alloc[widget.Node](a, 12usize)
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 14usize)
         if parts_error != ok { ret (zero, TooLarge) }
         var p = 0usize
         parts[p] = windows_rect_raw(0.0, 0.0, item_w, 22.0, 0x2C2C2Cu32)
@@ -10968,10 +10968,23 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             parts[p] = ring
             p += 1usize
         }
-        if c.checked {
+        if c.checked && !c.radio {
             let (tick, tick_error) = control.raw_pixels(a, dark_menu_check(), 10.0, 7.0)
             if tick_error != ok { ret (zero, tick_error) }
             parts[p] = widget.positioned(0u64, 6.0, 8.0, style.defaults(), mem_one(a, tick))
+            p += 1usize
+        }
+        // a picture or a radio dot sits in the check column (no capture: the native menu has none)
+        if c.pictured && !c.radio && !c.checkable {
+            let (glyph, glyph_error) = control.icon_square(a, ink, c.glyph, 16.0)
+            if glyph_error != ok { ret (zero, glyph_error) }
+            parts[p] = widget.positioned(0u64, 4.0, 3.0, style.defaults(), mem_one(a, glyph))
+            p += 1usize
+        }
+        if c.radio && c.checked {
+            let (dot, dot_error) = overlay.menu_radio_dot(a, ink, 16.0)
+            if dot_error != ok { ret (zero, dot_error) }
+            parts[p] = widget.positioned(0u64, 4.0, 3.0, style.defaults(), mem_one(a, dot))
             p += 1usize
         }
         parts[p] = widget.positioned(0u64, 31.0, 2.0, style.defaults(), mem_one(a, said))
