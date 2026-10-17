@@ -225,6 +225,7 @@ fn check_scope(c: *Ctx, first: u32, count: u32, top: bool, params: *const list.L
     while m < fn_l.len {
         // A block-level function against a `var` of the same block is a clash.
         if has_name(&all_vars, fn_l.items[m]) { ret fail(c, first_stmt_node(c, first, count), "Identifier has already been declared") }
+        if params.len > 0usize && has_name(params, fn_l.items[m]) { ret fail(c, first_stmt_node(c, first, count), "Identifier has already been declared") }
         m += 1usize
     }
     ret ok
@@ -1234,7 +1235,7 @@ fn check_stmt(c: *Ctx, id: u32) -> err {
                 i2 += 1usize
             }
             if dup { e = fail(c, cur, "Label has already been declared") }
-            if c.strict && (str.eq(ln.text, "yield") || str.eq(ln.text, "let")) && false { }
+            if (c.strict && is_strict_reserved(ln.text)) || (c.in_generator && str.eq(ln.text, "yield")) || ((c.in_async || c.in_static_block) && str.eq(ln.text, "await")) { e = fail(c, cur, "Reserved word used as a label") }
             let pe = list.push[str](&c.labels, ln.text)
             let pe2 = list.push[bool](&c.label_loops, loopish)
             added += 1usize
