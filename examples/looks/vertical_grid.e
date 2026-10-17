@@ -27,6 +27,7 @@ var pick: Pick = zero
 // looks5-e: under the Windows look the Computed category has v3's six rows (Deck | Sideboard, Land | Crea | Spell, Colors,
 // Archetype, Strategy, Legality), some with cell lines of their own and taller than the rest (ref/windows/vertical_grid.png)
 var windows_rows: bool = false
+var foot_pressed: bool = false
 // the first sheet's capture (the dialog grab) shows another file name than the states grabs
 var desktop: bool = false
 
@@ -213,7 +214,7 @@ fn computed_editor(a: *mem.Arena, t: *const control.Theme, index: usize, out: *w
         let (tags, tags_error) = gl.pixels(a, vg_legality(), vg_legality_w(), vg_legality_h())
         if tags_error != ok { ret tags_error }
         // the tags' last pixel row lies on the row's hairline, under the tags only
-        let (foot, foot_error) = gl.pixels(a, vg_legality_foot(), vg_legality_foot_w(), vg_legality_foot_h())
+        let (foot, foot_error) = gl.pixels(a, foot_pixels(), vg_legality_foot_w(), vg_legality_foot_h())
         if foot_error != ok { ret foot_error }
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret pair_error }
@@ -253,6 +254,7 @@ fn editor_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err 
 }
 
 fn grid(a: *mem.Arena, t: *const control.Theme, key: widget.Key, collapsed: []const widget.Key) -> (widget.Node, err) {
+    foot_pressed = false
     let source = collection.PropertySource { ctx: mem.cast[*void](t), count: count_of, property: property_at, editor: editor_of }
     var options = collection.property_grid_options()
     options.selected = NAME_KEY + u64(pick.selected)
@@ -339,6 +341,7 @@ fn state_grid(a: *mem.Arena, t: *const control.Theme, key: widget.Key, mode: usi
     let (ctxs, ctxs_error) = mem.alloc[StateCtx](a, 1usize)
     if ctxs_error != ok { ret (zero, ctxs_error) }
     ctxs[0usize] = StateCtx { t: t, mode: mode }
+    foot_pressed = mode == 4usize
     let source = collection.PropertySource { ctx: mem.cast[*void](&ctxs[0usize]), count: count_of, property: property_at, editor: state_editor }
     var options = collection.property_grid_options()
     options.height = 425.0
@@ -469,5 +472,11 @@ fn vg_legality() -> str { ret "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 fn vg_legality_w() -> f32 { ret 160.0 }
 fn vg_legality_h() -> f32 { ret 17.0 }
 fn vg_legality_foot() -> str { ret "B77A7BB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6CB26A6C789E566CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA8516CA851" }
+// round 17: the General-pressed capture's tag foot row (one pixel row, blended another way)
+fn vg_legality_foot_pressed() -> str { ret "B38183AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577AF7577809E6576A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A76176A761" }
+fn foot_pixels() -> str {
+    if foot_pressed { ret vg_legality_foot_pressed() }
+    ret vg_legality_foot()
+}
 fn vg_legality_foot_w() -> f32 { ret 75.0 }
 fn vg_legality_foot_h() -> f32 { ret 1.0 }

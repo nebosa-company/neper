@@ -2378,6 +2378,18 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
     if look.on { rule.background = paint.Brush { Solid: look.header_line } }
     parts[1usize] = widget.box(0u64, rule, zero)
+    // round 17: the live grid's rule under the header stops short of the row indicator's header cell (it stays white there)
+    if look.on && look.soft_lines && t.tokens.profile == .Windows && t.tokens.palette != .Dark && columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 && columns[0usize].width > 2.0 {
+        let (white_rule, white_rule_error) = mem.alloc[widget.Node](a, 2usize)
+        if white_rule_error != ok { ret (zero, TooLarge) }
+        var white_cell = control.sized_style(columns[0usize].width - 2.0, t.tokens.sizes.divider)
+        white_cell.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        var full_rule = rule
+        full_rule.width = style.Length { Percent: 100.0 }
+        white_rule[0usize] = widget.box(0u64, full_rule, zero)
+        white_rule[1usize] = widget.positioned(0u64, lead, 0.0, style.defaults(), one_node(a, widget.box(0u64, white_cell, zero)))
+        parts[1usize] = widget.stack(0u64, style.defaults(), white_rule[0usize..2usize])
+    }
     // round 12: under a hot or pressed header the rule takes its tint over that column (live hover and pressed grabs)
     if hot_has {
         var from_x = lead
@@ -5278,7 +5290,7 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // (D1538) An outline with `has_filter` stands a filter field over its rows
 // (`filter`, `filter_len`, reported through `filtering`) that narrows them by
 // `sort_text` (column 0).
-type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool, numbered: bool, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool }
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool, numbered: bool, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool, bar_view: f32 }
 
 // (D1534) Row `at`'s section number into `out`: its place among its siblings,
 // then its parent's, up to the root, written root first ("2.1.3").
@@ -6317,14 +6329,27 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         // looks3-e: v3's 16 wide bar beside header and rows, as tall as both
         var row_pitch = row_height_of
         if !(row_pitch > 0.0) { row_pitch = gl.v3().row_height }
+        // round 17: a list shown as the top of a taller one (a clipped capture) keeps the taller list's bar
+        var bar_view = options.height
+        if options.bar_view > 0.0 { bar_view = options.bar_view }
         control.set_scroll_bar_crisp(true)
-        let (bar, bar_error) = control.windows_scroll_bar(a, key + 3300u64, t, true, head_height + 1.0 + options.height - 1.0, options.height, f32(table_total) * row_pitch, options.offset)
+        let (bar, bar_error) = control.windows_scroll_bar(a, key + 3300u64, t, true, head_height + 1.0 + bar_view - 1.0, bar_view, f32(table_total) * row_pitch, options.offset)
         control.set_scroll_bar_crisp(false)
         if bar_error != ok { ret (zero, bar_error) }
         let (beside, beside_error) = mem.alloc[widget.Node](a, 2usize)
         if beside_error != ok { ret (zero, TooLarge) }
         beside[0usize] = column_node[0usize]
         beside[1usize] = bar
+        if t.tokens.palette != .Dark {
+            // round 17: the live bar's top row is #F3F3F3 over the #F0F0F0 track (every tree list capture)
+            let (lit, lit_error) = mem.alloc[widget.Node](a, 2usize)
+            if lit_error != ok { ret (zero, TooLarge) }
+            var lit_row = control.sized_style(16.0, 1.0)
+            lit_row.background = paint.Brush { Solid: gl.rgb(0xF3F3F3u32) }
+            lit[0usize] = bar
+            lit[1usize] = widget.positioned(0u64, 1.0, 0.0, style.defaults(), one_node(a, widget.box(0u64, lit_row, zero)))
+            beside[1usize] = widget.stack(0u64, style.defaults(), lit[0usize..2usize])
+        }
         column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), beside[0usize..2usize])
     }
     var sem: widget.Semantics = zero

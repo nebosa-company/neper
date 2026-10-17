@@ -1,0 +1,78 @@
+{
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "Round 17 (w2) metric: scripts/looks_strict.py cell by cell (reference flat pixel off when ours differs by more than 2 levels; pixels near text boxes counted as text, the rest chrome; no rectangle excluded), crops compared in place or placed by its search; sums below count nested crops again. Fixed this round: a grouped grid's 4 px under the last row is v3's white pane with a #EEEEEE row line starting after the indicator column (it was the pane grey; the strip stops at the vertical bar); the current row's arrow stands 3 px higher (2 px when a later row is current); the rule under the header stops short of the indicator cell (white there); the Hover 8 sheet's second grid is scrolled to the end (thumb at the foot of the track); the Next pressed capture shows the button at rest, so its cell is no longer driven. Chrome px off, sum per sheet, before to now: data_grid_hover8 452 to 140, group 292 to 120, group2 577 to 251, group3 294 to 101, top 130 to 98, top2 308 to 88, top3 and top4 130 to 88, top5 219 to 177, hover 96 to 74, hover4 to hover7 96 to 54, bottom 705 to 694, main 596 to 586, states 40 to 19. Still review: every sheet keeps residues of 1 to 60 px (column line pixels, the star and sort glyphs, frame colour columns, glyph rows).",
+    "gaps": [
+     "v3's rarity and set icons in the picture column are not drawn (coloured artwork, not excluded by the strict rule)",
+     "Group sheets: the horizontal bar's thumb is 4 to 5 px longer than the capture's (30 px at x 1016 to 1018, y 228 to 237 in data_grid_group, group2, group3 and hover8)",
+     "data_grid_top5 (lower arrow pressed): the capture's vertical thumb is the 3 px thin one (b6 85 bf), ours is the 7 px wide one (74 px)",
+     "data_grid_bottom and data_grid_bottom2: about 25 small clusters (frame column 7 levels, column lines 3 to 12 levels, a 17 px row line 21 levels); data_grid_main 586 px of the same kind",
+     "Column line pixel at each row boundary (1 px, 30 to 36 levels) and the star glyph's three rows in the header (14 px, 23 levels)",
+     "Edition chip sort glyph (8 to 30 px) and the group rows' expander boxes in group2 (up to 237 levels, 1 px column)",
+     "Text: ClearType fringes and hinting not reproduced (grayscale)"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list_expanded.png",
+    "notes": "Round 17 (w2) metric: scripts/looks_strict.py cell by cell (reference flat pixel off when ours differs by more than 2 levels; pixels near text boxes counted as text, the rest chrome; no rectangle excluded), crops compared in place or placed by its search; sums below count nested crops again. Fixed this round: the 90 px focus and check crops are the top of the 300 px list, so the sheet now keeps the full list's bar thumb (TreeOptions.bar_view; the 71 px stand-in list had a 20 px thumb): tree_list_focus 135 to 0 and tree_list_check 135 to 0 chrome px (rows, header, thumb and bar all at 0, 7 px of glyph edge left); the bar's first row is #F3F3F3 over the #F0F0F0 track in every capture (16 px each: tree_list_hover and hover2 16 to 0 per crop, expanded 35 and 39 to 19 and 23). Chrome px now: tree_list 2 (a glyph row at the foot), expanded 19 and 23, rules 0, hover and hover2 0 per crop. The shift of the taller list inside the 90 px cell was the layout shrinking a column taller than its clip; bar_view avoids it by keeping the 71 px list and the taller bar.",
+    "gaps": [
+     "tree_list_expanded: v3's gold edition icons and the dotted guide lines are not drawn (coloured artwork); the checkbox column's bottom line at the clip edge (17 px, 2 rows) is a partly visible next row",
+     "The bar thumb of tree_list_expanded ends 3 px later than the capture's (2 px at x 308, 87 levels)",
+     "ES header caption clipped at its right edge (5 px)",
+     "Text: ClearType fringes and hinting not reproduced (text_off 7 to 115 px per crop)"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "Round 17 (w2) metric: scripts/looks_strict.py cell by cell (reference flat pixel off when ours differs by more than 2 levels; pixels near text boxes counted as text, the rest chrome; no rectangle excluded), crops compared in place or placed by its search; sums below count nested crops again. Fixed this round: the Legality tag strip's foot row (one pixel row on the row hairline) in the General-pressed capture is blended another way (#AF7577 and #76A761, the other captures #B26A6C and #6CA851): vertical_grid_states crop 5 42 to 0 chrome px. Now: vertical_grid 0, vertical_grid_hover 0 in all five crops, vertical_grid_states 0 in four crops and 3 px (a glyph row, 20 levels) in the Archetype crop. Review, not matched, because of that crop and the text ink boxes.",
+    "gaps": [
+     "vertical_grid_states, Archetype crop: 3 px of a glyph row 1 px off (20 levels)",
+     "Uncaptured: other editors, disabled",
+     "The Legality letters are v3's own bitmap pixels (artwork copied from the capture)"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_bar_main.png",
+    "notes": "Round 17 (w2) metric: scripts/looks_strict.py cell by cell (reference flat pixel off when ours differs by more than 2 levels; pixels near text boxes counted as text, the rest chrome; no rectangle excluded), crops compared in place or placed by its search; sums below count nested crops again. scroll_bar_main 11 of 11, main_h 3 of 3, live 3 of 3 crops at 0 chrome px (unchanged). scroll_bar_native: the pressed-up cell had no thumb at the native position (344 px); its thumb now stands where the capture has it (40 px long, starting 51 px down the 170 px bar), crop 3 (the thumb column) 72 to 37 px and crop 2 344 to 243: the rest is the thumb's look (v3's antialiased 3 column pill against the native crisp 2 px thumb with #929292 end rows, 73 px) and the track's first column (#F7F7F7 against the native #FFFFFF, 170 px at 8 levels). A crisp bar with the pointer check for the thumb hot state was tried and dropped: it hid the pressed arrow.",
+    "gaps": [
+     "scroll_bar_native pressed-up crop: native thumb (crisp 2 px) and first column (white) are not v3's and are not copied",
+     "Native light hover-arrow captures are pixel-identical to rest (README): no separate state",
+     "Horizontal arrow states (the held left arrow, hot arrows) have no capture of v3 and are not drawn",
+     "The dialog and tree bars (Options Shortcuts, Sort, Filter tree) are compared inside their grid sheets"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/combo_box_focus.png",
+    "notes": "Round 15: the light sheet is unchanged (verified by a full re-render). Fixed: the hot list-style combo's pure stroke columns were #0078D7 where the capture has #0078D4 (combo_hover 9 of 9 cells pass at 0 chrome px, was 8 of 9). Still failing (scripts/looks_cells2.py): the lit row text of the Font Size, Row Color and Show lists against ClearType (combo_box_list_size and open_size 17 to 19 chrome px, 8 to 15 of them outside the 2 px glyph halo; list_show and open_show 2 to 3), the card combo crops (flat_card, flat_card_hover) fail the ink boxes at 0 chrome px, and the in-place grid editor combo (vertical grid) keeps 3 px. | Round 17 (w2): re-measured with scripts/looks_strict.py: combo_box_list_size 15, list_size3 16, list_size5 8, open_size 15 chrome px, list_size2 and open_size2 0, both head crops 0. All of the remainder is glyph columns of the lit row text and of Small and Extra Large (x 40 and x 52, 106 and 139 levels), the 1 px hinting difference; no structure is off. Not changed this round (text engine, outside this group).",
+    "gaps": [
+     "Unverified: disabled and read-only closed combos (v3 never showed them; the native Win32 combo is a different frame family)",
+     "Lit list row text is 1 px right of the capture's (Font Size, Row Color lists) and the Show list keeps a row edge pixel 4 levels off",
+     "Text: ClearType colour fringes not reproduced (grayscale)"
+    ]
+   }
+  }
+ }
+}
