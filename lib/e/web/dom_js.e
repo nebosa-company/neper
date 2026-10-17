@@ -9196,22 +9196,25 @@ fn part36(b: *str.Builder) -> err {
     try str.push(b, "    return isShowingPopover(this);\n")
     try str.push(b, "  }\n")
     try str.push(b, "});\n")
+    try str.push(b, "function sameOrAncestorTree(el, t) {\n")
+    try str.push(b, "  let r = rootNode(el);\n")
+    try str.push(b, "  for (let i = 0; i < 64; i++) {\n")
+    try str.push(b, "    if (rootNode(t) === r) return true;\n")
+    try str.push(b, "    if (isShadowRoot(r)) r = rootNode(shadowHost(r)); else return false;\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  return false;\n")
+    try str.push(b, "}\n")
     try str.push(b, "function popoverTargetOf(el) {\n")
     try str.push(b, "  const s = slotOf(el);\n")
-    try str.push(b, "  if (s.popoverTargetExplicit !== undefined && s.popoverTargetExplicit !== null) {\n")
-    try str.push(b, "    const t = s.popoverTargetExplicit;\n")
-    try str.push(b, "    return isConnected(t) || shadowIncludingRoot(t) === shadowIncludingRoot(el) ? t : null;\n")
-    try str.push(b, "  }\n")
+    try str.push(b, "  if (s.popoverTargetExplicit !== undefined && s.popoverTargetExplicit !== null) return sameOrAncestorTree(el, s.popoverTargetExplicit) ? s.popoverTargetExplicit : null;\n")
     try str.push(b, "  const id = getAttributeValue(el, 'popovertarget');\n")
     try str.push(b, "  if (id === null) return null;\n")
-    try str.push(b, "  const root = rootNode(el);\n")
-    try str.push(b, "  const found = findByIdInTree(root, id);\n")
-    try str.push(b, "  return found;\n")
+    try str.push(b, "  return findByIdInTree(rootNode(el), id);\n")
     try str.push(b, "}\n")
     try str.push(b, "for (const name of ['HTMLButtonElement', 'HTMLInputElement']) {\n")
     try str.push(b, "  attributes(P(name), {\n")
     try str.push(b, "    popoverTargetElement: {\n")
-    try str.push(b, "      get() { elSlot(this); const t = popoverTargetOf(this); return t !== null && popoverStateOf(t) !== null ? t : (slotOf(this).popoverTargetExplicit && isRetargetable(this, slotOf(this).popoverTargetExplicit) ? slotOf(this).popoverTargetExplicit : (t !== null && popoverStateOf(t) !== null ? t : null)); },\n")
+    try str.push(b, "      get() { elSlot(this); return popoverTargetOf(this); },\n")
     try str.push(b, "      set(v) {\n")
     try str.push(b, "        const s = elSlot(this);\n")
     try str.push(b, "        if (v !== null && !(isNode(v) && nodeType(v) === ELEMENT_NODE)) throw new TypeError(\"Failed to set the 'popoverTargetElement' property: The provided value is not an Element.\");\n")
@@ -9261,6 +9264,9 @@ fn part36(b: *str.Builder) -> err {
     try str.push(b, "    let ancestor = null;\n")
     try str.push(b, "    for (const p of popoverStack) { let n = target; while (n !== null) { if (n === p) { ancestor = p; break; } n = parentNode(n) || (isShadowRoot(n) ? shadowHost(n) : null); } }\n")
     try str.push(b, "    for (const p of popoverStack) { const inv = popoverData(p).invoker; if (inv && (inv === target || isInclusiveAncestor(inv, target))) ancestor = p; }\n")
+    try str.push(b, "    for (let n = target; n !== null; n = parentNode(n)) {\n")
+    try str.push(b, "      if (nodeType(n) === ELEMENT_NODE && (htmlLocal(n) === 'button' || htmlLocal(n) === 'input')) { const t = popoverTargetOf(n); if (t !== null && popoverStack.indexOf(t) >= 0) ancestor = t; }\n")
+    try str.push(b, "    }\n")
     try str.push(b, "    hideAllPopoversUntil(ancestor, false, true, popoverStack);\n")
     try str.push(b, "  }, true);\n")
     try str.push(b, "  mainDocument.addEventListener('keydown', event => {\n")
@@ -9392,16 +9398,16 @@ fn part36(b: *str.Builder) -> err {
     try str.push(b, "  if (isCharacterData(t)) return N.value(idOf(node)).length;\n")
     try str.push(b, "  return childCount(node);\n")
     try str.push(b, "}\n")
+    ret ok
+}
+
+fn part37(b: *str.Builder) -> err {
     try str.push(b, "function comparePoints(nodeA, offsetA, nodeB, offsetB) {\n")
     try str.push(b, "  if (nodeA === nodeB) return offsetA === offsetB ? 0 : offsetA < offsetB ? -1 : 1;\n")
     try str.push(b, "  if (isFollowing(nodeA, nodeB)) {\n")
     try str.push(b, "    const r = comparePoints(nodeB, offsetB, nodeA, offsetA);\n")
     try str.push(b, "    return r === -1 ? 1 : r === 1 ? -1 : 0;\n")
     try str.push(b, "  }\n")
-    ret ok
-}
-
-fn part37(b: *str.Builder) -> err {
     try str.push(b, "  if (isInclusiveAncestor(nodeA, nodeB)) {\n")
     try str.push(b, "    let child = nodeB;\n")
     try str.push(b, "    while (parentNode(child) !== nodeA) child = parentNode(child);\n")
@@ -9646,16 +9652,16 @@ fn part37(b: *str.Builder) -> err {
     try str.push(b, "  const containedChildren = childrenOf(ca).filter(c => contained(c, range));\n")
     try str.push(b, "  for (const c of containedChildren) if (nodeType(c) === DOCUMENT_TYPE_NODE) throw domError('HierarchyRequestError', 'The range contains a doctype');\n")
     try str.push(b, "  let newNode, newOffset;\n")
+    ret ok
+}
+
+fn part38(b: *str.Builder) -> err {
     try str.push(b, "  if (isInclusiveAncestor(originalStartNode, originalEndNode)) { newNode = originalStartNode; newOffset = originalStartOffset; }\n")
     try str.push(b, "  else {\n")
     try str.push(b, "    let referenceNode = originalStartNode;\n")
     try str.push(b, "    while (parentNode(referenceNode) !== null && !isInclusiveAncestor(parentNode(referenceNode), originalEndNode)) referenceNode = parentNode(referenceNode);\n")
     try str.push(b, "    newNode = parentNode(referenceNode);\n")
     try str.push(b, "    newOffset = indexOfChild(referenceNode) + 1;\n")
-    ret ok
-}
-
-fn part38(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "  if (firstPartiallyContainedChild !== null && isCharacterData(nodeType(firstPartiallyContainedChild))) {\n")
     try str.push(b, "    const clone = cloneNode(originalStartNode, undefined, false);\n")
@@ -9900,16 +9906,16 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "function twSlot(o) { const s = slotOf(o); if (!s || !s.isTreeWalker) illegal(); return s; }\n")
     try str.push(b, "function createTreeWalker(root, whatToShow, filter) {\n")
     try str.push(b, "  const w = create(TreeWalker.prototype);\n")
+    ret ok
+}
+
+fn part39(b: *str.Builder) -> err {
     try str.push(b, "  setSlot(w, { isTreeWalker: true, root, current: root, whatToShow, filter, active: false });\n")
     try str.push(b, "  return w;\n")
     try str.push(b, "}\n")
     try str.push(b, "function traverseChildren(walker, first) {\n")
     try str.push(b, "  const s = twSlot(walker);\n")
     try str.push(b, "  let node = first ? firstChild(s.current) : lastChild(s.current);\n")
-    ret ok
-}
-
-fn part39(b: *str.Builder) -> err {
     try str.push(b, "  while (node !== null) {\n")
     try str.push(b, "    const result = filterNode(walker, node);\n")
     try str.push(b, "    if (result === FILTER_ACCEPT) { s.current = node; return node; }\n")
@@ -10154,16 +10160,16 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "    if (observerNotifyList.indexOf(e.observer) < 0) apply(arrayPush, observerNotifyList, [e.observer]);\n")
     try str.push(b, "    queueMicrotaskForObservers();\n")
     try str.push(b, "  }\n")
+    ret ok
+}
+
+fn part40(b: *str.Builder) -> err {
     try str.push(b, "};\n")
     try str.push(b, "addTransientRegistrations = function (node, parent) {\n")
     try str.push(b, "  let n = parent;\n")
     try str.push(b, "  while (n !== null) {\n")
     try str.push(b, "    const regs = registrationsOf(n, false);\n")
     try str.push(b, "    if (regs) {\n")
-    ret ok
-}
-
-fn part40(b: *str.Builder) -> err {
     try str.push(b, "      for (const r of regs.slice()) {\n")
     try str.push(b, "        if (r.options.subtree) {\n")
     try str.push(b, "          const t = registrationsOf(node, true);\n")
@@ -10408,16 +10414,16 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "        if (typeof key !== 'string') continue;\n")
     try str.push(b, "        const d = getOwnPropertyDescriptor(init, key);\n")
     try str.push(b, "        if (d !== undefined && d.enumerable) appendHeader(h, key, toDOMString(init[key]));\n")
+    ret ok
+}
+
+fn part41(b: *str.Builder) -> err {
     try str.push(b, "      }\n")
     try str.push(b, "    }\n")
     try str.push(b, "  } else throw new TypeError(\"Failed to construct 'Headers': The provided value is not of type '(sequence<sequence<ByteString>> or record<ByteString, ByteString>)'.\");\n")
     try str.push(b, "}\n")
     try str.push(b, "function appendHeader(h, name, value) {\n")
     try str.push(b, "  const s = hSlot(h);\n")
-    ret ok
-}
-
-fn part41(b: *str.Builder) -> err {
     try str.push(b, "  const v = normalizeHeaderValue(value);\n")
     try str.push(b, "  if (!validHeaderName(name)) throw new TypeError(\"Failed to execute 'append' on 'Headers': Invalid name\");\n")
     try str.push(b, "  if (!validHeaderValue(v)) throw new TypeError(\"Failed to execute 'append' on 'Headers': Invalid value\");\n")
@@ -10662,16 +10668,16 @@ fn part41(b: *str.Builder) -> err {
     try str.push(b, "    const r = new Response(null, { status });\n")
     try str.push(b, "    slotOf(r.headers).guard = 'none';\n")
     try str.push(b, "    r.headers.set('Location', parsed[0]);\n")
+    ret ok
+}
+
+fn part42(b: *str.Builder) -> err {
     try str.push(b, "    slotOf(r.headers).guard = 'immutable';\n")
     try str.push(b, "    return r;\n")
     try str.push(b, "  },\n")
     try str.push(b, "  json(data, init = undefined) {\n")
     try str.push(b, "    const text = JSON.stringify(data);\n")
     try str.push(b, "    if (text === undefined) throw new TypeError(\"Failed to execute 'json' on 'Response': The data is not JSON serializable\");\n")
-    ret ok
-}
-
-fn part42(b: *str.Builder) -> err {
     try str.push(b, "    const r = new Response(text, init);\n")
     try str.push(b, "    if (!slotOf(r.headers).list.some(e => e[0] === 'content-type') || true) { slotOf(r.headers).list = slotOf(r.headers).list.filter(e => e[0] !== 'content-type'); r.headers.set('Content-Type', 'application/json'); }\n")
     try str.push(b, "    return r;\n")
@@ -10916,16 +10922,16 @@ fn part42(b: *str.Builder) -> err {
     try str.push(b, "  },\n")
     try str.push(b, "  responseXML: {\n")
     try str.push(b, "    get() {\n")
+    ret ok
+}
+
+fn part43(b: *str.Builder) -> err {
     try str.push(b, "      const s = xhrSlot(this);\n")
     try str.push(b, "      if (s.responseType !== '' && s.responseType !== 'document') throw domError('InvalidStateError', \"Failed to read the 'responseXML' property from 'XMLHttpRequest': The value is only accessible if the object's 'responseType' is '' or 'document' (was '\" + s.responseType + \"').\");\n")
     try str.push(b, "      if (s.state !== 4) return null;\n")
     try str.push(b, "      const ct = xhrContentType(s);\n")
     try str.push(b, "      if (!/html|xml/i.test(ct)) return null;\n")
     try str.push(b, "      try { return new DOMParser().parseFromString(xhrResponseText(s), /html/i.test(ct) ? 'text/html' : 'application/xml'); } catch (e) { return null; }\n")
-    ret ok
-}
-
-fn part43(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "  },\n")
     try str.push(b, "  response: {\n")
@@ -11170,16 +11176,16 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "  }\n")
     try str.push(b, "  if (open.length) fail('unclosed element ' + open[open.length - 1].name);\n")
+    ret ok
+}
+
+fn part44(b: *str.Builder) -> err {
     try str.push(b, "  if (root === null) fail('no root element');\n")
     try str.push(b, "}\n")
     try str.push(b, "function DOMParser() {\n")
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'DOMParser': Please use the 'new' operator\");\n")
     try str.push(b, "  setSlot(this, { isDOMParser: true });\n")
     try str.push(b, "}\n")
-    ret ok
-}
-
-fn part44(b: *str.Builder) -> err {
     try str.push(b, "iface('DOMParser', DOMParser, null);\n")
     try str.push(b, "function parseHTMLDocument(doc, markup) {\n")
     try str.push(b, "  const mk = name => createElementWithDefinition(doc, name, HTML_NS, null, null, false);\n")
@@ -11424,16 +11430,16 @@ fn part44(b: *str.Builder) -> err {
     try str.push(b, "const broadcastChannels = new Map();\n")
     try str.push(b, "function BroadcastChannel(name) {\n")
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'BroadcastChannel': Please use the 'new' operator\");\n")
+    ret ok
+}
+
+fn part45(b: *str.Builder) -> err {
     try str.push(b, "  required(arguments, 1, 'BroadcastChannel');\n")
     try str.push(b, "  const n = toDOMString(name);\n")
     try str.push(b, "  setSlot(this, { listeners: [], isTarget: true, isBC: true, name: n, closed: false });\n")
     try str.push(b, "  if (!broadcastChannels.has(n)) broadcastChannels.set(n, []);\n")
     try str.push(b, "  broadcastChannels.get(n).push(this);\n")
     try str.push(b, "}\n")
-    ret ok
-}
-
-fn part45(b: *str.Builder) -> err {
     try str.push(b, "iface('BroadcastChannel', BroadcastChannel, EventTarget);\n")
     try str.push(b, "defineHandlerAttrs(BroadcastChannel.prototype, ['message', 'messageerror']);\n")
     try str.push(b, "attributes(BroadcastChannel.prototype, { name: { get() { const s = slotOf(this); if (!s || !s.isBC) illegal(); return s.name; } } });\n")
@@ -11604,7 +11610,7 @@ fn part45(b: *str.Builder) -> err {
 }
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 631636)
+    var b = try str.builder(a, 631784)
     try part0(&b)
     try part1(&b)
     try part2(&b)
