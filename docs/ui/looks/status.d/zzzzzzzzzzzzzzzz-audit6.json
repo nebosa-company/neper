@@ -1,0 +1,136 @@
+{
+ "text_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Audit 6 (own comparer, native dark captures, nothing cut): edit-rest, hover, readonly, focus, password 0 chrome px; edit-selected 19 chrome px (the selection fill is #0078D7 but one row taller in the capture, and the caret column differs), edit-disabled 13 chrome px. Downgraded from the workers' matched. | ",
+    "gaps": [
+     "Hover is pixel-identical to rest in the capture: no distinct hover look to match",
+     "Unverified (no native state): invalid, long text, placeholder colour; the capture's multi-line scroll column is the light unthemed one, ours keeps the dark bar and is not compared there",
+     "Text glyph pixels are excluded (ClearType against greyscale): ink boxes within 1 px only"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Audit 6: spin-rest, hover, pressed, disabled 0 chrome px; spin-focus 16 chrome px (caret column and selection fill rows). Downgraded from the workers' matched. | ",
+    "gaps": [
+     "Unverified: arrows dimmed at the bounds, the four-arrow v3 fast spin edit"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Audit 6: combo-edit/list rest, hover, hover-arrow (empty field now matches, 0 px), list focus 0 chrome px; combo-edit-focus 19, combo-edit-disabled 9, combo-list-disabled 18, the open list captures 36 to 38 chrome px (head selection and caret). Downgraded from the workers' matched. | ",
+    "gaps": [
+     "Hover captures of the edit and list are pixel-identical to rest",
+     "Unverified: invalid, the scrolling drop list (the open captures show 8 rows, no scroll bar)",
+     "The list-style combo text keeps linear advances (static text); only the editable combo's edit control uses hdmx advances"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark_mask.png",
+    "notes": "Audit 6: no native mask edit capture; against the edit captures it fails like the text edit (edit-selected 19, edit-disabled 13 chrome px). Downgraded from the workers' matched. | ",
+    "gaps": [
+     "No native mask-edit capture: the mask behaviour (invalid state, mask characters) is unverified",
+     "Typed text with mask literals is unverified"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Audit 6: the radio ring sits one pixel off the native one: unchecked rest, hover 26 chrome px, checked rest, hover 26, focus 37; only disabled and one pressed state are clean. Downgraded from the workers' matched. | ",
+    "gaps": [
+     "The black caption is a capture artefact copied on request: it is unreadable on #202020",
+     "Unverified: radio group chrome (no native dark group box)"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Audit 6: label-rest and label-disabled 0 chrome px, but the four syslink captures (rest, hover, focus, disabled) have no cell (best placement 226 to 2100 flat px off). Downgraded from the workers' matched. | ",
+    "gaps": [
+     "Unverified: other backgrounds, rotated, link kinds (syslink: no Neper link control compared)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark2.png",
+    "notes": "Audit 6: tooltip-rest 0 chrome px; tooltip-balloon 36 chrome px (the native info icon is an i glyph in a disc, ours a plain disc). Downgraded from the workers' matched. | ",
+    "gaps": [
+     "The balloon icon is artwork: a plain disc stands in for it (its 16 x 16 area is inside the glyph exclusion)",
+     "Balloon is only reached through win_native_balloon: the app's hint keeps the square tip"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark3.png",
+    "notes": "Audit 6: all 17 native dark button captures (rest, hover, pressed, focus, default, disabled, split, picture) 0 chrome px, only text edge pixels differ (15 to 19, glyphs are lighter in grey scale). Confirmed matched. | ",
+    "gaps": [
+     "The picture is v3's artwork class (a bitmap in the capture): ours is the Info glyph, so the 16 x 16 picture area and its 2 px halo are excluded; the caption ink is within 1 px",
+     "Unverified: toggle, loading and plain kinds, a split button whose arrow part is pressed (the capture is the main part)"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/checkbox.png",
+    "notes": "Audit 6: all 15 native dark check box captures 0 chrome px (text edge px 44 to 47). Confirmed matched. | ",
+    "gaps": [
+     "Audit 5: the sheet is native_dark.png, whose caption is the native 'Sample label'; the dark checkbox in a group with rows above 24 px keeps the v3 row layout and Tahoma",
+     "Audit 5 unverified: hover has no distinct capture",
+     "checkbox-*-hover is pixel-identical to rest in the capture: hover has no distinct reference",
+     "A check box inside a group with rows above 24 px keeps the older v3 row layout (Tahoma)",
+     "Mnemonic underlines are not drawn in the dark native row (the native control shows them only after Alt)"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark2.png",
+    "notes": "Audit 6: all 14 native dark scroll bar captures (vertical and horizontal: rest, hover arrow, thumb, track, pressed, disabled) 0 chrome px, 0 to 2 glyph edge px, max 6 levels. Upgraded to matched against native dark; the dark live grids are not compared. | ",
+    "gaps": [
+     "hscroll-hover-track capture shows no bar at all: unmatchable",
+     "Pressed on the end arrow (down, right) is the start arrow's mirror image, not captured",
+     "Hover and the held thumb keep the rest look, as every captured hover and held-thumb state does"
+    ]
+   }
+  }
+ }
+}
