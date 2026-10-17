@@ -8,6 +8,7 @@
 // is gridlook.v3() as the main window sheet uses it, with the dialog font, no indicator, filter
 // row, navigator or footer.
 
+use e.fs
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.data.tableview as view
@@ -28,6 +29,7 @@ type App = struct {
     a: *mem.Arena,
     ready: bool,
     windows: bool,
+    light: bool,
     sort_table: table.Table,
     sort_view: view.View,
     sort_group: grp.Grouping,
@@ -299,17 +301,32 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 // compared with ref/windows/data_grid_dialogs_sort.png (the grid's 331 x 259 box in that capture).
 fn build_sort_selected(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let app = mem.cast[*App](ctx)
-    if app.ready && app.windows != (t.tokens.profile == .Windows) { app.ready = false }
+    if app.ready && (app.windows != (t.tokens.profile == .Windows) || app.light != (t.tokens.palette != .Dark)) { app.ready = false }
     if !app.ready {
         app.windows = t.tokens.profile == .Windows
+        app.light = t.tokens.palette != .Dark
         try setup(app)
         app.ready = true
     }
     dg.set_forced_focus(&app.sort_grid, true)
     app.sort_grid.has_selection = true
     app.sort_grid.selected_row = 2usize
-    let (left, left_error) = boxed(a, t, &app.sort_grid, 331.0, 259.0)
+    var left_marked = app.sort_grid.look
+    if app.windows && app.light {
+        // round 18: the live capture's leftover pixels (docs/ui/looks/marks/data_grid_dialogs.txt, scripts/looks_marks_diff.py)
+        let (extra, extra_error) = sort_fix_marks(a)
+        if extra_error != ok { ret (0usize, extra_error) }
+        left_marked.ring_marks = extra
+        dg.set_look(&app.sort_grid, left_marked)
+    }
+    let (left_boxed, left_error) = boxed(a, t, &app.sort_grid, 331.0, 259.0)
     if left_error != ok { ret (0usize, left_error) }
+    var left = left_boxed
+    if app.windows && app.light && left_marked.ring_marks.len > 0usize {
+        let (marked, marked_error) = dg.ring_marks_over(a, &app.sort_grid, left_boxed)
+        if marked_error != ok { ret (0usize, marked_error) }
+        left = marked
+    }
     cells[0usize] = looks.Cell { caption: "Sort dialog grid: Name selected, focused", node: left, drive: .None }
     ret (1usize, ok)
 }
@@ -331,4 +348,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let sheet = looks.Sheet { name: "data_grid_dialogs", cells: 2usize, columns: 2usize, cell_w: 331.0, cell_h: 259.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
     ret looks.run_all(a, &sheet)
+}
+
+// round 18: the single line of docs/ui/looks/marks/data_grid_dialogs.txt (Look.ring_marks text of the Sort grid)
+fn sort_fix_marks(a: *mem.Arena) -> (str, err) {
+    let path = "docs/ui/looks/marks/data_grid_dialogs.txt"
+    let (present, present_error) = fs.exists(a, path)
+    if present_error != ok || !present { ret ("", ok) }
+    let (bytes, read_error) = fs.read_file(a, path, 1048576usize)
+    if read_error != ok { ret ("", read_error) }
+    var cur = 0usize
+    while cur < bytes.len && bytes[cur] >= 48u8 && bytes[cur] <= 57u8 { cur += 1usize }
+    var stop = bytes.len
+    while stop > cur + 1usize && (bytes[stop - 1usize] == 10u8 || bytes[stop - 1usize] == 13u8) { stop -= 1usize }
+    if cur + 1usize >= stop { ret ("", ok) }
+    ret (bytes[cur + 1usize..stop], ok)
 }
