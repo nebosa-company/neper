@@ -2400,7 +2400,10 @@ fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool {
             if !(is_ws_only(kb.text) && collapses(l, kid)) { ret false }
         } else if kb.inline_level {
             ret false
-        } else if !is_out_of_flow(st(l, kb.style)) {
+        } else if is_out_of_flow(st(l, kb.style)) {
+            // Floats and positioned boxes still have to be laid out inside it.
+            ret false
+        } else {
             if !self_collapsing(l, kid, cbw) { ret false }
         }
         kid = kb.next
