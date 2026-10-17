@@ -10996,7 +10996,7 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if mark_error != ok { ret (zero, mark_error) }
             var under_ink: u32 = 0xFFFFFFu32
             if !c.enabled { under_ink = 0x6D6D6Du32 }
-            parts[p] = windows_rect_raw(31.0 + before, 16.0, mark_adv, 1.0, under_ink)
+            parts[p] = windows_rect_raw(32.0 + f32(usize(before + 0.5)), 16.0, f32(usize(mark_adv + 0.5)), 1.0, under_ink)
             p += 1usize
         }
         if c.shortcut.len > 0usize {
