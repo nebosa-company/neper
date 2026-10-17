@@ -59,6 +59,16 @@ fn render(a: *mem.Arena, env: *Env, address: str, out: []u32) -> bool {
     if gpu.read_image(env.q, img, out) != ok { ret false }
     let released = scene.release_scene(env.renderer, id)
     page.release_fonts(pg)
+    // The renderer holds a fixed number of textures: give back the ones this page uploaded.
+    var ti = 0usize
+    while ti < pg.images.len {
+        let ie = &pg.images.items[ti]
+        if ie.uploaded {
+            let freed = scene.release_image(env.renderer, ie.texture)
+            ie.uploaded = false
+        }
+        ti += 1usize
+    }
     ret true
 }
 
