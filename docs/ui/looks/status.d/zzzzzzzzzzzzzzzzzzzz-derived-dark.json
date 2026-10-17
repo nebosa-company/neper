@@ -1,0 +1,92 @@
+{
+ "toolbar_button": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/toolbar_button.png",
+    "notes": "DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no usable dark reference: the native dark toolbar (toolbar-rest .. toolbar-dropdown-hot of ref/windows-native/dark) draws dim text on #202020 and keeps the light hot and checked faces (#E5F3FF), so it is not a look to copy. The dark sheet is the palette's: icon and text #CECECE on the #3C3C3C hot face (7.0 : 1), unmeasured washes.",
+    "gaps": [
+     "Hot, pressed, checked and disabled washes are guesses from the Windows 11 ramp",
+     "The native dark toolbar is broken (dim text, light hot faces): nothing to match"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/menu_bar.png",
+    "notes": "DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no usable dark reference: the native menu bar stays white under DarkMode (menubar-rest, -hot-*, -open of ref/windows-native/dark). Dark sheet = titles white on #202020 (16.3 : 1), hot and open washes unmeasured. The open menu under a title now is the native dark flyout (see popup_menu).",
+    "gaps": [
+     "Hot/open washes are guesses; title paddings are v3's",
+     "The native menu bar capture is white: nothing to match"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/status_bar.png",
+    "notes": "DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no usable dark reference: the native status bar stays light under DarkMode. Dark sheet = text white on #2B2B2B 13.5 to 14.2 : 1, no drawn border.",
+    "gaps": [
+     "No native dark reference exists",
+     "Panel hover is none (as v3); the progress fill is a guess"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/group_box.png",
+    "notes": "DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (the native group box frame stays light #DCDCDC in dark). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: group_box 1 px outside the text zone of 1880 off px, group_box_dialog 1512 of 7961 The frame (#333333 against the page 1.29 : 1) is below the 3 : 1 border bar.",
+    "gaps": [
+     "No native dark reference: the capture is the unthemed light frame",
+     "The frame is below the 3 : 1 border bar, so the status stays started"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/page_control.png",
+    "notes": "DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (the native tab control stays light under DarkMode). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: page_control sheets 0 px outside the text zone (stats 250 to 470 off, all inside 2 px of text), bottom strips 1 to 2 px, page_control_bottom_states 28 px outside the text zone The round 15 bottom-strip frame columns follow in dark.",
+    "gaps": [
+     "No native dark reference exists",
+     "The tab outlines are 2.4 : 1 against the page: below the 3 : 1 bar for every state"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/splitter.png",
+    "notes": "DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (there is no native splitter control and no dark app splitter capture). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: splitter 0 px off in all 9 sheets but the main one (40 px, 0 outside the text zone)",
+    "gaps": [
+     "No native or live dark reference exists"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/progress_bar.png",
+    "notes": "DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (the native progress bar is the light one: uxtheme has no dark progress bar). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: progress_bar 429 px off, 0 outside the text zone",
+    "gaps": [
+     "No native dark reference exists",
+     "Paused and error tones are not measured"
+    ]
+   }
+  }
+ }
+}
