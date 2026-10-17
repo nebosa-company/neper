@@ -19,38 +19,68 @@ fn arg(args: []const js.Value, i: usize) -> js.Value {
 // --- ArrayBuffer
 
 fn new_buffer(it: *js.Interp, proto: *js.Obj, len: usize) -> (*js.Obj, err) {
+    let (o, e) = new_buffer_full(it, proto, len, len, false, false)
+    ret (o, e)
+}
+
+// A buffer of `len` bytes with room for `max` (a resizable ArrayBuffer or a growable SharedArrayBuffer).
+fn new_buffer_full(it: *js.Interp, proto: *js.Obj, len: usize, max: usize, resizable: bool, sh: bool) -> (*js.Obj, err) {
     let o = js.new_obj(it, js.C_ARRAYBUFFER, proto)
     let (cell, ce) = mem.alloc[js.Buf](it.a, 1usize)
     if ce != ok { ret (o, js.throw_range(it, "Array buffer allocation failed")) }
-    let (bytes, be) = mem.alloc[u8](it.a, len + 1usize)
+    let (bytes, be) = mem.alloc[u8](it.a, max + 1usize)
     if be != ok { ret (o, js.throw_range(it, "Array buffer allocation failed")) }
     var i = 0usize
-    while i < len {
+    while i < max {
         bytes[i] = 0u8
         i += 1usize
     }
-    cell[0usize] = js.Buf { bytes: bytes[0usize..len], detached: false }
+    cell[0usize] = js.Buf { bytes: bytes[0usize..len], detached: false, store: bytes[0usize..max], max: max, resizable: resizable, is_shared: sh }
     o.data = mem.cast[*void](&cell[0usize])
     ret (o, ok)
 }
 
+// ToIndex: undefined is 0; a negative or too large integer is a RangeError.
+fn to_index(it: *js.Interp, v: js.Value, what: str) -> (f64, err) {
+    if js.is_undefined(v) { ret (0.0f64, ok) }
+    let (n, ne) = js.to_number(it, v)
+    if ne != ok { ret (0.0f64, ne) }
+    let len = js.to_integer(n)
+    if len < 0.0f64 || len > 9007199254740991.0f64 { ret (0.0f64, js.throw_range(it, what)) }
+    ret (len, ok)
+}
+
+// The `maxByteLength` of an options object (RangeError when it is invalid); `present` is false when there is none.
+fn max_length_option(it: *js.Interp, options: js.Value) -> (f64, bool, err) {
+    if !js.is_object(options) { ret (0.0f64, false, ok) }
+    let (mv, me) = js.get_prop(it, js.as_object(options), js.key_of("maxByteLength"), options)
+    if me != ok { ret (0.0f64, false, me) }
+    if js.is_undefined(mv) { ret (0.0f64, false, ok) }
+    let (m, e2) = to_index(it, mv, "Invalid array buffer max length")
+    if e2 != ok { ret (0.0f64, false, e2) }
+    ret (m, true, ok)
+}
+
 fn array_buffer_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     if !it.has_new_target { ret (js.undefv(), js.throw_type(it, "Constructor ArrayBuffer requires 'new'")) }
-    let (n, ne) = js.to_number(it, arg(args, 0usize))
+    let (len, ne) = to_index(it, arg(args, 0usize), "Invalid array buffer length")
     if ne != ok { ret (js.undefv(), ne) }
-    let len = js.to_integer(n)
-    if len < 0.0f64 || len > 9007199254740991.0f64 { ret (js.undefv(), js.throw_range(it, "Invalid array buffer length")) }
+    let (maxlen, has_max, mxe) = max_length_option(it, arg(args, 1usize))
+    if mxe != ok { ret (js.undefv(), mxe) }
     let nto = js.as_object(it.new_target)
     let (proto, pe) = js.proto_value_of(it, nto, it.protos.array_buffer)
     if pe != ok { ret (js.undefv(), pe) }
-    if len > 2147483647.0f64 { ret (js.undefv(), js.throw_range(it, "Array buffer allocation failed")) }
-    let (o, be) = new_buffer(it, proto, usize(len))
+    if has_max && len > maxlen { ret (js.undefv(), js.throw_range(it, "Invalid array buffer max length")) }
+    if len > 2147483647.0f64 || (has_max && maxlen > 2147483647.0f64) { ret (js.undefv(), js.throw_range(it, "Array buffer allocation failed")) }
+    var cap = len
+    if has_max { cap = maxlen }
+    let (o, be) = new_buffer_full(it, proto, usize(len), usize(cap), has_max, false)
     if be != ok { ret (js.undefv(), be) }
     ret (js.obj_value(o), ok)
 }
 
 fn this_buffer(it: *js.Interp, v: js.Value) -> (*js.Buf, *js.Obj, err) {
-    if js.is_object(v) && js.as_object(v).class == js.C_ARRAYBUFFER {
+    if js.is_object(v) && js.as_object(v).class == js.C_ARRAYBUFFER && !js.buf_of(js.as_object(v)).is_shared {
         ret (js.buf_of(js.as_object(v)), js.as_object(v), ok)
     }
     var none: *js.Buf = zero
@@ -123,13 +153,190 @@ fn max_byte_length_getter(it: *js.Interp, this_val: js.Value, args: []const js.V
     let (b, o, e) = this_buffer(it, this_val)
     if e != ok { ret (js.undefv(), e) }
     if b.detached { ret (js.num_value(0.0f64), ok) }
+    if b.resizable { ret (js.num_value(f64(b.max)), ok) }
     ret (js.num_value(f64(b.bytes.len)), ok)
 }
 
 fn resizable_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (b, o, e) = this_buffer(it, this_val)
     if e != ok { ret (js.undefv(), e) }
-    ret (js.bool_value(false), ok)
+    ret (js.bool_value(b.resizable), ok)
+}
+
+fn set_buffer_length(b: *js.Buf, n: usize) {
+    var k = b.bytes.len
+    while k < n {
+        b.store[k] = 0u8
+        k += 1usize
+    }
+    b.bytes = b.store[0usize..n]
+}
+
+fn buffer_resize(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (b, o, e) = this_buffer(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    if !b.resizable { ret (js.undefv(), js.throw_type(it, "Method ArrayBuffer.prototype.resize called on incompatible receiver")) }
+    let (n, ne) = to_index(it, arg(args, 0usize), "Invalid array buffer length")
+    if ne != ok { ret (js.undefv(), ne) }
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    if n > f64(b.max) { ret (js.undefv(), js.throw_range(it, "Invalid array buffer length")) }
+    set_buffer_length(b, usize(n))
+    ret (js.undefv(), ok)
+}
+
+fn buffer_transfer_common(it: *js.Interp, this_val: js.Value, args: []const js.Value, fixed: bool) -> (js.Value, err) {
+    let (b, o, e) = this_buffer(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    var new_len = f64(b.bytes.len)
+    if !js.is_undefined(arg(args, 0usize)) {
+        let (n, ne) = to_index(it, arg(args, 0usize), "Invalid array buffer length")
+        if ne != ok { ret (js.undefv(), ne) }
+        new_len = n
+    }
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    var resizable = b.resizable && !fixed
+    var cap = usize(new_len)
+    if resizable {
+        if new_len > f64(b.max) { ret (js.undefv(), js.throw_range(it, "Invalid array buffer length")) }
+        cap = b.max
+    }
+    if new_len > 2147483647.0f64 { ret (js.undefv(), js.throw_range(it, "Array buffer allocation failed")) }
+    let (nb, nbe) = new_buffer_full(it, it.protos.array_buffer, usize(new_len), cap, resizable, false)
+    if nbe != ok { ret (js.undefv(), nbe) }
+    let nbuf = js.buf_of(nb)
+    var k = 0usize
+    while k < nbuf.bytes.len && k < b.bytes.len {
+        nbuf.bytes[k] = b.bytes[k]
+        k += 1usize
+    }
+    b.detached = true
+    b.bytes = b.bytes[0usize..0usize]
+    ret (js.obj_value(nb), ok)
+}
+
+fn buffer_transfer(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (r, e) = buffer_transfer_common(it, this_val, args, false)
+    ret (r, e)
+}
+
+fn buffer_transfer_fixed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (r, e) = buffer_transfer_common(it, this_val, args, true)
+    ret (r, e)
+}
+
+// --- SharedArrayBuffer
+
+fn this_shared(it: *js.Interp, v: js.Value) -> (*js.Buf, *js.Obj, err) {
+    if js.is_object(v) && js.as_object(v).class == js.C_ARRAYBUFFER && js.buf_of(js.as_object(v)).is_shared {
+        ret (js.buf_of(js.as_object(v)), js.as_object(v), ok)
+    }
+    var none: *js.Buf = zero
+    ret (none, js.null_obj(), js.throw_type(it, "Method SharedArrayBuffer.prototype method called on incompatible receiver"))
+}
+
+fn shared_buffer_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    if !it.has_new_target { ret (js.undefv(), js.throw_type(it, "Constructor SharedArrayBuffer requires 'new'")) }
+    let (len, ne) = to_index(it, arg(args, 0usize), "Invalid array buffer length")
+    if ne != ok { ret (js.undefv(), ne) }
+    let (maxlen, has_max, mxe) = max_length_option(it, arg(args, 1usize))
+    if mxe != ok { ret (js.undefv(), mxe) }
+    let nto = js.as_object(it.new_target)
+    let (proto, pe) = js.proto_value_of(it, nto, it.ta_protos[0usize])
+    if pe != ok { ret (js.undefv(), pe) }
+    if has_max && len > maxlen { ret (js.undefv(), js.throw_range(it, "Invalid array buffer max length")) }
+    if len > 2147483647.0f64 || (has_max && maxlen > 2147483647.0f64) { ret (js.undefv(), js.throw_range(it, "Array buffer allocation failed")) }
+    var cap = len
+    if has_max { cap = maxlen }
+    let (o, be) = new_buffer_full(it, proto, usize(len), usize(cap), has_max, true)
+    if be != ok { ret (js.undefv(), be) }
+    ret (js.obj_value(o), ok)
+}
+
+fn shared_byte_length(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (b, o, e) = this_shared(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    ret (js.num_value(f64(b.bytes.len)), ok)
+}
+
+fn shared_growable(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (b, o, e) = this_shared(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    ret (js.bool_value(b.resizable), ok)
+}
+
+fn shared_max_byte_length(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (b, o, e) = this_shared(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    if b.resizable { ret (js.num_value(f64(b.max)), ok) }
+    ret (js.num_value(f64(b.bytes.len)), ok)
+}
+
+fn shared_grow(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (b, o, e) = this_shared(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    if !b.resizable { ret (js.undefv(), js.throw_type(it, "Method SharedArrayBuffer.prototype.grow called on incompatible receiver")) }
+    let (n, ne) = to_index(it, arg(args, 0usize), "Invalid array buffer length")
+    if ne != ok { ret (js.undefv(), ne) }
+    if n > f64(b.max) || n < f64(b.bytes.len) { ret (js.undefv(), js.throw_range(it, "Invalid array buffer length")) }
+    set_buffer_length(b, usize(n))
+    ret (js.undefv(), ok)
+}
+
+fn shared_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (b, o, e) = this_shared(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    let len = f64(b.bytes.len)
+    let (first, fe) = barr.rel_index(it, arg(args, 0usize), len, 0.0f64)
+    if fe != ok { ret (js.undefv(), fe) }
+    let (fin, fine) = barr.rel_index(it, arg(args, 1usize), len, len)
+    if fine != ok { ret (js.undefv(), fine) }
+    var new_len = fin - first
+    if new_len < 0.0f64 { new_len = 0.0f64 }
+    let (c, ce) = js.get_prop(it, o, js.key_of("constructor"), this_val)
+    if ce != ok { ret (js.undefv(), ce) }
+    var ctor = js.obj_value(it.ta_ctors[0usize])
+    if js.is_object(c) {
+        let (sp, spe) = js.get_prop(it, js.as_object(c), js.key_of_symbol(it.sym_species), c)
+        if spe != ok { ret (js.undefv(), spe) }
+        if !js.is_nullish(sp) {
+            if !js.is_constructor(sp) { ret (js.undefv(), js.throw_type(it, "species is not a constructor")) }
+            ctor = sp
+        }
+    } else if !js.is_undefined(c) {
+        ret (js.undefv(), js.throw_type(it, "constructor is not an object"))
+    }
+    let (nv, nve) = js.construct(it, ctor, js.one_arg(it, js.num_value(new_len)), ctor)
+    if nve != ok { ret (js.undefv(), nve) }
+    if !js.is_object(nv) || js.as_object(nv).class != js.C_ARRAYBUFFER || !js.buf_of(js.as_object(nv)).is_shared { ret (js.undefv(), js.throw_type(it, "species constructor did not return a SharedArrayBuffer")) }
+    let nb = js.buf_of(js.as_object(nv))
+    if js.as_object(nv) == o { ret (js.undefv(), js.throw_type(it, "species constructor returned the same buffer")) }
+    if f64(nb.bytes.len) < new_len { ret (js.undefv(), js.throw_type(it, "new SharedArrayBuffer is too small")) }
+    var k = 0usize
+    let start = usize(first)
+    while f64(k) < new_len && start + k < b.bytes.len {
+        nb.bytes[k] = b.bytes[start + k]
+        k += 1usize
+    }
+    ret (nv, ok)
+}
+
+fn install_shared_array_buffer(it: *js.Interp) {
+    let proto = js.new_obj(it, js.C_OBJECT, it.protos.object)
+    it.ta_protos[0usize] = proto
+    let ctor = js.make_native(it, "SharedArrayBuffer", 1u32, shared_buffer_ctor)
+    ctor.ctor_kind = js.K_BASE
+    it.ta_ctors[0usize] = ctor
+    let e1 = js.define_data(it, ctor, js.key_of("prototype"), js.obj_value(proto), 0u8)
+    let e2 = js.define_data(it, proto, js.key_of("constructor"), js.obj_value(ctor), js.P_HIDDEN)
+    let e3 = js.define_data(it, it.global, js.key_of("SharedArrayBuffer"), js.obj_value(ctor), js.P_HIDDEN)
+    let sg = js.make_native(it, "get [Symbol.species]", 0u32, species_self)
+    let e4 = js.define_accessor_raw(it, ctor, js.key_of_symbol(it.sym_species), sg, js.null_obj(), js.P_CONFIGURABLE)
+    js.add_getter(it, proto, "byteLength", shared_byte_length)
+    js.add_getter(it, proto, "growable", shared_growable)
+    js.add_getter(it, proto, "maxByteLength", shared_max_byte_length)
+    js.add_method(it, proto, "grow", 1u32, shared_grow)
+    js.add_method(it, proto, "slice", 2u32, shared_slice)
+    let e5 = js.define_data(it, proto, js.key_of_symbol(it.sym_to_string_tag), js.str_value("SharedArrayBuffer"), js.P_CONFIGURABLE)
 }
 
 fn detach_host(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -158,6 +365,10 @@ fn install_array_buffer(it: *js.Interp) {
     js.add_getter(it, it.protos.array_buffer, "resizable", resizable_getter)
     js.add_getter(it, it.protos.array_buffer, "detached", detached_getter)
     js.add_method(it, it.protos.array_buffer, "slice", 2u32, buffer_slice)
+    js.add_method(it, it.protos.array_buffer, "resize", 1u32, buffer_resize)
+    js.add_method(it, it.protos.array_buffer, "transfer", 0u32, buffer_transfer)
+    js.add_method(it, it.protos.array_buffer, "transferToFixedLength", 0u32, buffer_transfer_fixed)
+    install_shared_array_buffer(it)
     let e5 = js.define_data(it, it.protos.array_buffer, js.key_of_symbol(it.sym_to_string_tag), js.str_value("ArrayBuffer"), js.P_CONFIGURABLE)
     // $262.detachArrayBuffer.
     let (h, he) = js.get_prop(it, it.global, js.key_of("$262"), js.obj_value(it.global))
@@ -184,8 +395,7 @@ fn kind_name(kind: u8) -> str {
 fn validate_ta(it: *js.Interp, v: js.Value) -> (*js.Obj, err) {
     if js.is_object(v) && js.as_object(v).class == js.C_TYPEDARRAY {
         let o = js.as_object(v)
-        let b = js.buf_of(js.ta_of(o).buffer)
-        if b.detached { ret (o, js.throw_type(it, "Cannot perform method on a detached ArrayBuffer")) }
+        if js.ta_out_of_bounds(o) { ret (o, js.throw_type(it, "Cannot perform method on a detached or out of bounds ArrayBuffer view")) }
         ret (o, ok)
     }
     ret (js.null_obj(), js.throw_type(it, "this is not a typed array."))
@@ -240,8 +450,13 @@ fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Va
         if js.is_undefined(arg(args, 2usize)) {
             if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
             if usize(offset) > b.bytes.len { ret (js.undefv(), js.throw_range(it, "Start offset is outside the bounds of the buffer")) }
-            if (b.bytes.len - usize(offset)) % size != 0usize { ret (js.undefv(), js.throw_range(it, "byte length of the array must be a multiple of the element size")) }
-            new_len = (b.bytes.len - usize(offset)) / size
+            if b.resizable {
+                tracking = true
+                new_len = (b.bytes.len - usize(offset)) / size
+            } else {
+                if (b.bytes.len - usize(offset)) % size != 0usize { ret (js.undefv(), js.throw_range(it, "byte length of the array must be a multiple of the element size")) }
+                new_len = (b.bytes.len - usize(offset)) / size
+            }
         } else {
             let (ln, lne) = js.to_number(it, args[2usize])
             if lne != ok { ret (js.undefv(), lne) }
@@ -373,13 +588,14 @@ fn ta_buffer_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 fn ta_byte_length_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     if !js.is_object(this_val) || js.as_object(this_val).class != js.C_TYPEDARRAY { ret (js.undefv(), js.throw_type(it, "not a typed array")) }
     let o = js.as_object(this_val)
+    if js.ta_out_of_bounds(o) { ret (js.num_value(0.0f64), ok) }
     ret (js.num_value(f64(js.ta_length(o) * js.ta_elem_size(js.ta_of(o).kind))), ok)
 }
 
 fn ta_byte_offset_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     if !js.is_object(this_val) || js.as_object(this_val).class != js.C_TYPEDARRAY { ret (js.undefv(), js.throw_type(it, "not a typed array")) }
     let o = js.as_object(this_val)
-    if js.buf_of(js.ta_of(o).buffer).detached { ret (js.num_value(0.0f64), ok) }
+    if js.ta_out_of_bounds(o) { ret (js.num_value(0.0f64), ok) }
     ret (js.num_value(f64(js.ta_of(o).offset)), ok)
 }
 
@@ -1010,6 +1226,7 @@ fn dataview_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
     if offset > f64(b.bytes.len) { ret (js.undefv(), js.throw_range(it, "Start offset is outside the bounds of the buffer")) }
     var view_len = f64(b.bytes.len) - offset
+    var dv_tracking = b.resizable && js.is_undefined(arg(args, 2usize))
     if !js.is_undefined(arg(args, 2usize)) {
         let (ln, lne) = js.to_number(it, args[2usize])
         if lne != ok { ret (js.undefv(), lne) }
@@ -1024,7 +1241,7 @@ fn dataview_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     let o = js.new_obj(it, js.C_DATAVIEW, proto)
     let (cell, ce) = mem.alloc[DView](it.a, 1usize)
     if ce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
-    cell[0usize] = DView { buffer: js.as_object(bv), offset: usize(offset), length: usize(view_len), tracking: false }
+    cell[0usize] = DView { buffer: js.as_object(bv), offset: usize(offset), length: usize(view_len), tracking: dv_tracking }
     o.data = mem.cast[*void](&cell[0usize])
     ret (js.obj_value(o), ok)
 }
@@ -1033,6 +1250,18 @@ fn this_dv(it: *js.Interp, v: js.Value) -> (*DView, err) {
     if js.is_object(v) && js.as_object(v).class == js.C_DATAVIEW { ret (dv_of(js.as_object(v)), ok) }
     var none: *DView = zero
     ret (none, js.throw_type(it, "Receiver is not a DataView"))
+}
+
+// Whether the view lies outside its buffer now, and the byte length it has.
+fn dv_state(d: *DView) -> (bool, usize) {
+    let b = js.buf_of(d.buffer)
+    if b.detached { ret (true, 0usize) }
+    if d.tracking {
+        if d.offset > b.bytes.len { ret (true, 0usize) }
+        ret (false, b.bytes.len - d.offset)
+    }
+    if d.offset + d.length > b.bytes.len { ret (true, 0usize) }
+    ret (false, d.length)
 }
 
 fn dv_buffer_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -1044,16 +1273,16 @@ fn dv_buffer_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 fn dv_byte_length_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (d, e) = this_dv(it, this_val)
     if e != ok { ret (js.undefv(), e) }
-    let b = js.buf_of(d.buffer)
-    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
-    ret (js.num_value(f64(d.length)), ok)
+    let (oob, vlen) = dv_state(d)
+    if oob { ret (js.undefv(), js.throw_type(it, "DataView is detached or out of bounds")) }
+    ret (js.num_value(f64(vlen)), ok)
 }
 
 fn dv_byte_offset_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (d, e) = this_dv(it, this_val)
     if e != ok { ret (js.undefv(), e) }
-    let b = js.buf_of(d.buffer)
-    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    let (oob, vlen) = dv_state(d)
+    if oob { ret (js.undefv(), js.throw_type(it, "DataView is detached or out of bounds")) }
     ret (js.num_value(f64(d.offset)), ok)
 }
 
@@ -1066,9 +1295,10 @@ fn dv_get(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) 
     if idx < 0.0f64 || js.is_infinite(idx) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
     let little = js.to_boolean(arg(args, 1usize))
     let b = js.buf_of(d.buffer)
-    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    let (oob, vlen) = dv_state(d)
+    if oob { ret (js.undefv(), js.throw_type(it, "DataView is detached or out of bounds")) }
     let size = js.ta_elem_size(kind)
-    if idx + f64(size) > f64(d.length) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
+    if idx + f64(size) > f64(vlen) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
     var raw = 0u64
     var i = 0usize
     while i < size {
@@ -1092,9 +1322,10 @@ fn dv_set(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) 
     if vne != ok { ret (js.undefv(), vne) }
     let little = js.to_boolean(arg(args, 2usize))
     let b = js.buf_of(d.buffer)
-    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    let (oob, vlen) = dv_state(d)
+    if oob { ret (js.undefv(), js.throw_type(it, "DataView is detached or out of bounds")) }
     let size = js.ta_elem_size(kind)
-    if idx + f64(size) > f64(d.length) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
+    if idx + f64(size) > f64(vlen) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
     var i = 0usize
     while i < size {
         var shift = 8usize * i

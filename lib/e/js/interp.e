@@ -6505,7 +6505,8 @@ fn gen_yield_star_async(it: *Interp, f: *Frame, iterable: Value) -> (Value, err)
 
 // --- typed arrays (the integer-indexed exotic object) and their buffers
 
-type Buf = struct { bytes: []u8, detached: bool }
+// A buffer's bytes are `store[0..len]`; a resizable or growable one keeps room for `max` bytes.
+type Buf = struct { bytes: []u8, detached: bool, store: []u8, max: usize, resizable: bool, is_shared: bool }
 
 type TArr = struct { buffer: *Obj, offset: usize, length: usize, kind: u8, tracking: bool }
 
@@ -6517,6 +6518,15 @@ fn ta_elem_size(kind: u8) -> usize {
     if kind == 4u8 || kind == 5u8 { ret 2usize }
     if kind == 6u8 || kind == 7u8 || kind == 8u8 { ret 4usize }
     ret 8usize
+}
+
+// Whether a view no longer fits its buffer (detached, or shrunk below the view's end).
+fn ta_out_of_bounds(o: *Obj) -> bool {
+    let t = ta_of(o)
+    let b = buf_of(t.buffer)
+    if b.detached { ret true }
+    if t.tracking { ret t.offset > b.bytes.len }
+    ret t.offset + t.length * ta_elem_size(t.kind) > b.bytes.len
 }
 
 // The current element count (a length-tracking view follows its buffer; a detached one is zero).

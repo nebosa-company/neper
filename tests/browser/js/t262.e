@@ -32,7 +32,7 @@ fn features_of(meta: str) -> str {
 
 fn skipped_feature(full_meta: str) -> bool {
     let meta = features_of(full_meta)
-    let feats = "SharedArrayBuffer|Atomics|Intl|Temporal|IsHTMLDDA|resizable-arraybuffer|ShadowRealm|import-attributes|source-phase-imports|decorators|explicit-resource-management|json-modules|tail-call-optimization|uint8array-base64|regexp-v-flag|regexp-duplicate-named-groups|Float16Array|await-dictionary|canonical-tz|iterator-includes|Iterator.prototype.join|iterator-chunking|joint-iteration|immutable-arraybuffer|Error.isError|import-defer|regexp-unicode-property-escapes|"
+    let feats = "Intl|Temporal|IsHTMLDDA|ShadowRealm|import-attributes|source-phase-imports|decorators|explicit-resource-management|json-modules|tail-call-optimization|uint8array-base64|regexp-v-flag|regexp-duplicate-named-groups|Float16Array|await-dictionary|canonical-tz|iterator-includes|Iterator.prototype.join|iterator-chunking|joint-iteration|immutable-arraybuffer|Error.isError|import-defer|regexp-unicode-property-escapes|"
     var start = 0usize
     var i = 0usize
     while i < feats.len {
