@@ -12,6 +12,7 @@
 use e.data.list as list
 use e.mem
 use e.str
+use e.text.unicode as unicode
 
 const T_EOF: u8 = 0u8
 const T_IDENT: u8 = 1u8
@@ -65,9 +66,42 @@ fn uspace_len(s: str, at: usize) -> usize {
     ret 0usize
 }
 
+// The scalar value starting at `at` of UTF-8 text.
+fn scalar_in(s: str, at: usize) -> u32 {
+    let c = s[at]
+    if c < 128u8 { ret u32(c) }
+    if c >= 240u8 && at + 3usize < s.len { ret ((u32(c) & 7u32) << 18u32) | ((u32(s[at + 1usize]) & 63u32) << 12u32) | ((u32(s[at + 2usize]) & 63u32) << 6u32) | (u32(s[at + 3usize]) & 63u32) }
+    if c >= 224u8 && at + 2usize < s.len { ret ((u32(c) & 15u32) << 12u32) | ((u32(s[at + 1usize]) & 63u32) << 6u32) | (u32(s[at + 2usize]) & 63u32) }
+    if c >= 192u8 && at + 1usize < s.len { ret ((u32(c) & 31u32) << 6u32) | (u32(s[at + 1usize]) & 63u32) }
+    ret u32(c)
+}
+
+// ID_Start for non-ASCII scalars: the letter categories and Nl, plus Other_ID_Start.
+fn id_start_cp(cp: u32) -> bool {
+    if cp < 128u32 { ret is_id_start(u8(cp)) }
+    if cp == 11823u32 { ret false }
+    if cp == 8472u32 || cp == 8494u32 || cp == 12443u32 || cp == 12444u32 || cp == 6277u32 || cp == 6278u32 { ret true }
+    let cat = unicode.category(cp)
+    ret cat == .Lu || cat == .Ll || cat == .Lt || cat == .Lm || cat == .Lo || cat == .Nl
+}
+
+// ID_Continue (plus ZWNJ / ZWJ, which identifiers allow).
+fn id_part_cp(cp: u32) -> bool {
+    if cp < 128u32 { ret is_id_part(u8(cp)) }
+    if cp == 11823u32 { ret false }
+    if id_start_cp(cp) { ret true }
+    if cp == 8204u32 || cp == 8205u32 || cp == 183u32 || cp == 903u32 || (cp >= 4969u32 && cp <= 4977u32) || cp == 6618u32 { ret true }
+    let cat = unicode.category(cp)
+    ret cat == .Mn || cat == .Mc || cat == .Nd || cat == .Pc
+}
+
 fn id_part_at(s: str, at: usize) -> bool {
     let c = s[at]
-    if c >= 128u8 { ret uspace_len(s, at) == 0usize }
+    if c >= 128u8 {
+        // Continuation bytes belong to the scalar whose lead byte was checked.
+        if c < 192u8 { ret true }
+        ret id_part_cp(scalar_in(s, at))
+    }
     ret is_id_part(c)
 }
 fn hex_value(c: u8) -> i32 {
@@ -223,6 +257,7 @@ fn put_unit(b: *str.Builder, src: str, c: i64, after: usize) -> usize {
 fn read_ident(lx: *Lexer) -> (str, bool, err) {
     let start = lx.pos
     var at = start
+    if start < lx.src.len && lx.src[start] >= 192u8 && !id_start_cp(scalar_in(lx.src, start)) { ret ("", false, fail(lx, "invalid character in identifier")) }
     while at < lx.src.len && id_part_at(lx.src, at) { at += 1usize }
     if at >= lx.src.len || lx.src[at] != 92u8 {
         lx.pos = at
@@ -241,14 +276,9 @@ fn read_ident(lx: *Lexer) -> (str, bool, err) {
             let (cp, after) = read_unicode_escape(lx.src, pos + 2usize)
             if cp < 0i64 { ret ("", true, fail(lx, "bad unicode escape in identifier")) }
             // The escaped character must be allowed at that position of an identifier.
-            var cp_ok = true
-            if cp < 128i64 {
-                cp_ok = is_id_start(u8(cp)) || (pos != start && is_digit(u8(cp)))
-            } else if cp == 8204i64 || cp == 8205i64 {
-                cp_ok = pos != start
-            } else if cp == 160i64 || cp == 8232i64 || cp == 8233i64 || cp == 65279i64 || cp == 5760i64 || (cp >= 8192i64 && cp <= 8202i64) || cp == 8239i64 || cp == 8287i64 || cp == 12288i64 {
-                cp_ok = false
-            }
+            var cp_ok = false
+            if pos == start { cp_ok = id_start_cp(u32(cp)) } else { cp_ok = id_part_cp(u32(cp)) }
+            if cp == 8204i64 || cp == 8205i64 { cp_ok = pos != start }
             if !cp_ok { ret ("", true, fail(lx, "invalid escaped character in identifier")) }
             put_cp(&out, u32(cp))
             pos = after
@@ -325,6 +355,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
             t.num = v2
             lx.pos = k
             t.end = k
+            if k < src.len && (src[k] == 95u8 || src[k] == 110u8) { ret fail(lx, "legacy octal literals cannot have separators or be BigInts") }
             if k < src.len && is_id_part(src[k]) { ret fail(lx, "identifier directly after number") }
             ret ok
         }
@@ -337,6 +368,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
     var seen_exp = false
     var last_digit = false
     var is_big = false
+    var lead_zero = src[at] == 48u8
     while at < src.len {
         let c = src[at]
         if is_digit(c) {
@@ -345,6 +377,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
             at += 1usize
         } else if c == 95u8 {
             if !last_digit || at + 1usize >= src.len || !is_digit(src[at + 1usize]) { ret fail(lx, "bad numeric separator") }
+            if lead_zero && !seen_dot && !seen_exp { ret fail(lx, "numeric separators are not allowed after a leading zero") }
             last_digit = false
             at += 1usize
         } else if c == 46u8 && !seen_dot && !seen_exp {
@@ -363,6 +396,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
             }
             if at >= src.len || !is_digit(src[at]) { ret fail(lx, "missing exponent") }
         } else if c == 110u8 && !seen_dot && !seen_exp {
+            if lead_zero && out.len > 1usize { ret fail(lx, "BigInt literals cannot have a leading zero") }
             is_big = true
             at += 1usize
             break

@@ -6,6 +6,7 @@
 // a group end or a loop iteration continues exactly where backtracking needs it. Lookbehind matches backwards.
 
 use e.data.list as list
+use e.js.lex as lex
 use e.mem
 use e.str
 use e.text.unicode as unicode
@@ -557,8 +558,8 @@ fn parse_group_name(p: *Parse) -> (str, err) {
                 l = 2usize
             }
         }
-        let ok_start = (c >= 65u32 && c <= 90u32) || (c >= 97u32 && c <= 122u32) || c == 36u32 || c == 95u32 || c >= 128u32
-        let ok_part = ok_start || (c >= 48u32 && c <= 57u32)
+        let ok_start = lex.id_start_cp(c)
+        let ok_part = lex.id_part_cp(c)
         if (!any && !ok_start) || !ok_part { ret ("", fail(p, "Invalid capture group name")) }
         any = true
         put_cp(&out, c)
