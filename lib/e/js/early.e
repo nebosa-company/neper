@@ -715,6 +715,16 @@ fn check_function(c: *Ctx, id: u32) -> err {
         if strict && (str.eq(n.text, "eval") || str.eq(n.text, "arguments")) && !is_method { try restore_fail(c, saved, fail(c, id, "Unexpected eval or arguments in strict mode")) }
         if strict && is_strict_reserved(n.text) && !is_method { try restore_fail(c, saved, fail(c, id, "Unexpected strict mode reserved word")) }
     }
+    if n.text.len > 0usize && !is_method && !is_arrow {
+        if (n.flags & ast.F_DECL) != 0u16 {
+            // A declaration binds its name in the enclosing scope, so that scope's yield / await rules apply.
+            if saved.in_generator && str.eq(n.text, "yield") { try restore_fail(c, saved, fail(c, id, "yield is a reserved word here")) }
+            if (saved.in_async || saved.in_static_block) && str.eq(n.text, "await") { try restore_fail(c, saved, fail(c, id, "await is a reserved word here")) }
+        } else {
+            if (n.flags & ast.F_GENERATOR) != 0u16 && str.eq(n.text, "yield") { try restore_fail(c, saved, fail(c, id, "yield is a reserved word here")) }
+            if (n.flags & ast.F_ASYNC) != 0u16 && str.eq(n.text, "await") { try restore_fail(c, saved, fail(c, id, "await is a reserved word here")) }
+        }
+    }
     // Parameters.
     let simple = is_simple_params(c, n)
     // `use strict` in a function with non-simple parameters is an error; the function is strict afterwards.
