@@ -1082,6 +1082,7 @@ fn parse_lhs(p: *Parser) -> (u32, err) {
             node(p, cid2).c = u32(args2.len)
             e = cid2
         } else if p.tok.kind == lex.T_TEMPLATE {
+            if optional { ret (ast.NONE, fail(p, "Invalid tagged template on optional chain")) }
             let tpl = try parse_template(p)
             let (tid, te) = mk(p, ast.N_TAGGED)
             if te != ok { ret (ast.NONE, te) }
