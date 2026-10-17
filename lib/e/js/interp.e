@@ -5833,13 +5833,11 @@ fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
         let z = null_env()
         while tgt.parent != z && !env_is_var_scope(it, tgt) { tgt = tgt.parent }
     }
-    // An eval in a parameter expression gets a variable scope of its own, and may not redeclare `arguments`.
+    // An eval in a parameter expression declares into the parameter scope, but may not redeclare `arguments`.
     let var_limit = tgt
     var param_eval = false
     if !g.strict && tgt.in_params {
         param_eval = true
-        g.env.is_var = true
-        tgt = g.env
     }
     if !g.strict {
         // EvalDeclarationInstantiation: a `var` / function name may not collide with a lexical binding between here and the variable scope.
