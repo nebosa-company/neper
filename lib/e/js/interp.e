@@ -127,7 +127,7 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, ux_src: str, ux_units: []const u16,
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_ctor: *Obj, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp
 }

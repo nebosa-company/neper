@@ -84,7 +84,7 @@ type Custom = struct { name: str, value: str }
 type Extra = struct { name: str, value: str }
 
 type Style = struct {
-    display: Display, position: Position, floating: Float, clear: Clear, box_sizing: BoxSizing,
+    display: Display, was_inline: bool, position: Position, floating: Float, clear: Clear, box_sizing: BoxSizing,
     overflow_x: Overflow, overflow_y: Overflow, visibility: Visibility,
     width: Len, height: Len, min_width: Len, min_height: Len, max_width: Len, max_height: Len,
     inset: [4]Len, margin: [4]Len, padding: [4]Len,
@@ -1400,7 +1400,11 @@ fn finish(s: *Style) {
     if s.outline_style == .None || s.outline_style == .Hidden { s.outline_width = 0.0f64 }
     if s.outline_current { s.outline_color = s.color }
     if s.decoration_current { s.decoration_color = s.color }
-    if s.position == .Absolute || s.position == .Fixed || s.floating != .None { s.display = blockify(s.display) }
+    if s.position == .Absolute || s.position == .Fixed || s.floating != .None {
+        // An absolutely positioned box that was inline-level keeps its static position on the line.
+        if s.display == .Inline || s.display == .InlineBlock || s.display == .InlineFlex || s.display == .InlineGrid || s.display == .InlineTable { s.was_inline = true }
+        s.display = blockify(s.display)
+    }
 }
 
 // The computed style of `el` given its parent's. `stack` holds the ancestor query containers (none for now).

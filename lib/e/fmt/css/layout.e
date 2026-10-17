@@ -73,8 +73,11 @@ type Layout = struct {
     root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64,
     floats: list.List[FloatRec], tables: list.List[TableData],
     counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize,
-    vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom]
+    vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule]
 }
+
+// A column rule: a filled rectangle in the border box of multicol container `box` (see `layout_multicol`).
+type ColRule = struct { box: u32, x: f64, y: f64, w: f64, h: f64, color: u32 }
 
 // A float placed in a block formatting context, in the coordinates of the context's root content box.
 type FloatRec = struct { box: u32, x: f64, y: f64, w: f64, h: f64, left: bool, root: u32 }
@@ -1428,6 +1431,7 @@ fn collect_inline(bd: *Builder, b: u32, ends_space: *Flag) {
             bx(l, b).aux = 0u32
             push_piece(bd, Piece { kind: .Float, box: b, text: "", w: 0.0f64, trail: 0.0f64, soft: false, ink: false, start: 0usize, clen: 0usize })
         } else {
+            bx(l, b).aux = 0u32
             push_piece(bd, Piece { kind: .Abs, box: b, text: "", w: 0.0f64, trail: 0.0f64, soft: false, ink: false, start: 0usize, clen: 0usize })
         }
         ret
@@ -1739,13 +1743,22 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
             continue
         }
         if p.kind == .Abs {
-            // A block-level box's static position is the container's content edge; an inline-level one follows the line.
-            if l.boxes.items[usize(p.box)].inline_level {
-                l.boxes.items[usize(p.box)].x = out.line_x + pos
-            } else {
-                l.boxes.items[usize(p.box)].x = 0.0f64
+            // A block-level box's static position is the container's content edge; one that was inline-level follows the line.
+            let ab = &l.boxes.items[usize(p.box)]
+            let owner = &l.boxes.items[usize(x.cont)]
+            if ab.aux == 2u32 {
+                j += 1usize
+                continue
             }
-            l.boxes.items[usize(p.box)].y = x.y
+            if ab.inline_level || st(l, ab.style).was_inline {
+                ab.x = out.line_x + pos
+            } else {
+                ab.x = 0.0f64
+            }
+            ab.y = x.y
+            ab.x += owner.border[3usize] + owner.padding[3usize]
+            ab.y += owner.border[0usize] + owner.padding[0usize]
+            ab.aux = 2u32
             j += 1usize
             continue
         }
@@ -2644,7 +2657,17 @@ fn layout_in_new_bfc(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         if (inner == .Flow || inner == .FlowRoot) && has_columns(bs) {
             let cols = columns_for(l, bs, cw)
             if cols.count > 1usize {
-                h = layout_multicol(l, b, cw, ch, cols, &fc)
+                var has_span = false
+                var sk = l.boxes.items[usize(b)].first
+                while sk != NONE {
+                    if is_spanner(l, sk) { has_span = true }
+                    sk = l.boxes.items[usize(sk)].next
+                }
+                if has_span {
+                    h = layout_multicol_spans(l, b, cw, cols, &fc)
+                } else {
+                    h = layout_multicol(l, b, cw, ch, cols, &fc)
+                }
                 done = true
             }
         }
@@ -6096,6 +6119,171 @@ fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -
     ret maxk
 }
 
+// The `column-rule` of a container: (width, colour, drawn). Only the solid look is drawn, whatever the style.
+fn column_rule_of(l: *Layout, s: *const style.Style) -> (f64, u32, bool) {
+    var width = 3.0f64
+    var color = s.color
+    var kind = ""
+    let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
+    let (sh, has_sh) = extra_text(s, "column-rule")
+    if has_sh {
+        let toks = cv.split_top_level_spaces(l.a, cv.trim_ws(sh))
+        var i = 0usize
+        while i < toks.len {
+            let t = cv.lower(l.a, toks[i])
+            i += 1usize
+            if str.eq(t, "none") || str.eq(t, "hidden") || str.eq(t, "solid") || str.eq(t, "dashed") || str.eq(t, "dotted") || str.eq(t, "double") || str.eq(t, "groove") || str.eq(t, "ridge") || str.eq(t, "inset") || str.eq(t, "outset") {
+                kind = t
+            } else if str.eq(t, "thin") {
+                width = 1.0f64
+            } else if str.eq(t, "medium") {
+                width = 3.0f64
+            } else if str.eq(t, "thick") {
+                width = 5.0f64
+            } else {
+                let (len, good) = style.parse_len(&ctx, t, s.font_size, 0u32)
+                if good && len.kind == .Px && len.pct == 0.0f64 {
+                    width = len.px
+                } else {
+                    let (c, cgood) = style.parse_color_value(&ctx, t, s.color)
+                    if cgood { color = c }
+                }
+            }
+        }
+    }
+    let (ks, has_ks) = extra_text(s, "column-rule-style")
+    if has_ks { kind = cv.lower(l.a, cv.trim_ws(ks)) }
+    let (ws, has_ws) = extra_text(s, "column-rule-width")
+    if has_ws {
+        let (len2, good2) = style.parse_len(&ctx, ws, s.font_size, 0u32)
+        if good2 && len2.kind == .Px { width = len2.px }
+    }
+    let (cs, has_cs) = extra_text(s, "column-rule-color")
+    if has_cs {
+        let (c2, cgood2) = style.parse_color_value(&ctx, cs, s.color)
+        if cgood2 { color = c2 }
+    }
+    if kind.len == 0usize || str.eq(kind, "none") || str.eq(kind, "hidden") || width <= 0.0f64 { ret (0.0f64, 0u32, false) }
+    ret (width, color, true)
+}
+
+// Records the rules between the `used` columns of a run that starts at content-relative `y` and is `colh` high.
+fn record_rules(l: *Layout, b: u32, cols: Cols, used: usize, y: f64, colh: f64) {
+    let bb = &l.boxes.items[usize(b)]
+    let (w, color, on) = column_rule_of(l, st(l, bb.style))
+    if !on || used < 2usize || colh <= 0.0f64 { ret }
+    let stride = cols.width + cols.gap
+    let ox0 = bb.border[3usize] + bb.padding[3usize]
+    let oy0 = bb.border[0usize] + bb.padding[0usize]
+    var i = 1usize
+    while i < used && i < 64usize {
+        let x = ox0 + f64(i) * stride - cols.gap / 2.0f64 - w / 2.0f64
+        let pushed = list.push[ColRule](&l.rules, ColRule { box: b, x: x, y: oy0 + y, w: w, h: colh, color: color })
+        i += 1usize
+    }
+}
+
+// Whether child box `c` spans every column (`column-span: all`).
+fn is_spanner(l: *const Layout, c: u32) -> bool {
+    let cb = &l.boxes.items[usize(c)]
+    if cb.inline_level || cb.inner == .Marker || cb.inner == .Text || cb.positioned_out { ret false }
+    let (v, has) = extra_text(st(l, cb.style), "column-span")
+    ret has && str.eq(cv.lower(l.a, cv.trim_ws(v)), "all")
+}
+
+// The columns a run of children needs (the highest column index) at column height `colh`; with `apply` the run is moved
+// into its columns and down by `shift`. `base` is the content-relative y where the run starts in the single-column layout.
+fn colify_run(l: *Layout, first: u32, stop: u32, origin: f64, base: f64, colh: f64, stride: f64, apply: bool, shift: f64) -> usize {
+    var maxk = 0usize
+    var kid = first
+    while kid != stop && kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        let nxt = kb.next
+        if !kb.inline_level && kb.inner != .Marker && !(kb.positioned_out) {
+            let ks = st(l, kb.style)
+            if ks.position != .Absolute && ks.position != .Fixed {
+                let ky = origin + kb.y - base
+                let k0 = column_of(ky, colh)
+                let k1 = column_of(ky + kb.h - 0.02f64, colh)
+                var k = k0
+                if k0 == k1 || unbreakable(l, kid) || (kb.first == NONE && kb.line_count == 0u32) {
+                    if k0 > maxk { maxk = k0 }
+                    if apply && k0 > 0usize {
+                        l.boxes.items[usize(kid)].x += f64(k0) * stride
+                        l.boxes.items[usize(kid)].y -= f64(k0) * colh
+                    }
+                } else {
+                    let m = colify(l, kid, ky, colh, stride, apply)
+                    if m > maxk { maxk = m }
+                }
+                if apply { l.boxes.items[usize(kid)].y += shift }
+            }
+        }
+        kid = nxt
+    }
+    ret maxk
+}
+
+// A container with `column-span: all` children: each run of children between them is balanced into the columns on its own and
+// each spanner is laid out across the full width.
+fn layout_multicol_spans(l: *Layout, b: u32, cw: f64, cols: Cols, fc: *Flow) -> f64 {
+    let (h0, _m) = layout_children(l, b, cols.width, -1.0f64, fc, false)
+    let bb = bx(l, b)
+    let origin = -(bb.border[0usize] + bb.padding[0usize])
+    let ox0 = bb.border[3usize] + bb.padding[3usize]
+    let oy0 = bb.border[0usize] + bb.padding[0usize]
+    let stride = cols.width + cols.gap
+    var cursor = 0.0f64
+    var kid = bb.first
+    var guard = 0usize
+    while kid != NONE && guard < 100000usize {
+        guard += 1usize
+        let kb = &l.boxes.items[usize(kid)]
+        if kb.inner == .Marker || kb.positioned_out {
+            kid = kb.next
+            continue
+        }
+        if is_spanner(l, kid) {
+            var acc = no_margin()
+            var consumed = Flag { v: false }
+            var sub = Flow { base: l.floats.len, ox: ox0, oy: oy0 }
+            cursor = layout_block_child(l, b, kid, cw, -1.0f64, &sub, cursor, &acc, &consumed, ox0, oy0)
+            cursor += margin_value(acc)
+            kid = l.boxes.items[usize(kid)].next
+            continue
+        }
+        // A run: from `kid` to the next spanner.
+        let run_first = kid
+        var run_stop = kid
+        while run_stop != NONE && !is_spanner(l, run_stop) { run_stop = l.boxes.items[usize(run_stop)].next }
+        let base = l.boxes.items[usize(run_first)].y - oy0
+        var run_end = base
+        var q = run_first
+        while q != run_stop {
+            let qb = &l.boxes.items[usize(q)]
+            if !qb.positioned_out && qb.inner != .Marker { run_end = maxf(run_end, qb.y - oy0 + qb.h) }
+            q = qb.next
+        }
+        let total = maxf(0.0f64, run_end - base)
+        var colh = total / f64(cols.count)
+        if total > 0.0f64 {
+            var step = maxf(1.0f64, total / 64.0f64)
+            var iter = 0usize
+            while iter < 80usize && colify_run(l, run_first, run_stop, origin, base + 0.0f64 - 0.0f64, colh, stride, false, 0.0f64) >= cols.count && colh < total {
+                colh += step
+                iter += 1usize
+            }
+            if colh > total { colh = total }
+        }
+        let shift = cursor - base
+        let used_r = colify_run(l, run_first, run_stop, origin, base, colh, stride, true, shift)
+        record_rules(l, b, cols, used_r + 1usize, cursor, colh)
+        cursor += colh
+        kid = run_stop
+    }
+    ret maxf(cursor, h0 * 0.0f64)
+}
+
 fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) -> f64 {
     let (h0, _m) = layout_children(l, b, cols.width, -1.0f64, fc, false)
     let total = maxf(h0, float_bottom(l, fc.base, 2u32, 0.0f64))
@@ -6120,7 +6308,8 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
         if colh > total { colh = total }
         if ch >= 0.0f64 && colh > ch { colh = ch }
     }
-    let _used = colify(l, b, origin, colh, stride, true)
+    let used_k = colify(l, b, origin, colh, stride, true)
+    record_rules(l, b, cols, used_k + 1usize, 0.0f64, colh)
     ret colh
 }
 
@@ -6705,8 +6894,9 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (tables, e6) = list.init[TableData](a, 8usize)
     let (counters, e7) = list.init[CounterInst](a, 16usize)
     let (grids, e8) = list.init[GridGeom](a, 4usize)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, vmode: 0u8, tr1: zero, tr2: zero, grids: grids }
+    let (rules_made, e9r) = list.init[ColRule](a, 8usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9r != ok { ret (zero, TooBig) }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))

@@ -750,13 +750,13 @@ fn paint_text_run(p: *Painter, text_box: u32, text: str, x: f64, y: f64, w: f64)
             if ts0.writing_mode != .HorizontalTb {
                 // Vertical text is set sideways: the run is turned a quarter clockwise about its top-right corner.
                 save(p)
-                emit(p, scene.Command { Transform: geo.Transform { m00: 0.0f32, m01: -1.0f32, m02: f32(x + w), m10: 1.0f32, m11: 0.0f32, m12: f32(y) } })
+                emit(p, scene.Command { Transform: geo.Transform { m00: 0.0f32, m01: -1.0f32, m02: f32(snap(x + w)), m10: 1.0f32, m11: 0.0f32, m12: f32(snap(y)) } })
                 emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: 0.0f32, y: 0.0f32 }, brush: solid(ts0.color) } })
                 restore(p)
             } else if ts0.letter_spacing != 0.0f64 || ts0.word_spacing != 0.0f64 {
                 paint_spaced(p, ts0, text, x, y)
             } else {
-                emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: f32(x), y: f32(y) }, brush: solid(ts0.color) } })
+                emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: f32(snap(x)), y: f32(snap(y)) }, brush: solid(ts0.color) } })
             }
         }
     }
@@ -1101,6 +1101,12 @@ fn paint_floats(p: *Painter, b: u32, ax: f64, ay: f64) {
 // Step 5: inline content of the container and of its in-flow block descendants: lines, markers, outlines.
 fn paint_inline_layer(p: *Painter, b: u32, ax: f64, ay: f64) {
     let bb = &p.l.boxes.items[usize(b)]
+    var ri = 0usize
+    while ri < p.l.rules.len {
+        let rr = p.l.rules.items[ri]
+        if rr.box == b { fill(p, ax + rr.x, ay + rr.y, rr.w, rr.h, rr.color) }
+        ri += 1usize
+    }
     paint_lines(p, b, ax, ay)
     var kid = bb.first
     while kid != layout.NONE {

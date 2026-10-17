@@ -15,6 +15,14 @@ fn len_of(it: *js.Interp, o: *js.Obj) -> (f64, err) {
     ret (n, e)
 }
 
+// CreateDataPropertyOrThrow.
+fn create_data(it: *js.Interp, o: *js.Obj, key: js.Key, v: js.Value) -> err {
+    let (done, de) = js.define_own(it, o, key, js.data_desc(v, js.P_DEFAULT))
+    if de != ok { ret de }
+    if !done { ret js.throw_type(it, "Cannot define property on the result array") }
+    ret ok
+}
+
 fn set_length(it: *js.Interp, o: *js.Obj, n: f64) -> err {
     let pe = js.put(it, js.obj_value(o), js.key_of("length"), js.num_value(n), true)
     ret pe
@@ -70,8 +78,70 @@ fn array_is_array(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     ret (js.bool_value(r), ok)
 }
 
+// ArrayCreate(len).
+fn array_create(it: *js.Interp, len: f64) -> (*js.Obj, err) {
+    if len > 4294967295.0f64 { ret (js.new_array(it), js.throw_range(it, "Invalid array length")) }
+    let a = js.new_array(it)
+    a.num = len
+    ret (a, ok)
+}
+
+// ArraySpeciesCreate(original, len): the result array of map / filter / slice / splice / concat / flat / flatMap.
+fn species_create(it: *js.Interp, orig: *js.Obj, len: f64) -> (*js.Obj, err) {
+    let (is_arr, ae) = js.is_array_e(it, js.obj_value(orig))
+    if ae != ok { ret (orig, ae) }
+    if !is_arr {
+        let (r0, e0) = array_create(it, len)
+        ret (r0, e0)
+    }
+    let (c0, ce) = js.get_prop(it, orig, js.key_of("constructor"), js.obj_value(orig))
+    if ce != ok { ret (orig, ce) }
+    var c = c0
+    if js.is_constructor(c) {
+        let co = js.as_object(c)
+        if co.realm != it && co.realm != js.null_interp() && co == co.realm.array_ctor { c = js.undefv() }
+    }
+    if js.is_object(c) {
+        let (sp, se) = js.get_prop(it, js.as_object(c), js.key_of_symbol(it.sym_species), c)
+        if se != ok { ret (orig, se) }
+        c = sp
+        if js.is_null(c) { c = js.undefv() }
+    }
+    if js.is_undefined(c) {
+        let (r1, e1) = array_create(it, len)
+        ret (r1, e1)
+    }
+    if !js.is_constructor(c) { ret (orig, js.throw_type(it, "object.constructor[Symbol.species] is not a constructor")) }
+    let (res, re) = js.construct(it, c, js.one_arg(it, js.num_value(len)), c)
+    if re != ok { ret (orig, re) }
+    ret (js.as_object(res), ok)
+}
+
+// The array an `Array.of` / `Array.from` call fills: `new this(len)` for a constructor `this`, else a plain array.
+fn array_target(it: *js.Interp, this_val: js.Value, with_len: bool, len: f64) -> (*js.Obj, err) {
+    if js.is_constructor(this_val) {
+        var cargs = js.zero_args()
+        if with_len { cargs = js.one_arg(it, js.num_value(len)) }
+        let (r, re) = js.construct(it, this_val, cargs, this_val)
+        if re != ok { ret (js.new_array(it), re) }
+        ret (js.as_object(r), ok)
+    }
+    let (arr, ae) = array_create(it, len)
+    ret (arr, ae)
+}
+
 fn array_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    ret (js.obj_value(js.array_from(it, args)), ok)
+    let (a, ae) = array_target(it, this_val, true, f64(args.len))
+    if ae != ok { ret (js.undefv(), ae) }
+    var k = 0usize
+    while k < args.len {
+        let de = create_data(it, a, js.key_of(js.number_to_string(it.a, f64(k))), args[k])
+        if de != ok { ret (js.undefv(), de) }
+        k += 1usize
+    }
+    let sl = set_length(it, a, f64(args.len))
+    if sl != ok { ret (js.undefv(), sl) }
+    ret (js.obj_value(a), ok)
 }
 
 fn array_from_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -79,12 +149,12 @@ fn array_from_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     let mapper = arg(args, 1usize)
     let this_arg = arg(args, 2usize)
     if !js.is_undefined(mapper) && !js.is_callable(mapper) { ret (js.undefv(), js.throw_type(it, "Array.from: mapper is not a function")) }
-    let out = js.new_array(it)
-    if js.is_nullish(src) { ret (js.undefv(), js.throw_type(it, "Array.from requires an array-like or iterable")) }
     let (m, me) = js.get_value(it, src, js.key_of_symbol(it.sym_iterator))
     if me != ok { ret (js.undefv(), me) }
     var k = 0usize
     if !js.is_nullish(m) {
+        let (out, oe) = array_target(it, this_val, false, 0.0f64)
+        if oe != ok { ret (js.undefv(), oe) }
         let (iter, ie) = js.get_iterator(it, src)
         if ie != ok { ret (js.undefv(), ie) }
         while true {
@@ -100,15 +170,23 @@ fn array_from_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
                 }
                 item = mv
             }
-            try js.array_push(it, out, item)
+            let (d, de) = js.define_own(it, out, js.key_of(js.number_to_string(it.a, f64(k))), js.data_desc(item, js.P_DEFAULT))
+            if de != ok {
+                let ce2 = js.iterator_close(it, iter)
+                ret (js.undefv(), de)
+            }
             k += 1usize
         }
+        let sl = set_length(it, out, f64(k))
+        if sl != ok { ret (js.undefv(), sl) }
         ret (js.obj_value(out), ok)
     }
     let (so, soe) = js.to_object(it, src)
     if soe != ok { ret (js.undefv(), soe) }
     let (len, le) = js.length_of(it, so)
     if le != ok { ret (js.undefv(), le) }
+    let (out2, oe2) = array_target(it, this_val, true, len)
+    if oe2 != ok { ret (js.undefv(), oe2) }
     while f64(k) < len {
         let (v2, ve2) = js.get_index(it, so, f64(k))
         if ve2 != ok { ret (js.undefv(), ve2) }
@@ -118,10 +196,13 @@ fn array_from_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
             if mve2 != ok { ret (js.undefv(), mve2) }
             item2 = mv2
         }
-        try js.array_push(it, out, item2)
+        let de2 = create_data(it, out2, js.key_of(js.number_to_string(it.a, f64(k))), item2)
+        if de2 != ok { ret (js.undefv(), de2) }
         k += 1usize
     }
-    ret (js.obj_value(out), ok)
+    let sl2 = set_length(it, out2, len)
+    if sl2 != ok { ret (js.undefv(), sl2) }
+    ret (js.obj_value(out2), ok)
 }
 
 fn array_push_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -240,7 +321,10 @@ fn array_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
     if se != ok { ret (js.undefv(), se) }
     let (end, ee) = rel_index(it, arg(args, 1usize), len, len)
     if ee != ok { ret (js.undefv(), ee) }
-    let out = js.new_array(it)
+    var count = end - start
+    if count < 0.0f64 { count = 0.0f64 }
+    let (out, oute) = species_create(it, o, count)
+    if oute != ok { ret (js.undefv(), oute) }
     var k = start
     var n = 0.0f64
     while k < end {
@@ -248,7 +332,7 @@ fn array_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
         if js.has_property(it, o, js.key_of(js.number_to_string(it.a, k))) {
             let (v, ve) = js.get_index(it, o, k)
             if ve != ok { ret (js.undefv(), ve) }
-            let (done, de) = js.define_own(it, out, js.key_of(js.number_to_string(it.a, n)), js.data_desc(v, js.P_DEFAULT))
+            let de = create_data(it, out, js.key_of(js.number_to_string(it.a, n)), v)
             if de != ok { ret (js.undefv(), de) }
         }
         k += 1.0f64
@@ -278,7 +362,8 @@ fn array_splice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     }
     var items: []const js.Value = js.zero_args()
     if args.len > 2usize { items = args[2usize..] }
-    let removed = js.new_array(it)
+    let (removed, removede) = species_create(it, o, delete_count)
+    if removede != ok { ret (js.undefv(), removede) }
     var k = 0.0f64
     while k < delete_count {
         try js.tick(it)
@@ -286,7 +371,7 @@ fn array_splice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
         if js.has_property(it, o, fk) {
             let (v, ve) = js.get_index(it, o, start + k)
             if ve != ok { ret (js.undefv(), ve) }
-            let (done, de) = js.define_own(it, removed, js.key_of(js.number_to_string(it.a, k)), js.data_desc(v, js.P_DEFAULT))
+            let de = create_data(it, removed, js.key_of(js.number_to_string(it.a, k)), v)
             if de != ok { ret (js.undefv(), de) }
         }
         k += 1.0f64
@@ -355,7 +440,8 @@ fn is_concat_spreadable(it: *js.Interp, v: js.Value) -> (bool, err) {
 fn array_concat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, oe) = js.to_object(it, this_val)
     if oe != ok { ret (js.undefv(), oe) }
-    let out = js.new_array(it)
+    let (out, oute) = species_create(it, o, 0.0f64)
+    if oute != ok { ret (js.undefv(), oute) }
     var n = 0.0f64
     var i = 0usize
     while i <= args.len {
@@ -374,14 +460,14 @@ fn array_concat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
                 if js.has_property(it, ito, js.key_of(js.number_to_string(it.a, k))) {
                     let (v, ve) = js.get_index(it, ito, k)
                     if ve != ok { ret (js.undefv(), ve) }
-                    let (done, de) = js.define_own(it, out, js.key_of(js.number_to_string(it.a, n)), js.data_desc(v, js.P_DEFAULT))
+                    let de = create_data(it, out, js.key_of(js.number_to_string(it.a, n)), v)
                     if de != ok { ret (js.undefv(), de) }
                 }
                 k += 1.0f64
                 n += 1.0f64
             }
         } else {
-            let (done2, de2) = js.define_own(it, out, js.key_of(js.number_to_string(it.a, n)), js.data_desc(item, js.P_DEFAULT))
+            let de2 = create_data(it, out, js.key_of(js.number_to_string(it.a, n)), item)
             if de2 != ok { ret (js.undefv(), de2) }
             n += 1.0f64
         }
@@ -595,7 +681,13 @@ fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind
     let this_arg = arg(args, 1usize)
     if kind == 1u8 && len > 4294967295.0f64 { ret (js.undefv(), js.throw_range(it, "Invalid array length")) }
     var out = js.new_array(it)
-    if kind == 1u8 { out.num = len }
+    if kind == 1u8 || kind == 2u8 {
+        var want = 0.0f64
+        if kind == 1u8 { want = len }
+        let (sp, spe) = species_create(it, o, want)
+        if spe != ok { ret (js.undefv(), spe) }
+        out = sp
+    }
     var out_n = 0.0f64
     let reverse = kind == 7u8 || kind == 8u8
     var k = 0.0f64
@@ -610,11 +702,11 @@ fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind
             let (r, re) = js.call_function(it, cb, this_arg, three_args(it, v, js.num_value(k), js.obj_value(o)))
             if re != ok { ret (js.undefv(), re) }
             if kind == 1u8 {
-                let (d, de) = js.define_own(it, out, key, js.data_desc(r, js.P_DEFAULT))
+                let de = create_data(it, out, key, r)
                 if de != ok { ret (js.undefv(), de) }
             } else if kind == 2u8 {
                 if js.to_boolean(r) {
-                    let (d2, de2) = js.define_own(it, out, js.key_of(js.number_to_string(it.a, out_n)), js.data_desc(v, js.P_DEFAULT))
+                    let de2 = create_data(it, out, js.key_of(js.number_to_string(it.a, out_n)), v)
                     if de2 != ok { ret (js.undefv(), de2) }
                     out_n += 1.0f64
                 }
@@ -935,7 +1027,8 @@ fn array_flat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
         if de != ok { ret (js.undefv(), de) }
         depth = js.to_integer(dn)
     }
-    let out = js.new_array(it)
+    let (out, oute) = species_create(it, o, 0.0f64)
+    if oute != ok { ret (js.undefv(), oute) }
     let (n, fe) = flatten_into(it, out, o, depth, js.undefv(), js.undefv(), 0.0f64)
     if fe != ok { ret (js.undefv(), fe) }
     ret (js.obj_value(out), ok)
@@ -947,7 +1040,8 @@ fn array_flat_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     let cb = arg(args, 0usize)
     let ce = cb_check(it, cb)
     if ce != ok { ret (js.undefv(), ce) }
-    let out = js.new_array(it)
+    let (out, oute) = species_create(it, o, 0.0f64)
+    if oute != ok { ret (js.undefv(), oute) }
     let (n, fe) = flatten_into(it, out, o, 1.0f64, cb, arg(args, 1usize), 0.0f64)
     if fe != ok { ret (js.undefv(), fe) }
     ret (js.obj_value(out), ok)
@@ -1027,6 +1121,7 @@ fn install_array(it: *js.Interp) {
     let e2 = js.define_data(it, proto, js.key_of("constructor"), js.obj_value(ctor), js.P_HIDDEN)
     let e3 = js.define_data(it, it.global, js.key_of("Array"), js.obj_value(ctor), js.P_HIDDEN)
     it.last = ctor
+    it.array_ctor = ctor
     js.add_method(it, it.last, "isArray", 1u32, array_is_array)
     js.add_method(it, it.last, "of", 0u32, array_of)
     js.add_method(it, it.last, "from", 1u32, array_from_fn)
