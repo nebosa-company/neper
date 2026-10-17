@@ -14,6 +14,7 @@
 // private block carved from it (`view_bytes`) that it rewinds on every paint.
 
 use e.data.list as list
+use e.fmt.css.geom as geom
 use e.fmt.css.layout as layout
 use e.fmt.css.paint as cpaint
 use e.fmt.css.sheet as sheet
@@ -40,6 +41,7 @@ use e.str
 use e.text.charset_cjk as cjk
 use e.text.fontset as fontset
 use e.ui.html_view as view
+use e.web.cssom as cssom
 use e.web.script as script
 
 error NotRenderable
@@ -58,7 +60,8 @@ type Page = struct {
     images: list.List[ImageEntry],
     renderer: *scene.Renderer, has_renderer: bool,
     view: *view.View,
-    ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32
+    ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32,
+    box_map: []u32, box_rev: u64, has_box_map: bool
 }
 
 // --- Small helpers.
@@ -708,6 +711,118 @@ fn fetch_text_hook(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
     ret (text, resp.status, true)
 }
 
+// The layout box of a node (layout.NONE when it has none: display none, comments).
+fn box_of(p: *Page, node: html.NodeId) -> u32 {
+    let v = p.view
+    if !p.has_box_map {
+        let (m, me) = mem.alloc[u32](p.pa, v.tree.nodes.len)
+        if me != ok { ret layout.NONE }
+        p.box_map = m
+        p.has_box_map = true
+        p.box_rev = 0u64
+    }
+    if p.box_rev != v.revision {
+        var i = 0usize
+        while i < p.box_map.len {
+            p.box_map[i] = layout.NONE
+            i += 1usize
+        }
+        var b = 0usize
+        while b < v.lay.boxes.len {
+            let bx = &v.lay.boxes.items[b]
+            if !bx.anonymous && bx.node != html.NONE && usize(bx.node) < p.box_map.len && p.box_map[usize(bx.node)] == layout.NONE { p.box_map[usize(bx.node)] = u32(b) }
+            b += 1usize
+        }
+        p.box_rev = v.revision
+    }
+    if usize(node) >= p.box_map.len { ret layout.NONE }
+    ret p.box_map[usize(node)]
+}
+
+// Scripts asking for geometry or style see the current document: a pending change is laid out first.
+fn flush_layout(p: *Page) {
+    if p.view.tree.version != p.seen_version { refresh(p) }
+}
+
+fn geom_hook(ctx: *void, node: u32, what: u8, out: []f64) -> bool {
+    let p = mem.cast[*Page](ctx)
+    flush_layout(p)
+    let v = p.view
+    if what == 4u8 {
+        out[0usize] = f64(v.width)
+        out[1usize] = f64(v.height)
+        out[2usize] = f64(v.scroll_x)
+        out[3usize] = f64(v.scroll_y)
+        out[4usize] = v.lay.doc_width
+        out[5usize] = v.lay.doc_height
+        ret true
+    }
+    let b = box_of(p, node)
+    if b == layout.NONE { ret false }
+    let l = &v.lay
+    let bx = &l.boxes.items[usize(b)]
+    if what == 0u8 {
+        let r = geom.bounding_rect(v.arena, l, b)
+        out[0usize] = r.x - f64(v.scroll_x)
+        out[1usize] = r.y - f64(v.scroll_y)
+        out[2usize] = r.w
+        out[3usize] = r.h
+        ret true
+    }
+    if what == 1u8 {
+        let pt = geom.offset_pos(l, b)
+        out[0usize] = pt.x
+        out[1usize] = pt.y
+        out[2usize] = bx.w
+        out[3usize] = bx.h
+        let op = geom.offset_parent(l, b)
+        out[4usize] = -1.0f64
+        if op != layout.NONE && l.boxes.items[usize(op)].node != html.NONE { out[4usize] = f64(l.boxes.items[usize(op)].node) }
+        ret true
+    }
+    if what == 2u8 {
+        let cs = geom.client_size(l, b)
+        out[0usize] = bx.border[3usize]
+        out[1usize] = bx.border[0usize]
+        out[2usize] = cs.x
+        out[3usize] = cs.y
+        ret true
+    }
+    let ss = geom.scroll_size(l, b)
+    out[0usize] = ss.x
+    out[1usize] = ss.y
+    ret true
+}
+
+fn style_hook(ctx: *void, node: u32, prop: str) -> (str, bool) {
+    let p = mem.cast[*Page](ctx)
+    flush_layout(p)
+    let v = p.view
+    if usize(node) >= v.styles.len { ret ("", false) }
+    let s = &v.styles[usize(node)]
+    let b = box_of(p, node)
+    if b != layout.NONE {
+        let bx = &v.lay.boxes.items[usize(b)]
+        // Used values: the content box (or border box) width and height, the used margins.
+        if str.eq(prop, "width") || str.eq(prop, "height") {
+            var w = bx.w
+            var h = bx.h
+            if s.box_sizing != .BorderBox {
+                w = bx.w - bx.border[1usize] - bx.border[3usize] - bx.padding[1usize] - bx.padding[3usize]
+                h = bx.h - bx.border[0usize] - bx.border[2usize] - bx.padding[0usize] - bx.padding[2usize]
+            }
+            if str.eq(prop, "width") { ret (cssom.px_text(p.pa, w), true) }
+            ret (cssom.px_text(p.pa, h), true)
+        }
+        if str.eq(prop, "margin-top") { ret (cssom.px_text(p.pa, bx.margin[0usize]), true) }
+        if str.eq(prop, "margin-right") { ret (cssom.px_text(p.pa, bx.margin[1usize]), true) }
+        if str.eq(prop, "margin-bottom") { ret (cssom.px_text(p.pa, bx.margin[2usize]), true) }
+        if str.eq(prop, "margin-left") { ret (cssom.px_text(p.pa, bx.margin[3usize]), true) }
+    }
+    let (text, has_value) = cssom.value(p.pa, s, prop)
+    ret (text, has_value)
+}
+
 // After scripts changed the document: style sheets, title and layout follow.
 fn refresh(p: *Page) {
     let v = p.view
@@ -725,6 +840,7 @@ fn start_scripts(p: *Page) {
     p.ctx = ctx
     p.scripted = true
     script.set_fetch(ctx, mem.cast[*void](p), fetch_text_hook)
+    script.set_view(ctx, mem.cast[*void](p), geom_hook, style_hook)
     p.seen_version = v.tree.version
     script.lifecycle(ctx, "run")
     let next = script.pump_once(ctx)
@@ -777,6 +893,10 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     p.client = client
     p.fonts = fonts
     p.has_renderer = false
+    p.scripted = false
+    p.has_box_map = false
+    p.box_rev = 0u64
+    p.seen_version = 0u64
     let (imgs, ie) = list.init[ImageEntry](a, 32usize)
     if ie != ok { ret (zero, ie) }
     p.images = imgs

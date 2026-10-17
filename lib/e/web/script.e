@@ -19,9 +19,15 @@ use e.web.dom_js as dom_js
 // A synchronous fetch supplied by the page: (context, url, referrer) -> (body text, status, reached the server).
 type FetchFn = fn(*void, str, str) -> (str, u16, bool)
 
+// Layout and style answers from the page that owns the view: node geometry (`what` 0 bounding client rect, 1 offset box,
+// 2 client box, 3 scroll size, 4 viewport and scroll position; results in the 8 numbers) and computed style text.
+type GeomFn = fn(*void, u32, u8, []f64) -> bool
+type StyleFn = fn(*void, u32, str) -> (str, bool)
+
 type Host = struct {
     d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool,
-    fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool
+    fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool,
+    view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool
 }
 
 fn host_of(it: *js.Interp) -> *Host { ret mem.cast[*Host](it.host) }
@@ -553,6 +559,38 @@ fn n_fetch_text(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     ret (js.obj_value(arr), ok)
 }
 
+// geom(id, what): an array of numbers for the node, or null when it has no box.
+fn n_geom(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    if !h.has_view { ret (js.null_value(), ok) }
+    let id = nid(arg(args, 0usize))
+    if !valid(h, id) { ret (js.undefv(), bad_node(it)) }
+    let (what, we) = js.to_number(it, arg(args, 1usize))
+    if we != ok { ret (js.undefv(), we) }
+    var out: [8]f64 = zero
+    if !h.geom_fn(h.view_ctx, id, u8(what), out[0usize..8usize]) { ret (js.null_value(), ok) }
+    let arr = js.new_array(it)
+    var i = 0usize
+    while i < 8usize {
+        try js.array_push(it, arr, js.num_value(out[i]))
+        i += 1usize
+    }
+    ret (js.obj_value(arr), ok)
+}
+
+// computed(id, property): the computed value text, or undefined when the property is not modelled.
+fn n_computed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    if !h.has_view { ret (js.undefv(), ok) }
+    let id = nid(arg(args, 0usize))
+    if !valid(h, id) { ret (js.undefv(), bad_node(it)) }
+    let (prop, pe) = sarg(it, args, 1usize)
+    if pe != ok { ret (js.undefv(), pe) }
+    let (text, known) = h.style_fn(h.view_ctx, id, prop)
+    if !known { ret (js.undefv(), ok) }
+    ret (js.str_value(text), ok)
+}
+
 fn n_base(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     ret (js.str_value(host_of(it).base), ok)
 }
@@ -687,6 +725,8 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "base", 0u32, n_base)
     js.add_method(it, n, "runJobs", 0u32, n_run_jobs)
     js.add_method(it, n, "fetchText", 1u32, n_fetch_text)
+    js.add_method(it, n, "geom", 2u32, n_geom)
+    js.add_method(it, n, "computed", 2u32, n_computed)
     js.add_method(it, n, "urlParse", 2u32, n_url_parse)
     js.add_method(it, n, "urlSet", 3u32, n_url_set)
     js.add_method(it, n, "navigate", 1u32, n_navigate)
@@ -723,6 +763,15 @@ fn set_fetch(it: *js.Interp, ctx: *void, f: FetchFn) {
     h.fetch_ctx = ctx
     h.fetch_fn = f
     h.has_fetch = true
+}
+
+// Gives scripts the page's layout and style (getBoundingClientRect, getComputedStyle, offset and client sizes).
+fn set_view(it: *js.Interp, ctx: *void, g: GeomFn, st: StyleFn) {
+    let h = host_of(it)
+    h.view_ctx = ctx
+    h.geom_fn = g
+    h.style_fn = st
+    h.has_view = true
 }
 
 // The pending navigation requested by `location` assignments: (address, requested).
