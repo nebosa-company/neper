@@ -112,6 +112,24 @@ fn escape_source(it: *js.Interp, src: str) -> str {
     ret str.done(&out)
 }
 
+// The UTF-16 units of a long subject, kept for the next match: scanning a big string with a global regexp would otherwise convert it
+// once per match.
+fn subject_units(it: *js.Interp, s: str) -> []const u16 {
+    if s.len < 128usize { ret to_units(it.a, s) }
+    if it.ux_src.len == s.len && str.eq(it.ux_src, s) { ret it.ux_units }
+    let units = to_units(it.a, s)
+    let (copy, ce) = mem.alloc[u8](it.a, s.len)
+    if ce != ok { ret units }
+    var i = 0usize
+    while i < s.len {
+        copy[i] = s[i]
+        i += 1usize
+    }
+    it.ux_src = copy[0usize..s.len]
+    it.ux_units = units
+    ret units
+}
+
 // Builds a RegExp object for `source`/`flags` with the given prototype.
 fn regexp_create(it: *js.Interp, proto: *js.Obj, source: str, flags: str) -> (js.Value, err) {
     let units = to_units(it.a, source)
@@ -210,7 +228,7 @@ fn builtin_exec(it: *js.Interp, r: *js.Obj, s: str) -> (js.Value, err) {
     let global = c.re.global
     let sticky = c.re.sticky
     if !global && !sticky { last_index = 0.0f64 }
-    let units = to_units(it.a, s)
+    let units = subject_units(it, s)
     if last_index > f64(units.len) {
         if global || sticky {
             let pe = js.put(it, js.obj_value(r), js.key_of("lastIndex"), js.num_value(0.0f64), true)

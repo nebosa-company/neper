@@ -53,8 +53,16 @@ fn from_document(a: *mem.Arena, doc: *const html.Document, spare: usize) -> (Dom
     ret (Dom { a: a, nodes: table, used: doc.nodes.len, root: doc.root, quirks: doc.quirks, version: 0u64 }, ok)
 }
 
+// The parser reserves its node table up front and the arena never gives it back, so bound it by what the markup can build.
+fn sized(options: html.Options, source: str) -> html.Options {
+    var o = options
+    let cap = source.len * 8usize + 256usize
+    if o.max_nodes > cap { o.max_nodes = cap }
+    ret o
+}
+
 fn parse(a: *mem.Arena, source: str, options: html.Options, spare: usize) -> (Dom, err) {
-    let (doc, parse_error) = html.parse(a, source, options)
+    let (doc, parse_error) = html.parse(a, source, sized(options, source))
     if parse_error != ok { ret (zero, parse_error) }
     let (made, made_error) = from_document(a, &doc, spare)
     ret (made, made_error)
@@ -62,7 +70,7 @@ fn parse(a: *mem.Arena, source: str, options: html.Options, spare: usize) -> (Do
 
 // As `parse`, with scripting on or off (with it on, `<noscript>` content is raw text, as in a browser that runs scripts).
 fn parse_with(a: *mem.Arena, source: str, options: html.Options, spare: usize, scripting: bool) -> (Dom, err) {
-    let (doc, parse_error) = html.parse_with(a, source, options, scripting)
+    let (doc, parse_error) = html.parse_with(a, source, sized(options, source), scripting)
     if parse_error != ok { ret (zero, parse_error) }
     let (made, made_error) = from_document(a, &doc, spare)
     ret (made, made_error)
@@ -457,7 +465,7 @@ fn inner_html(a: *mem.Arena, d: *const Dom, id: NodeId) -> (str, err) {
 
 // Replaces the children of element `id` with the parse of `markup` in its context.
 fn set_inner_html(d: *Dom, id: NodeId, markup: str, options: html.Options) -> err {
-    let (frag, frag_error) = html.parse_fragment(d.a, markup, d.nodes[usize(id)].name, d.nodes[usize(id)].namespace, options)
+    let (frag, frag_error) = html.parse_fragment(d.a, markup, d.nodes[usize(id)].name, d.nodes[usize(id)].namespace, sized(options, markup))
     if frag_error != ok { ret frag_error }
     remove_children(d, id)
     var kid = frag.nodes[usize(frag.root)].first_child

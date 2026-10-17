@@ -86,7 +86,7 @@ type NsData = struct { entries: []const NsEntry }
 // The Proxy internal methods live in b_proxy.e; `op` is one of PX_* (see the end of this file).
 type ProxyHook = fn(*Interp, u8, *Obj, Key, Value, Value) -> (Value, err)
 
-type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool, is_var: bool }
+type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool, is_var: bool, captured: bool }
 
 // Binding flags.
 const B_CONST: u8 = 1u8
@@ -127,7 +127,7 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize,
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp
 }
@@ -2331,6 +2331,16 @@ fn new_env(it: *Interp, parent: *Env) -> *Env {
     ret e
 }
 
+// A function created in `e` keeps it, and every scope outside it, alive: loops then give each iteration a scope of its own.
+fn mark_captured(e: *Env) {
+    var cur = e
+    let none = null_env()
+    while cur != none && !cur.captured {
+        cur.captured = true
+        cur = cur.parent
+    }
+}
+
 fn null_env() -> *Env {
     var none: *Env = zero
     ret none
@@ -2572,6 +2582,7 @@ fn make_function(it: *Interp, f: *Frame, fid: u32) -> (*Obj, err) {
     fo.prog = f.prog
     fo.node = fid
     fo.env = f.env
+    mark_captured(f.env)
     let is_arrow = (n.flags & ast.F_ARROW) != 0u16 && (n.flags & ast.F_METHOD) == 0u16
     let is_method = (n.flags & ast.F_METHOD) != 0u16
     let is_gen = (n.flags & ast.F_GENERATOR) != 0u16
@@ -2868,6 +2879,13 @@ fn call_js(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_targe
     if it.mem_limit != 0usize && mem.mark(it.a) > it.mem_limit { ret (undefv(), throw_range(it, "out of memory")) }
     f.env = new_env(it, fo.env)
     if f.env == null_env() { ret (undefv(), throw_range(it, "out of memory")) }
+    var env_cap = usize(n.b) + usize(n.hoist_count)
+    if (n.flags & ast.F_USES_ARGS) != 0u16 && !is_arrow { env_cap += 1usize }
+    if (n.flags & ast.F_EXPR_BODY) == 0u16 {
+        let body = fo.prog.nodes[usize(n.c)]
+        env_cap += lexical_count(&f, body.a, body.b)
+    }
+    presize_env(it, f.env, env_cap)
     f.func = fo
     f.has_func = true
     f.args = args
@@ -4597,6 +4615,7 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
         ctor.prog = f.prog
         ctor.node = ast.NONE
         ctor.env = f.env
+        mark_captured(f.env)
         ctor.native = default_constructor
         ctor.has_native = true
         let de = define_data(it, ctor, key_of("length"), num_value(0.0f64), P_CONFIGURABLE)
@@ -4897,6 +4916,28 @@ fn declare_pattern_names(it: *Interp, f: *Frame, pid: u32, flags: u8) -> err {
     ret ok
 }
 
+// How many names the lexical declarations among these statements bind, at least (a destructuring pattern may bind more).
+fn lexical_count(f: *const Frame, first: u32, count: u32) -> usize {
+    var i = 0usize
+    var n = 0usize
+    while i < usize(count) {
+        let sid = f.prog.kids[usize(first) + i]
+        let sn = f.prog.nodes[usize(sid)]
+        i += 1usize
+        if sn.kind == ast.N_VAR && sn.op != ast.D_VAR { n += usize(sn.b) }
+        if sn.kind == ast.N_CLASS && (sn.flags & ast.F_DECL) != 0u16 { n += 1usize }
+        if sn.kind == ast.N_FUNC && (sn.flags & ast.F_DECL) != 0u16 { n += 1usize }
+    }
+    ret n
+}
+
+// A scope's binding list is sized up front: growing it by doubling leaves every outgrown buffer behind in the arena.
+fn presize_env(it: *Interp, e: *Env, cap: usize) {
+    if cap == 0usize { ret }
+    let (v, ve) = list.init[Binding](it.a, cap)
+    if ve == ok { e.vars = v }
+}
+
 fn has_lexical(f: *const Frame, first: u32, count: u32) -> bool {
     var i = 0usize
     while i < usize(count) {
@@ -4942,6 +4983,7 @@ fn exec_block(it: *Interp, f: *Frame, bn: ast.Node) -> (Completion, err) {
     let saved = f.env
     if has_lexical(f, bn.a, bn.b) {
         f.env = new_env(it, saved)
+        presize_env(it, f.env, lexical_count(f, bn.a, bn.b))
         scoped = true
         let he = hoist_declarations(it, f, bn.a, bn.b)
         if he != ok {
@@ -5246,9 +5288,10 @@ fn exec_for(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Comple
     }
     var last = undefv()
     while true {
-        if per_iteration {
+        if per_iteration && f.env.captured {
             // A fresh scope per iteration copies the loop variables.
             let fresh = new_env(it, saved)
+            presize_env(it, fresh, f.env.vars.len)
             var v2 = 0usize
             while v2 < f.env.vars.len {
                 let pe = list.push[Binding](&fresh.vars, f.env.vars.items[v2])
@@ -5278,8 +5321,9 @@ fn exec_for(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Comple
             }
             if leave { break }
         }
-        if per_iteration {
+        if per_iteration && f.env.captured {
             let fresh2 = new_env(it, saved)
+            presize_env(it, fresh2, f.env.vars.len)
             var v3 = 0usize
             while v3 < f.env.vars.len {
                 let pe2 = list.push[Binding](&fresh2.vars, f.env.vars.items[v3])
@@ -5673,6 +5717,22 @@ fn eval_source(it: *Interp, source: str) -> (Value, err) {
     cell[0usize].url = it.script_url
     let (rt1, re1) = run_program(it, &cell[0usize])
     ret (rt1, re1)
+}
+
+// A parsed program that several realms can run (the tree is read-only), so each frame need not parse the page runtime again.
+fn parse_shared(it: *Interp, source: str) -> (*void, err) {
+    let (parsed, pe) = jsparse.parse_program(it.a, source)
+    if pe != ok { ret (mem.cast[*void](it), throw_syntax(it, str_concat(it, "SyntaxError: ", parsed.message))) }
+    let (cell, ce) = mem.alloc[ast.Program](it.a, 1usize)
+    if ce != ok { ret (mem.cast[*void](it), throw_range(it, "out of memory")) }
+    cell[0usize] = parsed.program
+    cell[0usize].url = it.script_url
+    ret (mem.cast[*void](&cell[0usize]), ok)
+}
+
+fn run_shared(it: *Interp, prog: *void) -> (Value, err) {
+    let (r, e) = run_program(it, mem.cast[*ast.Program](prog))
+    ret (r, e)
 }
 
 // `eval(source)` called directly: runs in the caller's scope (a fresh scope in strict code).

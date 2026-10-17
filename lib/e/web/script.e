@@ -36,7 +36,7 @@ type Host = struct {
     fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool,
     view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool,
     net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32,
-    parent: *js.Interp, has_parent: bool, children: list.List[*js.Interp]
+    parent: *js.Interp, has_parent: bool, children: list.List[*js.Interp], dom_prog: *void, has_dom_prog: bool
 }
 
 fn host_of(it: *js.Interp) -> *Host { ret mem.cast[*Host](it.host) }
@@ -1150,10 +1150,20 @@ fn new_context_in(a: *mem.Arena, d: *dom.Dom, base: str, donor: *js.Interp) -> (
     let mie = module.install(it, load_module_hook)
     it.host = mem.cast[*void](&cell[0usize])
     install_natives(it)
-    let (src, se) = dom_js.source(a)
-    if se != ok { ret (it, se) }
+    // The page runtime is parsed once and shared by every frame's context.
+    if donor != js.null_interp() && host_of(donor).has_dom_prog {
+        cell[0usize].dom_prog = host_of(donor).dom_prog
+        cell[0usize].has_dom_prog = true
+    } else {
+        let (src, se) = dom_js.source(a)
+        if se != ok { ret (it, se) }
+        let (pp, ppe) = js.parse_shared(it, src)
+        if ppe != ok { ret (it, ppe) }
+        cell[0usize].dom_prog = pp
+        cell[0usize].has_dom_prog = true
+    }
     it.step_limit = 300000000u64
-    let (v, e) = js.eval_source(it, src)
+    let (v, e) = js.run_shared(it, cell[0usize].dom_prog)
     it.step_limit = 0u64
     it.steps = 0u64
     if e != ok { ret (it, e) }
