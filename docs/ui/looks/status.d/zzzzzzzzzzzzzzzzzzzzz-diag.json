@@ -1,0 +1,16 @@
+{
+ "label": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/syslink.png",
+    "notes": "Diag 16 (scripts/looks_dark_native.py: each 1x native dark capture cut to its control rectangle plus 3 px and searched at every whole-pixel offset in the dark label, syslink and native_dark sheets, nothing cut from ours; reference flat pixel = run of 11 or more, grown 1 px; off above 2 levels; excluded only glyph pixels within 2 px of text ink): label-rest 1 and label-disabled 1 px (one ClearType fringe pixel each), syslink-rest, hover and disabled 0 px, syslink-focus 2 px (the T glyph's top edge, greyscale against ClearType). Audit 7's 8 to 10 px on the four SysLink captures came from searching sheets that do not hold windows-dark/syslink.png; at its own cell they are within 2 px. The sheets re-rendered from master are equal to these (the stale ones were the combo, image combo and tree sheets, which carry no label capture). Upgraded from review. | Audit 7: label-rest 2 and label-disabled 1 px, but the four syslink captures stayed 8 to 10 px off at the placement it tried. | Round 15 (own comparer, dark: 11 px runs plus 8-neighbour flat pixels, ink more than 60 levels from the background grown 2 px excluded): label-rest and label-disabled 0 flat px off (windows-dark/native_dark.png); the four SysLink captures now have a cell (windows-dark/syslink.png, control.windows_syslink) with underlines (row 27) and the focus rectangle (66,14)-(93,28) exact. Hover is the rest look in the capture. The sheet is rendered by examples/looks/syslink.e.",
+    "gaps": [
+     "Unverified: other backgrounds, rotated (no capture)",
+     "The link and plain runs are grayscale and thinner than the ClearType captures: glyph edge pixels differ (1 to 2 px per capture outside the 2 px text zone), ink boxes agree within 1 px",
+     "Neper has no link label: the sheet's Neper look shows the sentence as plain text"
+    ]
+   }
+  }
+ }
+}
