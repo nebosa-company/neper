@@ -3639,6 +3639,11 @@ fn flex_is_row(s: *const style.Style) -> bool { ret s.flex_direction == .Row || 
 
 fn flex_gap(len: style.Len, basis: f64) -> f64 { ret maxf(0.0f64, resolve_or(len, basis, 0.0f64)) }
 
+// A scroll container (`hidden`, `scroll`, `auto`): `visible` and `clip` do not make one.
+fn is_scroll_container(s: *const style.Style) -> bool {
+    ret s.overflow_x == .Hidden || s.overflow_x == .Scroll || s.overflow_x == .Auto || s.overflow_y == .Hidden || s.overflow_y == .Scroll || s.overflow_y == .Auto
+}
+
 fn flex_item_align(cs: *const style.Style, is: *const style.Style) -> style.Align {
     var a = is.align_self
     if a == .Auto { a = cs.align_items }
@@ -3847,7 +3852,7 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             // A column item's content height depends on its width.
             let stretch = items[i].align == .Stretch
             let w = flex_cross_width(l, id, cw, stretch)
-            if basis < 0.0f64 || spec_main < 0.0f64 {
+            if basis < 0.0f64 || spec_main < 0.0f64 || (ks.min_height.kind == .Auto && !is_scroll_container(ks)) {
                 flex_place_item(l, id, w, -1.0f64)
                 let auto_h = bx(l, id).h - vertical_extras(bx(l, id))
                 content_min = auto_h
@@ -3867,7 +3872,7 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let (maxv, has_max) = resolve_len(max_len, main_def)
         if min_len.kind == .Px && has_min {
             if row { min_main = to_content_w(l, id, minv) } else { min_main = to_content_h(l, id, minv) }
-        } else if min_len.kind == .Auto && ks.overflow_x == .Visible && ks.overflow_y == .Visible {
+        } else if min_len.kind == .Auto && !is_scroll_container(ks) {
             min_main = content_min
             if spec_main >= 0.0f64 { min_main = minf(min_main, spec_main) }
         }
