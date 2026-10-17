@@ -4536,7 +4536,7 @@ fn inf() -> f64 { ret 1000000000.0f64 }
 // 6 fit-content(limit).
 type SizeFn = struct { kind: u8, v: f64 }
 
-type GTrack = struct { min: SizeFn, max: SizeFn, base: f64, limit: f64, pos: f64 }
+type GTrack = struct { min: SizeFn, max: SizeFn, base: f64, limit: f64, pos: f64, collapsed: bool, fit: bool }
 
 type GName = struct { name: str, line: i32 }
 
@@ -4606,7 +4606,7 @@ fn gp_size(gp: *GridParse, tok: str) -> (SizeFn, bool) {
 
 fn gp_track(gp: *GridParse, tok: str, out: *list.List[GTrack]) -> bool {
     let t = cv.lower(gp.c.a, cv.trim_ws(tok))
-    var tr = GTrack { min: SizeFn { kind: 3u8, v: 0.0f64 }, max: SizeFn { kind: 3u8, v: 0.0f64 }, base: 0.0f64, limit: inf(), pos: 0.0f64 }
+    var tr = GTrack { min: SizeFn { kind: 3u8, v: 0.0f64 }, max: SizeFn { kind: 3u8, v: 0.0f64 }, base: 0.0f64, limit: inf(), pos: 0.0f64, collapsed: false, fit: false }
     if str.starts_with(t, "minmax(") && str.ends_with(t, ")") {
         let parts = cv.split_top_level_commas(gp.c.a, t[7usize..t.len - 1usize])
         if parts.len != 2usize { ret false }
@@ -4690,9 +4690,17 @@ fn gp_list(gp: *GridParse, text: str, out: *list.List[GTrack], names: *list.List
                 if good == ok && cnt >= 1i64 { n = cnt }
             }
             var rep = 0i64
+            let first_rep = out.len
             while rep < n && out.len < 1000usize {
                 gp_list(gp, body, out, names)
                 rep += 1i64
+            }
+            if str.eq(count_text, "auto-fit") {
+                var fk = first_rep
+                while fk < out.len {
+                    out.items[fk].fit = true
+                    fk += 1usize
+                }
             }
         } else {
             let added = gp_track(gp, tok, out)
@@ -5251,6 +5259,41 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
         if k < rtr.len { rt[k] = rtr.items[k] } else if k >= usize(er) { rt[k] = grid_make_track(&auto_rows, k - usize(er)) } else { rt[k] = grid_make_track(&auto_rows, 0usize) }
         k += 1usize
     }
+    // `auto-fit` tracks no item lands in collapse to nothing.
+    k = 0usize
+    while k < nc {
+        if ct[k].fit {
+            var used = false
+            var ii = 0usize
+            while ii < n {
+                if usize(items[ii].cs) <= k && k < usize(items[ii].cs + items[ii].cn) { used = true }
+                ii += 1usize
+            }
+            if !used {
+                ct[k].collapsed = true
+                ct[k].min = SizeFn { kind: 0u8, v: 0.0f64 }
+                ct[k].max = SizeFn { kind: 0u8, v: 0.0f64 }
+            }
+        }
+        k += 1usize
+    }
+    k = 0usize
+    while k < nr {
+        if rt[k].fit {
+            var used2 = false
+            var ij = 0usize
+            while ij < n {
+                if usize(items[ij].rs) <= k && k < usize(items[ij].rs + items[ij].rn) { used2 = true }
+                ij += 1usize
+            }
+            if !used2 {
+                rt[k].collapsed = true
+                rt[k].min = SizeFn { kind: 0u8, v: 0.0f64 }
+                rt[k].max = SizeFn { kind: 0u8, v: 0.0f64 }
+            }
+        }
+        k += 1usize
+    }
     g.cols = ct
     g.rows = rt
     g.cnames = cnames
@@ -5379,7 +5422,7 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
     if avail >= 0.0f64 {
         var round = 0usize
         while round < 16usize {
-            var used = gap * f64(n - 1usize)
+            var used = gaps_of(tr, n, gap)
             var growing = 0usize
             t = 0usize
             while t < n {
@@ -5413,7 +5456,7 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
         if avail >= 0.0f64 {
             var guard = 0usize
             while guard < 16usize {
-                var left = avail - gap * f64(n - 1usize)
+                var left = avail - gaps_of(tr, n, gap)
                 var factors = 0.0f64
                 t = 0usize
                 while t < n {
@@ -5473,7 +5516,7 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
     }
     // Stretch the auto tracks over any space left.
     if stretch && avail >= 0.0f64 {
-        var used2 = gap * f64(n - 1usize)
+        var used2 = gaps_of(tr, n, gap)
         var autos = 0usize
         t = 0usize
         while t < n {
@@ -5492,6 +5535,28 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
     }
 }
 
+// The tracks that take part in the gutters: a collapsed track merges its two gutters into one.
+fn gaps_of(tr: []GTrack, n: usize, gap: f64) -> f64 {
+    var v = 0usize
+    var t = 0usize
+    while t < n {
+        if !tr[t].collapsed { v += 1usize }
+        t += 1usize
+    }
+    if v > 1usize { ret gap * f64(v - 1usize) }
+    ret 0.0f64
+}
+
+fn visible_tracks(tr: []GTrack, from: usize, to: usize) -> usize {
+    var v = 0usize
+    var t = from
+    while t < to {
+        if !tr[t].collapsed { v += 1usize }
+        t += 1usize
+    }
+    ret v
+}
+
 fn tracks_total(tr: []GTrack, n: usize, gap: f64) -> f64 {
     var sum = 0.0f64
     var t = 0usize
@@ -5499,28 +5564,29 @@ fn tracks_total(tr: []GTrack, n: usize, gap: f64) -> f64 {
         sum += tr[t].base
         t += 1usize
     }
-    if n > 1usize { sum += gap * f64(n - 1usize) }
+    let vis = visible_tracks(tr, 0usize, n)
+    if vis > 1usize { sum += gap * f64(vis - 1usize) }
     ret sum
 }
 
-// Track positions with the content distribution (`justify-content` / `align-content`) over a definite size.
 fn position_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, mode: style.Align) {
     var lead = 0.0f64
     var spacing = 0.0f64
     let free = avail - tracks_total(tr, n, gap)
+    let vis = visible_tracks(tr, 0usize, n)
     if avail >= 0.0f64 && n > 0usize {
         if mode == .End || mode == .FlexEnd || mode == .Right {
             lead = free
         } else if mode == .Center {
             lead = free / 2.0f64
         } else if free > 0.0f64 {
-            if mode == .SpaceBetween && n > 1usize {
-                spacing = free / f64(n - 1usize)
-            } else if mode == .SpaceAround {
-                spacing = free / f64(n)
+            if mode == .SpaceBetween && vis > 1usize {
+                spacing = free / f64(vis - 1usize)
+            } else if mode == .SpaceAround && vis > 0usize {
+                spacing = free / f64(vis)
                 lead = spacing / 2.0f64
             } else if mode == .SpaceEvenly {
-                spacing = free / f64(n + 1usize)
+                spacing = free / f64(vis + 1usize)
                 lead = spacing
             }
         }
@@ -5529,18 +5595,24 @@ fn position_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, mode: style.Ali
     var t = 0usize
     while t < n {
         tr[t].pos = cursor
-        cursor += tr[t].base + gap + spacing
+        if tr[t].collapsed {
+            cursor += tr[t].base
+        } else {
+            cursor += tr[t].base + gap + spacing
+        }
         t += 1usize
     }
 }
 
 fn grid_area_size(tr: []GTrack, start: i32, span: i32, gap: f64) -> f64 {
-    var sum = gap * f64(span - 1i32)
+    var sum = 0.0f64
     var q = usize(start)
     while q < usize(start + span) {
         sum += tr[q].base
         q += 1usize
     }
+    let vis = visible_tracks(tr, usize(start), usize(start + span))
+    if vis > 1usize { sum += gap * f64(vis - 1usize) }
     ret sum
 }
 
