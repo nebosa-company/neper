@@ -5842,7 +5842,13 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         g.items[i].rmax = outer
         i += 1usize
     }
-    size_tracks(g.rows, g.nr, g.gap_r, ch, g.items, g.n, false, false, stretch_rows && ch >= 0.0f64)
+    // An automatic height still stretches the rows up to the container's `min-height`.
+    var ch_fill = ch
+    if ch_fill < 0.0f64 && cs.min_height.kind == .Px {
+        let (mhv, has_mh) = resolve_len(cs.min_height, -1.0f64)
+        if has_mh && mhv > 0.0f64 { ch_fill = to_content_h(l, b, mhv) }
+    }
+    size_tracks(g.rows, g.nr, g.gap_r, ch_fill, g.items, g.n, false, false, stretch_rows && ch_fill >= 0.0f64)
     position_tracks(g.cols, g.nc, g.gap_c, cw, cs.justify_content)
     position_tracks(g.rows, g.nr, g.gap_r, ch, cs.align_content)
     let bb0 = bx(l, b)
