@@ -73,7 +73,7 @@ type Layout = struct {
     root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64,
     floats: list.List[FloatRec], tables: list.List[TableData],
     counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize,
-    vmode: u8, tr1: []style.Style, tr2: []style.Style
+    vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom]
 }
 
 // A float placed in a block formatting context, in the coordinates of the context's root content box.
@@ -4940,7 +4940,14 @@ fn item_axis_specs(a: *mem.Arena, s: *const style.Style, col: bool) -> (LineSpec
 
 type Grid = struct {
     cols: []GTrack, rows: []GTrack, nc: usize, nr: usize,
-    items: []GItem, n: usize, gap_c: f64, gap_r: f64
+    items: []GItem, n: usize, gap_c: f64, gap_r: f64,
+    cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32
+}
+
+// A laid-out grid's track geometry, kept so absolutely positioned children can use their grid area as containing block.
+type GridGeom = struct {
+    box: u32, nc: usize, nr: usize, cpos: []f64, csz: []f64, rpos: []f64, rsz: []f64,
+    cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32
 }
 
 fn occ_free(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize) -> bool {
@@ -5246,6 +5253,10 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     }
     g.cols = ct
     g.rows = rt
+    g.cnames = cnames
+    g.rnames = rnames
+    g.ec = ec
+    g.er = er
     ret (g, true)
 }
 
@@ -5655,8 +5666,76 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let last = g.rows[g.nr - 1usize]
         total = maxf(total, last.pos + last.base)
     }
+    // Keep the track geometry for absolutely positioned children.
+    let (cpos, cpe) = mem.alloc[f64](l.a, g.nc + 1usize)
+    let (csz, cse) = mem.alloc[f64](l.a, g.nc + 1usize)
+    let (rpos, rpe) = mem.alloc[f64](l.a, g.nr + 1usize)
+    let (rsz, rse) = mem.alloc[f64](l.a, g.nr + 1usize)
+    if cpe == ok && cse == ok && rpe == ok && rse == ok {
+        var q = 0usize
+        while q < g.nc {
+            cpos[q] = g.cols[q].pos
+            csz[q] = g.cols[q].base
+            q += 1usize
+        }
+        q = 0usize
+        while q < g.nr {
+            rpos[q] = g.rows[q].pos
+            rsz[q] = g.rows[q].base
+            q += 1usize
+        }
+        let gg = GridGeom { box: b, nc: g.nc, nr: g.nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: g.ec, er: g.er }
+        let gp2 = list.push[GridGeom](&l.grids, gg)
+    }
     ret total
 }
+
+// The grid area an absolutely positioned child of grid container `gb` names, as (found, x0, x1, y0, y1) relative to the
+// container's content box; an `auto` edge falls back to the padding box (`pw` x `ph` around the content box).
+fn grid_abs_area(l: *Layout, gb: u32, child: u32, pw: f64, ph: f64, ox: f64, oy: f64) -> (bool, f64, f64, f64, f64) {
+    var gi = l.grids.len
+    var found = false
+    var geom: GridGeom = zero
+    while gi > 0usize && !found {
+        gi -= 1usize
+        if l.grids.items[gi].box == gb {
+            geom = l.grids.items[gi]
+            found = true
+        }
+    }
+    if !found || geom.nc == 0usize || geom.nr == 0usize { ret (false, 0.0f64, 0.0f64, 0.0f64, 0.0f64) }
+    let ks = bstyle(l, child)
+    let (sc, ecs) = item_axis_specs(l.a, ks, true)
+    let (sr, ers) = item_axis_specs(l.a, ks, false)
+    var x0 = -ox
+    var x1 = pw - ox
+    var y0 = -oy
+    var y1 = ph - oy
+    var cnl = geom.cnames
+    var rnl = geom.rnames
+    let c0 = resolve_line(&cnl, geom.ec, sc, false, l.a)
+    let c1 = resolve_line(&cnl, geom.ec, ecs, true, l.a)
+    let r0 = resolve_line(&rnl, geom.er, sr, false, l.a)
+    let r1 = resolve_line(&rnl, geom.er, ers, true, l.a)
+    if c0 >= 1i32 && usize(c0) <= geom.nc + 1usize {
+        let i0 = usize(c0 - 1i32)
+        if i0 < geom.nc { x0 = geom.cpos[i0] } else { x0 = geom.cpos[geom.nc - 1usize] + geom.csz[geom.nc - 1usize] }
+    }
+    if c1 >= 1i32 && usize(c1) <= geom.nc + 1usize {
+        let i1 = usize(c1 - 1i32)
+        if i1 < geom.nc { x1 = geom.cpos[i1] } else { x1 = geom.cpos[geom.nc - 1usize] + geom.csz[geom.nc - 1usize] }
+    }
+    if r0 >= 1i32 && usize(r0) <= geom.nr + 1usize {
+        let j0 = usize(r0 - 1i32)
+        if j0 < geom.nr { y0 = geom.rpos[j0] } else { y0 = geom.rpos[geom.nr - 1usize] + geom.rsz[geom.nr - 1usize] }
+    }
+    if r1 >= 1i32 && usize(r1) <= geom.nr + 1usize {
+        let j1 = usize(r1 - 1i32)
+        if j1 < geom.nr { y1 = geom.rpos[j1] } else { y1 = geom.rpos[geom.nr - 1usize] + geom.rsz[geom.nr - 1usize] }
+    }
+    ret (true, x0, x1, y0, y1)
+}
+
 
 // --- Multi-column layout (CSS Multicol 3): the content is laid out as one tall column at the column width and its
 // lines and blocks are then moved into balanced columns. Boxes are not fragmented: a block that straddles a column break
@@ -5850,6 +5929,21 @@ fn layout_abs(l: *Layout, b: u32) {
         cb_w = l.viewport_width
         cb_h = l.viewport_height
     }
+    var grid_cb = false
+    // A child of a grid container is placed against the grid area its `grid-row`/`grid-column` name.
+    if cbid != l.root && l.boxes.items[usize(cbid)].inner == .Grid && l.boxes.items[usize(b)].parent == cbid {
+        let gpad = &l.boxes.items[usize(cbid)]
+        let (gfound, gx0, gx1, gy0, gy1) = grid_abs_area(l, cbid, b, cb_w, cb_h, gpad.padding[3usize], gpad.padding[0usize])
+        if gfound {
+            let sx = gx0 + gpad.padding[3usize]
+            let sy = gy0 + gpad.padding[0usize]
+            pad_x += sx
+            pad_y += sy
+            cb_w = maxf(0.0f64, gx1 - gx0)
+            cb_h = maxf(0.0f64, gy1 - gy0)
+            grid_cb = true
+        }
+    }
     let phys_cb_w = cb_w
     let phys_cb_h = cb_h
     if swap_code != 0u8 {
@@ -5872,6 +5966,11 @@ fn layout_abs(l: *Layout, b: u32) {
         let (px, py) = abs_origin(l, bb.parent)
         static_x = px + bb.x - pad_x
         static_y = py + bb.y - pad_y
+    }
+    // In a grid area the static position is the area's start corner.
+    if grid_cb {
+        static_x = 0.0f64
+        static_y = 0.0f64
     }
     if swap_code != 0u8 {
         let (sx, sy, sw0, sh0) = remap_rect(0u8, swap_code, phys_cb_w, phys_cb_h, static_x, static_y, 0.0f64, 0.0f64)
@@ -6298,8 +6397,9 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (floats, e5) = list.init[FloatRec](a, 16usize)
     let (tables, e6) = list.init[TableData](a, 8usize)
     let (counters, e7) = list.init[CounterInst](a, 16usize)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, vmode: 0u8, tr1: zero, tr2: zero }
+    let (grids, e8) = list.init[GridGeom](a, 4usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret (zero, TooBig) }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, vmode: 0u8, tr1: zero, tr2: zero, grids: grids }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))
