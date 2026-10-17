@@ -17747,9 +17747,14 @@ fn win4_hot_paint(f: *const Win3Frame, b: *scene.Builder, x: f32, y: f32, w: f32
     let rx = [5]f32{ 292.0, 557.0, 560.0, 706.0, 710.0 }
     let ri = [5]f32{ 1.0, 0.598, 0.595, 0.489, 0.486 }
     let ro = [5]f32{ 0.0, 0.404, 0.407, 0.513, 0.516 }
-    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke, win4_curve(wx, lx[0usize..5usize], lo[0usize..5usize])), alpha))
+    // round 15: a pure stroke column (weight 1: the left edge at x 149, the right one at 292) is the capture's #0078D4, not the mixed fit's #0078D7
+    var stroke_left = stroke
+    if f.look == 4u32 && win4_curve(wx, lx[0usize..5usize], lo[0usize..5usize]) > 0.999 { stroke_left = style.hex(30932u32) }
+    var stroke_right = stroke
+    if f.look == 4u32 && win4_curve(right, rx[0usize..5usize], ri[0usize..5usize]) > 0.999 { stroke_right = style.hex(30932u32) }
+    try win3_rect(b, x, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke_left, win4_curve(wx, lx[0usize..5usize], lo[0usize..5usize])), alpha))
     try win3_rect(b, x + 1.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke, win4_curve(wx, lx[0usize..5usize], li[0usize..5usize])), alpha))
-    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke, win4_curve(right, rx[0usize..5usize], ri[0usize..5usize])), alpha))
+    try win3_rect(b, x + w - 2.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(face, stroke_right, win4_curve(right, rx[0usize..5usize], ri[0usize..5usize])), alpha))
     try win3_rect(b, x + w - 1.0, y + 5.0, 1.0, h - 10.0, with_alpha(win4_mix(ground, stroke, win4_curve(right, rx[0usize..5usize], ro[0usize..5usize])), alpha))
     try win4_hot_corner(f, b, face, stroke, win3_corner_tl(), x, y, false, false, alpha)
     try win4_hot_corner(f, b, face, stroke, win3_corner_tr(), x + w - 5.0, y, true, false, alpha)

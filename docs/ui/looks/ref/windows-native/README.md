@@ -51,3 +51,7 @@ Dark natively: push/split button, check box, radio, edit/combo (CFD), spin, trac
 | `listview-*` | datagrid (header, rows, sort arrow) | data_grid |
 | `window-*`, `dialog-*`, `messagebox-*`, `taskdialog-*` | overlay.dialog | dialog |
 | `trackbar-*` | (no Neper control yet) | none |
+
+## Round 15 additions (100 % only, no @1.5x yet)
+
+`edit-multiline-rest`, `-focus`, `-selected`, `-readonly`, `-disabled` (the multi-line edit without a bar: 168 x 90, three lines; the focus capture shows the caret, the selected one the first line selected with the caret at its end) and `edit-multiline-explorer` (the six-line edit with `DarkMode_Explorer` on the control, which themes the scroll bar: a 17 wide #171717 column with a 2 wide #959595 thumb; the frame is then the Explorer theme's white one, so only the inside of the frame is a reference). `edit-multiline-vscroll` (the `DarkMode_CFD` theme) keeps the light unthemed scroll column: it is what a CFD edit gets, and no dark app ships it. Captured with `gallery.exe <out> <theme> 100 edit-multiline` and merged by hand into manifest.csv and controls.json (finish.py rewrites both from one run).
