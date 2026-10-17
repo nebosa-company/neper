@@ -8616,6 +8616,8 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
             if slot.kind == .Maximize { which = 5u32 }
             if slot.kind == .Close { which = 6u32 }
         }
+        if style.windows_dark_on() && which < 3u32 { which += 16u32 }
+        if style.windows_dark_on() && slot.kind == .Close && caption_dialog_x && slot.rect.width > 40.0 { which = 8u32 }
         let (shape, shape_error) = winchrome.glyph_node(a, which, (u32(ink.red * 255.0 + 0.5) * 65536u32) + (u32(ink.green * 255.0 + 0.5) * 256u32) + u32(ink.blue * 255.0 + 0.5), ink.alpha, slot.rect.width)
         ret (shape, shape_error)
     }
@@ -8654,6 +8656,9 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
 // buttons from the right: 46 wide each when the window has minimise or maximise, a lone close button 33 wide; a
 // button the window cannot use is not drawn (a width of 0) because v3's dialogs show only the X. The host's hit test
 // (`win.caption_layout`) stays the platform's 32 / 46 / 32, up to 2 px away from what is drawn.
+// round 15: set by `windows_caption_v3`: the caption being built is a dialog's (the X alone)
+var caption_dialog_x: bool = false
+
 fn windows_caption_v3(c: win.Caption, width: f32) -> win.Caption {
     var out = c
     if out.count == 0usize || out.leading { ret out }
@@ -8666,8 +8671,10 @@ fn windows_caption_v3(c: win.Caption, width: f32) -> win.Caption {
         i += 1usize
     }
     // a dialog (neither minimise nor maximise usable) shows the X alone, 33 wide; any other window the three, 46 each
+    caption_dialog_x = drawn == 0usize
     var button_w: f32 = 46.0
-    if drawn == 0usize { button_w = 33.0 }
+    // round 15: only v3 (the light look) has the 33 wide dialog X; the native dark dialog (dialog-active) has the 46 wide one
+    if drawn == 0usize && !style.windows_dark_on() { button_w = 33.0 }
     var right = width
     i = out.count
     while i > 0usize {
@@ -8691,6 +8698,7 @@ fn windows_caption_v3(c: win.Caption, width: f32) -> win.Caption {
 // The title bar `width` wide. Keys from `key`: the drag region and title `+ 1`, minimise `+ 2`, maximise `+ 3`, close `+ 4`.
 // The bar is a group named "Title bar"; the buttons are named Minimize, Maximize or Restore, and Close.
 fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, options: TitleBarOptions, width: f32) -> (widget.Node, err) {
+    style.windows_dark_enter(t.tokens)
     let caption_options = title_caption(&options)
     var words = control.text_options()
     words.role = .LabelLarge

@@ -20142,13 +20142,13 @@ fn win_native_balloon(a: *mem.Arena, key: widget.Key, t: *const Theme, title: st
     body.size = 12.0
     let (body_node, body_error) = colored_text(a, 0u64, hint_text, &ft, body, style.hex_raw(0xFFFFFFu32))
     if body_error != ok { ret (zero, body_error) }
-    var disc = sized_style(16.0, 16.0)
-    disc.radius = 8.0
-    disc.background = paint.Brush { Solid: style.hex_raw(0x1E78D2u32) }
+    // round 15: the icon is the capture's own 16 x 16 pixels (a blue disc with the white i)
+    let (disc, disc_error) = raw_pixels(a, "2B2B2B2B2B2B2B2B2B2B2B2B26445520638B1A84C0168ED4168ED41A7AB41D67932837402B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B29313522638B1891D61795DA1797DF1698E01597DF1594DD1490D91389D21E5E872930352B2B2B2B2B2B2B2B2B2931351D7EB51894D91799E01698E01597DF6DBEEB6CBDEB1293DE1393DE1291DD1189D41672AF2930352B2B2B2B2B2B2063881894DA1798E01698E01596DF4FB0E7FFFFFFFFFFFF3EA6E41191DD108FDD108FDD0F85D21A59842B2B2B293740178FD51696DF1697E01495DF1494DF219AE0E2F2FBE2F1FB2E9DE1108FDD0E8DDB0D8CDB0D8ADA0E7DCB243F521D67911592DA1596DF1495DF1293DE1292DE1191DD1090DD0F8EDC0F8EDD0E8DDC0D8BDB0D8BDB0B89DA0B81D11956831877B01493DC1394DF1393DF1292DE1090DD108FDDE1F1FBE1F1FB0E8CDC0C8ADB0C8ADB0A88DA0987D90984D70E6CB21386CE1293DE1292DE1191DD1090DD0F8EDC0E8DDCFFFFFFFFFFFF0C89DA0B89DB0A88DA0986D90885D90884D90974C51284CD1190DD1090DD108FDD0E8DDC0E8CDC0D8BDBFFFFFFFFFFFF0A87D90986D90986D90884D90783D80681D80871C31476B70F8DDB0E8EDC0E8CDB0D8BDB0C8ADB0B89DAFFFFFFFFFFFF0986D90784D80783D90782D80581D7067CD40F62A41B59840E85D30D8BDB0C8ADB0C89DA0A88DA0A87DAFFFFFFFFFFFF0784D80682D70581D70580D7047ED60477CE145487233E510F7CC90C89DA0B89DA0A87DA0986D90986D9FFFFFFFFFFFF0682D80580D7047ED7037DD6037BD5066EC227333E2B2B2B1A57820C7DCD0986D90985D90784D80783D8E0EFFAE0EFFA0480D7047DD6037DD6027BD50471C9184F7F2B2B2B2B2B2B2930341167A70A7BCC0883D70682D80581D70480D7047FD6037DD6027CD60279D3036FC60D5EA2292F342B2B2B2B2B2B2B2B2B292F341953800973C40679CE057BD2037DD7037DD60379D20372C9056ABE164E7D292F342B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B27343E1554880F61A4076CBE066ABE0B61AB164E7D213A4F2B2B2B2B2B2B2B2B2B2B2B2B", 16.0, 16.0)
+    if disc_error != ok { ret (zero, disc_error) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = chrome
-    layers[1usize] = widget.positioned(0u64, 12.0, 30.0, disc, zero)
+    layers[1usize] = widget.positioned(0u64, 12.0, 30.0, style.defaults(), widget_one_of(a, disc))
     layers[2usize] = widget.positioned(0u64, 33.0, 28.0, style.defaults(), widget_one_of(a, head_node))
     layers[3usize] = widget.positioned(0u64, 33.0, 49.0, style.defaults(), widget_one_of(a, body_node))
     ret (widget.stack(key, sized_style(159.0, 74.0), layers[0usize..4usize]), ok)
@@ -20401,4 +20401,53 @@ fn one_widget(a: *mem.Arena, node: widget.Node) -> []widget.Node {
     if nodes_error != ok { ret zero }
     nodes[0usize] = node
     ret nodes[0usize..1usize]
+}
+
+// ---- round 15 (looks15-w3): pixels that never take the Windows dark map ----------------------------------------------
+// A `w` x `h` bitmap of `pix` (RRGGBB per pixel) painted exactly as given: `gl.pixels` maps its colours through the dark map, a native
+// dark capture's pixels must not be.
+type RawPix = struct { pix: str, cols: usize }
+
+fn raw_pixel_digit(c: u8) -> u32 {
+    if c >= 97u8 { ret u32(c - 87u8) }
+    if c >= 65u8 { ret u32(c - 55u8) }
+    ret u32(c - 48u8)
+}
+
+fn raw_pixels_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*RawPix](ctx)
+    var n = 0usize
+    var at = 0usize
+    while at + 6usize <= m.pix.len {
+        var run = 1usize
+        let col = n % m.cols
+        while col + run < m.cols && at + (run + 1usize) * 6usize <= m.pix.len {
+            var same = true
+            var d = 0usize
+            while d < 6usize {
+                if m.pix[at + d] != m.pix[at + run * 6usize + d] { same = false }
+                d += 1usize
+            }
+            if !same { break }
+            run += 1usize
+        }
+        var v = 0u32
+        var d2 = 0usize
+        while d2 < 6usize {
+            v = v * 16u32 + raw_pixel_digit(m.pix[at + d2])
+            d2 += 1usize
+        }
+        try winpx.fill(b, f32(i64(area.x + 0.5)) + f32(col), f32(i64(area.y + 0.5)) + f32(n / m.cols), f32(run), 1.0, style.hex_raw(v))
+        at += 6usize * run
+        n += run
+    }
+    ret ok
+}
+
+fn raw_pixels(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[RawPix](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = RawPix { pix: pix, cols: usize(w) }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: mark_measure, paint: raw_pixels_paint, state: widget.bytes_of[RawPix](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
 }
