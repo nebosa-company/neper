@@ -107,7 +107,7 @@ type Obj = struct {
     prog: *const ast.Program, node: u32, env: *Env, native: NativeFn, has_native: bool, ctor_kind: u8, home: *Obj, has_home: bool,
     fields: *Obj, has_fields: bool, this_val: Value, bound_target: *Obj, bound_this: Value, bound_args: []const Value,
     // primitive wrappers, dates, internal slots
-    prim: Value, data: *void, num: f64, text: str, aux: *Obj, id: u64, realm: *Interp
+    prim: Value, data: *void, num: f64, text: str, aux: *Obj, id: u64, realm: *Interp, pmeths: *Obj, has_pmeths: bool
 }
 
 // Constructor kinds of a function object.
@@ -896,6 +896,7 @@ fn new_obj(it: *Interp, class: u8, proto: *Obj) -> *Obj {
     o.fields = z
     o.aux = z
     o.realm = it
+    o.pmeths = z
     ret o
 }
 
@@ -1155,6 +1156,10 @@ fn proto_of(o: *const Obj) -> (*Obj, bool) {
 
 // [[Get]]: walks the prototype chain; accessors run with `receiver` as `this`.
 fn get_prop(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err) {
+    if is_symbol_key(key) && key.sym.private {
+        let (pv, pe) = private_get(it, o, key, receiver)
+        ret (pv, pe)
+    }
     it.steps += 1u64
     if it.step_limit != 0u64 && it.steps > it.step_limit { ret (undefv(), throw_range(it, "execution step limit exceeded")) }
     var cur = o
@@ -1183,6 +1188,71 @@ fn get_prop(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err) {
         cur = cur.proto
     }
     ret (undefv(), ok)
+}
+
+// --- private elements: own properties keyed by a private symbol, never reached through the prototype chain or a proxy trap
+
+fn private_get(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err) {
+    let (at, found) = index_of_prop(o, key)
+    if !found { ret (undefv(), throw_type(it, str_concat3(it, "Cannot read private member #", key.sym.description, " from an object whose class did not declare it"))) }
+    let p = o.props.items[at]
+    if (p.flags & P_ACCESSOR) != 0u8 {
+        if p.getter == null_obj() { ret (undefv(), throw_type(it, str_concat3(it, "'#", key.sym.description, "' was defined without a getter"))) }
+        let (r, re) = call_function(it, obj_value(p.getter), receiver, zero_args())
+        ret (r, re)
+    }
+    ret (p.value, ok)
+}
+
+fn private_set(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (bool, err) {
+    let (at, found) = index_of_prop(o, key)
+    if !found { ret (false, throw_type(it, str_concat3(it, "Cannot write private member #", key.sym.description, " to an object whose class did not declare it"))) }
+    let p = o.props.items[at]
+    if (p.flags & P_ACCESSOR) != 0u8 {
+        if p.setter == null_obj() { ret (false, throw_type(it, str_concat3(it, "'#", key.sym.description, "' was defined without a setter"))) }
+        let (r, re) = call_function(it, obj_value(p.setter), receiver, one_arg(it, val))
+        if re != ok { ret (false, re) }
+        ret (true, ok)
+    }
+    if (p.flags & P_WRITABLE) == 0u8 { ret (false, throw_type(it, str_concat3(it, "Private method '#", key.sym.description, "' is not writable"))) }
+    o.props.items[at].value = val
+    ret (true, ok)
+}
+
+// Adds a private field (kind 0), method (1), getter (2) or setter (3) to `o`; a second definition of the same name is a TypeError.
+fn private_install(it: *Interp, o: *Obj, key: Key, kind: u8, val: Value) -> err {
+    let (at, found) = index_of_prop(o, key)
+    let z = null_obj()
+    if kind == 2u8 || kind == 3u8 {
+        if found {
+            if (o.props.items[at].flags & P_ACCESSOR) == 0u8 { ret throw_type(it, "Cannot initialize private methods of class twice on the same object") }
+            if kind == 2u8 {
+                if o.props.items[at].getter != z { ret throw_type(it, "Cannot initialize private methods of class twice on the same object") }
+                o.props.items[at].getter = as_object(val)
+            } else {
+                if o.props.items[at].setter != z { ret throw_type(it, "Cannot initialize private methods of class twice on the same object") }
+                o.props.items[at].setter = as_object(val)
+            }
+            ret ok
+        }
+        var g = z
+        var s = z
+        if kind == 2u8 { g = as_object(val) } else { s = as_object(val) }
+        ret append_prop(it, o, Prop { key: key, value: undefv(), getter: g, setter: s, flags: P_ACCESSOR })
+    }
+    if found { ret throw_type(it, "Cannot initialize private field twice on the same object") }
+    var flags = P_WRITABLE
+    if kind == 1u8 { flags = 0u8 }
+    ret append_prop(it, o, Prop { key: key, value: val, getter: z, setter: z, flags: flags })
+}
+
+fn three_values(it: *Interp, a: Value, b: Value, c: Value) -> []const Value {
+    let (cell, ce) = mem.alloc[Value](it.a, 3usize)
+    if ce != ok { ret zero_args() }
+    cell[0usize] = a
+    cell[1usize] = b
+    cell[2usize] = c
+    ret cell[0usize..3usize]
 }
 
 fn zero_args() -> []const Value {
@@ -1266,6 +1336,10 @@ fn str_concat(it: *Interp, x: str, y: str) -> str {
 
 // [[Set]]. Answers false when the assignment is rejected (read-only, no setter, frozen); the caller throws in strict code.
 fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (bool, err) {
+    if is_symbol_key(key) && key.sym.private {
+        let (sv, se) = private_set(it, o, key, val, receiver)
+        ret (sv, se)
+    }
     if o.class == C_NAMESPACE { ret (false, ok) }
     var cur = o
     var guard = 0u32
@@ -2727,6 +2801,25 @@ fn construct(it: *Interp, fv: Value, args: []const Value, new_target: Value) -> 
 
 // Runs a class constructor's field initialisers on a new instance.
 fn init_fields(it: *Interp, ctor: *Obj, inst: *Obj) -> err {
+    if ctor.has_pmeths {
+        // Private methods and accessors are installed on every instance before the fields.
+        let pl = ctor.pmeths
+        var pk = 0usize
+        while pk < pl.elems.len {
+            let pentry = as_object(pl.elems.items[pk])
+            pk += 1usize
+            var pkey = key_of("")
+            switch pentry.elems.items[0usize] {
+            case .Sym as psym:
+                pkey = key_of_symbol(psym)
+            default:
+                pkey = key_of("")
+            }
+            let pkind = u8(num_of(pentry.elems.items[2usize]))
+            let pie = private_install(it, inst, pkey, pkind, pentry.elems.items[1usize])
+            if pie != ok { ret pie }
+        }
+    }
     if !ctor.has_fields { ret ok }
     let list_obj = ctor.fields
     var i = 0usize
@@ -2758,6 +2851,7 @@ fn init_fields(it: *Interp, ctor: *Obj, inst: *Obj) -> err {
 }
 
 fn field_define(it: *Interp, inst: *Obj, key: Key, val: Value) -> err {
+    if is_symbol_key(key) && key.sym.private { ret private_install(it, inst, key, 0u8, val) }
     let (done, de) = define_own(it, inst, key, data_desc(val, P_DEFAULT))
     if de != ok { ret de }
     if !done { ret throw_type(it, "Cannot define class field") }
@@ -3765,6 +3859,20 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
         ret (rt3, re3)
     }
     if k == ast.N_BINARY {
+        if n.op == ast.O_IN && f.prog.nodes[usize(n.a)].kind == ast.N_PRIVATE {
+            let (rv, rve) = eval(it, f, n.b)
+            if rve != ok { ret (undefv(), rve) }
+            if !is_object(rv) { ret (undefv(), throw_type(it, "Cannot use 'in' operator to search for a private field in a non-object")) }
+            let (sv, se) = lookup_value(it, f, str_concat(it, "#", f.prog.nodes[usize(n.a)].text))
+            if se != ok { ret (undefv(), se) }
+            switch sv {
+            case .Sym as ps:
+                let (pat, pfound) = index_of_prop(as_object(rv), key_of_symbol(ps))
+                ret (bool_value(pfound), ok)
+            default:
+                ret (undefv(), throw_syntax(it, "Private field is not defined"))
+            }
+        }
         let (l, le) = eval(it, f, n.a)
         if le != ok { ret (undefv(), le) }
         let (r, re) = eval(it, f, n.b)
@@ -4363,6 +4471,7 @@ fn zero_keys() -> []const Key {
 }
 
 fn key_name_for_function(it: *Interp, key: Key) -> str {
+    if is_symbol_key(key) && key.sym.private { ret str_concat(it, "#", key.sym.description) }
     if is_symbol_key(key) {
         if key.sym.has_description { ret str_concat3(it, "[", key.sym.description, "]") }
         ret ""
@@ -4514,6 +4623,8 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
     let (field_list, fle) = list.init[Value](it.a, 4usize)
     var fields = field_list
     let static_fields = new_array(it)
+    let (pm_list, pme) = list.init[Value](it.a, 4usize)
+    var pmeths_list = pm_list
     var j = 0usize
     while j < usize(n.c) {
         let mem_id2 = f.prog.kids[usize(n.b) + j]
@@ -4579,14 +4690,40 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
         fo.home = holder
         fo.has_home = true
         fo.ctor_kind = K_NONE
+        let is_private_member = (mn2.flags & ast.F_COMPUTED) == 0u16 && kn2.kind == ast.N_PRIVATE
+        if is_private_member {
+            var pfx = ""
+            if mn2.op == ast.M_GET { pfx = "get " } else if mn2.op == ast.M_SET { pfx = "set " }
+            let pne = define_data(it, fo, key_of("name"), str_value(str_concat(it, pfx, key_name_for_function(it, key))), P_CONFIGURABLE)
+        }
         if mn2.op == ast.M_METHOD {
             set_function_name(it, obj_value(fo), key_name_for_function(it, key))
+            if is_private_member {
+                if is_static {
+                    let spe = private_install(it, ctor, key, 1u8, obj_value(fo))
+                    if spe != ok { ret (undefv(), spe) }
+                } else {
+                    try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), obj_value(fo), num_value(1.0f64)))))
+                }
+                continue
+            }
             let (done, de) = define_own(it, holder, key, data_desc(obj_value(fo), P_HIDDEN))
             if de != ok { ret (undefv(), de) }
         } else {
             var prefix = "get "
             if mn2.op == ast.M_SET { prefix = "set " }
             set_function_name(it, obj_value(fo), str_concat(it, prefix, key_name_for_function(it, key)))
+            if is_private_member {
+                var akind = 2u8
+                if mn2.op == ast.M_SET { akind = 3u8 }
+                if is_static {
+                    let spe2 = private_install(it, ctor, key, akind, obj_value(fo))
+                    if spe2 != ok { ret (undefv(), spe2) }
+                } else {
+                    try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), obj_value(fo), num_value(f64(akind))))))
+                }
+                continue
+            }
             var d = empty_desc()
             d.has_enumerable = true
             d.enumerable = false
@@ -4606,6 +4743,10 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
     if fields.len > 0usize {
         ctor.fields = array_from(it, list.slice_const[Value](&fields))
         ctor.has_fields = true
+    }
+    if pmeths_list.len > 0usize {
+        ctor.pmeths = array_from(it, list.slice_const[Value](&pmeths_list))
+        ctor.has_pmeths = true
     }
     if n.text.len > 0usize { try init_binding(it, class_env, n.text, obj_value(ctor)) }
     // Static fields and blocks, in order, with `this` the class.

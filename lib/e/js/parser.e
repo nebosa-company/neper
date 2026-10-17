@@ -20,7 +20,7 @@ type Parser = struct {
     a: *mem.Arena, lx: lex.Lexer, tok: lex.Tok, prev_end: usize, prev_start: usize, prev_line: u32,
     nodes: list.List[ast.Node], kids: list.List[u32], strs: list.List[ast.TemplateStr], vars: list.List[u32],
     strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool, blk: u32, module: bool, anon_default: bool, top_await: bool,
-    message: str, line: u32
+    message: str, line: u32, parens: list.List[u32]
 }
 
 fn fail(p: *Parser, message: str) -> err {
@@ -469,6 +469,23 @@ fn parse_conditional(p: *Parser) -> (u32, err) {
     ret (id, ok)
 }
 
+fn is_paren(p: *const Parser, id: u32) -> bool {
+    var i = 0usize
+    while i < p.parens.len {
+        if p.parens.items[i] == id { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+fn logical_kind(p: *Parser, id: u32) -> u8 {
+    // 1: && or ||, 2: ??, 0: anything else (a parenthesised logical expression is a primary).
+    let n = node(p, id)
+    if n.kind != ast.N_LOGICAL || is_paren(p, id) { ret 0u8 }
+    if n.op == ast.O_NULLISH { ret 2u8 }
+    ret 1u8
+}
+
 fn parse_binary(p: *Parser, min_prec: u8) -> (u32, err) {
     var left: u32 = ast.NONE
     // `#x in obj`.
@@ -494,6 +511,16 @@ fn parse_binary(p: *Parser, min_prec: u8) -> (u32, err) {
         }
         var kind = ast.N_BINARY
         if op == ast.O_AND || op == ast.O_OR || op == ast.O_NULLISH { kind = ast.N_LOGICAL }
+        if op == ast.O_EXP {
+            let lk = node(p, left).kind
+            if (lk == ast.N_UNARY || lk == ast.N_AWAIT) && !is_paren(p, left) { ret (ast.NONE, fail(p, "Unary operator used immediately before exponentiation expression")) }
+        }
+        if kind == ast.N_LOGICAL {
+            let lg = logical_kind(p, left)
+            let rg = logical_kind(p, right)
+            if op == ast.O_NULLISH && (lg == 1u8 || rg == 1u8) { ret (ast.NONE, fail(p, "Cannot mix ?? with || or && without parentheses")) }
+            if op != ast.O_NULLISH && (lg == 2u8 || rg == 2u8) { ret (ast.NONE, fail(p, "Cannot mix ?? with || or && without parentheses")) }
+        }
         let (id, me) = mk(p, kind)
         if me != ok { ret (ast.NONE, me) }
         node(p, id).op = op
@@ -878,6 +905,7 @@ fn parse_primary(p: *Parser) -> (u32, err) {
             // error pass (a name or member stays assignable and needs no mark).
             let ek = node(p, e).kind
             if ek == ast.N_ARRAY || ek == ast.N_OBJECT { node(p, e).op = 1u8 }
+            try list.push[u32](&p.parens, e)
             ret (e, ok)
         }
         if str.eq(t.text, "[") {
@@ -1216,6 +1244,7 @@ fn parse_params(p: *Parser) -> (list.List[u32], err) {
             let tgt = try parse_binding_element(p)
             node(p, sid).a = tgt
             try list.push[u32](&ids, sid)
+            if is_p(p, ",") { ret (ids, fail(p, "Rest parameter must be last formal parameter")) }
         } else {
             let el = try parse_binding_element(p)
             try list.push[u32](&ids, el)
@@ -2165,6 +2194,8 @@ fn parse_goal_in(a: *mem.Arena, source: str, module: bool, eo: *const early.Eval
     p.a = a
     p.module = module
     p.strict = eo.strict
+    let (pl, ple) = list.init[u32](a, 8usize)
+    p.parens = pl
     if module {
         p.strict = true
         p.in_async = true

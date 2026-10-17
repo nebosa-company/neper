@@ -471,6 +471,10 @@ fn check_expr(c: *Ctx, id: u32) -> err {
             let r = node(c, n.b)
             if (l.kind == ast.N_LOGICAL && (l.op == ast.O_AND || l.op == ast.O_OR) && false) || (r.kind == ast.N_LOGICAL && (r.op == ast.O_AND || r.op == ast.O_OR) && false) { ret fail(c, id, "Cannot mix ?? with || or &&") }
         }
+        if n.op == ast.O_IN && node(c, n.a).kind == ast.N_PRIVATE {
+            try check_private_ref(c, id, node(c, n.a).text)
+            ret check_expr(c, n.b)
+        }
         try check_expr(c, n.a)
         ret check_expr(c, n.b)
     }
@@ -603,6 +607,7 @@ fn check_object(c: *Ctx, id: u32) -> err {
             continue
         }
         if (pn.flags & ast.F_COMPUTED) != 0u16 { try check_expr(c, pn.a) }
+        if (pn.flags & ast.F_COMPUTED) == 0u16 && node(c, pn.a).kind == ast.N_PRIVATE { ret fail(c, pid, "Unexpected private name in an object literal") }
         if pn.op == ast.M_INIT {
             if (pn.flags & ast.F_SHORTHAND) != 0u16 {
                 let vn = node(c, pn.b)
