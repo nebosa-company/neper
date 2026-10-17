@@ -1,0 +1,86 @@
+{
+ "text_edit": {
+  "windows_dark": {
+   "status": "review",
+   "screenshot": "windows-dark/native_dark.png",
+   "notes": "Round 17 w1 (scripts/looks_dark_native.py, strict: flat reference pixel off above 2 levels, only glyph pixels within 2 px of text ink set apart). edit-password 80 to 0 px (the bullets are the capture's 7 x 5 ClearType tile). Single-line captures rest, hover, focus, selected, read-only, disabled 0 to 1 px; multi-line rest, focus, selected, read-only, disabled 3 to 5 px. edit-multiline-explorer 987 px: the whole count is the Explorer theme's white 2 px rounded frame (#ECECEC, #FEFEFE), a different theme from the CFD frame of every other capture; the inside (text, scroll column #171717 with its 2 px thumb) is equal; not drawn. edit-multiline-vscroll 2391 px: the unthemed light scroll column, which no dark app ships; not drawn. Both stay review.",
+   "gaps": [
+    "edit-multiline-explorer: Explorer-theme frame not drawn (987 px, all frame)",
+    "edit-multiline-vscroll: unthemed light scroll column not drawn (2391 px)",
+    "Remaining px are text glyphs: ClearType colour fringes in the capture against our greyscale glyphs, outside the comparer's ink rule (low-contrast or isolated glyphs); the text engine has no LCD mode, so they stay."
+   ]
+  }
+ },
+ "spin_edit": {
+  "windows_dark": {
+   "status": "review",
+   "screenshot": "windows-dark/native_dark.png",
+   "notes": "Round 17 w1 (scripts/looks_dark_native.py, strict: flat reference pixel off above 2 levels, only glyph pixels within 2 px of text ink set apart). Chrome equal in all seven captures (the up-down pair 0 px). Remaining 8 to 37 px per capture is the one digit glyph (greyscale against ClearType) the comparer does not take as text because a single glyph is not a word; pressed captures 35 and 37 are the same glyph plus the pressed arrow fringe.",
+   "gaps": [
+    "Digit glyph ClearType fringe (23 px rest, 35 to 37 pressed)"
+   ]
+  }
+ },
+ "combo_box": {
+  "windows_dark": {
+   "status": "review",
+   "screenshot": "windows-dark/native_dark_open2.png",
+   "notes": "Round 17 w1 (scripts/looks_dark_native.py, strict: flat reference pixel off above 2 levels, only glyph pixels within 2 px of text ink set apart). List rows' text moved up one row (ink rows now equal the capture's); open lists 77 to 68 and 173 to 153 px, combo-list-disabled 84 px: every remaining pixel in the lists and the disabled head is a glyph fringe (disabled grey text is under the 60 level ink rule). Closed heads 0 px.",
+   "gaps": [
+    "Remaining px are text glyphs: ClearType colour fringes in the capture against our greyscale glyphs, outside the comparer's ink rule (low-contrast or isolated glyphs); the text engine has no LCD mode, so they stay."
+   ]
+  }
+ },
+ "image_combo_box": {
+  "windows_dark": {
+   "status": "review",
+   "screenshot": "windows-dark/native_dark_open4.png",
+   "notes": "Round 17 w1 (scripts/looks_dark_native.py, strict: flat reference pixel off above 2 levels, only glyph pixels within 2 px of text ink set apart). Shares the combo list rows (text one row higher); open lists as the combo box. Closed heads 0 px.",
+   "gaps": [
+    "Remaining px are text glyphs: ClearType colour fringes in the capture against our greyscale glyphs, outside the comparer's ink rule (low-contrast or isolated glyphs); the text engine has no LCD mode, so they stay."
+   ]
+  }
+ },
+ "button": {
+  "windows_dark": {
+   "status": "matched",
+   "screenshot": "windows-dark/native_dark3.png",
+   "notes": "Round 17 w1 (scripts/looks_dark_native.py, strict: flat reference pixel off above 2 levels, only glyph pixels within 2 px of text ink set apart). All 17 captures within 1 px: split-disabled 10 to 1 (the emboss copy of the arrow, one caption fringe pixel left), picture buttons button-icon, -hover and -disabled 58, 58 and 35 to 0 (the sheet now supplies the capture's own 16 x 16 information icon, dithered when disabled, as the application's picture; the look's mono Info glyph is not what the capture shows).",
+   "gaps": [
+    "The picture bitmaps are the capture's pixels carried in examples/looks/native_dark3.e, not a look feature",
+    "One ClearType fringe pixel in each split caption"
+   ]
+  }
+ },
+ "popup_menu": {
+  "windows_dark": {
+   "status": "review",
+   "screenshot": "windows-dark/native_dark5.png",
+   "notes": "Round 17 w1 (scripts/looks_dark_native.py, strict: flat reference pixel off above 2 levels, only glyph pixels within 2 px of text ink set apart). Underlines of the mnemonic letters now match (4 px less per capture: start one pixel in, whole-pixel width); six captures 65 to 100 px, every one a glyph fringe (the N of New, the chevron's neighbours are text). ",
+   "gaps": [
+    "Remaining px are text glyphs: ClearType colour fringes in the capture against our greyscale glyphs, outside the comparer's ink rule (low-contrast or isolated glyphs); the text engine has no LCD mode, so they stay."
+   ]
+  }
+ },
+ "hint": {
+  "windows_dark": {
+   "status": "review",
+   "screenshot": "windows-dark/native_dark2.png",
+   "notes": "Round 17 w1 (scripts/looks_dark_native.py, strict: flat reference pixel off above 2 levels, only glyph pixels within 2 px of text ink set apart). The balloon popup rect is 9 px (glyph fringes). The whole capture also holds the owning Hover me button, which the hint sheet does not draw (balloon 1963, rest 1816 px as a whole capture): unchanged.",
+   "gaps": [
+    "Owner button of the tooltip captures has no cell in the hint sheet",
+    "Remaining px are text glyphs: ClearType colour fringes in the capture against our greyscale glyphs, outside the comparer's ink rule (low-contrast or isolated glyphs); the text engine has no LCD mode, so they stay."
+   ]
+  }
+ },
+ "radio": {
+  "windows_dark": {
+   "status": "review",
+   "screenshot": "windows-dark/native_dark.png",
+   "notes": "Round 17 w1 (scripts/looks_dark_native.py, strict: flat reference pixel off above 2 levels, only glyph pixels within 2 px of text ink set apart). Not changed by this round. Re-measured with the dark comparer: the circle chrome is 0 px; 238 (rest, hover, pressed), 126 (focus) px are the black captions (the capture's label is #000000 on #202020, unthemed text): ClearType fringes of values under 33 levels, below the comparer's 60 level ink rule. Disabled captures 1 px.",
+   "gaps": [
+    "Caption: black unthemed text in the capture; ClearType fringes only, no LCD text mode"
+   ]
+  }
+ }
+}
