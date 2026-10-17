@@ -1317,7 +1317,8 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
             if seg_text.len > 0usize {
                 // The break after this piece is a soft wrap opportunity when the style wraps.
                 var soft = wrap && (k < n || true) && (opp[k] != 0u8 || s.word_break == .BreakAll)
-                if k == n { soft = wrap }
+                // The end of a text run is a break opportunity only after a space (atomics mark the piece before them).
+                if k == n { soft = wrap && (trail_text.len > 0usize || seg_text.len == 0usize) }
                 push_piece(bd, Piece { kind: .Text, box: b, text: seg_text, w: w, trail: tr, soft: soft, ink: content_end > 0usize || preserve, start: offs[seg], clen: content_end })
             }
             if hard { push_piece(bd, Piece { kind: .Hard, box: b, text: "", w: 0.0f64, trail: 0.0f64, soft: false, ink: true, start: 0usize, clen: 0usize }) }
