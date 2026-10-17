@@ -20,6 +20,7 @@ use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
 use e.ui.widget
+use e.ui.winbutton
 use e.ui.winchrome
 use e.ui.window as win
 use e.ui.winpx
@@ -9222,10 +9223,10 @@ fn windows_bar_strip_dark(a: *mem.Arena, nodes: []const widget.Node, height: f32
     fill.height = style.Length { Percent: 100.0 }
     parts[n] = widget.box(0u64, fill, zero)
     n += 1usize
-    parts[n] = windows_rect_raw(0.0, height - 1.0, 4096.0, 1.0, 0x3D3D3Du32)
+    parts[n] = windows_rect_raw(0.0, height - 1.0, 4096.0, 1.0, 0x353535u32)
     n += 1usize
     if lead != 16777215u32 {
-        parts[n] = windows_rect_raw(0.0, 0.0, 1.0, height - 1.0, 0x3D3D3Du32)
+        parts[n] = windows_rect_raw(0.0, 0.0, 1.0, height - 1.0, 0x353535u32)
         n += 1usize
     }
     if grip {
@@ -9233,13 +9234,13 @@ fn windows_bar_strip_dark(a: *mem.Arena, nodes: []const widget.Node, height: f32
         if menu { top = 2.0 }
         let rows = height - top - 3.0
         parts[n] = windows_rect_raw(4.0, top, 1.0, rows, 0x5A5A5Au32)
-        parts[n + 1usize] = windows_rect_raw(5.0, top, 1.0, rows, 0x3D3D3Du32)
+        parts[n + 1usize] = windows_rect_raw(5.0, top, 1.0, rows, 0x353535u32)
         parts[n + 2usize] = windows_rect_raw(7.0, top, 1.0, rows, 0x5A5A5Au32)
-        parts[n + 3usize] = windows_rect_raw(8.0, top, 1.0, rows, 0x3D3D3Du32)
+        parts[n + 3usize] = windows_rect_raw(8.0, top, 1.0, rows, 0x353535u32)
         n += 4usize
     }
     if closed && width > 0.0 {
-        parts[n] = windows_rect_raw(width - 1.0, 0.0, 1.0, height - 1.0, 0x3D3D3Du32)
+        parts[n] = windows_rect_raw(width - 1.0, 0.0, 1.0, height - 1.0, 0x353535u32)
         n += 1usize
     }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
@@ -9268,7 +9269,7 @@ fn windows_bar_separator(a: *mem.Arena, height: f32) -> (widget.Node, err) {
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
         pair[0usize] = windows_rule_raw(1.0, height, 0x5A5A5Au32)
-        pair[1usize] = windows_rule_raw(1.0, height, 0x3D3D3Du32)
+        pair[1usize] = windows_rule_raw(1.0, height, 0x353535u32)
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
@@ -9718,6 +9719,10 @@ fn windows_menu_rule(a: *mem.Arena) -> (widget.Node, err) {
 fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8, max_height: f32) -> (widget.Node, err) {
     style.windows_dark_enter(t.tokens)
     let dark = style.windows_dark_on()
+    if dark {
+        let (native_menu, native_menu_error) = windows_dark_menu_at(a, key, t, anchor, label, commands, dismiss, placement, offset, depth)
+        ret (native_menu, native_menu_error)
+    }
     let (bt, bt_error) = control.windows_bar_theme(a, t)
     if bt_error != ok { ret (zero, bt_error) }
     let (bold_theme, bold_error) = control.windows_bar_theme_bold(a, t)
@@ -9840,7 +9845,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             if c.split { blue_w = widest - 16.0 - from }
             if dark {
                 // (round 7) Windows 11 dark: a neutral #3D3D3D row, the slot included
-                parts[p] = windows_rect_raw(0.0, 0.0, widest, 20.0, 0x3D3D3Du32)
+                parts[p] = windows_rect_raw(0.0, 0.0, widest, 20.0, 0x353535u32)
             } else {
                 parts[p] = windows_rect(from, 0.0, blue_w, 20.0, 30935u32)
             }
@@ -10358,7 +10363,7 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
         // (round 7) a flat #2B2B2B bar under a #3D3D3D line
         parts[n] = windows_rect_raw(0.0, 0.0, width, 19.0, 0x2B2B2Bu32)
         n += 1usize
-        parts[n] = windows_rect_raw(0.0, 0.0, width, 1.0, 0x3D3D3Du32)
+        parts[n] = windows_rect_raw(0.0, 0.0, width, 1.0, 0x353535u32)
         n += 1usize
     } else {
         parts[n] = windows_rect(0.0, 0.0, width, 19.0, 15790320u32)
@@ -10865,4 +10870,206 @@ fn cupertino_nav_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, ti
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = body
     ret (widget.semantics(key, sem, style.defaults(), framed[0usize..1usize]), ok)
+}
+
+// ---- round 15 (looks15-w3): the native Windows 11 dark popup menu ---------------------------------------------------------------
+// menu-popup-* of docs/ui/looks/ref/windows-native/dark: a 1 px #808080 line round a #2B2B2B face, 22 px rows 5 px in from the line
+// (#2C2C2C, the item rect), a 9 px band with a #3E3E3E line for a separator, Segoe UI 12 px white text 32 in from the row's edge,
+// the shortcut ending 20 from its right edge, a 10 x 7 check at (6, 8), a 5 x 9 chevron at (175, 7); the keyboard row (and the row
+// whose submenu is open) has a 1 px white rounded outline (the capture's own corner pixels). v3 has no dark menu: this look
+// follows the native one. A menu is `32 + the widest label + 34 + the widest shortcut + 20` (cut to whole pixels) plus 12.
+fn dark_menu_tl() -> str { ret "2C2C2C474747CACACAF2F2F2FFFFFFFFFFFF474747F2F2F29595953939392C2C2C2C2C2CBDBDBD8888882C2C2C2C2C2C2C2C2C2C2C2CFFFFFF3939392C2C2C2C2C2C2C2C2C2C2C2CFFFFFF2C2C2C2C2C2C2C2C2C2C2C2C2C2C2CFFFFFF2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C" }
+fn dark_menu_tr() -> str { ret "FFFFFFFFFFFFFFFFFFBDBDBD4747472C2C2C2C2C2C2C2C2C393939888888F2F2F24747472C2C2C2C2C2C2C2C2C2C2C2C969696CACACA2C2C2C2C2C2C2C2C2C2C2C2C393939F2F2F22C2C2C2C2C2C2C2C2C2C2C2C2C2C2CFFFFFF2C2C2C2C2C2C2C2C2C2C2C2C2C2C2CFFFFFF" }
+fn dark_menu_bl() -> str { ret "FFFFFF2C2C2C2C2C2C2C2C2C2C2C2C2C2C2CFFFFFF2C2C2C2C2C2C2C2C2C2C2C2C2C2C2CF2F2F23939392C2C2C2C2C2C2C2C2C2C2C2CCACACA9595952C2C2C2C2C2C2C2C2C2C2C2C464646F2F2F28888883939392C2C2C2C2C2C2C2C2C464646BDBDBDFFFFFFFFFFFFFFFFFF" }
+fn dark_menu_br() -> str { ret "2C2C2C2C2C2C2C2C2C2C2C2C2C2C2CFFFFFF2C2C2C2C2C2C2C2C2C2C2C2C2C2C2CFFFFFF2C2C2C2C2C2C2C2C2C2C2C2C393939FFFFFF2C2C2C2C2C2C2C2C2C2C2C2C888888BDBDBD2C2C2C2C2C2C393939969696F2F2F2464646FFFFFFFFFFFFF2F2F2CACACA4646462C2C2C" }
+fn dark_menu_check() -> str { ret "2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C7B7B7B3939392C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C969696D7D7D72C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C969696D7D7D73939392C2C2C464646E5E5E54646462C2C2C2C2C2C969696D7D7D73939392C2C2C2C2C2C2C2C2C7B7B7BE5E5E5464646969696D7D7D73939392C2C2C2C2C2C2C2C2C2C2C2C2C2C2C7B7B7BF2F2F2D7D7D73939392C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C2C5454543939392C2C2C2C2C2C2C2C2C2C2C2C2C2C2C" }
+fn dark_menu_chevron() -> str { ret "6161615454542C2C2C2C2C2C2C2C2C898989F2F2F25454542C2C2C2C2C2C2C2C2C959595F2F2F25454542C2C2C2C2C2C2C2C2C959595F2F2F25454542C2C2C2C2C2C2C2C2CCACACAE5E5E52C2C2C2C2C2C969696F2F2F25454542C2C2C969696F2F2F25454542C2C2C898989F2F2F25454542C2C2C2C2C2C6E6E6E5454542C2C2C2C2C2C2C2C2C" }
+
+fn dark_menu_outline(a: *mem.Arena, width: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 10usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (tl, tl_error) = control.raw_pixels(a, dark_menu_tl(), 6.0, 6.0)
+    if tl_error != ok { ret (zero, tl_error) }
+    let (tr, tr_error) = control.raw_pixels(a, dark_menu_tr(), 6.0, 6.0)
+    if tr_error != ok { ret (zero, tr_error) }
+    let (bl, bl_error) = control.raw_pixels(a, dark_menu_bl(), 6.0, 6.0)
+    if bl_error != ok { ret (zero, bl_error) }
+    let (br, br_error) = control.raw_pixels(a, dark_menu_br(), 6.0, 6.0)
+    if br_error != ok { ret (zero, br_error) }
+    parts[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one(a, tl))
+    parts[1usize] = widget.positioned(0u64, width - 6.0, 0.0, style.defaults(), mem_one(a, tr))
+    parts[2usize] = widget.positioned(0u64, 0.0, 16.0, style.defaults(), mem_one(a, bl))
+    parts[3usize] = widget.positioned(0u64, width - 6.0, 16.0, style.defaults(), mem_one(a, br))
+    parts[4usize] = windows_rect_raw(6.0, 0.0, width - 12.0, 1.0, 0xFFFFFFu32)
+    parts[5usize] = windows_rect_raw(6.0, 21.0, width - 12.0, 1.0, 0xFFFFFFu32)
+    parts[6usize] = windows_rect_raw(0.0, 6.0, 1.0, 10.0, 0xFFFFFFu32)
+    parts[7usize] = windows_rect_raw(width - 1.0, 6.0, 1.0, 10.0, 0xFFFFFFu32)
+    ret (widget.stack(0u64, control.sized_style(width, 22.0), parts[0usize..8usize]), ok)
+}
+
+fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8) -> (widget.Node, err) {
+    var caption = control.text_options()
+    caption.size = 12.0
+    caption.wrap = .None
+    var widest_label: f32 = 0.0
+    var widest_keys: f32 = 0.0
+    var sized = 0usize
+    while sized < commands.len {
+        let (plain_size, _, plain_size_error) = winbutton.mnemonic(a, commands[sized].label)
+        if plain_size_error != ok { ret (zero, plain_size_error) }
+        let (label_adv, _, _, label_adv_error) = control.run_metrics_faced(a, t, caption, plain_size)
+        if label_adv_error != ok { ret (zero, label_adv_error) }
+        if label_adv > widest_label { widest_label = label_adv }
+        if commands[sized].shortcut.len > 0usize {
+            let (keys_adv, _, _, keys_adv_error) = control.run_metrics_faced(a, t, caption, commands[sized].shortcut)
+            if keys_adv_error != ok { ret (zero, keys_adv_error) }
+            if keys_adv > widest_keys { widest_keys = keys_adv }
+        }
+        sized += 1usize
+    }
+    let item_w = f32(usize(32.0 + widest_label + 34.0 + widest_keys + 20.0))
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * commands.len)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var body_h: f32 = 0.0
+    var i = 0usize
+    while i < commands.len {
+        let c = &commands[i]
+        let has_submenu = c.submenu.len != 0usize
+        if c.separated && i > 0usize {
+            let (band, band_error) = mem.alloc[widget.Node](a, 1usize)
+            if band_error != ok { ret (zero, TooLarge) }
+            band[0usize] = windows_rect_raw(3.0, 4.0, item_w - 6.0, 1.0, 0x3E3E3Eu32)
+            rows[n] = widget.stack(0u64, control.sized_style(item_w, 9.0), band[0usize..1usize])
+            n += 1usize
+            body_h += 9.0
+        }
+        let item_key = key + 1u64 + u64(i)
+        let state = control.control_state(t, item_key, c.enabled, false)
+        let keyed = c.selected || c.submenu_open
+        var ink = style.hex_raw(0xFFFFFFu32)
+        if !c.enabled { ink = style.hex_raw(0x6D6D6Du32) }
+        let (plain, mark_at, plain_error) = winbutton.mnemonic(a, c.label)
+        if plain_error != ok { ret (zero, plain_error) }
+        let (said, said_error) = control.colored_text(a, 0u64, plain, t, caption, ink)
+        if said_error != ok { ret (zero, said_error) }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 12usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        var p = 0usize
+        parts[p] = windows_rect_raw(0.0, 0.0, item_w, 22.0, 0x2C2C2Cu32)
+        p += 1usize
+        if state.hovered && c.enabled && !keyed {
+            parts[p] = windows_rect_raw(0.0, 0.0, item_w, 22.0, 0x353535u32)
+            p += 1usize
+        }
+        if keyed {
+            let (ring, ring_error) = dark_menu_outline(a, item_w)
+            if ring_error != ok { ret (zero, ring_error) }
+            parts[p] = ring
+            p += 1usize
+        }
+        if c.checked {
+            let (tick, tick_error) = control.raw_pixels(a, dark_menu_check(), 10.0, 7.0)
+            if tick_error != ok { ret (zero, tick_error) }
+            parts[p] = widget.positioned(0u64, 6.0, 8.0, style.defaults(), mem_one(a, tick))
+            p += 1usize
+        }
+        parts[p] = widget.positioned(0u64, 31.0, 2.0, style.defaults(), mem_one(a, said))
+        p += 1usize
+        if mark_at < plain.len {
+            let (before, _, _, before_error) = control.run_metrics_faced(a, t, caption, plain[0usize..mark_at])
+            if before_error != ok { ret (zero, before_error) }
+            let (mark_adv, _, _, mark_error) = control.run_metrics_faced(a, t, caption, plain[mark_at..mark_at + 1usize])
+            if mark_error != ok { ret (zero, mark_error) }
+            var under_ink: u32 = 0xFFFFFFu32
+            if !c.enabled { under_ink = 0x6D6D6Du32 }
+            parts[p] = windows_rect_raw(31.0 + before, 16.0, mark_adv, 1.0, under_ink)
+            p += 1usize
+        }
+        if c.shortcut.len > 0usize {
+            let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, t, caption, ink)
+            if keys_error != ok { ret (zero, keys_error) }
+            let (keys_adv, _, _, keys_adv_error) = control.run_metrics_faced(a, t, caption, c.shortcut)
+            if keys_adv_error != ok { ret (zero, keys_adv_error) }
+            parts[p] = widget.positioned(0u64, item_w - 20.0 - keys_adv, 2.0, style.defaults(), mem_one(a, keys_node))
+            p += 1usize
+        }
+        if has_submenu {
+            let (chev, chev_error) = control.raw_pixels(a, dark_menu_chevron(), 5.0, 9.0)
+            if chev_error != ok { ret (zero, chev_error) }
+            parts[p] = widget.positioned(0u64, item_w - 15.0, 7.0, style.defaults(), mem_one(a, chev))
+            p += 1usize
+        }
+        let content = widget.stack(0u64, control.sized_style(item_w, 22.0), parts[0usize..p])
+        var look = control.windows_bar_look(state, ink)
+        look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        look.border_width = 0.0
+        look.padding_start = 0.0
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_width = 0.0
+        look.min_height = 22.0
+        var sem_states = 0u32
+        if c.checked { sem_states = accessibility.STATE_CHECKED }
+        var semantic_role = 22u8
+        if c.checkable || c.checked { semantic_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
+        if c.radio { semantic_role = accessibility.ROLE_MENU_ITEM_RADIO }
+        var sem_actions = 0u32
+        var controls = 0u64
+        var chosen = &c.action
+        let submenu_key = key * 32u64 + 16u64 + u64(i)
+        if has_submenu {
+            sem_actions = accessibility.ACTION_SHOW_MENU
+            controls = submenu_key
+            chosen = &c.submenu_toggle
+            if c.submenu_open { sem_states = sem_states | accessibility.STATE_EXPANDED }
+        }
+        let (made, made_error) = control.pressable_states_fill(a, item_key, t, semantic_role, plain, look, c.enabled, false, sem_states, sem_actions, controls, chosen, true, content)
+        if made_error != ok { ret (zero, made_error) }
+        rows[n] = made
+        n += 1usize
+        body_h += 22.0
+        if has_submenu {
+            let (nested, nested_error) = bar_menu_at(a, submenu_key, t, item_key, c.label, c.submenu, c.submenu_open, &c.submenu_toggle, .Right, geometry.Point { x: 6.0, y: -3.0 }, depth + 1u8)
+            if nested_error != ok { ret (zero, nested_error) }
+            rows[n] = nested
+            n += 1usize
+        }
+        i += 1usize
+    }
+    var column_style = style.defaults()
+    column_style.width = style.Length { Px: item_w }
+    column_style.height = style.Length { Px: body_h }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, rows[0usize..n])
+    var face = windows_flat_raw(0x2B2B2Bu32)
+    face.border = style.Border { width: 1.0, color: style.hex_raw(0x808080u32) }
+    let (shadow_held, shadow_error) = mem.alloc[widget.Node](a, 1usize)
+    if shadow_error != ok { ret (zero, TooLarge) }
+    shadow_held[0usize] = widget.padded(0u64, 6.0, 3.0, 6.0, 3.0, face, held[0usize..1usize])
+    if depth > 0u8 {
+        // a cascade lies under its parent: the first 6 columns (its line and the overlap) are not drawn, so the overlay starts 6 right
+        // of the parent's row and the menu sits 6 left in a clip box
+        var clip = style.defaults()
+        clip.width = style.Length { Px: item_w + 12.0 - 6.0 }
+        clip.height = style.Length { Px: body_h + 6.0 }
+        clip.overflow = .Clip
+        face.margin = style.EdgeLengths { left: style.Length { Px: -6.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        let (clipped, clipped_error) = mem.alloc[widget.Node](a, 1usize)
+        if clipped_error != ok { ret (zero, TooLarge) }
+        clipped[0usize] = widget.padded(0u64, 6.0, 3.0, 6.0, 3.0, face, held[0usize..1usize])
+        shadow_held[0usize] = widget.box(0u64, clip, clipped[0usize..1usize])
+    }
+    var none: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), shadow_held[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 21u8
+    sem.label = label
+    let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+    if lifted_error != ok { ret (zero, TooLarge) }
+    lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
 }

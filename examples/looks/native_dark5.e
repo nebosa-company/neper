@@ -11,7 +11,7 @@ use e.ui.looks
 use e.ui.style
 use e.ui.widget
 
-fn cell_w() -> f32 { ret 260.0 }
+fn cell_w() -> f32 { ret 380.0 }
 fn cell_h() -> f32 { ret 200.0 }
 
 fn sized(w: f32, h: f32) -> style.Style {
@@ -41,35 +41,63 @@ fn command(action: widget.Submit, label: str, shortcut: str, enabled: bool, sepa
     ret c
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// One of the captures: `selected` the keyboard row (0 none, 1 New, 2 Open, 3 Save), `open_sub` the Open Recent submenu open (its child
+// `child_selected` 1 or 2 outlined).
+fn one_menu(a: *mem.Arena, t: *const control.Theme, base: u64, selected: usize, open_sub: bool, child_selected: usize) -> (widget.Node, err) {
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
-    if actions_error != ok { ret (0usize, actions_error) }
+    if actions_error != ok { ret (zero, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
-    // menu-popup-rest: New, Open (checked), Save (disabled), separator, Open Recent (submenu), separator, Exit
     let (menu_list, menu_list_error) = mem.alloc[navigation.BarCommand](a, 5usize)
-    if menu_list_error != ok { ret (0usize, menu_list_error) }
-    menu_list[0usize] = command(actions[0usize], "New", "Ctrl+N", true, false)
-    menu_list[1usize] = command(actions[0usize], "Open", "Ctrl+O", true, false)
+    if menu_list_error != ok { ret (zero, menu_list_error) }
+    let (kids, kids_error) = mem.alloc[navigation.BarCommand](a, 2usize)
+    if kids_error != ok { ret (zero, kids_error) }
+    kids[0usize] = command(actions[0usize], "Project one", "", true, false)
+    kids[1usize] = command(actions[0usize], "Project two", "", true, false)
+    if child_selected > 0usize { kids[child_selected - 1usize].selected = true }
+    menu_list[0usize] = command(actions[0usize], "&New", "Ctrl+N", true, false)
+    menu_list[1usize] = command(actions[0usize], "&Open", "Ctrl+O", true, false)
     menu_list[1usize].checkable = true
     menu_list[1usize].checked = true
-    menu_list[2usize] = command(actions[0usize], "Save", "Ctrl+S", false, false)
-    menu_list[3usize] = command(actions[0usize], "Open Recent", "", true, true)
-    menu_list[3usize].submenu = menu_list[2usize..3usize]
-    menu_list[4usize] = command(actions[0usize], "Exit", "", true, true)
-    let (menu, menu_error) = navigation.bar_menu(a, 9501u64, t, 9500u64, "Menu", menu_list[0usize..5usize], true, &actions[0usize])
-    if menu_error != ok { ret (0usize, menu_error) }
+    menu_list[2usize] = command(actions[0usize], "&Save", "Ctrl+S", false, false)
+    menu_list[3usize] = command(actions[0usize], "Open &Recent", "", true, true)
+    menu_list[3usize].submenu = kids[0usize..2usize]
+    menu_list[3usize].submenu_open = open_sub
+    menu_list[4usize] = command(actions[0usize], "E&xit", "", true, true)
+    if selected > 0usize { menu_list[selected - 1usize].selected = true }
+    let (menu, menu_error) = navigation.bar_menu(a, base + 1u64, t, base, "Menu", menu_list[0usize..5usize], true, &actions[0usize])
+    if menu_error != ok { ret (zero, menu_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
-    if parts_error != ok { ret (0usize, parts_error) }
-    parts[0usize] = widget.box(9500u64, control.sized_style(1.0, 1.0), zero)
+    if parts_error != ok { ret (zero, parts_error) }
+    parts[0usize] = widget.box(base, control.sized_style(1.0, 1.0), zero)
     parts[1usize] = menu
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
-    if row_error != ok { ret (0usize, row_error) }
+    if row_error != ok { ret (zero, row_error) }
     row[0usize] = widget.stack(0u64, control.sized_style(1.0, 1.0), parts[0usize..2usize])
-    cells[0usize] = looks.Cell { caption: "menu-popup-rest", node: widget.padded(0u64, 20.0, 18.0, 0.0, 0.0, control.sized_style(cell_w(), cell_h()), row[0usize..1usize]), drive: .None }
-    ret (1usize, ok)
+    ret (widget.padded(0u64, 20.0, 18.0, 0.0, 0.0, control.sized_style(cell_w(), cell_h()), row[0usize..1usize]), ok)
+}
+
+fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let captions = [6]str{ "menu-popup-rest", "menu-popup-keyboard-first", "menu-popup-keyboard-checked", "menu-popup-keyboard-disabled", "menu-popup-submenu-keyboard-item", "menu-popup-submenu" }
+    let picks = [6]usize{ 0usize, 1usize, 2usize, 3usize, 0usize, 0usize }
+    var i = 0usize
+    while i < 6usize {
+        var child = 0usize
+        if i == 4usize { child = 2usize }
+        let (node, node_error) = one_menu(a, t, 9500u64 + 10u64 * u64(i), picks[i], i >= 4usize, child)
+        if node_error != ok { ret (0usize, node_error) }
+        var drive: looks.Drive = .None
+        if i == 5usize {
+            // the capture's first child row under the pointer
+            drive = .Hover
+            looks.aim(i, 126.0, 7.0)
+        }
+        cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
+        i += 1usize
+    }
+    ret (6usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark5", cells: 1usize, columns: 1usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark5", cells: 6usize, columns: 3usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
