@@ -47,7 +47,7 @@ fn check_ident(c: *Ctx, id: u32, binding: bool) -> err {
     if is_reserved_word(name) { ret fail(c, id, "Unexpected reserved word") }
     if c.strict && is_strict_reserved(name) { ret fail(c, id, "Unexpected strict mode reserved word") }
     if c.in_generator && str.eq(name, "yield") { ret fail(c, id, "yield is a reserved word here") }
-    if (c.in_async || c.in_static_block) && str.eq(name, "await") { ret fail(c, id, "await is a reserved word here") }
+    if (c.in_async || c.in_static_block || c.p.is_module) && str.eq(name, "await") { ret fail(c, id, "await is a reserved word here") }
     if binding && c.strict && (str.eq(name, "eval") || str.eq(name, "arguments")) { ret fail(c, id, "Unexpected eval or arguments in strict mode") }
     if (c.in_field_init || c.in_static_block) && str.eq(name, "arguments") && !binding { ret fail(c, id, "arguments is not allowed in class field initializer or static initialization block") }
     ret ok
@@ -834,7 +834,7 @@ fn check_class(c: *Ctx, id: u32) -> err {
     let saved = save_ctx(c)
     c.strict = true
     if n.text.len > 0usize {
-        if is_reserved_word(n.text) || is_strict_reserved(n.text) || str.eq(n.text, "await") && false { try restore_fail(c, saved, fail(c, id, "Unexpected reserved word as class name")) }
+        if is_reserved_word(n.text) || is_strict_reserved(n.text) || str.eq(n.text, "await") && (saved.in_async || saved.in_static_block || c.p.is_module) { try restore_fail(c, saved, fail(c, id, "Unexpected reserved word as class name")) }
     }
     if n.a != ast.NONE {
         let e = check_expr(c, n.a)
