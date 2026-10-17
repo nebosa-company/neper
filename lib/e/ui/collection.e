@@ -2695,6 +2695,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                     line.background = paint.Brush { Solid: paint.rgba(soft_base(t), soft_base(t), soft_base(t), cover) }
                 }
             }
+            // round 17: the Windows dark look draws the native list view's one #414141 column line, not the light ramp
+            if look.on && look.soft_lines && !look.dialog_lines && style.windows_dark_on() { line.background = paint.Brush { Solid: look.line } }
             boxed[n] = widget.box(0u64, line, zero)
             n += 1usize
             if look.on && look.soft_lines && !look.dialog_lines {
@@ -2706,6 +2708,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                     if c == 0usize && t.tokens.profile == .Windows && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { soft.background = paint.Brush { Solid: gl.rgb(0xFAFAFAu32) } }
                     if look.top_fit && c == 0usize && t.tokens.profile == .Windows && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { soft.background = paint.Brush { Solid: paint.rgba(soft_base(t) + 0.043, soft_base(t) + 0.043, soft_base(t) + 0.043, 0.125) } }
                     if soft_cover > 0.0 { soft.background = paint.Brush { Solid: paint.rgba(soft_base(t), soft_base(t), soft_base(t), soft_cover) } }
+                    if style.windows_dark_on() { soft.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
                 }
                 boxed[n] = widget.box(0u64, soft, zero)
                 n += 1usize
