@@ -76,13 +76,19 @@ fn scalar_in(s: str, at: usize) -> u32 {
     ret u32(c)
 }
 
+fn newer_than_tables(cp: u32, cat: unicode.Category) -> bool {
+    if cat != .Cn { ret false }
+    ret (cp & 65534u32) != 65534u32 && !(cp >= 64976u32 && cp <= 65007u32)
+}
+
 // ID_Start for non-ASCII scalars: the letter categories and Nl, plus Other_ID_Start.
 fn id_start_cp(cp: u32) -> bool {
     if cp < 128u32 { ret is_id_start(u8(cp)) }
     if cp == 11823u32 { ret false }
     if cp == 8472u32 || cp == 8494u32 || cp == 12443u32 || cp == 12444u32 || cp == 6277u32 || cp == 6278u32 { ret true }
     let cat = unicode.category(cp)
-    ret cat == .Lu || cat == .Ll || cat == .Lt || cat == .Lm || cat == .Lo || cat == .Nl
+    // Code points newer than the bundled tables are accepted rather than rejected.
+    ret cat == .Lu || cat == .Ll || cat == .Lt || cat == .Lm || cat == .Lo || cat == .Nl || newer_than_tables(cp, cat)
 }
 
 // ID_Continue (plus ZWNJ / ZWJ, which identifiers allow).
@@ -90,9 +96,9 @@ fn id_part_cp(cp: u32) -> bool {
     if cp < 128u32 { ret is_id_part(u8(cp)) }
     if cp == 11823u32 { ret false }
     if id_start_cp(cp) { ret true }
-    if cp == 8204u32 || cp == 8205u32 || cp == 183u32 || cp == 903u32 || (cp >= 4969u32 && cp <= 4977u32) || cp == 6618u32 { ret true }
+    if cp == 8204u32 || cp == 8205u32 || cp == 183u32 || cp == 903u32 || (cp >= 4969u32 && cp <= 4977u32) || cp == 6618u32 || cp == 12539u32 || cp == 65381u32 { ret true }
     let cat = unicode.category(cp)
-    ret cat == .Mn || cat == .Mc || cat == .Nd || cat == .Pc
+    ret cat == .Mn || cat == .Mc || cat == .Nd || cat == .Pc || newer_than_tables(cp, cat)
 }
 
 fn id_part_at(s: str, at: usize) -> bool {

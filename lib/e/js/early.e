@@ -720,7 +720,7 @@ fn check_function(c: *Ctx, id: u32) -> err {
         if (n.flags & ast.F_DECL) != 0u16 {
             // A declaration binds its name in the enclosing scope, so that scope's yield / await rules apply.
             if saved.in_generator && str.eq(n.text, "yield") { try restore_fail(c, saved, fail(c, id, "yield is a reserved word here")) }
-            if (saved.in_async || saved.in_static_block) && str.eq(n.text, "await") { try restore_fail(c, saved, fail(c, id, "await is a reserved word here")) }
+            if (saved.in_async || (saved.in_static_block && !saved.in_function)) && str.eq(n.text, "await") { try restore_fail(c, saved, fail(c, id, "await is a reserved word here")) }
         } else {
             if (n.flags & ast.F_GENERATOR) != 0u16 && str.eq(n.text, "yield") { try restore_fail(c, saved, fail(c, id, "yield is a reserved word here")) }
             if (n.flags & ast.F_ASYNC) != 0u16 && str.eq(n.text, "await") { try restore_fail(c, saved, fail(c, id, "await is a reserved word here")) }
@@ -834,7 +834,7 @@ fn check_class(c: *Ctx, id: u32) -> err {
     let saved = save_ctx(c)
     c.strict = true
     if n.text.len > 0usize {
-        if is_reserved_word(n.text) || is_strict_reserved(n.text) || str.eq(n.text, "await") && (saved.in_async || saved.in_static_block || c.p.is_module) { try restore_fail(c, saved, fail(c, id, "Unexpected reserved word as class name")) }
+        if is_reserved_word(n.text) || is_strict_reserved(n.text) || str.eq(n.text, "await") && (saved.in_async || (saved.in_static_block && !saved.in_function) || c.p.is_module) { try restore_fail(c, saved, fail(c, id, "Unexpected reserved word as class name")) }
     }
     if n.a != ast.NONE {
         let e = check_expr(c, n.a)
