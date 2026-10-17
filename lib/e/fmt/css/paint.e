@@ -997,6 +997,7 @@ fn push_overflow_clip(p: *Painter, b: u32, ax: f64, ay: f64) -> bool {
     let bb = &p.l.boxes.items[usize(b)]
     let s = layout.st(p.l, bb.style)
     if !clips_overflow(s) || bb.parent == layout.NONE || p.l.boxes.items[usize(bb.parent)].parent == layout.NONE { ret false }
+    if layout.overflow_propagated(p.l, b) { ret false }
     if bb.inner == .Table || bb.inner == .Row || bb.inner == .RowGroup { ret false }
     if bb.first == layout.NONE && bb.line_count == 0u32 { ret false }
     save(p)

@@ -142,3 +142,4 @@ invalid-negative-width-001.html | invalid-negative-width-001-ref.html | match
 prewrap-hang-001.html | prewrap-hang-001-ref.html | match
 ch-unit-001.html | ch-unit-001-ref.html | match
 anon-table-cells-001.html | anon-table-cells-001-ref.html | match
+body-overflow-propagation-001.html | body-overflow-propagation-001-ref.html | match

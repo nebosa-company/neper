@@ -943,6 +943,18 @@ fn margin_value(m: Margin) -> f64 { ret m.pos + m.neg }
 
 fn no_margin() -> Margin { ret Margin { pos: 0.0f64, neg: 0.0f64 } }
 
+// The `body` whose overflow went to the viewport (the root element's own is `visible`): it is an ordinary block.
+fn overflow_propagated(l: *const Layout, b: u32) -> bool {
+    let bb = &l.boxes.items[usize(b)]
+    if bb.node == NONE || bb.parent == NONE { ret false }
+    if !str.eq(l.d.nodes[usize(bb.node)].name, "body") { ret false }
+    let pb = &l.boxes.items[usize(bb.parent)]
+    if pb.node == NONE || pb.parent == NONE { ret false }
+    if !str.eq(l.d.nodes[usize(pb.node)].name, "html") { ret false }
+    let ps = st(l, pb.style)
+    ret ps.overflow_x == .Visible && ps.overflow_y == .Visible
+}
+
 fn is_bfc_root(l: *const Layout, b: u32) -> bool {
     let bb = &l.boxes.items[usize(b)]
     if bb.parent == NONE { ret true }
@@ -950,7 +962,7 @@ fn is_bfc_root(l: *const Layout, b: u32) -> bool {
     let s = st(l, bb.style)
     if bb.inner == .FlowRoot || bb.inner == .Flex || bb.inner == .Grid || bb.inner == .Table || bb.inner == .Cell || bb.inner == .Replaced { ret true }
     if s.floating != .None || s.position == .Absolute || s.position == .Fixed { ret true }
-    if s.overflow_x != .Visible || s.overflow_y != .Visible { ret true }
+    if (s.overflow_x != .Visible || s.overflow_y != .Visible) && !overflow_propagated(l, b) { ret true }
     if has_columns(s) { ret true }
     if s.display == .FlowRoot || s.display == .InlineBlock { ret true }
     ret false
@@ -1048,6 +1060,11 @@ fn box_ratio(l: *const Layout, b: u32) -> (f64, bool) {
         den = d2
     }
     ret (num / den, true)
+}
+
+fn has_box_ratio(l: *const Layout, b: u32) -> bool {
+    let (r, has) = box_ratio(l, b)
+    ret has
 }
 
 // The content height the ratio gives box `b` of content width `cw` (border-box width `bb.w`): false when it has no ratio.
@@ -6270,7 +6287,8 @@ fn layout_abs(l: *Layout, b: u32) {
         spec_h = rh
     } else if s.height.kind == .Px && has_hv {
         spec_h = to_content_h(l, b, hv)
-    } else if has_t && has_b {
+    } else if has_t && has_b && !has_box_ratio(l, b) {
+        // (a box with a preferred ratio takes its height from its width instead of stretching)
         spec_h = maxf(0.0f64, cb_h - tv - bv - mt - mb - extras_v)
     }
     var ratio_h_abs = -1.0f64
