@@ -2155,7 +2155,7 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
     }
     // round 15: the native dark (GDI) edit sets its glyphs one row above the line box its selection and caret fill
     var glyph_origin = origin
-    if native_caret_face(ed.caret) && !ed.multiline { glyph_origin = geometry.Point { x: origin.x, y: origin.y - 1.0 } }
+    if native_caret_face(ed.caret) { glyph_origin = geometry.Point { x: origin.x, y: origin.y - 1.0 } }
     try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
     if focused_here && ed.marked.alpha > 0.0 {
         // The selected glyphs again in their own colour, clipped to the selection.

@@ -46,11 +46,13 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let choices = [8]str{ "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel" }
     let (buffer, buffer_error) = mem.alloc[u8](a, 64usize)
     if buffer_error != ok { ret (0usize, buffer_error) }
+    // round 15: variants 4 and 5 are the dark image combo box (no pictures) beside combo-list-open and combo-list-open-hover-row
+    let image = variant >= 4usize
     var hovered_row = variant >= 2usize
     var shown = "Bravo"
     var active = 1usize
     if variant % 2usize == 1usize { active = 4usize }
-    if variant == 3usize { shown = "Echo" }
+    if variant == 3usize || variant == 5usize { shown = "Echo" }
     let n = control.copy_text(buffer, shown)
     let (picks, picks_error) = pick_actions(a, 8usize)
     if picks_error != ok { ret (0usize, picks_error) }
@@ -59,14 +61,25 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     var options = control.field_options()
     options.width = 149.0
     options.read_only = variant / 2usize == 1usize
-    let (combo, combo_error) = control.combo_box(a, 1000u64, t, "Combo", buffer, n, zero, choices[0usize..8usize], active, true, picks, zero, &toggle[0usize], options)
+    var combo: widget.Node = zero
+    var combo_error: err = ok
+    if image {
+        var none: []const widget.Node = zero
+        let (made, made_error) = control.image_select_pending(a, 1000u64, t, "Combo", choices[0usize..8usize], none, active, active, true, true, &toggle[0usize], picks, 149.0, 0.0, 0.0)
+        combo = made
+        combo_error = made_error
+    } else {
+        let (made, made_error) = control.combo_box(a, 1000u64, t, "Combo", buffer, n, zero, choices[0usize..8usize], active, true, picks, zero, &toggle[0usize], options)
+        combo = made
+        combo_error = made_error
+    }
     if combo_error != ok { ret (0usize, combo_error) }
     // the head sits at (20, 8) of a 190 x 200 cell, so the cell's middle (the pointer of a driven cell) is over the fifth row
     var drive: looks.Drive = .None
     if variant % 2usize == 1usize { drive = .Hover }
     // round 13: the editable combo's head text is selected in both captures (the edit keeps the focus while the list is open), also with
     // the row under the pointer: the lit row is the `active` one, so the variant needs no pointer on the list
-    if variant < 2usize {
+    if variant < 2usize && !image {
         // the editable combo's text is selected in the capture: focus it from the head's text, then select all
         drive = .Focus
         looks.aim(0usize, 0.0 - 50.0, 0.0 - 80.0)
@@ -86,6 +99,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if variant == 1usize { name = "native_dark_open1" }
     if variant == 2usize { name = "native_dark_open2" }
     if variant == 3usize { name = "native_dark_open3" }
+    if variant == 4usize { name = "native_dark_open4" }
+    if variant == 5usize { name = "native_dark_open5" }
     let sheet = looks.Sheet { name: name, cells: 1usize, columns: 1usize, cell_w: 190.0, cell_h: 200.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

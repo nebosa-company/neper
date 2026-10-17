@@ -13658,5 +13658,209 @@
   ],
   "dpi": 96,
   "controls": []
+ },
+ "dark/edit-multiline-disabled@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "dark/edit-multiline-explorer@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three  Line four  Line five  Line six ",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "dark/edit-multiline-focus@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "dark/edit-multiline-readonly@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "dark/edit-multiline-rest@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "dark/edit-multiline-selected@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "light/edit-multiline-disabled@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "light/edit-multiline-explorer@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three  Line four  Line five  Line six ",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "light/edit-multiline-focus@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "light/edit-multiline-readonly@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "light/edit-multiline-rest@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
+ },
+ "light/edit-multiline-selected@1x.png": {
+  "size": [
+   200,
+   110
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Edit",
+    "text": "Line one  Line two  Line three",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 90
+   }
+  ]
  }
 }

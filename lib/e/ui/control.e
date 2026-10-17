@@ -6583,7 +6583,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var pad: f32 = 3.0
     if win_dark(t) { pad = 6.0 }
     // the native multi-line edit sets its text one pixel further in (edit-multiline-vscroll: ink from x 7)
-    if win_dark(t) && multiline { pad = 7.0 }
+    if win_dark(t) && multiline { pad = 6.0 }
     let inner = max_zero(options.width - 2.0 - 2.0 * pad - options.start_space - options.end_space)
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
@@ -6693,7 +6693,8 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     var pad_y: f32 = 3.384
     if win_dark(t) { pad_y = 3.0 }
     if multiline { pad_y = 3.0 }
-    if multiline && win_dark(t) { pad_y = 2.0 }
+    // round 15: the glyphs sit one row above the line box (see widget.place_edit), so the box starts one row lower
+    if multiline && win_dark(t) { pad_y = 3.0 }
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: pad + options.start_space }, top: style.Length { Px: pad_y }, right: style.Length { Px: pad + options.end_space }, bottom: style.Length { Px: pad_y } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
@@ -15523,13 +15524,21 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     // looks3 group d: the frame is the theme's bitmap (win3_frame); the head itself is bare.
     var head_w: f32 = 112.0
     if width > 0.0 { head_w = width }
-    var look = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: head_w, min_height: 21.0, corners: zero }
+    // round 15: the dark head is the native list-style combo (22 + 1 high, Segoe UI 9 pt, text from x 4), as `combo_box` draws it
+    var head_h: f32 = 21.0
+    var text_h: f32 = 21.0
+    if dark {
+        head_h = 23.0
+        text_h = 22.0
+    }
+    var look = style.ResolvedControl { background: paint.rgba(0.0, 0.0, 0.0, 0.0), foreground: c.ink, border: paint.rgba(0.0, 0.0, 0.0, 0.0), border_width: 0.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: true, min_width: head_w, min_height: head_h, corners: zero }
     var words = text_options()
     words.role = .BodyMedium
     words.wrap = .None
     var value_color = c.ink
     if !chosen && enabled { value_color = style.color(t.tokens, .TextMuted) }
-    let (bar_t, bar_error) = win3_dialog_theme(a, t)
+    var (bar_t, bar_error) = win3_dialog_theme(a, t)
+    if dark { (bar_t, bar_error) = windows_edit_theme(a, t, 15.0) }
     if bar_error != ok { ret (zero, bar_error) }
     let (value_node, value_error) = colored_text(a, 0u64, shown, &bar_t, words, value_color)
     if value_error != ok { ret (zero, value_error) }
@@ -15552,8 +15561,9 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     bits[1usize] = chevron
     var spread = style.defaults()
     spread.width = style.Length { Px: head_w }
-    spread.height = style.Length { Px: 21.0 }
+    spread.height = style.Length { Px: text_h }
     spread.padding = edges(3.0, 0.0, 0.0, 0.0)
+    if dark { spread.padding = edges(4.0, 0.0, 0.0, 0.0) }
     let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, spread, bits[0usize..2usize])
     var tone: f32 = 0.0
     if !enabled { tone = 0.5 }
@@ -15569,7 +15579,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         if focused { native_state = 1u32 }
         if open || state.pressed { native_state = 3u32 }
         if !enabled { native_state = 2u32 }
-        let (made_frame, made_error) = winedit.native_combo(a, 1u32, native_state, head_w, 21.0)
+        let (made_frame, made_error) = winedit.native_combo(a, 1u32, native_state, head_w, text_h)
         frame = made_frame
         frame_error = made_error
     } else {
@@ -15593,7 +15603,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         layers[2usize] = widget.positioned(0u64, 3.0, 3.0, style.defaults(), held[0usize..1usize])
         count = 3usize
     }
-    var zone_style = sized_style(17.0, 21.0)
+    var zone_style = sized_style(17.0, head_h)
     zone_style.overflow = .Visible
     let (zone_held, zone_held_error) = mem.alloc[widget.Node](a, 1usize)
     if zone_held_error != ok { ret (zero, TooLarge) }
@@ -15601,7 +15611,9 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     zone_held[0usize] = widget.region(key + 1048703u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](toggle), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: false }, zone_style, zone_none)
     layers[count] = widget.positioned(0u64, head_w - 17.0, 0.0, zone_style, zone_held[0usize..1usize])
     count += 1usize
-    let content = widget.stack(0u64, sized_style(head_w, 21.0), layers[0usize..count])
+    var content_w = head_w
+    if dark { content_w = head_w + 1.0 }
+    let content = widget.stack(0u64, sized_style(content_w, head_h), layers[0usize..count])
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
     let (head_node, head_error) = pressable_states(a, key, t, 3u8, shown, look, enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, content)
