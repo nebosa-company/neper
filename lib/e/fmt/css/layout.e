@@ -6194,15 +6194,14 @@ fn layout_abs(l: *Layout, b: u32) {
     // The static position, in the containing block's padding box.
     var static_x = bb.x
     var static_y = bb.y
-    if bb.aux == 3u32 {
-        let pb = &l.boxes.items[usize(bb.parent)]
-        let (px, py) = abs_origin(l, bb.parent)
-        static_x = px + pb.border[3usize] + pb.padding[3usize] + bb.x - pad_x
-        static_y = py + pb.border[0usize] + pb.padding[0usize] + bb.y - pad_y
-    } else {
-        let (px, py) = abs_origin(l, bb.parent)
-        static_x = px + bb.x - pad_x
-        static_y = py + bb.y - pad_y
+    let pb = &l.boxes.items[usize(bb.parent)]
+    let (px, py) = abs_origin(l, bb.parent)
+    static_x = px + bb.x - pad_x
+    static_y = py + bb.y - pad_y
+    // Beside inline content in a block container the box has no flow position yet: use the content edge.
+    if bb.aux == 0u32 && bb.x == 0.0f64 && bb.y == 0.0f64 && pb.inner == .Flow && !pb.inline_level {
+        static_x += pb.border[3usize] + pb.padding[3usize]
+        static_y += pb.border[0usize] + pb.padding[0usize]
     }
     // In a grid area the static position is the area's start corner.
     if grid_cb {
