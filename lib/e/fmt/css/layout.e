@@ -1305,7 +1305,11 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
     var seg = 0usize
     var k = 1usize
     while k <= n {
-        let cut_here = k == n || opp[k] != 0u8 || s.word_break == .BreakAll || scal[k - 1usize] == 10u32
+        // break-all adds a break between any two letters, never before a space.
+        let all_here = s.word_break == .BreakAll && !(k < n && scal[k] == 32u32)
+        // `break-spaces`: every preserved space is a wrap opportunity of its own and takes up room.
+        let bspace = s.white_space == .BreakSpaces && scal[k - 1usize] == 32u32
+        let cut_here = k == n || opp[k] != 0u8 || all_here || scal[k - 1usize] == 10u32 || bspace
         let is_nl = scal[k - 1usize] == 10u32
         if cut_here || is_nl {
             var seg_end = k
@@ -1317,7 +1321,8 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
             let seg_text = text[offs[seg]..offs[seg_end]]
             // Split the trailing collapsible spaces.
             var content_end = seg_text.len
-            if !preserve {
+            // Collapsible spaces end a piece's content; so do the preserved ones of `pre-wrap`, which hang at the line end.
+            if !preserve || s.white_space == .PreWrap {
                 while content_end > 0usize && seg_text[content_end - 1usize] == 32u8 { content_end -= 1usize }
             }
             let content = seg_text[..content_end]
@@ -1326,7 +1331,7 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
             let tr = text_advance(l, s, trail_text)
             if seg_text.len > 0usize {
                 // The break after this piece is a soft wrap opportunity when the style wraps.
-                var soft = wrap && (k < n || true) && (opp[k] != 0u8 || s.word_break == .BreakAll)
+                var soft = wrap && (k < n || true) && (opp[k] != 0u8 || all_here || bspace)
                 // The end of a text run is a break opportunity only after a space (atomics mark the piece before them).
                 if k == n { soft = wrap && (trail_text.len > 0usize || seg_text.len == 0usize) }
                 push_piece(bd, Piece { kind: .Text, box: b, text: seg_text, w: w, trail: tr, soft: soft, ink: content_end > 0usize || preserve, start: offs[seg], clen: content_end })
