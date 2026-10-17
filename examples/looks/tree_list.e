@@ -202,9 +202,16 @@ fn one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
 fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *widget.Node) -> err {
     let t = mem.cast[*const control.Theme](ctx)
     if node >= 200u64 && column == 3usize {
-        let (date, date_error) = control.text(a, 0u64, child_date(usize(node - 200u64)), t, control.text_options())
+        var date_options = control.text_options()
+        // round 15: the live capture's dates sit 3 px further right, on one line (a word wrap would break them at a hyphen)
+        var date_pad: f32 = 2.0
+        if t.tokens.profile == .Windows {
+            date_pad = 5.0
+            date_options.wrap = .None
+        }
+        let (date, date_error) = control.text(a, 0u64, child_date(usize(node - 200u64)), t, date_options)
         if date_error != ok { ret date_error }
-        *out = widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), one_of(a, date))
+        *out = widget.padded(0u64, date_pad, 0.0, 0.0, 0.0, style.defaults(), one_of(a, date))
         ret ok
     }
     if column != 2usize {
@@ -214,6 +221,8 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
     let (made, made_error) = control.colored_text(a, 0u64, name_of(node), t, control.text_options(), gl.rgb(ink_of(node)))
     if made_error != ok { ret made_error }
     *out = made
+    // round 15: an edition's name starts 2 px further right in the live capture
+    if node >= 200u64 && t.tokens.profile == .Windows { *out = widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), one_of(a, made)) }
     // the capture's names start 2 px further right on the top-level rows
     if node < 200u64 && t.tokens.profile == .Windows { *out = widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), one_of(a, made)) }
     ret ok
