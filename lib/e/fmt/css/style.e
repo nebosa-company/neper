@@ -269,7 +269,7 @@ fn border_width_value(c: *const Context, v: str, em: f64) -> (f64, bool) {
     if !parsed || px < 0.0f64 { ret (0.0f64, false) }
     // A used border width is a whole number of device pixels: fractions are dropped and a thin one still draws as one pixel.
     if px > 0.0f64 && px < 1.0f64 { ret (1.0f64, true) }
-    ret (f64(i64(px)), true)
+    ret (f64(i64(px + 0.001f64)), true)
 }
 
 fn parse_number_value(c: *const Context, v: str) -> (f64, bool) {
