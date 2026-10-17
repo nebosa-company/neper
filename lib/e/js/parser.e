@@ -19,7 +19,7 @@ error ParseError
 type Parser = struct {
     a: *mem.Arena, lx: lex.Lexer, tok: lex.Tok, prev_end: usize, prev_start: usize, prev_line: u32,
     nodes: list.List[ast.Node], kids: list.List[u32], strs: list.List[ast.TemplateStr], vars: list.List[u32],
-    strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool, blk: u32,
+    strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool, blk: u32, module: bool, anon_default: bool, top_await: bool,
     message: str, line: u32
 }
 
@@ -546,6 +546,7 @@ fn parse_unary(p: *Parser) -> (u32, err) {
         if str.eq(t2, "await") && p.in_async {
             let (id4, me4) = mk(p, ast.N_AWAIT)
             if me4 != ok { ret (ast.NONE, me4) }
+            if !p.in_function { p.top_await = true }
             try adv(p)
             let arg4 = try parse_unary(p)
             node(p, id4).a = arg4
@@ -1088,6 +1089,7 @@ fn parse_new(p: *Parser) -> (u32, err) {
         callee = try parse_new(p)
     } else if is_k(p, "import") {
         callee = try parse_import(p)
+        if p.nodes.items[usize(callee)].kind == ast.N_IMPORT_CALL { ret (ast.NONE, fail(p, "cannot use new with import()")) }
     } else {
         callee = try parse_primary(p)
     }
@@ -1143,6 +1145,7 @@ fn parse_import(p: *Parser) -> (u32, err) {
     if is_p(p, ".") {
         try adv(p)
         if !is_k(p, "meta") { ret (ast.NONE, fail(p, "expected import.meta")) }
+        if !p.module { ret (ast.NONE, fail(p, "import.meta is only valid in modules")) }
         try adv(p)
         let (id, me) = mk(p, ast.N_IMPORT_META)
         if me != ok { ret (ast.NONE, me) }
@@ -1150,6 +1153,12 @@ fn parse_import(p: *Parser) -> (u32, err) {
     }
     if !is_p(p, "(") { ret (ast.NONE, fail(p, "unexpected import")) }
     let args = try parse_arguments(p)
+    if args.len == 0usize || args.len > 2usize { ret (ast.NONE, fail(p, "import() takes one or two arguments")) }
+    var ai = 0usize
+    while ai < args.len {
+        if p.nodes.items[usize(args.items[ai])].kind == ast.N_SPREAD { ret (ast.NONE, fail(p, "import() does not take spread arguments")) }
+        ai += 1usize
+    }
     let (id2, me2) = mk(p, ast.N_IMPORT_CALL)
     if me2 != ok { ret (ast.NONE, me2) }
     let (first, ke) = commit(p, &args)
@@ -1232,7 +1241,21 @@ fn parse_statements(p: *Parser, closing: bool, ids: *list.List[u32]) -> err {
                 prologue = false
             }
         }
-        let s = try parse_statement(p)
+        var s: u32 = ast.NONE
+        var handled = false
+        if p.module && !closing && p.tok.kind == lex.T_IDENT && !p.tok.escaped {
+            if str.eq(p.tok.text, "import") {
+                let nx0 = try peek(p)
+                if !(nx0.kind == lex.T_PUNCT && (str.eq(nx0.text, "(") || str.eq(nx0.text, "."))) {
+                    s = try parse_import_decl(p)
+                    handled = true
+                }
+            } else if str.eq(p.tok.text, "export") {
+                s = try parse_export_decl(p)
+                handled = true
+            }
+        }
+        if !handled { s = try parse_statement(p) }
         try list.push[u32](ids, s)
         if prologue {
             let k = p.nodes.items[usize(s)].kind
@@ -1315,6 +1338,9 @@ fn parse_function(p: *Parser, decl: bool, is_async: bool) -> (u32, err) {
     if p.tok.kind == lex.T_IDENT && !is_p(p, "(") {
         node(p, fid).text = p.tok.text
         try adv(p)
+    } else if decl && p.anon_default {
+        node(p, fid).text = "*default*"
+        p.anon_default = false
     } else if decl {
         ret (ast.NONE, fail(p, "function declaration needs a name"))
     }
@@ -1339,6 +1365,9 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
     if p.tok.kind == lex.T_IDENT && !is_k(p, "extends") {
         node(p, cid).text = p.tok.text
         try adv(p)
+    } else if decl && p.anon_default {
+        node(p, cid).text = "*default*"
+        p.anon_default = false
     } else if decl {
         ret (ast.NONE, fail(p, "class declaration needs a name"))
     }
@@ -1558,6 +1587,7 @@ fn parse_for(p: *Parser) -> (u32, err) {
     if is_k(p, "await") {
         try adv(p)
         is_await = true
+        if !p.in_function { p.top_await = true }
     }
     try expect_p(p, "(")
     var init: u32 = ast.NONE
@@ -1880,12 +1910,252 @@ fn parse_statement(p: *Parser) -> (u32, err) {
     ret (sid, ok)
 }
 
+// --- modules
+
+// An IdentifierName or a string literal naming an export or import: (name, was a string).
+fn parse_module_name(p: *Parser) -> (str, bool, err) {
+    if p.tok.kind == lex.T_STR {
+        let s = p.tok.text
+        try adv(p)
+        ret (s, true, ok)
+    }
+    if p.tok.kind == lex.T_IDENT {
+        let s2 = p.tok.text
+        try adv(p)
+        ret (s2, false, ok)
+    }
+    ret ("", false, fail(p, "expected a module export name"))
+}
+
+fn parse_module_binding(p: *Parser) -> (str, err) {
+    if p.tok.kind != lex.T_IDENT || is_reserved(p.tok.text) || str.eq(p.tok.text, "await") || str.eq(p.tok.text, "yield") || str.eq(p.tok.text, "eval") || str.eq(p.tok.text, "arguments") || str.eq(p.tok.text, "let") || str.eq(p.tok.text, "static") || str.eq(p.tok.text, "implements") || str.eq(p.tok.text, "interface") || str.eq(p.tok.text, "package") || str.eq(p.tok.text, "private") || str.eq(p.tok.text, "protected") || str.eq(p.tok.text, "public") {
+        ret ("", fail(p, "expected a binding identifier"))
+    }
+    let s = p.tok.text
+    try adv(p)
+    ret (s, ok)
+}
+
+fn parse_module_source(p: *Parser) -> (str, err) {
+    if p.tok.kind != lex.T_STR { ret ("", fail(p, "expected a module specifier")) }
+    let s = p.tok.text
+    try adv(p)
+    // Import attributes (`with { type: "json" }`) are read and ignored.
+    if is_k(p, "with") && !p.tok.nl {
+        try adv(p)
+        try expect_p(p, "{")
+        while !is_p(p, "}") {
+            if p.tok.kind == lex.T_EOF { ret ("", fail(p, "unexpected end of input")) }
+            try adv(p)
+        }
+        try adv(p)
+    }
+    ret (s, ok)
+}
+
+fn parse_import_decl(p: *Parser) -> (u32, err) {
+    let (imp, me) = mk(p, ast.N_IMPORT)
+    if me != ok { ret (ast.NONE, me) }
+    try adv(p)
+    let (specs_0, se) = new_ids(p)
+    var specs = specs_0
+    if se != ok { ret (ast.NONE, se) }
+    if p.tok.kind != lex.T_STR {
+        if p.tok.kind == lex.T_IDENT {
+            let (ds, de) = mk(p, ast.N_IMPORT_SPEC)
+            if de != ok { ret (ast.NONE, de) }
+            let local = try parse_module_binding(p)
+            node(p, ds).op = 1u8
+            node(p, ds).text = "default"
+            node(p, ds).text2 = local
+            try list.push[u32](&specs, ds)
+            if is_p(p, ",") {
+                try adv(p)
+                if !is_p(p, "*") && !is_p(p, "{") { ret (ast.NONE, fail(p, "expected * or { after the default import")) }
+            }
+        }
+        if is_p(p, "*") {
+            try adv(p)
+            if !is_k(p, "as") { ret (ast.NONE, fail(p, "expected as")) }
+            try adv(p)
+            let (ns, ne) = mk(p, ast.N_IMPORT_SPEC)
+            if ne != ok { ret (ast.NONE, ne) }
+            let local2 = try parse_module_binding(p)
+            node(p, ns).op = 2u8
+            node(p, ns).text = "*"
+            node(p, ns).text2 = local2
+            try list.push[u32](&specs, ns)
+        } else if is_p(p, "{") {
+            try adv(p)
+            while !is_p(p, "}") {
+                let (sp, spe) = mk(p, ast.N_IMPORT_SPEC)
+                if spe != ok { ret (ast.NONE, spe) }
+                let was_reserved = p.tok.kind == lex.T_IDENT && (is_reserved(p.tok.text) || str.eq(p.tok.text, "await"))
+                let (imported, was_str, nme) = parse_module_name(p)
+                if nme != ok { ret (ast.NONE, nme) }
+                var local3 = imported
+                if is_k(p, "as") {
+                    try adv(p)
+                    local3 = try parse_module_binding(p)
+                } else if was_str || was_reserved || str.eq(imported, "eval") || str.eq(imported, "arguments") || str.eq(imported, "yield") {
+                    ret (ast.NONE, fail(p, "an imported name that is not a valid binding needs as"))
+                }
+                node(p, sp).op = 3u8
+                node(p, sp).text = imported
+                node(p, sp).text2 = local3
+                try list.push[u32](&specs, sp)
+                if !is_p(p, "}") { try expect_p(p, ",") }
+            }
+            try adv(p)
+        } else if specs.len == 0usize {
+            ret (ast.NONE, fail(p, "expected an import clause"))
+        }
+        if !is_k(p, "from") { ret (ast.NONE, fail(p, "expected from")) }
+        try adv(p)
+    }
+    let source = try parse_module_source(p)
+    try consume_semi(p)
+    let (first, ke) = commit(p, &specs)
+    if ke != ok { ret (ast.NONE, ke) }
+    node(p, imp).a = first
+    node(p, imp).b = u32(specs.len)
+    node(p, imp).text = source
+    ret (imp, ok)
+}
+
+fn parse_export_decl(p: *Parser) -> (u32, err) {
+    let (ex, me) = mk(p, ast.N_EXPORT)
+    if me != ok { ret (ast.NONE, me) }
+    try adv(p)
+    if is_k(p, "default") {
+        try adv(p)
+        var is_decl = false
+        if is_k(p, "function") || is_k(p, "class") { is_decl = true }
+        if is_k(p, "async") {
+            let nx = try peek(p)
+            if nx.kind == lex.T_IDENT && str.eq(nx.text, "function") && !nx.nl { is_decl = true }
+        }
+        if is_decl {
+            p.anon_default = true
+            let d = try parse_statement(p)
+            p.anon_default = false
+            node(p, ex).op = ast.X_DEFAULT_DECL
+            node(p, ex).a = d
+            node(p, ex).text = p.nodes.items[usize(d)].text
+            ret (ex, ok)
+        }
+        let saved = p.no_in
+        p.no_in = false
+        let e = try parse_assign(p)
+        p.no_in = saved
+        try consume_semi(p)
+        node(p, ex).op = ast.X_DEFAULT_EXPR
+        node(p, ex).a = e
+        ret (ex, ok)
+    }
+    if is_p(p, "*") {
+        try adv(p)
+        var star_as = false
+        var exported = ""
+        if is_k(p, "as") {
+            try adv(p)
+            let (nm, ws, nme) = parse_module_name(p)
+            if nme != ok { ret (ast.NONE, nme) }
+            exported = nm
+            star_as = true
+        }
+        if !is_k(p, "from") { ret (ast.NONE, fail(p, "expected from")) }
+        try adv(p)
+        let source = try parse_module_source(p)
+        try consume_semi(p)
+        node(p, ex).op = ast.X_STAR
+        if star_as {
+            node(p, ex).op = ast.X_STAR_AS
+            node(p, ex).text2 = exported
+        }
+        node(p, ex).text = source
+        ret (ex, ok)
+    }
+    if is_p(p, "{") {
+        try adv(p)
+        let (specs_0, se) = new_ids(p)
+        var specs = specs_0
+        if se != ok { ret (ast.NONE, se) }
+        var strings = false
+        var reserved_local = false
+        while !is_p(p, "}") {
+            let (sp, spe) = mk(p, ast.N_EXPORT_SPEC)
+            if spe != ok { ret (ast.NONE, spe) }
+            if p.tok.kind == lex.T_IDENT && (is_reserved(p.tok.text) || str.eq(p.tok.text, "await")) { reserved_local = true }
+            let (local, was_str, nme) = parse_module_name(p)
+            if nme != ok { ret (ast.NONE, nme) }
+            if was_str { strings = true }
+            var exported2 = local
+            if is_k(p, "as") {
+                try adv(p)
+                let (nm2, ws2, nme2) = parse_module_name(p)
+                if nme2 != ok { ret (ast.NONE, nme2) }
+                exported2 = nm2
+            }
+            node(p, sp).text = local
+            node(p, sp).text2 = exported2
+            try list.push[u32](&specs, sp)
+            if !is_p(p, "}") { try expect_p(p, ",") }
+        }
+        try adv(p)
+        node(p, ex).op = ast.X_LIST
+        if is_k(p, "from") {
+            try adv(p)
+            let source2 = try parse_module_source(p)
+            node(p, ex).text = source2
+            node(p, ex).c = 1u32
+        } else {
+            if strings || reserved_local { ret (ast.NONE, fail(p, "a local export must name a binding")) }
+        }
+        try consume_semi(p)
+        let (first, ke) = commit(p, &specs)
+        if ke != ok { ret (ast.NONE, ke) }
+        node(p, ex).a = first
+        node(p, ex).b = u32(specs.len)
+        ret (ex, ok)
+    }
+    // export var / let / const / function / class
+    var allowed = false
+    if is_k(p, "var") || is_k(p, "const") || is_k(p, "function") || is_k(p, "class") { allowed = true }
+    if is_k(p, "let") { allowed = true }
+    if is_k(p, "async") {
+        let nx2 = try peek(p)
+        if nx2.kind == lex.T_IDENT && str.eq(nx2.text, "function") && !nx2.nl { allowed = true }
+    }
+    if !allowed { ret (ast.NONE, fail(p, "unexpected token after export")) }
+    let d2 = try parse_statement(p)
+    node(p, ex).op = ast.X_DECL
+    node(p, ex).a = d2
+    ret (ex, ok)
+}
+
 // Parses a script; `Program.root` is the N_PROGRAM node. On failure `message` and `line` describe the error.
 type Parsed = struct { program: ast.Program, message: str, line: u32 }
 
 fn parse_program(a: *mem.Arena, source: str) -> (Parsed, err) {
+    let (r, e) = parse_goal(a, source, false)
+    ret (r, e)
+}
+
+// Parses a module: strict code in which `await` works at the top level and `import` / `export` declarations are allowed.
+fn parse_module(a: *mem.Arena, source: str) -> (Parsed, err) {
+    let (r, e) = parse_goal(a, source, true)
+    ret (r, e)
+}
+
+fn parse_goal(a: *mem.Arena, source: str, module: bool) -> (Parsed, err) {
     var p: Parser = zero
     p.a = a
+    p.module = module
+    if module {
+        p.strict = true
+        p.in_async = true
+    }
     p.lx = lex.new_lexer(a, source)
     let (nodes, e1) = list.init[ast.Node](a, 256usize)
     let (kids, e2) = list.init[u32](a, 256usize)
@@ -1919,8 +2189,9 @@ fn parse_program(a: *mem.Arena, source: str) -> (Parsed, err) {
     p.nodes.items[usize(root)].a = kfirst
     p.nodes.items[usize(root)].b = u32(ids.len)
     if p.strict { p.nodes.items[usize(root)].flags = ast.F_STRICT }
+    if p.top_await { p.nodes.items[usize(root)].flags = p.nodes.items[usize(root)].flags | ast.F_ASYNC }
     close_hoist(&p, root, 0usize)
-    out.program = ast.Program { nodes: list.slice_const[ast.Node](&p.nodes), kids: list.slice_const[u32](&p.kids), strs: list.slice_const[ast.TemplateStr](&p.strs), root: root, source: source }
+    out.program = ast.Program { nodes: list.slice_const[ast.Node](&p.nodes), kids: list.slice_const[u32](&p.kids), strs: list.slice_const[ast.TemplateStr](&p.strs), root: root, source: source, url: "", module: zero, is_module: module }
     // Static semantics beyond the grammar.
     let (early_result, early_error) = early.check(a, &out.program)
     if early_error != ok {

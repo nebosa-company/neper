@@ -75,6 +75,23 @@ const N_DEBUGGER: u8 = 60u8
 const N_PROGRAM: u8 = 61u8
 const N_WITH: u8 = 62u8
 
+// Module items. N_IMPORT: `a`/`b` the list of N_IMPORT_SPEC, `text` the module specifier. N_IMPORT_SPEC: `op` 1 default,
+// 2 namespace, 3 named; `text` the imported name, `text2` the local binding. N_EXPORT: `op` is an X_ constant; for X_DECL and
+// X_DEFAULT_DECL `a` is the declaration, for X_DEFAULT_EXPR `a` the expression, for X_LIST `a`/`b` the list of N_EXPORT_SPEC
+// and `text` the module it re-exports from when `c` is 1, for X_STAR and X_STAR_AS `text` the module and for X_STAR_AS `text2`
+// the exported name. N_EXPORT_SPEC: `text` the local (or imported) name, `text2` the exported name.
+const N_IMPORT: u8 = 70u8
+const N_EXPORT: u8 = 71u8
+const N_IMPORT_SPEC: u8 = 72u8
+const N_EXPORT_SPEC: u8 = 73u8
+
+const X_DECL: u8 = 1u8
+const X_DEFAULT_EXPR: u8 = 2u8
+const X_DEFAULT_DECL: u8 = 3u8
+const X_LIST: u8 = 4u8
+const X_STAR: u8 = 5u8
+const X_STAR_AS: u8 = 6u8
+
 // Declaration kinds (`op` of N_VAR and N_FORIN/N_FOROF heads).
 const D_VAR: u8 = 1u8
 const D_LET: u8 = 2u8
@@ -153,5 +170,5 @@ type Node = struct {
 type TemplateStr = struct { cooked: str, raw: str, valid: bool }
 
 type Program = struct {
-    nodes: []const Node, kids: []const u32, strs: []const TemplateStr, root: u32, source: str
+    nodes: []const Node, kids: []const u32, strs: []const TemplateStr, root: u32, source: str, url: str, module: *void, is_module: bool
 }

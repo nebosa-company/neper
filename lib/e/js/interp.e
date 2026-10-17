@@ -51,6 +51,7 @@ const C_ARRAYBUFFER: u8 = 20u8
 const C_TYPEDARRAY: u8 = 21u8
 const C_DATAVIEW: u8 = 22u8
 const C_ITERATOR: u8 = 23u8
+const C_NAMESPACE: u8 = 24u8
 
 // Property flags.
 const P_WRITABLE: u8 = 1u8
@@ -71,6 +72,16 @@ type Prop = struct { key: Key, value: Value, getter: *Obj, setter: *Obj, flags: 
 
 type NativeFn = fn(*Interp, Value, []const Value) -> (Value, err)
 
+// Modules (module.e): the host resolves, fetches and parses a module (answers its record), and the evaluator calls back for
+// dynamic `import()` (op 1: value is the specifier) and `import.meta` (op 2), told which program asked.
+type ModuleLoader = fn(*Interp, str, str) -> (*void, err)
+type ModuleHook = fn(*Interp, u8, Value, *const ast.Program) -> (Value, err)
+
+// A module namespace object's exports, sorted by name: the binding a name reads (an environment and a binding name) or, for
+// `export * as ns`, the namespace object itself.
+type NsEntry = struct { name: str, env: *Env, binding: str, ns_value: Value, is_ns: bool }
+type NsData = struct { entries: []const NsEntry }
+
 // The Proxy internal methods live in b_proxy.e; `op` is one of PX_* (see the end of this file).
 type ProxyHook = fn(*Interp, u8, *Obj, Key, Value, Value) -> (Value, err)
 
@@ -80,8 +91,10 @@ type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_
 const B_CONST: u8 = 1u8
 const B_TDZ: u8 = 2u8
 const B_STRICT_CONST: u8 = 4u8
+// An import binding: `value` names the binding of the exporting module's environment (`target`) it reads.
+const B_ALIAS: u8 = 8u8
 
-type Binding = struct { name: str, value: Value, flags: u8 }
+type Binding = struct { name: str, value: Value, flags: u8, target: *Env }
 
 type Obj = struct {
     class: u8, proto: *Obj, has_proto: bool, extensible: bool,
@@ -111,7 +124,9 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize,
+    modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
+    pending_module_body: bool
 }
 
 fn null_interp() -> *Interp {
@@ -1052,6 +1067,19 @@ fn array_set_length(it: *Interp, o: *Obj, len: f64) {
 // The own property `key` of `o`, with exotic objects (arrays, strings, arguments) synthesised.
 fn get_own(it: *Interp, o: *Obj, key: Key) -> (Prop, bool) {
     let z = null_obj()
+    if o.class == C_NAMESPACE {
+        if is_symbol_key(key) {
+            if key.sym == it.sym_to_string_tag { ret (Prop { key: key, value: str_value("Module"), getter: z, setter: z, flags: 0u8 }, true) }
+            ret (zero, false)
+        }
+        let (ev, found, ee) = ns_read(it, o, key.name)
+        if ee != ok {
+            it.px_err = ee
+            ret (zero, false)
+        }
+        if !found { ret (zero, false) }
+        ret (Prop { key: key, value: ev, getter: z, setter: z, flags: P_WRITABLE | P_ENUMERABLE }, true)
+    }
     if o.class == C_PROXY {
         let (gv, ge) = px_call(it, PX_GETOWN, o, key, undefv(), undefv())
         if ge != ok {
@@ -1234,6 +1262,7 @@ fn str_concat(it: *Interp, x: str, y: str) -> str {
 
 // [[Set]]. Answers false when the assignment is rejected (read-only, no setter, frozen); the caller throws in strict code.
 fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (bool, err) {
+    if o.class == C_NAMESPACE { ret (false, ok) }
     var cur = o
     var guard = 0u32
     while guard < 100000u32 {
@@ -1423,6 +1452,11 @@ fn has_property(it: *Interp, o: *Obj, key: Key) -> bool {
 }
 
 fn delete_prop(it: *Interp, o: *Obj, key: Key) -> bool {
+    if o.class == C_NAMESPACE {
+        if is_symbol_key(key) { ret key.sym != it.sym_to_string_tag }
+        let (nv, found, ne) = ns_read(it, o, key.name)
+        ret !found
+    }
     if o.class == C_PROXY {
         let (dv, de) = px_call(it, PX_DELETE, o, key, undefv(), undefv())
         if de != ok {
@@ -1507,6 +1541,26 @@ fn prop_to_desc(p: Prop) -> Desc {
 // ValidateAndApplyPropertyDescriptor over an ordinary or array object. Answers false when the change is not allowed.
 fn define_own(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err) {
     let z = null_obj()
+    if o.class == C_NAMESPACE {
+        if is_symbol_key(key) {
+            if key.sym != it.sym_to_string_tag { ret (false, ok) }
+            if d.has_configurable && d.configurable { ret (false, ok) }
+            if d.has_enumerable && d.enumerable { ret (false, ok) }
+            if d.has_get || d.has_set { ret (false, ok) }
+            if d.has_writable && d.writable { ret (false, ok) }
+            if d.has_value && !same_value(d.value, str_value("Module")) { ret (false, ok) }
+            ret (true, ok)
+        }
+        let (cur, found, ce) = ns_read(it, o, key.name)
+        if ce != ok { ret (false, ce) }
+        if !found { ret (false, ok) }
+        if d.has_configurable && d.configurable { ret (false, ok) }
+        if d.has_enumerable && !d.enumerable { ret (false, ok) }
+        if d.has_get || d.has_set { ret (false, ok) }
+        if d.has_writable && !d.writable { ret (false, ok) }
+        if d.has_value && !same_value(d.value, cur) { ret (false, ok) }
+        ret (true, ok)
+    }
     if o.class == C_PROXY {
         let (pv, pe) = px_call(it, PX_DEFINE, o, key, from_descriptor(it, d), undefv())
         if pe != ok { ret (false, pe) }
@@ -2220,14 +2274,14 @@ fn declare(it: *Interp, e: *Env, name: str, val: Value, flags: u8) -> err {
         e.vars.items[at].flags = flags
         ret ok
     }
-    ret list.push[Binding](&e.vars, Binding { name: name, value: val, flags: flags })
+    ret list.push[Binding](&e.vars, Binding { name: name, value: val, flags: flags, target: null_env() })
 }
 
 // A `var`/parameter-style declaration: leaves an existing binding's value alone.
 fn declare_var(it: *Interp, e: *Env, name: str) -> err {
     let (at, found) = env_index(e, name)
     if found { ret ok }
-    ret list.push[Binding](&e.vars, Binding { name: name, value: undefv(), flags: 0u8 })
+    ret list.push[Binding](&e.vars, Binding { name: name, value: undefv(), flags: 0u8, target: null_env() })
 }
 
 type Frame = struct {
@@ -2288,6 +2342,12 @@ fn get_in_scope(it: *Interp, holder: *Env, name: str) -> (Value, err) {
         }
         let (at, found) = env_index(holder, name)
         if found {
+            if (holder.vars.items[at].flags & B_ALIAS) != 0u8 {
+                let tenv = holder.vars.items[at].target
+                let (tat, tfound) = env_index(tenv, value_str(holder.vars.items[at].value))
+                if !tfound || (tenv.vars.items[tat].flags & B_TDZ) != 0u8 { ret (undefv(), throw_reference(it, str_concat3(it, "Cannot access '", name, "' before initialization"))) }
+                ret (tenv.vars.items[tat].value, ok)
+            }
             if (holder.vars.items[at].flags & B_TDZ) != 0u8 { ret (undefv(), throw_reference(it, str_concat3(it, "Cannot access '", name, "' before initialization"))) }
             ret (holder.vars.items[at].value, ok)
         }
@@ -2309,6 +2369,7 @@ fn put_in_scope(it: *Interp, f: *Frame, holder: *Env, name: str, val: Value) -> 
         let (at, found) = env_index(holder, name)
         if found {
             let fl = holder.vars.items[at].flags
+            if (fl & B_ALIAS) != 0u8 { ret throw_type(it, "Assignment to constant variable.") }
             if (fl & B_TDZ) != 0u8 { ret throw_reference(it, str_concat3(it, "Cannot access '", name, "' before initialization")) }
             if (fl & B_CONST) != 0u8 {
                 if (fl & B_STRICT_CONST) != 0u8 || f.strict { ret throw_type(it, "Assignment to constant variable.") }
@@ -2351,7 +2412,7 @@ fn init_binding(it: *Interp, e: *Env, name: str, val: Value) -> err {
         e.vars.items[at].flags = e.vars.items[at].flags & (255u8 - B_TDZ)
         ret ok
     }
-    ret list.push[Binding](&e.vars, Binding { name: name, value: val, flags: 0u8 })
+    ret list.push[Binding](&e.vars, Binding { name: name, value: val, flags: 0u8, target: null_env() })
 }
 
 // --- functions
@@ -2390,7 +2451,9 @@ fn make_function(it: *Interp, f: *Frame, fid: u32) -> (*Obj, err) {
     fo.ctor_kind = K_NONE
     if !is_arrow && !is_method && !is_gen && !is_async { fo.ctor_kind = K_BASE }
     try define_data(it, fo, key_of("length"), num_value(n.num), P_CONFIGURABLE)
-    try define_data(it, fo, key_of("name"), str_value(n.text), P_CONFIGURABLE)
+    var fn_name = n.text
+    if str.eq(n.text, "*default*") { fn_name = "default" }
+    try define_data(it, fo, key_of("name"), str_value(fn_name), P_CONFIGURABLE)
     if fo.ctor_kind == K_BASE {
         let proto = new_plain(it)
         try define_data(it, proto, key_of("constructor"), obj_value(fo), P_HIDDEN)
@@ -2767,7 +2830,7 @@ fn bind_name(it: *Interp, f: *Frame, name: str, val: Value, mode: u8) -> err {
             f.env.vars.items[at].flags = fl
             ret ok
         }
-        ret list.push[Binding](&f.env.vars, Binding { name: name, value: val, flags: fl })
+        ret list.push[Binding](&f.env.vars, Binding { name: name, value: val, flags: fl, target: null_env() })
     }
     ret ok
 }
@@ -2998,6 +3061,16 @@ fn own_keys(it: *Interp, o: *Obj) -> ([]const Key, err) {
     let (l, le) = list.init[Key](it.a, o.props.len + o.elems.len + 4usize)
     var out = l
     if le != ok { ret (zero, le) }
+    if o.class == C_NAMESPACE {
+        let nd = mem.cast[*NsData](o.data)
+        var ni = 0usize
+        while ni < nd.entries.len {
+            try list.push[Key](&out, key_of(nd.entries[ni].name))
+            ni += 1usize
+        }
+        try list.push[Key](&out, key_of_symbol(it.sym_to_string_tag))
+        ret (list.slice_const[Key](&out), ok)
+    }
     if o.class == C_PROXY {
         let (kv, ke) = px_call(it, PX_KEYS, o, key_of(""), undefv(), undefv())
         if ke != ok { ret (zero, ke) }
@@ -3801,7 +3874,25 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
         let (r6, re6) = await_value(it, f, av)
         ret (r6, re6)
     }
-    if k == ast.N_IMPORT_CALL || k == ast.N_IMPORT_META { ret (undefv(), throw_syntax(it, "modules are not supported yet")) }
+    if k == ast.N_IMPORT_CALL || k == ast.N_IMPORT_META {
+        if !it.has_modules { ret (undefv(), throw_syntax(it, "modules are not supported here")) }
+        if k == ast.N_IMPORT_META {
+            let (mv, me) = it.module_hook(it, 2u8, undefv(), f.prog)
+            ret (mv, me)
+        }
+        var spec = undefv()
+        if n.c > 0u32 {
+            let (sv, se) = eval(it, f, f.prog.kids[usize(n.b)])
+            if se != ok { ret (undefv(), se) }
+            spec = sv
+        }
+        if n.c > 1u32 {
+            let (ov, oe) = eval(it, f, f.prog.kids[usize(n.b) + 1usize])
+            if oe != ok { ret (undefv(), oe) }
+        }
+        let (iv, ie) = it.module_hook(it, 1u8, spec, f.prog)
+        ret (iv, ie)
+    }
     if k == ast.N_PRIVATE { ret (undefv(), throw_syntax(it, "unexpected private name")) }
     if k == ast.N_SUPER { ret (undefv(), throw_syntax(it, "'super' keyword unexpected here")) }
     ret (undefv(), throw_syntax(it, "unsupported expression"))
@@ -3875,11 +3966,11 @@ fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         let an = f.prog.nodes[usize(n.a)]
         if an.kind == ast.N_IDENT {
             // `typeof undeclared` is "undefined" rather than a ReferenceError.
-            let (v, e) = lookup_value(it, f, an.text)
-            if e != ok {
-                if is_reference_error(it) { ret (str_value("undefined"), ok) }
-                ret (undefv(), e)
-            }
+            let (holder, he) = resolve_scope(it, f, an.text)
+            if he != ok { ret (undefv(), he) }
+            if holder == null_env() && !has_property(it, it.global, key_of(an.text)) { ret (str_value("undefined"), ok) }
+            let (v, e) = get_in_scope(it, holder, an.text)
+            if e != ok { ret (undefv(), e) }
             ret (str_value(type_of(v)), ok)
         }
         let (v2, e2) = eval(it, f, n.a)
@@ -4328,11 +4419,16 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
     ctor.has_proto = true
     ctor.home = proto
     ctor.has_home = true
-    let name = n.text
+    var name = n.text
+    var inner_name = n.text
+    if str.eq(n.text, "*default*") {
+        name = "default"
+        inner_name = ""
+    }
     try define_data(it, ctor, key_of("name"), str_value(name), P_CONFIGURABLE)
     try define_data(it, ctor, key_of("prototype"), obj_value(proto), 0u8)
     try define_data(it, proto, key_of("constructor"), obj_value(ctor), P_HIDDEN)
-    if n.text.len > 0usize { try declare(it, class_env, n.text, undefv(), B_CONST | B_TDZ) }
+    if inner_name.len > 0usize { try declare(it, class_env, inner_name, undefv(), B_CONST | B_TDZ) }
     // Members.
     let (field_list, fle) = list.init[Value](it.a, 4usize)
     var fields = field_list
@@ -4520,9 +4616,13 @@ fn bind_function_decl(it: *Interp, f: *Frame, vscope: *Env, name: str, fo: *Obj)
 fn hoist_declarations_in(it: *Interp, f: *Frame, first: u32, count: u32, vscope: *Env) -> err {
     var i = 0usize
     while i < usize(count) {
-        let sid = f.prog.kids[usize(first) + i]
-        let sn = f.prog.nodes[usize(sid)]
+        var sid = f.prog.kids[usize(first) + i]
+        var sn = f.prog.nodes[usize(sid)]
         i += 1usize
+        if sn.kind == ast.N_EXPORT && (sn.op == ast.X_DECL || sn.op == ast.X_DEFAULT_DECL) {
+            sid = sn.a
+            sn = f.prog.nodes[usize(sid)]
+        }
         if sn.kind == ast.N_VAR && sn.op != ast.D_VAR {
             var flags = B_TDZ
             if sn.op == ast.D_CONST { flags = flags | B_CONST }
@@ -4587,6 +4687,18 @@ fn has_lexical(f: *const Frame, first: u32, count: u32) -> bool {
         if sn.kind == ast.N_LABELED { ret true }
     }
     ret false
+}
+
+// The statements of a module body: its declarations were instantiated when the module was linked.
+fn exec_module_statements(it: *Interp, f: *Frame, root_id: u32) -> (Completion, err) {
+    let bn = f.prog.nodes[usize(root_id)]
+    var i = 0usize
+    while i < usize(bn.b) {
+        let (c, e) = exec(it, f, f.prog.kids[usize(bn.a) + i])
+        if e != ok { ret (normal(), e) }
+        i += 1usize
+    }
+    ret (normal(), ok)
 }
 
 // The body of a function: declarations hoisted into the call's own scope.
@@ -4748,7 +4860,19 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
         }
         ret (normal(), ok)
     }
-    if k == ast.N_FUNC || k == ast.N_EMPTY || k == ast.N_DEBUGGER { ret (normal(), ok) }
+    if k == ast.N_FUNC || k == ast.N_EMPTY || k == ast.N_DEBUGGER || k == ast.N_IMPORT { ret (normal(), ok) }
+    if k == ast.N_EXPORT {
+        if n.op == ast.X_DECL || n.op == ast.X_DEFAULT_DECL {
+            let (xc, xe) = exec(it, f, n.a)
+            ret (xc, xe)
+        }
+        if n.op == ast.X_DEFAULT_EXPR {
+            let (dv, de) = eval_named(it, f, n.a, "default")
+            if de != ok { ret (normal(), de) }
+            try init_binding(it, f.env, "*default*", dv)
+        }
+        ret (normal(), ok)
+    }
     if k == ast.N_CLASS {
         let (cv, ce) = eval_class(it, f, n)
         if ce != ok { ret (normal(), ce) }
@@ -5323,6 +5447,7 @@ fn eval_source(it: *Interp, source: str) -> (Value, err) {
     let (cell, ce) = mem.alloc[ast.Program](it.a, 1usize)
     if ce != ok { ret (undefv(), throw_range(it, "out of memory")) }
     cell[0usize] = parsed.program
+    cell[0usize].url = it.script_url
     let (rt1, re1) = run_program(it, &cell[0usize])
     ret (rt1, re1)
 }
@@ -5336,6 +5461,7 @@ fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
     let (cell, ce) = mem.alloc[ast.Program](it.a, 1usize)
     if ce != ok { ret (undefv(), throw_range(it, "out of memory")) }
     cell[0usize] = parsed.program
+    cell[0usize].url = f.prog.url
     let prog = &cell[0usize]
     let root = prog.nodes[usize(prog.root)]
     var g: Frame = zero
@@ -5399,7 +5525,7 @@ type GenState = struct {
     it: *Interp, frame: Frame, body: u32, expr_body: bool, kind: u8,
     state: u8, mode: u8, send: Value, out: Value, out_raw: bool, out_err: err, ret_val: Value,
     gen_ev: sync.Event, caller_ev: sync.Event, started: bool, saved_depth: u32,
-    promise: *Obj, awaiting: bool, owner: *Obj, queue: list.List[AgRequest], busy: bool
+    promise: *Obj, awaiting: bool, owner: *Obj, queue: list.List[AgRequest], busy: bool, module_body: bool
 }
 
 // Generator states.
@@ -5424,6 +5550,9 @@ fn gen_thread_main(gs: *GenState) {
         let (v, ve) = eval(it, &gs.frame, gs.body)
         result = v
         e = ve
+    } else if gs.module_body {
+        let (mc, mce) = exec_module_statements(it, &gs.frame, gs.body)
+        e = mce
     } else {
         let (c, ce) = exec_body(it, &gs.frame, gs.body)
         e = ce
@@ -5606,6 +5735,7 @@ fn make_suspendable(it: *Interp, fo: *Obj, f: Frame, n: ast.Node) -> (Value, err
     gs.ret_val = undefv()
     gs.frame.gen = mem.cast[*void](gs)
     gs.frame.has_gen = true
+    gs.module_body = it.pending_module_body
     if is_gen && is_async {
         gs.kind = 2u8
         let (ql, qle) = list.init[AgRequest](it.a, 2usize)
@@ -6448,6 +6578,29 @@ fn from_descriptor(it: *Interp, d: Desc) -> Value {
     ret obj_value(o)
 }
 
+
+fn zero_entries() -> []const NsEntry {
+    var none: []const NsEntry = zero
+    ret none
+}
+
+// The value of export `name` of namespace object `o`: (value, exists, error); reading an uninitialised binding is a
+// ReferenceError.
+fn ns_read(it: *Interp, o: *Obj, name: str) -> (Value, bool, err) {
+    let nd = mem.cast[*NsData](o.data)
+    var i = 0usize
+    while i < nd.entries.len {
+        if str.eq(nd.entries[i].name, name) {
+            let en = nd.entries[i]
+            if en.is_ns { ret (en.ns_value, true, ok) }
+            let (at, found) = env_index(en.env, en.binding)
+            if !found || (en.env.vars.items[at].flags & B_TDZ) != 0u8 { ret (undefv(), true, throw_reference(it, str_concat3(it, "Cannot access '", name, "' before initialization"))) }
+            ret (en.env.vars.items[at].value, true, ok)
+        }
+        i += 1usize
+    }
+    ret (undefv(), false, ok)
+}
 
 // --- Proxy plumbing (the traps themselves are in b_proxy.e)
 

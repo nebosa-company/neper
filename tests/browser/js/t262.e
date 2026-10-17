@@ -9,6 +9,7 @@ use e.data.list as list
 use e.fs
 use e.io
 use e.js.interp as js
+use e.js.module as module
 use e.js.parser as jsparse
 use e.js.realm as realm
 use e.mem
@@ -102,6 +103,76 @@ fn cat3(a: *mem.Arena, x: str, y: str, z: str) -> str {
 }
 
 type Ctx = struct { a: *mem.Arena, args: []str, status: i32 }
+
+// The directory part of a path ("" when there is none), with the trailing slash.
+fn dir_part(path: str) -> str {
+    var i = path.len
+    while i > 0usize && path[i - 1usize] != 47u8 { i -= 1usize }
+    ret path[0usize..i]
+}
+
+// Joins `base` (a directory with a trailing slash) and a relative path and removes "." and ".." segments.
+fn join_path(a: *mem.Arena, base: str, rel: str) -> str {
+    var full = rel
+    if !(rel.len > 0usize && rel[0usize] == 47u8) { full = cat3(a, base, rel, "") }
+    var segs: [96]str = zero
+    var n = 0usize
+    var pos = 0usize
+    var drive = ""
+    if full.len > 2usize && full[1usize] == 58u8 {
+        drive = full[0usize..2usize]
+        full = full[2usize..]
+    }
+    while pos <= full.len {
+        var end = pos
+        while end < full.len && full[end] != 47u8 { end += 1usize }
+        let seg = full[pos..end]
+        if str.eq(seg, "..") {
+            if n > 0usize { n -= 1usize }
+        } else if seg.len > 0usize && !str.eq(seg, ".") {
+            if n < 96usize {
+                segs[n] = seg
+                n += 1usize
+            }
+        }
+        pos = end + 1usize
+    }
+    var out = drive
+    var i = 0usize
+    while i < n {
+        out = cat3(a, out, "/", segs[i])
+        i += 1usize
+    }
+    ret out
+}
+
+// Resolves a module specifier against the referring module's file and loads it from disk.
+fn load_module(it: *js.Interp, referrer: str, spec: str) -> (*void, err) {
+    var rel_ok = false
+    if spec.len > 1usize && spec[0usize] == 46u8 && (spec[1usize] == 47u8 || spec[1usize] == 46u8) { rel_ok = true }
+    if spec.len > 0usize && spec[0usize] == 47u8 { rel_ok = true }
+    if !rel_ok { ret (zero, js.throw_type(it, cat3(it.a, "Cannot resolve module specifier ", spec, ""))) }
+    let resolved = join_path(it.a, dir_part(referrer), spec)
+    let (found, has) = module.find(it, resolved)
+    if has { ret (mem.cast[*void](found), ok) }
+    let (src, fe) = fs.read_file(it.a, resolved, 8388608usize)
+    if fe != ok { ret (zero, js.throw_type(it, cat3(it.a, "Cannot find module ", resolved, ""))) }
+    let text: str = src
+    let (m, me) = module.new_module(it, resolved, text)
+    if me != ok { ret (zero, me) }
+    ret (mem.cast[*void](m), ok)
+}
+
+fn name_of_thrown(it: *js.Interp, v: js.Value) -> str {
+    if js.is_object(v) {
+        let (cv, ce) = js.get_value(it, v, js.key_of("constructor"))
+        if ce == ok && js.is_object(cv) {
+            let (nv, ne) = js.get_value(it, cv, js.key_of("name"))
+            if ne == ok && js.is_string(nv) { ret js.value_str(nv) }
+        }
+    }
+    ret ""
+}
 
 fn main(a: *mem.Arena, args: []str) -> err {
     // The interpreter recurses deeply, so it runs on a thread with a large stack.
@@ -198,7 +269,7 @@ fn run_all(ctx: *Ctx) {
             expect_phase = field_of(meta, nn, "phase:")
             expect_type = field_of(meta, nn, "type:")
         }
-        if is_module || skipped_feature(meta) || (strict_all && no_strict) {
+        if skipped_feature(meta) || (strict_all && no_strict) {
             skipped += 1usize
             mem.reset(a, work)
             continue
@@ -207,7 +278,20 @@ fn run_all(ctx: *Ctx) {
         var pass = false
         var why = ""
         let use_strict = only_strict || strict_all
-        if str.eq(expect_phase, "parse") || str.eq(expect_phase, "early") {
+        if is_module && (str.eq(expect_phase, "parse") || str.eq(expect_phase, "early")) {
+            let (pr, pe) = jsparse.parse_module(a, src)
+            if pe != ok { pass = true } else {
+                // Static errors of the module record count as early errors too.
+                let (it0, re0) = realm.new_realm(a)
+                if re0 == ok {
+                    let ie = module.install(it0, load_module)
+                    let (mm, me) = module.new_module(it0, cat3(a, dir, cat3(a, "/", path, ""), ""), src)
+                    if me != ok { pass = true } else { why = "expected an early error" }
+                } else {
+                    why = "expected an early error"
+                }
+            }
+        } else if str.eq(expect_phase, "parse") || str.eq(expect_phase, "early") {
             var text: str = src
             if use_strict { text = cat3(a, "\"use strict\";\n", src, "") }
             let (pr, pe) = jsparse.parse_program(a, text)
@@ -245,12 +329,36 @@ fn run_all(ctx: *Ctx) {
                         k += 1usize
                     }
                 }
+                let full_path = cat3(a, dir, cat3(a, "/", path, ""), "")
                 if !failed {
-                    let (v, e0) = realm.run(it, script)
-                    var e = e0
-                    if e == ok {
-                        let je = js.run_jobs(it)
-                        if je != ok { e = je }
+                    let ie0 = module.install(it, load_module)
+                    it.script_url = full_path
+                    var e: err = ok
+                    var v0 = js.undefv()
+                    if is_module {
+                        let (mm, me) = module.new_module(it, full_path, src)
+                        e = me
+                        if e == ok {
+                            let (pv, pe2) = module.run_module(it, mm)
+                            e = pe2
+                            if e == ok {
+                                let je0 = js.run_jobs(it)
+                                if je0 != ok { e = je0 }
+                                let ps = js.promise_state_of(js.as_object(pv))
+                                if e == ok && ps.state == 2u8 {
+                                    it.thrown = ps.result
+                                    e = js.Throw
+                                }
+                            }
+                        }
+                    } else {
+                        let (v, e1) = realm.run(it, script)
+                        e = e1
+                        v0 = v
+                        if e == ok {
+                            let je = js.run_jobs(it)
+                            if je != ok { e = je }
+                        }
                     }
                     if e == js.Throw {
                         var thrown_name = ""
@@ -261,7 +369,7 @@ fn run_all(ctx: *Ctx) {
                                 if ne == ok && js.is_string(nv) { thrown_name = js.value_str(nv) }
                             }
                         }
-                        if str.eq(expect_phase, "runtime") && str.eq(thrown_name, expect_type) {
+                        if (str.eq(expect_phase, "runtime") || str.eq(expect_phase, "resolution")) && str.eq(thrown_name, expect_type) {
                             pass = true
                         } else {
                             let (ms, mse) = js.to_string(it, it.thrown)
