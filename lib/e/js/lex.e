@@ -35,7 +35,7 @@ type Tok = struct {
 // template may carry; `exprs` are the substitution sources, one fewer than the strings.
 type Template = struct { cooked: []const str, raw: []const str, valid: []const bool, exprs: []const str }
 
-type Lexer = struct { a: *mem.Arena, src: str, pos: usize, line: u32, template: Template, message: str }
+type Lexer = struct { a: *mem.Arena, src: str, pos: usize, line: u32, template: Template, message: str, module: bool }
 
 fn new_lexer(a: *mem.Arena, src: str) -> Lexer {
     var lx: Lexer = zero
@@ -192,7 +192,7 @@ fn skip_space(lx: *Lexer) -> (bool, err) {
             if !closed { ret (nl, fail(lx, "unterminated comment")) }
         } else if c == 35u8 && lx.pos == 0usize && lx.src.len > 1usize && lx.src[1usize] == 33u8 {
             while lx.pos < lx.src.len && line_terminator(lx.src, lx.pos) == 0usize { lx.pos += 1usize }
-        } else if c == 60u8 && lx.pos + 3usize < lx.src.len && lx.src[lx.pos + 1usize] == 33u8 && lx.src[lx.pos + 2usize] == 45u8 && lx.src[lx.pos + 3usize] == 45u8 {
+        } else if !lx.module && c == 60u8 && lx.pos + 3usize < lx.src.len && lx.src[lx.pos + 1usize] == 33u8 && lx.src[lx.pos + 2usize] == 45u8 && lx.src[lx.pos + 3usize] == 45u8 {
             while lx.pos < lx.src.len && line_terminator(lx.src, lx.pos) == 0usize { lx.pos += 1usize }
         } else {
             ret (nl, ok)

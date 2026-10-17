@@ -1638,7 +1638,9 @@ fn parse_for(p: *Parser) -> (u32, err) {
         if is_k(p, "var") || is_k(p, "const") || let_decl {
             init = try parse_var(p, true)
         } else {
+            let starts_async = is_k(p, "async") && !p.tok.escaped
             init = try parse_expression(p)
+            if starts_async && is_k(p, "of") && !is_await && node(p, init).kind == ast.N_IDENT && str.eq(node(p, init).text, "async") && !is_paren(p, init) { ret (ast.NONE, fail(p, "The left-hand side of a for-of loop may not be 'async'")) }
         }
     }
     p.no_in = saved
@@ -2217,6 +2219,7 @@ fn parse_goal_in(a: *mem.Arena, source: str, module: bool, eo: *const early.Eval
         p.in_async = true
     }
     p.lx = lex.new_lexer(a, source)
+    p.lx.module = module
     let (nodes, e1) = list.init[ast.Node](a, 256usize)
     let (kids, e2) = list.init[u32](a, 256usize)
     let (strs, e3) = list.init[ast.TemplateStr](a, 16usize)
