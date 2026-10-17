@@ -15,6 +15,7 @@ use e.data.list as list
 use e.data.map as map
 use e.js.ast as ast
 use e.js.bigint as bigint
+use e.js.early as early
 use e.js.parser as jsparse
 use e.math
 use e.mem
@@ -93,6 +94,8 @@ const B_TDZ: u8 = 2u8
 const B_STRICT_CONST: u8 = 4u8
 // An import binding: `value` names the binding of the exporting module's environment (`target`) it reads.
 const B_ALIAS: u8 = 8u8
+// A let / const / class binding (set with the temporal dead zone): a sloppy direct eval's `var` may not redeclare it.
+const B_LEX: u8 = 16u8
 
 type Binding = struct { name: str, value: Value, flags: u8, target: *Env }
 
@@ -2267,7 +2270,9 @@ fn env_index(e: *const Env, name: str) -> (usize, bool) {
     ret (0usize, false)
 }
 
-fn declare(it: *Interp, e: *Env, name: str, val: Value, flags: u8) -> err {
+fn declare(it: *Interp, e: *Env, name: str, val: Value, flags_in: u8) -> err {
+    var flags = flags_in
+    if (flags & B_TDZ) != 0u8 { flags = flags | B_LEX }
     let (at, found) = env_index(e, name)
     if found {
         e.vars.items[at].value = val
@@ -2803,7 +2808,8 @@ fn bind_function(it: *Interp, f: *Frame, fo: *Obj, n: ast.Node, args: []const Va
     var h = 0usize
     while h < usize(n.hoist_count) {
         let hid = f.prog.kids[usize(n.hoist_first) + h]
-        try declare_var(it, f.env, f.prog.nodes[usize(hid)].text)
+        let hn = f.prog.nodes[usize(hid)]
+        if !(hn.kind == ast.N_FUNC && hn.op == 2u8) { try declare_var(it, f.env, hn.text) }
         h += 1usize
     }
     ret ok
@@ -2821,8 +2827,8 @@ fn bind_name(it: *Interp, f: *Frame, name: str, val: Value, mode: u8) -> err {
     }
     if mode == 3u8 { ret declare(it, f.env, name, val, 0u8) }
     if mode == 6u8 || mode == 7u8 {
-        var fl = 0u8
-        if mode == 7u8 { fl = B_CONST }
+        var fl = B_LEX
+        if mode == 7u8 { fl = B_LEX | B_CONST }
         let (at, found) = env_index(f.env, name)
         if found && (f.env.vars.items[at].flags & B_TDZ) == 0u8 && mode != 6u8 && false { ret ok }
         if found {
@@ -5390,7 +5396,8 @@ fn run_program(it: *Interp, prog: *const ast.Program) -> (Value, err) {
     while h < usize(root.hoist_count) {
         let hid = prog.kids[usize(root.hoist_first) + h]
         let name = prog.nodes[usize(hid)].text
-        if !has_own(it, it.global, key_of(name)) {
+        let skip_b = prog.nodes[usize(hid)].kind == ast.N_FUNC && prog.nodes[usize(hid)].op == 2u8
+        if !skip_b && !has_own(it, it.global, key_of(name)) {
             try define_data(it, it.global, key_of(name), undefv(), P_WRITABLE | P_ENUMERABLE)
         }
         h += 1usize
@@ -5456,7 +5463,30 @@ fn eval_source(it: *Interp, source: str) -> (Value, err) {
 fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
     if !is_string(arg) { ret (arg, ok) }
     let source = value_str(arg)
-    let (parsed, pe) = jsparse.parse_program(it.a, source)
+    var eo: early.EvalOpts = zero
+    eo.strict = f.strict
+    eo.super_prop = f.has_home
+    if f.has_func {
+        let fnode = f.func.prog.nodes[usize(f.func.node)]
+        eo.new_target = (fnode.flags & ast.F_ARROW) == 0u16 || (fnode.flags & ast.F_METHOD) != 0u16 || f.func.bound_target != null_obj()
+        eo.super_call = f.func.ctor_kind == K_DERIVED
+    }
+    var pnames: list.List[str] = zero
+    let (pl, ple) = list.init[str](it.a, 4usize)
+    pnames = pl
+    var pe_env = f.env
+    let zenv = null_env()
+    while pe_env != zenv {
+        var vi = 0usize
+        while vi < pe_env.vars.len {
+            let vn = pe_env.vars.items[vi].name
+            if vn.len > 1usize && vn[0usize] == 35u8 { let pp = list.push[str](&pnames, vn[1usize..]) }
+            vi += 1usize
+        }
+        pe_env = pe_env.parent
+    }
+    eo.privates = list.slice_const[str](&pnames)
+    let (parsed, pe) = jsparse.parse_eval(it.a, source, &eo)
     if pe != ok { ret (undefv(), throw_syntax(it, str_concat(it, "SyntaxError: ", parsed.message))) }
     let (cell, ce) = mem.alloc[ast.Program](it.a, 1usize)
     if ce != ok { ret (undefv(), throw_range(it, "out of memory")) }
@@ -5482,10 +5512,32 @@ fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
         let z = null_env()
         while tgt.parent != z && !env_is_var_scope(it, tgt) { tgt = tgt.parent }
     }
+    if !g.strict {
+        // EvalDeclarationInstantiation: a `var` / function name may not collide with a lexical binding between here and the variable scope.
+        var ch = 0usize
+        while ch < usize(root.hoist_count) {
+            let cnode = prog.nodes[usize(prog.kids[usize(root.hoist_first) + ch])]
+            let cname = cnode.text
+            var ce2 = f.env
+            if cnode.kind == ast.N_FUNC && cnode.op == 2u8 { ce2 = null_env() }
+            let zv = null_env()
+            while ce2 != zv {
+                let (cat, cfound) = env_index(ce2, cname)
+                if cfound && (ce2.vars.items[cat].flags & B_LEX) != 0u8 { ret (undefv(), throw_syntax(it, str_concat3(it, "Identifier '", cname, "' has already been declared"))) }
+                if ce2 == tgt { break }
+                ce2 = ce2.parent
+            }
+            ch += 1usize
+        }
+    }
     var h = 0usize
     while h < usize(root.hoist_count) {
         let hid = prog.kids[usize(root.hoist_first) + h]
         let name = prog.nodes[usize(hid)].text
+        if prog.nodes[usize(hid)].kind == ast.N_FUNC && prog.nodes[usize(hid)].op == 2u8 {
+            h += 1usize
+            continue
+        }
         // `var`s of sloppy direct eval land in the caller's variable scope.
         if tgt.parent == null_env() {
             if !has_own(it, it.global, key_of(name)) { try define_data(it, it.global, key_of(name), undefv(), P_DEFAULT) }

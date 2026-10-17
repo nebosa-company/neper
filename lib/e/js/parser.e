@@ -2148,10 +2148,23 @@ fn parse_module(a: *mem.Arena, source: str) -> (Parsed, err) {
     ret (r, e)
 }
 
+// Parses the source of a direct eval, which inherits strictness and the `super` / `new.target` / private-name context of its caller.
+fn parse_eval(a: *mem.Arena, source: str, eo: *const early.EvalOpts) -> (Parsed, err) {
+    let (r, e) = parse_goal_in(a, source, false, eo)
+    ret (r, e)
+}
+
 fn parse_goal(a: *mem.Arena, source: str, module: bool) -> (Parsed, err) {
+    var none: early.EvalOpts = zero
+    let (r, e) = parse_goal_in(a, source, module, &none)
+    ret (r, e)
+}
+
+fn parse_goal_in(a: *mem.Arena, source: str, module: bool, eo: *const early.EvalOpts) -> (Parsed, err) {
     var p: Parser = zero
     p.a = a
     p.module = module
+    p.strict = eo.strict
     if module {
         p.strict = true
         p.in_async = true
@@ -2193,7 +2206,7 @@ fn parse_goal(a: *mem.Arena, source: str, module: bool) -> (Parsed, err) {
     close_hoist(&p, root, 0usize)
     out.program = ast.Program { nodes: list.slice_const[ast.Node](&p.nodes), kids: list.slice_const[u32](&p.kids), strs: list.slice_const[ast.TemplateStr](&p.strs), root: root, source: source, url: "", module: zero, is_module: module }
     // Static semantics beyond the grammar.
-    let (early_result, early_error) = early.check(a, &out.program)
+    let (early_result, early_error) = early.check_in(a, &out.program, eo)
     if early_error != ok {
         out.message = early_result.message
         out.line = early_result.line

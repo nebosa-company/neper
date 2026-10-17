@@ -17,7 +17,7 @@ type Ctx = struct {
     a: *mem.Arena, p: *const ast.Program, strict: bool, in_function: bool, in_async: bool, in_generator: bool,
     in_loop: u32, in_switch: u32, labels: list.List[str], label_loops: list.List[bool], allow_new_target: bool,
     allow_super_prop: bool, allow_super_call: bool, in_field_init: bool, in_static_block: bool, message: str, line: u32,
-    privates: list.List[str], private_depth: list.List[usize], in_params: bool
+    privates: list.List[str], private_depth: list.List[usize], in_params: bool, lexstack: list.List[str], lex_floor: usize
 }
 
 fn fail(c: *Ctx, id: u32, m: str) -> err {
@@ -225,6 +225,69 @@ fn check_scope(c: *Ctx, first: u32, count: u32, top: bool, params: *const list.L
         m += 1usize
     }
     ret ok
+}
+
+// Annex B.3.3: a block-level function is also a `var` only when `var F` in its place would be no early error, that is when no
+// enclosing block (up to the function) declares F lexically. A function that fails the test is marked op 2.
+fn unlabel(c: *const Ctx, sid: u32) -> u32 {
+    var inner = sid
+    var guard = 0u32
+    while node(c, inner).kind == ast.N_LABELED && guard < 100u32 {
+        inner = node(c, inner).a
+        guard += 1u32
+    }
+    ret inner
+}
+
+fn lex_conflict(c: *const Ctx, name: str) -> bool {
+    var i = c.lex_floor
+    while i < c.lexstack.len {
+        if str.eq(c.lexstack.items[i], name) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+fn annexb_mark(c: *Ctx, first: u32, count: u32) {
+    var i = 0usize
+    while i < usize(count) {
+        let fid = unlabel(c, kid(c, first, i))
+        let fnn = node(c, fid)
+        i += 1usize
+        if fnn.kind == ast.N_FUNC && (fnn.flags & ast.F_DECL) != 0u16 && fnn.op == 1u8 && lex_conflict(c, fnn.text) {
+            let np = mem.cast[*ast.Node](&c.p.nodes[usize(fid)])
+            np.op = 2u8
+        }
+    }
+}
+
+// Pushes the lexically declared names of a statement list (let / const / class, and block-level functions when `funcs`).
+fn push_lex(c: *Ctx, first: u32, count: u32, funcs: bool) {
+    var i = 0usize
+    while i < usize(count) {
+        let sid = unlabel(c, kid(c, first, i))
+        let sn = node(c, sid)
+        i += 1usize
+        if sn.kind == ast.N_VAR && sn.op != ast.D_VAR {
+            var d = 0usize
+            while d < usize(sn.b) {
+                var names: list.List[str] = zero
+                let (l4, e4) = list.init[str](c.a, 2usize)
+                names = l4
+                let pe = pattern_names(c, node(c, kid(c, sn.a, d)).a, &names)
+                var q = 0usize
+                while q < names.len {
+                    let pu = list.push[str](&c.lexstack, names.items[q])
+                    q += 1usize
+                }
+                d += 1usize
+            }
+        } else if sn.kind == ast.N_CLASS && (sn.flags & ast.F_DECL) != 0u16 {
+            let pu2 = list.push[str](&c.lexstack, sn.text)
+        } else if funcs && sn.kind == ast.N_FUNC && (sn.flags & ast.F_DECL) != 0u16 {
+            let pu3 = list.push[str](&c.lexstack, sn.text)
+        }
+    }
 }
 
 fn first_stmt_node(c: *const Ctx, first: u32, count: u32) -> u32 {
@@ -696,6 +759,13 @@ fn check_function(c: *Ctx, id: u32) -> err {
         } else {
             let bn = node(c, n.c)
             be = check_scope(c, bn.a, bn.b, true, &names)
+            c.lex_floor = c.lexstack.len
+            var nz = 0usize
+            while nz < names.len {
+                let pu5 = list.push[str](&c.lexstack, names.items[nz])
+                nz += 1usize
+            }
+            push_lex(c, bn.a, bn.b, false)
             if be == ok { be = check_stmt_list(c, bn.a, bn.b) }
         }
     }
@@ -705,11 +775,11 @@ fn check_function(c: *Ctx, id: u32) -> err {
 
 type Saved = struct {
     strict: bool, in_function: bool, in_async: bool, in_generator: bool, in_loop: u32, in_switch: u32, labels_len: usize, allow_new_target: bool,
-    allow_super_prop: bool, allow_super_call: bool, in_field_init: bool, in_static_block: bool, in_params: bool
+    allow_super_prop: bool, allow_super_call: bool, in_field_init: bool, in_static_block: bool, in_params: bool, lex_len: usize, lex_floor: usize
 }
 
 fn save_ctx(c: *const Ctx) -> Saved {
-    ret Saved { strict: c.strict, in_function: c.in_function, in_async: c.in_async, in_generator: c.in_generator, in_loop: c.in_loop, in_switch: c.in_switch, labels_len: c.labels.len, allow_new_target: c.allow_new_target, allow_super_prop: c.allow_super_prop, allow_super_call: c.allow_super_call, in_field_init: c.in_field_init, in_static_block: c.in_static_block, in_params: c.in_params }
+    ret Saved { strict: c.strict, in_function: c.in_function, in_async: c.in_async, in_generator: c.in_generator, in_loop: c.in_loop, in_switch: c.in_switch, labels_len: c.labels.len, allow_new_target: c.allow_new_target, allow_super_prop: c.allow_super_prop, allow_super_call: c.allow_super_call, in_field_init: c.in_field_init, in_static_block: c.in_static_block, in_params: c.in_params, lex_len: c.lexstack.len, lex_floor: c.lex_floor }
 }
 
 fn restore_ctx(c: *Ctx, s: Saved) {
@@ -727,6 +797,8 @@ fn restore_ctx(c: *Ctx, s: Saved) {
     c.in_field_init = s.in_field_init
     c.in_static_block = s.in_static_block
     c.in_params = s.in_params
+    c.lexstack.len = s.lex_len
+    c.lex_floor = s.lex_floor
 }
 
 fn restore_fail(c: *Ctx, s: Saved, e: err) -> err {
@@ -957,7 +1029,12 @@ fn check_stmt(c: *Ctx, id: u32) -> err {
         let (nl, nle) = list.init[str](c.a, 1usize)
         nm = nl
         try check_scope(c, n.a, n.b, false, &nm)
-        ret check_stmt_list(c, n.a, n.b)
+        annexb_mark(c, n.a, n.b)
+        let lmark = c.lexstack.len
+        push_lex(c, n.a, n.b, true)
+        let be2 = check_stmt_list(c, n.a, n.b)
+        c.lexstack.len = lmark
+        ret be2
     }
     if k == ast.N_IF {
         try check_expr(c, n.a)
@@ -1052,7 +1129,19 @@ fn check_stmt(c: *Ctx, id: u32) -> err {
                     w += 1usize
                 }
             }
-            try check_stmt_list(c, body.a, body.b)
+            annexb_mark(c, body.a, body.b)
+            let cmark = c.lexstack.len
+            push_lex(c, body.a, body.b, true)
+            if cn.a != ast.NONE && node(c, cn.a).kind != ast.N_IDENT {
+                var pz = 0usize
+                while pz < pnames.len {
+                    let pu4 = list.push[str](&c.lexstack, pnames.items[pz])
+                    pz += 1usize
+                }
+            }
+            let ce3 = check_stmt_list(c, body.a, body.b)
+            c.lexstack.len = cmark
+            if ce3 != ok { ret ce3 }
         }
         if n.c != ast.NONE { try check_stmt(c, n.c) }
         ret ok
@@ -1225,7 +1314,14 @@ fn check_for(c: *Ctx, id: u32) -> err {
         }
     }
     c.in_loop += 1u32
+    let fmark = c.lexstack.len
+    var hz = 0usize
+    while hz < head_names.len {
+        let pu6 = list.push[str](&c.lexstack, head_names.items[hz])
+        hz += 1usize
+    }
     let e = check_substatement(c, n.d, false)
+    c.lexstack.len = fmark
     c.in_loop -= 1u32
     ret e
 }
@@ -1275,7 +1371,14 @@ fn check_for_in_of(c: *Ctx, id: u32) -> err {
         }
     }
     c.in_loop += 1u32
+    let fmark = c.lexstack.len
+    var hz = 0usize
+    while hz < head_names.len {
+        let pu6 = list.push[str](&c.lexstack, head_names.items[hz])
+        hz += 1usize
+    }
     let e = check_substatement(c, n.c, false)
+    c.lexstack.len = fmark
     c.in_loop -= 1u32
     ret e
 }
@@ -1283,7 +1386,16 @@ fn check_for_in_of(c: *Ctx, id: u32) -> err {
 type Result = struct { message: str, line: u32 }
 
 // Checks a parsed script; `ok` with an empty message when it has no early error.
+// What a direct eval inherits from its caller: strictness, whether `new.target` / `super` are allowed, the private names in scope.
+type EvalOpts = struct { strict: bool, new_target: bool, super_prop: bool, super_call: bool, privates: []const str }
+
 fn check(a: *mem.Arena, prog: *const ast.Program) -> (Result, err) {
+    var none: EvalOpts = zero
+    let (r, er) = check_in(a, prog, &none)
+    ret (r, er)
+}
+
+fn check_in(a: *mem.Arena, prog: *const ast.Program, eo: *const EvalOpts) -> (Result, err) {
     var c: Ctx = zero
     c.a = a
     c.p = prog
@@ -1294,10 +1406,21 @@ fn check(a: *mem.Arena, prog: *const ast.Program) -> (Result, err) {
     let (l3, e3) = list.init[str](a, 4usize)
     c.privates = l3
     let root = prog.nodes[usize(prog.root)]
-    c.strict = (root.flags & ast.F_STRICT) != 0u16
+    c.strict = (root.flags & ast.F_STRICT) != 0u16 || eo.strict
+    c.allow_new_target = eo.new_target
+    c.allow_super_prop = eo.super_prop
+    c.allow_super_call = eo.super_call
+    var pi = 0usize
+    while pi < eo.privates.len {
+        let pe = list.push[str](&c.privates, eo.privates[pi])
+        pi += 1usize
+    }
     var none: list.List[str] = zero
     let (nl, nle) = list.init[str](a, 1usize)
     none = nl
+    let (l4, e4) = list.init[str](a, 8usize)
+    c.lexstack = l4
+    push_lex(&c, root.a, root.b, false)
     var e = check_scope(&c, root.a, root.b, true, &none)
     if e == ok { e = check_stmt_list(&c, root.a, root.b) }
     var out = Result { message: c.message, line: c.line }
