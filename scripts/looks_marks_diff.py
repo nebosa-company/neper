@@ -1,10 +1,10 @@
-"""usage: python -I looks_marks_diff.py <sheet> <marks file> <key0> <x0,y0,x1,y1> [<x0,y0,x1,y1> ...] [--dir windows]
+"""usage: python -I looks_marks_diff.py <sheet> <marks file> <key0> <x0,y0,x1,y1> [<x0,y0,x1,y1> ...] [--dir windows] [--mask x0,y0,x1,y1 ...]
 
 For each box (a grid's cell in the reference sheet, key = key0, key0 + 1, ...) finds the reference's flat pixels that our render of the sheet
 misses by more than 2 levels outside text (looks_strict's rule: not inside a text box; plus the ink rule: not within 2 px of glyph ink) and
 appends, to line "<key> ..." of <marks file>, the pixels of that neighbourhood (3 px grown, plus every differing pixel of the small cells
 looks_cells finds) as Look.ring_marks text: "x y h rrggbb [w];..." from the box's top-left. Render the sheet, run this, render again: the
-second render has no flat pixel off. The sheet app reads the file (examples/looks/data_grid_top.e fix_marks_of).
+second render has no flat pixel off. Each --mask rectangle (v3's coloured artwork) is painted out of both images, as looks_strict.py does with its bare rectangle arguments. The sheet app reads the file (examples/looks/data_grid_top.e fix_marks_of).
 """
 import os
 import sys
@@ -56,11 +56,14 @@ def rects(mask, ref, x0, y0):
     return ["%d %d %d %02x%02x%02x%s" % (r[0] - x0, r[1] - y0, r[4], *r[3], (" %d" % r[2]) if r[2] > 1 else "") for r in out]
 
 
-def marks_for(sheet, boxes, look="windows"):
+def marks_for(sheet, boxes, look="windows", masks=()):
     ref = np.array(Image.open(ROOT + "ref/windows/%s.png" % sheet).convert("RGB"))
     ours = np.array(Image.open(ROOT + "%s/%s.png" % (look, sheet)).convert("RGB"))
     if ref.shape != ours.shape:
         ours = ours[:ref.shape[0], :ref.shape[1]]
+    for (mx0, my0, mx1, my1) in masks:
+        ref[my0:my1, mx0:mx1] = ref[0, 0]
+        ours[my0:my1, mx0:mx1] = ref[0, 0]
     off = (np.abs(ref.astype(int) - ours.astype(int)).max(axis=2) > 2) & looks_struct.struct_mask(ref)
     d = np.abs(ref.astype(int) - ours.astype(int)).max(axis=2)
     near = ink_near(ref) | ink_near(ours)
@@ -94,13 +97,18 @@ def main(argv):
         look = argv[argv.index("--dir") + 1]
         argv = [a for a in argv if a not in ("--dir", look)]
     sheet, path, key0 = argv[0], argv[1], int(argv[2])
+    masks = []
+    while "--mask" in argv:
+        i = argv.index("--mask")
+        masks.append(tuple(int(v) for v in argv[i + 1].split(",")))
+        argv = argv[:i] + argv[i + 2:]
     boxes = [tuple(int(v) for v in a.split(",")) for a in argv[3:]]
     old = {}
     if os.path.exists(path):
         for line in open(path):
             k, m = line.rstrip("\n").split(" ", 1)
             old[int(k)] = m
-    for i, m in enumerate(marks_for(sheet, boxes, look)):
+    for i, m in enumerate(marks_for(sheet, boxes, look, masks)):
         if m:
             old[key0 + i] = (old.get(key0 + i, "") + ";" + m).strip(";")
     with open(path, "w", newline="\n") as f:
