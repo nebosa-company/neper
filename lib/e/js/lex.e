@@ -240,6 +240,16 @@ fn read_ident(lx: *Lexer) -> (str, bool, err) {
         } else if c == 92u8 && pos + 1usize < lx.src.len && lx.src[pos + 1usize] == 117u8 {
             let (cp, after) = read_unicode_escape(lx.src, pos + 2usize)
             if cp < 0i64 { ret ("", true, fail(lx, "bad unicode escape in identifier")) }
+            // The escaped character must be allowed at that position of an identifier.
+            var cp_ok = true
+            if cp < 128i64 {
+                cp_ok = is_id_start(u8(cp)) || (pos != start && is_digit(u8(cp)))
+            } else if cp == 8204i64 || cp == 8205i64 {
+                cp_ok = pos != start
+            } else if cp == 160i64 || cp == 8232i64 || cp == 8233i64 || cp == 65279i64 || cp == 5760i64 || (cp >= 8192i64 && cp <= 8202i64) || cp == 8239i64 || cp == 8287i64 || cp == 12288i64 {
+                cp_ok = false
+            }
+            if !cp_ok { ret ("", true, fail(lx, "invalid escaped character in identifier")) }
             put_cp(&out, u32(cp))
             pos = after
         } else {

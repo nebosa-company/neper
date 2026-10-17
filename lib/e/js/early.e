@@ -49,7 +49,7 @@ fn check_ident(c: *Ctx, id: u32, binding: bool) -> err {
     if c.in_generator && str.eq(name, "yield") { ret fail(c, id, "yield is a reserved word here") }
     if (c.in_async || c.in_static_block) && str.eq(name, "await") { ret fail(c, id, "await is a reserved word here") }
     if binding && c.strict && (str.eq(name, "eval") || str.eq(name, "arguments")) { ret fail(c, id, "Unexpected eval or arguments in strict mode") }
-    if c.in_field_init && str.eq(name, "arguments") && !binding { ret fail(c, id, "arguments is not allowed in class field initializer") }
+    if (c.in_field_init || c.in_static_block) && str.eq(name, "arguments") && !binding { ret fail(c, id, "arguments is not allowed in class field initializer or static initialization block") }
     ret ok
 }
 
@@ -513,6 +513,7 @@ fn check_expr(c: *Ctx, id: u32) -> err {
         if bn.kind == ast.N_SUPER {
             if !c.allow_super_prop { ret fail(c, id, "'super' keyword unexpected here") }
             if (n.flags & ast.F_OPTIONAL) != 0u16 { ret fail(c, id, "Invalid optional chain from super property") }
+            if n.b != ast.NONE && (n.flags & ast.F_COMPUTED) == 0u16 && node(c, n.b).kind == ast.N_PRIVATE { ret fail(c, id, "Unexpected private field") }
         } else {
             try check_expr(c, n.a)
         }
@@ -534,6 +535,7 @@ fn check_expr(c: *Ctx, id: u32) -> err {
     }
     if k == ast.N_YIELD || k == ast.N_AWAIT {
         if c.in_params { ret fail(c, id, "yield or await expression in parameters") }
+        if c.in_static_block { ret fail(c, id, "yield or await expression in a static initialization block") }
         ret check_expr(c, n.a)
     }
     if k == ast.N_SPREAD { ret check_expr(c, n.a) }
@@ -845,14 +847,18 @@ fn check_class(c: *Ctx, id: u32) -> err {
             while d < declared.len {
                 if str.eq(declared.items[d], kn.text) {
                     let prev = kinds.items[d]
-                    let is_pair = (prev == ast.M_GET && mn.op == ast.M_SET) || (prev == ast.M_SET && mn.op == ast.M_GET)
-                    let same_static = true
+                    let cur_static = (mn.flags & ast.F_STATIC) != 0u16
+                    let prev_static = (prev & 128u8) != 0u8
+                    let prev_op = prev & 127u8
+                    let is_pair = ((prev_op == ast.M_GET && mn.op == ast.M_SET) || (prev_op == ast.M_SET && mn.op == ast.M_GET)) && cur_static == prev_static
                     if !is_pair { try restore_fail(c, saved, fail(c, mid, "Identifier has already been declared")) }
                 }
                 d += 1usize
             }
             try list.push[str](&declared, kn.text)
-            try list.push[u8](&kinds, mn.op)
+            var kind_code = mn.op
+            if (mn.flags & ast.F_STATIC) != 0u16 { kind_code = kind_code | 128u8 }
+            try list.push[u8](&kinds, kind_code)
             try list.push[str](&c.privates, kn.text)
         }
         if (mn.flags & ast.F_COMPUTED) == 0u16 && kn.kind == ast.N_STR {
