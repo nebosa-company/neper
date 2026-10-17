@@ -1148,6 +1148,8 @@ fn new_context_in(a: *mem.Arena, d: *dom.Dom, base: str, donor: *js.Interp) -> (
     let (kids, ke) = list.init[*js.Interp](a, 4usize)
     cell[0usize].children = kids
     let mie = module.install(it, load_module_hook)
+    // Scripts get no collector: past 80% of the arena a call throws a RangeError instead of exhausting memory the page still needs.
+    it.mem_limit = a.cap - a.cap / 5usize
     it.host = mem.cast[*void](&cell[0usize])
     install_natives(it)
     // The page runtime is parsed once and shared by every frame's context.
