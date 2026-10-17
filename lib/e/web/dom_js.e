@@ -3750,6 +3750,121 @@ fn part14(b: *str.Builder) -> err {
     try str.push(b, "  assignSlotsOfShadow(sr);\n")
     try str.push(b, "}\n")
     try str.push(b, "attributes(Element.prototype, { assignedSlot: { get() { elSlot(this); return findSlot(this, true); } } });\n")
+    try str.push(b, "function attachDeclarativeShadow(tpl, host) {\n")
+    try str.push(b, "  const mode = getAttributeValue(tpl, 'shadowrootmode');\n")
+    try str.push(b, "  if (mode !== 'open' && mode !== 'closed') return false;\n")
+    try str.push(b, "  const hs = slotOf(host);\n")
+    try str.push(b, "  if (hs.shadowRoot || hs.namespaceURI !== HTML_NS || !(shadowHostNames.indexOf(hs.localName) >= 0 || isValidCustomElementName(hs.localName))) return false;\n")
+    try str.push(b, "  const sr = attachShadowRoot(host, mode, getAttributeValue(tpl, 'shadowrootdelegatesfocus') !== null,\n")
+    try str.push(b, "    getAttributeValue(tpl, 'shadowrootslotassignment') === 'manual' ? 'manual' : 'named',\n")
+    try str.push(b, "    getAttributeValue(tpl, 'shadowrootclonable') !== null, getAttributeValue(tpl, 'shadowrootserializable') !== null);\n")
+    try str.push(b, "  slotOf(sr).declarative = true;\n")
+    try str.push(b, "  for (const c of childrenOf(tpl)) { removeNode(c, true); appendNodeSimple(sr, c); }\n")
+    try str.push(b, "  removeNode(tpl, true);\n")
+    try str.push(b, "  return sr;\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function convertDeclarative(root) {\n")
+    try str.push(b, "  for (const c of childrenOf(root)) {\n")
+    try str.push(b, "    if (nodeType(c) !== ELEMENT_NODE) continue;\n")
+    try str.push(b, "    const cs = slotOf(c);\n")
+    try str.push(b, "    if (cs.localName === 'template' && cs.namespaceURI === HTML_NS && nodeType(root) === ELEMENT_NODE) {\n")
+    try str.push(b, "      const sr = attachDeclarativeShadow(c, root);\n")
+    try str.push(b, "      if (sr) { convertDeclarative(sr); continue; }\n")
+    try str.push(b, "    }\n")
+    try str.push(b, "    convertDeclarative(c);\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function parseUnsafe(context, markup) {\n")
+    try str.push(b, "  const frag = parseFragment(context, markup);\n")
+    try str.push(b, "  const holder = createElementInternal(slotOf(context).doc, slotOf(context).localName, slotOf(context).namespaceURI, null, null, false);\n")
+    try str.push(b, "  for (const k of childrenOf(frag)) appendNodeSimple(holder, k);\n")
+    try str.push(b, "  convertDeclarative(holder);\n")
+    try str.push(b, "  for (const k of childrenOf(holder)) appendNodeSimple(frag, k);\n")
+    try str.push(b, "  return frag;\n")
+    try str.push(b, "}\n")
+    try str.push(b, "operations(Element.prototype, {\n")
+    try str.push(b, "  setHTMLUnsafe(html) {\n")
+    try str.push(b, "    elSlot(this);\n")
+    try str.push(b, "    required(arguments, 1, 'setHTMLUnsafe');\n")
+    try str.push(b, "    const s = toDOMString(html);\n")
+    try str.push(b, "    replaceAllWith(this, parseUnsafe(this, s));\n")
+    try str.push(b, "  },\n")
+    try str.push(b, "  getHTML(options = undefined) {\n")
+    try str.push(b, "    elSlot(this);\n")
+    try str.push(b, "    return serializeHTMLChildren(this, options || {});\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "operations(ShadowRoot.prototype, {\n")
+    try str.push(b, "  setHTMLUnsafe(html) {\n")
+    try str.push(b, "    const s = srSlot(this);\n")
+    try str.push(b, "    required(arguments, 1, 'setHTMLUnsafe');\n")
+    try str.push(b, "    replaceAllWith(this, parseUnsafe(s.host, toDOMString(html)));\n")
+    try str.push(b, "  },\n")
+    try str.push(b, "  getHTML(options = undefined) { srSlot(this); return serializeHTMLChildren(this, options || {}); }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "operations(Document, {\n")
+    try str.push(b, "  parseHTMLUnsafe(html) {\n")
+    try str.push(b, "    required(arguments, 1, 'parseHTMLUnsafe');\n")
+    try str.push(b, "    const doc = newDocument(false);\n")
+    try str.push(b, "    setPrototypeOf(doc, Document.prototype);\n")
+    try str.push(b, "    slotOf(doc).url = slotOf(mainDocument).url;\n")
+    try str.push(b, "    parseHTMLDocument(doc, toDOMString(html));\n")
+    try str.push(b, "    convertDeclarative(doc);\n")
+    ret ok
+}
+
+fn part15(b: *str.Builder) -> err {
+    try str.push(b, "    return doc;\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "const htmlVoid = ['area', 'base', 'basefont', 'bgsound', 'br', 'col', 'embed', 'frame', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr'];\n")
+    try str.push(b, "const htmlRawText = ['style', 'script', 'xmp', 'iframe', 'noembed', 'noframes', 'plaintext', 'noscript'];\n")
+    try str.push(b, "function escapeHTMLText(s) { return s.replace(/&/g, '&amp;').replace(/ /g, '&nbsp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\n")
+    try str.push(b, "function escapeHTMLAttr(s) { return s.replace(/&/g, '&amp;').replace(/ /g, '&nbsp;').replace(/\"/g, '&quot;'); }\n")
+    try str.push(b, "function serializeHTMLChildren(node, opts) {\n")
+    try str.push(b, "  let out = '';\n")
+    try str.push(b, "  const ns = slotOf(node);\n")
+    try str.push(b, "  const host = ns.nodeType === ELEMENT_NODE ? node : null;\n")
+    try str.push(b, "  if (host && ns.shadowRoot && (opts.serializableShadowRoots && slotOf(ns.shadowRoot).serializable || (opts.shadowRoots || []).indexOf(ns.shadowRoot) >= 0)) {\n")
+    try str.push(b, "    const sr = slotOf(ns.shadowRoot);\n")
+    try str.push(b, "    out += '<template shadowrootmode=\"' + sr.mode + '\"' + (sr.delegatesFocus ? ' shadowrootdelegatesfocus=\"\"' : '') + (sr.clonable ? ' shadowrootclonable=\"\"' : '') + (sr.serializable ? ' shadowrootserializable=\"\"' : '') + (sr.slotAssignment === 'manual' ? ' shadowrootslotassignment=\"manual\"' : '') + '>' + serializeHTMLChildren(ns.shadowRoot, opts) + '</template>';\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  const kids = ns.nodeType === ELEMENT_NODE && ns.localName === 'template' && ns.namespaceURI === HTML_NS ? childrenOf(templateContent(node)) : childrenOf(node);\n")
+    try str.push(b, "  for (const c of kids) out += serializeHTMLNode(c, opts, node);\n")
+    try str.push(b, "  return out;\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function serializeHTMLNode(n, opts, parent) {\n")
+    try str.push(b, "  const s = slotOf(n);\n")
+    try str.push(b, "  switch (s.nodeType) {\n")
+    try str.push(b, "    case ELEMENT_NODE: {\n")
+    try str.push(b, "      const tag = s.namespaceURI === HTML_NS || s.namespaceURI === SVG_NS || s.namespaceURI === MATHML_NS ? s.localName : qualifiedName(n);\n")
+    try str.push(b, "      let out = '<' + tag;\n")
+    try str.push(b, "      for (const a of attrsOf(n)) {\n")
+    try str.push(b, "        const as = slotOf(a);\n")
+    try str.push(b, "        let name = as.localName;\n")
+    try str.push(b, "        if (as.namespaceURI === XMLNS_NS) name = as.prefix === null ? 'xmlns' : 'xmlns:' + as.localName;\n")
+    try str.push(b, "        else if (as.namespaceURI === XML_NS) name = 'xml:' + as.localName;\n")
+    try str.push(b, "        else if (as.namespaceURI === XLINK_NS) name = 'xlink:' + as.localName;\n")
+    try str.push(b, "        else if (as.prefix !== null) name = as.prefix + ':' + as.localName;\n")
+    try str.push(b, "        out += ' ' + name + '=\"' + escapeHTMLAttr(as.value) + '\"';\n")
+    try str.push(b, "      }\n")
+    try str.push(b, "      out += '>';\n")
+    try str.push(b, "      if (s.namespaceURI === HTML_NS && htmlVoid.indexOf(s.localName) >= 0) return out;\n")
+    try str.push(b, "      out += serializeHTMLChildren(n, opts);\n")
+    try str.push(b, "      return out + '</' + tag + '>';\n")
+    try str.push(b, "    }\n")
+    try str.push(b, "    case TEXT_NODE: {\n")
+    try str.push(b, "      const v = N.value(s.id);\n")
+    try str.push(b, "      const ps = parent && slotOf(parent);\n")
+    try str.push(b, "      if (ps && ps.nodeType === ELEMENT_NODE && ps.namespaceURI === HTML_NS && htmlRawText.indexOf(ps.localName) >= 0) return v;\n")
+    try str.push(b, "      return escapeHTMLText(v);\n")
+    try str.push(b, "    }\n")
+    try str.push(b, "    case COMMENT_NODE: return '<!--' + N.value(s.id) + '-->';\n")
+    try str.push(b, "    case PROCESSING_INSTRUCTION_NODE: return '<?' + s.target + ' ' + N.value(s.id) + '>';\n")
+    try str.push(b, "    case DOCUMENT_TYPE_NODE: return '<!DOCTYPE ' + s.name + '>';\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  return '';\n")
+    try str.push(b, "}\n")
     try str.push(b, "const documentAttrs = {\n")
     try str.push(b, "  title: {\n")
     try str.push(b, "    get() {\n")
@@ -3810,10 +3925,6 @@ fn part14(b: *str.Builder) -> err {
     try str.push(b, "  anchors: { get() { docSlot(this); return htmlCollectionOf(this, 'anchors', d => slotOf(d).localName === 'a' && getAttributeValue(d, 'name') !== null); } },\n")
     try str.push(b, "  scripts: { get() { docSlot(this); return htmlCollectionOf(this, 'scripts', d => slotOf(d).localName === 'script'); } },\n")
     try str.push(b, "  embeds: { get() { docSlot(this); return htmlCollectionOf(this, 'embeds', d => slotOf(d).localName === 'embed'); } },\n")
-    ret ok
-}
-
-fn part15(b: *str.Builder) -> err {
     try str.push(b, "  plugins: { get() { docSlot(this); return htmlCollectionOf(this, 'embeds', d => slotOf(d).localName === 'embed'); } },\n")
     try str.push(b, "  applets: { get() { docSlot(this); return htmlCollectionOf(this, 'applets', d => false); } },\n")
     try str.push(b, "  all: { get() { docSlot(this); return htmlCollectionOf(this, 'all', d => true); } },\n")
@@ -3953,6 +4064,10 @@ fn part15(b: *str.Builder) -> err {
     try str.push(b, "let makeMediaQueryList = q => ({ media: q, matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; } });\n")
     try str.push(b, "let structuredCloneImpl = v => v;\n")
     try str.push(b, "const windowAttrs = {\n")
+    ret ok
+}
+
+fn part16(b: *str.Builder) -> err {
     try str.push(b, "  location: { get() { return locationObject; }, set(v) { locationObject.href = v; } },\n")
     try str.push(b, "  history: { get() { return historyObject; } },\n")
     try str.push(b, "  navigator: { get() { return navigatorObject; } },\n")
@@ -4064,10 +4179,6 @@ fn part15(b: *str.Builder) -> err {
     try str.push(b, "    let str = toUSVString(init);\n")
     try str.push(b, "    if (str[0] === '?') str = str.slice(1);\n")
     try str.push(b, "    s.list = parseUrlEncoded(str);\n")
-    ret ok
-}
-
-fn part16(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "}\n")
     try str.push(b, "iface('URLSearchParams', URLSearchParams, null);\n")
@@ -4207,6 +4318,10 @@ fn part16(b: *str.Builder) -> err {
     try str.push(b, "    required(arguments, 1, 'forEach');\n")
     try str.push(b, "    if (typeof callback !== 'function') throw new TypeError(\"Failed to execute 'forEach' on 'URLSearchParams': parameter 1 is not of type 'Function'.\");\n")
     try str.push(b, "    for (let i = 0; i < s.list.length; i++) apply(callback, thisArg, [s.list[i][1], s.list[i][0], this]);\n")
+    ret ok
+}
+
+fn part17(b: *str.Builder) -> err {
     try str.push(b, "  },\n")
     try str.push(b, "  keys() { paramsSlot(this); return makeParamsIterator(this, 'key'); },\n")
     try str.push(b, "  values() { paramsSlot(this); return makeParamsIterator(this, 'value'); },\n")
@@ -4318,10 +4433,6 @@ fn part16(b: *str.Builder) -> err {
     try str.push(b, "attributes(Performance.prototype, { timeOrigin: { get() { return 0; } } });\n")
     try str.push(b, "function Screen() { throw new TypeError('Illegal constructor'); }\n")
     try str.push(b, "iface('Screen', Screen, null);\n")
-    ret ok
-}
-
-fn part17(b: *str.Builder) -> err {
     try str.push(b, "const screenObject = create(Screen.prototype);\n")
     try str.push(b, "setSlot(screenObject, { isScreen: true });\n")
     try str.push(b, "attributes(Screen.prototype, {\n")
@@ -4461,6 +4572,10 @@ fn part17(b: *str.Builder) -> err {
     try str.push(b, "    else apply(arrayPush, deferredScripts, [run]);\n")
     try str.push(b, "    return;\n")
     try str.push(b, "  }\n")
+    ret ok
+}
+
+fn part18(b: *str.Builder) -> err {
     try str.push(b, "  if (src !== null) {\n")
     try str.push(b, "    if (src === '') { scheduleTimer(() => fireScriptEvent(el, 'error'), 0, false, []); return; }\n")
     try str.push(b, "    const parsed = N.urlParse(src, documentBaseURL(doc));\n")
@@ -4572,10 +4687,6 @@ fn part17(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "const prevInserted = elementInserted;\n")
     try str.push(b, "elementInserted = function (el) {\n")
-    ret ok
-}
-
-fn part18(b: *str.Builder) -> err {
     try str.push(b, "  prevInserted(el);\n")
     try str.push(b, "  if (shadowIncludingRoot(el) === mainDocument) refreshNamedFor(el);\n")
     try str.push(b, "};\n")
@@ -4715,6 +4826,10 @@ fn part18(b: *str.Builder) -> err {
     try str.push(b, "    const oldParent = parentNode(node);\n")
     try str.push(b, "    if (oldParent !== null) removeNode(node, false);\n")
     try str.push(b, "    let newOffset = referenceNode === null ? nodeLength(parent) : indexOfChild(referenceNode);\n")
+    ret ok
+}
+
+fn part19(b: *str.Builder) -> err {
     try str.push(b, "    newOffset += nodeType(node) === DOCUMENT_FRAGMENT_NODE ? nodeLength(node) : 1;\n")
     try str.push(b, "    preInsert(node, parent, referenceNode);\n")
     try str.push(b, "    if (s.startNode === s.endNode && s.startOffset === s.endOffset) { s.endNode = parent; s.endOffset = newOffset; }\n")
@@ -4826,10 +4941,6 @@ fn part18(b: *str.Builder) -> err {
     try str.push(b, "  for (const d of descendantsOf(ca)) if (contained(d, range) && !contained(parentNode(d), range)) apply(arrayPush, nodesToRemove, [d]);\n")
     try str.push(b, "  let newNode, newOffset;\n")
     try str.push(b, "  if (isInclusiveAncestor(originalStartNode, originalEndNode)) { newNode = originalStartNode; newOffset = originalStartOffset; }\n")
-    ret ok
-}
-
-fn part19(b: *str.Builder) -> err {
     try str.push(b, "  else {\n")
     try str.push(b, "    let referenceNode = originalStartNode;\n")
     try str.push(b, "    while (parentNode(referenceNode) !== null && !isInclusiveAncestor(parentNode(referenceNode), originalEndNode)) referenceNode = parentNode(referenceNode);\n")
@@ -4969,6 +5080,10 @@ fn part19(b: *str.Builder) -> err {
     try str.push(b, "  if (s.endNode === node && s.endOffset > offset) { s.endNode = newNode; s.endOffset -= offset; }\n")
     try str.push(b, "  const index = indexOfChild(node);\n")
     try str.push(b, "  if (s.startNode === parent && s.startOffset === index + 1) s.startOffset++;\n")
+    ret ok
+}
+
+fn part20(b: *str.Builder) -> err {
     try str.push(b, "  if (s.endNode === parent && s.endOffset === index + 1) s.endOffset++;\n")
     try str.push(b, "};\n")
     try str.push(b, "adjustRangesForMerge = function (cur, node, length) {\n")
@@ -5080,10 +5195,6 @@ fn part19(b: *str.Builder) -> err {
     try str.push(b, "  const s = slotOf(iterator);\n")
     try str.push(b, "  if (!isInclusiveAncestor(toBeRemoved, s.reference) || toBeRemoved === s.root) return;\n")
     try str.push(b, "  if (s.pointerBefore) {\n")
-    ret ok
-}
-
-fn part20(b: *str.Builder) -> err {
     try str.push(b, "    let n = toBeRemoved, next = null;\n")
     try str.push(b, "    while (n !== null && n !== s.root) {\n")
     try str.push(b, "      const sib = nextSibling(n);\n")
@@ -5223,6 +5334,10 @@ fn part20(b: *str.Builder) -> err {
     try str.push(b, "  createNodeIterator(root, whatToShow = 0xFFFFFFFF, filter = null) {\n")
     try str.push(b, "    docSlot(this);\n")
     try str.push(b, "    required(arguments, 1, 'createNodeIterator');\n")
+    ret ok
+}
+
+fn part21(b: *str.Builder) -> err {
     try str.push(b, "    if (!isNode(root)) throw new TypeError(\"Failed to execute 'createNodeIterator' on 'Document': parameter 1 is not of type 'Node'.\");\n")
     try str.push(b, "    return createNodeIterator(root, whatToShow === undefined ? 0xFFFFFFFF : toUnsignedLong(whatToShow), toFilter(filter));\n")
     try str.push(b, "  },\n")
@@ -5334,10 +5449,6 @@ fn part20(b: *str.Builder) -> err {
     try str.push(b, "  let n = target;\n")
     try str.push(b, "  const chain = [];\n")
     try str.push(b, "  while (n !== null) { apply(arrayPush, chain, [n]); n = parentNode(n); }\n")
-    ret ok
-}
-
-fn part21(b: *str.Builder) -> err {
     try str.push(b, "  for (const node of chain) {\n")
     try str.push(b, "    const regs = registrationsOf(node, false);\n")
     try str.push(b, "    if (!regs) continue;\n")
@@ -5477,6 +5588,10 @@ fn part21(b: *str.Builder) -> err {
     try str.push(b, "  const bytes = slotOf(blob).bytes, type = slotOf(blob).type;\n")
     try str.push(b, "  scheduleTimer(() => {\n")
     try str.push(b, "    if (s.aborted) { s.aborted = false; return; }\n")
+    ret ok
+}
+
+fn part22(b: *str.Builder) -> err {
     try str.push(b, "    frFire(reader, 'loadstart');\n")
     try str.push(b, "    s.result = kind === 'text' ? N.utf8Decode(bytes) : kind === 'dataurl' ? 'data:' + (type || 'application/octet-stream') + ';base64,' + btoa(bytes) : kind === 'binarystring' ? bytes : binaryToBytes(bytes).buffer;\n")
     try str.push(b, "    s.readyState = 2;\n")
@@ -5588,10 +5703,6 @@ fn part21(b: *str.Builder) -> err {
     try str.push(b, "        const items = Array.from(pair);\n")
     try str.push(b, "        if (items.length !== 2) throw new TypeError(\"Failed to construct 'Headers': Invalid value\");\n")
     try str.push(b, "        appendHeader(h, toDOMString(items[0]), toDOMString(items[1]));\n")
-    ret ok
-}
-
-fn part22(b: *str.Builder) -> err {
     try str.push(b, "      }\n")
     try str.push(b, "    } else {\n")
     try str.push(b, "      for (const key of Reflect.ownKeys(init)) {\n")
@@ -5731,6 +5842,10 @@ fn part22(b: *str.Builder) -> err {
     try str.push(b, "  if (inputSlot && inputSlot.isRequest) {\n")
     try str.push(b, "    s.url = inputSlot.url; s.method = inputSlot.method; s.mode = inputSlot.mode; s.credentials = inputSlot.credentials; s.cache = inputSlot.cache; s.redirect = inputSlot.redirect;\n")
     try str.push(b, "    s.referrer = inputSlot.referrer; s.referrerPolicy = inputSlot.referrerPolicy; s.integrity = inputSlot.integrity; s.keepalive = inputSlot.keepalive;\n")
+    ret ok
+}
+
+fn part23(b: *str.Builder) -> err {
     try str.push(b, "    s.headers = new Headers(inputSlot.headers); slotOf(s.headers).guard = 'request';\n")
     try str.push(b, "    s.body = inputSlot.body;\n")
     try str.push(b, "    s.signal = inputSlot.signal;\n")
@@ -5842,10 +5957,6 @@ fn part22(b: *str.Builder) -> err {
     try str.push(b, "  error() { const r = new Response(null, { status: 200 }); const s = slotOf(r); s.status = 0; s.type = 'error'; slotOf(s.headers).guard = 'immutable'; return r; },\n")
     try str.push(b, "  redirect(url, status = 302) {\n")
     try str.push(b, "    const parsed = N.urlParse(toUSVString(url), documentBaseURL(mainDocument));\n")
-    ret ok
-}
-
-fn part23(b: *str.Builder) -> err {
     try str.push(b, "    if (parsed === null) throw new TypeError(\"Failed to execute 'redirect' on 'Response': Invalid URL\");\n")
     try str.push(b, "    if ([301, 302, 303, 307, 308].indexOf(status) < 0) throw new RangeError(\"Failed to execute 'redirect' on 'Response': Invalid status code\");\n")
     try str.push(b, "    const r = new Response(null, { status });\n")
@@ -5985,6 +6096,10 @@ fn part23(b: *str.Builder) -> err {
     try str.push(b, "  s.state = 4; s.sendFlag = false;\n")
     try str.push(b, "  if (!sync) {\n")
     try str.push(b, "    xhrReadyState(xhr, 4);\n")
+    ret ok
+}
+
+fn part24(b: *str.Builder) -> err {
     try str.push(b, "    xhrFire(xhr, xhr, 'load', raw.body.length, raw.body.length);\n")
     try str.push(b, "    xhrFire(xhr, xhr, 'loadend', raw.body.length, raw.body.length);\n")
     try str.push(b, "  }\n")
@@ -6096,10 +6211,6 @@ fn part23(b: *str.Builder) -> err {
     try str.push(b, "      const s = xhrSlot(this);\n")
     try str.push(b, "      if (s.responseType !== '' && s.responseType !== 'text') throw domError('InvalidStateError', \"Failed to read the 'responseText' property from 'XMLHttpRequest': The value is only accessible if the object's 'responseType' is '' or 'text' (was '\" + s.responseType + \"').\");\n")
     try str.push(b, "      if (s.state !== 3 && s.state !== 4) return '';\n")
-    ret ok
-}
-
-fn part24(b: *str.Builder) -> err {
     try str.push(b, "      return xhrResponseText(s);\n")
     try str.push(b, "    }\n")
     try str.push(b, "  },\n")
@@ -6239,6 +6350,10 @@ fn part24(b: *str.Builder) -> err {
     try str.push(b, "        const end = text.indexOf(']]>', pos);\n")
     try str.push(b, "        if (end < 0) fail('unterminated CDATA section');\n")
     try str.push(b, "        appendNodeSimple(parent, createCDATA(doc, text.slice(pos + 9, end)));\n")
+    ret ok
+}
+
+fn part25(b: *str.Builder) -> err {
     try str.push(b, "        for (const ch of text.slice(pos, end)) if (ch === '\\n') line++;\n")
     try str.push(b, "        pos = end + 3;\n")
     try str.push(b, "      } else if (text.startsWith('<!DOCTYPE', pos)) {\n")
@@ -6350,10 +6465,6 @@ fn part24(b: *str.Builder) -> err {
     try str.push(b, "        if (raw.indexOf(']]>') >= 0) fail(']]> in character data');\n")
     try str.push(b, "        appendNodeSimple(parent, createTextNode(doc, decodeRefs(raw.replace(/\\r\\n?/g, '\\n'), false)));\n")
     try str.push(b, "      }\n")
-    ret ok
-}
-
-fn part25(b: *str.Builder) -> err {
     try str.push(b, "      for (const ch of raw) if (ch === '\\n') line++;\n")
     try str.push(b, "      pos = end < 0 ? n : end;\n")
     try str.push(b, "    }\n")
@@ -6493,6 +6604,10 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "    case CDATA_SECTION_NODE: return '<![CDATA[' + N.value(s.id) + ']]>';\n")
     try str.push(b, "    case COMMENT_NODE: return '<!--' + N.value(s.id) + '-->';\n")
     try str.push(b, "    case PROCESSING_INSTRUCTION_NODE: return '<?' + s.target + (N.value(s.id) !== '' ? ' ' + N.value(s.id) : '') + '?>';\n")
+    ret ok
+}
+
+fn part26(b: *str.Builder) -> err {
     try str.push(b, "    case ATTRIBUTE_NODE: return s.value;\n")
     try str.push(b, "  }\n")
     try str.push(b, "  return '';\n")
@@ -6604,10 +6719,6 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "attributes(MessageChannel.prototype, {\n")
     try str.push(b, "  port1: { get() { const s = slotOf(this); if (!s || !s.isChannel) illegal(); return s.port1; } },\n")
     try str.push(b, "  port2: { get() { const s = slotOf(this); if (!s || !s.isChannel) illegal(); return s.port2; } }\n")
-    ret ok
-}
-
-fn part26(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "const broadcastChannels = new Map();\n")
     try str.push(b, "function BroadcastChannel(name) {\n")
@@ -6747,6 +6858,10 @@ fn part26(b: *str.Builder) -> err {
     try str.push(b, "  });\n")
     try str.push(b, "}\n")
     try str.push(b, "function MediaQueryList() { throw new TypeError('Illegal constructor'); }\n")
+    ret ok
+}
+
+fn part27(b: *str.Builder) -> err {
     try str.push(b, "iface('MediaQueryList', MediaQueryList, EventTarget);\n")
     try str.push(b, "makeMediaQueryList = function (query) {\n")
     try str.push(b, "  const mql = create(MediaQueryList.prototype);\n")
@@ -6798,12 +6913,13 @@ fn part26(b: *str.Builder) -> err {
     try str.push(b, "defineProperty(global, 'getSelection', { value: function getSelection() { return selectionObject; }, writable: true, enumerable: true, configurable: true });\n")
     try str.push(b, "Document.prototype.getSelection = function getSelection() { return selectionObject; };\n")
     try str.push(b, "defineProperty(Document.prototype, 'getSelection', { enumerable: true });\n")
+    try str.push(b, "convertDeclarative(mainDocument);\n")
     try str.push(b, "})(this);\n")
     ret ok
 }
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 370024)
+    var b = try str.builder(a, 375587)
     try part0(&b)
     try part1(&b)
     try part2(&b)
@@ -6831,5 +6947,6 @@ fn source(a: *mem.Arena) -> (str, err) {
     try part24(&b)
     try part25(&b)
     try part26(&b)
+    try part27(&b)
     ret (str.done(&b), ok)
 }
