@@ -133,6 +133,12 @@ fn detach(l: *Layout, child: u32) {
 fn anon_style(l: *Layout, parent_style: u32, display: style.Display) -> u32 {
     var s = style.inherit_from(st(l, parent_style))
     s.display = display
+    // An anonymous box has no borders: the initial width of `medium` must not become a used width.
+    var bi = 0usize
+    while bi < 4usize {
+        s.border_width[bi] = 0.0f64
+        bi += 1usize
+    }
     let pushed = list.push[style.Style](&l.anon, s)
     ret u32(l.styles.len) + u32(l.anon.len) - 1u32
 }
