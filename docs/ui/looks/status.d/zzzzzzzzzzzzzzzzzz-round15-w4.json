@@ -1,0 +1,124 @@
+{
+ "button": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/button_states.png",
+    "notes": "Round 15 (own comparer, reference flat pixel off when ours differs by more than 2 levels, offsets searched within 2 px): all 84 crops of button, button_hover, button_kinds, button_shift, button_states and button_arrows are 0 flat px off. Text ink boxes at the 60, 100 and 150 level agree within 1 px (60 and one of the others) in every crop once the v3 icon bitmaps are left out. Excluded, v3 artwork only (sheet pixels, 16 x 16 bitmap plus a 2 px halo): button_kinds (38,41)-(56,60) New Rule, (181,41)-(202,60) Delete Rule, and the whole arrow button (493,110)-(521,134); button_hover (467,321)-(485,340) and (38,391)-(56,410); button_states (324,251)-(342,270); button_arrows: the (3,4)-(22,24) interior of each of the four buttons at (23,43), (78,43), (133,43), (188,43). Scale 1.25, 1.5, 2.0: all pass.",
+    "gaps": [
+     "Unverified: toggle, split, loading and plain kinds (no capture); disabled has one capture",
+     "Scale: 1.5x ring tile is uneven (informational)",
+     "Edit Rule and New Rule pictures are v3 bitmap artwork (decided: not text), drawn as a placeholder glyph and excluded",
+     "Round 12: toggle, split, loading and plain kinds still have no capture",
+     "Round 15: the glyph pixels are grayscale against the captures' ClearType; ink boxes agree, glyph pixels do not within 2 levels (excluded within 2 px of ink)",
+     "Round 15: the Edit Rule, New Rule, Delete Rule and arrow pictures are v3 bitmaps drawn as a placeholder glyph (excluded as listed in the notes)"
+    ]
+   },
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark3.png",
+    "notes": "Round 15 recheck (own comparer, flat 8-neighbour or 11 px run, ink more than 60 levels): all 18 native dark button captures (rest, hover, pressed, focus, default, disabled, split, picture, hover-pressed) 0 flat px off. | Audit 6: all 17 native dark button captures (rest, hover, pressed, focus, default, disabled, split, picture) 0 chrome px, only text edge pixels differ (15 to 19, glyphs are lighter in grey scale). Confirmed matched.",
+    "gaps": [
+     "The picture is v3's artwork class (a bitmap in the capture): ours is the Info glyph, so the 16 x 16 picture area and its 2 px halo are excluded; the caption ink is within 1 px",
+     "Unverified: toggle, loading and plain kinds, a split button whose arrow part is pressed (the capture is the main part)"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/label.png",
+    "notes": "Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 12/12 crops, 0 flat px off. Link hover and pressed identical to rest. Round 15: the four native light SysLink captures (rest, hover, focus, disabled) have cells too (syslink sheet): 0 flat px off.",
+    "gaps": [
+     "Audit 5 unverified (no capture): disabled (native only), rotated, other backgrounds",
+     "Not compared (antialiasing): the text is grayscale and the captures are ClearType; ink boxes agree within 1 px, glyph pixels do not within 2 levels",
+     "The Options page title bars (bold white on grey gradient) are a panel, not a TcxLabel",
+     "Disabled: #A0A0A0 from the native light static capture (a TcxLabel may differ: v3 never showed one disabled)",
+     "Audit 4: the 'Row Color:' ink box agrees at 100 and 150 levels, and at 60 once the mnemonic underline (2 rows under the glyphs) is merged into its text line; a plain row grouping splits it",
+     "Audit 4 uncaptured: disabled (native #A0A0A0 only), rotated labels, other backgrounds, non-ASCII text",
+     "Round 15: SysLink compared in windows/syslink.png (native light captures only: v3 has no hot-link label of that kind; its own hot-links are the Tahoma underlined cells of label.png)"
+    ]
+   },
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/syslink.png",
+    "notes": "Round 15 (own comparer, dark: 11 px runs plus 8-neighbour flat pixels, ink more than 60 levels from the background grown 2 px excluded): label-rest and label-disabled 0 flat px off (windows-dark/native_dark.png); the four SysLink captures that had no cell (syslink-rest, hover, focus, disabled) now have one (windows-dark/syslink.png, control.windows_syslink) and are 0 flat px off, glyph ink boxes within 1 px at the 40 and 100 level, underlines (row 27) and the focus rectangle (66,14)-(93,28) exact. Hover is the rest look in the capture. The sheet is rendered by examples/looks/syslink.e.",
+    "gaps": [
+     "Unverified: other backgrounds, rotated (no capture)",
+     "Round 15: the link and plain runs are grayscale and thinner than the ClearType captures; ink boxes agree within 1 px, glyph pixels do not within 2 levels (excluded within 2 px of ink)",
+     "Round 15: Neper has no link label: the sheet's Neper look shows the sentence as plain text"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/radio_states-vs-ref.png",
+    "notes": "Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 19/19 crops, 0 flat px off. The hover over Search Cards: its grab differs from the Search Collection rest grab only by the caret column (23, 73 to 86) of the Search edit, so the radio is identical to rest (checked on the grabs). Round 15 recheck: radio_states, radio_hover and radio_dialog 23 crops 0 flat px off.",
+    "gaps": [
+     "Audit 5 unverified (no capture): disabled",
+     "Captured but identical to rest: 9 hover grabs and 1 pressed grab show no distinct look",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 100 %; 1.5 87.2 % of runs hold (informational)",
+     "Disabled: native light capture only (the dot and ring tile exact); the native light radio-checked-pressed capture is blank, so pressed stays v3's",
+     "Round 12: disabled has the native light capture only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "Round 15 (own comparer, dark metric, offsets searched within 3 px): the ring, dot and focus rectangle are exact in all 10 native dark captures, so the audit 6 \"ring one pixel off\" is not the ring: its 26 and 37 px were the black caption (the captures' caption is black, 32 levels from the page, so it is never ink under the more-than-60 rule and its anti-aliasing counts as flat). The caption sat a fraction of a row low; half a row up (control.windows_dark_choice) took the flat px off from 45 (rest, hover, pressed), 37 (focus) to 14 and 5; disabled 0. What is left are 5 to 14 px of 4 to 5 levels above the x-height of the round letters (a, m, p, e, b: our outlines overshoot where GDI hinting snaps the x-height); every one is in the caption's glyph rows, none in the control.",
+    "gaps": [
+     "Blocked by the text engine: removing the last 14 px needs hinted (x-height snapped) glyphs; a size or colour tweak would only move them",
+     "The black caption is a capture artefact copied on request: it is unreadable on #202020",
+     "Unverified: radio group chrome (no native dark group box)"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/radio_group.png",
+    "notes": "No native dark reference: the native group box stays light (#DCDCDC frame) in the dark gallery, so the frame cannot be compared; the stand-alone radio rows it holds follow the native dark radio only where the row is 24 px or lower. Contrast: frame #333333 against the page 1.29 : 1 (below the 3 : 1 bar for a control border), caption white 16.3 : 1. Round 15: the radio rows follow the native dark radio rows (see radio); the frame colour is the shared group box choice (worker W3's group_box), not changed here.",
+    "gaps": [
+     "No native or real-app dark reference for the group frame",
+     "The frame is a decorative #333333 line, 1.29 : 1 against the page: it fails the 3 : 1 border bar, so the status stays started",
+     "The rows inside are not rebuilt to the native 22 px row"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/checkbox_states-vs-ref.png",
+    "notes": "Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 29/29 crops, 0 flat px off. Round 15 recheck: checkbox_states, checkbox_hover and checkbox_dialog 29 crops 0 flat px off.",
+    "gaps": [
+     "Audit 5 unverified (no capture): disabled, indeterminate (native only)",
+     "Not compared (antialiasing): text is grayscale against ClearType captures; ink boxes within 1 px",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 96.9 %; 1.5 89.0 % of runs hold (informational)",
+     "Disabled and indeterminate: native light captures only (box tiles exact, caption #6D6D6D as captured; v3 never showed them); hover of indeterminate is its rest look (native hover is identical to rest)",
+     "Audit 4 uncaptured: disabled and indeterminate (native light captures only, box tiles exact)"
+    ]
+   },
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/checkbox.png",
+    "notes": "Round 15 recheck (own comparer): all 15 native dark check box captures 0 flat px off; the caption moved half a row up with the radio (native text rows 15 to 24: sum of squares against the capture 274k to 110k). | Audit 6: all 15 native dark check box captures 0 chrome px (text edge px 44 to 47). Confirmed matched.",
+    "gaps": [
+     "Audit 5: the sheet is native_dark.png, whose caption is the native 'Sample label'; the dark checkbox in a group with rows above 24 px keeps the v3 row layout and Tahoma",
+     "Audit 5 unverified: hover has no distinct capture",
+     "checkbox-*-hover is pixel-identical to rest in the capture: hover has no distinct reference",
+     "A check box inside a group with rows above 24 px keeps the older v3 row layout (Tahoma)",
+     "Mnemonic underlines are not drawn in the dark native row (the native control shows them only after Alt)"
+    ]
+   }
+  }
+ }
+}
