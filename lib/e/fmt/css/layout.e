@@ -1800,8 +1800,17 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
         }
         i = end
     }
+    // `line-clamp` / `-webkit-line-clamp`: only the first N lines stay, the last one marked to end with an ellipsis.
+    var n_own = x.own.len
+    var end_y = x.y
+    let clamp_n = line_clamp_count(cs)
+    if clamp_n > 0usize && n_own > clamp_n {
+        n_own = clamp_n
+        let kept = &l.lines.items[usize(x.own.items[clamp_n - 1usize])]
+        kept.overflow_ellipsis = true
+        end_y = kept.y + kept.h
+    }
     // The container's own lines, contiguous: lines of inline-blocks laid out in between are not part of its range.
-    let n_own = x.own.len
     if n_own > 0usize {
         let first_own = usize(x.own.items[0usize])
         if usize(x.own.items[n_own - 1usize]) - first_own + 1usize == n_own {
@@ -1818,7 +1827,31 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
         }
         l.boxes.items[usize(cont)].line_count = u32(n_own)
     }
-    ret x.y
+    ret end_y
+}
+
+// The line count of `line-clamp` (or `-webkit-line-clamp`), 0 when there is none.
+fn line_clamp_count(s: *const style.Style) -> usize {
+    var text: str = ""
+    var found = false
+    var i = 0usize
+    while i < s.extras.len {
+        if str.eq(s.extras[i].name, "line-clamp") || str.eq(s.extras[i].name, "-webkit-line-clamp") {
+            text = s.extras[i].value
+            found = true
+        }
+        i += 1usize
+    }
+    if !found { ret 0usize }
+    let t = str.trim(text)
+    let (n, ne) = str.parse_i64(t)
+    if ne == ok && n > 0i64 { ret usize(n) }
+    // `line-clamp: <n> <block-ellipsis>`
+    var sp = 0usize
+    while sp < t.len && t[sp] != 32u8 { sp += 1usize }
+    let (n2, ne2) = str.parse_i64(t[0usize..sp])
+    if ne2 == ok && n2 > 0i64 { ret usize(n2) }
+    ret 0usize
 }
 
 // Vertical metrics and fragments of the line made of pieces[scan.lead..end). Returns the line height, or -1 for a line

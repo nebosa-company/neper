@@ -423,6 +423,8 @@ fn side_of(rest: str) -> i32 {
 fn parse_display(v: str) -> (Display, bool) {
     let set = ",inline,block,none,contents,inline-block,flex,inline-flex,grid,inline-grid,table,inline-table,table-row,table-cell,table-row-group,table-header-group,table-footer-group,table-column,table-column-group,table-caption,list-item,flow-root,ruby,ruby-text,ruby-base,ruby-text-container,ruby-base-container,"
     if has_kw(v, set) { ret (kw[Display](v, set, .Inline), true) }
+    if str.eq(v, "-webkit-box") { ret (.Block, true) }
+    if str.eq(v, "-webkit-inline-box") { ret (.InlineBlock, true) }
     if str.eq(v, "block flow") || str.eq(v, "flow") { ret (.Block, true) }
     if str.eq(v, "inline flow") { ret (.Inline, true) }
     if str.eq(v, "block flex") { ret (.Flex, true) }

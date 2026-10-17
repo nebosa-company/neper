@@ -137,3 +137,4 @@ float-intrinsic-001.html | float-intrinsic-001-ref.html | match
 rtl-overconstrained-001.html | rtl-overconstrained-001-ref.html | match
 grid-auto-fit-001.html | grid-auto-fit-001-ref.html | match
 flex-order-paint-001.html | flex-order-paint-001-ref.html | match
+line-clamp-001.html | line-clamp-001-ref.html | match

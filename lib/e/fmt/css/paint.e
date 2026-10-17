@@ -794,6 +794,47 @@ fn paint_inline_decor(p: *Painter, ob: u32, fr: layout.Frag, cx: f64, cy: f64) {
     if br > 0.0f64 { fill(p, x + fr.w - br, y + bt, br, fr.h - bt - bbm, border_color_of(s, 1usize)) }
 }
 
+// A text fragment of a line that ends with an ellipsis (text-overflow or a clamped line): the text is cut at a character where
+// the ellipsis still fits in the box's content width, the ellipsis follows it, later fragments are dropped.
+fn paint_ellipsized(p: *Painter, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64) {
+    let ts = layout.st(p.l, p.l.boxes.items[usize(fr.box)].style)
+    let env = p.env
+    let content_w = bb.w - bb.border[1usize] - bb.border[3usize] - bb.padding[1usize] - bb.padding[3usize]
+    let dots = "\xe2\x80\xa6"
+    let dl = env.text(env.ctx, ts, dots)
+    var ew = 0.0f64
+    if mem.address_of(dl) != 0usize { ew = f64(dl.bounds.width) }
+    // Fragments after the one that reaches the end are not drawn.
+    let is_last = fr.x + fr.w >= ln.x + ln.w - 0.01f64
+    if fr.x >= content_w - ew && !is_last { ret }
+    if !is_last && fr.x + fr.w + ew <= content_w + 0.01f64 {
+        paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
+        ret
+    }
+    if !is_last { ret }
+    if fr.x + fr.w + ew <= content_w + 0.01f64 {
+        paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
+        paint_text_run(p, fr.box, dots, cx + fr.x + fr.w, cy + fr.y, ew)
+        ret
+    }
+    // Cut at the longest prefix that leaves room.
+    var cut = fr.text.len
+    var width_left = content_w - ew - fr.x
+    while cut > 0usize {
+        // Back up to a character boundary.
+        cut -= 1usize
+        while cut > 0usize && (fr.text[cut] & 192u8) == 128u8 { cut -= 1usize }
+        let pre = fr.text[0usize..cut]
+        let pl = env.text(env.ctx, ts, pre)
+        if mem.address_of(pl) != 0usize && f64(pl.bounds.width) <= width_left + 0.01f64 {
+            paint_text_run(p, fr.box, pre, cx + fr.x, cy + fr.y, f64(pl.bounds.width))
+            paint_text_run(p, fr.box, dots, cx + fr.x + f64(pl.bounds.width), cy + fr.y, ew)
+            ret
+        }
+    }
+    paint_text_run(p, fr.box, dots, cx + fr.x, cy + fr.y, ew)
+}
+
 // The lines of block container `b`, whose border box is at (ax, ay).
 fn paint_lines(p: *Painter, b: u32, ax: f64, ay: f64) {
     let bb = &p.l.boxes.items[usize(b)]
@@ -817,7 +858,11 @@ fn paint_lines(p: *Painter, b: u32, ax: f64, ay: f64) {
             let fr = p.l.frags.items[usize(ln.frag_first) + fi]
             fi += 1usize
             if fr.kind == .Text {
-                paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
+                if ln.overflow_ellipsis {
+                    paint_ellipsized(p, bb, ln, fr, cx, cy)
+                } else {
+                    paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
+                }
             } else if fr.kind == .Marker {
                 paint_marker(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
             } else if fr.kind == .Atomic {
