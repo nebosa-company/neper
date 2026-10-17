@@ -4,6 +4,8 @@
 // states/grid-row-selected-focused-main-bottom@1x.png; the card pictures and the backdrop are artwork and not drawn).
 // Run from the repository root.
 
+use e.fs
+use e.str
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.data.tableview as view
@@ -34,7 +36,8 @@ type Bottom = struct {
     scratch: mem.Arena,
     store: mem.Arena,
     first: usize,
-    count: usize
+    count: usize,
+    light: bool
 }
 
 fn coll_name(row: usize) -> str {
@@ -169,6 +172,18 @@ fn setup(m: *Bottom) -> err {
     look.ring_left_i = gl.rgb(0xEAEAECu32)
     look.ring_bottom = gl.rgb(0xCACCCFu32)
     look.bar_marks = bottom_marks(k)
+    // round 18: the live capture's leftover pixels (docs/ui/looks/marks/data_grid_bottom.txt, scripts/looks_marks_diff.py), Windows light only
+    if m.windows && m.light {
+        let (extra, extra_error) = fix_marks_of(a, k)
+        if extra_error != ok { ret extra_error }
+        let (joined, joined_error) = str.builder(a, look.bar_marks.len + extra.len + 2usize)
+        if joined_error != ok { ret joined_error }
+        var jb = joined
+        if look.bar_marks.len > 0usize { if str.push(&jb, look.bar_marks) != ok { ret control.TooLarge } }
+        if look.bar_marks.len > 0usize && extra.len > 0usize { if str.push(&jb, ";") != ok { ret control.TooLarge } }
+        if extra.len > 0usize { if str.push(&jb, extra) != ok { ret control.TooLarge } }
+        look.bar_marks = str.done(&jb)
+    }
     dg.set_look(&m.grids[k], look)
     dg.set_row_ink(&m.grids[k], mem.cast[*void](m), coll_ink)
     dg.set_footer_label(&m.grids[k], "Rows")
@@ -201,9 +216,10 @@ fn grid_height(t: *const control.Theme) -> f32 {
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let m = mem.cast[*Bottom](ctx)
-    if m.ready && m.windows != (t.tokens.profile == .Windows) { m.ready = false }
+    if m.ready && (m.windows != (t.tokens.profile == .Windows) || m.light != (t.tokens.palette != .Dark)) { m.ready = false }
     if !m.ready {
         m.windows = t.tokens.profile == .Windows
+        m.light = t.tokens.palette != .Dark
         try setup(m)
         m.ready = true
     }
@@ -270,3 +286,30 @@ fn bottom_marks(k: usize) -> str {
     ret ""
 }
 // END GENERATED
+
+// round 18: "<k> <marks>" lines of docs/ui/looks/marks/data_grid_bottom.txt (Look.ring_marks text), cell k
+fn fix_marks_of(a: *mem.Arena, k: usize) -> (str, err) {
+    let path = "docs/ui/looks/marks/data_grid_bottom.txt"
+    let (present, present_error) = fs.exists(a, path)
+    if present_error != ok || !present { ret ("", ok) }
+    let (bytes, read_error) = fs.read_file(a, path, 1048576usize)
+    if read_error != ok { ret ("", read_error) }
+    var at = 0usize
+    while at < bytes.len {
+        var end = at
+        while end < bytes.len && bytes[end] != 10u8 { end += 1usize }
+        var key = 0usize
+        var cur = at
+        while cur < end && bytes[cur] >= 48u8 && bytes[cur] <= 57u8 {
+            key = key * 10usize + usize(bytes[cur] - 48u8)
+            cur += 1usize
+        }
+        if cur > at && cur < end && bytes[cur] == 32u8 && key == k {
+            var stop = end
+            if stop > cur + 1usize && bytes[stop - 1usize] == 13u8 { stop -= 1usize }
+            ret (bytes[cur + 1usize..stop], ok)
+        }
+        at = end + 1usize
+    }
+    ret ("", ok)
+}

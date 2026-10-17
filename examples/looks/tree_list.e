@@ -260,6 +260,7 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key, focus_tw
     options.height = 300.0
     if focus_two { options.height = 71.0 }
     if focus_two { options.bar_view = 300.0 }
+    if flags.expanded && !focus_two { options.bar_scale = 1.0233 }
     let (node, node_error) = collection.tree_table_with(a, key, held, "Blocks", columns[0usize..4usize], source, cells, opened, picked[0usize..1usize], widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, 99usize, false, widget.Change[usize] { ctx: zero, invoke: noop_sort }, widget.Change[collection.Reorder] { ctx: zero, invoke: noop_reorder }, widget.Change[collection.ColumnResize] { ctx: zero, invoke: noop_resize }, 17.0, options)
     ret (node, node_error)
 }
