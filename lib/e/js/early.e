@@ -325,6 +325,7 @@ fn check_pattern(c: *Ctx, id: u32, binding: bool, allow_cover: bool) -> err {
             }
             if en.kind == ast.N_SPREAD {
                 if i + 1usize != usize(n.b) { ret fail(c, eid, "Rest element must be last element") }
+                if en.c == 1u32 { ret fail(c, eid, "Rest element may not have a trailing comma") }
                 let tn = node(c, en.a)
                 if tn.kind == ast.N_ASSIGN { ret fail(c, eid, "Rest element may not have an initializer") }
                 try check_pattern(c, en.a, binding, allow_cover)
@@ -342,6 +343,7 @@ fn check_pattern(c: *Ctx, id: u32, binding: bool, allow_cover: bool) -> err {
             let pn = node(c, pid)
             if pn.op == ast.M_SPREAD {
                 if j + 1usize != usize(n.b) { ret fail(c, pid, "Rest element must be last element") }
+                if pn.c == 1u32 { ret fail(c, pid, "Rest element may not have a trailing comma") }
                 let rn = node(c, pn.b)
                 if binding && rn.kind != ast.N_IDENT { ret fail(c, pid, "Invalid rest element") }
                 if rn.kind == ast.N_ARRAY || rn.kind == ast.N_OBJECT || rn.kind == ast.N_ASSIGN { ret fail(c, pid, "Invalid rest element") }

@@ -747,6 +747,7 @@ fn parse_object(p: *Parser) -> (u32, err) {
             let v = try parse_assign(p)
             node(p, pid).op = ast.M_SPREAD
             node(p, pid).b = v
+            if is_p(p, ",") { node(p, pid).c = 1u32 }
         } else {
             var is_async = false
             var is_gen = false
@@ -852,6 +853,7 @@ fn parse_array(p: *Parser) -> (u32, err) {
                 let v = try parse_assign(p)
                 node(p, sid).a = v
                 try list.push[u32](&ids, sid)
+                if is_p(p, ",") { node(p, sid).c = 1u32 }
             } else {
                 let v2 = try parse_assign(p)
                 try list.push[u32](&ids, v2)
