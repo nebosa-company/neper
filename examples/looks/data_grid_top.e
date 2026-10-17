@@ -458,7 +458,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var name = "data_grid_top"
     seed.first = 0usize
     seed.count = 2usize
-    if args.len > 1usize {
+    if args.len > 1usize && args[1usize][0usize] != 115u8 && args[1usize][0usize] != 112u8 {
         // the part number: one or two digits
         var part = usize(args[1usize][0usize] - 48u8)
         if args[1usize].len > 1usize { part = part * 10usize + usize(args[1usize][1usize] - 48u8) }
@@ -469,6 +469,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         name = names[part]
     }
     apps[0usize] = seed
+    if args.len > 1usize && args[1usize][0usize] == 115u8 {
+        // `data_grid_top.exe states`: the selected-row grid, its top 179 px are the live grab docs/ui/looks/ref/windows/states/grid-row-selected-focused-main)
+        seed.first = 1usize
+        seed.count = 1usize
+        apps[0usize] = seed
+        let quick = looks.Sheet { name: "data_grid_states", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 213.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
+        ret looks.run_all(a, &quick)
+    }
+    if args.len > 1usize && args[1usize][0usize] == 112u8 {
+        // `data_grid_top.exe pressed`: the header-pressed grid (the top 24 px are the live grab)
+        seed.first = 0usize
+        seed.count = 1usize
+        apps[0usize] = seed
+        let pressed = looks.Sheet { name: "data_grid_states_pressed", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 213.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
+        ret looks.run_all(a, &pressed)
+    }
     let sheet = looks.Sheet { name: name, cells: seed.count, columns: 2usize, cell_w: 576.0, cell_h: 213.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
     ret looks.run_all(a, &sheet)
 }
