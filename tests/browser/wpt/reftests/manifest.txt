@@ -150,3 +150,4 @@ empty-list-item-marker-001.html | empty-list-item-marker-001-ref.html | match
 grid-abspos-align-001.html | grid-abspos-align-001-ref.html | match
 colspan-001.html | colspan-001-ref.html | match
 colrule-001.html | colrule-001-ref.html | match
+abspos-inline-static-001.html | abspos-inline-static-001-ref.html | match
