@@ -130,3 +130,4 @@ rel-inline-001.html | rel-inline-001-ref.html | match
 vertical-box-001.html | vertical-box-001-ref.html | match
 aspect-ratio-001.html | aspect-ratio-001-ref.html | match
 float-in-empty-001.html | float-in-empty-001-ref.html | match
+bfc-beside-float-001.html | bfc-beside-float-001-ref.html | match

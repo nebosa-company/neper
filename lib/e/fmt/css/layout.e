@@ -1630,7 +1630,7 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
     let l = x.l
     let cs = x.cs
     var out = Scan { restart: false, end: i, lead: i, forced: false, line_x: 0.0f64, avail: x.cbw }
-    let est = x.sa + x.sd
+    let est = maxf(x.sa + x.sd, 1.0f64)
     let fc = x.fc
     let lx = float_edge_left(l, fc.base, fc.oy + x.y, fc.oy + x.y + est, fc.ox) - fc.ox
     let rx = float_edge_right(l, fc.base, fc.oy + x.y, fc.oy + x.y + est, fc.ox + x.cbw) - fc.ox
@@ -1661,7 +1661,12 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
             continue
         }
         if p.kind == .Abs {
-            l.boxes.items[usize(p.box)].x = out.line_x + pos
+            // A block-level box's static position is the container's content edge; an inline-level one follows the line.
+            if l.boxes.items[usize(p.box)].inline_level {
+                l.boxes.items[usize(p.box)].x = out.line_x + pos
+            } else {
+                l.boxes.items[usize(p.box)].x = 0.0f64
+            }
             l.boxes.items[usize(p.box)].y = x.y
             j += 1usize
             continue
@@ -1686,6 +1691,15 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
         var needed = p.w
         if p.kind == .Marker {
             needed = text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
+        }
+        // Nothing fits beside the floats: the line moves down to where they end (CSS 2.1 9.5).
+        if pos + needed > out.avail + 0.01f64 && !has_content && (lx > 0.0f64 || rx < x.cbw - 0.01f64) && !(p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord)) {
+            let below = next_float_end(l, fc.base, fc.oy + x.y)
+            if below > fc.oy + x.y + 0.01f64 {
+                x.y = below - fc.oy
+                out.restart = true
+                ret out
+            }
         }
         if pos + needed > out.avail + 0.01f64 && has_content {
             if last_soft != NONE {
@@ -2748,7 +2762,10 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
         avail = offer
         size_block_box(l, c, cw, offer)
         let cb3 = &l.boxes.items[usize(c)]
-        let need = cb3.w + cb3.margin[1usize] + cb3.margin[3usize]
+        // The end margin of an over-constrained box is the (possibly negative) rest, so measure with its specified margin.
+        var mr_need = 0.0f64
+        if s.margin[1usize].kind != .Auto { mr_need = resolve_or(s.margin[1usize], maxf(cw, 0.0f64), 0.0f64) }
+        let need = cb3.w + mr_need + cb3.margin[3usize]
         if need <= offer + 0.01f64 || !bfc || fc.base >= l.floats.len { break }
         let nxt = next_float_end(l, fc.base, fc.oy + y_top)
         if nxt <= fc.oy + y_top { break }
