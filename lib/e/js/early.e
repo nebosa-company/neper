@@ -198,7 +198,10 @@ fn check_scope(c: *Ctx, first: u32, count: u32, top: bool, params: *const list.L
                 let plain = (inn.flags & (ast.F_GENERATOR | ast.F_ASYNC)) == 0u16
                 if has_name(&lex_l, inn.text) { ret fail(c, sid, "Identifier has already been declared") }
                 if has_name(&fn_l, inn.text) && (c.strict || !plain) { ret fail(c, sid, "Identifier has already been declared") }
-                if !has_name(&fn_l, inn.text) { try list.push[str](&fn_l, inn.text) }
+                if !plain {
+                    // Generators and async functions never merge with a same-named declaration.
+                    try list.push[str](&lex_l, inn.text)
+                } else if !has_name(&fn_l, inn.text) { try list.push[str](&fn_l, inn.text) }
             }
         }
     }
@@ -1249,6 +1252,9 @@ fn check_switch_scope(c: *Ctx, all: list.List[u32]) -> err {
     var vars: list.List[str] = zero
     let (l2, e2) = list.init[str](c.a, 8usize)
     vars = l2
+    var plain_l: list.List[str] = zero
+    let (l2b, e2b) = list.init[str](c.a, 4usize)
+    plain_l = l2b
     var i = 0usize
     while i < all.len {
         let sid = all.items[i]
@@ -1271,7 +1277,9 @@ fn check_switch_scope(c: *Ctx, all: list.List[u32]) -> err {
                 d += 1usize
             }
         } else if (sn.kind == ast.N_CLASS || sn.kind == ast.N_FUNC) && (sn.flags & ast.F_DECL) != 0u16 {
-            if has_name(&lex_l, sn.text) && !(sn.kind == ast.N_FUNC && !c.strict && (sn.flags & (ast.F_GENERATOR | ast.F_ASYNC)) == 0u16) { ret fail(c, sid, "Identifier has already been declared") }
+            let plain_fn = sn.kind == ast.N_FUNC && !c.strict && (sn.flags & (ast.F_GENERATOR | ast.F_ASYNC)) == 0u16
+            if has_name(&lex_l, sn.text) && !(plain_fn && has_name(&plain_l, sn.text)) { ret fail(c, sid, "Identifier has already been declared") }
+            if plain_fn { try list.push[str](&plain_l, sn.text) }
             try list.push[str](&lex_l, sn.text)
         }
     }
