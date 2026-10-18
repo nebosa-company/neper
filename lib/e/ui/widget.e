@@ -30,6 +30,7 @@ use e.text.layout
 use e.text.unicode
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.matshade
 use e.ui.style
 use e.ui.window
 
@@ -1912,6 +1913,12 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     let outer_clip = s.clip_rect
     let outer_has_clip = s.has_clip
     // The shadow lies under everything, the background's shape at its offset.
+    // Android: a drawn Material 3 elevation level (e.ui.matshade) round the box, its corners the box's own.
+    if node.style.shade > 0u8 {
+        var shade_radius = node.style.radius
+        if corner.top_left > shade_radius { shade_radius = corner.top_left }
+        try matshade.paint_level(b, bounds, shade_radius, node.style.shade)
+    }
     if node.style.shadow.color.alpha > 0.0 {
         let shifted = geometry.Rect { x: bounds.x + node.style.shadow.offset.x, y: bounds.y + node.style.shadow.offset.y, width: bounds.width, height: bounds.height }
         try fill_corners(a, b, shifted, corner, paint.Brush { Solid: node.style.shadow.color })

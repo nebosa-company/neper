@@ -2452,7 +2452,11 @@ fn pressable_states_fill(a: *mem.Arena, key: widget.Key, t: *const Theme, role: 
     if look.custom_padding { vertical = look.padding_y }
     let pad_y = style.Length { Px: vertical }
     s.padding = style.EdgeLengths { left: style.Length { Px: start }, top: pad_y, right: style.Length { Px: end }, bottom: pad_y }
-    if look.elevation != 0u8 {
+    if look.elevation != 0u8 && t.tokens.profile == .MaterialLike {
+        // Android: the M3 elevation level is a drawn shade (e.ui.matshade), not the offset copy below.
+        s.shade = look.elevation
+        if s.shade > 5u8 { s.shade = 5u8 }
+    } else if look.elevation != 0u8 {
         var raised = usize(look.elevation)
         if raised > 5usize { raised = 5usize }
         s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(raised) }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[raised]) }
@@ -2485,6 +2489,10 @@ fn button_look(t: *const Theme, look: style.ResolvedControl, enabled: bool) -> s
     out.padding = 16.0
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { out.padding = 24.0 }
     if options_text(look) { out.padding = 12.0 }
+    // Android: a text button under its state layer (alpha well below a container's) keeps its 12 sides.
+    if t.tokens.profile == .MaterialLike && look.background.alpha < 0.5 && !(look.border_width > 0.0) { out.padding = 12.0 }
+    // Android: M3 buttons are at least 64 wide (a short text button is 64, centred label).
+    if t.tokens.profile == .MaterialLike { out.min_width = 64.0 }
     // The label line centred in the control height (D944).
     out.custom_padding = true
     out.padding_y = max_zero((t.tokens.metrics.control_height - style.text_style(t.tokens, .Label).line_height) * 0.5)
