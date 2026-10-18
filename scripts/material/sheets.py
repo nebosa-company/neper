@@ -75,4 +75,4 @@ SHEETS["slider"] = {"columns": 5, "cell_w": 220, "cell_h": 40, "cells": [
 
 # The reference is spec-derived CSS (360 wide, Sunday first, a 28 day month from a Sunday), not a Material Web capture: the numbers measure how far the
 # modal date picker is from that reading of the spec (it is 328 wide, Monday first), they are not a pass mark.
-SHEETS["date_picker"] = {"columns": 1, "cell_w": 360, "cell_h": 560, "at": (16, 10), "cells": ["date-picker-rest"]}
+SHEETS["date_picker"] = {"columns": 1, "cell_w": 360, "cell_h": 480, "at": (0, 3), "cells": ["date-picker-rest"]}

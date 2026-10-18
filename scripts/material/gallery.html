@@ -126,10 +126,12 @@ html.notext svg.i { opacity: 0; }
 .badge.s { width: 6px; height: 6px; border-radius: 3px; left: 15px; top: 0; }
 .badge.l { min-width: 16px; height: 16px; border-radius: 8px; left: 12px; top: -4px; padding: 0 4px; font: 500 11px/16px Roboto; letter-spacing: 0; text-align: center; }
 .datepicker { box-sizing: border-box; width: 360px; background: var(--md-sys-color-surface-container-high); border-radius: 28px; padding-bottom: 12px;
-  box-shadow: 0 2px 6px 2px rgba(0,0,0,.15), 0 1px 2px 0 rgba(0,0,0,.3); }
-.datepicker .hd { padding: 16px 24px 0 24px; height: 120px; box-sizing: border-box; }
+  box-shadow: 0 4px 8px 3px rgba(0,0,0,.15), 0 1px 3px 0 rgba(0,0,0,.3), 0 0 0 100vmax rgba(0,0,0,.32); }
+.datepicker .hd { padding: 16px 12px 0 24px; height: 120px; box-sizing: border-box; }
+.datepicker .ib { width: 48px; height: 48px; display: grid; place-items: center; color: var(--md-sys-color-on-surface-variant); }
 .datepicker .hd .s { font: 500 14px/20px Roboto; letter-spacing: 0; color: var(--md-sys-color-on-surface-variant); }
-.datepicker .hd .d { font: 400 32px/40px Roboto; color: var(--md-sys-color-on-surface); margin-top: 36px; }
+.datepicker .hd .r { display: flex; justify-content: space-between; align-items: center; margin-top: 32px; }
+.datepicker .hd .d { font: 400 32px/40px Roboto; color: var(--md-sys-color-on-surface); }
 .datepicker hr { border: 0; border-top: 1px solid var(--md-sys-color-outline-variant); margin: 0; }
 .datepicker .mn { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 0 24px; height: 48px; font: 500 14px/20px Roboto; letter-spacing: 0; color: var(--md-sys-color-on-surface-variant); }
 .datepicker .g { display: grid; grid-template-columns: repeat(7, 48px); padding: 0 12px; font: 400 14px/20px Roboto; letter-spacing: 0; text-align: center; }
@@ -326,7 +328,7 @@ add("badge-999", `<span class="badge l" style="position:static;display:block">99
 add("badge-icon-dot", `<span class="badgebox">${ic("notif")}<span class="badge s"></span></span>`);
 add("badge-icon-3", `<span class="badgebox">${ic("notif")}<span class="badge l">3</span></span>`);
 const days = (sel) => ["S", "M", "T", "W", "T", "F", "S"].map(d => `<span class="w">${d}</span>`).join("") + Array.from({ length: 28 }, (_, i) => `<span><span class="c${i + 1 === 14 ? " today" : ""}${i + 1 === sel ? " sel" : ""}" style="display:grid;place-items:center">${i + 1}</span></span>`).join("");
-add("date-picker-rest", `<div class="datepicker"><div class="hd"><div class="s">Select date</div><div class="d">Mon, Jun 14</div></div><hr><div class="mn"><span>June 2021</span><span style="display:flex">${ic("prev")}${ic("next")}</span></div><div class="g">${days(21)}</div><div class="ft"><md-text-button>Cancel</md-text-button><md-text-button>OK</md-text-button></div></div>`);
+add("date-picker-rest", `<div class="datepicker"><div class="hd"><div class="s">Select date</div><div class="r"><div class="d">Sat, Feb 21</div><span class="ib">${ic("edit")}</span></div></div><hr><div class="mn"><span>February 2026</span><span style="display:flex"><span class="ib">${ic("prev")}</span><span class="ib">${ic("next")}</span></span></div><div class="g">${days(21)}</div><div class="ft"><md-text-button>Cancel</md-text-button><md-text-button>OK</md-text-button></div></div>`);
 
 // Focus is the 10 % state layer on Android: the ripple's hover layer at 10 % (Material Web itself only draws its focus ring)
 window.focusLayer = () => {

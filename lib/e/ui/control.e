@@ -3177,7 +3177,17 @@ fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *
     }
     let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
     if label_error != ok { ret (zero, label_error) }
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, label_node)
+    var shown_label = label_node
+    if t.tokens.profile == .MaterialLike {
+        // A label shorter than the 64 dp minimum stands in the middle of the button.
+        let (held_label, held_label_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_label_error != ok { ret (zero, TooLarge) }
+        held_label[0usize] = label_node
+        var middle = style.defaults()
+        middle.min_width = style.Length { Px: max_zero(look.min_width - 2.0 * look.padding) }
+        shown_label = widget.aligned(0u64, .Center, .Center, middle, held_label[0usize..1usize])
+    }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, shown_label)
     ret (node, node_error)
 }
 
