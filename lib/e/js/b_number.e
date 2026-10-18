@@ -700,16 +700,21 @@ fn math_round(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     let (x, e) = m1(it, args)
     if e != ok { ret (js.undefv(), e) }
     if !js.is_finite(x) || x == 0.0f64 { ret (js.num_value(x), ok) }
-    if x > -0.5f64 && x < 0.0f64 { ret (js.num_value(-0.0f64), ok) }
+    if x >= -0.5f64 && x < 0.0f64 { ret (js.num_value(-0.0f64), ok) }
     if x >= 4503599627370496.0f64 || x <= -4503599627370496.0f64 { ret (js.num_value(x), ok) }
-    let r = js.floor(x + 0.5f64)
+    let fl = js.floor(x)
+    var r = fl
+    if x - fl >= 0.5f64 { r = fl + 1.0f64 }
     ret (js.num_value(r), ok)
 }
 
 fn math_trunc(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (x, e) = m1(it, args)
     if e != ok { ret (js.undefv(), e) }
-    ret (js.num_value(js.trunc(x)), ok)
+    if x == 0.0f64 { ret (js.num_value(x), ok) }
+    let t = js.trunc(x)
+    if t == 0.0f64 && x < 0.0f64 { ret (js.num_value(-0.0f64), ok) }
+    ret (js.num_value(t), ok)
 }
 
 fn math_sign(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -860,6 +865,10 @@ fn math_atan2(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     let (x, e2) = js.to_number(it, arg(args, 1usize))
     if e2 != ok { ret (js.undefv(), e2) }
     if js.is_nan(x) || js.is_nan(y) { ret (js.num_value(js.nan()), ok) }
+    if x == js.infinity() && js.is_finite(y) {
+        if y < 0.0f64 || (y == 0.0f64 && 1.0f64 / y < 0.0f64) { ret (js.num_value(-0.0f64), ok) }
+        ret (js.num_value(0.0f64), ok)
+    }
     ret (js.num_value(math.atan2(y, x)), ok)
 }
 

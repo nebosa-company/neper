@@ -12,7 +12,7 @@ fn arg(args: []const js.Value, i: usize) -> js.Value {
     ret js.undefv()
 }
 
-type Compiled = struct { re: rx.Regex, source: str, flags: str }
+type Compiled = struct { re: rx.Regex, source: str, flags: str, legacy: bool, realm: *js.Interp }
 
 fn compiled_of(o: *js.Obj) -> *Compiled { ret mem.cast[*Compiled](o.data) }
 
@@ -131,14 +131,14 @@ fn subject_units(it: *js.Interp, s: str) -> []const u16 {
 }
 
 // Builds a RegExp object for `source`/`flags` with the given prototype.
-fn regexp_create(it: *js.Interp, proto: *js.Obj, source: str, flags: str) -> (js.Value, err) {
+fn regexp_create(it: *js.Interp, proto: *js.Obj, source: str, flags: str, legacy: bool) -> (js.Value, err) {
     let units = to_units(it.a, source)
     let (re, msg, ce) = rx.compile(it.a, units, flags)
     if ce != ok { ret (js.undefv(), js.throw_syntax(it, js.str_concat3(it, "Invalid regular expression: /", source, js.str_concat(it, "/: ", msg)))) }
     let o = js.new_obj(it, js.C_REGEXP, proto)
     let (cell, me) = mem.alloc[Compiled](it.a, 1usize)
     if me != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
-    cell[0usize] = Compiled { re: re, source: source, flags: flags }
+    cell[0usize] = Compiled { re: re, source: source, flags: flags, legacy: legacy, realm: it }
     o.data = mem.cast[*void](&cell[0usize])
     let pe = js.define_data(it, o, js.key_of("lastIndex"), js.num_value(0.0f64), js.P_WRITABLE)
     ret (js.obj_value(o), ok)
@@ -196,7 +196,9 @@ fn regexp_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
         if pe != ok { ret (js.undefv(), pe) }
         proto = p
     }
-    let (r, re) = regexp_create(it, proto, source, flags)
+    var legacy = true
+    if it.has_new_target { legacy = js.as_object(it.new_target) == it.regexp_ctor }
+    let (r, re) = regexp_create(it, proto, source, flags, legacy)
     ret (r, re)
 }
 
@@ -247,6 +249,16 @@ fn builtin_exec(it: *js.Interp, r: *js.Obj, s: str) -> (js.Value, err) {
     }
     let start = usize(m.caps[0usize])
     let end = usize(m.caps[1usize])
+    if c.legacy && c.realm == it {
+        it.rx_valid = true
+        it.rx_input_ok = true
+        it.rx_input = s
+        it.rx_units = units
+        it.rx_caps = m.caps
+    } else {
+        it.rx_valid = false
+        it.rx_input_ok = false
+    }
     if global || sticky {
         let pe3 = js.put(it, js.obj_value(r), js.key_of("lastIndex"), js.num_value(f64(end)), true)
         if pe3 != ok { ret (js.undefv(), pe3) }
@@ -904,6 +916,8 @@ fn regexp_split(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
 
 fn regexp_compile(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     if !is_regexp_obj(this_val) { ret (js.undefv(), js.throw_type(it, "RegExp.prototype.compile called on incompatible receiver")) }
+    let tc = compiled_of(js.as_object(this_val))
+    if !tc.legacy || tc.realm != it { ret (js.undefv(), js.throw_type(it, "RegExp.prototype.compile cannot be used on this RegExp")) }
     let pattern = arg(args, 0usize)
     let flags_arg = arg(args, 1usize)
     var source = ""
@@ -939,6 +953,85 @@ fn regexp_compile(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
 
 fn species_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (this_val, ok) }
 
+// Annex B legacy static properties (RegExp.$1 ... RegExp.input): which one is told by the getter function's `num`.
+fn legacy_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let sel = usize(it.callee.num)
+    if !js.is_object(this_val) || js.as_object(this_val) != it.regexp_ctor { ret (js.undefv(), js.throw_type(it, "RegExp legacy property accessed on an incompatible receiver")) }
+    if sel == 0usize {
+        if !it.rx_input_ok { ret (js.undefv(), js.throw_type(it, "RegExp.input is not set")) }
+        ret (js.str_value(it.rx_input), ok)
+    }
+    if !it.rx_valid { ret (js.undefv(), js.throw_type(it, "no successful match yet or the legacy properties were invalidated")) }
+    let units = it.rx_units
+    let caps = it.rx_caps
+    let ms = usize(caps[0usize])
+    let me = usize(caps[1usize])
+    if sel == 1usize { ret (js.str_value(from_units(it, units, ms, me)), ok) }
+    if sel == 3usize { ret (js.str_value(from_units(it, units, 0usize, ms)), ok) }
+    if sel == 4usize { ret (js.str_value(from_units(it, units, me, units.len)), ok) }
+    var g = 0usize
+    if sel == 2usize {
+        g = caps.len / 2usize - 1usize
+        if g == 0usize { ret (js.str_value(""), ok) }
+    } else {
+        g = sel - 10usize
+    }
+    if g * 2usize + 1usize >= caps.len { ret (js.str_value(""), ok) }
+    let cs = caps[g * 2usize]
+    let ce = caps[g * 2usize + 1usize]
+    if cs < 0i64 || ce < 0i64 { ret (js.str_value(""), ok) }
+    ret (js.str_value(from_units(it, units, usize(cs), usize(ce))), ok)
+}
+
+fn legacy_set_input(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    if !js.is_object(this_val) || js.as_object(this_val) != it.regexp_ctor { ret (js.undefv(), js.throw_type(it, "RegExp.input set on an incompatible receiver")) }
+    let (sv, se) = js.to_string(it, arg(args, 0usize))
+    if se != ok { ret (js.undefv(), se) }
+    it.rx_input = sv
+    it.rx_input_ok = true
+    ret (js.undefv(), ok)
+}
+
+fn legacy_name(i: usize) -> str {
+    if i == 0usize { ret "input" }
+    if i == 1usize { ret "$_" }
+    if i == 2usize { ret "lastMatch" }
+    if i == 3usize { ret "$&" }
+    if i == 4usize { ret "lastParen" }
+    if i == 5usize { ret "$+" }
+    if i == 6usize { ret "leftContext" }
+    if i == 7usize { ret "$`" }
+    if i == 8usize { ret "rightContext" }
+    if i == 9usize { ret "$'" }
+    if i == 10usize { ret "$1" }
+    if i == 11usize { ret "$2" }
+    if i == 12usize { ret "$3" }
+    if i == 13usize { ret "$4" }
+    if i == 14usize { ret "$5" }
+    if i == 15usize { ret "$6" }
+    if i == 16usize { ret "$7" }
+    if i == 17usize { ret "$8" }
+    ret "$9"
+}
+
+fn install_legacy(it: *js.Interp, ctor: *js.Obj) {
+    var i = 0usize
+    while i < 19usize {
+        let nm = legacy_name(i)
+        var sel = 0usize
+        if i >= 10usize { sel = 10usize + (i - 9usize) } else { sel = i / 2usize }
+        let gname = js.str_concat(it, "get ", nm)
+        let g = js.make_native(it, gname, 0u32, legacy_get)
+        g.num = f64(sel)
+        var setter = js.null_obj()
+        if sel == 0usize {
+            setter = js.make_native(it, js.str_concat(it, "set ", nm), 1u32, legacy_set_input)
+        }
+        let de = js.define_accessor_raw(it, ctor, js.key_of(nm), g, setter, js.P_CONFIGURABLE)
+        i += 1usize
+    }
+}
+
 fn install_regexp(it: *js.Interp) {
     let proto = it.protos.regexp
     let ctor = js.make_native(it, "RegExp", 2u32, regexp_ctor)
@@ -948,6 +1041,7 @@ fn install_regexp(it: *js.Interp) {
     let e3 = js.define_data(it, it.global, js.key_of("RegExp"), js.obj_value(ctor), js.P_HIDDEN)
     it.regexp_ctor = ctor
     it.last = ctor
+    install_legacy(it, ctor)
     let sg = js.make_native(it, "get [Symbol.species]", 0u32, species_self)
     let e4 = js.define_accessor_raw(it, it.last, js.key_of_symbol(it.sym_species), sg, js.null_obj(), js.P_CONFIGURABLE)
     js.add_method(it, it.protos.regexp, "exec", 1u32, regexp_exec_m)

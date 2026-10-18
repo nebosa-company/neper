@@ -822,6 +822,7 @@ fn regex_at(lx: *Lexer, start: usize) -> (Tok, err) {
         let c = src[pos]
         if line_terminator(src, pos) > 0usize { ret (t, fail(lx, "unterminated regular expression")) }
         if c == 92u8 {
+            if pos + 1usize < src.len && line_terminator(src, pos + 1usize) > 0usize { ret (t, fail(lx, "unterminated regular expression")) }
             pos += 2usize
         } else if c == 91u8 {
             in_class = true
@@ -839,7 +840,7 @@ fn regex_at(lx: *Lexer, start: usize) -> (Tok, err) {
     t.text = src[start + 1usize..pos]
     pos += 1usize
     let flag_start = pos
-    while pos < src.len && is_id_part(src[pos]) { pos += 1usize }
+    while pos < src.len && id_part_at(src, pos) { pos += 1usize }
     t.flags = src[flag_start..pos]
     lx.pos = pos
     t.end = pos

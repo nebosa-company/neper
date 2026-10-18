@@ -375,17 +375,51 @@ fn object_is(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.
     ret (js.bool_value(js.same_value(arg(args, 0usize), arg(args, 1usize))), ok)
 }
 
-fn object_freeze(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    let v = arg(args, 0usize)
-    if !js.is_object(v) { ret (v, ok) }
-    js.freeze_object(it, js.as_object(v))
-    ret (v, ok)
+// SetIntegrityLevel through the object's own internal methods (proxies and typed arrays take this path).
+fn set_integrity_generic(it: *js.Interp, o: *js.Obj, frozen: bool) -> (bool, err) {
+    let (done, pe) = js.prevent_extensions(it, o)
+    if pe != ok { ret (false, pe) }
+    if !done { ret (false, ok) }
+    let (keys, ke) = js.own_keys(it, o)
+    if ke != ok { ret (false, ke) }
+    var i = 0usize
+    while i < keys.len {
+        var d = js.empty_desc()
+        d.has_configurable = true
+        d.configurable = false
+        if frozen {
+            let (cur, found, ge) = js.get_own_e(it, o, keys[i])
+            if ge != ok { ret (false, ge) }
+            if !found {
+                i += 1usize
+                continue
+            }
+            if (cur.flags & js.P_ACCESSOR) == 0u8 {
+                d.has_writable = true
+                d.writable = false
+            }
+        }
+        let (r, de) = js.define_own(it, o, keys[i], d)
+        if de != ok { ret (false, de) }
+        if !r { ret (false, js.throw_type(it, "Cannot redefine property")) }
+        i += 1usize
+    }
+    ret (true, ok)
 }
 
-fn object_seal(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    let v = arg(args, 0usize)
+fn set_integrity(it: *js.Interp, v: js.Value, frozen: bool) -> (js.Value, err) {
     if !js.is_object(v) { ret (v, ok) }
     let o = js.as_object(v)
+    if o.class == js.C_PROXY || o.class == js.C_TYPEDARRAY || o.class == js.C_NAMESPACE {
+        let (done, e) = set_integrity_generic(it, o, frozen)
+        if e != ok { ret (js.undefv(), e) }
+        if !done { ret (js.undefv(), js.throw_type(it, "Cannot freeze or seal this object")) }
+        ret (v, ok)
+    }
+    if frozen {
+        js.freeze_object(it, o)
+        ret (v, ok)
+    }
     if o.class == js.C_ARRAY { let m = js.materialize_elements(it, o) }
     var i = 0usize
     while i < o.props.len {
@@ -394,6 +428,16 @@ fn object_seal(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
     }
     o.extensible = false
     ret (v, ok)
+}
+
+fn object_freeze(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (r, e) = set_integrity(it, arg(args, 0usize), true)
+    ret (r, e)
+}
+
+fn object_seal(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (r, e) = set_integrity(it, arg(args, 0usize), false)
+    ret (r, e)
 }
 
 fn object_prevent_extensions(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -414,44 +458,73 @@ fn object_is_extensible(it: *js.Interp, this_val: js.Value, args: []const js.Val
     ret (js.bool_value(ext), ok)
 }
 
-fn object_is_frozen_or_sealed(it: *js.Interp, v: js.Value, frozen: bool) -> bool {
-    if !js.is_object(v) { ret true }
+fn object_is_frozen_or_sealed(it: *js.Interp, v: js.Value, frozen: bool) -> (bool, err) {
+    if !js.is_object(v) { ret (true, ok) }
     let o = js.as_object(v)
-    if o.extensible { ret false }
+    let (ext, xe) = js.is_extensible(it, o)
+    if xe != ok { ret (false, xe) }
+    if ext { ret (false, ok) }
     let (keys, ke) = js.own_keys(it, o)
-    if ke != ok { ret false }
+    if ke != ok { ret (false, ke) }
     var i = 0usize
     while i < keys.len {
-        let (p, found) = js.get_own(it, o, keys[i])
+        let (p, found, ge) = js.get_own_e(it, o, keys[i])
+        if ge != ok { ret (false, ge) }
         if found {
-            if (p.flags & js.P_CONFIGURABLE) != 0u8 { ret false }
-            if frozen && (p.flags & js.P_ACCESSOR) == 0u8 && (p.flags & js.P_WRITABLE) != 0u8 { ret false }
+            if (p.flags & js.P_CONFIGURABLE) != 0u8 { ret (false, ok) }
+            if frozen && (p.flags & js.P_ACCESSOR) == 0u8 && (p.flags & js.P_WRITABLE) != 0u8 { ret (false, ok) }
         }
         i += 1usize
     }
-    ret true
+    ret (true, ok)
 }
 
-fn object_is_frozen(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (js.bool_value(object_is_frozen_or_sealed(it, arg(args, 0usize), true)), ok) }
-fn object_is_sealed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (js.bool_value(object_is_frozen_or_sealed(it, arg(args, 0usize), false)), ok) }
+fn object_is_frozen(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (r, e) = object_is_frozen_or_sealed(it, arg(args, 0usize), true)
+    if e != ok { ret (js.undefv(), e) }
+    ret (js.bool_value(r), ok)
+}
+fn object_is_sealed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (r, e) = object_is_frozen_or_sealed(it, arg(args, 0usize), false)
+    if e != ok { ret (js.undefv(), e) }
+    ret (js.bool_value(r), ok)
+}
 
 fn object_from_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let src = arg(args, 0usize)
+    if js.is_nullish(src) { ret (js.undefv(), js.throw_type(it, "Object.fromEntries requires an iterable")) }
     let out = js.new_plain(it)
-    let (items, ie) = js.iterate_to_list(it, arg(args, 0usize))
+    let (iter, ie) = js.get_iterator(it, src)
     if ie != ok { ret (js.undefv(), ie) }
-    var i = 0usize
-    while i < items.len {
-        let item = items.items[i]
-        if !js.is_object(item) { ret (js.undefv(), js.throw_type(it, "Iterator value is not an entry object")) }
+    while true {
+        let (item, done, se) = js.iterator_step(it, iter)
+        if se != ok { ret (js.undefv(), se) }
+        if done { break }
+        if !js.is_object(item) {
+            let te = js.throw_type(it, "Iterator value is not an entry object")
+            js.iterator_close_quiet(it, iter)
+            ret (js.undefv(), te)
+        }
         let (k, ke) = js.get_value(it, item, js.key_of("0"))
-        if ke != ok { ret (js.undefv(), ke) }
+        if ke != ok {
+            js.iterator_close_quiet(it, iter)
+            ret (js.undefv(), ke)
+        }
         let (v, ve) = js.get_value(it, item, js.key_of("1"))
-        if ve != ok { ret (js.undefv(), ve) }
+        if ve != ok {
+            js.iterator_close_quiet(it, iter)
+            ret (js.undefv(), ve)
+        }
         let (pk, pke) = js.to_property_key(it, k)
-        if pke != ok { ret (js.undefv(), pke) }
-        let (done, de) = js.define_own(it, out, pk, js.data_desc(v, js.P_DEFAULT))
-        if de != ok { ret (js.undefv(), de) }
-        i += 1usize
+        if pke != ok {
+            js.iterator_close_quiet(it, iter)
+            ret (js.undefv(), pke)
+        }
+        let (dd, de) = js.define_own(it, out, pk, js.data_desc(v, js.P_DEFAULT))
+        if de != ok {
+            js.iterator_close_quiet(it, iter)
+            ret (js.undefv(), de)
+        }
     }
     ret (js.obj_value(out), ok)
 }
@@ -717,8 +790,16 @@ fn install_function(it: *js.Interp) {
     js.add_method(it, proto, "apply", 2u32, function_proto_apply)
     js.add_method(it, proto, "bind", 1u32, function_proto_bind)
     js.add_method(it, proto, "toString", 0u32, function_proto_to_string)
+    // The restricted `caller` and `arguments` accessors: both throw through %ThrowTypeError%.
+    let th = js.thrower_fn(it)
+    let e2 = js.define_accessor_raw(it, proto, js.key_of("caller"), th, th, js.P_CONFIGURABLE)
+    let e3 = js.define_accessor_raw(it, proto, js.key_of("arguments"), th, th, js.P_CONFIGURABLE)
+}
+
+// Function.prototype[Symbol.hasInstance]: needs the well-known symbols, so it is installed after them.
+fn install_function_symbols(it: *js.Interp) {
     let hi = js.make_native(it, "[Symbol.hasInstance]", 1u32, function_proto_has_instance)
-    let e = js.define_data(it, proto, js.key_of_symbol(it.sym_has_instance), js.obj_value(hi), 0u8)
+    let e = js.define_data(it, it.protos.function, js.key_of_symbol(it.sym_has_instance), js.obj_value(hi), 0u8)
 }
 
 // --- Error types
@@ -1022,7 +1103,7 @@ fn install_globals(it: *js.Interp) {
 fn global_eval(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let a0 = arg(args, 0usize)
     if !js.is_string(a0) { ret (a0, ok) }
-    let (v, e) = js.eval_source(it, js.value_str(a0))
+    let (v, e) = js.indirect_eval(it, a0)
     ret (v, e)
 }
 
@@ -1088,6 +1169,7 @@ fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
     install_function(it)
     install_errors(it)
     install_symbol(it)
+    install_function_symbols(it)
     b_array.install_array(it)
     b_string.install_string(it)
     b_number.install_number(it)

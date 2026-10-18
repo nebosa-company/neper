@@ -9,6 +9,7 @@
 
 use e.data.list as list
 use e.js.ast as ast
+use e.js.bigint as bigint
 use e.js.early as early
 use e.js.lex as lex
 use e.mem
@@ -19,7 +20,7 @@ error ParseError
 type Parser = struct {
     a: *mem.Arena, lx: lex.Lexer, tok: lex.Tok, prev_end: usize, prev_start: usize, prev_line: u32,
     nodes: list.List[ast.Node], kids: list.List[u32], strs: list.List[ast.TemplateStr], vars: list.List[u32],
-    strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool, blk: u32, module: bool, anon_default: bool, top_await: bool,
+    strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool, blk: u32, module: bool, anon_default: bool, top_await: bool, sub_flag: bool,
     message: str, line: u32, parens: list.List[u32]
 }
 
@@ -675,6 +676,40 @@ fn parse_sub(p: *Parser, src: str) -> (u32, err) {
     ret (e, ok)
 }
 
+// The decimal text of a BigInt literal (`0x1fn`, `1_000n`, ...).
+fn bigint_key_text(p: *Parser, text: str) -> (str, err) {
+    var digits = text
+    if digits.len > 0usize && digits[digits.len - 1usize] == 110u8 { digits = digits[0usize..digits.len - 1usize] }
+    var radix = 10u32
+    if digits.len > 2usize && digits[0usize] == 48u8 {
+        let c = digits[1usize]
+        if c == 120u8 || c == 88u8 {
+            radix = 16u32
+            digits = digits[2usize..]
+        } else if c == 111u8 || c == 79u8 {
+            radix = 8u32
+            digits = digits[2usize..]
+        } else if c == 98u8 || c == 66u8 {
+            radix = 2u32
+            digits = digits[2usize..]
+        }
+    }
+    let (bb, be) = str.builder(p.a, digits.len)
+    if be != ok { ret ("", be) }
+    var b2 = bb
+    var i = 0usize
+    while i < digits.len {
+        if digits[i] != 95u8 { let pe = str.push_byte(&b2, digits[i]) }
+        i += 1usize
+    }
+    let clean = str.done(&b2)
+    let (bv, good, pe2) = bigint.parse_digits(p.a, clean, radix)
+    if pe2 != ok || !good { ret ("", fail(p, "Invalid BigInt literal")) }
+    let (txt, te) = bigint.to_string(p.a, bv, 10u32)
+    if te != ok { ret ("", te) }
+    ret (txt, ok)
+}
+
 fn parse_property_key(p: *Parser) -> (u32, bool, err) {
     // Keys: identifier names (including reserved words), strings, numbers, `[expr]`, `#private`.
     if is_p(p, "[") {
@@ -692,6 +727,14 @@ fn parse_property_key(p: *Parser) -> (u32, bool, err) {
         node(p, id).text = p.tok.text
         try adv(p)
         ret (id, false, ok)
+    }
+    if p.tok.kind == lex.T_NUM && p.tok.big {
+        // A BigInt literal names the property by its decimal string.
+        let (idb, meb) = mk(p, ast.N_STR)
+        if meb != ok { ret (ast.NONE, false, meb) }
+        node(p, idb).text = try bigint_key_text(p, p.lx.src[p.tok.start..p.tok.end])
+        try adv(p)
+        ret (idb, false, ok)
     }
     if p.tok.kind == lex.T_NUM {
         let (id2, me2) = mk(p, ast.N_NUM)
@@ -907,6 +950,8 @@ fn parse_primary(p: *Parser) -> (u32, err) {
             // error pass (a name or member stays assignable and needs no mark).
             let ek = node(p, e).kind
             if ek == ast.N_ARRAY || ek == ast.N_OBJECT { node(p, e).op = 1u8 }
+            // A parenthesised name assigned to takes no inferred function name: `d` = 1 marks it.
+            if ek == ast.N_IDENT { node(p, e).d = 1u32 }
             try list.push[u32](&p.parens, e)
             ret (e, ok)
         }
@@ -1728,6 +1773,7 @@ fn parse_for(p: *Parser) -> (u32, err) {
         var right: u32 = ast.NONE
         if of { right = try parse_assign(p) } else { right = try parse_expression(p) }
         try expect_p(p, ")")
+        p.sub_flag = true
         let body = try parse_statement(p)
         var kind = ast.N_FORIN
         if of { kind = ast.N_FOROF }
@@ -1751,6 +1797,7 @@ fn parse_for(p: *Parser) -> (u32, err) {
     var update: u32 = ast.NONE
     if !is_p(p, ")") { update = try parse_expression(p) }
     try expect_p(p, ")")
+    p.sub_flag = true
     let body2 = try parse_statement(p)
     let (id2, me2) = mk(p, ast.N_FOR)
     if me2 != ok { ret (ast.NONE, me2) }
@@ -1764,6 +1811,7 @@ fn parse_for(p: *Parser) -> (u32, err) {
 // Annex B.3.4: `if (x) function f() {}` behaves as if the declaration were wrapped in a block.
 fn parse_if_body(p: *Parser) -> (u32, err) {
     if !is_k(p, "function") || p.strict {
+        p.sub_flag = true
         let r = try parse_statement(p)
         var inner = r
         var guard = 0u32
@@ -1792,6 +1840,8 @@ fn parse_if_body(p: *Parser) -> (u32, err) {
 }
 
 fn parse_statement(p: *Parser) -> (u32, err) {
+    let sub = p.sub_flag
+    p.sub_flag = false
     if p.tok.kind == lex.T_PUNCT {
         if is_p(p, "{") {
             let b = try parse_block(p)
@@ -1811,7 +1861,12 @@ fn parse_statement(p: *Parser) -> (u32, err) {
             ret (v, ok)
         }
         if str.eq(w, "let") {
-            let ld = try is_let_decl(p)
+            var ld = try is_let_decl(p)
+            if ld && sub {
+                // In a single-statement position `let` followed by a line break and no `[` is an identifier (ASI applies).
+                let lnx = try peek(p)
+                if lnx.nl && !(lnx.kind == lex.T_PUNCT && str.eq(lnx.text, "[")) { ld = false }
+            }
             if ld {
                 let v2 = try parse_var(p, false)
                 try consume_semi(p)
@@ -1870,6 +1925,7 @@ fn parse_statement(p: *Parser) -> (u32, err) {
             try expect_p(p, "(")
             let test2 = try parse_expression(p)
             try expect_p(p, ")")
+            p.sub_flag = true
             let body = try parse_statement(p)
             node(p, id3).a = test2
             node(p, id3).b = body
@@ -1879,6 +1935,7 @@ fn parse_statement(p: *Parser) -> (u32, err) {
             let (id4, me4) = mk(p, ast.N_DOWHILE)
             if me4 != ok { ret (ast.NONE, me4) }
             try adv(p)
+            p.sub_flag = true
             let body2 = try parse_statement(p)
             try expect_k(p, "while")
             try expect_p(p, "(")
@@ -2014,6 +2071,7 @@ fn parse_statement(p: *Parser) -> (u32, err) {
             try expect_p(p, "(")
             let obj = try parse_expression(p)
             try expect_p(p, ")")
+            p.sub_flag = true
             let body3 = try parse_statement(p)
             node(p, id11).a = obj
             node(p, id11).b = body3
@@ -2028,6 +2086,7 @@ fn parse_statement(p: *Parser) -> (u32, err) {
                 node(p, id12).text = w
                 try adv(p)
                 try adv(p)
+                p.sub_flag = true
                 let body4 = try parse_statement(p)
                 node(p, id12).a = body4
                 ret (id12, ok)

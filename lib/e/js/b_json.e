@@ -259,7 +259,9 @@ fn revive(it: *js.Interp, p: *P, rec_in: usize, holder: *js.Obj, key: js.Key, re
     }
     if js.is_object(val) {
         let vo = js.as_object(val)
-        if vo.class == js.C_ARRAY {
+        let (val_is_array, vae) = js.is_array_e(it, val)
+        if vae != ok { ret (js.undefv(), vae) }
+        if val_is_array {
             let (len, le) = js.length_of(it, vo)
             if le != ok { ret (js.undefv(), le) }
             var i = 0.0f64
@@ -270,7 +272,8 @@ fn revive(it: *js.Interp, p: *P, rec_in: usize, holder: *js.Obj, key: js.Key, re
                 let (nv, ne) = revive(it, p, child, vo, ik, reviver)
                 if ne != ok { ret (js.undefv(), ne) }
                 if js.is_undefined(nv) {
-                    let dd = js.delete_prop(it, vo, ik)
+                    let (dd, dde) = js.delete_prop_e(it, vo, ik)
+                    if dde != ok { ret (js.undefv(), dde) }
                 } else {
                     let (done, de) = js.define_own(it, vo, ik, js.data_desc(nv, js.P_DEFAULT))
                     if de != ok { ret (js.undefv(), de) }
@@ -278,12 +281,25 @@ fn revive(it: *js.Interp, p: *P, rec_in: usize, holder: *js.Obj, key: js.Key, re
                 i += 1.0f64
             }
         } else {
-            let (keys, ke) = js.own_keys(it, vo)
+            let (all_keys, ke) = js.own_keys(it, vo)
             if ke != ok { ret (js.undefv(), ke) }
+            // EnumerableOwnProperties first, then the values are revived one by one.
+            let (kl, kle) = list.init[js.Key](it.a, all_keys.len + 1usize)
+            var enum_list = kl
+            var ai = 0usize
+            while ai < all_keys.len {
+                let ak = all_keys[ai]
+                ai += 1usize
+                if js.is_symbol_key(ak) { continue }
+                let (apr, afound, age) = js.get_own_e(it, vo, ak)
+                if age != ok { ret (js.undefv(), age) }
+                if afound && (apr.flags & js.P_ENUMERABLE) != 0u8 { try list.push[js.Key](&enum_list, ak) }
+            }
+            let keys = list.slice_const[js.Key](&enum_list)
             var k = 0usize
             while k < keys.len {
-                let (pr, found) = js.get_own(it, vo, keys[k])
-                if found && !js.is_symbol_key(keys[k]) && (pr.flags & js.P_ENUMERABLE) != 0u8 {
+                let found = true
+                if found {
                     var child2 = NO_REC
                     if rec != NO_REC && !js.is_symbol_key(keys[k]) {
                         var q = p.recs.items[rec].keys.len
@@ -298,7 +314,8 @@ fn revive(it: *js.Interp, p: *P, rec_in: usize, holder: *js.Obj, key: js.Key, re
                     let (nv2, ne2) = revive(it, p, child2, vo, keys[k], reviver)
                     if ne2 != ok { ret (js.undefv(), ne2) }
                     if js.is_undefined(nv2) {
-                        let dd2 = js.delete_prop(it, vo, keys[k])
+                        let (dd2, dde2) = js.delete_prop_e(it, vo, keys[k])
+                        if dde2 != ok { ret (js.undefv(), dde2) }
                     } else {
                         let (done2, de2) = js.define_own(it, vo, keys[k], js.data_desc(nv2, js.P_DEFAULT))
                         if de2 != ok { ret (js.undefv(), de2) }
@@ -459,7 +476,9 @@ fn ser(it: *js.Interp, st: *S, holder: *js.Obj, key: js.Key, value_in: js.Value,
         inner = js.str_concat(it, indent, step)
         let (pl, ple) = list.init[str](it.a, 8usize)
         var items = pl
-        if js.is_array(value) {
+        let (is_arr, arr_e) = js.is_array_e(it, value)
+        if arr_e != ok { ret ("", false, arr_e) }
+        if is_arr {
             let (len, le) = js.length_of(it, o)
             if le != ok { ret ("", false, le) }
             var k = 0.0f64
@@ -480,19 +499,28 @@ fn ser(it: *js.Interp, st: *S, holder: *js.Obj, key: js.Key, value_in: js.Value,
         if st.has_allow {
             keys = list.slice_const[js.Key](&st.allow)
         } else {
+            // The enumerable own string keys are fixed before any value is read (or replaced).
             let (own, oke) = js.own_keys(it, o)
             if oke != ok { ret ("", false, oke) }
-            keys = own
+            let (kl, kle) = list.init[js.Key](it.a, own.len + 1usize)
+            var enum_keys = kl
+            var ei = 0usize
+            while ei < own.len {
+                let ek = own[ei]
+                ei += 1usize
+                if js.is_symbol_key(ek) { continue }
+                let (pr, found, ge) = js.get_own_e(it, o, ek)
+                if ge != ok { ret ("", false, ge) }
+                if !found || (pr.flags & js.P_ENUMERABLE) == 0u8 { continue }
+                try list.push[js.Key](&enum_keys, ek)
+            }
+            keys = list.slice_const[js.Key](&enum_keys)
         }
         var k2 = 0usize
         while k2 < keys.len {
             let kk = keys[k2]
             k2 += 1usize
             if js.is_symbol_key(kk) { continue }
-            if !st.has_allow {
-                let (pr, found) = js.get_own(it, o, kk)
-                if !found || (pr.flags & js.P_ENUMERABLE) == 0u8 { continue }
-            }
             let (pv, pve) = js.get_prop(it, o, kk, value)
             if pve != ok { ret ("", false, pve) }
             let (t2, has2, se3) = ser(it, st, o, kk, pv, inner)
@@ -550,10 +578,16 @@ fn json_stringify(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     let (al, ale) = list.init[js.Key](it.a, 4usize)
     st.allow = al
     let rep = arg(args, 1usize)
+    var rep_is_array = false
+    if js.is_object(rep) && !js.is_callable(rep) {
+        let (ra, rae) = js.is_array_e(it, rep)
+        if rae != ok { ret (js.undefv(), rae) }
+        rep_is_array = ra
+    }
     if js.is_callable(rep) {
         st.replacer = rep
         st.has_replacer = true
-    } else if js.is_array(rep) {
+    } else if rep_is_array {
         st.has_allow = true
         let ro = js.as_object(rep)
         let (len, le) = js.length_of(it, ro)

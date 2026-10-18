@@ -702,7 +702,7 @@ fn check_function(c: *Ctx, id: u32) -> err {
         c.allow_new_target = true
         c.in_field_init = false
         c.in_static_block = false
-        if !is_method { c.allow_super_prop = false }
+        c.allow_super_prop = is_method
         if !is_method { c.allow_super_call = false }
     } else {
         c.in_function = true
@@ -1445,7 +1445,7 @@ type Result = struct { message: str, line: u32 }
 
 // Checks a parsed script; `ok` with an empty message when it has no early error.
 // What a direct eval inherits from its caller: strictness, whether `new.target` / `super` are allowed, the private names in scope.
-type EvalOpts = struct { strict: bool, new_target: bool, super_prop: bool, super_call: bool, privates: []const str }
+type EvalOpts = struct { strict: bool, new_target: bool, super_prop: bool, super_call: bool, in_field_init: bool, privates: []const str }
 
 fn check(a: *mem.Arena, prog: *const ast.Program) -> (Result, err) {
     var none: EvalOpts = zero
@@ -1468,6 +1468,7 @@ fn check_in(a: *mem.Arena, prog: *const ast.Program, eo: *const EvalOpts) -> (Re
     c.allow_new_target = eo.new_target
     c.allow_super_prop = eo.super_prop
     c.allow_super_call = eo.super_call
+    c.in_field_init = eo.in_field_init
     var pi = 0usize
     while pi < eo.privates.len {
         let pe = list.push[str](&c.privates, eo.privates[pi])

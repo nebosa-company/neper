@@ -272,7 +272,7 @@ fn aggregate_element(it: *js.Interp, this_val: js.Value, args: []const js.Value,
     if ag.remaining == 0.0f64 {
         if kind == 3u8 {
             // any: every promise rejected -> AggregateError.
-            let err_obj = js.make_error(it, it.protos.error_proto, "All promises were rejected")
+            let err_obj = js.make_error(it, it.protos.aggregate_error, "All promises were rejected")
             let e5 = js.define_data(it, js.as_object(err_obj), js.key_of("errors"), js.obj_value(ag.values), js.P_HIDDEN)
             let (r, re) = js.call_function(it, ag.reject, js.undefv(), js.one_arg(it, err_obj))
             if re != ok { ret (js.undefv(), re) }
@@ -338,7 +338,7 @@ fn combinator(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: 
         if npe != ok {
             failure = true
             failed_err = npe
-            let cl = js.iterator_close(it, iter)
+            js.iterator_close_quiet(it, iter)
             break
         }
         var on_ful = js.undefv()
@@ -376,13 +376,14 @@ fn combinator(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: 
         if te != ok {
             failure = true
             failed_err = te
+            js.iterator_close_quiet(it, iter)
             break
         }
         let (tr, tre) = js.call_function(it, tv, np, js.two_args(it, on_ful, on_rej))
         if tre != ok {
             failure = true
             failed_err = tre
-            let cl2 = js.iterator_close(it, iter)
+            js.iterator_close_quiet(it, iter)
             break
         }
         index += 1.0f64
@@ -399,13 +400,27 @@ fn combinator(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: 
         cell[0usize].remaining -= 1.0f64
         if cell[0usize].remaining == 0.0f64 {
             if kind == 2u8 {
-                let err_obj = js.make_error(it, it.protos.error_proto, "All promises were rejected")
+                let err_obj = js.make_error(it, it.protos.aggregate_error, "All promises were rejected")
                 let e5 = js.define_data(it, js.as_object(err_obj), js.key_of("errors"), js.obj_value(cell[0usize].values), js.P_HIDDEN)
                 let (r4, re4) = js.call_function(it, cap.reject, js.undefv(), js.one_arg(it, err_obj))
-                if re4 != ok { ret (js.undefv(), re4) }
+                if re4 != ok {
+                    if re4 == js.Throw {
+                        let (r4b, re4b) = js.call_function(it, cap.reject, js.undefv(), js.one_arg(it, it.thrown))
+                        if re4b != ok { ret (js.undefv(), re4b) }
+                        ret (cap.promise, ok)
+                    }
+                    ret (js.undefv(), re4)
+                }
             } else {
                 let (r5, re5) = js.call_function(it, cap.resolve, js.undefv(), js.one_arg(it, js.obj_value(cell[0usize].values)))
-                if re5 != ok { ret (js.undefv(), re5) }
+                if re5 != ok {
+                    if re5 == js.Throw {
+                        let (r5b, re5b) = js.call_function(it, cap.reject, js.undefv(), js.one_arg(it, it.thrown))
+                        if re5b != ok { ret (js.undefv(), re5b) }
+                        ret (cap.promise, ok)
+                    }
+                    ret (js.undefv(), re5)
+                }
             }
         }
     }

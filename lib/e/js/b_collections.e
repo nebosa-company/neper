@@ -154,28 +154,28 @@ fn construct_collection(it: *js.Interp, class: u8, proto_default: *js.Obj, weak:
         if done { break }
         if pairs {
             if !js.is_object(item) {
-                let cl = js.iterator_close(it, iter)
+                js.iterator_close_quiet(it, iter)
                 ret (js.undefv(), js.throw_type(it, "Iterator value is not an entry object"))
             }
             let (k, ke) = js.get_value(it, item, js.key_of("0"))
             if ke != ok {
-                let cl2 = js.iterator_close(it, iter)
+                js.iterator_close_quiet(it, iter)
                 ret (js.undefv(), ke)
             }
             let (v, ve) = js.get_value(it, item, js.key_of("1"))
             if ve != ok {
-                let cl3 = js.iterator_close(it, iter)
+                js.iterator_close_quiet(it, iter)
                 ret (js.undefv(), ve)
             }
             let (r, re) = js.call_function(it, add, js.obj_value(o), js.two_args(it, k, v))
             if re != ok {
-                let cl4 = js.iterator_close(it, iter)
+                js.iterator_close_quiet(it, iter)
                 ret (js.undefv(), re)
             }
         } else {
             let (r2, re2) = js.call_function(it, add, js.obj_value(o), js.one_arg(it, item))
             if re2 != ok {
-                let cl5 = js.iterator_close(it, iter)
+                js.iterator_close_quiet(it, iter)
                 ret (js.undefv(), re2)
             }
         }

@@ -176,14 +176,16 @@ fn array_from_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
             if js.is_callable(mapper) {
                 let (mv, mve) = js.call_function(it, mapper, this_arg, js.two_args(it, v, js.num_value(f64(k))))
                 if mve != ok {
-                    let ce = js.iterator_close(it, iter)
+                    js.iterator_close_quiet(it, iter)
                     ret (js.undefv(), mve)
                 }
                 item = mv
             }
-            let (d, de) = js.define_own(it, out, js.key_of(js.number_to_string(it.a, f64(k))), js.data_desc(item, js.P_DEFAULT))
+            let (d, de0) = js.define_own(it, out, js.key_of(js.number_to_string(it.a, f64(k))), js.data_desc(item, js.P_DEFAULT))
+            var de = de0
+            if de == ok && !d { de = js.throw_type(it, "Cannot define property on the result array") }
             if de != ok {
-                let ce2 = js.iterator_close(it, iter)
+                js.iterator_close_quiet(it, iter)
                 ret (js.undefv(), de)
             }
             k += 1usize
@@ -222,9 +224,11 @@ fn array_push_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     let (len, le) = len_of(it, o)
     if le != ok { ret (js.undefv(), le) }
     var n = len
+    if len + f64(args.len) > 9007199254740991.0f64 { ret (js.undefv(), js.throw_type(it, "Pushing these values would exceed the maximum array length")) }
+    let fast_ok = o.proto == it.protos.array && it.protos.array.elems.len == 0usize && !it.proto_indexed
     var i = 0usize
     while i < args.len {
-        if o.class == js.C_ARRAY && f64(o.elems.len) == n && o.text.len == 0usize && o.extensible {
+        if fast_ok && o.class == js.C_ARRAY && f64(o.elems.len) == n && o.text.len == 0usize && o.extensible {
             try js.array_push(it, o, args[i])
         } else {
             let se = js.set_index(it, o, n, args[i])
@@ -297,6 +301,7 @@ fn array_unshift(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     if le != ok { ret (js.undefv(), le) }
     let count = f64(args.len)
     if count > 0.0f64 {
+        if len + count > 9007199254740991.0f64 { ret (js.undefv(), js.throw_type(it, "Array.prototype.unshift: result is too long")) }
         var k = len
         while k > 0.0f64 {
             try js.tick(it)
@@ -373,6 +378,7 @@ fn array_splice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     }
     var items: []const js.Value = js.zero_args()
     if args.len > 2usize { items = args[2usize..] }
+    if len + f64(items.len) - delete_count > 9007199254740991.0f64 { ret (js.undefv(), js.throw_type(it, "Array.prototype.splice: result is too long")) }
     let (removed, removede) = species_create(it, o, delete_count)
     if removede != ok { ret (js.undefv(), removede) }
     var k = 0.0f64
@@ -445,7 +451,8 @@ fn is_concat_spreadable(it: *js.Interp, v: js.Value) -> (bool, err) {
     let (s, se) = js.get_value(it, v, js.key_of_symbol(it.sym_is_concat_spreadable))
     if se != ok { ret (false, se) }
     if !js.is_undefined(s) { ret (js.to_boolean(s), ok) }
-    ret (js.is_array(v), ok)
+    let (arr, ae) = js.is_array_e(it, v)
+    ret (arr, ae)
 }
 
 fn array_concat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -465,6 +472,7 @@ fn array_concat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
             let ito = js.as_object(item)
             let (len, le) = len_of(it, ito)
             if le != ok { ret (js.undefv(), le) }
+            if n + len > 9007199254740991.0f64 { ret (js.undefv(), js.throw_type(it, "Array.prototype.concat: result is too long")) }
             var k = 0.0f64
             while k < len {
                 try js.tick(it)
@@ -478,6 +486,7 @@ fn array_concat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
                 n += 1.0f64
             }
         } else {
+            if n >= 9007199254740991.0f64 { ret (js.undefv(), js.throw_type(it, "Array.prototype.concat: result is too long")) }
             let de2 = create_data(it, out, js.key_of(js.number_to_string(it.a, n)), item)
             if de2 != ok { ret (js.undefv(), de2) }
             n += 1.0f64
@@ -998,9 +1007,13 @@ fn array_sort(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
 
 // --- flat / flatMap
 
-fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, mapper: js.Value, this_arg: js.Value, start: f64) -> (f64, err) {
-    let (len, le) = len_of(it, src)
-    if le != ok { ret (0.0f64, le) }
+fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, mapper: js.Value, this_arg: js.Value, start: f64, known_len: f64) -> (f64, err) {
+    var len = known_len
+    if len < 0.0f64 {
+        let (l2, le) = len_of(it, src)
+        if le != ok { ret (0.0f64, le) }
+        len = l2
+    }
     var n = start
     var k = 0.0f64
     while k < len {
@@ -1015,12 +1028,13 @@ fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, m
                 v = mv
             }
             if depth > 0.0f64 && js.is_array(v) {
-                let (n2, ne2) = flatten_into(it, target_arr, js.as_object(v), depth - 1.0f64, js.undefv(), js.undefv(), n)
+                let (n2, ne2) = flatten_into(it, target_arr, js.as_object(v), depth - 1.0f64, js.undefv(), js.undefv(), n, -1.0f64)
                 if ne2 != ok { ret (0.0f64, ne2) }
                 n = n2
             } else {
                 let (done, de) = js.define_own(it, target_arr, js.key_of(js.number_to_string(it.a, n)), js.data_desc(v, js.P_DEFAULT))
                 if de != ok { ret (0.0f64, de) }
+                if !done { ret (0.0f64, js.throw_type(it, "Cannot define property on the result array")) }
                 n += 1.0f64
             }
         }
@@ -1038,9 +1052,11 @@ fn array_flat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
         if de != ok { ret (js.undefv(), de) }
         depth = js.to_integer(dn)
     }
+    let (src_len, sle) = len_of(it, o)
+    if sle != ok { ret (js.undefv(), sle) }
     let (out, oute) = species_create(it, o, 0.0f64)
     if oute != ok { ret (js.undefv(), oute) }
-    let (n, fe) = flatten_into(it, out, o, depth, js.undefv(), js.undefv(), 0.0f64)
+    let (n, fe) = flatten_into(it, out, o, depth, js.undefv(), js.undefv(), 0.0f64, src_len)
     if fe != ok { ret (js.undefv(), fe) }
     ret (js.obj_value(out), ok)
 }
@@ -1051,9 +1067,11 @@ fn array_flat_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     let cb = arg(args, 0usize)
     let ce = cb_check(it, cb)
     if ce != ok { ret (js.undefv(), ce) }
+    let (src_len2, sle2) = len_of(it, o)
+    if sle2 != ok { ret (js.undefv(), sle2) }
     let (out, oute) = species_create(it, o, 0.0f64)
     if oute != ok { ret (js.undefv(), oute) }
-    let (n, fe) = flatten_into(it, out, o, 1.0f64, cb, arg(args, 1usize), 0.0f64)
+    let (n, fe) = flatten_into(it, out, o, 1.0f64, cb, arg(args, 1usize), 0.0f64, src_len2)
     if fe != ok { ret (js.undefv(), fe) }
     ret (js.obj_value(out), ok)
 }

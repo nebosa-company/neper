@@ -25,7 +25,10 @@ fn describe(it: *js.Interp, v: js.Value) -> str {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let (it, re) = realm.new_realm(a)
-    if re != ok { os.exit(3i32) }
+    if re != ok {
+        let pr = io.printf["realm error: {}\n"](describe(it, it.thrown))
+        os.exit(3i32)
+    }
     var failed = false
     var i = 0usize
     while i < args.len {
