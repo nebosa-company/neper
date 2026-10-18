@@ -1,0 +1,108 @@
+{
+ "toolbar_button": {
+  "looks": {
+   "linux": {
+    "notes": "Audit 14. The round 26 overlay replaced this entry without a status, so it fell to planned; restored. Own comparer (every crop of the three manifests template-searched in the committed 1x sheet; off = more than 2 levels): 14 crops, flat 0 off. Symbolic icon edges are artwork, excluded as listed rectangles (never borders or text): toolbar crop 9 icon rectangles (112,13,6x5) (26,16,6x8) (71,16,6x9, 40 levels) (219,16,6x5) (62,19,8x10) (179,19,5x6) (109,21,12x9) (213,22,5x6) (20,27,5x6), each crop of the icon buttons (16,10,6x5) and (10,16,5x6) up to 12 levels, toggles (26,14,5x6). Outside those rectangles only the focus ring corner pixels differ, 1 to 2 px at 4 to 6 levels. Upgrade to matched.",
+    "status": "matched",
+    "gaps": [
+     "Icon edges differ from the symbolic icons (listed rectangles, excluded as artwork)"
+    ]
+   },
+   "linux_dark": {
+    "notes": "Audit 14. Restored (round 26 overlay had no status). Flat 0 off in 14 crops; icon edges up to 14 levels in the same listed rectangles (toolbar crop 9, icon buttons 2 each, toggles 1); outside them nothing above 6 levels. Matched.",
+    "status": "matched",
+    "gaps": [
+     "Icon edges differ from the symbolic icons (listed rectangles, excluded as artwork)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/fab.png",
+    "notes": "Audit 14 downgrade. Outlined icon buttons: rest 188 px, hover 207, pressed 232 (up to 88 levels, the 1 px outline circle), focus 880 px (primary outline against the capture's grey, the known Material Web ambiguity); standard hover 136 px up to 19 levels. The earlier 0 over the line came from a metric that never sees non-flat ring pixels.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The icon is Neper's glyph, not the Material icon (glyph ink is excluded from the metric)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/fab.png",
+    "notes": "Audit 14 downgrade. Outlined icon buttons: rest 208 px, hover 199, pressed 204 (up to 89 levels), focus 869 px; standard hover 138 px.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The icon is Neper's glyph, not the Material icon (glyph ink is excluded from the metric)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "linux": {
+    "notes": "Audit 14. The round 26 overlay replaced this entry without a status (it fell to planned); restored. Own comparer: flat 0 off in all crops. menu-edit: 157 strict px = 133 px of the disabled row's label (36x15 at (41,68), glyph pixels, ours up to 10 levels darker, counted not excluded from the report) and 24 corner px at 3 levels. menu-view: check mark (18x16 at (40,36), 66 px, 172 levels) and submenu chevron (13x18 at (155,176), 74 px, 54 levels) are symbolic icon rectangles, excluded as artwork and listed; 30 other px at 9 levels or less. Matched.",
+    "status": "matched",
+    "gaps": [
+     "Disabled row label is up to 10 levels darker than GTK's (133 px)",
+     "Check mark and submenu chevron differ from the symbolic icons (listed rectangles)"
+    ]
+   },
+   "linux_dark": {
+    "notes": "Audit 14. Restored (round 26 overlay had no status). Flat 0 off; menu-edit 180 strict = 135 px of the disabled label (10 levels) and 45 corner px at 10 levels; menu-view check (18x16) and chevron (13x18) are the listed icon rectangles. Matched.",
+    "status": "matched",
+    "gaps": [
+     "Disabled row label is up to 10 levels darker than GTK's (133 px)",
+     "Check mark and submenu chevron differ from the symbolic icons (listed rectangles)"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/checkbox.png",
+    "notes": "Audit 14 downgrade. Own comparer (reference crop template-searched in the committed sheet, text ink within 2 px excluded, every other pixel compared, 2 px outlines included). Unchecked pressed: the outline (15,15,20,20) differs on 132 px, 7 to 17 levels: the capture draws the pressed state layer over the outline, (36,32,44), ours is plain on-surface (29,27,32). Filled boxes: 4 corner pixels per box, 12 px up to 65 levels. Check mark rectangle (18,19,14x12) is artwork, excluded and listed. Hover and focus halos differ by 6 levels or less.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/checkbox.png",
+    "notes": "Audit 14 downgrade. Unchecked pressed outline (15,15,20,20) differs on 128 px up to 11 levels (state layer over the outline in the capture); filled box corners 12 px up to 63 levels; check mark rectangle excluded as artwork.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/radio.png",
+    "notes": "Audit 14 downgrade. The 22 x 22 ring (15,15,22,22) differs on 87 to 122 px in every state, up to 55 levels; the ink mass of ours is 1.079 times the capture's (centroids equal): the ring stroke is about 8 % heavy. A 2 px ring is always compared.",
+    "gaps": [
+     "Audit 14: see notes",
+     "M3 defines no error state for a radio button: the sheet's Error column has no reference",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/radio.png",
+    "notes": "Audit 14 downgrade. The ring differs on 100 to 219 px per state up to 62 levels; ink mass 1.085 times the capture's.",
+    "gaps": [
+     "Audit 14: see notes",
+     "M3 defines no error state for a radio button: the sheet's Error column has no reference",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ }
+}
