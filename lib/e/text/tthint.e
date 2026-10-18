@@ -675,7 +675,7 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
     if p >= npt || r >= z.n { ret }
     var plain = r + 4usize == z.n
     if pair && r < npt {
-        if abs64(z.org[2usize * p + 1usize] - z.org[2usize * r + 1usize]) >= 512i64 { plain = true }
+        if abs64(z.org[2usize * p + 1usize] - z.org[2usize * r + 1usize]) >= 512i64 && abs64(z.cur[2usize * p] - z.cur[2usize * r]) < 64i64 { plain = true }
     }
     if plain {
         z.mp[p] = 0i64
@@ -697,7 +697,7 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
         ret
     }
     z.mp[p] = 0i64 - (i64(r) + 1i64)
-    if z.ipd[r] {
+    if z.ipd[r] || z.mp[r] < 0i64 {
         z.sh[p] = z.sh[r]
         ret
     }
@@ -755,7 +755,7 @@ fn ct_resolve(h: *Hinter, p: usize, depth: usize) {
         ret
     }
     ct_resolve(h, r, depth + 1usize)
-    if m > 0i64 || z.ipd[r] {
+    if m > 0i64 || z.ipd[r] || z.mp[r] < 0i64 {
         z.sh[p] = z.sh[r]
         if (z.tags[r] & 64i64) != 0i64 { z.tags[p] = z.tags[p] | 64i64 }
         ret
