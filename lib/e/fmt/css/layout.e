@@ -6254,6 +6254,10 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         } else {
             size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
         }
+        if lanes_dense(cs) {
+            let dense_h = layout_lanes_dense(l, b, g, cs, cw)
+            ret dense_h
+        }
         let lanes_h = layout_lanes(l, b, g, cs, cw)
         ret lanes_h
     }
@@ -6490,6 +6494,121 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
 
 // `display: grid-lanes` (masonry) with the lanes along the columns: each item goes to the lane, or run of lanes, whose
 // content ends highest (within `flow-tolerance`, the first such lane), and the container's height is the tallest lane.
+fn lanes_dense(cs: *const style.Style) -> bool {
+    let (pv, has_pv) = extra_text(cs, "grid-lanes-pack")
+    if has_pv && str.contains(pv, "dense") { ret true }
+    let (fv, has_fv) = extra_text(cs, "grid-auto-flow")
+    ret has_fv && str.contains(fv, "dense")
+}
+
+// Dense packing: each item goes to the earliest free spot, holes beside spanning items included.
+fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64 {
+    position_tracks(g.cols, g.nc, g.gap_c, cw, cs.justify_content)
+    let bb0 = bx(l, b)
+    let ox0 = bb0.border[3usize] + bb0.padding[3usize]
+    let oy0 = bb0.border[0usize] + bb0.padding[0usize]
+    let cap = g.n + 1usize
+    let (os, e1) = mem.alloc[f64](l.a, (g.nc + 1usize) * cap)
+    let (oe, e2) = mem.alloc[f64](l.a, (g.nc + 1usize) * cap)
+    let (on, e3) = mem.alloc[usize](l.a, g.nc + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 }
+    var q = 0usize
+    while q < g.nc {
+        on[q] = 0usize
+        q += 1usize
+    }
+    var tol = 0.0f64
+    let (tv, has_tv) = extra_text(cs, "flow-tolerance")
+    if has_tv {
+        let tl = cv.lower(l.a, cv.trim_ws(tv))
+        if str.ends_with(tl, "px") {
+            let (nv, ne) = str.parse_i64(tl[..tl.len - 2usize])
+            if ne == ok { tol = f64(nv) }
+        }
+    }
+    var total = 0.0f64
+    var i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let is = bstyle(l, id)
+        let (sc, ecs) = item_axis_specs(l.a, is, true)
+        let span = usize(maxf(1.0f64, f64(g.items[i].cn)))
+        var s_lo = 0usize
+        var s_hi = 0usize
+        if g.nc >= span { s_hi = g.nc - span }
+        if sc.kind != 0u8 {
+            s_lo = usize(g.items[i].cs)
+            s_hi = s_lo
+        }
+        var best_y = 1000000000.0f64
+        var best_s = s_lo
+        var s0 = s_lo
+        while s0 <= s_hi && s0 + span <= g.nc {
+            let area_w = grid_area_size(g.cols, i32(s0), i32(span), g.gap_c)
+            let w = grid_item_width(l, id, cs, area_w)
+            var hs = -1.0f64
+            let (hv, has_h) = resolve_len(is.height, -1.0f64)
+            if is.height.kind == .Px && has_h { hs = to_content_h(l, id, hv) }
+            flex_place_item(l, id, w, hs)
+            let ib = bx(l, id)
+            let outer = ib.h + ib.margin[0usize] + ib.margin[2usize]
+            // Candidate tops: 0 and just below every interval end in the spanned lanes.
+            var cand_best = 1000000000.0f64
+            var ci = -1i64
+            while ci < i64(g.nc * cap) {
+                var y = 0.0f64
+                var valid = true
+                if ci >= 0i64 {
+                    let lane = usize(ci) / cap
+                    let k = usize(ci) % cap
+                    if lane < s0 || lane >= s0 + span || k >= on[lane] { valid = false } else { y = oe[lane * cap + k] + g.gap_r }
+                }
+                if valid && y < cand_best {
+                    var free = true
+                    var t = s0
+                    while t < s0 + span && free {
+                        var k2 = 0usize
+                        while k2 < on[t] {
+                            let a0 = os[t * cap + k2]
+                            let b0 = oe[t * cap + k2]
+                            if y < b0 + g.gap_r && y + outer + g.gap_r > a0 { free = false }
+                            k2 += 1usize
+                        }
+                        t += 1usize
+                    }
+                    if free { cand_best = y }
+                }
+                ci += 1i64
+            }
+            if cand_best < best_y - tol {
+                best_y = cand_best
+                best_s = s0
+            }
+            s0 += 1usize
+        }
+        let area_w = grid_area_size(g.cols, i32(best_s), i32(span), g.gap_c)
+        let w = grid_item_width(l, id, cs, area_w)
+        var hs2 = -1.0f64
+        let (hv2, has_h2) = resolve_len(is.height, -1.0f64)
+        if is.height.kind == .Px && has_h2 { hs2 = to_content_h(l, id, hv2) }
+        flex_place_item(l, id, w, hs2)
+        let pb = bx(l, id)
+        pb.x = ox0 + g.cols[best_s].pos + pb.margin[3usize]
+        pb.y = oy0 + best_y + pb.margin[0usize]
+        let bottom = best_y + pb.margin[0usize] + pb.h + pb.margin[2usize]
+        var t3 = best_s
+        while t3 < best_s + span && t3 < g.nc {
+            os[t3 * cap + on[t3]] = best_y
+            oe[t3 * cap + on[t3]] = bottom
+            on[t3] += 1usize
+            t3 += 1usize
+        }
+        if bottom > total { total = bottom }
+        i += 1usize
+    }
+    ret total
+}
+
 fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64 {
     position_tracks(g.cols, g.nc, g.gap_c, cw, cs.justify_content)
     let bb0 = bx(l, b)
