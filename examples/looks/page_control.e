@@ -307,7 +307,6 @@ fn run_tab(a: *mem.Arena, which: usize) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    control.set_dx_text(true)
     if args.len == 2usize && args[1usize][0usize] == 116u8 {
         var which = usize(args[1usize][1usize]) - 48usize
         if args[1usize].len > 2usize { which = which * 10usize + usize(args[1usize][2usize]) - 48usize }

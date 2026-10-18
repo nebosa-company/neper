@@ -425,7 +425,6 @@ fn build_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    control.set_dx_text(true)
     if args.len > 1usize && args[1usize][0usize] == 104u8 {
         // `tree_list.exe h0` / `h1`: the hover sheets
         flags.part = usize(args[1usize][1usize] - 48u8)
@@ -467,7 +466,6 @@ fn build_focus(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn main_states(a: *mem.Arena) -> err {
-    control.set_dx_text(true)
     let focus = looks.Sheet { name: "tree_list_focus", cells: 1usize, columns: 1usize, cell_w: 305.0, cell_h: 90.0, ctx: zero, build: build_focus }
     try looks.run_all(a, &focus)
     flags.checked = true

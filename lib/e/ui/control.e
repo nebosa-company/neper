@@ -163,19 +163,7 @@ fn text_node(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, option
     ret (node, node_error)
 }
 
-// v3's Dev Express controls (page control, tree list, grids) draw their text without ClearType; an app that shows them turns this on and the
-// Windows light look sets that text greyscale (see `scene.gray_text`).
-var dx_text_on: bool = false
-
-fn set_dx_text(on: bool) { dx_text_on = on }
-
-fn dx_ink(t: *const Theme, color: paint.Color) -> paint.Color {
-    if dx_text_on && t.tokens.profile == .Windows && t.tokens.palette != .Dark { ret scene.gray_text(color) }
-    ret color
-}
-
-fn colored_text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions, shown_color: paint.Color) -> (widget.Node, err) {
-    let color = dx_ink(t, shown_color)
+fn colored_text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions, color: paint.Color) -> (widget.Node, err) {
     let (text_look, style_error) = text_style_faced(a, t, options)
     if style_error != ok { ret (zero, style_error) }
     ret (widget.text(key, widget.Text { value: value, style: text_look, color: style.lift_ink(t.tokens, color), wrap: options.wrap, align: options.align, max_lines: options.max_lines, ellipsis: options.ellipsis }, style.defaults()), ok)
@@ -4392,8 +4380,7 @@ fn choices_hinted_width(value: str) -> f32 {
 
 // `shown` as words at GDI's advances: a node `width` x 15 (the dialog text's line height) and the width. `options`
 // carry the 11 px size and the face; the caller's own node replaces `colored_text`.
-fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, plain_ink: paint.Color, shown: str) -> (widget.Node, f32, err) {
-    let ink = dx_ink(t, plain_ink)
+fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, ink: paint.Color, shown: str) -> (widget.Node, f32, err) {
     let total = choices_hinted_width(shown)
     if total == 0.0 {
         let (one, one_error) = colored_text(a, 0u64, shown, t, options, ink)
