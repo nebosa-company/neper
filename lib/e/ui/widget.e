@@ -1943,6 +1943,8 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     // The border is stroked inside the bounds, on the rounded shape when there is one.
     if !shaped && scene.pixel_exact_on() && (scene.builder_scale(b) != 1.0 || scene.pixel_exact_at_one_on()) && node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
         try snapped_border(b, bounds, node.style.border.width, node.style.border.color)
+    } else if shaped && scene.fine_curves_on() && node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
+        try fill_ring(a, b, drawn, corner, node.style.border.width, node.style.border.color)
     } else if node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
         let half = node.style.border.width * 0.5
         let inset = geometry.Rect { x: drawn.x + half, y: drawn.y + half, width: max_f(drawn.width - node.style.border.width, 0.0), height: max_f(drawn.height - node.style.border.width, 0.0) }
@@ -6432,3 +6434,62 @@ fn focused_role(widget_runtime: *Runtime) -> (Key, u8, bool) {
     }
     ret (key, role, true)
 }
+
+// ---- the Linux look, exact rings (round 22, worker lb) ---------------------------------------------------------------------
+// A rounded border as the area between the box's shape and the same shape `width` smaller (the corner radii shrink by `width`), as
+// GTK paints a border or an outline: the stroke of the middle line leaves its inner corner a polygon of mitre joins, 10 % off in a 4 px corner.
+fn ring_path(a: *mem.Arena, outer: geometry.RRect, inner: geometry.RRect) -> (geometry.Path, err) {
+    let (pb, pb_error) = geometry.path_builder(a, 24usize, 64usize)
+    if pb_error != ok { ret (zero, TooLarge) }
+    var builder = pb
+    let r = outer.rect
+    let x0 = r.x
+    let y0 = r.y
+    let x1 = r.x + r.width
+    let y1 = r.y + r.height
+    let tl = outer.top_left.x
+    let tr = outer.top_right.x
+    let br = outer.bottom_right.x
+    let bl = outer.bottom_left.x
+    if geometry.move_to(&builder, geometry.Point { x: x0 + tl, y: y0 }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: x1 - tr, y: y0 }) != ok { ret (zero, TooLarge) }
+    if tr > 0.0 && corner_curve(&builder, geometry.Point { x: x1 - tr, y: y0 }, geometry.Point { x: x1, y: y0 }, geometry.Point { x: x1, y: y0 + tr }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: x1, y: y1 - br }) != ok { ret (zero, TooLarge) }
+    if br > 0.0 && corner_curve(&builder, geometry.Point { x: x1, y: y1 - br }, geometry.Point { x: x1, y: y1 }, geometry.Point { x: x1 - br, y: y1 }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: x0 + bl, y: y1 }) != ok { ret (zero, TooLarge) }
+    if bl > 0.0 && corner_curve(&builder, geometry.Point { x: x0 + bl, y: y1 }, geometry.Point { x: x0, y: y1 }, geometry.Point { x: x0, y: y1 - bl }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: x0, y: y0 + tl }) != ok { ret (zero, TooLarge) }
+    if tl > 0.0 && corner_curve(&builder, geometry.Point { x: x0, y: y0 + tl }, geometry.Point { x: x0, y: y0 }, geometry.Point { x: x0 + tl, y: y0 }) != ok { ret (zero, TooLarge) }
+    if geometry.close_path(&builder) != ok { ret (zero, TooLarge) }
+    // the hole, the other way round
+    let q = inner.rect
+    let ix0 = q.x
+    let iy0 = q.y
+    let ix1 = q.x + q.width
+    let iy1 = q.y + q.height
+    let itl = inner.top_left.x
+    let itr = inner.top_right.x
+    let ibr = inner.bottom_right.x
+    let ibl = inner.bottom_left.x
+    if geometry.move_to(&builder, geometry.Point { x: ix0 + itl, y: iy0 }) != ok { ret (zero, TooLarge) }
+    if itl > 0.0 && corner_curve(&builder, geometry.Point { x: ix0 + itl, y: iy0 }, geometry.Point { x: ix0, y: iy0 }, geometry.Point { x: ix0, y: iy0 + itl }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: ix0, y: iy1 - ibl }) != ok { ret (zero, TooLarge) }
+    if ibl > 0.0 && corner_curve(&builder, geometry.Point { x: ix0, y: iy1 - ibl }, geometry.Point { x: ix0, y: iy1 }, geometry.Point { x: ix0 + ibl, y: iy1 }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: ix1 - ibr, y: iy1 }) != ok { ret (zero, TooLarge) }
+    if ibr > 0.0 && corner_curve(&builder, geometry.Point { x: ix1 - ibr, y: iy1 }, geometry.Point { x: ix1, y: iy1 }, geometry.Point { x: ix1, y: iy1 - ibr }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: ix1, y: iy0 + itr }) != ok { ret (zero, TooLarge) }
+    if itr > 0.0 && corner_curve(&builder, geometry.Point { x: ix1, y: iy0 + itr }, geometry.Point { x: ix1, y: iy0 }, geometry.Point { x: ix1 - itr, y: iy0 }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: ix0 + itl, y: iy0 }) != ok { ret (zero, TooLarge) }
+    if geometry.close_path(&builder) != ok { ret (zero, TooLarge) }
+    ret (geometry.finish(&builder), ok)
+}
+
+fn fill_ring(a: *mem.Arena, b: *scene.Builder, r: geometry.Rect, c: style.Corners, width: f32, color: paint.Color) -> err {
+    let outer = shape_of(r, c, 0.0)
+    let hole = geometry.Rect { x: r.x + width, y: r.y + width, width: max_f(r.width - 2.0 * width, 0.0), height: max_f(r.height - 2.0 * width, 0.0) }
+    let inner = shape_of(hole, c, 0.0 - width)
+    let (outline, outline_error) = ring_path(a, outer, inner)
+    if outline_error != ok { ret TooLarge }
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: outline, brush: paint.Brush { Solid: color } } })
+}
+// ---- end the Linux look, exact rings ---------------------------------------------------------------------------------------

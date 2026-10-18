@@ -4,6 +4,7 @@
 
 use e.gfx.paint
 use e.mem
+use e.ui.adwicon_l2 as adwicon
 use e.ui.control
 use e.ui.layout as ui_layout
 use e.ui.looks
@@ -13,8 +14,8 @@ use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn window_control(a: *mem.Arena, t: *const control.Theme, kind: control.GlyphKind, x: f32) -> (widget.Node, err) {
-    let (mark, mark_error) = control.icon_square(a, style.color(t.tokens, .Text), kind, 16.0)
+fn window_control(a: *mem.Arena, t: *const control.Theme, svg: str, x: f32) -> (widget.Node, err) {
+    let (mark, mark_error) = adwicon.icon(a, svg, style.color(t.tokens, .Text), 16.0)
     if mark_error != ok { ret (zero, mark_error) }
     var disc = control.sized_style(24.0, 24.0)
     disc.radius = 12.0
@@ -25,9 +26,9 @@ fn window_control(a: *mem.Arena, t: *const control.Theme, kind: control.GlyphKin
 }
 
 fn header(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit) -> (widget.Node, err) {
-    let (add, add_error) = control.glyph_button(a, 11u64, t, .Add, "Add", action, 34.0, 16.0)
+    let (add, add_error) = control.linux_svg_toggle(a, 11u64, t, adwicon.list_add(), "Add", action, 34.0, 16.0, false)
     if add_error != ok { ret (zero, add_error) }
-    let (menu, menu_error) = control.glyph_button(a, 12u64, t, .Menu, "Menu", action, 34.0, 16.0)
+    let (menu, menu_error) = control.linux_svg_toggle(a, 12u64, t, adwicon.open_menu(), "Menu", action, 34.0, 16.0, false)
     if menu_error != ok { ret (zero, menu_error) }
     let (starts, starts_error) = mem.alloc[widget.Node](a, 1usize)
     if starts_error != ok { ret (zero, starts_error) }
@@ -40,10 +41,10 @@ fn header(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit) 
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, layers_error) }
     layers[0usize] = bar
-    let kinds = [3]control.GlyphKind{ .Dash, .Maximize, .Cross }
+    let controls = [3]str{ adwicon.window_minimize(), adwicon.window_maximize(), adwicon.window_close() }
     var i = 0usize
     while i < 3usize {
-        let (disc, disc_error) = window_control(a, t, kinds[i], 311.0 + 37.0 * f32(i))
+        let (disc, disc_error) = window_control(a, t, controls[i], 311.0 + 37.0 * f32(i))
         if disc_error != ok { ret (zero, disc_error) }
         layers[1usize + i] = disc
         i += 1usize
@@ -61,7 +62,7 @@ fn rule_options() -> control.DividerOptions {
 
 // Five flat icon buttons (new, open, save, cut, copy) round a separator: 6 px in, 12 apart, the separator a 34 high line.
 fn toolbar_row(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit) -> (widget.Node, err) {
-    let kinds = [5]control.GlyphKind{ .Add, .Edit, .ArrowDown, .Cross, .Settings }
+    let icons = [5]str{ adwicon.document_new(), adwicon.document_open(), adwicon.document_save(), adwicon.edit_cut(), adwicon.edit_copy() }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
     if parts_error != ok { ret (zero, parts_error) }
     var at = 0usize
@@ -73,7 +74,7 @@ fn toolbar_row(a: *mem.Arena, t: *const control.Theme, action: *const widget.Sub
             parts[at] = line
             at += 1usize
         }
-        let (one, one_error) = control.glyph_button(a, 2000u64 + u64(i), t, kinds[i], "Tool", action, 34.0, 16.0)
+        let (one, one_error) = control.linux_svg_toggle(a, 2000u64 + u64(i), t, icons[i], "Tool", action, 34.0, 16.0, false)
         if one_error != ok { ret (zero, one_error) }
         parts[at] = one
         at += 1usize
@@ -106,7 +107,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
                 options.variant = .Plain
                 caption = "flat icon"
             }
-            let (made, made_error) = control.button_with_glyph(a, key, t, .Maximize, "", &actions[0usize], options)
+            let (made, made_error) = control.button_with_svg(a, key, t, adwicon.edit_copy(), "", &actions[0usize], options)
             if made_error != ok { ret (0usize, made_error) }
             node = made
             if state == 1usize { drive = .Hover }

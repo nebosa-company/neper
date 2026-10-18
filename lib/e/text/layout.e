@@ -118,6 +118,12 @@ fn shape_options(rtl: bool, language: str, size: f32) -> shape.Options {
     var o: shape.Options = zero
     if rtl { o.direction = .RightToLeft }
     o.language = language
+    // the pseudo-language "pngo": Pango's whole pixel advances at the font's size (the Linux look)
+    if language.len == 4usize && language[0usize] == 112u8 && language[1usize] == 110u8 && language[2usize] == 103u8 && language[3usize] == 111u8 {
+        o.language = ""
+        o.script = 1818326126u32
+        o.ppem = 2147483648u32 | u32(size * 64.0 + 0.5)
+    }
     // round 13: the pseudo-language "kern" asks for Latin shaping with the font's kern feature: Segoe UI has no DFLT script in its GPOS, so
     // an unset script finds no features at all, while the native Windows 11 edit controls kern ("Te" is 1.17 px tighter at 12 px).
     if language.len == 4usize && language[0usize] == 107u8 && language[1usize] == 101u8 && language[2usize] == 114u8 && language[3usize] == 110u8 {

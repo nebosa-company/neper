@@ -6,6 +6,7 @@
 
 use e.mem
 use e.str as strs
+use e.ui.adwicon_l2 as adwicon
 use e.ui.control
 use e.ui.looks
 use e.ui.widget
@@ -24,17 +25,17 @@ fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key
     if row == 4usize {
         options.variant = .Tonal
         options.circular = true
-        let (node, node_error) = control.button_with_glyph(a, key, t, .Add, "", action, options)
+        let (node, node_error) = control.button_with_svg(a, key, t, adwicon.list_add(), "", action, options)
         ret (node, node_error)
     }
     if row == 5usize || row == 6usize {
         if row == 5usize { options.variant = .Tonal }
-        let (node, node_error) = control.button_with_glyph(a, key, t, .Maximize, "", action, options)
+        let (node, node_error) = control.button_with_svg(a, key, t, adwicon.edit_copy(), "", action, options)
         ret (node, node_error)
     }
     if row == 7usize {
         options.variant = .Tonal
-        let (node, node_error) = control.button_with_glyph(a, key, t, .Add, "Button", action, options)
+        let (node, node_error) = control.button_with_svg(a, key, t, adwicon.list_add(), "Button", action, options)
         ret (node, node_error)
     }
     let (node, node_error) = control.button(a, key, t, "Button", action, options)
