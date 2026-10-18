@@ -4379,7 +4379,7 @@ fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, ink: pain
         var size = options.size
         if size == 0.0 { size = 11.0 }
         // ClearType sets a whole-pixel size at GDI's hinted advances itself, so the word keeps its size.
-        if natural > 0.0 && scene.text_aa_mode() != .ClearType {
+        if natural > 0.0 && (scene.text_aa_mode() != .ClearType || scene.is_gray_text(ink)) {
             size = size * hinted / natural
             if size < 10.0 { size = 10.0 }
             if size > 12.0 { size = 12.0 }
@@ -4812,6 +4812,8 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if current { ink = style.hex_raw(16777215u32) }
+    // v3's Dev Express list draws its text without ClearType (the pages' lists, which pass their window position as mark_y).
+    if t.tokens.palette != .Dark && mark_y >= 0.0 { ink = scene.gray_text(ink) }
     let (words, words_width, words_error) = choices_words(a, dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
