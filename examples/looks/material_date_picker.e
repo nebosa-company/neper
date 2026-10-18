@@ -18,7 +18,8 @@ fn picker(a: *mem.Arena, t: *const control.Theme, typing: bool) -> (widget.Node,
     if actions_error != ok { ret (zero, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     actions[1usize] = widget.Submit { ctx: zero, invoke: noop_submit }
-    let day = time.Date { year: 2026i32, month: 10u8, day: 16u8 }
+    // February 2026 starts on a Sunday and has 28 days, like the grid of the spec-derived capture (a 28 day month from Sunday); 21 is chosen and 14 is today.
+    let day = time.Date { year: 2026i32, month: 2u8, day: 21u8 }
     let (buffer, buffer_error) = mem.alloc[u8](a, 32usize)
     if buffer_error != ok { ret (zero, buffer_error) }
     let words = "2026-10-16"
@@ -34,7 +35,7 @@ fn picker(a: *mem.Arena, t: *const control.Theme, typing: bool) -> (widget.Node,
     options.len = 0usize
     if typing { options.len = n }
     options.typed = widget.Change[str] { ctx: zero, invoke: noop_text }
-    options.today = day
+    options.today = time.Date { year: 2026i32, month: 2u8, day: 14u8 }
     let (node, node_error) = overlay.date_picker_modal(a, 300u64, t, day, true, day, widget.Change[time.Date] { ctx: zero, invoke: noop_date }, widget.Change[time.Date] { ctx: zero, invoke: noop_date }, true, &actions[0usize], &actions[1usize], options)
     ret (node, node_error)
 }

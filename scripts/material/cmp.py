@@ -27,6 +27,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 LOOKS = os.path.join(ROOT, "docs/ui/looks")
 REF = os.path.join(LOOKS, "ref/material")
 MARGIN, SPACING, CAPTION, CROP = 12, 10, 20, 16
+BOXES = False  # --boxes: also print where the off, ring and shadow pixels of each cell are
 
 sys.path.insert(0, os.path.dirname(__file__))
 from sheets import SHEETS  # noqa: E402
@@ -137,6 +138,11 @@ def run(name, dark, png_dir, only):
         totals[5] += ring
         results.append((ref_name, dx, dy, n, off, offg, rim, shadow, int(d[m & ~glyph].max()) if (m & ~glyph).any() else 0, ring))
         print("  %-34s shift %2d %2d  structural px %5d  off %5d  off+glyph %5d  rim>40 %4d  shadow %5d  max %3d  ring %5d" % results[-1])
+        if BOXES:
+            for label, mask in (("off", (d > 2) & m & ~glyph), ("ring", (d > 12) & win & ~st & line_flat(ref) & ~glyph), ("shadow", outside_off)):
+                ys, xs = np.nonzero(mask)
+                if len(xs):
+                    print("      %-6s %4d px in x %d..%d y %d..%d (crop px; the control starts at %d)" % (label, len(xs), xs.min(), xs.max(), ys.min(), ys.max(), CROP))
         if png_dir:
             os.makedirs(png_dir, exist_ok=True)
             X0, Y0 = bx + dx, by + dy
@@ -160,6 +166,8 @@ if __name__ == "__main__":
     dark = "--dark" in args
     png = args[args.index("--png") + 1] if "--png" in args else None
     only = args[args.index("--only") + 1] if "--only" in args else None
+    BOXES = "--boxes" in args
+    globals()["BOXES"] = BOXES
     names = [a for i, a in enumerate(args) if not a.startswith("--") and (i == 0 or args[i - 1] not in ("--png", "--only"))]
     for n in names:
         run(n, dark, png, only)

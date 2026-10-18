@@ -703,10 +703,18 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
 // The Android look (docs/ui/looks/material, material-dark): `s` under style.material at 100 % and 150 %. Only these two
 // looks are written, so a sheet can be run without touching the Neper and Windows pictures.
 fn run_material(a: *mem.Arena, s: *const Sheet) -> err {
+    // As run_all: NEPER_LOOKS_SCALE renders that one scale and NEPER_LOOKS_NOTEXT leaves the text out (the scale check, scripts/looks_scale_check.py).
+    let only_scale = env_scale(a)
+    let (no_text, no_text_error) = os.env(a, "NEPER_LOOKS_NOTEXT")
+    scene.set_text_hidden(no_text_error == ok && no_text.len > 0usize)
     var scale_index = 0usize
     while scale_index < 2usize {
         var scale: f32 = 1.0
         if scale_index == 1usize { scale = 1.5 }
+        if only_scale > 0.0 {
+            if scale_index == 1usize { break }
+            scale = only_scale
+        }
         var look_index = 0usize
         while look_index < 2usize {
             var look: Look = .Material

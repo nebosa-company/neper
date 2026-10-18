@@ -377,7 +377,10 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
         raised.radius = 0.0
         raised.padding = 4.0
     }
+    // Android: the level-2 shade is drawn (e.ui.matshade), not the offset copy.
+    if t.tokens.profile == .MaterialLike { raised.elevation = 0u8 }
     var plate = control.surface_style(t, raised)
+    if t.tokens.profile == .MaterialLike { plate.shade = 2u8 }
     if t.tokens.palette == .Dark && t.tokens.profile == .Neper { plate.border = style.Border { width: 1.0, color: style.frame_ink(t.tokens) } }
     plate.padding.top = style.Length { Px: 12.0 }
     plate.padding.bottom = style.Length { Px: 8.0 }
