@@ -871,9 +871,9 @@ fn cupertino(palette: Palette) -> ThemeTokens {
         puta(&t, .SurfaceVariant, 0xE5E5EAu32, 1.0)
         puta(&t, .Text, 0x000000u32, 1.0)
         puta(&t, .OnSurface, 0x000000u32, 1.0)
-        // secondaryLabel rgba(60,60,67,0.6) flattened on white.
-        puta(&t, .TextMuted, 0x8A8A8Eu32, 1.0)
-        puta(&t, .OnSurfaceVariant, 0x8A8A8Eu32, 1.0)
+        // secondaryLabel rgba(60,60,67,0.6), kept translucent so it composites on the page and on a cell alike.
+        puta(&t, .TextMuted, 0x3C3C43u32, 0.6)
+        puta(&t, .OnSurfaceVariant, 0x3C3C43u32, 0.6)
         // opaqueSeparator #C6C6C8; Outline is the unchecked-box edge (rgba(0,0,0,0.25) flattened).
         puta(&t, .Border, 0xC6C6C8u32, 1.0)
         puta(&t, .Outline, 0xBFBFBFu32, 1.0)
@@ -900,9 +900,9 @@ fn cupertino(palette: Palette) -> ThemeTokens {
         puta(&t, .SurfaceVariant, 0x3A3A3Cu32, 1.0)
         puta(&t, .Text, 0xFFFFFFu32, 1.0)
         puta(&t, .OnSurface, 0xFFFFFFu32, 1.0)
-        // secondaryLabel rgba(235,235,245,0.6) flattened on #2C2C2E.
-        puta(&t, .TextMuted, 0x9E9EA6u32, 1.0)
-        puta(&t, .OnSurfaceVariant, 0x9E9EA6u32, 1.0)
+        // secondaryLabel rgba(235,235,245,0.6), kept translucent.
+        puta(&t, .TextMuted, 0xEBEBF5u32, 0.6)
+        puta(&t, .OnSurfaceVariant, 0xEBEBF5u32, 0.6)
         puta(&t, .Border, 0x38383Au32, 1.0)
         puta(&t, .Outline, 0x6B6B6Eu32, 1.0)
         puta(&t, .OutlineVariant, 0x48484Au32, 1.0)
