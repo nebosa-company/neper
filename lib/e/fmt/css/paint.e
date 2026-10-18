@@ -39,7 +39,12 @@ fn draw_ref(p: *Painter, img: ImageRef, dx: f64, dy: f64, dw: f64, dh: f64) {
         }
         ret
     }
-    emit(p, scene.Command { Image: scene.DrawImage { texture: img.texture, source: geo.rect(0.0f32, 0.0f32, img.width, img.height), destination: grect(dx, dy, dw, dh), opacity: 1.0f32 } })
+    let sx0 = snap(dx)
+    let sy0 = snap(dy)
+    let sx1 = snap(dx + dw)
+    let sy1 = snap(dy + dh)
+    if sx1 <= sx0 || sy1 <= sy0 { ret }
+    emit(p, scene.Command { Image: scene.DrawImage { texture: img.texture, source: geo.rect(0.0f32, 0.0f32, img.width, img.height), destination: grect(sx0, sy0, sx1 - sx0, sy1 - sy0), opacity: 1.0f32 } })
 }
 
 // `text` returns the shaped layout of a run in the style's font (an address of 0: nothing to draw); `image` the texture
