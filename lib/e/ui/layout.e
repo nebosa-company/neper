@@ -18,12 +18,15 @@
 // shares what a bounded limit leaves after the others and the gaps; every child
 // fills its cell. More children than cells is `Overflow`.
 
+use e.math
 use e.mem
 use e.gfx.geometry
 
 type Axis = enum u8 { Horizontal, Vertical }
-type MainAlign = enum u8 { Start, End, Center, SpaceBetween, SpaceAround, SpaceEvenly }
-type CrossAlign = enum u8 { Start, End, Center, Stretch, Baseline }
+type MainAlign = enum u8 { Start, End, Center, SpaceBetween, SpaceAround, SpaceEvenly, CenterWhole }
+// `CenterWhole` centres like `Center` and puts the child on a whole logical pixel (rounded down): the looks sheets' cells, whose reference
+// controls sit on whole pixels (a browser lays its page out at integers).
+type CrossAlign = enum u8 { Start, End, Center, Stretch, Baseline, CenterWhole }
 type Constraints = struct { min_width: f32, max_width: f32, min_height: f32, max_height: f32 }
 type Flex = struct { axis: Axis, main: MainAlign, cross: CrossAlign, gap: f32 }
 type GridTrack = union enum u8 { Px: f32, Flex: f32, Auto }
@@ -150,6 +153,8 @@ fn flex(a: *mem.Arena, spec: Flex, limits: Constraints, children: []const Child)
             pen = leftover
         } else if spec.main == .Center {
             pen = leftover / 2.0
+        } else if spec.main == .CenterWhole {
+            pen = math.floor[f32](leftover / 2.0)
         } else if spec.main == .SpaceBetween && n > 1usize {
             between += leftover / f32(n - 1usize)
         } else if spec.main == .SpaceAround {
@@ -167,7 +172,7 @@ fn flex(a: *mem.Arena, spec: Flex, limits: Constraints, children: []const Child)
         if spec.cross == .Stretch { c = cross_size }
         if c > cross_size { c = cross_size }
         var offset: f32 = 0.0
-        if spec.cross == .End { offset = cross_size - c } else if spec.cross == .Center { offset = (cross_size - c) / 2.0 }
+        if spec.cross == .End { offset = cross_size - c } else if spec.cross == .Center { offset = (cross_size - c) / 2.0 } else if spec.cross == .CenterWhole { offset = math.floor[f32]((cross_size - c) / 2.0) }
         if horizontal {
             rects[i] = geometry.rect(pen, offset, sizes[i], c)
         } else {

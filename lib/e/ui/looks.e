@@ -273,7 +273,7 @@ fn set_look(rig: *Rig, look: Look) {
     // The Windows dark look maps the light literals of its tile painters (style.hex) to dark; nothing else does.
     style.set_windark(look == .WindowsDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
-    scene.set_pixel_exact(rig.tokens.profile == .Windows)
+    scene.set_pixel_exact(rig.tokens.profile == .Windows || rig.tokens.profile == .MaterialLike)
     scene.set_fine_curves(rig.tokens.profile == .Linux)
     scene.set_cff_text(rig.tokens.profile == .Linux)
     // The Windows profile draws text as ClearType (hinted, per-subpixel coverage); every other look keeps the greyscale fill.
@@ -285,7 +285,7 @@ fn set_look(rig: *Rig, look: Look) {
     if aa_error == ok && strs.eq(aa_text, "cleartype") { text_aa = scene.TextAa.ClearType }
     scene.set_text_aa(text_aa)
     let (exact_text, exact_error) = os.env(rig.a, "NEPER_LOOKS_EXACT")
-    scene.set_pixel_exact_at_one(exact_error == ok && exact_text.len > 0usize)
+    scene.set_pixel_exact_at_one((exact_error == ok && exact_text.len > 0usize) || rig.tokens.profile == .MaterialLike)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
     if (look == .Linux || look == .LinuxDark) && rig.linux_fonts.len > 0usize { rig.fonts = rig.linux_fonts }
 }
@@ -374,7 +374,9 @@ fn sheet(a: *mem.Arena, t: *const control.Theme, cells: []const Cell, columns: u
             parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, size_style(cell_w, caption_h()), holder)
             parts[2usize] = cells[i].node
             let inner = parts[2usize..3usize]
-            let centred = widget.aligned(0u64, .Center, .Center, size_style(cell_w, cell_h), inner)
+            var centred = widget.aligned(0u64, .Center, .Center, size_style(cell_w, cell_h), inner)
+            // Material Web's captures are laid out on whole pixels: the Android sheets put the control on one too.
+            if t.tokens.profile == .MaterialLike { centred = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .CenterWhole, cross: .CenterWhole, gap: 0.0 }, size_style(cell_w, cell_h), inner) }
             let (column, column_error) = mem.alloc[widget.Node](a, 2usize)
             if column_error != ok { ret (zero, column_error) }
             column[0usize] = parts[0usize]
