@@ -1354,6 +1354,39 @@ fn push_entry_clips(p: *Painter, e: u32, root: u32, rx: f64, ry: f64) -> usize {
     ret pushed
 }
 
+// The clip rectangle (x, y, w, h) of `clip: rect(top, right, bottom, left)` for a box at (x, y) of size w x h; `auto` is the border edge.
+fn clip_rect_of(p: *Painter, s: *const style.Style, x: f64, y: f64, w: f64, h: f64) -> ([4]f64, bool) {
+    var out: [4]f64 = zero
+    let (v, has) = geom.extra_of(s, "clip")
+    if !has { ret (out, false) }
+    let t = cv.lower(p.a, cv.trim_ws(v))
+    if !str.starts_with(t, "rect(") || t[t.len - 1usize] != 41u8 { ret (out, false) }
+    let inner = t[5usize..t.len - 1usize]
+    // Commas and spaces both separate the four values.
+    let (spaced, spe) = str.replace(p.a, inner, ",", " ")
+    if spe != ok { ret (out, false) }
+    let parts = cv.split_top_level_spaces(p.a, spaced)
+    if parts.len != 4usize { ret (out, false) }
+    let ctx = style.new_context(p.a, p.l.viewport_width, p.l.viewport_height)
+    var vals: [4]f64 = zero
+    var i = 0usize
+    while i < 4usize {
+        if str.eq(parts[i], "auto") {
+            if i == 0usize { vals[i] = 0.0f64 } else if i == 1usize { vals[i] = w } else if i == 2usize { vals[i] = h } else { vals[i] = 0.0f64 }
+        } else {
+            let (len, good) = style.parse_len(&ctx, parts[i], s.font_size, style.A_NEGATIVE)
+            if !good || len.kind != .Px { ret (out, false) }
+            vals[i] = len.px
+        }
+        i += 1usize
+    }
+    out[0usize] = x + vals[3usize]
+    out[1usize] = y + vals[0usize]
+    out[2usize] = maxf(0.0f64, vals[1usize] - vals[3usize])
+    out[3usize] = maxf(0.0f64, vals[2usize] - vals[0usize])
+    ret (out, true)
+}
+
 fn paint_entry(p: *Painter, en: Entry, root: u32, rx: f64, ry: f64) {
     let (rox, roy) = layout.abs_origin(p.l, root)
     let (eox, eoy) = layout.abs_origin(p.l, en.box)
@@ -1367,7 +1400,16 @@ fn paint_entry(p: *Painter, en: Entry, root: u32, rx: f64, ry: f64) {
     }
     if es.visibility != .Visible && !en.real && eb.first == layout.NONE { ret }
     if outside_view(p, en.box, ex, ey) { ret }
-    let clips = push_entry_clips(p, en.box, root, rx, ry)
+    var clips = push_entry_clips(p, en.box, root, rx, ry)
+    // The deprecated `clip: rect(...)` of an absolutely positioned box clips the box and its descendants.
+    if es.position == .Absolute || es.position == .Fixed {
+        let (cr, has_clip) = clip_rect_of(p, es, ex, ey, eb.w, eb.h)
+        if has_clip {
+            save(p)
+            emit(p, scene.Command { Clip: scene.Clip { Rect: grect(cr[0usize], cr[1usize], cr[2usize], cr[3usize]) } })
+            clips += 1usize
+        }
+    }
     if !en.real {
         paint_atomic(p, en.box, ex, ey)
     } else {

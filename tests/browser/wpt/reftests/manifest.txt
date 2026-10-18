@@ -167,3 +167,4 @@ text-align-last-block-in-inline-001.html | text-align-last-block-in-inline-001-r
 percent-height-empty-block-001.html | percent-height-empty-block-001-ref.html | match
 grid-row-gap-alias-001.html | grid-row-gap-alias-001-ref.html | match
 named-colors-extended-001.html | named-colors-extended-001-ref.html | match
+clip-rect-001.html | clip-rect-001-ref.html | match
