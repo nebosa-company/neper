@@ -1,4 +1,4 @@
-// The JavaScript-written built-ins, generated from prelude.js by scripts/gen_js_prelude.py -- edit that, not this file.
+// The JavaScript-written built-ins, generated from prelude.js (or the prelude/ parts) by scripts/gen_js_prelude.py -- edit that, not this file.
 
 use e.mem
 use e.str

@@ -21,10 +21,14 @@ def literal(text: str) -> str:
 def generate(name: str, what: str) -> None:
     src = ROOT / "lib" / "e" / "js" / (name + ".js")
     out = ROOT / "lib" / "e" / "js" / (name + ".e")
-    lines = [line.rstrip() for line in src.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if src.exists():
+        text = src.read_text(encoding="utf-8")
+    else:  # a directory of numbered parts, joined in order
+        text = NEWLINE.join(p.read_text(encoding="utf-8") for p in sorted((ROOT / "lib" / "e" / "js" / name).glob("*.js")))
+    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
     size = sum(len(l) + 1 for l in lines) + 64
     pushes = NEWLINE.join(f"    try str.push(&b, {literal(line + NEWLINE)})" for line in lines)
-    out.write_text(f"""// {what}, generated from {name}.js by scripts/gen_js_prelude.py -- edit that, not this file.
+    out.write_text(f"""// {what}, generated from {name}.js (or the {name}/ parts) by scripts/gen_js_prelude.py -- edit that, not this file.
 
 use e.mem
 use e.str
