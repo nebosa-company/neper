@@ -15365,6 +15365,10 @@ fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.
     view.overflow = .Clip
     var along = height
     if !vertical { along = width }
+    // The Linux look (worker l3): GNOME's overlay indicator, shown only while the content moves, in the slider colour.
+    if t.tokens.profile == .Linux {
+        ret (widget.scroll(key, widget.Scroll { axis: axis, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: linux_slider(t, true), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: true, virtual_extras: zero }, view, children), ok)
+    }
     if t.tokens.profile != .Windows {
         ret (widget.scroll(key, widget.Scroll { axis: axis, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, children), ok)
     }
@@ -15383,6 +15387,51 @@ fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.
 }
 
 fn scroll_bar_gesture(ctx: *void, g: widget.Gesture) -> err { ret ok }
+
+// ---- the Linux look, scroll bar (worker l3, round 20) ----------------------------------------------------------------
+// GtkScrollbar in libadwaita 1.5: a strip 20 across, no trough, holding an 8 across pill (#d3d3d3 Light, #505050 Dark; #f5f5f5 /
+// #2c2c2c when insensitive) centred in it. Along the strip the pill is `length * length / content` long and sits at
+// `offset / content * length`. Dragging is the viewport's own (as under the Windows look).
+fn linux_slider(t: *const Theme, enabled: bool) -> paint.Color {
+    if t.tokens.palette == .Dark {
+        if !enabled { ret style.hex_raw(0x2C2C2Cu32) }
+        ret style.hex_raw(0x505050u32)
+    }
+    if !enabled { ret style.hex_raw(0xF5F5F5u32) }
+    ret style.hex_raw(0xD3D3D3u32)
+}
+
+fn linux_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, content: f32, offset: f32, enabled: bool) -> (widget.Node, err) {
+    var strip = sized_style(20.0, length)
+    if !vertical { strip = sized_style(length, 20.0) }
+    var count = 0usize
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    if content > 0.0 {
+        var span = length * length / content
+        if span > length { span = length }
+        var at = offset / content * length
+        if at > length - span { at = length - span }
+        if at < 0.0 { at = 0.0 }
+        var pill = sized_style(8.0, span)
+        pill.margin = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: at }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        if !vertical {
+            pill = sized_style(span, 8.0)
+            pill.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        }
+        pill.radius = 4.0
+        pill.background = paint.Brush { Solid: linux_slider(t, enabled) }
+        pill.position = .Absolute
+        parts[0usize] = widget.box(key + 1u64, pill, zero)
+        count = 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 17u8
+    sem.label = "Scroll bar"
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(key, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, strip, parts[0usize..count]))), ok)
+}
+// ---- end the Linux look, scroll bar ---------------------------------------------------------------------------------
 
 // ---- The Windows look, bars (docs/ui/looks, group `bars`): toolbar buttons, menu text and the
 // shared bar helpers. v3's DevExpress bars draw Tahoma 8 pt (11 px) on the #F0F0F0 face; the

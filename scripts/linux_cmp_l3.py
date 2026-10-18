@@ -48,6 +48,11 @@ sheet("splitter", 2, 210, 90, [
     ("paned-wide", [(36, 30, 64, 54), (133, 30, 170, 54)]),
 ])
 
+sheet("scroll_bar", 2, 210, 170, [
+    "scrollbar-h-normal", "scrollbar-v-normal", "scrollbar-h-hover", "scrollbar-v-hover",
+    "scrollbar-h-disabled", "scrollbar-v-disabled", "scrolled-overlay", "scrolled-classic",
+])
+
 
 def origin(sh, i):
     col, row = i % sh["columns"], i // sh["columns"]
