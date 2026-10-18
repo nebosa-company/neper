@@ -43,6 +43,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             selected = 0usize
         }
         if i == 4usize { selected = 3usize }
+        // md-navigation-bar captured with three destinations has no badge (the count and the dot are on the four).
+        if i == 0usize { items[2usize].badge = "" } else { items[2usize].badge = "3" }
         let (node, node_error) = navigation.destination_bar_of(a, u64((i + 1usize) * 100usize), t, items[0usize..count], selected, picks[0usize..count], .Bottom, 360.0)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None

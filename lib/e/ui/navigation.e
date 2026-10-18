@@ -1675,6 +1675,9 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         pill_width = 64.0
         cell_height = 52.0
         if items.len > 0usize { cell = control.max_zero(extent - 16.0) / f32(items.len) }
+        // The Android reference (spec CSS) keeps 8 dp between destinations 8 in from the ends: the same centres as destinations (extent - 8)
+        // / n wide from 4 in, which also keeps the gaps pressable.
+        if t.tokens.profile == .MaterialLike { cell = control.max_zero(extent - 8.0) / f32(items.len) }
     }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let (cells, cells_error) = mem.alloc[widget.Node](a, items.len)
@@ -1779,10 +1782,12 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         i += 1usize
     }
     var sheet = style.defaults()
+    var bar_inset: f32 = 8.0
+    if t.tokens.profile == .MaterialLike { bar_inset = 4.0 }
     if bottom {
         sheet = control.sized_style(extent, 80.0)
         sheet.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
-        sheet.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 16.0 } }
+        sheet.padding = style.EdgeLengths { left: style.Length { Px: bar_inset }, top: style.Length { Px: 12.0 }, right: style.Length { Px: bar_inset }, bottom: style.Length { Px: 16.0 } }
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, sheet, cells[0usize..items.len])
         sem.column_count = u32(items.len)
     } else {
