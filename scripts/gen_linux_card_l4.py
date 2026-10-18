@@ -42,7 +42,8 @@ def check_box(scheme, checked):
     for y in range(20):
         for x in range(20):
             p = im.getpixel((5 + x, y0 + y))
-            out.append(0 if p == card else 0xFF000000 | p[0] << 16 | p[1] << 8 | p[2])
+            inner = checked and 3 <= x <= 16 and 3 <= y <= 16  # a tick pixel that is the card colour is the tick, not the outside
+            out.append(0 if p == card and not inner else 0xFF000000 | p[0] << 16 | p[1] << 8 | p[2])
     return out
 
 
