@@ -11113,15 +11113,25 @@ fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipK
     var words = style.color(t.tokens, .OnSurface)
     var look = style.resolve(t.tokens, .Outlined, state)
     look.border = style.color(t.tokens, .Outline)
-    // M3 chips are outlined in `outline-variant` (md.comp.assist-chip.outline).
-    if t.tokens.profile == .MaterialLike { look.border = style.color(t.tokens, .OutlineVariant) }
+    // M3 chips are outlined in `outline` (md.comp.assist-chip.outline).
+    if t.tokens.profile == .MaterialLike { look.border = style.color(t.tokens, .Outline) }
     look.border_width = 1.0
     if chosen {
         fill = style.color(t.tokens, .SecondaryContainer)
         words = style.color(t.tokens, .OnSecondaryContainer)
         look.border_width = 0.0
     }
-    look.background = style.layer(fill, words, state_opacity(t, state))
+    var layer_ink = words
+    if t.tokens.profile == .MaterialLike {
+        // md-*-chip state layers: on-surface for an assist chip, on-surface-variant for the others, on-secondary-container for a chosen
+        // filter chip; pressed is on-surface for an assist chip or an unchosen filter chip, on-surface-variant for the rest.
+        if kind != .Assist && !chosen { layer_ink = style.color(t.tokens, .OnSurfaceVariant) }
+        if state.pressed {
+            if kind == .Assist || (kind == .Filter && !chosen) { layer_ink = style.color(t.tokens, .OnSurface) }
+            if chosen { layer_ink = style.color(t.tokens, .OnSurfaceVariant) }
+        }
+    }
+    look.background = style.layer(fill, layer_ink, state_opacity(t, state))
     look.foreground = words
     look.radius = t.tokens.radii.sm
     let height = t.tokens.sizes.control_sm
@@ -11157,6 +11167,11 @@ fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipK
         removed[0usize] = cross
         var circle = sized_style(24.0, 24.0)
         circle.radius = 12.0
+        // md-input-chip: the remove icon is 18 dp, which makes the chip 83 dp for "Input".
+        if t.tokens.profile == .MaterialLike {
+            circle = sized_style(18.0, 18.0)
+            circle.radius = 9.0
+        }
         circle.background = paint.Brush { Solid: with_alpha(muted, state_opacity(t, control_state(t, key + 1u64, true, false))) }
         let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
         if hit_error != ok { ret (zero, TooLarge) }

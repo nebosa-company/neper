@@ -47,7 +47,7 @@ fn one(a: *mem.Arena, t: *const control.Theme, key: widget.Key, value: str, choi
     if picks_error != ok { ret (zero, picks_error) }
     let (toggle, toggle_error) = pick_actions(a, 1usize)
     if toggle_error != ok { ret (zero, toggle_error) }
-    let (combo, combo_error) = control.combo_box(a, key, t, "Row Color", buffer, n, zero, choices, active, open, picks, zero, &toggle[0usize], options)
+    let (combo, combo_error) = control.combo_box(a, key, t, "Label", buffer, n, zero, choices, active, open, picks, zero, &toggle[0usize], options)
     if combo_error != ok { ret (zero, combo_error) }
     let (shown, shown_error) = placed(a, combo, above, left, high, across)
     ret (shown, shown_error)
@@ -96,6 +96,12 @@ fn spec_of(sheet_no: usize, i: usize) -> Spec {
     options.width = 200.0
     var s = Spec { caption: "Enabled", drive: .None, value: "Against Card Color", open: false, rows: 4usize, active: 0usize, above: 12.0, left: 10.0, high: 84.0, options: options }
     if sheet_no == 0usize {
+        // the states sheet: a 240 dp field centred in its cell, the value the reference's
+        s.options.width = 240.0
+        s.value = "Apple"
+        s.above = 20.0
+        s.left = 15.0
+        s.high = 96.0
         if i == 1usize {
             s.caption = "Hovered"
             s.drive = .Hover
@@ -154,6 +160,11 @@ fn spec_of(sheet_no: usize, i: usize) -> Spec {
     ret s
 }
 
+fn across_of(sheet_no: usize) -> f32 {
+    if sheet_no == 0usize { ret 270.0 }
+    ret cell_w()
+}
+
 fn count_of(sheet_no: usize) -> usize {
     if sheet_no == 0usize { ret 8usize }
     ret 3usize
@@ -175,7 +186,7 @@ fn build_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
         let s = spec_of(sheet_no, i)
         var choices: []const str = colors[0usize..4usize]
         if s.rows == 22usize { choices = numbers[0usize..22usize] }
-        let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, s.value, choices, s.active, s.open && now == i, s.options, s.above, s.left, s.high, cell_w())
+        let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, s.value, choices, s.active, s.open && now == i, s.options, s.above, s.left, s.high, across_of(sheet_no))
         if node_error != ok { ret (0usize, node_error) }
         cells[i] = looks.Cell { caption: s.caption, node: node, drive: s.drive }
         i += 1usize
@@ -201,6 +212,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let lists = looks.Sheet { name: "combo_box_lists", cells: 3usize, columns: 3usize, cell_w: cell_w(), cell_h: cell_h(), ctx: mem.cast[*void](&passes[0usize]), build: build_lists }
         ret looks.run_material(a, &lists)
     }
-    let states = looks.Sheet { name: "combo_box", cells: 8usize, columns: 3usize, cell_w: cell_w(), cell_h: 84.0, ctx: mem.cast[*void](&passes[0usize]), build: build_states }
+    let states = looks.Sheet { name: "combo_box", cells: 8usize, columns: 3usize, cell_w: 270.0, cell_h: 96.0, ctx: mem.cast[*void](&passes[0usize]), build: build_states }
     ret looks.run_material(a, &states)
 }

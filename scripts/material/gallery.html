@@ -229,8 +229,8 @@ for (const v of ["filled", "outlined"]) {
   const tag = `md-${v}-select`;
   for (const st of ["rest", "hover", "focus", "disabled", "error"]) {
     const o = `<md-select-option value="a"><div slot="headline">Apple</div></md-select-option><md-select-option value="b"><div slot="headline">Banana</div></md-select-option>`;
-    add(`select-${v}-empty-${st}`, `<${tag} label="Label"${dis(st === "disabled")}${st === "error" ? ' error error-text="Error"' : ""}>${o}</${tag}>`);
-    add(`select-${v}-value-${st}`, `<${tag} label="Label"${dis(st === "disabled")}${st === "error" ? ' error error-text="Error"' : ""}>${o.replace('value="a"', 'value="a" selected')}</${tag}>`);
+    add(`select-${v}-empty-${st}`, `<${tag} label="Label"${dis(st === "disabled")}${st === "error" ? " error" : ""}>${o}</${tag}>`);
+    add(`select-${v}-value-${st}`, `<${tag} label="Label"${dis(st === "disabled")}${st === "error" ? " error" : ""}>${o.replace('value="a"', 'value="a" selected')}</${tag}>`);
   }
 }
 // chips
@@ -238,11 +238,11 @@ for (const k of ["assist", "filter", "input", "suggestion"]) {
   const tag = `md-${k}-chip`;
   for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
     const a = dis(st === "disabled");
-    add(`chip-${k}-${st}`, `<md-chip-set><${tag} label="Label"${a}></${tag}></md-chip-set>`);
-    if (k === "filter") add(`chip-${k}-selected-${st}`, `<md-chip-set><${tag} label="Label" selected${a}></${tag}></md-chip-set>`);
-    if (k === "assist" || k === "suggestion") add(`chip-${k}-elevated-${st}`, `<md-chip-set><${tag} label="Label" elevated${a}></${tag}></md-chip-set>`);
-    if (k === "assist") add(`chip-${k}-icon-${st}`, `<md-chip-set><${tag} label="Label"${a}>${sl("add", "icon")}</${tag}></md-chip-set>`);
-    if (k === "input") add(`chip-${k}-selected-${st}`, `<md-chip-set><${tag} label="Label" selected${a}></${tag}></md-chip-set>`);
+    add(`chip-${k}-${st}`, `<md-chip-set><${tag} label="${k[0].toUpperCase() + k.slice(1)}"${a}></${tag}></md-chip-set>`);
+    if (k === "filter") add(`chip-${k}-selected-${st}`, `<md-chip-set><${tag} label="${k[0].toUpperCase() + k.slice(1)}" selected${a}></${tag}></md-chip-set>`);
+    if (k === "assist" || k === "suggestion") add(`chip-${k}-elevated-${st}`, `<md-chip-set><${tag} label="${k[0].toUpperCase() + k.slice(1)}" elevated${a}></${tag}></md-chip-set>`);
+    if (k === "assist") add(`chip-${k}-icon-${st}`, `<md-chip-set><${tag} label="${k[0].toUpperCase() + k.slice(1)}"${a}>${sl("add", "icon")}</${tag}></md-chip-set>`);
+    if (k === "input") add(`chip-${k}-selected-${st}`, `<md-chip-set><${tag} label="${k[0].toUpperCase() + k.slice(1)}" selected${a}></${tag}></md-chip-set>`);
   }
 }
 // slider

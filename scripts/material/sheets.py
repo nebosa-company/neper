@@ -26,3 +26,10 @@ SHEETS["switch"] = {"columns": 5, "cell_w": 90, "cell_h": 56, "cells": ["switch-
 SHEETS["text_field"] = {"columns": 6, "cell_w": 270, "cell_h": 96, "cells": [
     "text-field-%s-%s" % (v, k) for v in ["filled", "outlined"] for k in
     ["empty-rest", "empty-hover", "empty-focus", "value-focus", "value-disabled", "value-error"]]}
+
+SHEETS["combo_box"] = {"columns": 3, "cell_w": 270, "cell_h": 96, "cells": [
+    "select-outlined-value-rest", "select-outlined-value-hover", "select-outlined-value-focus", "select-outlined-value-disabled",
+    "select-outlined-value-error", "select-filled-value-rest", "select-filled-value-hover", "select-filled-value-focus"]}
+
+SHEETS["chips"] = {"columns": 4, "cell_w": 130, "cell_h": 48, "cells": [
+    "chip-%s-%s" % (k, s) for k in ["assist", "filter", "filter-selected", "input", "suggestion"] for s in ["rest", "hover", "focus", "pressed"]]}
