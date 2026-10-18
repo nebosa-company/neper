@@ -492,7 +492,7 @@ fn check_expr(c: *Ctx, id: u32) -> err {
         if n.op == ast.O_ASSIGN && (n.flags & ast.F_OPTIONAL) == 0u16 {
             try check_assign_target(c, n.a, true)
         } else {
-            if !is_simple_target(c, n.a) && !(node(c, n.a).kind == ast.N_CALL && !c.strict) { ret fail(c, id, "Invalid left-hand side in assignment") }
+            if !is_simple_target(c, n.a) && !(node(c, n.a).kind == ast.N_CALL && !c.strict && (n.flags & ast.F_OPTIONAL) == 0u16) { ret fail(c, id, "Invalid left-hand side in assignment") }
             try check_assign_target(c, n.a, false)
         }
         ret check_expr(c, n.b)
