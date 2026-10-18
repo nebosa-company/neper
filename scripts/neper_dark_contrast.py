@@ -7,7 +7,7 @@ The page is the sheet's corner colour. Per sheet, from the 1.0 PNG:
              that are 70 % one colour, neither the page nor the fill; the brightest counts) must show it at >= 3 : 1 against the page. Fill-only surfaces
              (bars, rows, panels, selection fills) have no border to judge and are not boundaries;
   text     : ink is whatever departs from its local background (the 9 px median) by more than 1.08 : 1, merged along the row into runs; a run
-             at least 7 px tall and wider than tall is text and needs >= 4.5 : 1 (its core pixel against that background),
+             7 to 22 px tall and at least 1.5 times as wide as tall is text and needs >= 4.5 : 1 (its core pixel against that background),
              any other ink blob (icon, mark, caret) needs >= 3 : 1; rules (a blob at most 6 px thick and at least 3 times as long: dividers,
              grid and tree lines, which carry no information) and hairlines are not judged.
 A disabled control is exempt in WCAG. Neper draws one as its ink at 38 % (content) and 12 % (container) over what it sits
@@ -104,7 +104,7 @@ def check(name):
         if min(h, w) <= 6 and max(h, w) >= 3 * min(h, w) and not (h >= 7 and w > h):
             continue
         y, x = ys.start + i[0], xs.start + i[1]
-        text = 7 <= h <= 22 and w > h and sel.sum() >= 12
+        text = 7 <= h <= 22 and w >= 1.5 * h and sel.sum() >= 12
         found.append((xs.start, ys.start, w, h, "text" if text else "glyph", float(cr[y, x]), 4.5 if text else 3.0,
                       disabled(img[y, x].astype(float), bgc[y, x].astype(float), 0.38), img[y, x], bgc[y, x]))
     for x0, y0, x1, y1 in groups(img, page):
