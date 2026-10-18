@@ -47,7 +47,7 @@ fn check_ident(c: *Ctx, id: u32, binding: bool) -> err {
     if is_reserved_word(name) { ret fail(c, id, "Unexpected reserved word") }
     if c.strict && is_strict_reserved(name) { ret fail(c, id, "Unexpected strict mode reserved word") }
     if c.in_generator && str.eq(name, "yield") { ret fail(c, id, "yield is a reserved word here") }
-    if (c.in_async || c.in_static_block || c.p.is_module) && str.eq(name, "await") { ret fail(c, id, "await is a reserved word here") }
+    if (c.in_async || (c.in_static_block && (!c.in_function || c.in_params)) || c.p.is_module) && str.eq(name, "await") { ret fail(c, id, "await is a reserved word here") }
     if binding && c.strict && (str.eq(name, "eval") || str.eq(name, "arguments")) { ret fail(c, id, "Unexpected eval or arguments in strict mode") }
     if (c.in_field_init || c.in_static_block) && str.eq(name, "arguments") && !binding { ret fail(c, id, "arguments is not allowed in class field initializer or static initialization block") }
     ret ok
@@ -354,6 +354,7 @@ fn check_pattern(c: *Ctx, id: u32, binding: bool, allow_cover: bool) -> err {
                 try check_pattern(c, pn.b, binding, allow_cover)
             } else if pn.op == ast.M_INIT {
                 if (pn.flags & ast.F_COMPUTED) != 0u16 { try check_expr(c, pn.a) }
+                if (pn.flags & ast.F_COMPUTED) == 0u16 && node(c, pn.a).kind == ast.N_PRIVATE { ret fail(c, pid, "Unexpected private name in a destructuring pattern") }
                 if (pn.flags & ast.F_SHORTHAND) != 0u16 {
                     let vn = node(c, pn.b)
                     if vn.kind == ast.N_ASSIGN {
@@ -703,8 +704,9 @@ fn check_function(c: *Ctx, id: u32) -> err {
         if !is_method { c.allow_super_call = false }
     } else {
         c.in_function = true
-        c.in_async = (n.flags & ast.F_ASYNC) != 0u16
-        c.in_generator = false
+        // Arrow parameters keep the enclosing [Await] / [Yield] context; only the body leaves it.
+        c.in_async = (n.flags & ast.F_ASYNC) != 0u16 || saved.in_async
+        c.in_generator = saved.in_generator
     }
     c.in_loop = 0u32
     c.in_switch = 0u32
@@ -774,6 +776,10 @@ fn check_function(c: *Ctx, id: u32) -> err {
         pi += 1usize
     }
     c.in_params = false
+    if is_arrow {
+        c.in_async = (n.flags & ast.F_ASYNC) != 0u16
+        c.in_generator = false
+    }
     // Body.
     var be: err = ok
     if n.c != ast.NONE {

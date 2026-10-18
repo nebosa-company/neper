@@ -479,6 +479,7 @@ fn parse_class(p: *Parse) -> (u32, err) {
             let (plo, phi, pe0) = parse_property(p, neg_p)
             if pe0 != ok { ret (NONE, pe0) }
             try add_range(p, plo, phi)
+            if peek(p) == 45i64 && peek_at(p, 1usize) != 93i64 && p.i + 1usize < p.src.len { ret (NONE, fail(p, "Invalid character class")) }
             continue
         }
         if c == 92u32 {
@@ -496,6 +497,7 @@ fn parse_class(p: *Parse) -> (u32, err) {
             p.i += l
             lo = cp
         }
+        if is_set && p.unicode && peek(p) == 45i64 && peek_at(p, 1usize) != 93i64 && p.i + 1usize < p.src.len { ret (NONE, fail(p, "Invalid character class")) }
         // A range `a-z`.
         if !is_set && peek(p) == 45i64 && peek_at(p, 1usize) != 93i64 && p.i + 1usize < p.src.len {
             let save = p.i

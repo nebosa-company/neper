@@ -679,9 +679,17 @@ fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
     if bb.inner == .Text || bb.inner == .Marker || bb.inner == .Column || bb.inner == .ColumnGroup { ret }
     let s = layout.st(p.l, bb.style)
     if s.visibility != .Visible { ret }
-    paint_box_shadow(p, s, x, y, bb.w, bb.h)
-    paint_background(p, b, s, x, y, bb.w, bb.h)
-    if !bb.coll { paint_borders(p, s, x, y, bb.w, bb.h) }
+    var dy = y
+    var dh = bb.h
+    // The captions sit outside the table box proper: its background and border stop short of them.
+    if bb.inner == .Table && bb.aux2 != 0u32 {
+        let td = p.l.tables.items[usize(bb.aux2 - 1u32)]
+        dy = y + td.cap_t
+        dh = bb.h - td.cap_t - td.cap_b
+    }
+    paint_box_shadow(p, s, x, dy, bb.w, dh)
+    paint_background(p, b, s, x, dy, bb.w, dh)
+    if !bb.coll { paint_borders(p, s, x, dy, bb.w, dh) }
 }
 
 // --- Text and inline content.

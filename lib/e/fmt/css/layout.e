@@ -1756,8 +1756,10 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                 ab.x = 0.0f64
             }
             ab.y = x.y
-            ab.x += owner.border[3usize] + owner.padding[3usize]
-            ab.y += owner.border[0usize] + owner.padding[0usize]
+            if owner.inner == .Flow || owner.inner == .FlowRoot {
+                ab.x += owner.border[3usize] + owner.padding[3usize]
+                ab.y += owner.border[0usize] + owner.padding[0usize]
+            }
             ab.aux = 2u32
             j += 1usize
             continue
@@ -3128,7 +3130,7 @@ type TableData = struct {
     col_min: []f64, col_max: []f64, col_w: []f64, col_pct: []f64, col_spec: []f64,
     row_h: []f64, row_y: []f64, row_box: []u32, row_above: []f64, row_below: []f64,
     sh: f64, sv: f64, sum_min: f64, sum_max: f64,
-    collapsed: bool, hedge: []Edge, vedge: []Edge
+    collapsed: bool, hedge: []Edge, vedge: []Edge, cap_t: f64, cap_b: f64
 }
 
 fn is_ws_text(l: *const Layout, k: u32) -> bool {
@@ -3459,7 +3461,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
         sum_max += cmax[k]
         k += 1usize
     }
-    let td = TableData { cols: ncols, rows: nrows, cells: cells, col_min: cmin, col_max: cmax, col_w: cw, col_pct: cpct, col_spec: cspec, row_h: rh, row_y: ry, row_box: rb, row_above: rab, row_below: rbe, sh: sh, sv: sv, sum_min: sum_min, sum_max: sum_max, collapsed: collapsed, hedge: hedge, vedge: vedge }
+    let td = TableData { cols: ncols, rows: nrows, cells: cells, col_min: cmin, col_max: cmax, col_w: cw, col_pct: cpct, col_spec: cspec, row_h: rh, row_y: ry, row_box: rb, row_above: rab, row_below: rbe, sh: sh, sv: sv, sum_min: sum_min, sum_max: sum_max, collapsed: collapsed, hedge: hedge, vedge: vedge, cap_t: 0.0f64, cap_b: 0.0f64 }
     let pushed = list.push[TableData](&l.tables, td)
     let index = u32(l.tables.len) - 1u32
     l.boxes.items[usize(t)].aux2 = index + 1u32
@@ -3945,7 +3947,7 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
             resolve_edges(l, kid, cw)
             resolve_margins_fixed(l, kid, cw)
             let cap = bx(l, kid)
-            cap.w = maxf(0.0f64, cw - cap.margin[1usize] - cap.margin[3usize])
+            cap.w = maxf(0.0f64, cw + horizontal_extras(bx(l, t)) - cap.margin[1usize] - cap.margin[3usize])
             let content_w = maxf(0.0f64, cap.w - horizontal_extras(cap))
             let h = layout_in_new_bfc(l, kid, content_w, -1.0f64)
             let cap2 = bx(l, kid)
@@ -3955,6 +3957,8 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
         }
         kid = l.boxes.items[usize(kid)].next
     }
+    l.tables.items[usize(ti)].cap_t = cap_top
+    l.tables.items[usize(ti)].cap_b = cap_bottom
     // Positions in the table's border-box coordinates.
     let tb = bx(l, t)
     let gx = tb.border[3usize] + tb.padding[3usize]
@@ -4036,14 +4040,14 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
     }
     // Captions go above and below the grid.
     let tb2 = bx(l, t)
-    var cur_top = tb2.border[0usize] + tb2.padding[0usize]
-    var cur_bottom = cur_top + cap_top + grid_h
+    var cur_top = 0.0f64
+    var cur_bottom = cap_top + tb2.border[0usize] + tb2.padding[0usize] + grid_h + tb2.padding[2usize] + tb2.border[2usize]
     kid = tb2.first
     while kid != NONE {
         if l.boxes.items[usize(kid)].inner == .Caption {
             let cs = bstyle(l, kid)
             let cap = bx(l, kid)
-            cap.x = gx + cap.margin[3usize]
+            cap.x = cap.margin[3usize]
             if cs.caption_side == .Bottom {
                 cap.y = cur_bottom + cap.margin[0usize]
                 cur_bottom += cap.h + cap.margin[0usize] + cap.margin[2usize]
