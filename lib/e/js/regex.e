@@ -135,6 +135,16 @@ fn add_class_escape(p: *Parse, c: u8) -> err {
         lows[3usize] = 97u32
         highs[3usize] = 122u32
         n = 4usize
+        // With case-insensitive unicode matching, U+017F and U+212A are word characters too (they fold to s and k).
+        var eff_ic = p.ignore_case
+        if (p.mods & 1u8) != 0u8 { eff_ic = (p.mods & 2u8) != 0u8 }
+        if p.unicode && eff_ic {
+            lows[4usize] = 383u32
+            highs[4usize] = 383u32
+            lows[5usize] = 8490u32
+            highs[5usize] = 8490u32
+            n = 6usize
+        }
     } else {
         lows[0usize] = 9u32
         highs[0usize] = 13u32
@@ -1886,7 +1896,10 @@ fn eff_s(m: *const M, n: *const Node) -> bool {
 fn canon(m: *const M, c: u32, ic: bool) -> u32 {
     if !ic { ret c }
     if m.re.unicode {
-        // Simple case folding: lowercase of the uppercase form.
+        // Simple case folding: lowercase of the uppercase form, plus the folds CaseFolding.txt lists with no simple uppercase.
+        if c == 8147u32 { ret 912u32 }
+        if c == 8163u32 { ret 944u32 }
+        if c == 64261u32 { ret 64262u32 }
         ret unicode.to_lower_simple(unicode.to_upper_simple(c))
     }
     if c < 128u32 {

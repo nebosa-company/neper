@@ -23,7 +23,8 @@ type Module = struct {
     requested: list.List[str], req_defer: list.List[bool], deps: list.List[*Module], def_namespace: *js.Obj, has_def_ns: bool,
     imports: list.List[Import], locals: list.List[Export], indirects: list.List[Export], stars: list.List[usize],
     status: u8, has_tla: bool, namespace: *js.Obj, has_ns: bool,
-    failure: js.Value, failed: bool, eval_promise: *js.Obj, has_eval_promise: bool, meta: *js.Obj, has_meta: bool
+    failure: js.Value, failed: bool, meta: *js.Obj, has_meta: bool,
+    dfs: u32, dfs_anc: u32, cycle_root: *Module, has_root: bool, async_order: u32, pending: u32, parents: list.List[*Module], cap: *js.Obj, has_cap: bool
 }
 
 // Module statuses.
@@ -32,6 +33,7 @@ const S_LINKING: u8 = 1u8
 const S_LINKED: u8 = 2u8
 const S_EVALUATING: u8 = 3u8
 const S_EVALUATED: u8 = 4u8
+const S_EVAL_ASYNC: u8 = 5u8
 
 fn module_of(p: *void) -> *Module { ret mem.cast[*Module](p) }
 
@@ -382,6 +384,9 @@ fn new_module(it: *js.Interp, url: str, source: str) -> (*Module, err) {
     let (lc, lce) = list.init[Export](it.a, 8usize)
     let (ind, inde) = list.init[Export](it.a, 4usize)
     let (st, ste) = list.init[usize](it.a, 2usize)
+    let (par, pare) = list.init[*Module](it.a, 2usize)
+    if pare != ok { ret (zero, js.throw_range(it, "out of memory")) }
+    m.parents = par
     if rqe != ok || rdfe != ok || dpe != ok || ime != ok || lce != ok || inde != ok || ste != ok { ret (zero, js.throw_range(it, "out of memory")) }
     m.requested = rq
     m.req_defer = rdf
@@ -673,7 +678,7 @@ fn link(it: *js.Interp, m: *Module) -> err {
 
 // --- evaluation
 
-type EvalState = struct { mods: list.List[*Module], pos: usize, promise: *js.Obj }
+// --- evaluation (ECMA-262 16.2.1.5: depth-first with cycle roots, pending async dependencies and async parents)
 
 fn module_frame(m: *Module) -> js.Frame {
     var f: js.Frame = zero
@@ -687,175 +692,314 @@ fn module_frame(m: *Module) -> js.Frame {
     ret f
 }
 
-fn collect_order(a: *mem.Arena, m: *Module, seen: *list.List[*Module], out: *list.List[*Module]) -> err {
-    var s = 0usize
-    while s < seen.len {
-        if seen.items[s] == m { ret ok }
-        s += 1usize
+fn root_of(m: *Module) -> *Module {
+    if m.has_root { ret m.cycle_root }
+    ret m
+}
+
+fn in_list(l: *const list.List[*Module], m: *Module) -> bool {
+    var i = 0usize
+    while i < l.len {
+        if l.items[i] == m { ret true }
+        i += 1usize
     }
+    ret false
+}
+
+// GatherAsynchronousTransitiveDependencies: the modules with top-level await a deferred import needs evaluated first.
+fn gather_async_deps(a: *mem.Arena, m: *Module, seen: *list.List[*Module], out: *list.List[*Module]) -> err {
+    if in_list(seen, m) { ret ok }
     try list.push[*Module](seen, m)
-    var i = 0usize
-    while i < m.deps.len {
-        if i < m.req_defer.len && m.req_defer.items[i] {
-            // A deferred import evaluates only the asynchronous part of its graph now.
-            var gseen = try list.init[*Module](a, 4usize)
-            try gather_async(a, m.deps.items[i], seen, &gseen, out)
-        } else {
-            try collect_order(a, m.deps.items[i], seen, out)
-        }
-        i += 1usize
-    }
-    try list.push[*Module](out, m)
-    ret ok
-}
-
-// The modules with top-level await below `m` (and `m` itself when it has it), each with the dependencies it needs, in evaluation order.
-fn gather_async(a: *mem.Arena, m: *Module, seen: *list.List[*Module], gseen: *list.List[*Module], out: *list.List[*Module]) -> err {
-    var s = 0usize
-    while s < gseen.len {
-        if gseen.items[s] == m { ret ok }
-        s += 1usize
-    }
-    try list.push[*Module](gseen, m)
     if m.has_tla {
-        try collect_order(a, m, seen, out)
+        try list.push[*Module](out, m)
         ret ok
     }
     var i = 0usize
     while i < m.deps.len {
-        try gather_async(a, m.deps.items[i], seen, gseen, out)
+        if !(i < m.req_defer.len && m.req_defer.items[i]) { try gather_async_deps(a, m.deps.items[i], seen, out) }
         i += 1usize
     }
     ret ok
 }
 
-// Evaluates a deferred module synchronously the first time its namespace is used.
-fn evaluate_deferred(it: *js.Interp, m: *Module) -> err {
+// Whether `m` and its eager dependencies can run to completion without waiting for asynchronous work.
+fn ready_for_sync(a: *mem.Arena, m: *Module, seen: *list.List[*Module]) -> bool {
+    if in_list(seen, m) { ret true }
+    let pe = list.push[*Module](seen, m)
     if m.status == S_EVALUATED {
-        if m.failed {
-            it.thrown = m.failure
-            ret js.Throw
-        }
-        ret ok
+        // A failed module is ready: touching its namespace rethrows the stored error.
+        if m.failed { ret true }
+        ret root_of(m).status == S_EVALUATED
     }
-    var seen = try list.init[*Module](it.a, 8usize)
-    var order = try list.init[*Module](it.a, 8usize)
-    try collect_order(it.a, m, &seen, &order)
+    if m.status == S_EVAL_ASYNC || m.status == S_EVALUATING || m.has_tla { ret false }
     var i = 0usize
-    while i < order.len {
-        let mm = order.items[i]
-        if mm.status == S_EVALUATING || (mm.has_tla && mm.status != S_EVALUATED) { ret js.throw_type(it, "The deferred module cannot be evaluated synchronously") }
+    while i < m.deps.len {
+        if !ready_for_sync(a, m.deps.items[i], seen) { ret false }
         i += 1usize
     }
-    let (p, pe) = js.new_promise(it)
-    if pe != ok { ret pe }
-    let (cell, ce) = mem.alloc[EvalState](it.a, 1usize)
-    if ce != ok { ret js.throw_range(it, "out of memory") }
-    let es = &cell[0usize]
-    es.mods = order
-    es.pos = 0usize
-    es.promise = p
-    run_from(it, es)
-    if m.failed {
-        it.thrown = m.failure
-        ret js.Throw
+    ret true
+}
+
+fn run_sync_body(it: *js.Interp, m: *Module) -> err {
+    var f = module_frame(m)
+    let (c, e) = js.exec_module_statements(it, &f, m.prog.root)
+    ret e
+}
+
+fn gather_available_ancestors(m: *Module, exec: *list.List[*Module]) -> err {
+    var i = 0usize
+    while i < m.parents.len {
+        let p = m.parents.items[i]
+        i += 1usize
+        if in_list(exec, p) || root_of(p).failed { continue }
+        p.pending -= 1u32
+        if p.pending == 0u32 {
+            try list.push[*Module](exec, p)
+            if !p.has_tla { try gather_available_ancestors(p, exec) }
+        }
     }
     ret ok
 }
 
-fn fail_from(it: *js.Interp, es: *EvalState, reason: js.Value) {
-    var i = es.pos
-    while i < es.mods.len {
-        let mm = es.mods.items[i]
-        if mm.status != S_EVALUATED {
-            mm.failure = reason
-            mm.failed = true
-            mm.status = S_EVALUATED
-        }
+fn async_rejected(it: *js.Interp, m: *Module, reason: js.Value) {
+    if m.status == S_EVALUATED { ret }
+    m.failed = true
+    m.failure = reason
+    m.status = S_EVALUATED
+    if m.has_cap {
+        let r = js.promise_reject(it, m.cap, reason)
+    }
+    var i = 0usize
+    while i < m.parents.len {
+        async_rejected(it, m.parents.items[i], reason)
         i += 1usize
     }
-    let r = js.promise_reject(it, es.promise, reason)
+}
+
+fn async_fulfilled(it: *js.Interp, m: *Module) {
+    if m.status == S_EVALUATED { ret }
+    m.status = S_EVALUATED
+    if m.has_cap { js.promise_fulfill(it, m.cap, js.undefv()) }
+    let (el, ele) = list.init[*Module](it.a, 4usize)
+    if ele != ok { ret }
+    var exec = el
+    let ge = gather_available_ancestors(m, &exec)
+    // Run them in the order their evaluation was started.
+    var a = 1usize
+    while a < exec.len {
+        var b = a
+        while b > 0usize && exec.items[b - 1usize].async_order > exec.items[b].async_order {
+            let tmp = exec.items[b]
+            exec.items[b] = exec.items[b - 1usize]
+            exec.items[b - 1usize] = tmp
+            b -= 1usize
+        }
+        a += 1usize
+    }
+    var i = 0usize
+    while i < exec.len {
+        let x = exec.items[i]
+        i += 1usize
+        if x.status == S_EVALUATED { continue }
+        if x.has_tla {
+            execute_async(it, x)
+        } else {
+            let e = run_sync_body(it, x)
+            if e != ok {
+                var reason = js.undefv()
+                if e == js.Throw { reason = it.thrown }
+                async_rejected(it, x, reason)
+            } else {
+                x.status = S_EVALUATED
+                if x.has_cap { js.promise_fulfill(it, x.cap, js.undefv()) }
+            }
+        }
+    }
 }
 
 fn tla_done(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    let es = mem.cast[*EvalState](it.callee.data)
-    es.mods.items[es.pos].status = S_EVALUATED
-    es.pos += 1usize
-    run_from(it, es)
+    async_fulfilled(it, module_of(it.callee.data))
     ret (js.undefv(), ok)
 }
 
 fn tla_failed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    let es = mem.cast[*EvalState](it.callee.data)
-    fail_from(it, es, arg(args, 0usize))
+    async_rejected(it, module_of(it.callee.data), arg(args, 0usize))
     ret (js.undefv(), ok)
 }
 
-fn run_from(it: *js.Interp, es: *EvalState) {
-    while es.pos < es.mods.len {
-        let mm = es.mods.items[es.pos]
-        if mm.status == S_EVALUATED {
-            if mm.failed {
-                fail_from(it, es, mm.failure)
-                ret
-            }
-            es.pos += 1usize
-            continue
-        }
-        mm.status = S_EVALUATING
-        var f = module_frame(mm)
-        if !mm.has_tla {
-            let (c, e) = js.exec_module_statements(it, &f, mm.prog.root)
-            if e != ok {
-                if e == js.Throw {
-                    fail_from(it, es, it.thrown)
-                } else {
-                    fail_from(it, es, js.undefv())
-                }
-                ret
-            }
-            mm.status = S_EVALUATED
-            es.pos += 1usize
-            continue
-        }
-        // Top-level await: the body runs as an async function body; the next module waits for its promise.
-        var n: ast.Node = zero
-        n.flags = ast.F_ASYNC
-        n.c = mm.prog.root
-        it.pending_module_body = true
-        let (pv, pe) = js.make_suspendable(it, js.null_obj(), f, n)
-        it.pending_module_body = false
-        if pe != ok {
-            fail_from(it, es, it.thrown)
-            ret
-        }
-        let on_ful = js.make_native(it, "", 1u32, tla_done)
-        on_ful.data = mem.cast[*void](es)
-        let on_rej = js.make_native(it, "", 1u32, tla_failed)
-        on_rej.data = mem.cast[*void](es)
-        let te = js.promise_then_raw(it, js.as_object(pv), js.obj_value(on_ful), js.obj_value(on_rej))
+// Top-level await: the body runs as an async function body; its promise drives the module's completion.
+fn execute_async(it: *js.Interp, m: *Module) {
+    var f = module_frame(m)
+    var n: ast.Node = zero
+    n.flags = ast.F_ASYNC
+    n.c = m.prog.root
+    it.pending_module_body = true
+    let (pv, pe) = js.make_suspendable(it, js.null_obj(), f, n)
+    it.pending_module_body = false
+    if pe != ok {
+        async_rejected(it, m, it.thrown)
         ret
     }
-    js.promise_fulfill(it, es.promise, js.undefv())
+    let on_ful = js.make_native(it, "", 1u32, tla_done)
+    on_ful.data = mem.cast[*void](m)
+    let on_rej = js.make_native(it, "", 1u32, tla_failed)
+    on_rej.data = mem.cast[*void](m)
+    let te = js.promise_then_raw(it, js.as_object(pv), js.obj_value(on_ful), js.obj_value(on_rej))
+}
+
+fn process_required(it: *js.Interp, m: *Module, req: *Module, stack: *list.List[*Module], index: u32) -> (u32, err) {
+    let (idx, e) = inner_evaluate(it, req, stack, index)
+    if e != ok { ret (idx, e) }
+    var r = req
+    if r.status == S_EVALUATING {
+        if r.dfs_anc < m.dfs_anc { m.dfs_anc = r.dfs_anc }
+    } else {
+        r = root_of(r)
+        if r.failed {
+            it.thrown = r.failure
+            ret (idx, js.Throw)
+        }
+    }
+    if r.async_order > 0u32 && r.status != S_EVALUATED {
+        m.pending += 1u32
+        try list.push[*Module](&r.parents, m)
+    }
+    ret (idx, ok)
+}
+
+fn inner_evaluate(it: *js.Interp, m: *Module, stack: *list.List[*Module], index0: u32) -> (u32, err) {
+    var index = index0
+    if m.status == S_EVAL_ASYNC || m.status == S_EVALUATED {
+        if !m.failed { ret (index, ok) }
+        it.thrown = m.failure
+        ret (index, js.Throw)
+    }
+    if m.status == S_EVALUATING { ret (index, ok) }
+    m.status = S_EVALUATING
+    m.dfs = index
+    m.dfs_anc = index
+    m.pending = 0u32
+    index += 1u32
+    try list.push[*Module](stack, m)
+    var i = 0usize
+    while i < m.deps.len {
+        let dep = m.deps.items[i]
+        if i < m.req_defer.len && m.req_defer.items[i] {
+            // A deferred import evaluates only the asynchronous part of its graph now.
+            var gseen = try list.init[*Module](it.a, 4usize)
+            var gout = try list.init[*Module](it.a, 4usize)
+            try gather_async_deps(it.a, dep, &gseen, &gout)
+            var g = 0usize
+            while g < gout.len {
+                let (gi, ge) = process_required(it, m, gout.items[g], stack, index)
+                if ge != ok { ret (gi, ge) }
+                index = gi
+                g += 1usize
+            }
+        } else {
+            let (di, de) = process_required(it, m, dep, stack, index)
+            if de != ok { ret (di, de) }
+            index = di
+        }
+        i += 1usize
+    }
+    if m.pending > 0u32 || m.has_tla {
+        it.mod_order += 1u32
+        m.async_order = it.mod_order
+        if m.pending == 0u32 { execute_async(it, m) }
+    } else {
+        try run_sync_body(it, m)
+    }
+    if m.dfs_anc == m.dfs {
+        while stack.len > 0usize {
+            let x = stack.items[stack.len - 1usize]
+            stack.len -= 1usize
+            if x.async_order > 0u32 { x.status = S_EVAL_ASYNC } else { x.status = S_EVALUATED }
+            x.cycle_root = m
+            x.has_root = true
+            if x == m { break }
+        }
+    }
+    ret (index, ok)
 }
 
 // Evaluates `m` and its dependencies; answers a promise that settles when evaluation has finished.
 fn evaluate(it: *js.Interp, m: *Module) -> (js.Value, err) {
-    if m.has_eval_promise { ret (js.obj_value(m.eval_promise), ok) }
+    var tgt = m
+    if (m.status == S_EVAL_ASYNC || m.status == S_EVALUATED) && m.has_root { tgt = m.cycle_root }
+    if tgt.has_cap { ret (js.obj_value(tgt.cap), ok) }
     let (p, pe) = js.new_promise(it)
     if pe != ok { ret (js.undefv(), pe) }
-    m.eval_promise = p
-    m.has_eval_promise = true
-    let (cell, ce) = mem.alloc[EvalState](it.a, 1usize)
-    if ce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
-    let es = &cell[0usize]
-    var seen = try list.init[*Module](it.a, 8usize)
-    es.mods = try list.init[*Module](it.a, 8usize)
-    try collect_order(it.a, m, &seen, &es.mods)
-    es.pos = 0usize
-    es.promise = p
-    run_from(it, es)
+    tgt.cap = p
+    tgt.has_cap = true
+    var stack = try list.init[*Module](it.a, 8usize)
+    let (idx, e) = inner_evaluate(it, tgt, &stack, 0u32)
+    if e != ok {
+        if e != js.Throw { ret (js.undefv(), e) }
+        let reason = it.thrown
+        var i = 0usize
+        while i < stack.len {
+            stack.items[i].status = S_EVALUATED
+            stack.items[i].failed = true
+            stack.items[i].failure = reason
+            i += 1usize
+        }
+        let re = js.promise_reject(it, p, reason)
+        ret (js.obj_value(p), ok)
+    }
+    if tgt.async_order == 0u32 { js.promise_fulfill(it, p, js.undefv()) }
     ret (js.obj_value(p), ok)
+}
+
+// Evaluates a deferred module synchronously the first time its namespace is used.
+fn evaluate_deferred(it: *js.Interp, m: *Module) -> err {
+    var seen = try list.init[*Module](it.a, 8usize)
+    if !ready_for_sync(it.a, m, &seen) { ret js.throw_type(it, "The deferred module cannot be evaluated synchronously") }
+    let (pv, pe) = evaluate(it, m)
+    if pe != ok { ret pe }
+    if m.failed {
+        it.thrown = m.failure
+        ret js.Throw
+    }
+    if m.status != S_EVALUATED && !(m.has_root && m.cycle_root.status == S_EVALUATED) { ret js.throw_type(it, "The deferred module cannot be evaluated synchronously") }
+    ret ok
+}
+
+// import.defer(): evaluates the asynchronous dependencies one after another, then answers the deferred namespace.
+type DeferState = struct { mods: list.List[*Module], pos: usize, outer: *js.Obj, tgt: *Module }
+
+fn defer_step(it: *js.Interp, ds: *DeferState) {
+    while ds.pos < ds.mods.len {
+        let (pv, pe) = evaluate(it, ds.mods.items[ds.pos])
+        if pe != ok {
+            let re = js.promise_reject(it, ds.outer, it.thrown)
+            ret
+        }
+        ds.pos += 1usize
+        let on_ful = js.make_native(it, "", 1u32, defer_next)
+        on_ful.data = mem.cast[*void](ds)
+        let on_rej = js.make_native(it, "", 1u32, defer_failed)
+        on_rej.data = mem.cast[*void](ds)
+        let te = js.promise_then_raw(it, js.as_object(pv), js.obj_value(on_ful), js.obj_value(on_rej))
+        ret
+    }
+    let (nso, ne) = deferred_namespace_of(it, ds.tgt)
+    if ne != ok {
+        let re2 = js.promise_reject(it, ds.outer, it.thrown)
+        ret
+    }
+    let r = js.promise_resolve_with(it, ds.outer, js.obj_value(nso))
+}
+
+fn defer_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    defer_step(it, mem.cast[*DeferState](it.callee.data))
+    ret (js.undefv(), ok)
+}
+
+fn defer_failed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let ds = mem.cast[*DeferState](it.callee.data)
+    let r = js.promise_reject(it, ds.outer, arg(args, 0usize))
+    ret (js.undefv(), ok)
 }
 
 // --- import.meta and dynamic import
@@ -926,55 +1070,60 @@ fn hook(it: *js.Interp, op: u8, v: js.Value, prog: *const ast.Program) -> (js.Va
         }
         ret (js.undefv(), se)
     }
-    let (mp, le) = it.module_loader(it, prog.url, spec)
-    if le != ok {
-        if le == js.Throw {
-            let (r2, e2) = reject_with_thrown(it, p)
-            ret (r2, e2)
-        }
-        ret (js.undefv(), le)
+    // Loading and evaluating happen in a later job: the importing module's own evaluation finishes first.
+    let (jcell, jce) = mem.alloc[DynImport](it.a, 1usize)
+    if jce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    jcell[0usize] = DynImport { spec: spec, url: prog.url, op: op, outer: p }
+    let (r0, r0e) = js.new_promise(it)
+    if r0e != ok { ret (js.undefv(), r0e) }
+    js.promise_fulfill(it, r0, js.undefv())
+    let job = js.make_native(it, "", 1u32, dynamic_import_job)
+    job.data = mem.cast[*void](&jcell[0usize])
+    let jte = js.promise_then_raw(it, r0, js.obj_value(job), js.undefv())
+    ret (js.obj_value(p), ok)
+}
+
+type DynImport = struct { spec: str, url: str, op: u8, outer: *js.Obj }
+
+fn dynamic_import_job(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let d = mem.cast[*DynImport](it.callee.data)
+    let e = dynamic_load(it, d.op, d.spec, d.url, d.outer)
+    if e == js.Throw {
+        let re = js.promise_reject(it, d.outer, it.thrown)
+        ret (js.undefv(), ok)
     }
+    ret (js.undefv(), e)
+}
+
+fn dynamic_load(it: *js.Interp, op: u8, spec: str, url: str, p: *js.Obj) -> err {
+    let (mp, le) = it.module_loader(it, url, spec)
+    if le != ok { ret le }
     let m = module_of(mp)
-    let lk = link(it, m)
-    if lk != ok {
-        if lk == js.Throw {
-            let (r3, e3) = reject_with_thrown(it, p)
-            ret (r3, e3)
-        }
-        ret (js.undefv(), lk)
-    }
+    try link(it, m)
     if op == 4u8 {
         // import.defer(): only the asynchronous dependencies run now; the promise answers the deferred namespace.
         var dseen = try list.init[*Module](it.a, 8usize)
-        var dgseen = try list.init[*Module](it.a, 8usize)
         var dorder = try list.init[*Module](it.a, 8usize)
-        try gather_async(it.a, m, &dseen, &dgseen, &dorder)
-        let (dep, depe) = js.new_promise(it)
-        if depe != ok { ret (js.undefv(), depe) }
-        let (dcell, dce) = mem.alloc[EvalState](it.a, 1usize)
-        if dce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
-        let des = &dcell[0usize]
-        des.mods = dorder
-        des.pos = 0usize
-        des.promise = dep
-        run_from(it, des)
-        let don_ful = js.make_native(it, "", 1u32, import_resolved_deferred)
-        don_ful.data = mem.cast[*void](m)
-        don_ful.aux = p
-        let don_rej = js.make_native(it, "", 1u32, import_rejected)
-        don_rej.aux = p
-        let dte = js.promise_then_raw(it, dep, js.obj_value(don_ful), js.obj_value(don_rej))
-        ret (js.obj_value(p), ok)
+        try gather_async_deps(it.a, m, &dseen, &dorder)
+        let (dcell, dce) = mem.alloc[DeferState](it.a, 1usize)
+        if dce != ok { ret js.throw_range(it, "out of memory") }
+        let ds = &dcell[0usize]
+        ds.mods = dorder
+        ds.pos = 0usize
+        ds.outer = p
+        ds.tgt = m
+        defer_step(it, ds)
+        ret ok
     }
     let (evp, ee) = evaluate(it, m)
-    if ee != ok { ret (js.undefv(), ee) }
+    if ee != ok { ret ee }
     let on_ful = js.make_native(it, "", 1u32, import_resolved)
     on_ful.data = mem.cast[*void](m)
     on_ful.aux = p
     let on_rej = js.make_native(it, "", 1u32, import_rejected)
     on_rej.aux = p
     let te = js.promise_then_raw(it, js.as_object(evp), js.obj_value(on_ful), js.obj_value(on_rej))
-    ret (js.obj_value(p), ok)
+    ret ok
 }
 
 // Turns on modules for a realm: `loader` resolves a specifier against the referring module's url and answers a registered
