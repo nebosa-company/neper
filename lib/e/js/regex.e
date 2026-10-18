@@ -47,7 +47,7 @@ type Regex = struct {
 type Parse = struct {
     a: *mem.Arena, src: []const u16, i: usize, nodes: list.List[Node], kids: list.List[u32], ranges: list.List[Range],
     classes: list.List[Class], names: list.List[str], refs: list.List[str], groups: u32, unicode: bool, named: bool, message: str, ignore_case: bool,
-    total_groups: u32, multiline: bool, dot_all: bool, mods: u8
+    total_groups: u32, multiline: bool, dot_all: bool, mods: u8, sets: bool
 }
 
 error SyntaxErr
@@ -533,6 +533,525 @@ fn parse_class(p: *Parse) -> (u32, err) {
     ret (id, ok)
 }
 
+// --- unicodeSets (`v` flag) character classes: set operations over code points plus a list of strings.
+
+type CSet = struct { ranges: list.List[Range], strs: list.List[list.List[u32]] }
+
+fn cset_new(p: *Parse) -> (CSet, err) {
+    let (r, re) = list.init[Range](p.a, 4usize)
+    if re != ok { ret (zero, re) }
+    let (s, se) = list.init[list.List[u32]](p.a, 2usize)
+    if se != ok { ret (zero, se) }
+    ret (CSet { ranges: r, strs: s }, ok)
+}
+
+// Sorts `rs` by start and merges overlapping or adjacent ranges.
+fn ranges_norm(p: *Parse, rs: *list.List[Range]) -> err {
+    var i = 1usize
+    while i < rs.len {
+        let cur = rs.items[i]
+        var j = i
+        while j > 0usize && rs.items[j - 1usize].lo > cur.lo {
+            rs.items[j] = rs.items[j - 1usize]
+            j -= 1usize
+        }
+        rs.items[j] = cur
+        i += 1usize
+    }
+    let (out, oe) = list.init[Range](p.a, rs.len + 1usize)
+    if oe != ok { ret oe }
+    var merged = out
+    var k = 0usize
+    while k < rs.len {
+        let r = rs.items[k]
+        k += 1usize
+        if merged.len > 0usize {
+            let last = merged.items[merged.len - 1usize]
+            if r.lo <= last.hi + 1u32 {
+                if r.hi > last.hi { merged.items[merged.len - 1usize].hi = r.hi }
+                continue
+            }
+        }
+        try list.push[Range](&merged, r)
+    }
+    rs.items = merged.items
+    rs.len = merged.len
+    ret ok
+}
+
+fn ranges_has(rs: *const list.List[Range], c: u32) -> bool {
+    var i = 0usize
+    while i < rs.len {
+        if c >= rs.items[i].lo && c <= rs.items[i].hi { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+fn ranges_complement(p: *Parse, rs: *const list.List[Range]) -> (list.List[Range], err) {
+    let (out, oe) = list.init[Range](p.a, rs.len + 2usize)
+    if oe != ok { ret (zero, oe) }
+    var res = out
+    var next = 0u32
+    var i = 0usize
+    while i < rs.len {
+        let r = rs.items[i]
+        i += 1usize
+        if r.lo > next { try list.push[Range](&res, Range { lo: next, hi: r.lo - 1u32 }) }
+        next = r.hi + 1u32
+    }
+    if next <= 1114111u32 { try list.push[Range](&res, Range { lo: next, hi: 1114111u32 }) }
+    ret (res, ok)
+}
+
+fn ranges_intersect(p: *Parse, x: *const list.List[Range], y: *const list.List[Range]) -> (list.List[Range], err) {
+    let (out, oe) = list.init[Range](p.a, x.len + y.len + 1usize)
+    if oe != ok { ret (zero, oe) }
+    var res = out
+    var i = 0usize
+    var j = 0usize
+    while i < x.len && j < y.len {
+        var lo = x.items[i].lo
+        if y.items[j].lo > lo { lo = y.items[j].lo }
+        var hi = x.items[i].hi
+        if y.items[j].hi < hi { hi = y.items[j].hi }
+        if lo <= hi { try list.push[Range](&res, Range { lo: lo, hi: hi }) }
+        if x.items[i].hi < y.items[j].hi { i += 1usize } else { j += 1usize }
+    }
+    ret (res, ok)
+}
+
+fn str_in(list_s: *const list.List[list.List[u32]], s: *const list.List[u32]) -> bool {
+    var i = 0usize
+    while i < list_s.len {
+        let t = &list_s.items[i]
+        if t.len == s.len {
+            var same = true
+            var k = 0usize
+            while k < s.len {
+                if t.items[k] != s.items[k] { same = false }
+                k += 1usize
+            }
+            if same { ret true }
+        }
+        i += 1usize
+    }
+    ret false
+}
+
+fn cset_add_str(p: *Parse, cs: *CSet, s: list.List[u32]) -> err {
+    if s.len == 1usize { ret add_to_ranges(cs, s.items[0usize], s.items[0usize]) }
+    if str_in(&cs.strs, &s) { ret ok }
+    ret list.push[list.List[u32]](&cs.strs, s)
+}
+
+fn add_to_ranges(cs: *CSet, lo: u32, hi: u32) -> err { ret list.push[Range](&cs.ranges, Range { lo: lo, hi: hi }) }
+
+fn cset_union(p: *Parse, a: *CSet, b: *const CSet) -> err {
+    var i = 0usize
+    while i < b.ranges.len {
+        try list.push[Range](&a.ranges, b.ranges.items[i])
+        i += 1usize
+    }
+    try ranges_norm(p, &a.ranges)
+    var k = 0usize
+    while k < b.strs.len {
+        if !str_in(&a.strs, &b.strs.items[k]) { try list.push[list.List[u32]](&a.strs, b.strs.items[k]) }
+        k += 1usize
+    }
+    ret ok
+}
+
+fn cset_intersect(p: *Parse, a: *CSet, b: *const CSet) -> err {
+    let (r, re) = ranges_intersect(p, &a.ranges, &b.ranges)
+    if re != ok { ret re }
+    a.ranges = r
+    let (ns, nse) = list.init[list.List[u32]](p.a, 2usize)
+    if nse != ok { ret nse }
+    var kept = ns
+    var k = 0usize
+    while k < a.strs.len {
+        if str_in(&b.strs, &a.strs.items[k]) { try list.push[list.List[u32]](&kept, a.strs.items[k]) }
+        k += 1usize
+    }
+    a.strs = kept
+    ret ok
+}
+
+fn cset_subtract(p: *Parse, a: *CSet, b: *const CSet) -> err {
+    let (bc, bce) = ranges_complement(p, &b.ranges)
+    if bce != ok { ret bce }
+    let (r, re) = ranges_intersect(p, &a.ranges, &bc)
+    if re != ok { ret re }
+    a.ranges = r
+    let (ns, nse) = list.init[list.List[u32]](p.a, 2usize)
+    if nse != ok { ret nse }
+    var kept = ns
+    var k = 0usize
+    while k < a.strs.len {
+        if !str_in(&b.strs, &a.strs.items[k]) { try list.push[list.List[u32]](&kept, a.strs.items[k]) }
+        k += 1usize
+    }
+    a.strs = kept
+    ret ok
+}
+
+// The code points matching an encoded property range entry (see parse_property), as explicit ranges.
+fn property_ranges(p: *Parse, lo: u32, hi: u32) -> (list.List[Range], err) {
+    let (out, oe) = list.init[Range](p.a, 16usize)
+    if oe != ok { ret (zero, oe) }
+    var res = out
+    var c = 0u32
+    var start = 0u32
+    var inside = false
+    while c <= 1114111u32 {
+        let hit = property_matches(lo, hi, c)
+        if hit && !inside {
+            inside = true
+            start = c
+        } else if !hit && inside {
+            inside = false
+            try list.push[Range](&res, Range { lo: start, hi: c - 1u32 })
+        }
+        c += 1u32
+    }
+    if inside { try list.push[Range](&res, Range { lo: start, hi: 1114111u32 }) }
+    ret (res, ok)
+}
+
+// Ranges of `\d \s \w` (and negations) as a standalone list.
+fn class_escape_ranges(p: *Parse, letter: u8) -> (list.List[Range], err) {
+    let before = p.ranges.len
+    try add_class_escape(p, letter)
+    let (out, oe) = list.init[Range](p.a, p.ranges.len - before + 1usize)
+    if oe != ok { ret (zero, oe) }
+    var res = out
+    var i = before
+    while i < p.ranges.len {
+        try list.push[Range](&res, p.ranges.items[i])
+        i += 1usize
+    }
+    p.ranges.len = before
+    try ranges_norm(p, &res)
+    ret (res, ok)
+}
+
+fn is_set_syntax(c: u32) -> bool {
+    ret c == 40u32 || c == 41u32 || c == 91u32 || c == 93u32 || c == 123u32 || c == 125u32 || c == 47u32 || c == 45u32 || c == 92u32 || c == 124u32
+}
+
+fn is_set_reserved_double(c: u32) -> bool {
+    ret c == 38u32 || c == 33u32 || c == 35u32 || c == 36u32 || c == 37u32 || c == 42u32 || c == 43u32 || c == 44u32 || c == 46u32 || c == 58u32 || c == 59u32 || c == 60u32 || c == 61u32 || c == 62u32 || c == 63u32 || c == 64u32 || c == 94u32 || c == 96u32 || c == 126u32
+}
+
+fn is_set_reserved_punct(c: u32) -> bool {
+    ret c == 38u32 || c == 45u32 || c == 33u32 || c == 35u32 || c == 37u32 || c == 44u32 || c == 58u32 || c == 59u32 || c == 60u32 || c == 61u32 || c == 62u32 || c == 64u32 || c == 96u32 || c == 126u32
+}
+
+// One ClassSetCharacter (the cursor is on it): a plain character or an escape that denotes one code point.
+fn v_character(p: *Parse) -> (u32, err) {
+    if p.i >= p.src.len { ret (0u32, fail(p, "Unterminated character class")) }
+    let c0 = u32(p.src[p.i])
+    if c0 == 92u32 {
+        p.i += 1usize
+        let n = peek(p)
+        if n >= 0i64 && is_set_reserved_punct(u32(n)) {
+            p.i += 1usize
+            ret (u32(n), ok)
+        }
+        if n == 98i64 {
+            p.i += 1usize
+            ret (8u32, ok)
+        }
+        let (v, cls, letter, ee) = parse_escape_value(p, true)
+        if ee != ok { ret (0u32, ee) }
+        if cls { ret (0u32, fail(p, "Invalid character class")) }
+        ret (v, ok)
+    }
+    let (cp, l) = next_cp(p)
+    if is_set_syntax(cp) { ret (0u32, fail(p, "Invalid character in character class")) }
+    if is_set_reserved_double(cp) && peek_at(p, l) == i64(cp) { ret (0u32, fail(p, "Invalid set operation in character class")) }
+    p.i += l
+    ret (cp, ok)
+}
+
+// `\q{abc|d}` (the `\q` is consumed).
+fn v_string_disjunction(p: *Parse) -> (CSet, err) {
+    let (cs, cse) = cset_new(p)
+    if cse != ok { ret (cs, cse) }
+    var set = cs
+    if !eat(p, 123u8) { ret (set, fail(p, "Invalid escape")) }
+    let (l0, le) = list.init[u32](p.a, 4usize)
+    if le != ok { ret (set, le) }
+    var cur = l0
+    while true {
+        if p.i >= p.src.len { ret (set, fail(p, "Invalid escape")) }
+        let c = peek(p)
+        if c == 125i64 || c == 124i64 {
+            p.i += 1usize
+            try cset_add_str(p, &set, cur)
+            let (l1, le1) = list.init[u32](p.a, 4usize)
+            if le1 != ok { ret (set, le1) }
+            cur = l1
+            if c == 125i64 { break }
+            continue
+        }
+        let ch = try v_character(p)
+        try list.push[u32](&cur, ch)
+    }
+    try ranges_norm(p, &set.ranges)
+    ret (set, ok)
+}
+
+// The strings of a property of strings (only Emoji_Keycap_Sequence is built in); `found` is false for other names.
+fn string_property(p: *Parse, name: str) -> (CSet, bool, err) {
+    let (cs, cse) = cset_new(p)
+    if cse != ok { ret (cs, false, cse) }
+    var set = cs
+    if !str.eq(name, "Emoji_Keycap_Sequence") { ret (set, false, ok) }
+    var k = 0u32
+    while k < 12u32 {
+        var base = 35u32
+        if k == 1u32 { base = 42u32 } else if k >= 2u32 { base = 48u32 + k - 2u32 }
+        let (l, le) = list.init[u32](p.a, 3usize)
+        if le != ok { ret (set, false, le) }
+        var seq = l
+        try list.push[u32](&seq, base)
+        try list.push[u32](&seq, 65039u32)
+        try list.push[u32](&seq, 8419u32)
+        try cset_add_str(p, &set, seq)
+        k += 1u32
+    }
+    ret (set, true, ok)
+}
+
+// The name inside `{...}` at the cursor, without consuming it.
+fn peek_property_name(p: *Parse) -> str {
+    if peek(p) != 123i64 { ret "" }
+    var j = p.i + 1usize
+    let (b, be) = str.builder(p.a, 24usize)
+    if be != ok { ret "" }
+    var out = b
+    while j < p.src.len && p.src[j] != 125u16 {
+        if p.src[j] >= 128u16 { ret "" }
+        let pe = str.push_byte(&out, u8(p.src[j]))
+        j += 1usize
+    }
+    ret str.done(&out)
+}
+
+// `\p{..}` / `\P{..}` in a v-mode class (the `\` and the letter are consumed).
+fn v_property(p: *Parse, negated: bool) -> (CSet, err) {
+    let name = peek_property_name(p)
+    let (sset, is_str, sse) = string_property(p, name)
+    if sse != ok { ret (sset, sse) }
+    if is_str {
+        if negated { ret (sset, fail(p, "Invalid property name")) }
+        while p.i < p.src.len && p.src[p.i] != 125u16 { p.i += 1usize }
+        p.i += 1usize
+        ret (sset, ok)
+    }
+    let (plo, phi, pe) = parse_property(p, negated)
+    if pe != ok { ret (sset, pe) }
+    let (rs, rse) = property_ranges(p, plo, phi)
+    if rse != ok { ret (sset, rse) }
+    let (cs, cse) = cset_new(p)
+    if cse != ok { ret (cs, cse) }
+    var set = cs
+    set.ranges = rs
+    ret (set, ok)
+}
+
+// One ClassSetOperand; `single` / `ch` report a lone literal character (a candidate end of a range).
+fn v_operand(p: *Parse) -> (CSet, bool, u32, err) {
+    let (cs, cse) = cset_new(p)
+    if cse != ok { ret (cs, false, 0u32, cse) }
+    var set = cs
+    if p.i >= p.src.len { ret (set, false, 0u32, fail(p, "Unterminated character class")) }
+    let c = peek(p)
+    if c == 91i64 {
+        p.i += 1usize
+        let inner_neg = eat(p, 94u8)
+        let (inner0, ine) = v_contents(p)
+        if ine != ok { ret (set, false, 0u32, ine) }
+        var inner = inner0
+        if inner_neg {
+            if inner.strs.len > 0usize { ret (set, false, 0u32, fail(p, "Negated character class may contain strings")) }
+            let (comp, ce) = ranges_complement(p, &inner.ranges)
+            if ce != ok { ret (set, false, 0u32, ce) }
+            inner.ranges = comp
+        }
+        ret (inner, false, 0u32, ok)
+    }
+    if c == 92i64 {
+        let n = peek_at(p, 1usize)
+        if n == 113i64 {
+            p.i += 2usize
+            let (q, qe) = v_string_disjunction(p)
+            ret (q, false, 0u32, qe)
+        }
+        if n == 100i64 || n == 68i64 || n == 119i64 || n == 87i64 || n == 115i64 || n == 83i64 {
+            p.i += 2usize
+            let (rs, rse) = class_escape_ranges(p, u8(n))
+            if rse != ok { ret (set, false, 0u32, rse) }
+            set.ranges = rs
+            ret (set, false, 0u32, ok)
+        }
+        if n == 112i64 || n == 80i64 {
+            p.i += 2usize
+            let (ps, pse) = v_property(p, n == 80i64)
+            ret (ps, false, 0u32, pse)
+        }
+    }
+    let (lit, lite) = v_character(p)
+    if lite != ok { ret (set, false, 0u32, lite) }
+    let ae = add_to_ranges(&set, lit, lit)
+    if ae != ok { ret (set, false, 0u32, ae) }
+    ret (set, true, lit, ok)
+}
+
+// The body of a v-mode class up to and including the closing `]`: a union (with ranges), an intersection or a subtraction.
+fn v_contents(p: *Parse) -> (CSet, err) {
+    let (cs, cse) = cset_new(p)
+    if cse != ok { ret (cs, cse) }
+    var acc = cs
+    var mode = 0u8
+    var count = 0usize
+    var last_range = false
+    while true {
+        if p.i >= p.src.len { ret (acc, fail(p, "Unterminated character class")) }
+        if peek(p) == 93i64 {
+            p.i += 1usize
+            break
+        }
+        if (peek(p) == 38i64 && peek_at(p, 1usize) == 38i64) || (peek(p) == 45i64 && peek_at(p, 1usize) == 45i64) {
+            let want = 1u8
+            var op = want
+            if peek(p) == 45i64 { op = 2u8 }
+            if count == 0usize || (mode == 0u8 && (count != 1usize || last_range)) || (mode != 0u8 && mode != op) { ret (acc, fail(p, "Invalid set operation in character class")) }
+            mode = op
+            p.i += 2usize
+            if op == 1u8 && peek(p) == 38i64 { ret (acc, fail(p, "Invalid set operation in character class")) }
+            let (rhs, s2, c2, rhse) = v_operand(p)
+            if rhse != ok { ret (acc, rhse) }
+            if op == 1u8 { try cset_intersect(p, &acc, &rhs) } else { try cset_subtract(p, &acc, &rhs) }
+            count += 1usize
+            continue
+        }
+        if mode != 0u8 { ret (acc, fail(p, "Invalid set operation in character class")) }
+        let (operand, single, lo, ope) = v_operand(p)
+        if ope != ok { ret (acc, ope) }
+        last_range = false
+        if single && peek(p) == 45i64 && peek_at(p, 1usize) != 45i64 {
+            p.i += 1usize
+            let (hi_set, s3, hi, hie) = v_operand(p)
+            if hie != ok { ret (acc, hie) }
+            if !s3 { ret (acc, fail(p, "Invalid character class")) }
+            if lo > hi { ret (acc, fail(p, "Range out of order in character class")) }
+            let (rng0, rnge) = cset_new(p)
+            if rnge != ok { ret (acc, rnge) }
+            var rng = rng0
+            try add_to_ranges(&rng, lo, hi)
+            try cset_union(p, &acc, &rng)
+            last_range = true
+        } else {
+            try cset_union(p, &acc, &operand)
+        }
+        count += 1usize
+    }
+    ret (acc, ok)
+}
+
+// Builds the node for a finished v-mode set: a plain class, or an alternation trying the longest strings first.
+fn v_set_node(p: *Parse, set: *const CSet) -> (u32, err) {
+    let first = u32(p.ranges.len)
+    var i = 0usize
+    while i < set.ranges.len {
+        try list.push[Range](&p.ranges, set.ranges.items[i])
+        i += 1usize
+    }
+    let cid = u32(p.classes.len)
+    try list.push[Class](&p.classes, Class { first: first, count: u32(set.ranges.len), neg: false })
+    let (cn, cne) = mk(p, R_CLASS)
+    if cne != ok { ret (NONE, cne) }
+    nd(p, cn).a = cid
+    if set.strs.len == 0usize { ret (cn, ok) }
+    // Longest strings first; the class (single characters) after them; the empty string last.
+    let (al, ale) = list.init[u32](p.a, set.strs.len + 2usize)
+    if ale != ok { ret (NONE, ale) }
+    var alts = al
+    var want = 0usize
+    var k = 0usize
+    while k < set.strs.len {
+        if set.strs.items[k].len > want { want = set.strs.items[k].len }
+        k += 1usize
+    }
+    var len = want
+    while len >= 1usize {
+        var m = 0usize
+        while m < set.strs.len {
+            let s = &set.strs.items[m]
+            m += 1usize
+            if s.len != len { continue }
+            let (il, ile) = list.init[u32](p.a, len)
+            if ile != ok { ret (NONE, ile) }
+            var items = il
+            var q = 0usize
+            while q < s.len {
+                let (chn, chne) = mk(p, R_CHAR)
+                if chne != ok { ret (NONE, chne) }
+                nd(p, chn).a = s.items[q]
+                try list.push[u32](&items, chn)
+                q += 1usize
+            }
+            let (sq, sqe) = mk(p, R_SEQ)
+            if sqe != ok { ret (NONE, sqe) }
+            let (sf, sfe) = commit(p, &items)
+            if sfe != ok { ret (NONE, sfe) }
+            nd(p, sq).a = sf
+            nd(p, sq).b = u32(items.len)
+            try list.push[u32](&alts, sq)
+        }
+        if len == 1usize { break }
+        len -= 1usize
+    }
+    if set.ranges.len > 0usize { try list.push[u32](&alts, cn) }
+    var has_empty = false
+    var e = 0usize
+    while e < set.strs.len {
+        if set.strs.items[e].len == 0usize { has_empty = true }
+        e += 1usize
+    }
+    if has_empty {
+        let (en, ene) = mk(p, R_SEQ)
+        if ene != ok { ret (NONE, ene) }
+        nd(p, en).a = 0u32
+        nd(p, en).b = 0u32
+        try list.push[u32](&alts, en)
+    }
+    let (an, ane) = mk(p, R_ALT)
+    if ane != ok { ret (NONE, ane) }
+    let (af, afe) = commit(p, &alts)
+    if afe != ok { ret (NONE, afe) }
+    nd(p, an).a = af
+    nd(p, an).b = u32(alts.len)
+    ret (an, ok)
+}
+
+// `[` consumed: a v-mode class as a node.
+fn parse_class_v(p: *Parse) -> (u32, err) {
+    let neg = eat(p, 94u8)
+    var set = try v_contents(p)
+    if neg {
+        if set.strs.len > 0usize { ret (NONE, fail(p, "Negated character class may contain strings")) }
+        let (comp, ce) = ranges_complement(p, &set.ranges)
+        if ce != ok { ret (NONE, ce) }
+        set.ranges = comp
+    }
+    let n = try v_set_node(p, &set)
+    ret (n, ok)
+}
+
 // Parses a group name `<name>` (the `<` is consumed); answers the name as UTF-8.
 fn parse_group_name(p: *Parse) -> (str, err) {
     let (b, be) = str.builder(p.a, 16usize)
@@ -870,11 +1389,15 @@ fn parse_term(p: *Parse) -> (u32, err) {
         atom = id6
     } else if c == 91u32 {
         p.i += 1usize
-        let cid = try parse_class(p)
-        let (id7, me7) = mk(p, R_CLASS)
-        if me7 != ok { ret (NONE, me7) }
-        nd(p, id7).a = cid
-        atom = id7
+        if p.sets {
+            atom = try parse_class_v(p)
+        } else {
+            let cid = try parse_class(p)
+            let (id7, me7) = mk(p, R_CLASS)
+            if me7 != ok { ret (NONE, me7) }
+            nd(p, id7).a = cid
+            atom = id7
+        }
     } else if c == 92u32 {
         p.i += 1usize
         // Backreference or escape.
@@ -927,6 +1450,19 @@ fn parse_term(p: *Parse) -> (u32, err) {
         } else if (d == 112i64 || d == 80i64) && p.unicode {
             let neg_t = d == 80i64
             p.i += 1usize
+            if p.sets {
+                let pname = peek_property_name(p)
+                let (ssets, is_str, sse) = string_property(p, pname)
+                if sse != ok { ret (NONE, sse) }
+                if is_str {
+                    if neg_t { ret (NONE, fail(p, "Invalid property name")) }
+                    while p.i < p.src.len && p.src[p.i] != 125u16 { p.i += 1usize }
+                    p.i += 1usize
+                    atom = try v_set_node(p, &ssets)
+                    quantifiable = true
+                }
+            }
+            if atom != NONE { } else {
             let (tlo, thi, te0) = parse_property(p, neg_t)
             if te0 != ok { ret (NONE, te0) }
             let first_t = u32(p.ranges.len)
@@ -937,6 +1473,7 @@ fn parse_term(p: *Parse) -> (u32, err) {
             if me_t != ok { ret (NONE, me_t) }
             nd(p, id_t).a = cid_t
             atom = id_t
+            }
         } else {
             let (v2, cls, letter, ee) = parse_escape_value(p, false)
             if ee != ok { ret (NONE, ee) }
@@ -1111,6 +1648,7 @@ fn compile(a: *mem.Arena, pattern: []const u16, flags: str) -> (Regex, str, err)
     re.unicode_sets = seen[7usize]
     if seen[4usize] && seen[7usize] { ret (re, "Invalid regular expression flags", SyntaxErr) }
     p.unicode = re.unicode
+    p.sets = re.unicode_sets
     p.ignore_case = re.ignore_case
     p.multiline = re.multiline
     p.dot_all = re.dot_all
