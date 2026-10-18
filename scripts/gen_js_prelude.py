@@ -44,6 +44,7 @@ fn source(a: *mem.Arena) -> (str, err) {{
 def main() -> None:
     generate("prelude", "The JavaScript-written built-ins")
     generate("temporal", "The Temporal built-ins")
+    generate("intl", "The Intl built-ins")
 
 
 main()

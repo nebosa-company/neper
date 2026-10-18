@@ -24,6 +24,7 @@ use e.js.interp as js
 use e.js.parser as jsparse
 use e.js.prelude as prelude
 use e.js.temporal as temporal
+use e.js.intl as intl
 use e.math
 use e.mem
 use e.str
@@ -1486,6 +1487,10 @@ fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
         if tse != ok { ret (it, tse) }
         let (tv, te) = js.eval_source(it, tsrc)
         if te != ok { ret (it, te) }
+        let (isrc, ise) = intl.source(a)
+        if ise != ok { ret (it, ise) }
+        let (iv, ie) = js.eval_source(it, isrc)
+        if ie != ok { ret (it, ie) }
     }
     let (sev, see) = js.get_prop(it, it.global, js.key_of("SuppressedError"), js.obj_value(it.global))
     if see == ok && js.is_object(sev) { it.suppressed_ctor = js.as_object(sev) }
