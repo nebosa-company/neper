@@ -5795,6 +5795,10 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         let (cup, cup_error) = cupertino_progress_bar(a, key, t, label, value, indeterminate, width, options)
         ret (cup, cup_error)
     }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_progress_bar(a, key, t, label, value, indeterminate, width, options)
+        ret (linux, linux_error)
+    }
     let aimed = clamp_share(value)
     // (D1279) A determinate bar eases to each new value, never backwards.
     var share = aimed
@@ -5903,6 +5907,105 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     }
     ret (widget.semantics(key, sem, style.defaults(), bar[0usize..1usize]), ok)
 }
+
+// ---- the Linux look, progress bar and spinner (worker l3, round 20) -------------------------------------------------
+// GtkProgressBar in libadwaita 1.5: an 8 high trough (#dddddd Light, #454545 Dark) with 4 px corners and a fill of the same height
+// in accent_bg #3584e4, at least as wide as it is high; `full_bleed` is the OSD bar, 2 high, square, with no trough. The spinner is
+// the 32 px `process-working` ring: a 5 px arc of 270 degrees with a round head, fading from nothing at its tail.
+fn linux_progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let aimed = clamp_share(value)
+    var share = aimed
+    if !indeterminate { share = eased_share(t, key, aimed, true) }
+    var h: f32 = 8.0
+    var r: f32 = 4.0
+    var ground = style.hex_raw(0xDDDDDDu32)
+    if dark { ground = style.hex_raw(0x454545u32) }
+    if options.full_bleed {
+        h = 2.0
+        r = 0.0
+        ground = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    }
+    var ink = style.hex_raw(0x3584E4u32)
+    if options.tone == .Error { ink = style.color(t.tokens, .ErrorContainer) }
+    if options.tone == .Paused { ink = style.color(t.tokens, .TextMuted) }
+    var track = sized_style(width, h)
+    track.radius = r
+    track.background = paint.Brush { Solid: ground }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    if indeterminate {
+        // GTK's pulse: a block a fifth of the trough wide bouncing from end to end.
+        let seg = width * 0.2
+        let turn = progress_turn(t, options.phase, time.seconds(2i64))
+        let left = (width - seg) * animation.triangle(turn)
+        parts[0usize] = widget.positioned(0u64, left, 0.0, style.defaults(), widget_one_of(a, bar_piece(key + 1u64, seg, h, ink, r)))
+        used = 1usize
+    }
+    if !indeterminate && share > 0.0 {
+        var done = width * share
+        if done < h { done = h }
+        parts[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, bar_piece(key + 1u64, done, h, ink, r)))
+        used = 1usize
+    }
+    let bar = widget.stack(0u64, track, parts[0usize..used])
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    if indeterminate {
+        sem.states = accessibility.STATE_BUSY
+    } else {
+        let (shown, shown_error) = percent_text(a, aimed)
+        if shown_error != ok { ret (zero, shown_error) }
+        sem.value = shown
+    }
+    ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, bar)), ok)
+}
+
+type LinuxSpin = struct { arena: *mem.Arena, ink: paint.Color, start: f32 }
+
+fn linux_spin_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let spin = mem.cast[*LinuxSpin](ctx)
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    let radius = area.width * 0.356
+    let width = area.width * 0.165
+    let steps = 27usize
+    let sweep: f32 = 4.712389
+    var i = 0usize
+    while i < steps {
+        let from = spin.start + sweep * f32(i) / f32(steps)
+        let share = (f32(i) + 1.0) / f32(steps)
+        let (arc, arc_error) = sweep_path(spin.arena, cx, cy, radius, from, sweep / f32(steps) + 0.004)
+        if arc_error != ok { ret arc_error }
+        var cap: paint.StrokeCap = .Butt
+        if i + 1usize == steps { cap = .Round }
+        if i == 0usize { cap = .Round }
+        let stroke = paint.Stroke { width: width, cap: cap, join: .Round, miter_limit: 4.0 }
+        try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: arc, brush: paint.Brush { Solid: with_alpha(spin.ink, share * spin.ink.alpha) }, stroke: stroke } })
+        i += 1usize
+    }
+    ret ok
+}
+
+fn linux_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32, options: ProgressOptions) -> (widget.Node, err) {
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    sem.states = accessibility.STATE_BUSY
+    var ink = style.color(t.tokens, .Text)
+    if options.content.alpha > 0.0 { ink = options.content }
+    let turn = progress_turn(t, options.phase, time.seconds(1i64))
+    let (spins, spins_error) = mem.alloc[LinuxSpin](a, 1usize)
+    if spins_error != ok { ret (zero, TooLarge) }
+    // the head sits at 4:30 at rest (turn 0); the arc turns clockwise from there
+    spins[0usize] = LinuxSpin { arena: a, ink: ink, start: 3.9269908 + turn * 6.2831855 }
+    var none: []const widget.Node = zero
+    let node = widget.Node { key: key + 1u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&spins[0usize]), measure: ring_measure, paint: linux_spin_paint, state: widget.bytes_of[LinuxSpin](&spins[0usize]) } }, style: sized_style(size, size), children: none }
+    ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, node)), ok)
+}
+// ---- end the Linux look, progress bar and spinner ---------------------------------------------------------------------
 
 // What a ring paints (v2, D970): the track over `sweep` radians clockwise from
 // `start` (radians from the top), the value arc through `share` of it, the gap in
@@ -6060,6 +6163,10 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_ring(a, key, t, label, value, indeterminate, size, options)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_ring(a, key, t, label, value, indeterminate, size, options)
+        ret (linux, linux_error)
     }
     var share = clamp_share(value)
     if share > 0.0 && share < 0.04 { share = 0.04 }
