@@ -10,6 +10,9 @@ The page is the sheet's corner colour. Per sheet, from the 1.0 PNG:
              7 to 22 px tall and at least 1.5 times as wide as tall is text and needs >= 4.5 : 1 (its core pixel against that background),
              any other ink blob (icon, mark, caret) needs >= 3 : 1; rules (a blob at most 6 px thick and at least 3 times as long: dividers,
              grid and tree lines, which carry no information) and hairlines are not judged.
+  frame    : in the group box sheets a horizontal hairline (a run of 60 or more equal pixels, one pixel thick) is the group's frame or a
+             row divider and needs >= 3 : 1 against the page (round 24; the boundary test above cannot see it, because the 12 % ink of
+             a disabled edge is the very colour of OutlineVariant).
 A disabled control is exempt in WCAG. Neper draws one as its ink at 38 % (content) and 12 % (container) over what it sits
 on (style.disabled_look), so a run or fill that is exactly that mix of the on-surface inks over its background is skipped and
 counted as `disabled`. Exit status is the number of sheets with a FAIL line.
@@ -79,11 +82,28 @@ def groups(img, page):
 SKIP = ("native_dark", "title_bar")
 
 
+def hairlines(img, page, lp):
+    fails = []
+    for y in range(1, img.shape[0] - 1):
+        x = 0
+        while x < img.shape[1]:
+            c = tuple(int(v) for v in img[y, x])
+            e = x
+            while e < img.shape[1] and tuple(int(v) for v in img[y, e]) == c:
+                e += 1
+            if e - x >= 60 and c != page and not (img[y - 1, x:e] == img[y, x:e]).all() and not (img[y + 1, x:e] == img[y, x:e]).all():
+                r = float(ratio(one_lum(c), lp))
+                if 1.15 < r < 3.0 and not disabled(c, page, 0.12):
+                    fails.append("frame (%d,%d) %d px wide %s on page %s %.2f:1 < 3" % (x, y, e - x, hx(c), hx(page), r))
+            x = e
+    return fails
+
+
 def check(name):
     img = np.array(Image.open(os.path.join(ROOT, name + ".png")).convert("RGB"))
     page = tuple(int(v) for v in img[0, 0])
     lp = one_lum(page)
-    fails = []
+    fails = hairlines(img, page, lp) if name.startswith("group_box") else []
     lum = lum_arr(img)
     bgc = np.stack([ndimage.median_filter(img[..., k], size=9) for k in range(3)], axis=2)
     bg = lum_arr(bgc)

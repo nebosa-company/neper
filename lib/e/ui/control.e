@@ -1601,6 +1601,15 @@ fn card_with_slots(a: *mem.Arena, key: widget.Key, t: *const Theme, options: Car
     ret (made, made_error)
 }
 
+// The group box's frame and row hairlines. Neper dark's OutlineVariant (#434653) is 1.98:1 on the page, and the
+// frame is all that marks the group, so it takes Outline (#8D909E, 5.8:1, the text field's frame; a hairline a third
+// of a pixel off the grid still keeps 3:1); every other look keeps the token.
+fn group_rule_color(t: *const Theme) -> paint.Color {
+    let rule = style.color(t.tokens, .OutlineVariant)
+    if t.tokens.profile == .Neper && t.tokens.palette == .Dark { ret style.color(t.tokens, .Outline) }
+    ret rule
+}
+
 // A group box: the outlined group box of D965 below.
 fn group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, children: []const widget.Node) -> (widget.Node, err) {
     let (made, made_error) = group_box_of(a, key, t, label, group_options(), children)
@@ -1663,7 +1672,7 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
             var line = style.defaults()
             line.height = style.Length { Px: t.tokens.sizes.divider }
             if options.width > 0.0 { line.width = style.Length { Px: options.width } }
-            line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            line.background = paint.Brush { Solid: group_rule_color(t) }
             if cupertino {
                 line.background = paint.Brush { Solid: style.cupertino_separator(t.tokens) }
                 line.height = style.Length { Px: 0.5 }
@@ -1705,7 +1714,7 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
             box_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
         } else {
             box_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-            box_style.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+            box_style.border = style.Border { width: t.tokens.sizes.divider, color: group_rule_color(t) }
         }
         if !options.enabled { box_style.border = style.Border { width: t.tokens.sizes.divider, color: with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_container) } }
         if options.message.len != 0usize { box_style.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Error) } }
