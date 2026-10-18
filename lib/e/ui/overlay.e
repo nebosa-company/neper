@@ -655,7 +655,7 @@ fn context_menu_touch_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
 // GtkPopoverMenu in libadwaita 1.5: `popover.menu > contents` in the popover colour (#ffffff, #383838), 12 px corners and 6 px
 // round 32 high rows (6 px corners, 12 px sides) whose wash is the text colour at 10 % (19 % pressed); a section break is a 1 px
 // line (#e1e1e1, #565656) with 6 px above and below; the accelerator is the text colour at 55 %, 12 px after the label; a
-// disabled row is the whole row at 50 %. The soft shadow round the surface is drawn by `linux_menu_shadow` (e.ui.linuxshadow_l2, fitted).
+// disabled row is its label and accelerator at 55 %. The soft shadow round the surface is drawn by `linux_menu_shadow` (e.ui.linuxshadow_l2, fitted).
 fn linux_menu_rule(t: *const control.Theme) -> paint.Color {
     if t.tokens.palette == .Dark { ret style.hex_raw(0x565656u32) }
     ret style.hex_raw(0xE1E1E1u32)
@@ -735,7 +735,7 @@ fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, 
     if dark { tint = paint.rgba(1.0, 1.0, 1.0, 1.0) } else { wash = wash * 0.8 }
     if !c.enabled {
         wash = 0.0
-        ink = control.with_alpha(ink, ink.alpha * 0.5)
+        ink = control.with_alpha(ink, ink.alpha * 0.55)
     }
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = control.with_alpha(tint, wash)
@@ -792,7 +792,9 @@ fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, 
     p += 1usize
     let has_submenu = c.submenu.len != 0usize
     if c.shortcut.len > 0usize && !has_submenu {
-        let faint = control.with_alpha(ink, ink.alpha * 0.55)
+        // a disabled row's accelerator is as faint as its label (55 % in all), not 55 % of that
+        var faint = control.with_alpha(ink, ink.alpha * 0.55)
+        if !c.enabled { faint = ink }
         let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, t, caption, faint)
         if keys_error != ok { ret (zero, keys_error) }
         let (keys_wide, keys_wide_error) = control.linux_label_width(a, t, caption, c.shortcut)

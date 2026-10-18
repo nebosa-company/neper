@@ -1,0 +1,54 @@
+{
+ "dialog": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/dialog.png",
+    "notes": "Round 26 (worker ld), scripts/linux_cmp_lf.py. The earlier reference was a squeezed picture (gallery.py snapshotted the 560 x 420 paintable at 550 x 410: GTK drew it at 0.982 x 0.976); regenerated unsqueezed with window_texture, card refitted (300 x 146, 43 px responses, 14.667 px body). The heading is not Bold emboldened: fontconfig gives Ultra-Bold the Cantarell-ExtraBold.otf face (checked against FreeType, 14 rows, same advances), so no synthetic emboldening exists to reproduce; the face is added as font 15. Light: ink pixels differing 0 of 2527 (heading, body, both labels), strict 73 of 230,000 (card corners and shadow, max 8 levels), flat 10.",
+    "gaps": [
+     "Corner antialiasing of the card (10 flat px Light, at most 8 levels); the uncaptured states (suggested response, three buttons, longer text) are not built."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/dialog.png",
+    "notes": "Round 26 (worker ld), scripts/linux_cmp_lf.py. The earlier reference was a squeezed picture (gallery.py snapshotted the 560 x 420 paintable at 550 x 410: GTK drew it at 0.982 x 0.976); regenerated unsqueezed with window_texture, card refitted (300 x 146, 43 px responses, 14.667 px body). The heading is not Bold emboldened: fontconfig gives Ultra-Bold the Cantarell-ExtraBold.otf face (checked against FreeType, 14 rows, same advances), so no synthetic emboldening exists to reproduce; the face is added as font 15. Dark: ink pixels differing 0 of 2594, strict 2 (max 3 levels), flat 0.",
+    "gaps": [
+     "The uncaptured states (suggested response, three buttons, longer text) are not built."
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "linux": {
+    "notes": "Round 26 (worker ld): a disabled row's accelerator is 55 % like its label (it was 55 % of 50 %): menu-edit strict 401 to 157 (ink 377 to 133). Remaining: the check mark and submenu chevron differ from the capture by up to 172 levels on about 170 px (the capture's icon is heavier than the SVG rendered at any scale, best fit still 60 % of the error); text and flat pixels 0 off."
+   },
+   "linux_dark": {
+    "notes": "Round 26 (worker ld): a disabled row's accelerator is 55 % like its label: menu-edit strict 423 to 180. Remaining: check and chevron edges (189 px)."
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "notes": "Round 26 (worker ld) check: flat 0 off, strict 9 px (folder icon edges, up to 37 levels), text exact; the standard audit 13 applied to vertical grid (symbolic icon edges only)."
+   },
+   "linux_dark": {
+    "status": "matched",
+    "notes": "Round 26 (worker ld) check: flat 0 off, strict 5 px (folder icon edges, up to 11 levels), text exact."
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "linux": {
+    "notes": "Round 26 (worker ld) check: flat 0 off in all 14 crops; strict 81 (icon edges: 4 px per icon crop up to 12 levels, the toolbar crop 33 px up to 40 levels). Stays review: the toolbar's five icons differ at their edges."
+   },
+   "linux_dark": {
+    "notes": "Round 26 (worker ld) check: flat 0 off; strict 79 (toolbar crop 27 px up to 14 levels, icon crops 4 px)."
+   }
+  }
+ }
+}
