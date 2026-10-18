@@ -22,6 +22,7 @@ use e.fmt.dom as dom
 use e.fmt.html as html
 use e.mem
 use e.str
+use e.text.bidi as bidi
 use e.text.segment as segment
 use e.text.unicode as unicode
 use e.text.utf8 as utf8
@@ -2097,12 +2098,86 @@ fn line_clamp_count(s: *const style.Style) -> usize {
 
 // Vertical metrics and fragments of the line made of pieces[scan.lead..end). Returns the line height, or -1 for a line
 // that held nothing to draw (only floats, absolutes or empty inline boxes).
+// Visual order of the words of a line of plain text (UAX #9 at the granularity of a piece): the levels come from the
+// characters of the whole line, then the pieces are reversed run by run. A line with boxes or atomics in it is left alone.
+fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool {
+    let l = x.l
+    let n = tail - lead
+    if n < 2usize { ret false }
+    var bytes = 0usize
+    var j = lead
+    while j < tail {
+        let p = x.bd.pieces.items[j]
+        if p.kind != .Text { ret false }
+        bytes += p.text.len
+        j += 1usize
+    }
+    if bytes == 0usize { ret false }
+    let (text32, e1) = mem.alloc[u32](l.a, bytes)
+    let (first, e2) = mem.alloc[usize](l.a, n)
+    if e1 != ok || e2 != ok { ret false }
+    var total = 0usize
+    var strong = x.cs.direction == .Rtl
+    j = 0usize
+    while j < n {
+        let t = x.bd.pieces.items[lead + j].text
+        first[j] = total
+        var at = 0usize
+        while at < t.len {
+            let (cp, w) = unicode.read_utf8(t, at)
+            text32[total] = cp
+            total += 1usize
+            let cls = bidi.class_of(cp)
+            if cls == .R || cls == .AL || cls == .AN { strong = true }
+            at += w
+        }
+        j += 1usize
+    }
+    if !strong { ret false }
+    let (levels, e3) = mem.alloc[u8](l.a, total)
+    let (scratch, e4) = mem.alloc[u32](l.a, 6usize * total + 6usize)
+    let (cord, e5) = mem.alloc[usize](l.a, total)
+    let (plv, e6) = mem.alloc[u8](l.a, n)
+    let (order, e7) = mem.alloc[usize](l.a, n)
+    let (tmp, e8) = mem.alloc[Piece](l.a, n)
+    if e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret false }
+    var base = 0i8
+    if x.cs.direction == .Rtl { base = 1i8 }
+    let (para, re) = bidi.resolve_levels(text32[..total], base, levels[..total], scratch)
+    if re != ok { ret false }
+    let le = bidi.reorder_line(text32[..total], levels[..total], para, 0usize, total, cord)
+    if le != ok { ret false }
+    j = 0usize
+    while j < n {
+        plv[j] = levels[first[j]]
+        j += 1usize
+    }
+    let oe = bidi.reorder(plv[..n], 0usize, n, order)
+    if oe != ok { ret false }
+    // The last word of the line loses its trailing space, wherever it ends up.
+    let lastp = &x.bd.pieces.items[tail - 1usize]
+    lastp.text = lastp.text[..lastp.clen]
+    lastp.trail = 0.0f64
+    j = 0usize
+    while j < n {
+        tmp[j] = x.bd.pieces.items[lead + order[j]]
+        j += 1usize
+    }
+    j = 0usize
+    while j < n {
+        x.bd.pieces.items[lead + j] = tmp[j]
+        j += 1usize
+    }
+    ret true
+}
+
 fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
     let l = x.l
     let cs = x.cs
     let lead = scan.lead
     var trim_end = end
     while trim_end > lead && x.bd.pieces.items[trim_end - 1usize].kind == .Text && !x.bd.pieces.items[trim_end - 1usize].ink && x.bd.pieces.items[trim_end - 1usize].w == 0.0f64 { trim_end -= 1usize }
+    let tail_keep = bidi_order_pieces(x, lead, trim_end)
     // Inline-box stack: the boxes carried in, then those opened on this line.
     var sbox: [64]u32 = zero
     var sshift: [64]f64 = zero
@@ -2206,9 +2281,9 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             used_w += text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
         } else {
             used_w += p.w
-            if k + 1usize < trim_end { used_w -= shy_hyphen_w(l, p) }
+            if k + 1usize < trim_end || (tail_keep && p.trail > 0.0f64) { used_w -= shy_hyphen_w(l, p) }
         }
-        if k + 1usize < trim_end { used_w += p.trail }
+        if k + 1usize < trim_end || (tail_keep && p.trail > 0.0f64) { used_w += p.trail }
         k += 1usize
     }
     let last_line = end >= x.bd.pieces.len
@@ -2221,8 +2296,8 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
     if line_align == .Justify && scan.avail > used_w {
         var gaps = 0usize
         k = lead
-        while k + 1usize < trim_end {
-            if x.bd.pieces.items[k].trail > 0.0f64 { gaps += 1usize }
+        while k < trim_end {
+            if (k + 1usize < trim_end || tail_keep) && x.bd.pieces.items[k].trail > 0.0f64 { gaps += 1usize }
             k += 1usize
         }
         if gaps > 0usize { spread = (scan.avail - used_w) / f64(gaps) }
@@ -2256,7 +2331,7 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             let proc = l.boxes.items[usize(p.box)].proc
             var this_to = p.start + p.text.len
             var this_w = p.w
-            if k + 1usize < trim_end {
+            if k + 1usize < trim_end || (tail_keep && p.trail > 0.0f64) {
                 this_w -= shy_hyphen_w(l, p)
                 this_w += p.trail
                 if p.trail > 0.0f64 { this_w += spread }
@@ -3508,7 +3583,8 @@ fn fix_table_like(l: *Layout, b: u32) {
         } else {
             allowed = kb.inner == .RowGroup || kb.inner == .Row || kb.inner == .Caption || kb.inner == .ColumnGroup || kb.inner == .Column
         }
-        if !allowed && !kb.inline_level && is_out_of_flow(st(l, kb.style)) { allowed = true }
+        // Positioned boxes stay where they are (the positioned pass lays them out); floats are wrapped like any other child.
+        if !allowed && !kb.inline_level && (st(l, kb.style).position == .Absolute || st(l, kb.style).position == .Fixed) { allowed = true }
         if allowed {
             wrap_table_run(l, b, run_first, run_last, wrap_kind, wrap_display)
             run_first = NONE
