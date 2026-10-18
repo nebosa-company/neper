@@ -914,6 +914,12 @@ fn parse_array(p: *Parser) -> (u32, err) {
 }
 
 fn parse_primary(p: *Parser) -> (u32, err) {
+    if is_p(p, "@") {
+        try skip_decorators(p)
+        if !is_k(p, "class") { ret (ast.NONE, fail(p, "decorators must precede a class")) }
+        let dc = try parse_class(p, false)
+        ret (dc, ok)
+    }
     let t = p.tok
     if t.kind == lex.T_NUM {
         var kind = ast.N_NUM
@@ -1444,6 +1450,15 @@ fn parse_function(p: *Parser, decl: bool, is_async: bool) -> (u32, err) {
     ret (fid, ok)
 }
 
+// Decorators are parsed but not applied (the proposal is stage 3); only the grammar is accepted.
+fn skip_decorators(p: *Parser) -> err {
+    while is_p(p, "@") {
+        try adv(p)
+        let dec = try parse_lhs(p)
+    }
+    ret ok
+}
+
 fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
     let (cid, ce) = mk(p, ast.N_CLASS)
     if ce != ok { ret (ast.NONE, ce) }
@@ -1476,6 +1491,7 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
             try adv(p)
             continue
         }
+        try skip_decorators(p)
         let (mid, me) = mk(p, ast.N_PROP)
         if me != ok { ret (ast.NONE, me) }
         var is_static = false
@@ -1521,8 +1537,16 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
             try adv(p)
             is_gen = true
         }
+        var is_auto = false
+        if is_k(p, "accessor") && !is_async && !is_gen {
+            let nx4 = try peek(p)
+            if !nx4.nl && !(nx4.kind == lex.T_PUNCT && (str.eq(nx4.text, "(") || str.eq(nx4.text, "=") || str.eq(nx4.text, ";") || str.eq(nx4.text, "}"))) {
+                try adv(p)
+                is_auto = true
+            }
+        }
         var accessor = 0u8
-        if (is_k(p, "get") || is_k(p, "set")) && !is_async && !is_gen {
+        if !is_auto && (is_k(p, "get") || is_k(p, "set")) && !is_async && !is_gen {
             let nx3 = try peek(p)
             if !(nx3.kind == lex.T_PUNCT && (str.eq(nx3.text, "(") || str.eq(nx3.text, "=") || str.eq(nx3.text, ";") || str.eq(nx3.text, "}") || (nx3.nl && str.eq(nx3.text, "*")))) {
                 if is_k(p, "get") { accessor = 1u8 } else { accessor = 2u8 }
@@ -1545,6 +1569,7 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
         } else {
             // A field: `key [= value] ;` — the initialiser runs as a method with `this` the instance.
             node(p, mid).op = ast.M_FIELD
+            if is_auto { node(p, mid).c = 1u32 }
             if is_p(p, "=") {
                 try adv(p)
                 let (fid2, fe2) = mk(p, ast.N_FUNC)
@@ -1850,6 +1875,12 @@ fn parse_if_body(p: *Parser) -> (u32, err) {
 fn parse_statement(p: *Parser) -> (u32, err) {
     let sub = p.sub_flag
     p.sub_flag = false
+    if is_p(p, "@") {
+        try skip_decorators(p)
+        if !is_k(p, "class") { ret (ast.NONE, fail(p, "decorators must precede a class")) }
+        let dc2 = try parse_class(p, true)
+        ret (dc2, ok)
+    }
     if p.tok.kind == lex.T_PUNCT {
         if is_p(p, "{") {
             let b = try parse_block(p)

@@ -5551,7 +5551,42 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
                 ff.text = key_name_for_function(it, key)
                 init_fn = obj_value(ff)
             }
-            let entry = array_from(it, two_args(it, key_to_value(key), init_fn))
+            var entry_key = key
+            if mn2.c == 1u32 {
+                // `accessor` field: storage lives under a fresh private name, reached through a getter/setter pair on `key`.
+                let backing = new_symbol(it, key_name_for_function(it, key), true)
+                backing.private = true
+                entry_key = key_of_symbol(backing)
+                let ag = make_native(it, str_concat(it, "get ", key_name_for_function(it, key)), 0u32, auto_get)
+                ag.prim = key_to_value(entry_key)
+                let asf = make_native(it, str_concat(it, "set ", key_name_for_function(it, key)), 1u32, auto_set)
+                asf.prim = key_to_value(entry_key)
+                if kn2.kind == ast.N_PRIVATE && (mn2.flags & ast.F_COMPUTED) == 0u16 {
+                    if is_static {
+                        let a1 = private_install(it, ctor, key, 2u8, obj_value(ag))
+                        if a1 != ok { ret (undefv(), a1) }
+                        let a2 = private_install(it, ctor, key, 3u8, obj_value(asf))
+                        if a2 != ok { ret (undefv(), a2) }
+                    } else {
+                        try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), obj_value(ag), num_value(2.0f64)))))
+                        try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), obj_value(asf), num_value(3.0f64)))))
+                    }
+                } else {
+                    var ad = empty_desc()
+                    ad.has_enumerable = true
+                    ad.enumerable = false
+                    ad.has_configurable = true
+                    ad.configurable = true
+                    ad.has_get = true
+                    ad.getter = obj_value(ag)
+                    ad.has_set = true
+                    ad.setter = obj_value(asf)
+                    let (adone, ade) = define_own(it, holder, key, ad)
+                    if ade != ok { ret (undefv(), ade) }
+                    if !adone { ret (undefv(), throw_type(it, "Cannot redefine a class member")) }
+                }
+            }
+            let entry = array_from(it, two_args(it, key_to_value(entry_key), init_fn))
             if is_static {
                 let pe = array_push(it, static_fields, obj_value(entry))
             } else {
@@ -5659,6 +5694,35 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
         }
     }
     ret (obj_value(ctor), ok)
+}
+
+fn auto_get(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    if !is_object(this_val) { ret (undefv(), throw_type(it, "accessor getter called on a non-object")) }
+    var key = key_of("")
+    switch it.callee.prim {
+    case .Sym as ks:
+        key = key_of_symbol(ks)
+    default:
+        key = key_of("")
+    }
+    let (gv, ge) = private_get(it, as_object(this_val), key, this_val)
+    ret (gv, ge)
+}
+
+fn auto_set(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    if !is_object(this_val) { ret (undefv(), throw_type(it, "accessor setter called on a non-object")) }
+    var key = key_of("")
+    switch it.callee.prim {
+    case .Sym as ks:
+        key = key_of_symbol(ks)
+    default:
+        key = key_of("")
+    }
+    var nv = undefv()
+    if args.len > 0usize { nv = args[0usize] }
+    let (ok2, e) = private_set(it, as_object(this_val), key, nv, this_val)
+    if e != ok { ret (undefv(), e) }
+    ret (undefv(), ok)
 }
 
 fn default_constructor(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
