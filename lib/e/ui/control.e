@@ -11587,7 +11587,7 @@ fn spin_box_full(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         ret (win, win_error)
     }
     if t.tokens.profile == .CupertinoLike {
-        let (cup, cup_error) = cupertino_spin_box(a, key, t, label, buffer, value, low, high, step, change, typed, width)
+        let (cup, cup_error) = cupertino_spin_box(a, key, t, label, buffer, value, low, high, step, change, typed, width, enabled, invalid)
         ret (cup, cup_error)
     }
     if t.tokens.profile == .Linux {
@@ -19335,7 +19335,7 @@ fn cup_mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             let dy = 0.0 - math.cos[f32](angle)
             var color = m.color
             color.alpha = m.color.alpha * cup_tick_alpha(i, head, count)
-            try cup_line(m, b, cx + dx * r * 0.52, cy + dy * r * 0.52, cx + dx * r * 0.96, cy + dy * r * 0.96, color, m.a)
+            try cup_line(m, b, cx + dx * r * 0.52, cy + dy * r * 0.52, cx + dx * (r - m.a * 0.5), cy + dy * (r - m.a * 0.5), color, m.a)
             i += 1usize
         }
         ret ok
@@ -19846,11 +19846,11 @@ fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     let hidden = widget.Slider { value: value, second: value, range: false, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: zero, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
-    layers[0usize] = widget.positioned(0u64, 8.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, track, zero)))
-    layers[1usize] = widget.positioned(0u64, 8.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, lit, zero)))
-    layers[2usize] = widget.positioned(0u64, centre - 14.0, 0.0, style.defaults(), widget_one_of(a, thumb))
-    layers[3usize] = widget.slider(key, hidden, sized_style(width, 28.0))
-    var frame_style = sized_style(width, 28.0)
+    layers[0usize] = widget.positioned(0u64, 14.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, track, zero)))
+    layers[1usize] = widget.positioned(0u64, 14.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, lit, zero)))
+    layers[2usize] = widget.positioned(0u64, 6.0 + centre - 14.0, 0.0, style.defaults(), widget_one_of(a, thumb))
+    layers[3usize] = widget.positioned(0u64, 6.0, 0.0, style.defaults(), widget_one_of(a, widget.slider(key, hidden, sized_style(width, 28.0))))
+    var frame_style = sized_style(width + 12.0, 28.0)
     if !enabled { frame_style.opacity = 0.4 }
     let frame = widget.stack(0u64, frame_style, layers[0usize..4usize])
     var sem: widget.Semantics = zero
@@ -19864,10 +19864,8 @@ fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     sem.value = said[0usize..said_len]
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
     if !enabled { sem.states = accessibility.STATE_DISABLED }
-    // The thumb overhangs the element by 6 at either end.
-    var margin = style.defaults()
-    margin.padding = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
-    ret (widget.semantics(0u64, sem, margin, widget_one_of(a, frame)), ok)
+    // The frame is 6 wider each side than the slider element, so the thumb at either end is not clipped.
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, frame)), ok)
 }
 // ---- end the Cupertino look (block 2) ---------------------------------------------------------------
 
@@ -20170,7 +20168,9 @@ fn cupertino_search(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u
     grow.width = style.Length { Flex: 1.0 }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let (glass, glass_error) = cup_mark(a, 8u32, muted, muted, 1.8, 0.0, 15.0, 15.0)
+    // The glass is two strokes that overlap, so it is flattened on the field: a translucent ink would double up where they meet.
+    let glass_ink = style.mix(fill, style.cup_alpha(muted, 1.0), muted.alpha)
+    let (glass, glass_error) = cup_mark(a, 8u32, glass_ink, glass_ink, 1.8, 0.0, 15.0, 15.0)
     if glass_error != ok { ret (zero, glass_error) }
     parts[0usize] = glass
     parts[1usize] = widget.stack(0u64, grow, layers[0usize..at])
@@ -20291,15 +20291,17 @@ fn cupertino_stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 }
 
 // The spin box in the Cupertino idiom: the rounded text field and the stepper pill beside it.
-fn cupertino_spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
-    let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
+fn cupertino_spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, enabled: bool, invalid: bool) -> (widget.Node, err) {
+    let (buttons, shortcuts, pair_error) = step_pair_enabled(a, t, key + 1u64, key + 2u64, value, low, high, step, change, enabled)
     if pair_error != ok { ret (zero, pair_error) }
     let len = write_i64(buffer, value)
     var options = field_options()
     options.width = width
+    options.enabled = enabled
+    options.invalid = invalid
     let (editor, editor_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
     if editor_error != ok { ret (zero, editor_error) }
-    let (pill, pill_error) = cup_step_pill(a, t, key + 1u64, key + 2u64, &shortcuts[0usize].action, &shortcuts[1usize].action, value > low, value < high)
+    let (pill, pill_error) = cup_step_pill(a, t, key + 1u64, key + 2u64, &shortcuts[0usize].action, &shortcuts[1usize].action, enabled && value > low, enabled && value < high)
     if pill_error != ok { ret (zero, pill_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
