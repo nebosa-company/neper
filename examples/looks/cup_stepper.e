@@ -1,5 +1,6 @@
 // The Cupertino stepper and spin box: docs/ui/looks/cupertino/spin_edit.png (and cupertino-dark). The stepper at
-// rest, at its lower bound, upper bound, hover and pressed (the plus half), then the spin box (field and stepper).
+// rest, at its lower bound, upper bound, hover and pressed (the plus half), with keyboard focus and disabled (both
+// halves at a bound), then the spin box (field and stepper).
 
 use e.mem
 use e.ui.control
@@ -10,16 +11,22 @@ fn noop_change(ctx: *void, value: i64) -> err { ret ok }
 fn noop_typed(ctx: *void, value: str) -> err { ret ok }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let names = [8]str{ "rest", "lower bound", "upper bound", "hover (plus half)", "pressed (plus half)", "spin box", "spin box at bound", "spin box hover" }
-    let values = [8]i64{ 5i64, 0i64, 10i64, 5i64, 5i64, 12i64, 0i64, 12i64 }
+    let names = [10]str{ "rest", "lower bound", "upper bound", "hover (plus half)", "pressed (plus half)", "keyboard focus", "disabled", "spin box", "spin box at bound", "spin box hover" }
+    let values = [10]i64{ 5i64, 0i64, 10i64, 5i64, 5i64, 5i64, 5i64, 12i64, 0i64, 12i64 }
     let change = widget.Change[i64] { ctx: zero, invoke: noop_change }
     let typed = widget.Change[str] { ctx: zero, invoke: noop_typed }
     var i = 0usize
-    while i < 8usize {
+    while i < 10usize {
         let key = u64((i + 1usize) * 10usize)
         var node: widget.Node = zero
-        if i < 5usize {
-            let (made, made_error) = control.stepper(a, key, t, "Quantity", values[i], 0i64, 10i64, 1i64, change)
+        if i < 7usize {
+            var high = 10i64
+            var low = 0i64
+            if i == 6usize {
+                low = 5i64
+                high = 5i64
+            }
+            let (made, made_error) = control.stepper(a, key, t, "Quantity", values[i], low, high, 1i64, change)
             if made_error != ok { ret (0usize, made_error) }
             node = made
         } else {
@@ -30,15 +37,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             node = made
         }
         var drive: looks.Drive = .None
-        if i == 3usize || i == 7usize { drive = .Hover }
+        if i == 3usize || i == 9usize { drive = .Hover }
         if i == 4usize { drive = .Press }
+        if i == 5usize { drive = .Focus }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize
     }
-    ret (8usize, ok)
+    ret (10usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "spin_edit", cells: 8usize, columns: 4usize, cell_w: 190.0, cell_h: 56.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "spin_edit", cells: 10usize, columns: 4usize, cell_w: 190.0, cell_h: 56.0, ctx: zero, build: build }
     ret looks.run_cupertino(a, &sheet)
 }
