@@ -11845,3 +11845,191 @@ fn linux_tree_row(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     ret (widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&picks[0usize]), invoke: row_pick_gesture }, gestures: 5u8, enabled: true, focusable: true }, row_style, one_node(a, line)), ok)
 }
 // ---- end the Linux look, tree view (worker l4) -------------------------------------------------------------------------
+
+// ---- the Linux look, preferences group and action rows (worker l4, round 20) ------------------------------------------------------
+// libadwaita 1.5 AdwPreferencesGroup / AdwActionRow: an optional heading (bold) and description (dim) over a boxed list card of 54 px
+// rows under 1 px rules. A row is its title (and subtitle, 12 px at 55 % of the foreground) 14 px in; a switch row ends in the
+// switch (46 x 26, 14 from the edge), an entry row shows its placeholder in the dim ink and an edit pencil, a combo row its value
+// and a down arrow. Kinds: 0 action row, 1 switch (on), 2 switch (off), 3 entry row, 4 combo row.
+type LinuxRow = struct { title: str, subtitle: str, kind: u8, value: str }
+
+fn linux_dim_for(t: *const control.Theme, share: f32) -> paint.Color {
+    let ink = style.color(t.tokens, .OnSurface)
+    ret paint.Color { red: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha * share }
+}
+
+fn linux_row_text(a: *mem.Arena, t: *const control.Theme, words: str, size: f32, ink: paint.Color) -> (widget.Node, err) {
+    var caption = control.text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    caption.size = size
+    let (node, node_error) = control.colored_text(a, 0u64, words, t, caption, ink)
+    ret (node, node_error)
+}
+
+fn linux_rows_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, spec: LinuxRow, width: f32, action: *const widget.Submit) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let state = control.control_state(t, key, true, false)
+    var fill = control.linux_row_fill(t, state, false)
+    let ink = style.color(t.tokens, .OnSurface)
+    var title_ink = ink
+    if spec.kind == 3u8 { title_ink = linux_dim_for(t, 0.55) }
+    let (title, title_error) = linux_row_text(a, t, spec.title, 14.667, title_ink)
+    if title_error != ok { ret (zero, title_error) }
+    let flat = style.Length { Px: 0.0 }
+    var left = style.defaults()
+    left.padding = style.EdgeLengths { left: style.Length { Px: 14.0 }, top: flat, right: flat, bottom: flat }
+    left.width = style.Length { Px: width - 70.0 }
+    left.height = style.Length { Px: 54.0 }
+    var texts = title
+    if spec.subtitle.len > 0usize {
+        let (sub, sub_error) = linux_row_text(a, t, spec.subtitle, 12.0, linux_dim_for(t, 0.55))
+        if sub_error != ok { ret (zero, sub_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = widget.padded(0u64, 0.0, 7.0, 0.0, 0.0, style.defaults(), one_node(a, title))
+        pair[1usize] = widget.padded(0u64, 0.0, 4.0, 0.0, 0.0, style.defaults(), one_node(a, sub))
+        texts = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+    }
+    var lead_main: ui_layout.MainAlign = .Start
+    var lead_cross: ui_layout.CrossAlign = .Start
+    if spec.subtitle.len == 0usize { lead_cross = .Center }
+    if spec.kind >= 3u8 { left.padding.bottom = style.Length { Px: 2.0 } }
+    let lead = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: lead_main, cross: lead_cross, gap: 0.0 }, left, one_node(a, texts))
+    // the trailing part
+    var trail: widget.Node = widget.box(0u64, control.sized_style(0.0, 0.0), zero)
+    if spec.kind == 1u8 || spec.kind == 2u8 {
+        let (track, track_error) = linux_switch(a, t, spec.kind == 1u8)
+        if track_error != ok { ret (zero, track_error) }
+        trail = track
+    }
+    if spec.kind == 3u8 {
+        let (pencil, pencil_error) = control.stroked_glyph(a, ink, .Edit, 19.0, 1.6)
+        if pencil_error != ok { ret (zero, pencil_error) }
+        trail = pencil
+    }
+    if spec.kind == 4u8 {
+        let (value, value_error) = linux_row_text(a, t, spec.value, 14.667, ink)
+        if value_error != ok { ret (zero, value_error) }
+        let (arrow, arrow_error) = control.cup_mark(a, 17u32, ink, ink, 0.0, 0.0, 12.0, 6.0)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+        if both_error != ok { ret (zero, TooLarge) }
+        both[0usize] = value
+        both[1usize] = arrow
+        trail = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), both[0usize..2usize])
+    }
+    var trail_style = style.defaults()
+    trail_style.height = style.Length { Px: 54.0 }
+    trail_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: control.if_else(spec.kind == 1u8, 2.0, 0.0) }, right: style.Length { Px: control.if_else(spec.kind == 3u8, 22.0, 14.0) }, bottom: style.Length { Px: control.if_else(spec.kind == 4u8, 2.0, 0.0) } }
+    let ends = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, trail_style, one_node(a, trail))
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = lead
+    parts[1usize] = widget.spacer(0u64, 1.0)
+    parts[2usize] = ends
+    var line_style = control.sized_style(width, 54.0)
+    line_style.background = paint.Brush { Solid: fill }
+    let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, line_style, parts[0usize..3usize])
+    let _ = dark
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, control.sized_style(width, 54.0), one_node(a, line)), ok)
+}
+
+// An AdwSwitch, 46 x 28 with its shadow: drawn as a track and a knob, with the library's pixels over it at 100 % when on.
+fn linux_switch(a: *mem.Arena, t: *const control.Theme, on: bool) -> (widget.Node, err) {
+    var track = control.sized_style(46.0, 26.0)
+    track.radius = 13.0
+    var knob = control.sized_style(20.0, 20.0)
+    knob.radius = 10.0
+    knob.background = paint.Brush { Solid: style.hex_raw(0xFFFFFFu32) }
+    var knob_x: f32 = 3.0
+    if on {
+        track.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        knob_x = 23.0
+    } else {
+        track.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .OnSurface), 0.15) }
+        if t.tokens.palette == .Dark { knob.background = paint.Brush { Solid: style.hex_raw(0xFFFFFFu32) } }
+    }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.box(0u64, track, zero)
+    layers[1usize] = widget.positioned(0u64, knob_x, 3.0, style.defaults(), one_node(a, widget.box(0u64, knob, zero)))
+    let drawn = widget.stack(0u64, control.sized_style(46.0, 26.0), layers[0usize..2usize])
+    if !on { ret (drawn, ok) }
+    let (pixels, pixels_error) = linux_card.switch_node(a, t.tokens.palette == .Dark)
+    if pixels_error != ok { ret (zero, pixels_error) }
+    let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+    if both_error != ok { ret (zero, TooLarge) }
+    both[0usize] = drawn
+    both[1usize] = pixels
+    ret (widget.stack(0u64, control.sized_style(46.0, 28.0), both[0usize..2usize]), ok)
+}
+
+// The group: heading and description (when given) over the card of `rows`; each row keyed `key + 1 + index`, firing its action.
+fn linux_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, heading: str, description: str, rows: []const LinuxRow, actions: []const widget.Submit, width: f32) -> (widget.Node, err) {
+    if actions.len != rows.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, rows.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < rows.len {
+        let (row_node, row_error) = linux_rows_row(a, key + 1u64 + u64(i), t, rows[i], width, &actions[i])
+        if row_error != ok { ret (zero, row_error) }
+        if i == 0usize {
+            items[i] = row_node
+        } else {
+            var rule = control.sized_style(width, 1.0)
+            rule.background = paint.Brush { Solid: control.linux_rule_for(t) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = widget.box(0u64, rule, zero)
+            pair[1usize] = row_node
+            items[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 55.0), pair[0usize..2usize])
+        }
+        i += 1usize
+    }
+    var total: f32 = 54.0
+    if rows.len > 0usize { total = f32(rows.len) * 54.0 + f32(rows.len - 1usize) }
+    var face = control.sized_style(width, total)
+    face.background = paint.Brush { Solid: control.linux_card_fill(t) }
+    face.radius = 12.0
+    face.overflow = .Clip
+    let stacked = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, items[0usize..rows.len])
+    let (corners, corners_error) = linux_card.corners_node(a, width, total, t.tokens.palette == .Dark)
+    if corners_error != ok { ret (zero, corners_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = stacked
+    pair[1usize] = corners
+    let boxed = widget.stack(0u64, control.sized_style(width, total), pair[0usize..2usize])
+    if heading.len == 0usize { ret (boxed, ok) }
+    var heavy = control.text_options()
+    heavy.role = .Label
+    heavy.wrap = .None
+    let (bold, bold_error) = control.colored_text(a, 0u64, heading, t, heavy, style.color(t.tokens, .OnSurface))
+    if bold_error != ok { ret (zero, bold_error) }
+    let (blocks, blocks_error) = mem.alloc[widget.Node](a, 5usize)
+    if blocks_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    blocks[count] = widget.padded(0u64, 0.0, 0.0, 0.0, 0.0, control.sized_style(width, 21.0), one_node(a, bold))
+    count += 1usize
+    if description.len > 0usize {
+        let (note, note_error) = linux_row_text(a, t, description, 14.667, linux_dim_for(t, 0.55))
+        if note_error != ok { ret (zero, note_error) }
+        blocks[count] = widget.padded(0u64, 0.0, 4.0, 0.0, 0.0, control.sized_style(width, 31.0), one_node(a, note))
+        count += 1usize
+    }
+    let (glow, glow_error) = linux_card.top_glow_node(a, width, t.tokens.palette == .Dark)
+    if glow_error != ok { ret (zero, glow_error) }
+    blocks[count] = glow
+    count += 1usize
+    blocks[count] = boxed
+    count += 1usize
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, width_only(width), blocks[0usize..count]), ok)
+}
+// ---- end the Linux look, rows (worker l4) ------------------------------------------------------------------------------------
+
+fn width_only(width: f32) -> style.Style {
+    var s = style.defaults()
+    s.width = style.Length { Px: width }
+    ret s
+}
