@@ -18,11 +18,13 @@ def literal(text: str) -> str:
     return '"' + escaped + '"'
 
 
-def main() -> None:
-    lines = [line.rstrip() for line in SRC.read_text(encoding="utf-8").splitlines() if line.strip()]
+def generate(name: str, what: str) -> None:
+    src = ROOT / "lib" / "e" / "js" / (name + ".js")
+    out = ROOT / "lib" / "e" / "js" / (name + ".e")
+    lines = [line.rstrip() for line in src.read_text(encoding="utf-8").splitlines() if line.strip()]
     size = sum(len(l) + 1 for l in lines) + 64
     pushes = NEWLINE.join(f"    try str.push(&b, {literal(line + NEWLINE)})" for line in lines)
-    OUT.write_text(f"""// The JavaScript-written built-ins, generated from prelude.js by scripts/gen_js_prelude.py -- edit that, not this file.
+    out.write_text(f"""// {what}, generated from {name}.js by scripts/gen_js_prelude.py -- edit that, not this file.
 
 use e.mem
 use e.str
@@ -33,6 +35,11 @@ fn source(a: *mem.Arena) -> (str, err) {{
     ret (str.done(&b), ok)
 }}
 """, encoding="utf-8", newline=NEWLINE)
+
+
+def main() -> None:
+    generate("prelude", "The JavaScript-written built-ins")
+    generate("temporal", "The Temporal built-ins")
 
 
 main()

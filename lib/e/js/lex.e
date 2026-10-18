@@ -666,6 +666,14 @@ fn read_template(lx: *Lexer, t: *Tok) -> err {
                     var dummy: Tok = zero
                     try read_template(&sub, &dummy)
                     pos = sub.pos
+                } else if c2 == 47u8 && regex_may_start(src, expr_start, pos) {
+                    pos += 1usize
+                    var in_class = false
+                    while pos < src.len && (in_class || src[pos] != 47u8) && line_terminator(src, pos) == 0usize {
+                        if src[pos] == 92u8 { pos += 1usize } else if src[pos] == 91u8 { in_class = true } else if src[pos] == 93u8 { in_class = false }
+                        pos += 1usize
+                    }
+                    pos += 1usize
                 } else if c2 == 47u8 && pos + 1usize < src.len && src[pos + 1usize] == 47u8 {
                     while pos < src.len && line_terminator(src, pos) == 0usize { pos += 1usize }
                 } else if c2 == 47u8 && pos + 1usize < src.len && src[pos + 1usize] == 42u8 {
@@ -686,6 +694,16 @@ fn read_template(lx: *Lexer, t: *Tok) -> err {
     lx.pos = pos
     t.end = pos
     ret ok
+}
+
+// Whether a `/` at `at` inside a template substitution (which starts at `from`) opens a regular expression rather than dividing.
+fn regex_may_start(src: str, from: usize, at: usize) -> bool {
+    if at + 1usize < src.len && (src[at + 1usize] == 47u8 || src[at + 1usize] == 42u8) { ret false }
+    var p = at
+    while p > from && (src[p - 1usize] == 32u8 || src[p - 1usize] == 9u8) { p -= 1usize }
+    if p == from { ret true }
+    let c = src[p - 1usize]
+    ret c == 40u8 || c == 44u8 || c == 61u8 || c == 58u8 || c == 91u8 || c == 33u8 || c == 38u8 || c == 124u8 || c == 63u8 || c == 123u8 || c == 125u8 || c == 59u8 || c == 43u8 || c == 45u8 || c == 42u8 || c == 37u8 || c == 60u8 || c == 62u8 || c == 126u8 || c == 94u8
 }
 
 fn punct_len(src: str, at: usize) -> usize {
