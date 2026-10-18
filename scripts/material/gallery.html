@@ -12,6 +12,8 @@
 @font-face { font-family: Roboto; font-weight: 700; src: url("file:///C:/Windows/Fonts/Roboto-Bold.ttf"); }
 :root {
   --md-ref-typeface-brand: Roboto; --md-ref-typeface-plain: Roboto;
+  /* Neper's text engine has no tracking (letter spacing): the references use none either, so widths agree */
+  --md-sys-typescale-display-large-tracking: 0px; --md-sys-typescale-display-medium-tracking: 0px; --md-sys-typescale-display-small-tracking: 0px; --md-sys-typescale-headline-large-tracking: 0px; --md-sys-typescale-headline-medium-tracking: 0px; --md-sys-typescale-headline-small-tracking: 0px; --md-sys-typescale-title-large-tracking: 0px; --md-sys-typescale-title-medium-tracking: 0px; --md-sys-typescale-title-small-tracking: 0px; --md-sys-typescale-body-large-tracking: 0px; --md-sys-typescale-body-medium-tracking: 0px; --md-sys-typescale-body-small-tracking: 0px; --md-sys-typescale-label-large-tracking: 0px; --md-sys-typescale-label-medium-tracking: 0px; --md-sys-typescale-label-small-tracking: 0px;
   --md-sys-color-shadow: #000; --md-sys-color-scrim: #000;
   /* the focus ring is off: Android shows focus as the 10 % state layer (profile MaterialLike, focus_ring 0) */
   --md-focus-ring-width: 0px; --md-focus-ring-duration: 0s;
@@ -85,26 +87,27 @@ html.notext svg.i { opacity: 0; }
 /* ---- CSS-spec parts (no Material Web component) ---- */
 .snackbar { box-sizing: border-box; display: flex; align-items: center; width: 344px; min-height: 48px; padding: 0 8px 0 16px; border-radius: 4px;
   background: var(--md-sys-color-inverse-surface); color: var(--md-sys-color-inverse-on-surface);
-  position: relative; font: 400 14px/20px Roboto; letter-spacing: .25px; }
+  position: relative; font: 400 14px/20px Roboto; letter-spacing: 0; }
 .snackbar md-elevation { --md-elevation-level: 3; }
 .snackbar .txt { flex: 1; padding: 14px 0; }
-.snackbar .act { font: 500 14px/20px Roboto; letter-spacing: .1px; color: var(--md-sys-color-inverse-primary); padding: 10px 12px; border-radius: 20px; }
+.snackbar .act { font: 500 14px/20px Roboto; letter-spacing: 0; color: var(--md-sys-color-inverse-primary); padding: 10px 12px; border-radius: 20px; }
 .snackbar .x { width: 40px; height: 40px; display: grid; place-items: center; color: var(--md-sys-color-inverse-on-surface); }
 .tooltip { box-sizing: border-box; display: inline-block; padding: 4px 8px; min-height: 24px; border-radius: 4px; background: var(--md-sys-color-inverse-surface);
-  color: var(--md-sys-color-inverse-on-surface); font: 400 12px/16px Roboto; letter-spacing: .4px; }
+  color: var(--md-sys-color-inverse-on-surface); font: 400 12px/16px Roboto; letter-spacing: 0; }
 .rich-tooltip { box-sizing: border-box; width: 312px; padding: 12px 16px 8px; border-radius: 12px; background: var(--md-sys-color-surface-container);
   box-shadow: 0 1px 3px 1px rgba(0,0,0,.15), 0 1px 2px 0 rgba(0,0,0,.3); }
-.rich-tooltip .t { font: 500 14px/20px Roboto; letter-spacing: .1px; color: var(--md-sys-color-on-surface-variant); }
-.rich-tooltip .b { font: 400 14px/20px Roboto; letter-spacing: .25px; color: var(--md-sys-color-on-surface-variant); padding: 4px 0 8px; }
+.rich-tooltip .t { font: 500 14px/20px Roboto; letter-spacing: 0; color: var(--md-sys-color-on-surface-variant); }
+.rich-tooltip .b { font: 400 14px/20px Roboto; letter-spacing: 0; color: var(--md-sys-color-on-surface-variant); padding: 4px 0 8px; }
 .rich-tooltip .a { font: 500 14px/20px Roboto; color: var(--md-sys-color-primary); padding: 10px 12px; margin: 0 -12px; }
 .navbar { box-sizing: border-box; display: flex; width: 360px; height: 80px; background: var(--md-sys-color-surface-container); padding: 12px 8px 16px; gap: 8px; }
 .navbar .it { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
-.navbar .pill { width: 64px; height: 32px; border-radius: 16px; display: grid; place-items: center; color: var(--md-sys-color-on-surface-variant); position: relative; overflow: hidden; }
+.navbar .pill { width: 64px; height: 32px; border-radius: 16px; display: grid; place-items: center; color: var(--md-sys-color-on-surface-variant); position: relative; }
+.navbar .pill::after { border-radius: 16px; }
 .navbar .it.on .pill { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
 .navbar .it.hover .pill::after, .navbar .it.pressed .pill::after { content: ""; position: absolute; inset: 0; background: var(--md-sys-color-on-surface); opacity: .08; }
 .navbar .it.pressed .pill::after { opacity: .1; }
 .navbar .it.on.hover .pill::after, .navbar .it.on.pressed .pill::after { background: var(--md-sys-color-on-secondary-container); }
-.navbar .lbl { font: 500 12px/16px Roboto; letter-spacing: .5px; color: var(--md-sys-color-on-surface-variant); }
+.navbar .lbl { font: 500 12px/16px Roboto; letter-spacing: 0; color: var(--md-sys-color-on-surface-variant); }
 .navbar .it.on .lbl { color: var(--md-sys-color-on-surface); }
 .navbar .it.dis { opacity: .38; }
 .appbar { box-sizing: border-box; display: flex; align-items: center; width: 360px; height: 64px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); padding: 0 4px; }
@@ -112,24 +115,24 @@ html.notext svg.i { opacity: 0; }
 .appbar .ic { width: 48px; height: 48px; display: grid; place-items: center; color: var(--md-sys-color-on-surface-variant); }
 .appbar .ttl { flex: 1; font: 400 22px/28px Roboto; padding: 0 4px; }
 .appbar.center .ttl { text-align: center; }
-.searchbar { box-sizing: border-box; display: flex; align-items: center; width: 360px; height: 56px; border-radius: 28px; padding: 0 16px; gap: 16px;
+.searchbar { box-sizing: border-box; display: flex; align-items: center; width: 320px; height: 56px; border-radius: 28px; padding: 0 16px; gap: 16px;
   background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant); position: relative; overflow: hidden; }
-.searchbar .ph { flex: 1; font: 400 16px/24px Roboto; letter-spacing: .5px; }
+.searchbar .ph { flex: 1; font: 400 16px/24px Roboto; letter-spacing: 0; }
 .searchbar.hover::after, .searchbar.pressed::after { content: ""; position: absolute; inset: 0; background: var(--md-sys-color-on-surface); opacity: .08; }
 .searchbar.pressed::after { opacity: .1; }
 .searchbar.dis { opacity: .38; }
 .badgebox { position: relative; display: inline-block; width: 24px; height: 24px; color: var(--md-sys-color-on-surface-variant); }
 .badge { position: absolute; box-sizing: border-box; background: var(--md-sys-color-error); color: var(--md-sys-color-on-error); }
 .badge.s { width: 6px; height: 6px; border-radius: 3px; left: 15px; top: 0; }
-.badge.l { min-width: 16px; height: 16px; border-radius: 8px; left: 12px; top: -4px; padding: 0 4px; font: 500 11px/16px Roboto; letter-spacing: .5px; text-align: center; }
+.badge.l { min-width: 16px; height: 16px; border-radius: 8px; left: 12px; top: -4px; padding: 0 4px; font: 500 11px/16px Roboto; letter-spacing: 0; text-align: center; }
 .datepicker { box-sizing: border-box; width: 360px; background: var(--md-sys-color-surface-container-high); border-radius: 28px; padding-bottom: 12px;
   box-shadow: 0 2px 6px 2px rgba(0,0,0,.15), 0 1px 2px 0 rgba(0,0,0,.3); }
 .datepicker .hd { padding: 16px 24px 0 24px; height: 120px; box-sizing: border-box; }
-.datepicker .hd .s { font: 500 14px/20px Roboto; letter-spacing: .1px; color: var(--md-sys-color-on-surface-variant); }
+.datepicker .hd .s { font: 500 14px/20px Roboto; letter-spacing: 0; color: var(--md-sys-color-on-surface-variant); }
 .datepicker .hd .d { font: 400 32px/40px Roboto; color: var(--md-sys-color-on-surface); margin-top: 36px; }
 .datepicker hr { border: 0; border-top: 1px solid var(--md-sys-color-outline-variant); margin: 0; }
-.datepicker .mn { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 0 24px; height: 48px; font: 500 14px/20px Roboto; letter-spacing: .1px; color: var(--md-sys-color-on-surface-variant); }
-.datepicker .g { display: grid; grid-template-columns: repeat(7, 48px); padding: 0 12px; font: 400 14px/20px Roboto; letter-spacing: .25px; text-align: center; }
+.datepicker .mn { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 0 24px; height: 48px; font: 500 14px/20px Roboto; letter-spacing: 0; color: var(--md-sys-color-on-surface-variant); }
+.datepicker .g { display: grid; grid-template-columns: repeat(7, 48px); padding: 0 12px; font: 400 14px/20px Roboto; letter-spacing: 0; text-align: center; }
 .datepicker .g span { height: 48px; display: grid; place-items: center; }
 .datepicker .g .w { height: 40px; font: 400 12px/16px Roboto; color: var(--md-sys-color-on-surface); }
 .datepicker .g .c { width: 40px; height: 40px; margin: 4px; border-radius: 20px; box-sizing: border-box; }
@@ -141,6 +144,7 @@ html.notext svg.i { opacity: 0; }
 <script src="bundle.js"></script>
 <script>
 const ICON = {
+  notif: "M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z",
   add: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z", close: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
   check: "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
   search: "M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
@@ -291,24 +295,36 @@ add("snackbar-rest", SB("Deck saved"));
 add("snackbar-action", SB("Card removed from the deck", true));
 add("snackbar-action-close", SB("Card removed from the deck", true, true));
 add("snackbar-two-lines", SB("The price refresh failed because the server could not be reached.", true));
-add("tooltip-plain", `<div class="tooltip">Tooltip text</div>`);
-add("tooltip-rich", `<div class="rich-tooltip"><div class="t">Rich tooltip</div><div class="b">Rich tooltips bring attention to a particular element or feature.</div><div class="a">Action</div></div>`);
-const nav = (on, state, label) => `<div class="navbar">` + ["home:Home", "search:Search", "star:Starred", "person:Profile"].map((s, i) => {
-  const [n, l] = s.split(":");
-  return `<div class="it${i === on ? " on" : ""}${i === 1 && state ? " " + state : ""}"><div class="pill">${ic(n)}</div><div class="lbl">${l}</div></div>`;
+add("tooltip-plain", `<div class="tooltip">Add to favorites</div>`);
+// a rich tooltip is as wide as its longest wrapped line (up to 312 dp), as Compose and Neper size it: mount() tightens it
+add("tooltip-rich", `<div class="rich-tooltip tight"><div class="t">Price refresh</div><div class="b">Prices are refreshed every night from TCGplayer and can lag a day.</div><div class="a">Learn more</div></div>`);
+// navigation bar (the sheet's: Home, Search, Alerts with a count, Profile with a dot; 360 dp)
+const NAVI = [["menu", "Home"], ["search", "Search"], ["notif", "Alerts"], ["person", "Profile"]];
+const nav = (count, on, state, stateAt) => `<div class="navbar">` + NAVI.slice(0, count).map(([n, l], i) => {
+  const badge = count === 4 && i === 2 ? '<span class="badge l" style="left:14px;top:-4px">3</span>' : count === 4 && i === 3 ? '<span class="badge s" style="left:15px;top:0"></span>' : "";
+  return `<div class="it${i === on ? " on" : ""}${i === stateAt && state ? " " + state : ""}"><div class="pill"><span class="badgebox">${ic(n)}${badge}</span></div><div class="lbl">${l}</div></div>`;
 }).join("") + `</div>`;
-add("navigation-bar-rest", nav(0));
-add("navigation-bar-hover", nav(0, "hover"));
-add("navigation-bar-pressed", nav(0, "pressed"));
-add("app-bar-small", `<div class="appbar"><div class="ic">${ic("menu")}</div><div class="ttl">Title</div><div class="ic">${ic("search")}</div><div class="ic">${ic("more")}</div></div>`);
-add("app-bar-small-scrolled", `<div class="appbar scrolled"><div class="ic">${ic("menu")}</div><div class="ttl">Title</div><div class="ic">${ic("search")}</div><div class="ic">${ic("more")}</div></div>`);
-add("app-bar-center", `<div class="appbar center"><div class="ic">${ic("menu")}</div><div class="ttl">Title</div><div class="ic">${ic("more")}</div></div>`);
+add("navigation-bar-three-rest", nav(3, 0));
+add("navigation-bar-four-rest", nav(4, 1));
+add("navigation-bar-four-hover", nav(4, 1, "hover", 2));
+add("navigation-bar-four-pressed", nav(4, 1, "pressed", 2));
+add("navigation-bar-four-last", nav(4, 3));
+const AB = (cls, lead, trail) => `<div class="appbar ${cls}">${lead ? `<div class="ic">${ic("menu")}</div>` : ""}<div class="ttl">Page title</div>${trail.map((n) => `<div class="ic">${ic(n)}</div>`).join("")}</div>`;
+add("app-bar-small", AB("", true, ["search", "add"]));
+add("app-bar-small-scrolled", AB("scrolled", true, ["search", "add"]));
+add("app-bar-center", AB("center", true, ["search", "add"]));
+add("app-bar-no-leading", AB("", false, ["search", "add"]));
 for (const st of ["rest", "hover", "pressed", "dis"]) {
-  add(`search-bar-${st === "dis" ? "disabled" : st}`, `<div class="searchbar ${st}">${ic("menu")}<span class="ph">Hinted search text</span>${ic("search")}</div>`);
+  add(`search-bar-${st === "dis" ? "disabled" : st}`, `<div class="searchbar ${st}">${ic("search")}<span class="ph">Search cards</span></div>`);
 }
-add("badge-small", `<span class="badgebox">${ic("heart")}<span class="badge s"></span></span>`);
-add("badge-large-1", `<span class="badgebox">${ic("heart")}<span class="badge l">3</span></span>`);
-add("badge-large-99", `<span class="badgebox">${ic("heart")}<span class="badge l">999+</span></span>`);
+add("search-bar-value", `<div class="searchbar"><span style="display:flex">${ic("search")}</span><span class="ph" style="color:var(--md-sys-color-on-surface)">Lightning Bolt</span>${ic("close")}</div>`);
+// badges: standalone, then on a 24 dp icon (the sheet's)
+add("badge-dot", `<span class="badge s" style="position:static;display:block"></span>`);
+add("badge-3", `<span class="badge l" style="position:static;display:block">3</span>`);
+add("badge-99", `<span class="badge l" style="position:static;display:block">99+</span>`);
+add("badge-999", `<span class="badge l" style="position:static;display:block">999+</span>`);
+add("badge-icon-dot", `<span class="badgebox">${ic("notif")}<span class="badge s"></span></span>`);
+add("badge-icon-3", `<span class="badgebox">${ic("notif")}<span class="badge l">3</span></span>`);
 const days = (sel) => ["S", "M", "T", "W", "T", "F", "S"].map(d => `<span class="w">${d}</span>`).join("") + Array.from({ length: 28 }, (_, i) => `<span><span class="c${i + 1 === 14 ? " today" : ""}${i + 1 === sel ? " sel" : ""}" style="display:grid;place-items:center">${i + 1}</span></span>`).join("");
 add("date-picker-rest", `<div class="datepicker"><div class="hd"><div class="s">Select date</div><div class="d">Mon, Jun 14</div></div><hr><div class="mn"><span>June 2021</span><span style="display:flex">${ic("prev")}${ic("next")}</span></div><div class="g">${days(21)}</div><div class="ft"><md-text-button>Cancel</md-text-button><md-text-button>OK</md-text-button></div></div>`);
 
@@ -337,6 +353,11 @@ window.mount = async (name, scheme) => {
   await document.fonts.ready;
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   await Promise.all([...s.querySelectorAll("*")].filter(e => e.updateComplete).map(e => e.updateComplete));
+  for (const t of s.querySelectorAll(".tight")) {
+    let right = 0, left = t.getBoundingClientRect().left;
+    for (const n of t.querySelectorAll(".t, .b")) { const r = document.createRange(); r.selectNodeContents(n); for (const q of r.getClientRects()) right = Math.max(right, q.right); }
+    t.style.width = Math.ceil(right - left + 16) + "px";
+  }
   // the box to clip: the target's rect (or its shadow part)
   let el = c.target ? s.querySelector(c.target) : s.firstElementChild;
   if (c.shadow) el = el.shadowRoot.querySelector(c.shadow) || el;

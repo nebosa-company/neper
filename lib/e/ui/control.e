@@ -7580,7 +7580,9 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     // ponytail: no expanded/docked view, grouped suggestions, result announcement
     // or shortcut/open-close model; add `overlay.search_view` when product search needs it.
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
-    let state = control_state(t, key, options.enabled, false)
+    var state = control_state(t, key, options.enabled, false)
+    // Android: the runtime hovers regions, not editors, so the bar answers through a hover region round it.
+    if t.tokens.profile == .MaterialLike && control_state(t, key + 1048650u64, options.enabled, false).hovered { state.hovered = true }
     var h = t.tokens.sizes.control_md
     var lead: f32 = 12.0
     var trail: f32 = 4.0
@@ -7663,7 +7665,15 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
         // Disabled: the bar at the 38 % content level.
         bar.opacity = t.tokens.states.disabled_content
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, bar, parts[0usize..count]), ok)
+    let bar_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, bar, parts[0usize..count])
+    if t.tokens.profile == .MaterialLike {
+        var no_gesture: widget.GestureAction = zero
+        let (held_bar, held_bar_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_bar_error != ok { ret (zero, TooLarge) }
+        held_bar[0usize] = bar_node
+        ret (widget.region(key + 1048650u64, widget.Region { gesture: no_gesture, gestures: 4u8, enabled: options.enabled, focusable: false }, style.defaults(), held_bar[0usize..1usize]), ok)
+    }
+    ret (bar_node, ok)
 }
 
 // A text area: a multiline editor `rows` lines tall (two at least).

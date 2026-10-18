@@ -53,3 +53,12 @@ SHEETS["dialog_icon"] = {"columns": 1, "cell_w": 330, "cell_h": 340, "at": (-9, 
 
 SHEETS["snackbar"] = {"columns": 2, "cell_w": 360, "cell_h": 84, "cells": [
     "snackbar-rest", "snackbar-action", "snackbar-action-close", "snackbar-two-lines", None, None]}
+
+SHEETS["navigation_bar"] = {"columns": 2, "cell_w": 370, "cell_h": 96, "cells": [
+    "navigation-bar-three-rest", "navigation-bar-four-rest", "navigation-bar-four-hover", "navigation-bar-four-pressed", "navigation-bar-four-last"]}
+SHEETS["app_bar"] = {"columns": 2, "cell_w": 360, "cell_h": 154, "cells": [
+    "app-bar-small", "app-bar-small-scrolled", "app-bar-center", None, None, "app-bar-no-leading"]}
+SHEETS["search_bar"] = {"columns": 3, "cell_w": 340, "cell_h": 70, "cells": [
+    "search-bar-rest", "search-bar-hover", None, None, "search-bar-value", "search-bar-disabled"]}
+SHEETS["badge"] = {"columns": 6, "cell_w": 100, "cell_h": 56, "cells": [
+    "badge-dot", "badge-3", "badge-99", "badge-999", "badge-icon-dot", "badge-icon-3"]}

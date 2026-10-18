@@ -1688,7 +1688,10 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         var label_ink = muted
         var pill = control.sized_style(pill_width, 32.0)
         pill.radius = 16.0
-        pill.background = paint.Brush { Solid: control.with_alpha(muted, control.state_opacity(t, state)) }
+        var wash_ink = muted
+        // md.comp.navigation-bar: an inactive item's hover and press layers are on-surface.
+        if t.tokens.profile == .MaterialLike { wash_ink = style.color(t.tokens, .OnSurface) }
+        pill.background = paint.Brush { Solid: control.with_alpha(wash_ink, control.state_opacity(t, state)) }
         // (D1317) The active fill's share of the pill, eased from the centre.
         var fill_goal: f32 = 0.0
         if chosen { fill_goal = 1.0 }
@@ -1699,7 +1702,7 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
             pill.background = paint.Brush { Solid: style.layer(style.color(t.tokens, .SecondaryContainer), icon_ink, control.state_opacity(t, state)) }
         }
         let growing = grown > 0.0 && grown < 1.0
-        if growing { pill.background = paint.Brush { Solid: control.with_alpha(muted, control.state_opacity(t, state)) } }
+        if growing { pill.background = paint.Brush { Solid: control.with_alpha(wash_ink, control.state_opacity(t, state)) } }
         var caption = control.text_options()
         caption.role = .LabelMedium
         caption.wrap = .None
