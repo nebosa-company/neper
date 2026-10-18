@@ -82,7 +82,7 @@ type ModuleHook = fn(*Interp, u8, Value, *const ast.Program) -> (Value, err)
 // A module namespace object's exports, sorted by name: the binding a name reads (an environment and a binding name) or, for
 // `export * as ns`, the namespace object itself.
 type NsEntry = struct { name: str, env: *Env, binding: str, ns_value: Value, is_ns: bool }
-type NsData = struct { entries: []const NsEntry }
+type NsData = struct { entries: []const NsEntry, deferred: bool, module: *void }
 
 // The Proxy internal methods live in b_proxy.e; `op` is one of PX_* (see the end of this file).
 type ProxyHook = fn(*Interp, u8, *Obj, Key, Value, Value) -> (Value, err)
@@ -115,6 +115,8 @@ type Obj = struct {
 const K_NONE: u8 = 0u8
 const K_BASE: u8 = 1u8
 const K_DERIVED: u8 = 2u8
+// The host's [[IsHTMLDDA]] object ($262.IsHTMLDDA): typeof "undefined", falsy, loosely equal to null and undefined, callable.
+const K_DDA: u8 = 99u8
 
 type Protos = struct {
     object: *Obj, function: *Obj, array: *Obj, string: *Obj, number: *Obj, boolean: *Obj, symbol: *Obj, error_proto: *Obj,
@@ -870,6 +872,8 @@ fn same_value(x: Value, y: Value) -> bool {
     }
 }
 
+fn is_dda(o: *Obj) -> bool { ret o.has_native && o.ctor_kind == K_DDA }
+
 fn to_boolean(v: Value) -> bool {
     switch v {
     case .Undefined:
@@ -885,7 +889,7 @@ fn to_boolean(v: Value) -> bool {
     case .Sym as sy:
         ret true
     case .Obj as o:
-        ret true
+        ret !is_dda(o)
     case .Big as bg:
         ret !bigint.is_zero(bg)
     }
@@ -907,6 +911,7 @@ fn type_of(v: Value) -> str {
     case .Sym as sy:
         ret "symbol"
     case .Obj as o:
+        if is_dda(o) { ret "undefined" }
         if is_callable(v) { ret "function" }
         ret "object"
     case .Big as bt:
@@ -1137,12 +1142,30 @@ fn array_set_length(it: *Interp, o: *Obj, len: f64) {
     o.num = len
 }
 
+// Touching a string-keyed export of a deferred namespace evaluates the module first (`then` is exempt).
+fn ns_touch(it: *Interp, o: *Obj, name: str) -> err {
+    let nd = mem.cast[*NsData](o.data)
+    if !nd.deferred || str.eq(name, "then") { ret ok }
+    var none: *const ast.Program = zero
+    let (v, e) = it.module_hook(it, 3u8, obj_value(o), none)
+    ret e
+}
+
 // The own property `key` of `o`, with exotic objects (arrays, strings, arguments) synthesised.
 fn get_own(it: *Interp, o: *Obj, key: Key) -> (Prop, bool) {
     let z = null_obj()
     if o.class == C_NAMESPACE {
         if is_symbol_key(key) {
-            if key.sym == it.sym_to_string_tag { ret (Prop { key: key, value: str_value("Module"), getter: z, setter: z, flags: 0u8 }, true) }
+            if key.sym == it.sym_to_string_tag {
+                var tag_name = "Module"
+                if mem.cast[*NsData](o.data).deferred { tag_name = "Deferred Module" }
+                ret (Prop { key: key, value: str_value(tag_name), getter: z, setter: z, flags: 0u8 }, true)
+            }
+            ret (zero, false)
+        }
+        let te = ns_touch(it, o, key.name)
+        if te != ok {
+            it.px_err = te
             ret (zero, false)
         }
         let (ev, found, ee) = ns_read(it, o, key.name)
@@ -1240,6 +1263,7 @@ fn get_prop(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err) {
             ret (pr, pe)
         }
         let (p, found) = get_own(it, cur, key)
+        if cur.class == C_NAMESPACE && it.px_err != ok { ret (undefv(), take_px_err(it)) }
         if found {
             if (p.flags & P_ACCESSOR) != 0u8 {
                 let z = null_obj()
@@ -1604,7 +1628,14 @@ fn has_property(it: *Interp, o: *Obj, key: Key) -> bool {
             }
             ret to_boolean(hv)
         }
-        if cur.class == C_NAMESPACE && !is_symbol_key(key) { ret ns_has_export(cur, key.name) }
+        if cur.class == C_NAMESPACE && !is_symbol_key(key) {
+            let te2 = ns_touch(it, cur, key.name)
+            if te2 != ok {
+                it.px_err = te2
+                ret false
+            }
+            ret ns_has_export(cur, key.name)
+        }
         let (p, found) = get_own(it, cur, key)
         if found { ret true }
         if cur.class == C_TYPEDARRAY && !is_symbol_key(key) {
@@ -1620,6 +1651,11 @@ fn has_property(it: *Interp, o: *Obj, key: Key) -> bool {
 fn delete_prop(it: *Interp, o: *Obj, key: Key) -> bool {
     if o.class == C_NAMESPACE {
         if is_symbol_key(key) { ret key.sym != it.sym_to_string_tag }
+        let te3 = ns_touch(it, o, key.name)
+        if te3 != ok {
+            it.px_err = te3
+            ret false
+        }
         ret !ns_has_export(o, key.name)
     }
     if o.class == C_PROXY {
@@ -1792,9 +1828,13 @@ fn define_own_ordinary(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err) {
             if d.has_enumerable && d.enumerable { ret (false, ok) }
             if d.has_get || d.has_set { ret (false, ok) }
             if d.has_writable && d.writable { ret (false, ok) }
-            if d.has_value && !same_value(d.value, str_value("Module")) { ret (false, ok) }
+            var tag_name2 = "Module"
+            if mem.cast[*NsData](o.data).deferred { tag_name2 = "Deferred Module" }
+            if d.has_value && !same_value(d.value, str_value(tag_name2)) { ret (false, ok) }
             ret (true, ok)
         }
+        let te4 = ns_touch(it, o, key.name)
+        if te4 != ok { ret (false, te4) }
         let (cur, found, ce) = ns_read(it, o, key.name)
         if ce != ok { ret (false, ce) }
         if !found { ret (false, ok) }
@@ -2406,12 +2446,17 @@ fn ordinary_has_instance(it: *Interp, ctor: Value, v: Value) -> (bool, err) {
 }
 
 // Abstract equality (`==`).
+fn is_dda_value(v: Value) -> bool {
+    if is_object(v) { ret is_dda(as_object(v)) }
+    ret false
+}
+
 fn loose_equals(it: *Interp, x: Value, y: Value) -> (bool, err) {
     switch x {
     case .Undefined:
-        ret (is_nullish(y), ok)
+        ret (is_nullish(y) || is_dda_value(y), ok)
     case .Null:
-        ret (is_nullish(y), ok)
+        ret (is_nullish(y) || is_dda_value(y), ok)
     case .Big as gx:
         switch y {
         case .Big as gy:
@@ -2495,9 +2540,9 @@ fn loose_equals(it: *Interp, x: Value, y: Value) -> (bool, err) {
         case .Obj as oy4:
             ret (ox == oy4, ok)
         case .Undefined:
-            ret (false, ok)
+            ret (is_dda(ox), ok)
         case .Null:
-            ret (false, ok)
+            ret (is_dda(ox), ok)
         default:
             let (px, pxe) = to_primitive(it, x, "default")
             if pxe != ok { ret (false, pxe) }
@@ -3021,6 +3066,7 @@ fn is_constructor(v: Value) -> bool {
         if o.class == C_BOUND { ret is_constructor(obj_value(o.bound_target)) }
         if o.class == C_PROXY { ret o.ctor_kind != K_NONE }
         if o.class != C_FUNCTION { ret false }
+        if is_dda(o) { ret false }
         if o.has_native { ret o.ctor_kind != K_NONE }
         ret o.ctor_kind != K_NONE
     default:
@@ -3858,6 +3904,8 @@ fn own_keys(it: *Interp, o: *Obj) -> ([]const Key, err) {
     var out = l
     if le != ok { ret (zero, le) }
     if o.class == C_NAMESPACE {
+        let te5 = ns_touch(it, o, "")
+        if te5 != ok { ret (zero, te5) }
         let nd = mem.cast[*NsData](o.data)
         var ni = 0usize
         while ni < nd.entries.len {
@@ -4786,7 +4834,14 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
         }
         var full_spec = specs
         if ty.len > 0usize { full_spec = str_concat3(it, specs, "\0", ty) }
-        let (iv, ie) = it.module_hook(it, 1u8, str_value(full_spec), f.prog)
+        if n.a == 2u32 {
+            // A source text module has no source phase representation.
+            let (sp, spe2) = rejected_promise(it, make_error(it, it.protos.syntax_error, "The module has no source phase representation"))
+            ret (sp, spe2)
+        }
+        var op = 1u8
+        if n.a == 1u32 { op = 4u8 }
+        let (iv, ie) = it.module_hook(it, op, str_value(full_spec), f.prog)
         ret (iv, ie)
     }
     if k == ast.N_PRIVATE { ret (undefv(), throw_syntax(it, "unexpected private name")) }

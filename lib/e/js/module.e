@@ -20,7 +20,7 @@ type Export = struct { export_name: str, local: str, request: i64, import_name: 
 
 type Module = struct {
     url: str, kind: str, prog: *ast.Program, env: *js.Env,
-    requested: list.List[str], deps: list.List[*Module],
+    requested: list.List[str], req_defer: list.List[bool], deps: list.List[*Module], def_namespace: *js.Obj, has_def_ns: bool,
     imports: list.List[Import], locals: list.List[Export], indirects: list.List[Export], stars: list.List[usize],
     status: u8, has_tla: bool, namespace: *js.Obj, has_ns: bool,
     failure: js.Value, failed: bool, eval_promise: *js.Obj, has_eval_promise: bool, meta: *js.Obj, has_meta: bool
@@ -80,19 +80,22 @@ fn declared_names(prog: *const ast.Program, sid: u32, out: *list.List[str]) -> (
     ret (false, ok)
 }
 
-fn find_request(m: *Module, spec: str) -> usize {
+fn find_request(m: *Module, spec: str, deferred: bool) -> usize {
     var i = 0usize
     while i < m.requested.len {
-        if str.eq(m.requested.items[i], spec) { ret i }
+        if str.eq(m.requested.items[i], spec) && m.req_defer.items[i] == deferred { ret i }
         i += 1usize
     }
     ret m.requested.len
 }
 
-fn add_request(it: *js.Interp, m: *Module, spec: str) -> (usize, err) {
-    let at = find_request(m, spec)
+// A specifier requested only by `import defer` keeps its dependency unevaluated until the namespace is touched; the same module
+// requested both ways has two requests, each evaluated at its own position.
+fn add_request(it: *js.Interp, m: *Module, spec: str, deferred: bool) -> (usize, err) {
+    let at = find_request(m, spec, deferred)
     if at < m.requested.len { ret (at, ok) }
     try list.push[str](&m.requested, spec)
+    try list.push[bool](&m.req_defer, deferred)
     ret (m.requested.len - 1usize, ok)
 }
 
@@ -128,13 +131,15 @@ fn collect(it: *js.Interp, m: *Module) -> err {
         let sn = prog.nodes[usize(sid)]
         i += 1usize
         if sn.kind == ast.N_IMPORT {
-            let (req, re) = add_request(it, m, sn.text)
+            let (req, re) = add_request(it, m, sn.text, sn.op == 1u8)
             if re != ok { ret js.throw_range(it, "out of memory") }
             var k = 0usize
             while k < usize(sn.b) {
                 let spec = prog.nodes[usize(prog.kids[usize(sn.a) + k])]
                 var iname = spec.text
                 if spec.op == 2u8 { iname = "*" }
+                if sn.op == 1u8 { iname = "*defer*" }
+                if sn.op == 2u8 { iname = "*source*" }
                 try list.push[Import](&m.imports, Import { request: req, import_name: iname, local: spec.text2 })
                 k += 1usize
             }
@@ -142,7 +147,7 @@ fn collect(it: *js.Interp, m: *Module) -> err {
         }
         // `export ... from` requests a module too: the requests keep their order of appearance across imports and re-exports.
         if sn.kind == ast.N_EXPORT && (sn.op == ast.X_STAR || sn.op == ast.X_STAR_AS || (sn.op == ast.X_LIST && sn.c == 1u32)) {
-            let (rq0, rqe0) = add_request(it, m, sn.text)
+            let (rq0, rqe0) = add_request(it, m, sn.text, false)
             if rqe0 != ok { ret js.throw_range(it, "out of memory") }
         }
         var inner = sid
@@ -218,18 +223,18 @@ fn collect(it: *js.Interp, m: *Module) -> err {
             if sn2.op == ast.X_DEFAULT_DECL && prog.nodes[usize(sn2.a)].text.len > 0usize { local = prog.nodes[usize(sn2.a)].text }
             try list.push[Export](&m.locals, Export { export_name: "default", local: local, request: -1i64, import_name: "" })
         } else if sn2.op == ast.X_STAR {
-            let (req2, re2) = add_request(it, m, sn2.text)
+            let (req2, re2) = add_request(it, m, sn2.text, false)
             if re2 != ok { ret js.throw_range(it, "out of memory") }
             try list.push[usize](&m.stars, req2)
         } else if sn2.op == ast.X_STAR_AS {
-            let (req3, re3) = add_request(it, m, sn2.text)
+            let (req3, re3) = add_request(it, m, sn2.text, false)
             if re3 != ok { ret js.throw_range(it, "out of memory") }
             try add_export_name(it, &seen_exports, sn2.text2)
             try list.push[Export](&m.indirects, Export { export_name: sn2.text2, local: "", request: i64(req3), import_name: "*" })
         } else if sn2.op == ast.X_LIST {
             var req4 = 0usize
             if sn2.c == 1u32 {
-                let (rq, rqe) = add_request(it, m, sn2.text)
+                let (rq, rqe) = add_request(it, m, sn2.text, false)
                 if rqe != ok { ret js.throw_range(it, "out of memory") }
                 req4 = rq
             }
@@ -245,7 +250,7 @@ fn collect(it: *js.Interp, m: *Module) -> err {
                 let (ix, is_import) = import_of(m, sp.text)
                 if is_import {
                     let ie = m.imports.items[ix]
-                    if str.eq(ie.import_name, "*") {
+                    if str.eq(ie.import_name, "*") || str.eq(ie.import_name, "*defer*") {
                         try list.push[Export](&m.locals, Export { export_name: sp.text2, local: sp.text, request: -1i64, import_name: "" })
                     } else {
                         try list.push[Export](&m.indirects, Export { export_name: sp.text2, local: "", request: i64(ie.request), import_name: ie.import_name })
@@ -371,13 +376,15 @@ fn new_module(it: *js.Interp, url: str, source: str) -> (*Module, err) {
     m.url = url
     m.has_tla = (parsed.program.nodes[usize(parsed.program.root)].flags & ast.F_ASYNC) != 0u16
     let (rq, rqe) = list.init[str](it.a, 4usize)
+    let (rdf, rdfe) = list.init[bool](it.a, 4usize)
     let (dp, dpe) = list.init[*Module](it.a, 4usize)
     let (im, ime) = list.init[Import](it.a, 8usize)
     let (lc, lce) = list.init[Export](it.a, 8usize)
     let (ind, inde) = list.init[Export](it.a, 4usize)
     let (st, ste) = list.init[usize](it.a, 2usize)
-    if rqe != ok || dpe != ok || ime != ok || lce != ok || inde != ok || ste != ok { ret (zero, js.throw_range(it, "out of memory")) }
+    if rqe != ok || rdfe != ok || dpe != ok || ime != ok || lce != ok || inde != ok || ste != ok { ret (zero, js.throw_range(it, "out of memory")) }
     m.requested = rq
+    m.req_defer = rdf
     m.deps = dp
     m.imports = im
     m.locals = lc
@@ -492,7 +499,19 @@ fn exported_names(it: *js.Interp, m: *Module, seen: *list.List[*Module], out: *l
 
 // The module namespace object.
 fn namespace_of(it: *js.Interp, m: *Module) -> (*js.Obj, err) {
-    if m.has_ns { ret (m.namespace, ok) }
+    let (o, e) = build_namespace(it, m, false)
+    ret (o, e)
+}
+
+// The deferred namespace object of `import defer`: the same exports, but touching them evaluates the module first.
+fn deferred_namespace_of(it: *js.Interp, m: *Module) -> (*js.Obj, err) {
+    let (o, e) = build_namespace(it, m, true)
+    ret (o, e)
+}
+
+fn build_namespace(it: *js.Interp, m: *Module, deferred: bool) -> (*js.Obj, err) {
+    if !deferred && m.has_ns { ret (m.namespace, ok) }
+    if deferred && m.has_def_ns { ret (m.def_namespace, ok) }
     // The object exists before its entries do: `export * as ns` of the module itself needs it.
     let (dc, dce) = mem.alloc[js.NsData](it.a, 1usize)
     if dce != ok { ret (zero, js.throw_range(it, "out of memory")) }
@@ -501,8 +520,15 @@ fn namespace_of(it: *js.Interp, m: *Module) -> (*js.Obj, err) {
     o.extensible = false
     o.data = mem.cast[*void](&dc[0usize])
     dc[0usize].entries = js.zero_entries()
-    m.namespace = o
-    m.has_ns = true
+    dc[0usize].deferred = deferred
+    dc[0usize].module = mem.cast[*void](m)
+    if deferred {
+        m.def_namespace = o
+        m.has_def_ns = true
+    } else {
+        m.namespace = o
+        m.has_ns = true
+    }
     var seen = try list.init[*Module](it.a, 4usize)
     var names = try list.init[str](it.a, 8usize)
     try exported_names(it, m, &seen, &names)
@@ -565,7 +591,12 @@ fn instantiate(it: *js.Interp, m: *Module) -> err {
     while i < m.imports.len {
         let im = m.imports.items[i]
         let dep = m.deps.items[im.request]
-        if str.eq(im.import_name, "*") {
+        if str.eq(im.import_name, "*source*") { ret js.throw_syntax(it, "The module has no source phase representation") }
+        if str.eq(im.import_name, "*defer*") {
+            let (dns, dnse) = deferred_namespace_of(it, dep)
+            if dnse != ok { ret dnse }
+            try js.declare(it, m.env, im.local, js.obj_value(dns), js.B_CONST)
+        } else if str.eq(im.import_name, "*") {
             let (nso, nse) = namespace_of(it, dep)
             if nse != ok { ret nse }
             try js.declare(it, m.env, im.local, js.obj_value(nso), js.B_CONST)
@@ -656,7 +687,7 @@ fn module_frame(m: *Module) -> js.Frame {
     ret f
 }
 
-fn collect_order(m: *Module, seen: *list.List[*Module], out: *list.List[*Module]) -> err {
+fn collect_order(a: *mem.Arena, m: *Module, seen: *list.List[*Module], out: *list.List[*Module]) -> err {
     var s = 0usize
     while s < seen.len {
         if seen.items[s] == m { ret ok }
@@ -665,10 +696,70 @@ fn collect_order(m: *Module, seen: *list.List[*Module], out: *list.List[*Module]
     try list.push[*Module](seen, m)
     var i = 0usize
     while i < m.deps.len {
-        try collect_order(m.deps.items[i], seen, out)
+        if i < m.req_defer.len && m.req_defer.items[i] {
+            // A deferred import evaluates only the asynchronous part of its graph now.
+            var gseen = try list.init[*Module](a, 4usize)
+            try gather_async(a, m.deps.items[i], seen, &gseen, out)
+        } else {
+            try collect_order(a, m.deps.items[i], seen, out)
+        }
         i += 1usize
     }
     try list.push[*Module](out, m)
+    ret ok
+}
+
+// The modules with top-level await below `m` (and `m` itself when it has it), each with the dependencies it needs, in evaluation order.
+fn gather_async(a: *mem.Arena, m: *Module, seen: *list.List[*Module], gseen: *list.List[*Module], out: *list.List[*Module]) -> err {
+    var s = 0usize
+    while s < gseen.len {
+        if gseen.items[s] == m { ret ok }
+        s += 1usize
+    }
+    try list.push[*Module](gseen, m)
+    if m.has_tla {
+        try collect_order(a, m, seen, out)
+        ret ok
+    }
+    var i = 0usize
+    while i < m.deps.len {
+        try gather_async(a, m.deps.items[i], seen, gseen, out)
+        i += 1usize
+    }
+    ret ok
+}
+
+// Evaluates a deferred module synchronously the first time its namespace is used.
+fn evaluate_deferred(it: *js.Interp, m: *Module) -> err {
+    if m.status == S_EVALUATED {
+        if m.failed {
+            it.thrown = m.failure
+            ret js.Throw
+        }
+        ret ok
+    }
+    var seen = try list.init[*Module](it.a, 8usize)
+    var order = try list.init[*Module](it.a, 8usize)
+    try collect_order(it.a, m, &seen, &order)
+    var i = 0usize
+    while i < order.len {
+        let mm = order.items[i]
+        if mm.status == S_EVALUATING || (mm.has_tla && mm.status != S_EVALUATED) { ret js.throw_type(it, "The deferred module cannot be evaluated synchronously") }
+        i += 1usize
+    }
+    let (p, pe) = js.new_promise(it)
+    if pe != ok { ret pe }
+    let (cell, ce) = mem.alloc[EvalState](it.a, 1usize)
+    if ce != ok { ret js.throw_range(it, "out of memory") }
+    let es = &cell[0usize]
+    es.mods = order
+    es.pos = 0usize
+    es.promise = p
+    run_from(it, es)
+    if m.failed {
+        it.thrown = m.failure
+        ret js.Throw
+    }
     ret ok
 }
 
@@ -760,7 +851,7 @@ fn evaluate(it: *js.Interp, m: *Module) -> (js.Value, err) {
     let es = &cell[0usize]
     var seen = try list.init[*Module](it.a, 8usize)
     es.mods = try list.init[*Module](it.a, 8usize)
-    try collect_order(m, &seen, &es.mods)
+    try collect_order(it.a, m, &seen, &es.mods)
     es.pos = 0usize
     es.promise = p
     run_from(it, es)
@@ -791,6 +882,18 @@ fn import_resolved(it: *js.Interp, this_val: js.Value, args: []const js.Value) -
     ret (js.undefv(), ok)
 }
 
+fn import_resolved_deferred(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let me = it.callee
+    let m = module_of(me.data)
+    let (nso, ne) = deferred_namespace_of(it, m)
+    if ne != ok {
+        let re = js.promise_reject(it, me.aux, it.thrown)
+        ret (js.undefv(), ok)
+    }
+    let r = js.promise_resolve_with(it, me.aux, js.obj_value(nso))
+    ret (js.undefv(), ok)
+}
+
 fn import_rejected(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let me = it.callee
     let r = js.promise_reject(it, me.aux, arg(args, 0usize))
@@ -803,6 +906,11 @@ fn reject_with_thrown(it: *js.Interp, p: *js.Obj) -> (js.Value, err) {
 }
 
 fn hook(it: *js.Interp, op: u8, v: js.Value, prog: *const ast.Program) -> (js.Value, err) {
+    if op == 3u8 {
+        let nd = mem.cast[*js.NsData](js.as_object(v).data)
+        let te = evaluate_deferred(it, module_of(nd.module))
+        ret (js.undefv(), te)
+    }
     if op == 2u8 {
         if !prog.is_module { ret (js.undefv(), js.throw_syntax(it, "import.meta is only valid in modules")) }
         let (mv, me) = meta_of(it, module_of(prog.module))
@@ -834,6 +942,29 @@ fn hook(it: *js.Interp, op: u8, v: js.Value, prog: *const ast.Program) -> (js.Va
             ret (r3, e3)
         }
         ret (js.undefv(), lk)
+    }
+    if op == 4u8 {
+        // import.defer(): only the asynchronous dependencies run now; the promise answers the deferred namespace.
+        var dseen = try list.init[*Module](it.a, 8usize)
+        var dgseen = try list.init[*Module](it.a, 8usize)
+        var dorder = try list.init[*Module](it.a, 8usize)
+        try gather_async(it.a, m, &dseen, &dgseen, &dorder)
+        let (dep, depe) = js.new_promise(it)
+        if depe != ok { ret (js.undefv(), depe) }
+        let (dcell, dce) = mem.alloc[EvalState](it.a, 1usize)
+        if dce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+        let des = &dcell[0usize]
+        des.mods = dorder
+        des.pos = 0usize
+        des.promise = dep
+        run_from(it, des)
+        let don_ful = js.make_native(it, "", 1u32, import_resolved_deferred)
+        don_ful.data = mem.cast[*void](m)
+        don_ful.aux = p
+        let don_rej = js.make_native(it, "", 1u32, import_rejected)
+        don_rej.aux = p
+        let dte = js.promise_then_raw(it, dep, js.obj_value(don_ful), js.obj_value(don_rej))
+        ret (js.obj_value(p), ok)
     }
     let (evp, ee) = evaluate(it, m)
     if ee != ok { ret (js.undefv(), ee) }

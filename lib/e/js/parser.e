@@ -1218,14 +1218,21 @@ fn parse_new(p: *Parser) -> (u32, err) {
 
 fn parse_import(p: *Parser) -> (u32, err) {
     try adv(p)
+    var phase = 0u32
     if is_p(p, ".") {
         try adv(p)
+        if is_k(p, "defer") || is_k(p, "source") {
+            if is_k(p, "defer") { phase = 1u32 } else { phase = 2u32 }
+            try adv(p)
+            if !is_p(p, "(") { ret (ast.NONE, fail(p, "import.defer and import.source must be called")) }
+        } else {
         if !is_k(p, "meta") { ret (ast.NONE, fail(p, "expected import.meta")) }
         if !p.module { ret (ast.NONE, fail(p, "import.meta is only valid in modules")) }
         try adv(p)
         let (id, me) = mk(p, ast.N_IMPORT_META)
         if me != ok { ret (ast.NONE, me) }
         ret (id, ok)
+        }
     }
     if !is_p(p, "(") { ret (ast.NONE, fail(p, "unexpected import")) }
     let args = try parse_arguments(p)
@@ -1239,6 +1246,7 @@ fn parse_import(p: *Parser) -> (u32, err) {
     if me2 != ok { ret (ast.NONE, me2) }
     let (first, ke) = commit(p, &args)
     if ke != ok { ret (ast.NONE, ke) }
+    node(p, id2).a = phase
     node(p, id2).b = first
     node(p, id2).c = u32(args.len)
     ret (id2, ok)
@@ -2177,6 +2185,28 @@ fn parse_import_decl(p: *Parser) -> (u32, err) {
     let (specs_0, se) = new_ids(p)
     var specs = specs_0
     if se != ok { ret (ast.NONE, se) }
+    var phase = 0u8
+    if is_k(p, "defer") {
+        let nx = try peek(p)
+        if nx.kind == lex.T_PUNCT && str.eq(nx.text, "*") {
+            phase = 1u8
+            try adv(p)
+        }
+    } else if is_k(p, "source") {
+        let nx2 = try peek(p)
+        if nx2.kind == lex.T_IDENT && !str.eq(nx2.text, "from") {
+            phase = 2u8
+            try adv(p)
+        } else if nx2.kind == lex.T_IDENT {
+            // `import source from "m"` imports the default export as `source`; `import source from from "m"` is a source-phase import.
+            let m0 = mark(p)
+            try adv(p)
+            try adv(p)
+            if p.tok.kind != lex.T_STR { phase = 2u8 }
+            restore(p, m0)
+            if phase == 2u8 { try adv(p) }
+        }
+    }
     if p.tok.kind != lex.T_STR {
         if p.tok.kind == lex.T_IDENT {
             let (ds, de) = mk(p, ast.N_IMPORT_SPEC)
@@ -2185,12 +2215,16 @@ fn parse_import_decl(p: *Parser) -> (u32, err) {
             node(p, ds).op = 1u8
             node(p, ds).text = "default"
             node(p, ds).text2 = local
+            if phase == 2u8 { node(p, ds).op = 4u8 }
             try list.push[u32](&specs, ds)
+            if phase != 0u8 && is_p(p, ",") { ret (ast.NONE, fail(p, "a defer or source import takes a single binding")) }
             if is_p(p, ",") {
                 try adv(p)
                 if !is_p(p, "*") && !is_p(p, "{") { ret (ast.NONE, fail(p, "expected * or { after the default import")) }
             }
         }
+        if phase == 2u8 && is_p(p, "*") { ret (ast.NONE, fail(p, "a source import takes a binding, not a namespace")) }
+        if phase == 1u8 && !is_p(p, "*") { ret (ast.NONE, fail(p, "a defer import takes a namespace")) }
         if is_p(p, "*") {
             try adv(p)
             if !is_k(p, "as") { ret (ast.NONE, fail(p, "expected as")) }
@@ -2203,6 +2237,7 @@ fn parse_import_decl(p: *Parser) -> (u32, err) {
             node(p, ns).text2 = local2
             try list.push[u32](&specs, ns)
         } else if is_p(p, "{") {
+            if phase != 0u8 { ret (ast.NONE, fail(p, "a defer or source import takes no named bindings")) }
             try adv(p)
             while !is_p(p, "}") {
                 let (sp, spe) = mk(p, ast.N_IMPORT_SPEC)
@@ -2237,6 +2272,7 @@ fn parse_import_decl(p: *Parser) -> (u32, err) {
     node(p, imp).a = first
     node(p, imp).b = u32(specs.len)
     node(p, imp).text = source
+    node(p, imp).op = phase
     ret (imp, ok)
 }
 

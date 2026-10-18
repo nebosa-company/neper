@@ -1140,6 +1140,14 @@ fn host_eval_script(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 
 fn host_gc(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (js.undefv(), ok) }
 
+fn ams_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    ret (js.undefv(), js.throw_type(it, "AbstractModuleSource is not a constructor"))
+}
+
+fn ams_tag(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (js.undefv(), ok) }
+
+fn host_dda_call(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (js.null_value(), ok) }
+
 // $262.createRealm(): a new realm that shares the well-known symbols and the job queue of this one.
 fn host_create_realm(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (r, re) = new_realm_with(it.a, it)
@@ -1413,6 +1421,18 @@ fn install_host(it: *js.Interp) {
     js.add_method(it, it.last, "createRealm", 0u32, host_create_realm)
     let e1 = js.define_data(it, it.last, js.key_of("global"), js.obj_value(it.global), js.P_HIDDEN)
     install_agent(it, it.last)
+    // %AbstractModuleSource%: the constructor of module source objects; none exists for source text modules.
+    let ams = js.make_native(it, "AbstractModuleSource", 0u32, ams_ctor)
+    ams.ctor_kind = js.K_BASE
+    let ams_proto = js.new_plain(it)
+    let ea1 = js.define_data(it, ams, js.key_of("prototype"), js.obj_value(ams_proto), 0u8)
+    let ea2 = js.define_data(it, ams_proto, js.key_of("constructor"), js.obj_value(ams), js.P_HIDDEN)
+    let ams_getter = js.make_native(it, "get [Symbol.toStringTag]", 0u32, ams_tag)
+    let ea3 = js.define_accessor_raw(it, ams_proto, js.key_of_symbol(it.sym_to_string_tag), ams_getter, js.null_obj(), js.P_CONFIGURABLE)
+    let ea4 = js.define_data(it, it.last, js.key_of("AbstractModuleSource"), js.obj_value(ams), js.P_HIDDEN)
+    let dda = js.make_native(it, "IsHTMLDDA", 0u32, host_dda_call)
+    dda.ctor_kind = js.K_DDA
+    let edda = js.define_data(it, it.last, js.key_of("IsHTMLDDA"), js.obj_value(dda), js.P_HIDDEN)
     js.add_method(it, it.global, "__tzNames", 0u32, tz_names_native)
     js.add_method(it, it.global, "__tzOffset", 2u32, tz_offset_native)
 }
