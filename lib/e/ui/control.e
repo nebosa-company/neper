@@ -2900,7 +2900,7 @@ fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Glyp
         ret (node, node_error)
     }
     if t.tokens.profile == .Linux {
-        let (glyph_node, glyph_error) = icon_square(a, style.adwaita_resolve(t.tokens, options.variant, state).foreground, kind, 16.0)
+        let (glyph_node, glyph_error) = linux_glyph_square(a, style.adwaita_resolve(t.tokens, options.variant, state).foreground, kind, 16.0)
         if glyph_error != ok { ret (zero, glyph_error) }
         let (node, node_error) = linux_button(a, key, t, label, glyph_node, true, action, options)
         ret (node, node_error)
@@ -9657,9 +9657,9 @@ fn linux_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []cons
         parts[0usize] = title
         var count = 1usize
         if chosen {
-            let (cross, cross_error) = icon_square(a, look.foreground, .Cross, 16.0)
+            let (cross, cross_error) = linux_glyph_square(a, look.foreground, .Cross, 16.0)
             if cross_error != ok { ret (zero, cross_error) }
-            parts[1usize] = widget.positioned(0u64, widths[i] - 20.0, 9.0, style.defaults(), mem_one_node(a, cross))
+            parts[1usize] = widget.positioned(0u64, widths[i] - 24.0, 9.0, style.defaults(), mem_one_node(a, cross))
             count = 2usize
         }
         let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, true, chosen, 0u32, 0u32, 0u64, &picks[i], widget.stack(0u64, sized_style(widths[i], 34.0), parts[0usize..count]))
@@ -9729,7 +9729,7 @@ fn linux_view_switcher(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: 
         if word_error != ok { ret (zero, word_error) }
         let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
         if wide_error != ok { ret (zero, wide_error) }
-        let (picture, picture_error) = icon_square(a, look.foreground, kinds[i], 16.0)
+        let (picture, picture_error) = linux_glyph_square(a, look.foreground, kinds[i], 16.0)
         if picture_error != ok { ret (zero, picture_error) }
         let content_w = 22.0 + wide
         let first = math.floor[f32]((widths[i] - content_w) * 0.5 + 0.5)
@@ -22622,3 +22622,20 @@ fn linux_rule_edge_for(t: *const Theme) -> paint.Color {
     ret paint.rgba(0.0, 0.0, 0.0, 0.1176)
 }
 // ---- end the Linux look, framed views (worker l4) -----------------------------------------------------------------------
+
+// ---- round 22 (lc): a 16 px glyph in the Linux look is the icon theme's symbolic icon where there is one, else the stroked glyph ----
+fn linux_glyph_square(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32) -> (widget.Node, err) {
+    var svg = ""
+    if kind == .Dash { svg = adwicon.window_minimize() }
+    if kind == .Cross { svg = adwicon.window_close() }
+    if kind == .Maximize { svg = adwicon.window_maximize() }
+    if kind == .Menu { svg = adwicon.open_menu() }
+    if kind == .Add { svg = adwicon.list_add() }
+    if kind == .Picture { svg = adwicon.picture_tile() }
+    if svg.len == 0usize {
+        let (square, square_error) = icon_square(a, color, kind, size)
+        ret (square, square_error)
+    }
+    let (mark, mark_error) = adwicon.icon(a, svg, color, size)
+    ret (mark, mark_error)
+}

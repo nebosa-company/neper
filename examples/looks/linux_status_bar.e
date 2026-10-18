@@ -14,7 +14,7 @@ fn noop_submit(ctx: *void) -> err { ret ok }
 
 // A window control: a 24 px circle in the text colour at 8 % holding a 16 px glyph.
 fn window_control(a: *mem.Arena, t: *const control.Theme, kind: control.GlyphKind, x: f32) -> (widget.Node, err) {
-    let (mark, mark_error) = control.icon_square(a, style.color(t.tokens, .Text), kind, 16.0)
+    let (mark, mark_error) = control.linux_glyph_square(a, style.color(t.tokens, .Text), kind, 16.0)
     if mark_error != ok { ret (zero, mark_error) }
     var disc = control.sized_style(24.0, 24.0)
     disc.radius = 12.0
