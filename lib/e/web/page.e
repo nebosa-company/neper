@@ -188,6 +188,7 @@ fn absolutize_css(a: *mem.Arena, text: str, base: *const url.Url) -> str {
                 }
                 if hi > text.len { hi = text.len }
                 p = hi + 1usize
+                if p > text.len { p = text.len }
             } else {
                 while hi < text.len && text[hi] != 41u8 { hi += 1usize }
                 p = hi
