@@ -1448,6 +1448,9 @@ fn finish(s: *Style) {
         if s.display == .Inline || s.display == .InlineBlock || s.display == .InlineFlex || s.display == .InlineGrid || s.display == .InlineTable { s.was_inline = true }
         s.display = blockify(s.display)
     }
+    // `clear` applies to block-level boxes only (not inline, inline-block, inline-table or the internal table boxes).
+    let d = s.display
+    if d == .Inline || d == .InlineBlock || d == .InlineTable || d == .InlineFlex || d == .InlineGrid || d == .TableRow || d == .TableCell || d == .TableRowGroup || d == .TableHeaderGroup || d == .TableFooterGroup || d == .TableColumn || d == .TableColumnGroup || d == .TableCaption { s.clear = .None }
 }
 
 // The computed style of `el` given its parent's. `stack` holds the ancestor query containers (none for now).
