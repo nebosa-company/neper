@@ -21647,7 +21647,7 @@ fn win_native_balloon(a: *mem.Arena, key: widget.Key, t: *const Theme, title: st
     layers[0usize] = chrome
     layers[1usize] = widget.positioned(0u64, 12.0, 30.0, style.defaults(), widget_one_of(a, disc))
     layers[2usize] = widget.positioned(0u64, 33.0, 28.0, style.defaults(), widget_one_of(a, head_node))
-    layers[3usize] = widget.positioned(0u64, 33.0, 49.0, style.defaults(), widget_one_of(a, body_node))
+    layers[3usize] = widget.positioned(0u64, 33.0, 48.0, style.defaults(), widget_one_of(a, body_node))
     ret (widget.stack(key, sized_style(159.0, 74.0), layers[0usize..4usize]), ok)
 }
 

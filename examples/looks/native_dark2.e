@@ -28,6 +28,25 @@ fn placed(a: *mem.Arena, node: widget.Node, x: f32, y: f32) -> (widget.Node, err
     ret (widget.stack(0u64, sized(cell_w(), cell_h()), inner[0usize..1usize]), ok)
 }
 
+fn noop_submit(ctx: *void) -> err { ret ok }
+
+// round 22: a tooltip capture is its anchor button (Hover me, 100 x 28 at (20, 14)) and the tip at (30, 52): here at (20, 3) and (30, 40).
+fn with_anchor(a: *mem.Arena, t: *const control.Theme, tip: widget.Node, anchor_x: f32) -> (widget.Node, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
+    if actions_error != ok { ret (zero, actions_error) }
+    actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    var options = control.button_options()
+    options.width = 100.0
+    options.height = 27.0
+    let (anchor, anchor_error) = control.button(a, 7090u64, t, "Hover me", &actions[0usize], options)
+    if anchor_error != ok { ret (zero, anchor_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, parts_error) }
+    parts[0usize] = widget.positioned(0u64, anchor_x, 3.0, style.defaults(), control.mem_one_node(a, anchor))
+    parts[1usize] = widget.positioned(0u64, 30.0, 40.0, style.defaults(), control.mem_one_node(a, tip))
+    ret (widget.stack(0u64, sized(cell_w(), cell_h()), parts[0usize..2usize]), ok)
+}
+
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     var at = 0usize
     // 0: vscroll-rest (17 x 170 at (20, 10)): a thumb 40 long from row 51
@@ -47,7 +66,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     // 2: tooltip-rest (126 x 20 at (30, 52) of its 260 x 110 capture; here at (30, 40)) and 3: tooltip-balloon (159 x 74)
     let (tip, tip_error) = control.win_native_tooltip(a, 7020u64, t, "This is the tooltip text", 126.0, 20.0)
     if tip_error != ok { ret (0usize, tip_error) }
-    let (tcell, tcell_error) = placed(a, tip, 30.0, 40.0)
+    let (tcell, tcell_error) = with_anchor(a, t, tip, 20.0)
     if tcell_error != ok { ret (0usize, tcell_error) }
     cells[at] = looks.Cell { caption: "tooltip-rest", node: tcell, drive: .None }
     at += 1usize
@@ -88,7 +107,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     // 8: tooltip-balloon (159 x 74 at (30, 52) of its 260 x 126 capture; here at (30, 40))
     let (balloon, balloon_error) = control.win_native_balloon(a, 7080u64, t, "Tip title", "This is the tooltip text")
     if balloon_error != ok { ret (0usize, balloon_error) }
-    let (balloon_cell, balloon_cell_error) = placed(a, balloon, 30.0, 40.0)
+    let (balloon_cell, balloon_cell_error) = with_anchor(a, t, balloon, 21.0)
     if balloon_cell_error != ok { ret (0usize, balloon_cell_error) }
     cells[at] = looks.Cell { caption: "tooltip-balloon", node: balloon_cell, drive: .None }
     at += 1usize
