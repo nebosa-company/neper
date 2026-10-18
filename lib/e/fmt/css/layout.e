@@ -2836,6 +2836,12 @@ fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool {
             kid = kb.next
             continue
         }
+        // An absolutely positioned child is laid out by the positioned pass and takes no part in the flow.
+        let kps = st(l, kb.style).position
+        if kb.inner != .Text && (kps == .Absolute || kps == .Fixed) {
+            kid = kb.next
+            continue
+        }
         if kb.inner == .Text {
             if !(is_ws_only(kb.text) && collapses(l, kid)) { ret false }
         } else if kb.inline_level {

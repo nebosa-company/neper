@@ -381,5 +381,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let ib = &p62.lay.boxes.items[usize(box_of(p62, "i"))]
     if db.line_count != 1u32 || ib.line_count != 1u32 { os.exit(98) }
     if p62.lay.frags.items[usize(p62.lay.lines.items[usize(db.line_first)].frag_first)].kind != layout.FragKind.Atomic { os.exit(99) }
+    // 63. An absolutely positioned child does not stop an empty block collapsing its margins through.
+    let (p63, ok63) = build(a, "<div id=w><div><div style=\"position:absolute\"></div></div><p id=p style=\"margin:24px 0;height:10px\"></p></div>", "")
+    if !ok63 || !is_rect(rect_of(p63, "w"), 0.0f64, 24.0f64, 800.0f64, 10.0f64) { os.exit(100) }
     ret ok
 }
