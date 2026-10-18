@@ -167,16 +167,16 @@ for (const v of ["filled", "outlined", "text", "filled-tonal", "elevated"]) {
 for (const v of ["standard:md-icon-button", "filled:md-filled-icon-button", "tonal:md-filled-tonal-icon-button", "outlined:md-outlined-icon-button"]) {
   const [key, tag] = v.split(":");
   for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
-    add(`icon-button-${key}-${st}`, `<${tag}${dis(st === "disabled")} aria-label="Favorite">${ic("heart")}</${tag}>`);
+    add(`icon-button-${key}-${st}`, `<${tag} toggle${dis(st === "disabled")} aria-label="Favorite">${ic("heart")}<span slot="selected">${ic("heart")}</span></${tag}>`);
   }
   if (key !== "standard") add(`icon-button-${key}-toggled`, `<${tag} toggle selected aria-label="Favorite">${ic("heart")}<span slot="selected">${ic("heart")}</span></${tag}>`);
 }
 add("icon-button-standard-toggled", `<md-icon-button toggle selected aria-label="Favorite">${ic("heart")}<span slot="selected">${ic("heart")}</span></md-icon-button>`);
 // fab
 for (const v of ["fab", "fab-small", "fab-large", "fab-extended"]) {
-  const a = { "fab": "", "fab-small": 'size="small"', "fab-large": 'size="large"', "fab-extended": 'label="Label"' }[v];
+  const a = { "fab": "", "fab-small": 'size="small"', "fab-large": 'size="large"', "fab-extended": 'label="Compose"' }[v];
   for (const st of ["rest", "hover", "pressed", "focus"]) {
-    add(`${v}-${st}`, `<md-fab ${a} aria-label="Add">${sl("add", "icon")}</md-fab>`);
+    add(`${v}-${st}`, `<md-fab variant="primary" ${a} aria-label="Compose">${sl("edit", "icon")}</md-fab>`);
   }
 }
 for (const c of ["primary", "secondary", "tertiary", "surface"]) {

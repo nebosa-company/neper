@@ -1275,8 +1275,10 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
     // M3: a filled or tonal button lifts to level 1 when hovered, an elevated one sits at 1 and goes to 2 only while hovered (not pressed).
     if t.profile == .MaterialLike {
         if variant == .Elevated && !state.disabled { elevation = 1u8 }
+        if variant == .Container { elevation = 3u8 }
         if state.hovered && !state.pressed && !state.disabled {
             if variant == .Elevated { elevation = 2u8 }
+            if variant == .Container { elevation = 4u8 }
             if variant == .Filled || variant == .Tonal { elevation = 1u8 }
         }
     }

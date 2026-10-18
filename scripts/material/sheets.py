@@ -12,3 +12,8 @@ SHEETS = {
     "button": {"columns": 5, "cell_w": 112, "cell_h": 56, "cells": ["button-%s-%s" % (v, s) for v in BTN for s in S5]},
     "button_icon": {"columns": 5, "cell_w": 124, "cell_h": 56, "cells": ["button-%s-icon-%s" % (v, s) for v in BTN for s in S5]},
 }
+
+IB = ["standard", "filled", "tonal", "outlined"]
+SHEETS["fab"] = {"columns": 6, "cell_w": 150, "cell_h": 108, "cells": [
+    "fab-small-rest", "fab-rest", "fab-large-rest", "fab-extended-rest", "fab-extended-hover", "fab-extended-pressed"] + [
+    "icon-button-%s-%s" % (v, s) for v in IB for s in ["rest", "toggled", "hover", "focus", "pressed", "disabled"]]}

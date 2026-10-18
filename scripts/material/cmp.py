@@ -82,23 +82,28 @@ def run(name, dark, png_dir, only):
         # one pixel in from the window edge so the spread filter is not cut
         best = None
         bx, by = int(round(cx)), int(round(cy))
-        for dy in range(-3, 4):
-            for dx in range(-3, 4):
-                ys, xs = bx + dx, by + dy
-                X0, Y0 = bx + dx, by + dy
-                if X0 < 0 or Y0 < 0 or X0 + ref.shape[1] > ours.shape[1] or Y0 + ref.shape[0] > ours.shape[0]:
-                    continue
-                o = ours[Y0:Y0 + ref.shape[0], X0:X0 + ref.shape[1]]
-                d = np.abs(o - ref).max(axis=2)
-                m = win & st
-                score = int(((d <= 2) & m).sum())
-                if best is None or score > best[0]:
-                    best = (score, dx, dy, d)
+        # the centred position first; another offset wins only by more than 12 matching pixels (flat cells tie)
+        for dx, dy in sorted(((a, b) for a in range(-3, 4) for b in range(-3, 4)), key=lambda p: abs(p[0]) + abs(p[1])):
+            X0, Y0 = bx + dx, by + dy
+            if X0 < 0 or Y0 < 0 or X0 + ref.shape[1] > ours.shape[1] or Y0 + ref.shape[0] > ours.shape[0]:
+                continue
+            o = ours[Y0:Y0 + ref.shape[0], X0:X0 + ref.shape[1]]
+            d = np.abs(o - ref).max(axis=2)
+            score = int(((d <= 2) & win).sum())
+            if best is None or score > best[0] + 12:
+                best = (score, dx, dy, d)
         if best is None:
             print("  %-34s outside the sheet" % ref_name)
             continue
         _, dx, dy, d = best
+        X0, Y0 = bx + dx, by + dy
         m = win & st
+        # our own ink next to the reference's glyphs (another icon drawing, another hinting) is glyph too: where ours differs from the
+        # reference's glyph-less twin by more than 40 levels within 5 px of its glyph ink
+        if os.path.exists(raw):
+            o2 = ours[Y0:Y0 + ref.shape[0], X0:X0 + ref.shape[1]]
+            near = ndimage.binary_dilation(np.abs(ref - load(raw)).max(axis=2) > 2, structure=np.ones((3, 3), bool), iterations=5)
+            glyph = glyph | (near & (np.abs(o2 - load(raw)).max(axis=2) > 40))
         off = int(((d > 2) & m & ~glyph).sum())
         offg = int(((d > 2) & m).sum())
         zone = np.zeros(st.shape, bool)

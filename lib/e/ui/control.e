@@ -8585,7 +8585,9 @@ fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ex
     var muted = style.color(t.tokens, .OnSurfaceVariant)
     if !options.enabled { muted = on }
     var look = style.resolve(t.tokens, .Plain, state)
-    look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), state_opacity(t, state))
+    var layer_ink = look.foreground
+            if state.pressed { layer_ink = style.color(t.tokens, .OnSurface) }
+            look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), layer_ink, state_opacity(t, state))
     look.foreground = on
     look.border_width = 0.0
     look.opacity = 1.0
@@ -8735,7 +8737,9 @@ fn section_header_marked(a: *mem.Arena, key: widget.Key, t: *const Theme, title:
     var tall = h
     if supporting.len != 0usize { tall = h + 16.0 }
     var look = style.resolve(t.tokens, .Plain, state)
-    look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), state_opacity(t, state))
+    var layer_ink = look.foreground
+            if state.pressed { layer_ink = style.color(t.tokens, .OnSurface) }
+            look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), layer_ink, state_opacity(t, state))
     look.foreground = on
     look.border_width = 0.0
     look.opacity = 1.0
@@ -19058,7 +19062,7 @@ fn material_fab(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
         if parts_error != ok { ret (zero, TooLarge) }
         parts[0usize] = mark
         parts[1usize] = label_node
-        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), parts[0usize..2usize])
+        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), parts[0usize..2usize])
         name = label
     }
     let (node, node_error) = pressable(a, key, t, 3u8, name, look, true, false, action, content)
@@ -19085,17 +19089,22 @@ fn material_icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: G
             look.border_width = 0.0
             look.background = style.layer(look.background, look.foreground, state_opacity(t, state))
         } else {
-            look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), look.foreground, state_opacity(t, state))
+            // md-outlined-icon-button: the icon and the hover and focus layers are on-surface-variant, the pressed layer on-surface.
+            var layer_ink = look.foreground
+            if state.pressed { layer_ink = style.color(t.tokens, .OnSurface) }
+            look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), layer_ink, state_opacity(t, state))
         }
     }
     if variant == .Tonal && !toggled {
-        look.background = style.layer(style.color(t.tokens, .SurfaceContainerHighest), style.color(t.tokens, .Primary), state_opacity(t, state))
-        look.foreground = style.color(t.tokens, .Primary)
+        // md-filled-tonal-icon-button, unselected toggle: surface-container-highest under an on-surface-variant icon and state layer.
+        look.foreground = style.color(t.tokens, .OnSurfaceVariant)
+        look.background = style.layer(style.color(t.tokens, .SurfaceContainerHighest), look.foreground, state_opacity(t, state))
     }
     if variant == .Filled && !toggled {
         look.background = style.layer(style.color(t.tokens, .SurfaceContainerHighest), style.color(t.tokens, .Primary), state_opacity(t, state))
         look.foreground = style.color(t.tokens, .Primary)
     }
+    look.elevation = 0u8
     if !enabled { look = style.disabled_look(t.tokens, look) }
     look.radius = 20.0
     look.custom_padding = true
