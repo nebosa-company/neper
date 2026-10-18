@@ -58,7 +58,11 @@ for (const scheme of ["light", "dark"]) {
       const r = await page.evaluate(([n, s]) => window.mount(n, s), [name, scheme]);
       const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
       if (state === "hover") { await page.mouse.move(cx, cy); await page.waitForTimeout(150); }
-      if (state === "pressed") { await page.mouse.move(cx, cy); await page.mouse.down(); await page.evaluate(() => window.pressedOnly()); await page.waitForTimeout(520); }
+      if (state === "pressed") { await page.mouse.move(cx, cy); await page.mouse.down(); await page.evaluate(() => window.pressedOnly()); await page.waitForTimeout(520); if (name.startsWith("list-item")) {
+          // A wide row's ripple has not grown over the whole row after 520 ms (a radial wash); the settled pressed state, which is also what Android draws once the ripple has filled the row, is the flat state layer
+          await page.evaluate(() => { const walk = (root) => { for (const el of root.querySelectorAll("*")) { if (el.tagName === "MD-RIPPLE" && el.shadowRoot) { const st = document.createElement("style"); st.textContent = ".surface::after { background: var(--md-ripple-pressed-color, var(--md-sys-color-on-surface, #1d1b20)) !important; inset: 0 !important; width: auto !important; height: auto !important; transform: none !important; }"; el.shadowRoot.appendChild(st); } if (el.shadowRoot) walk(el.shadowRoot); } }; walk(document.getElementById("stage")); });
+          await page.waitForTimeout(150);
+        } }
       if (state === "focus") { await page.keyboard.press("Tab"); await page.evaluate(() => window.focusLayer()); await page.waitForTimeout(120); }
       w = Math.round(r.w); h = Math.round(r.h);
       const MARGIN = r.margin;

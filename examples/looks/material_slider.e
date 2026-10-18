@@ -42,10 +42,29 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: states[column], node: node, drive: drive_of(column) }
         i += 1usize
     }
-    ret (10usize, ok)
+    // Rows 2 and 3: the labeled slider and the one with ticks (0 to 10, at 4), in the same five states.
+    var j = 0usize
+    while j < 10usize {
+        let row = j / 5usize
+        let column = j % 5usize
+        let change = widget.Change[f32] { ctx: zero, invoke: noop_change }
+        var value: f32 = 40.0
+        if column == 3usize { value = 50.0 }
+        var high: f32 = 100.0
+        if row == 1usize {
+            value = 4.0
+            if column == 3usize { value = 5.0 }
+            high = 10.0
+        }
+        let (n, e) = control.slider_material(a, u64(200usize + j), t, "", value, 0.0, high, 1.0, change, column != 4usize, row == 1usize, row == 0usize)
+        if e != ok { ret (0usize, e) }
+        cells[10usize + j] = looks.Cell { caption: states[column], node: n, drive: drive_of(column) }
+        j += 1usize
+    }
+    ret (20usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "slider", cells: 10usize, columns: 5usize, cell_w: 220.0, cell_h: 40.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "slider", cells: 20usize, columns: 5usize, cell_w: 220.0, cell_h: 72.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

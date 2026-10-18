@@ -2104,6 +2104,12 @@ fn floor_f(v: f32) -> f32 {
     ret f32(n)
 }
 
+// The Android look's caret (primary, 2 px) is `primary` at alpha 0.999 (visible) or 0.001 (the blink-off phase of a capture); an
+// editor with nothing in it draws a caret of those two colours and keeps its 1 px text-colour caret for every other look.
+fn android_caret(c: paint.Color) -> bool {
+    ret (c.alpha > 0.9985 && c.alpha < 0.9995) || (c.alpha > 0.0005 && c.alpha < 0.0015)
+}
+
 // round 13: `Edit.caret` with alpha 0.002 marks the native Windows 11 (GDI) edit: its rgb is the face colour, see place_edit.
 fn native_caret(face: paint.Color) -> paint.Color {
     ret paint.rgba(face.red, face.green, face.blue, 0.002)
@@ -2135,7 +2141,16 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
     if shown_error != ok { ret shown_error }
     if shown.len == 0usize {
         // Nothing to lay out: the caret alone, one line tall.
-        if focused_here { try push_rect(b, geometry.Rect { x: 0.0, y: 0.0, width: 1.0, height: ed.style.line_height }, origin, ed.color) }
+        if focused_here {
+            var empty_color = ed.color
+            var empty_width: f32 = 1.0
+            // A caret colour (not the native Windows sentinel) draws the 2 px caret of its colour, as with text.
+            if android_caret(ed.caret) {
+                empty_color = ed.caret
+                empty_width = 2.0
+            }
+            try push_rect(b, geometry.Rect { x: 0.0, y: 0.0, width: empty_width, height: ed.style.line_height }, origin, empty_color)
+        }
         ret ok
     }
     let (laid, layout_error) = lay_edit(a, shown, ed.style, edit_options(inner.width, ed.multiline))

@@ -13,7 +13,13 @@ fn noop_submit(ctx: *void) -> err { ret ok }
 fn noop_date(ctx: *void, value: time.Date) -> err { ret ok }
 fn noop_text(ctx: *void, value: str) -> err { ret ok }
 
-fn picker(a: *mem.Arena, t: *const control.Theme, typing: bool) -> (widget.Node, err) {
+fn picker(a: *mem.Arena, theme: *const control.Theme, typing: bool) -> (widget.Node, err) {
+    // An Android phone in the United States: the week starts on Sunday.
+    let (held, held_error) = mem.alloc[control.Theme](a, 1usize)
+    if held_error != ok { ret (zero, held_error) }
+    held[0usize] = *theme
+    held[0usize].language = "en-US"
+    let t = &held[0usize]
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 2usize)
     if actions_error != ok { ret (zero, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
@@ -55,7 +61,7 @@ fn build_input(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let calendar = looks.Sheet { name: "date_picker", cells: 1usize, columns: 1usize, cell_w: 360.0, cell_h: 560.0, ctx: zero, build: build }
+    let calendar = looks.Sheet { name: "date_picker", cells: 1usize, columns: 1usize, cell_w: 360.0, cell_h: 480.0, ctx: zero, build: build }
     try looks.run_material(a, &calendar)
     let entry = looks.Sheet { name: "date_input", cells: 1usize, columns: 1usize, cell_w: 360.0, cell_h: 320.0, ctx: zero, build: build_input }
     ret looks.run_material(a, &entry)

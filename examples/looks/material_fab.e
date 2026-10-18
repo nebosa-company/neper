@@ -67,10 +67,23 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[30usize + k] = looks.Cell { caption: more_names[k], node: node, drive: drive }
         k += 1usize
     }
-    ret (40usize, ok)
+    // The four colour roles (primary is the regular FAB above).
+    let tone_names = [4]str{ "Primary", "Secondary", "Tertiary", "Surface" }
+    var m = 0usize
+    while m < 4usize {
+        var tone: control.FabTone = .Primary
+        if m == 1usize { tone = .Secondary }
+        if m == 2usize { tone = .Tertiary }
+        if m == 3usize { tone = .Surface }
+        let (node, node_error) = control.material_fab_toned(a, u64(3000usize + m * 4usize), t, .Add, "Add", &actions[0usize], .Default, tone)
+        if node_error != ok { ret (0usize, node_error) }
+        cells[40usize + m] = looks.Cell { caption: tone_names[m], node: node, drive: .None }
+        m += 1usize
+    }
+    ret (44usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "fab", cells: 40usize, columns: 6usize, cell_w: 150.0, cell_h: 108.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "fab", cells: 44usize, columns: 6usize, cell_w: 150.0, cell_h: 128.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

@@ -132,6 +132,39 @@ fn spec_of(sheet_no: usize, i: usize) -> Spec {
             s.options.filled = true
             s.drive = .Focus
         }
+        if i == 8usize {
+            s.caption = "Filled, disabled"
+            s.options.filled = true
+            s.options.enabled = false
+        }
+        if i == 9usize {
+            s.caption = "Filled, error"
+            s.options.filled = true
+            s.options.invalid = true
+        }
+        // Cells 10 to 19: no value yet (the label rests inside), outlined then filled: enabled, hovered, focused, disabled, error.
+        if i >= 10usize {
+            let k = (i - 10usize) % 5usize
+            s.value = ""
+            s.options.filled = i >= 15usize
+            if k == 0usize { s.caption = "Empty" }
+            if k == 1usize {
+                s.caption = "Empty, hovered"
+                s.drive = .Hover
+            }
+            if k == 2usize {
+                s.caption = "Empty, focused"
+                s.drive = .Focus
+            }
+            if k == 3usize {
+                s.caption = "Empty, disabled"
+                s.options.enabled = false
+            }
+            if k == 4usize {
+                s.caption = "Empty, error"
+                s.options.invalid = true
+            }
+        }
     } else {
         s.high = cell_h()
         s.above = 12.0
@@ -166,7 +199,7 @@ fn across_of(sheet_no: usize) -> f32 {
 }
 
 fn count_of(sheet_no: usize) -> usize {
-    if sheet_no == 0usize { ret 8usize }
+    if sheet_no == 0usize { ret 20usize }
     ret 3usize
 }
 
@@ -174,7 +207,7 @@ fn build_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
     let colors = [4]str{ "Against Card Color", "Mono", "Rarity", "Frame" }
     let numbers = [22]str{ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21" }
     let n = count_of(sheet_no)
-    var drives = [8]looks.Drive{ .None, .None, .None, .None, .None, .None, .None, .None }
+    var drives: [20]looks.Drive = zero
     var i = 0usize
     while i < n {
         drives[i] = spec_of(sheet_no, i).drive
@@ -212,6 +245,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let lists = looks.Sheet { name: "combo_box_lists", cells: 3usize, columns: 3usize, cell_w: cell_w(), cell_h: cell_h(), ctx: mem.cast[*void](&passes[0usize]), build: build_lists }
         ret looks.run_material(a, &lists)
     }
-    let states = looks.Sheet { name: "combo_box", cells: 8usize, columns: 3usize, cell_w: 270.0, cell_h: 96.0, ctx: mem.cast[*void](&passes[0usize]), build: build_states }
+    let states = looks.Sheet { name: "combo_box", cells: 20usize, columns: 3usize, cell_w: 270.0, cell_h: 96.0, ctx: mem.cast[*void](&passes[0usize]), build: build_states }
     ret looks.run_material(a, &states)
 }

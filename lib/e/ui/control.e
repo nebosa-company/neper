@@ -21,6 +21,7 @@ use e.text.shape
 use e.ui.accessibility
 use e.ui.adwicon_l2 as adwicon
 use e.ui.linuxshadow_l2 as linuxshadow
+use e.ui.matglyph
 use e.ui.animation
 use e.ui.gridlook as gl
 use e.ui.input
@@ -730,7 +731,9 @@ fn icon_square(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32) ->
 
 // (D1530) An icon square in its outline or its filled "on" form over `ground`.
 fn icon_square_of(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32, filled: bool, ground: paint.Color) -> (widget.Node, err) {
-    let inset = size * 2.0 / 24.0
+    var inset = size * 2.0 / 24.0
+    // The Android look draws a Material icon over the whole 24 dp square (its outline already has its own margin).
+    if looks_material_icons && material_has_icon(kind) { inset = 0.0 }
     let (marks, marks_error) = mem.alloc[widget.Node](a, 1usize)
     if marks_error != ok { ret (zero, TooLarge) }
     let (made, mark_error) = stroked_glyph(a, color, kind, size - 2.0 * inset, size * 1.75 / 24.0)
@@ -2154,10 +2157,17 @@ fn badge_anchor(a: *mem.Arena, key: widget.Key, anchor: widget.Node, side: f32, 
     parts[2usize] = anchor
     parts[3usize] = mark
     parts[0usize] = widget.positioned(0u64, 0.0, 2.0, style.defaults(), parts[2usize..3usize])
+    // The Android look (M3 badge on an icon): a dot starts 15 in from the start, a count 12 in and 4 above the icon.
+    var dot_x = side - 6.0
+    var count_y: f32 = 0.0
+    if looks_material_icons {
+        dot_x = side - 9.0
+        count_y = -2.0
+    }
     if dot {
-        parts[1usize] = widget.positioned(0u64, side - 6.0, 2.0, style.defaults(), parts[3usize..4usize])
+        parts[1usize] = widget.positioned(0u64, dot_x, 2.0, style.defaults(), parts[3usize..4usize])
     } else {
-        parts[1usize] = widget.positioned(0u64, side - 12.0, 0.0, style.defaults(), parts[3usize..4usize])
+        parts[1usize] = widget.positioned(0u64, side - 12.0, count_y, style.defaults(), parts[3usize..4usize])
     }
     ret (widget.stack(key, sized_style(side, side + 2.0), parts[0usize..2usize]), ok)
 }
@@ -3177,7 +3187,17 @@ fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *
     }
     let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
     if label_error != ok { ret (zero, label_error) }
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, label_node)
+    var shown_label = label_node
+    if t.tokens.profile == .MaterialLike {
+        // A label shorter than the 64 dp minimum stands in the middle of the button.
+        let (held_label, held_label_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_label_error != ok { ret (zero, TooLarge) }
+        held_label[0usize] = label_node
+        var middle = style.defaults()
+        middle.min_width = style.Length { Px: max_zero(look.min_width - 2.0 * look.padding) }
+        shown_label = widget.aligned(0u64, .Center, .Center, middle, held_label[0usize..1usize])
+    }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, shown_label)
     ret (node, node_error)
 }
 
@@ -3573,6 +3593,11 @@ fn oval(b: *geometry.PathBuilder, cx: f32, cy: f32, rx: f32, ry: f32) -> err {
 
 fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*Glyph](ctx)
+    if looks_material_icons {
+        let (drawn, drawn_error) = material_icon_paint(g, b, area)
+        if drawn_error != ok { ret drawn_error }
+        if drawn { ret ok }
+    }
     if g.filled && glyph_has_body(g.kind) { ret filled_glyph_paint(g, b, area) }
     // (D1302) The gear's two rings and eight teeth need the larger builder.
     var verbs = 16usize
@@ -5629,6 +5654,18 @@ fn material_disc(x: f32, size: f32, ink: paint.Color, shade: u8) -> widget.Node 
 }
 
 fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, range: bool, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    let (node, node_error) = material_slider_marked(a, key, t, label, first, second, range, low, high, step, change, change_second, enabled, false, false)
+    ret (node, node_error)
+}
+
+// The Android slider with a tick at every step (`ticks`: 2 dp dots, `on-primary` on the active part and `on-surface-variant` beyond)
+// and the value in a 28 dp label over the handle while it is hovered, focused or pressed (`labeled`).
+fn slider_material(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool, ticks: bool, labeled: bool) -> (widget.Node, err) {
+    let (node, node_error) = material_slider_marked(a, key, t, label, value, value, false, low, high, step, change, zero, enabled, ticks, labeled)
+    ret (node, node_error)
+}
+
+fn material_slider_marked(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, range: bool, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool, ticks: bool, labeled: bool) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
     let ink = style.color(t.tokens, .OnSurface)
     var fill = style.color(t.tokens, .Primary)
@@ -5671,7 +5708,7 @@ fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     }
     let x_near = from + near * reach
     let x_far = from + far * reach
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 10usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 40usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var used = 0usize
     let rtl = t.tokens.direction == .RightToLeft
@@ -5692,6 +5729,32 @@ fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         used += 1usize
         layers[used] = material_bar(x_near, 182.0 - x_near, rest)
         used += 1usize
+    }
+    if ticks && step > 0.0 && span > 0.0 {
+        // ponytail: ticks only up to 20 steps; a finer slider has none
+        let steps = usize(span / step + 0.5)
+        if steps > 0usize && steps <= 20usize {
+            var tick_on = style.color(t.tokens, .OnPrimary)
+            var tick_off = style.color(t.tokens, .OnSurfaceVariant)
+            if !enabled {
+                tick_on = style.color(t.tokens, .Surface)
+                tick_off = with_alpha(ink, t.tokens.states.disabled_content)
+            }
+            var i = 0usize
+            while i <= steps {
+                let x = from + 2.0 + f32(i) * (reach - 4.0) / f32(steps)
+                var tick = sized_style(2.0, 2.0)
+                var tick_ink = tick_off
+                if x <= x_near { tick_ink = tick_on }
+                if range && x >= x_far { tick_ink = tick_off }
+                if range && x > x_near && x < x_far { tick_ink = tick_on }
+                tick.background = paint.Brush { Solid: tick_ink }
+                tick.radius = 1.0
+                layers[used] = widget.positioned(0u64, x - 1.0, 19.0, tick, zero)
+                used += 1usize
+                i += 1usize
+            }
+        }
     }
     var stops = [2]f32{ x_near, x_far }
     var count: usize = 1
@@ -5715,6 +5778,31 @@ fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         layers[used] = material_disc(stops[k] - 10.0, 20.0, knob, shade)
         used += 1usize
         k += 1usize
+    }
+    if labeled && enabled && !range && (state.hovered || state.pressed || state.focus_visible) {
+        // md-slider's value label: a 28 dp pill (a 14 dp square turned 45 degrees under it makes the point) ending at the handle's
+        // top, its bottom 0.2 above the stack and the point 5.5 below it.
+        let (reading, reading_error) = value_label_text(a, t, first)
+        if reading_error != ok { ret (zero, reading_error) }
+        let (diamond_held, diamond_error) = mem.alloc[widget.Node](a, 1usize)
+        if diamond_error != ok { ret (zero, TooLarge) }
+        var square = sized_style(14.0, 14.0)
+        square.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        diamond_held[0usize] = widget.box(0u64, square, zero)
+        let turned = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.7853982, offset: geometry.Point { x: 0.0, y: 0.0 } }, sized_style(14.0, 14.0), diamond_held[0usize..1usize])
+        let (turned_held, turned_error) = mem.alloc[widget.Node](a, 1usize)
+        if turned_error != ok { ret (zero, TooLarge) }
+        turned_held[0usize] = turned
+        layers[used] = widget.positioned(0u64, x_near - 7.0, 0.0 - 11.4, style.defaults(), turned_held[0usize..1usize])
+        used += 1usize
+        let (pill_held, pill_error) = mem.alloc[widget.Node](a, 1usize)
+        if pill_error != ok { ret (zero, TooLarge) }
+        pill_held[0usize] = reading
+        var pill = sized_style(28.0, 28.0)
+        pill.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        pill.radius = 14.0
+        layers[used] = widget.positioned(0u64, x_near - 14.0, 0.0 - 28.2, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, pill, pill_held[0usize..1usize])))
+        used += 1usize
     }
     var track_style = sized_style(180.0, 40.0)
     var track_at: f32 = 10.0
@@ -5741,6 +5829,19 @@ fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
     if !enabled { sem.states = accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(200.0, 40.0), layers[0usize..used]))), ok)
+}
+// The label's digits: the value rounded, `label-medium` in `on-primary`.
+fn value_label_text(a: *mem.Arena, t: *const Theme, value: f32) -> (widget.Node, err) {
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    var rounded = value + 0.5
+    if value < 0.0 { rounded = value - 0.5 }
+    let digit_count = write_i64(digits, i64(rounded))
+    var caption = text_options()
+    caption.role = .LabelMedium
+    caption.wrap = .None
+    let (reading, reading_error) = colored_text(a, 0u64, digits[0usize..digit_count], t, caption, style.color(t.tokens, .OnPrimary))
+    ret (reading, reading_error)
 }
 // ---- end the Android look, slider ---------------------------------------------------------------------------------------------
 
@@ -6211,7 +6312,7 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     let r: f32 = if_else(bleed, 0.0, h * 0.5)
     let ink = progress_ink(t, options.tone)
     let ground = progress_ground(t, options.tone)
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     if indeterminate {
@@ -6268,13 +6369,40 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
             rest = rest - done - gap
         }
         let buffered = clamp_share(options.buffer)
-        if buffered > share && rest > 0.0 {
+        if t.tokens.profile == .MaterialLike && buffered > share && rest > 0.0 {
+            // md-linear-progress with a buffer: the track to the buffered value, then a row of 4 dp dots in the track's colour 10 dp apart.
+            let track_end = (buffered - share) * width
+            parts[n] = bar_piece(0u64, track_end, h, ground, r)
+            n += 1usize
+            rest = rest - track_end
+            let dot_count = usize(math.max[f32]((rest - 8.0) / 10.0 + 1.0, 0.0))
+            if dot_count > 0usize {
+                let (dots, dots_error) = mem.alloc[widget.Node](a, dot_count * 2usize)
+                if dots_error != ok { ret (zero, TooLarge) }
+                var d = 0usize
+                while d < dot_count {
+                    dots[d] = bar_piece(0u64, 4.0, 4.0, ground, 2.0)
+                    dots[dot_count + d] = widget.positioned(0u64, 4.0 + 10.0 * f32(d), (h - 4.0) * 0.5, style.defaults(), dots[d..d + 1usize])
+                    d += 1usize
+                }
+                parts[n] = widget.stack(0u64, sized_style(rest, h), dots[dot_count..dot_count * 2usize])
+                n += 1usize
+            }
+            rest = 0.0
+        }
+        if t.tokens.profile != .MaterialLike && buffered > share && rest > 0.0 {
             let piece = (buffered - share) * width - gap
             if piece > 0.0 {
                 parts[n] = bar_piece(0u64, piece, h, style.layer(ground, ink, 0.32), r)
                 n += 1usize
                 rest = rest - piece - gap
             }
+        }
+        if rest > 0.0 && t.tokens.profile == .MaterialLike {
+            // Material Web's track ends square, with no stop dot.
+            parts[n] = bar_piece(0u64, rest, h, ground, r)
+            n += 1usize
+            rest = 0.0
         }
         if rest > 0.0 {
             // The track holds the stop dot at its end, centred, 2 in on the thick bar.
@@ -6745,7 +6873,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         editor[at] = hint_node
         at += 1usize
     }
-    let (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style))
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: material_caret(t), untabbed: false, ringed: false }, editor_style))
     if named_error != ok { ret (zero, named_error) }
     editor[at] = named
     // (D1456, docs/ux/components/TextField, text area) A multiline editor stands
@@ -6785,7 +6913,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         scrolled_style.width = style.Length { Px: inner }
         let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
         if scrolled_error != ok { ret (zero, TooLarge) }
-        let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, scrolled_style))
+        let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: material_caret(t), untabbed: false, ringed: false }, scrolled_style))
         if scrolled_named_error != ok { ret (zero, scrolled_named_error) }
         scrolled[0usize] = scrolled_named
         var viewport = style.defaults()
@@ -6977,7 +7105,10 @@ fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color
     let none = style.Length { Px: 0.0 }
     cut.padding = style.EdgeLengths { left: four, top: none, right: four, bottom: none }
     notch_parts[1usize] = frame
-    notch_parts[2usize] = widget.positioned(0u64, pad_x - 4.0, 0.0 - style.text_style(t.tokens, .BodySmall).line_height * 0.5, cut, notch_parts[0usize..1usize])
+    // Android: the floated label stands a pixel higher than the line box's middle on the edge (md-outlined-text-field).
+    var notch_up: f32 = 0.0
+    if t.tokens.profile == .MaterialLike { notch_up = 1.0 }
+    notch_parts[2usize] = widget.positioned(0u64, pad_x - 4.0, 0.0 - style.text_style(t.tokens, .BodySmall).line_height * 0.5 - notch_up, cut, notch_parts[0usize..1usize])
     ret (widget.stack(0u64, style.defaults(), notch_parts[1usize..3usize]), ok)
 }
 
@@ -7740,7 +7871,11 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var state = control_state(t, key, options.enabled, false)
     // Android: the runtime hovers regions, not editors, so the bar answers through a hover region round it.
-    if t.tokens.profile == .MaterialLike && control_state(t, key + 1048650u64, options.enabled, false).hovered { state.hovered = true }
+    if t.tokens.profile == .MaterialLike {
+        let region_state = control_state(t, key + 1048650u64, options.enabled, false)
+        if region_state.hovered { state.hovered = true }
+        if region_state.pressed { state.pressed = true }
+    }
     var h = t.tokens.sizes.control_md
     var lead: f32 = 12.0
     var trail: f32 = 4.0
@@ -7772,7 +7907,7 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: line }
-    layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: material_caret(t), untabbed: false, ringed: false }, editor_style)
     var search_name = options.placeholder
     if search_name.len == 0usize { search_name = "Search" }
     let (named_search, named_search_error) = named_editor(a, key, "", search_name, false, editor_style, layers[at])
@@ -7814,6 +7949,7 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     bar.min_height = style.Length { Px: h }
     var fill = style.color(t.tokens, .SurfaceContainerHigh)
     if state.hovered { fill = style.layer(fill, style.color(t.tokens, .OnSurface), t.tokens.states.hover) }
+    if state.pressed && android { fill = style.layer(style.color(t.tokens, .SurfaceContainerHigh), style.color(t.tokens, .OnSurface), t.tokens.states.pressed) }
     if android && !options.enabled { fill = style.layer(fill, style.color(t.tokens, .OnSurface), 0.0) }
     bar.background = paint.Brush { Solid: fill }
     bar.radius = h * 0.5
@@ -7825,7 +7961,10 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
         // Disabled: the bar at the 38 % content level.
         bar.opacity = t.tokens.states.disabled_content
     }
-    let bar_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, bar, parts[0usize..count])
+    // Android: 16 dp between the search icon and the query (md.comp.search-bar).
+    var bar_gap: f32 = 12.0
+    if android { bar_gap = 16.0 }
+    let bar_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: bar_gap }, bar, parts[0usize..count])
     if t.tokens.profile == .MaterialLike {
         var no_gesture: widget.GestureAction = zero
         let (held_bar, held_bar_error) = mem.alloc[widget.Node](a, 1usize)
@@ -7955,7 +8094,10 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     if value_error != ok { ret (zero, value_error) }
     var kind = closed
     if open { kind = opened }
-    let (chevron, chevron_error) = mark_glyph(a, point, kind, mark)
+    // Android: the select's arrow is the filled drop-down triangle (md-select), asked for by the thin sentinel.
+    var arrow_stroke: f32 = 2.0
+    if kind == .ChevronDown || kind == .ChevronUp { arrow_stroke = chip_icon_stroke(t) }
+    let (chevron, chevron_error) = stroked_glyph(a, point, kind, mark, arrow_stroke)
     if chevron_error != ok { ret (zero, chevron_error) }
     let (bits, bits_error) = mem.alloc[widget.Node](a, 4usize)
     if bits_error != ok { ret (zero, TooLarge) }
@@ -11329,8 +11471,17 @@ type ChipKind = enum u8 { Assist, Filter, Input, Suggestion }
 // an input chip ends 8 after a 24 remove circle round an 18 cross in
 // `on-surface-variant`, which takes its own state layer.
 fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipKind, selected: bool, action: *const widget.Submit, remove: *const widget.Submit) -> (widget.Node, err) {
+    let (node, node_error) = chip_styled(a, key, t, label, kind, selected, action, remove, true, false, .Add, false)
+    ret (node, node_error)
+}
+
+// A chip with the Android look's further forms: `enabled` (a disabled chip is outlined or filled at 12 % of on-surface under
+// 38 % words), `elevated` (an assist or suggestion chip on surface-container-low under the level 1 shade, 2 hovered), and a
+// leading icon `lead` (an assist chip's, in `primary`). An input chip that is `selected` is secondary-container.
+fn chip_styled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipKind, selected: bool, action: *const widget.Submit, remove: *const widget.Submit, enabled: bool, elevated: bool, lead: GlyphKind, has_lead: bool) -> (widget.Node, err) {
     let chosen = kind == .Filter && selected
-    let state = control_state(t, key, true, chosen)
+    let tinted = kind == .Input && selected
+    let state = control_state(t, key, enabled, chosen)
     var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
     var words = style.color(t.tokens, .OnSurface)
     var look = style.resolve(t.tokens, .Outlined, state)
@@ -11353,7 +11504,35 @@ fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipK
             if chosen { layer_ink = style.color(t.tokens, .OnSurfaceVariant) }
         }
     }
+    if tinted {
+        fill = style.color(t.tokens, .SecondaryContainer)
+        words = style.color(t.tokens, .OnSecondaryContainer)
+        layer_ink = words
+        look.border_width = 0.0
+    }
+    if elevated && !chosen && !tinted {
+        fill = style.color(t.tokens, .SurfaceContainerLow)
+        look.border_width = 0.0
+        look.elevation = 1u8
+        if state.hovered && !state.pressed { look.elevation = 2u8 }
+    }
+    var disabled_ink = words
+    if !enabled {
+        let on_surface = style.color(t.tokens, .OnSurface)
+        words = with_alpha(on_surface, t.tokens.states.disabled_content)
+        disabled_ink = words
+        look.elevation = 0u8
+        look.opacity = 1.0
+        if chosen || tinted || elevated {
+            fill = with_alpha(on_surface, t.tokens.states.disabled_container)
+            look.border_width = 0.0
+        } else {
+            look.border = with_alpha(on_surface, t.tokens.states.disabled_container)
+        }
+        layer_ink = on_surface
+    }
     look.background = style.layer(fill, layer_ink, state_opacity(t, state))
+    if !enabled { look.background = fill }
     look.foreground = words
     look.radius = t.tokens.radii.sm
     let height = t.tokens.sizes.control_sm
@@ -11371,8 +11550,18 @@ fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipK
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var content = label_node
+    if has_lead && kind == .Assist {
+        var lead_ink = style.color(t.tokens, .Primary)
+        if !enabled { lead_ink = words }
+        let (lead_mark, lead_error) = stroked_glyph(a, lead_ink, lead, t.tokens.sizes.icon_sm, chip_icon_stroke(t))
+        if lead_error != ok { ret (zero, lead_error) }
+        parts[0usize] = lead_mark
+        parts[1usize] = label_node
+        look.padding_start = 8.0
+        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), parts[0usize..2usize])
+    }
     if chosen {
-        let (check, check_error) = mark_glyph(a, words, .Check, t.tokens.sizes.icon_sm)
+        let (check, check_error) = stroked_glyph(a, words, .Check, t.tokens.sizes.icon_sm, chip_icon_stroke(t))
         if check_error != ok { ret (zero, check_error) }
         parts[0usize] = check
         parts[1usize] = label_node
@@ -11382,7 +11571,10 @@ fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipK
     if kind == .Input {
         parts[0usize] = label_node
         let muted = style.color(t.tokens, .OnSurfaceVariant)
-        let (cross, cross_error) = mark_glyph(a, muted, .Cross, t.tokens.sizes.icon_sm)
+        var remove_ink = muted
+        if tinted { remove_ink = words }
+        if !enabled { remove_ink = disabled_ink }
+        let (cross, cross_error) = stroked_glyph(a, remove_ink, .Cross, t.tokens.sizes.icon_sm, chip_icon_stroke(t))
         if cross_error != ok { ret (zero, cross_error) }
         let (removed, removed_error) = mem.alloc[widget.Node](a, 1usize)
         if removed_error != ok { ret (zero, TooLarge) }
@@ -11413,7 +11605,7 @@ fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipK
     }
     var role = 3u8
     if kind == .Filter { role = 4u8 }
-    let (node, node_error) = pressable_states(a, key, t, role, label, look, true, chosen, states, 0u32, 0u64, action, content)
+    let (node, node_error) = pressable_states(a, key, t, role, label, look, enabled, chosen, states, 0u32, 0u64, action, content)
     ret (node, node_error)
 }
 
@@ -12698,7 +12890,8 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
     look.min_height = side
     var kind: GlyphKind = .ChevronDown
     if open { kind = .ChevronUp }
-    let (chevron, chevron_error) = mark_glyph(a, muted, kind, size)
+    // Android: the drop-down triangle of md-select, asked for by the thin sentinel.
+    let (chevron, chevron_error) = stroked_glyph(a, muted, kind, size, chip_icon_stroke(t))
     if chevron_error != ok { ret (zero, chevron_error) }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
@@ -19328,8 +19521,32 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
 // A floating action button drawn from a glyph (md.comp.fab): `primary-container` with the icon in
 // `on-primary-container`, elevation 3 (4 hovered); small 40 dp with 12 dp corners, regular 56 with 16, large 96 with 28
 // and a 36 dp icon, extended 56 tall with 16 dp before the icon, 8 between and 20 after.
+type FabTone = enum u8 { Primary, Secondary, Tertiary, Surface }
+
 fn material_fab(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, size: FabSize) -> (widget.Node, err) {
-    var look = style.resolve(t.tokens, .Container, control_state(t, key, true, false))
+    let (node, node_error) = material_fab_toned(a, key, t, kind, label, action, size, .Primary)
+    ret (node, node_error)
+}
+
+// The FAB in one of the four M3 colour roles: primary, secondary and tertiary container under their `on` colours, or
+// `surface-container-high` under a `primary` icon.
+fn material_fab_toned(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, size: FabSize, tone: FabTone) -> (widget.Node, err) {
+    let fab_state = control_state(t, key, true, false)
+    var look = style.resolve(t.tokens, .Container, fab_state)
+    if tone != .Primary {
+        var fill = style.color(t.tokens, .SecondaryContainer)
+        var ink = style.color(t.tokens, .OnSecondaryContainer)
+        if tone == .Tertiary {
+            fill = style.color(t.tokens, .TertiaryContainer)
+            ink = style.color(t.tokens, .OnTertiaryContainer)
+        }
+        if tone == .Surface {
+            fill = style.color(t.tokens, .SurfaceContainerHigh)
+            ink = style.color(t.tokens, .Primary)
+        }
+        look.background = style.layer(fill, ink, state_opacity(t, fab_state))
+        look.foreground = ink
+    }
     var side: f32 = 56.0
     var icon_size: f32 = 24.0
     look.radius = 16.0
@@ -21082,6 +21299,15 @@ fn win_list_dots(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
 var looks_caret_hidden: bool = false
 
 fn set_caret_hidden(hidden: bool) { looks_caret_hidden = hidden }
+
+// The Android look's caret: `primary`, 2 dp (md.comp.filled-text-field.caret); invisible while a sheet compares with a capture
+// whose caret is in its blink-off phase.
+fn material_caret(t: *const Theme) -> paint.Color {
+    if t.tokens.profile != .MaterialLike { ret zero }
+    let primary = style.color(t.tokens, .Primary)
+    if looks_caret_hidden { ret paint.rgba(primary.red, primary.green, primary.blue, 0.001) }
+    ret paint.rgba(primary.red, primary.green, primary.blue, 0.999)
+}
 
 // round 15: the native dark edit's own caret (a system overlay that blinks) in its off phase, for the next edits built.
 var looks_native_caret_off: bool = false
@@ -23281,4 +23507,71 @@ fn linux_glyph_square(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: 
     }
     let (mark, mark_error) = adwicon.icon(a, svg, color, size)
     ret (mark, mark_error)
+}
+
+// ---- looks28: the Android look's icons ---------------------------------------------------------------------------
+// With the flag on (the Android look sets it), the glyphs that Material has an icon for are drawn as that icon's filled outline
+// (e.ui.matglyph, from scripts/material/gen_glyphs.py) instead of Neper's strokes. A stroke width below 1 asks for the
+// Symbols close and check that md-input-chip and md-filter-chip draw (the Icons close is the 2 dp one everywhere else; the check
+// of a check box is not replaced).
+var looks_material_icons: bool = false
+
+// A chip's check and cross: 2 as everywhere, the thin Symbols sentinel in the Android look.
+fn chip_icon_stroke(t: *const Theme) -> f32 {
+    if t.tokens.profile == .MaterialLike { ret 0.5 }
+    ret 2.0
+}
+
+fn set_material_icons(on: bool) { looks_material_icons = on }
+
+fn material_has_icon(kind: GlyphKind) -> bool {
+    ret kind == .Cross || kind == .ChevronLeft || kind == .ChevronRight || kind == .Search || kind == .Menu || kind == .Alert || kind == .Person || kind == .Edit || kind == .Add || kind == .MoreVert || kind == .Settings
+}
+
+fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bool, err) {
+    let (pb, pb_error) = geometry.path_builder(g.arena, 48usize, 160usize)
+    if pb_error != ok { ret (false, TooLarge) }
+    var builder = pb
+    let x = area.x
+    let y = area.y
+    let w = area.width
+    let h = area.height
+    var made = true
+    if g.kind == .Cross && g.stroke < 1.0 {
+        try matglyph.mat_close_thin(&builder, x, y, w, h)
+    } else if g.kind == .Cross {
+        try matglyph.mat_close(&builder, x, y, w, h)
+    } else if g.kind == .Check && g.stroke < 1.0 {
+        try matglyph.mat_check_chip(&builder, x, y, w, h)
+    } else if g.kind == .ChevronDown && g.stroke < 1.0 {
+        try matglyph.mat_down(&builder, x, y, w, h)
+    } else if g.kind == .ChevronUp && g.stroke < 1.0 {
+        try matglyph.mat_up(&builder, x, y, w, h)
+    } else if g.kind == .ChevronLeft {
+        try matglyph.mat_prev(&builder, x, y, w, h)
+    } else if g.kind == .ChevronRight {
+        try matglyph.mat_next(&builder, x, y, w, h)
+    } else if g.kind == .Search {
+        try matglyph.mat_search(&builder, x, y, w, h)
+    } else if g.kind == .Menu {
+        try matglyph.mat_menu(&builder, x, y, w, h)
+    } else if g.kind == .Alert {
+        try matglyph.mat_notif(&builder, x, y, w, h)
+    } else if g.kind == .Person {
+        try matglyph.mat_person(&builder, x, y, w, h)
+    } else if g.kind == .Edit {
+        try matglyph.mat_edit(&builder, x, y, w, h)
+    } else if g.kind == .Add {
+        try matglyph.mat_add(&builder, x, y, w, h)
+    } else if g.kind == .MoreVert {
+        try matglyph.mat_more(&builder, x, y, w, h)
+    } else if g.kind == .Settings {
+        try matglyph.mat_settings(&builder, x, y, w, h)
+    } else {
+        made = false
+    }
+    if !made { ret (false, ok) }
+    let path = geometry.finish(&builder)
+    let pushed = scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: g.color } } })
+    ret (true, pushed)
 }
