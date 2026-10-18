@@ -22,6 +22,8 @@ use e.ui.style
 use e.ui.widget
 use e.ui.winbutton
 use e.ui.winchrome
+use e.ui.winmenuicon
+use e.ui.wintile
 use e.ui.window as win
 use e.ui.winpx
 
@@ -1801,7 +1803,7 @@ type MenuBarItem = struct { label: str, items: []const overlay.MenuItem }
 // checkable and checked, a radio choice or pictured with a leading glyph,
 // whether a separator stands before it, whether it destroys (in `error`), and
 // its first-level submenu state and toggle.
-type BarCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, submenu: []const BarCommand, submenu_open: bool, submenu_toggle: widget.Submit, header: bool, split: bool, selected: bool, dither_flip: bool }
+type BarCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, submenu: []const BarCommand, submenu_open: bool, submenu_toggle: widget.Submit, header: bool, split: bool, selected: bool, dither_flip: bool, art: usize }
 
 // A menu of the v2 menu bar (D972): its title and its commands.
 type BarMenu = struct { label: str, commands: []const BarCommand }
@@ -10072,6 +10074,13 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             let (glyph, glyph_error) = control.icon_square(a, picture_ink, base_glyph, 16.0)
             if glyph_error != ok { ret (zero, glyph_error) }
             picture = glyph
+            if c.art > 0usize && !dark {
+                // v3's own picture of the item (e.ui.winmenuicon), a 16 x 16 tile
+                let atlas = winmenuicon.atlas()
+                let (tile, tile_error) = wintile.tile_node(a, 16usize, 16usize, atlas[(c.art - 1usize) * 256usize..c.art * 256usize])
+                if tile_error != ok { ret (zero, tile_error) }
+                picture = tile
+            }
             if c.glyph == .Table && !dark {
                 let (table, table_error) = windows_menu_table(a, picture_ink, 1usize + shift_checked)
                 if table_error != ok { ret (zero, table_error) }
