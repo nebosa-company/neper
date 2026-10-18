@@ -34,3 +34,18 @@ an 8-bit table (255 * (i / 255) ^ 1.2, rounded), are mixed with a = round(65536 
 (a channel has seven levels, so black on white shows 255 219 182 144 102 58 0), rounded to a byte and sent back through the inverse
 table; a pixel no channel covers is left alone, a covered pixel's uncovered channel still goes through the tables (64 comes out 65).
 The odd-k ties round the way they do because of the 16.16 fraction.
+
+Model the Neper pipeline fits to these atlases (`lib/e/text/tthint.e`, `ttglyph.e`, `lib/e/gfx/cleartype.e`):
+
+- GDI's ClearType pen advance is the font's `hdmx` advance, and hinting runs at the fonts' own sizes with x fitting added at `IUP[x]`
+  (per-point whole-pixel shifts that spread the difference between the `hdmx` advance and the rounded scaled advance over the glyph:
+  IP interpolates its reference shifts, pairs take the centre rule or follow a shifted reference, `SHPIX` of a pixel or more is ignored,
+  the right phantom is never moved by x moves, x `DELTAP` is ignored). `Outline.adv` is that advance.
+- A glyph whose program ran is sampled on one line per pixel row (y + 0.5) with six samples per pixel; a channel's coverage level is the
+  number of samples in its six-sample window. A glyph without a program (the NProbe fonts) is sampled on five weighted lines instead.
+- The hinted points are checked against `GetGlyphOutline` in black and white (the whole-pixel machine) and against the ClearType machine
+  through the tap fonts in `scripts/winnative/tap*.py`: copies of the font whose programs write the `GC` reading of every point into
+  storage and show it as bits, cut after K instructions or after `IUP[x]`.
+- Status at the end of round 22 (non-probe atlases): 4830 of 14144 ink glyphs pixel-identical, ClearType points equal to GDI's for
+  7188 of 12082 glyphs; the black-and-white outline and advance already match for 99%. Open: Segoe UI 24 (the stem is not rounded), Tahoma
+  (single-point y differences of 16 to 64 and x on `# f L ] r X { }`), composites (no fitting), `&PRUcm~` at Segoe UI 12.
