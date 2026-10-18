@@ -159,3 +159,4 @@ collapsed-table-no-padding-001.html | collapsed-table-no-padding-001-ref.html | 
 ch-unit-default-font-001.html | ch-unit-default-font-001-ref.html | match
 text-align-last-justify-001.html | text-align-last-justify-001-ref.html | match
 line-clamp-block-children-001.html | line-clamp-block-children-001-ref.html | match
+line-break-anywhere-simple-001.html | line-break-anywhere-simple-001-ref.html | match

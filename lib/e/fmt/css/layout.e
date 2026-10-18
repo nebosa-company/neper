@@ -1376,10 +1376,13 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
     }
     var seg = 0usize
     var k = 1usize
+    // `line-break: anywhere`: a wrap opportunity after every character.
+    let (lbv, has_lbv) = extra_text(s, "line-break")
+    let lb_anywhere = has_lbv && str.eq(cv.lower(l.a, cv.trim_ws(lbv)), "anywhere")
     while k <= n {
         // break-all adds a break between any two letters, never before a space.
         // break-spaces: every preserved space can end a line.
-        let all_here = (s.word_break == .BreakAll && !(k < n && scal[k] == 32u32)) || (s.white_space == .BreakSpaces && scal[k - 1usize] == 32u32)
+        let all_here = lb_anywhere || (s.word_break == .BreakAll && !(k < n && scal[k] == 32u32)) || (s.white_space == .BreakSpaces && scal[k - 1usize] == 32u32)
         // `break-spaces`: every preserved space is a wrap opportunity of its own and takes up room.
         let bspace = s.white_space == .BreakSpaces && scal[k - 1usize] == 32u32
         let cut_here = k == n || opp[k] != 0u8 || all_here || scal[k - 1usize] == 10u32 || bspace
