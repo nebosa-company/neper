@@ -11,7 +11,7 @@ compared), a reference pixel is STRUCTURAL when its 3 x 3 neighbourhood varies b
 shadow gradients; the anti-aliased rim of a shape does not qualify) and it is OFF when ours differs by more than 2 levels in any
 channel. Glyph pixels (text and icon artwork: where the reference differs from its `-notext` render, grown by 2 px) are not counted
 in `off`; `off+glyph` counts them. `rim` counts the rim pixels (not structural) that differ by more than 40 levels: a shape that
-is too big, too small or in the wrong place shows there. Outside the control's box (+1 px) every pixel is compared (shadows, state layers; nothing else may be drawn there): `shadow` counts the structural ones off by more than 2 levels and the rim pixels (the rim of a shadow or of a state layer's circle) off by more than 24.
+is too big, too small or in the wrong place shows there. Outside the control's box (+1 px) every pixel is compared (shadows, state layers; nothing else may be drawn there, glyph ink apart): `shadow` counts the structural ones off by more than 2 levels and the rim pixels (the rim of a shadow or of a state layer's circle) off by more than 24.
 `ring` counts the pixels that are not structural but lie on a straight 1 or 2 px line (a 3 px run along x or along y that varies by at most 6 levels: the 2 px outline of a checkbox, a radio ring, a divider, the flat part of a rim) and differ by more than 12 levels (the rasteriser differs from Skia by a few levels on anti-aliased edges): a thin line is never flat in all directions, so the flat count cannot see its colour.
 A cell passes with off == 0, shadow == 0 and ring == 0.
 """
@@ -126,7 +126,7 @@ def run(name, dark, png_dir, only):
         zone = np.zeros(st.shape, bool)
         zone[CROP - 1:CROP + h + 1, CROP - 1:CROP + w + 1] = True
         rim = int(((d > 40) & win & ~st & ~glyph & zone).sum())
-        outside_off = win & ~zone & (((d > 2) & st) | ((d > 24) & ~st))
+        outside_off = win & ~zone & ~glyph & (((d > 2) & st) | ((d > 24) & ~st))  # text and icon ink that stands outside the box (an outlined field's floated label, a slider's value label) is glyph too
         shadow = int(outside_off.sum())
         ring = int(((d > 12) & win & ~st & line_flat(ref) & ~glyph).sum())
         n = int((m & ~glyph).sum())

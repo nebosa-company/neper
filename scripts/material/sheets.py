@@ -74,9 +74,10 @@ SHEETS["badge"] = {"columns": 6, "cell_w": 100, "cell_h": 56, "cells": [
 SHEETS["tooltip"] = {"columns": 3, "cell_w": 320, "cell_h": 310, "full": True, "at": [(110, 107), (0, 0), (-107, 179)], "cells": [
     "tooltip-plain", None, "tooltip-rich"]}
 
-SHEETS["slider"] = {"columns": 5, "cell_w": 220, "cell_h": 40, "cells": [
+SHEETS["slider"] = {"columns": 5, "cell_w": 220, "cell_h": 72, "cells": [
     "slider-rest", "slider-rest-hover", "slider-rest-focus", "slider-rest-pressed", "slider-rest-disabled"] + [
-    "slider-range-%s" % s for s in S5]}
+    "slider-range-%s" % s for s in S5] + [
+    "slider-labeled-%s" % s for s in S5] + ["slider-ticks-%s" % s for s in S5]}
 
 # The reference is spec-derived CSS (360 wide, Sunday first, a 28 day month from a Sunday), not a Material Web capture: the numbers measure how far the
 # modal date picker is from that reading of the spec (it is 328 wide, Monday first), they are not a pass mark.

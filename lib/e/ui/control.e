@@ -5654,6 +5654,18 @@ fn material_disc(x: f32, size: f32, ink: paint.Color, shade: u8) -> widget.Node 
 }
 
 fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, range: bool, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    let (node, node_error) = material_slider_marked(a, key, t, label, first, second, range, low, high, step, change, change_second, enabled, false, false)
+    ret (node, node_error)
+}
+
+// The Android slider with a tick at every step (`ticks`: 2 dp dots, `on-primary` on the active part and `on-surface-variant` beyond)
+// and the value in a 28 dp label over the handle while it is hovered, focused or pressed (`labeled`).
+fn slider_material(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool, ticks: bool, labeled: bool) -> (widget.Node, err) {
+    let (node, node_error) = material_slider_marked(a, key, t, label, value, value, false, low, high, step, change, zero, enabled, ticks, labeled)
+    ret (node, node_error)
+}
+
+fn material_slider_marked(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, range: bool, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool, ticks: bool, labeled: bool) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
     let ink = style.color(t.tokens, .OnSurface)
     var fill = style.color(t.tokens, .Primary)
@@ -5696,7 +5708,7 @@ fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     }
     let x_near = from + near * reach
     let x_far = from + far * reach
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 10usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 40usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var used = 0usize
     let rtl = t.tokens.direction == .RightToLeft
@@ -5717,6 +5729,32 @@ fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         used += 1usize
         layers[used] = material_bar(x_near, 182.0 - x_near, rest)
         used += 1usize
+    }
+    if ticks && step > 0.0 && span > 0.0 {
+        // ponytail: ticks only up to 20 steps; a finer slider has none
+        let steps = usize(span / step + 0.5)
+        if steps > 0usize && steps <= 20usize {
+            var tick_on = style.color(t.tokens, .OnPrimary)
+            var tick_off = style.color(t.tokens, .OnSurfaceVariant)
+            if !enabled {
+                tick_on = style.color(t.tokens, .Surface)
+                tick_off = with_alpha(ink, t.tokens.states.disabled_content)
+            }
+            var i = 0usize
+            while i <= steps {
+                let x = from + 2.0 + f32(i) * (reach - 4.0) / f32(steps)
+                var tick = sized_style(2.0, 2.0)
+                var tick_ink = tick_off
+                if x <= x_near { tick_ink = tick_on }
+                if range && x >= x_far { tick_ink = tick_off }
+                if range && x > x_near && x < x_far { tick_ink = tick_on }
+                tick.background = paint.Brush { Solid: tick_ink }
+                tick.radius = 1.0
+                layers[used] = widget.positioned(0u64, x - 1.0, 19.0, tick, zero)
+                used += 1usize
+                i += 1usize
+            }
+        }
     }
     var stops = [2]f32{ x_near, x_far }
     var count: usize = 1
@@ -5740,6 +5778,31 @@ fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         layers[used] = material_disc(stops[k] - 10.0, 20.0, knob, shade)
         used += 1usize
         k += 1usize
+    }
+    if labeled && enabled && !range && (state.hovered || state.pressed || state.focus_visible) {
+        // md-slider's value label: a 28 dp pill (a 14 dp square turned 45 degrees under it makes the point) ending at the handle's
+        // top, its bottom 0.2 above the stack and the point 5.5 below it.
+        let (reading, reading_error) = value_label_text(a, t, first)
+        if reading_error != ok { ret (zero, reading_error) }
+        let (diamond_held, diamond_error) = mem.alloc[widget.Node](a, 1usize)
+        if diamond_error != ok { ret (zero, TooLarge) }
+        var square = sized_style(14.0, 14.0)
+        square.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        diamond_held[0usize] = widget.box(0u64, square, zero)
+        let turned = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.7853982, offset: geometry.Point { x: 0.0, y: 0.0 } }, sized_style(14.0, 14.0), diamond_held[0usize..1usize])
+        let (turned_held, turned_error) = mem.alloc[widget.Node](a, 1usize)
+        if turned_error != ok { ret (zero, TooLarge) }
+        turned_held[0usize] = turned
+        layers[used] = widget.positioned(0u64, x_near - 7.0, 0.0 - 11.4, style.defaults(), turned_held[0usize..1usize])
+        used += 1usize
+        let (pill_held, pill_error) = mem.alloc[widget.Node](a, 1usize)
+        if pill_error != ok { ret (zero, TooLarge) }
+        pill_held[0usize] = reading
+        var pill = sized_style(28.0, 28.0)
+        pill.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        pill.radius = 14.0
+        layers[used] = widget.positioned(0u64, x_near - 14.0, 0.0 - 28.2, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, pill, pill_held[0usize..1usize])))
+        used += 1usize
     }
     var track_style = sized_style(180.0, 40.0)
     var track_at: f32 = 10.0
@@ -5766,6 +5829,19 @@ fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
     if !enabled { sem.states = accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(200.0, 40.0), layers[0usize..used]))), ok)
+}
+// The label's digits: the value rounded, `label-medium` in `on-primary`.
+fn value_label_text(a: *mem.Arena, t: *const Theme, value: f32) -> (widget.Node, err) {
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    var rounded = value + 0.5
+    if value < 0.0 { rounded = value - 0.5 }
+    let digit_count = write_i64(digits, i64(rounded))
+    var caption = text_options()
+    caption.role = .LabelMedium
+    caption.wrap = .None
+    let (reading, reading_error) = colored_text(a, 0u64, digits[0usize..digit_count], t, caption, style.color(t.tokens, .OnPrimary))
+    ret (reading, reading_error)
 }
 // ---- end the Android look, slider ---------------------------------------------------------------------------------------------
 
