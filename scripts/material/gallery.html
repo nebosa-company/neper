@@ -275,12 +275,12 @@ const mi = (icon, text, key, extra) => `<md-menu-item${extra || ""}>${sl(icon, "
 const menuHtml = `<span id="anchor" style="display:inline-block;width:1px;height:1px"></span><md-menu id="m" open anchor="anchor" positioning="absolute">${mi("edit", "Edit", "Ctrl+E")}${mi("search", "Search", "Ctrl+F")}<md-divider role="separator" tabindex="-1"></md-divider>${mi("star", "Settings")}${mi("add", "Refresh", "", " disabled")}${mi("add", "Add")}</md-menu>`;
 add("menu-rest", menuHtml, { target: "md-menu", shadow: ".menu" });
 add("menu-hover", menuHtml, { target: "md-menu", shadow: ".menu" });
-// list
-const li = (a) => `<md-list-item ${a || ""}><div slot="headline">List item</div><div slot="supporting-text">Supporting text</div></md-list-item>`;
+// list (the sheet's rows: 340 dp wide, a leading person icon; two lines with a trailing chevron)
+const LI = (type, dis, lines, chevron, support) => `<md-list style="width:340px"><md-list-item type="button"${dis}><div slot="headline">List item</div>${lines === 2 ? `<div slot="supporting-text">${support}</div>` : ""}${sl("person", "start")}${chevron ? sl("next", "end") : ""}</md-list-item></md-list>`;
 for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
-  add(`list-item-${st}`, `<md-list><md-list-item type="button"${dis(st === "disabled")}><div slot="headline">List item</div></md-list-item></md-list>`, { target: "md-list-item" });
-  add(`list-item-two-line-${st}`, `<md-list><md-list-item type="button"${dis(st === "disabled")}><div slot="headline">List item</div><div slot="supporting-text">Supporting text</div></md-list-item></md-list>`, { target: "md-list-item" });
-  add(`list-item-leading-${st}`, `<md-list><md-list-item type="button"${dis(st === "disabled")}><div slot="headline">List item</div>${sl("person", "start")}${sl("more", "end")}</md-list-item></md-list>`, { target: "md-list-item" });
+  const d = st === "disabled" ? " disabled" : "";
+  add(`list-item-one-${st}`, LI("button", d, 1, false, ""), { target: "md-list-item" });
+  add(`list-item-two-${st}`, LI("button", d, 2, st === "rest" || st === "disabled", st === "rest" || st === "disabled" ? "Supporting line text lorem ipsum" : "Supporting line text"), { target: "md-list-item" });
 }
 // dialog (open, modal=false so no scrim; the surface is clipped)
 add("dialog-rest", `<md-dialog open style="--md-dialog-container-color:var(--md-sys-color-surface-container-high)"><div slot="headline">Dialog title</div><form slot="content" method="dialog">A dialog is a type of modal window that appears in front of app content to provide critical information or ask for a decision.</form><div slot="actions"><md-text-button>Cancel</md-text-button><md-text-button>OK</md-text-button></div></md-dialog>`, { target: "md-dialog", shadow: ".container" });

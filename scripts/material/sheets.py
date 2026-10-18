@@ -44,3 +44,6 @@ SHEETS["tabs"] = {"columns": 2, "cell_w": 310, "cell_h": 73, "cells": [
 
 SHEETS["menu"] = {"columns": 1, "cell_w": 220, "cell_h": 345, "at": (18, 8), "cells": ["menu-rest"]}
 SHEETS["menu_hover"] = {"columns": 1, "cell_w": 220, "cell_h": 345, "at": (18, 8), "cells": ["menu-hover"]}
+
+SHEETS["list"] = {"columns": 4, "cell_w": 350, "cell_h": 96, "cells": [
+    "list-item-one-rest", "list-item-two-rest", None, "list-item-two-hover", "list-item-two-focus", "list-item-two-pressed", None, "list-item-two-disabled"]}
