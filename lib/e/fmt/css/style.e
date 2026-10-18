@@ -48,7 +48,7 @@ type LenKind = enum u8 { Auto, Px, None, MinContent, MaxContent, FitContent, Num
 // `line-height` factor (in `px`); `Normal` is `line-height: normal`.
 type Len = struct { kind: LenKind, px: f64, pct: f64 }
 
-type Display = enum u8 { Inline, Block, None, Contents, InlineBlock, Flex, InlineFlex, Grid, InlineGrid, Table, InlineTable, TableRow, TableCell, TableRowGroup, TableHeaderGroup, TableFooterGroup, TableColumn, TableColumnGroup, TableCaption, ListItem, FlowRoot, Ruby, RubyText, RubyBase, RubyTextContainer, RubyBaseContainer }
+type Display = enum u8 { Inline, Block, None, Contents, InlineBlock, Flex, InlineFlex, Grid, InlineGrid, Table, InlineTable, TableRow, TableCell, TableRowGroup, TableHeaderGroup, TableFooterGroup, TableColumn, TableColumnGroup, TableCaption, ListItem, FlowRoot, Ruby, RubyText, RubyBase, RubyTextContainer, RubyBaseContainer, RunIn }
 type Position = enum u8 { Static, Relative, Absolute, Fixed, Sticky }
 type Float = enum u8 { None, Left, Right, InlineStart, InlineEnd }
 type Clear = enum u8 { None, Left, Right, Both, InlineStart, InlineEnd }
@@ -424,7 +424,7 @@ fn side_of(rest: str) -> i32 {
 }
 
 fn parse_display(v: str) -> (Display, bool) {
-    let set = ",inline,block,none,contents,inline-block,flex,inline-flex,grid,inline-grid,table,inline-table,table-row,table-cell,table-row-group,table-header-group,table-footer-group,table-column,table-column-group,table-caption,list-item,flow-root,ruby,ruby-text,ruby-base,ruby-text-container,ruby-base-container,"
+    let set = ",inline,block,none,contents,inline-block,flex,inline-flex,grid,inline-grid,table,inline-table,table-row,table-cell,table-row-group,table-header-group,table-footer-group,table-column,table-column-group,table-caption,list-item,flow-root,ruby,ruby-text,ruby-base,ruby-text-container,ruby-base-container,run-in,"
     if has_kw(v, set) { ret (kw[Display](v, set, .Inline), true) }
     if str.eq(v, "-webkit-box") { ret (.Block, true) }
     if str.eq(v, "-webkit-inline-box") { ret (.InlineBlock, true) }
