@@ -13,6 +13,8 @@ use e.text.tthint
 // the oracle tool compares it with a tap font whose glyphs have no programs).
 var skip_programs: bool = zero
 var trace_gid: i64 = -1i64
+var top_glyph: usize = zero
+var part_offset: i64 = zero
 
 fn set_trace_glyph(gid: i64) { trace_gid = gid }
 
@@ -158,13 +160,16 @@ fn size_of(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, cleartype: bool) -> (usi
 // Fills the zone `z` (already holding its points scaled to 26.6) with the glyph program at `lo..hi` run over it. A program that
 // traps leaves the points where they had got to.
 fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zone, lo: usize, hi: usize, composite: bool) -> err {
+    let top_gid = top_glyph
+    let off_here = part_offset
     let s = &h.sizes[si]
     let n = z.n
     var bw_adv = 0i64
     if s.cleartype {
         let (bw, bw_error) = size_of(h, a, s.ppem, false)
         if bw_error != ok { ret bw_error }
-        let (loaded, load_error) = gl_load(h, a, bw, gid, 0usize)
+        // a component is fitted to the advance of the glyph it belongs to
+        let (loaded, load_error) = gl_load(h, a, bw, top_gid, 0usize)
         if load_error != ok { ret load_error }
         bw_adv = loaded.adv
         h.level = loaded.lv
@@ -195,7 +200,12 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     h.ctX = 0i64
     if s.cleartype && !composite && bw_adv > 0i64 {
         h.ctX = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
+        if top_gid != gid {
+            let (top_adv, top_lsb) = gl_metrics(h, top_gid)
+            h.ctX = tthint.mulfix(top_adv, s.xscale)
+        }
         h.ctA = bw_adv
+        h.ctOff = 0i64
     }
     h.gs = s.gs
     h.sp = 0usize
@@ -423,7 +433,9 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
             px = tthint.pix_round(px)
             py = tthint.pix_round(py)
         }
+        part_offset = px
         let (part, part_error) = gl_load(h, a, si, component, depth + 1usize)
+        part_offset = 0i64
         if part_error != ok { ret (out, part_error) }
         let cz = &h.zsets[part.lv]
         let m = cz.n - 4usize
@@ -538,6 +550,7 @@ fn hint_glyph(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, gid: u32, cleartype: 
     if size_error != ok { ret (out, size_error) }
     h.level = 0usize
     h.ran = false
+    top_glyph = usize(gid)
     let (loaded, load_error) = gl_load(h, a, si, usize(gid), 0usize)
     if load_error != ok { ret (out, load_error) }
     let z = &h.zsets[loaded.lv]

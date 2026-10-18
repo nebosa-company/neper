@@ -52,7 +52,7 @@ type Hinter = struct {
     fpgm_at: usize, fpgm_len: usize, prep_at: usize, prep_len: usize,
     hdmx_at: usize, hdmx_records: usize, hdmx_record_size: usize,
     max_storage: usize, max_twilight: usize, max_fdefs: usize, max_stack: usize,
-    fdef_lo: []usize, fdef_hi: []usize, fpgm_done: bool,
+    fdef_lo: []usize, fdef_hi: []usize, fdef_delta: []bool, in_delta: bool, fpgm_done: bool,
     sizes: [24]Size, size_count: usize,
     zsets: [14]Zone, level: usize,
     stack: []i64, sp: usize, fail: bool,
@@ -62,7 +62,7 @@ type Hinter = struct {
     code_lo: usize, code_hi: usize, ip: usize, depth: usize, steps: usize,
     ppem: i64, xs: i64, cleartype: bool, composite: bool,
     sr_per: i64, sr_phase: i64, sr_thr: i64,
-    ctA: i64, ctX: i64, ran: bool
+    ctA: i64, ctX: i64, ctOff: i64, ran: bool
 }
 // What `hint_glyph` answers: the points of the outline (x, y interleaved, 26.6, x relative to the glyph's left phantom point),
 // whether each is on the curve (bit 0 of `tags`), the last point of each contour, the glyph's advance in this mode and the
@@ -291,6 +291,14 @@ fn open(a: *mem.Arena, data: []const u8) -> (*Hinter, err) {
         hi[f] = 0usize
         f += 1usize
     }
+    let (dk, dk_error) = mem.alloc[bool](a, h.max_fdefs + 1usize)
+    if dk_error != ok { ret (zero, NoRoom) }
+    f = 0usize
+    while f <= h.max_fdefs {
+        dk[f] = false
+        f += 1usize
+    }
+    h.fdef_delta = dk
     h.fdef_lo = lo
     h.fdef_hi = hi
     let (stack, stack_error) = mem.alloc[i64](a, h.max_stack + 96usize)
@@ -667,6 +675,12 @@ fn ct_centre(h: *Hinter, c2: i64) -> i64 {
     ret fdiv(2i64 * num + den, 2i64 * den)
 }
 
+// A component is fitted as part of the glyph it belongs to: its offset is stretched by the same ratio.
+fn ct_off_shift(h: *Hinter) -> i64 {
+    if h.ctOff == 0i64 || h.ctX <= 0i64 { ret 0i64 }
+    ret fdiv(2i64 * h.ctOff * (h.ctA - h.ctX) + h.ctX, 2i64 * h.ctX)
+}
+
 fn ct_live(z: *Zone, p: usize) -> bool { ret z.ipd[p] || z.mp[p] != 0i64 || (z.tags[p] & 128i64) != 0i64 }
 
 // MIRP and MSIRP (a pair) and MDRP, ALIGNRP and SHP (a point that follows) note which point they set against and give the point the
@@ -785,7 +799,7 @@ fn ct_scale(h: *Hinter) {
     }
     p = 0usize
     while p < npt {
-        z.cur[2usize * p] = z.cur[2usize * p] + z.sh[p]
+        z.cur[2usize * p] = z.cur[2usize * p] + z.sh[p] + ct_off_shift(h)
         z.tags[p] = z.tags[p] & (0i64 - 225i64)
         z.ipd[p] = false
         z.mp[p] = 0i64
@@ -925,11 +939,11 @@ fn vm_shpix(h: *Hinter) {
     while k < h.gs.lp {
         let p = vm_pop(h)
         if h.fail { ret }
-        // GDI's ClearType ignores a shift of a whole pixel or more along x (the font's tweaks for the black-and-white advance).
         var blocked = false
         if h.cleartype && h.gs.free_y == 0i64 && vm_pt(h, zi, p) {
-            if abs64(d) >= 64i64 { blocked = true }
+            if h.in_delta || abs64(d) >= 64i64 { blocked = true }
         }
+        if h.cleartype && h.gs.free_x == 0i64 && vm_pt(h, zi, p) && vm_delta_skipped(h, zi, usize(p)) { blocked = true }
         if !blocked && vm_pt(h, zi, p) { vm_move_by(h, zi, usize(p), dx, dy) }
         k += 1i64
     }
@@ -1070,6 +1084,16 @@ fn vm_mdap(h: *Hinter, round: bool) {
     h.gs.rp1 = p
 }
 
+// Whether ClearType's backward compatible mode drops a delta (DELTAP, SHPIX) on point `p`: a delta along x is dropped, and in the
+// other direction one on a point no instruction touched along y, because a delta there digs a dent in the outline where bilevel
+// rendering meant to flip a pixel. A composite glyph keeps its deltas along y: they place the accents.
+fn vm_delta_skipped(h: *Hinter, zi: usize, p: usize) -> bool {
+    if !h.cleartype || h.zone[1usize].n == 0usize { ret false }
+    if h.gs.free_x != 0i64 && h.gs.free_y == 0i64 { ret true }
+    if h.composite { ret false }
+    ret (h.zone[zi].tags[p] & 16i64) == 0i64
+}
+
 // The step of one DELTA argument: a 64th of a pixel shifted down by the delta shift.
 fn vm_delta_unit(h: *Hinter) -> i64 {
     var s = 6i64 - h.gs.delta_shift
@@ -1092,8 +1116,7 @@ fn vm_deltap(h: *Hinter, k: i64) {
             var amount = (b & 15i64) - 8i64
             if amount >= 0i64 { amount = amount + 1i64 }
             amount = amount * vm_delta_unit(h)
-            let along_x = h.cleartype && h.gs.free_x != 0i64 && h.gs.free_y == 0i64
-            if !along_x && vm_pt(h, h.gs.gep0, p) { vm_move(h, h.gs.gep0, usize(p), amount) }
+            if vm_pt(h, h.gs.gep0, p) && !vm_delta_skipped(h, h.gs.gep0, usize(p)) { vm_move(h, h.gs.gep0, usize(p), amount) }
         }
         i += 1i64
     }
@@ -1271,6 +1294,18 @@ fn vm_instctrl(h: *Hinter) {
     h.gs.instruct_control = (h.gs.instruct_control & (0i64 - bit - 1i64)) | (val & bit)
 }
 
+// ClearType's compatibility code finds the functions that apply a delta (SHPIX at one ppem) by their first instructions:
+// MPPEM GTEQ SWAP MPPEM LTEQ AND IF SHPIX ELSE POP POP EIF ENDF, or MPPEM EQ IF SHPIX ELSE POP POP EIF ENDF.
+fn vm_is_delta_function(h: *Hinter, at: usize) -> bool {
+    if at + 13usize > h.data.len { ret false }
+    let d = h.data
+    if d[at] != 0x4Bu8 { ret false }
+    if d[at + 1usize] == 0x54u8 {
+        ret d[at + 2usize] == 0x58u8 && d[at + 3usize] == 0x38u8 && d[at + 4usize] == 0x1Bu8 && d[at + 5usize] == 0x21u8 && d[at + 6usize] == 0x21u8 && d[at + 7usize] == 0x59u8 && d[at + 8usize] == 0x2Du8
+    }
+    ret d[at + 1usize] == 0x53u8 && d[at + 2usize] == 0x23u8 && d[at + 3usize] == 0x4Bu8 && d[at + 4usize] == 0x52u8 && d[at + 5usize] == 0x5Au8 && d[at + 6usize] == 0x58u8 && d[at + 7usize] == 0x38u8 && d[at + 8usize] == 0x1Bu8 && d[at + 9usize] == 0x21u8 && d[at + 10usize] == 0x21u8 && d[at + 11usize] == 0x59u8 && d[at + 12usize] == 0x2Du8
+}
+
 // Runs the function `f` `count` times.
 fn vm_call(h: *Hinter, f: i64, count: i64) {
     if f < 0i64 || usize(f) > h.max_fdefs || h.fdef_hi[usize(f)] == 0usize {
@@ -1284,6 +1319,8 @@ fn vm_call(h: *Hinter, f: i64, count: i64) {
     h.depth += 1usize
     let lo = h.fdef_lo[usize(f)]
     let hi = h.fdef_hi[usize(f)]
+    let saved_delta = h.in_delta
+    if h.fdef_delta[usize(f)] { h.in_delta = true }
     var k = 0i64
     while k < count {
         let saved_lo = h.code_lo
@@ -1303,6 +1340,7 @@ fn vm_call(h: *Hinter, f: i64, count: i64) {
         if h.fail { break }
         k += 1i64
     }
+    h.in_delta = saved_delta
     h.depth = h.depth - 1usize
 }
 
@@ -1612,6 +1650,7 @@ fn vm_step_run(h: *Hinter) {
             } else {
                 h.fdef_lo[usize(f)] = start
                 h.fdef_hi[usize(f)] = h.ip - 1usize
+                h.fdef_delta[usize(f)] = vm_is_delta_function(h, start)
             }
         }
     case 0x2D:
