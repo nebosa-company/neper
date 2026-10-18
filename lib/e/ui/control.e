@@ -25,6 +25,7 @@ use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
+use e.ui.linux_card
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -7698,6 +7699,10 @@ fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options
 // Unframed (D958), it is the rows alone on the container, for a frame around more.
 fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32, multi: bool, framed: bool) -> (widget.Node, err) {
     if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .Linux && framed {
+        let (boxed, boxed_error) = linux_listed(a, key, t, label, options, chosen, picks, rows, width, multi)
+        ret (boxed, boxed_error)
+    }
     if t.tokens.profile == .Windows && multi && framed {
         let (drawn, drawn_error) = windows_check_list(a, key, t, label, options, chosen, picks, rows, width)
         ret (drawn, drawn_error)
@@ -20657,3 +20662,159 @@ fn win_dark_bullets(a: *mem.Arena, count: usize) -> (widget.Node, err) {
     }
     ret (widget.stack(0u64, style.defaults(), kids[0usize..n]), ok)
 }
+
+// ---- the Linux look, lists, trees, grids and the alert dialog (worker l4, round 20) ------------------------------------
+// libadwaita 1.5 boxed list: a 12 px card (card_bg_color: white, white 8 % over the window Dark) of rows 47 high, each after the
+// first under a 1 px rule (card_shade_color: black 6.7 % Light, 36 % Dark; measured 238 and 34). A row is its label at 12 px from the
+// side with 12 above and below (Cantarell line 23). A selected row is accent_bg at 25 %; the pointer over a row washes the
+// card's foreground colour over it at 3 %; a pressed row 7 % (stylesheet; no capture).
+fn linux_rule_for(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret paint.rgba(0.0, 0.0, 0.0, 0.3584) }
+    ret paint.rgba(0.0, 0.0, 0.0, 0.0667)
+}
+fn linux_card_fill(t: *const Theme) -> paint.Color { ret style.color(t.tokens, .SurfaceContainer) }
+
+// The fill of a row of a boxed list or a tree: nothing at rest, the foreground at 3 % under the pointer (7 % pressed), accent_bg
+// at 25 % chosen (the wash adds over it).
+fn linux_row_fill(t: *const Theme, state: style.ControlState, chosen: bool) -> paint.Color {
+    var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if chosen { fill = with_alpha(style.color(t.tokens, .Primary), 0.25) }
+    var wash: f32 = 0.0
+    if state.hovered { wash = 0.03 }
+    if state.pressed { wash = 0.07 }
+    if wash > 0.0 {
+        let ink = style.color(t.tokens, .OnSurface)
+        let over_alpha = ink.alpha * wash
+        let out_alpha = over_alpha + fill.alpha * (1.0 - over_alpha)
+        let keep = fill.alpha * (1.0 - over_alpha)
+        fill = paint.Color { red: (ink.red * over_alpha + fill.red * keep) / out_alpha, green: (ink.green * over_alpha + fill.green * keep) / out_alpha, blue: (ink.blue * over_alpha + fill.blue * keep) / out_alpha, alpha: out_alpha }
+    }
+    ret fill
+}
+
+// A label as GTK sets it: a 23 high holder (the Cantarell line), the glyphs centred in it.
+fn linux_row_label(a: *mem.Arena, t: *const Theme, label: str, ink: paint.Color, high: f32, lift: f32) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    let (word, word_error) = colored_text(a, 0u64, label, t, caption, ink)
+    if word_error != ok { ret (zero, word_error) }
+    let held = widget.padded(0u64, 0.0, 0.0, 0.0, lift * 2.0, style.defaults(), mem_one_node(a, word))
+    ret (widget.aligned(0u64, .Start, .Center, sized_style(0.0, high), mem_one_node(a, held)), ok)
+}
+
+// The rows of a boxed list (list box, check list box): a tick box leads each row when `checks`.
+fn linux_listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32, checks: bool) -> (widget.Node, err) {
+    var row_h: f32 = 47.0
+    if checks { row_h = 30.0 }
+    let (items, items_error) = mem.alloc[widget.Node](a, options.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < options.len {
+        let row_key = key + 1u64 + u64(i)
+        let state = control_state(t, row_key, true, false)
+        var row_style = style.defaults()
+        row_style.width = style.Length { Px: width }
+        row_style.height = style.Length { Px: row_h }
+        var shown = chosen[i]
+        if checks { shown = false }
+        row_style.background = paint.Brush { Solid: linux_row_fill(t, state, shown) }
+        var lift: f32 = 0.0
+        if checks { lift = 1.0 } else { lift = 0.5 }
+        let (word, word_error) = linux_row_label(a, t, options[i], style.color(t.tokens, .OnSurface), 23.0, lift)
+        if word_error != ok { ret (zero, word_error) }
+        var line_style = style.defaults()
+        line_style.width = style.Length { Px: width }
+        line_style.height = style.Length { Px: row_h }
+        var lead: f32 = 14.0
+        var parts_count = 1usize
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        if checks {
+            lead = 5.0
+            let (tick_box, box_error) = linux_check_box(a, t, chosen[i], state)
+            if box_error != ok { ret (zero, box_error) }
+            parts[0usize] = tick_box
+            parts[1usize] = word
+            parts_count = 2usize
+        } else {
+            parts[0usize] = word
+        }
+        line_style.padding = style.EdgeLengths { left: style.Length { Px: lead }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 9.0 }, line_style, parts[0usize..parts_count])
+        let region = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, mem_one_node(a, line))
+        var entry: widget.Semantics = zero
+        entry.role = accessibility.ROLE_OPTION
+        entry.label = options[i]
+        entry.row = u32(i + 1usize)
+        entry.row_count = u32(options.len)
+        if chosen[i] { entry.states = accessibility.STATE_SELECTED }
+        let row_node = widget.semantics(0u64, entry, style.defaults(), mem_one_node(a, region))
+        if i == 0usize {
+            items[i] = row_node
+        } else {
+            var rule_style = sized_style(width, 1.0)
+            rule_style.background = paint.Brush { Solid: linux_rule_for(t) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = widget.box(0u64, rule_style, zero)
+            pair[1usize] = row_node
+            items[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sized_style(width, row_h + 1.0), pair[0usize..2usize])
+        }
+        i += 1usize
+    }
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: width }
+    var total: f32 = 0.0
+    if rows > 0u32 { total = f32(rows) * row_h + f32(rows - 1u32) }
+    view_style.height = style.Length { Px: total }
+    view_style.background = paint.Brush { Solid: linux_card_fill(t) }
+    view_style.radius = 12.0
+    view_style.overflow = .Clip
+    let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
+    if view_error != ok { ret (zero, TooLarge) }
+    // The card's rim and glow at the corners (baked from the library's crops, 100 % only) over the rows.
+    let (corners, corners_error) = linux_card.corners_node(a, width, total, t.tokens.palette == .Dark)
+    if corners_error != ok { ret (zero, corners_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = view
+    pair[1usize] = corners
+    let boxed = widget.stack(0u64, sized_style(width, total), pair[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_LISTBOX
+    sem.label = label
+    sem.row_count = u32(options.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, boxed)), ok)
+}
+
+// A GTK check button's box, 20 x 20 (the row's own; the check box control's Linux look is another worker's): 2 px frame of the
+// foreground at 15 %, 4 px corners; chosen it is accent_bg with a white tick.
+fn linux_check_box(a: *mem.Arena, t: *const Theme, chosen: bool, state: style.ControlState) -> (widget.Node, err) {
+    var face = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var edge = with_alpha(style.color(t.tokens, .Outline), 0.1176)
+    if t.tokens.palette == .Dark { edge = with_alpha(style.color(t.tokens, .Outline), 0.1486) }
+    if chosen {
+        face = style.color(t.tokens, .Primary)
+        edge = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    }
+    var box_style = sized_style(20.0, 20.0)
+    box_style.background = paint.Brush { Solid: face }
+    box_style.border = style.Border { width: 2.0, color: edge }
+    box_style.radius = 6.0
+    var base = widget.box(0u64, box_style, zero)
+    if chosen {
+        let (tick, tick_error) = mark_glyph(a, style.hex_raw(0xFFFFFFu32), .Check, 12.0)
+        if tick_error != ok { ret (zero, tick_error) }
+        base = widget.aligned(0u64, .Center, .Center, box_style, mem_one_node(a, tick))
+    }
+    // At 100 % the library's own pixels go over it (baked, e.ui.linux_card); other scales keep the drawn box.
+    let (pixels, pixels_error) = linux_card.check_box_node(a, t.tokens.palette == .Dark, chosen)
+    if pixels_error != ok { ret (zero, pixels_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = base
+    pair[1usize] = pixels
+    ret (widget.stack(0u64, sized_style(20.0, 20.0), pair[0usize..2usize]), ok)
+}
+// ---- end the Linux look, lists (worker l4) ----------------------------------------------------------------------------
