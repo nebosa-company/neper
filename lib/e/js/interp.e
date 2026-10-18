@@ -141,7 +141,7 @@ type Interp = struct {
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
     sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
-    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool
+    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str
 }
 
 fn root_realm(it: *Interp) -> *Interp {
@@ -3752,6 +3752,7 @@ fn target_name(f: *const Frame, id: u32) -> str {
 fn eval_named(it: *Interp, f: *Frame, id: u32, name: str) -> (Value, err) {
     let n = f.prog.nodes[usize(id)]
     if name.len > 0usize && (n.kind == ast.N_FUNC || n.kind == ast.N_CLASS) && n.text.len == 0usize {
+        if n.kind == ast.N_CLASS { it.class_hint = name }
         let (v, e) = eval(it, f, id)
         if e != ok { ret (undefv(), e) }
         set_function_name(it, v, name)
@@ -5413,13 +5414,17 @@ fn eval_class(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         }
         m += 1usize
     }
-    let (r, re) = eval_class_body(it, f, n, class_env)
+    let hint = it.class_hint
+    it.class_hint = ""
+    let (r, re) = eval_class_body(it, f, n, class_env, hint)
     f.env = saved_env
     f.strict = saved_strict
     ret (r, re)
 }
 
-fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Value, err) {
+fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: str) -> (Value, err) {
+    // The class's own name binding is in its temporal dead zone while `extends` is evaluated.
+    if n.text.len > 0usize && !str.eq(n.text, "*default*") { try declare(it, class_env, n.text, undefv(), B_CONST | B_TDZ) }
     var proto_parent = it.protos.object
     var ctor_parent = it.protos.function
     var has_proto_parent = true
@@ -5486,15 +5491,11 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
     ctor.home = proto
     ctor.has_home = true
     var name = n.text
-    var inner_name = n.text
-    if str.eq(n.text, "*default*") {
-        name = "default"
-        inner_name = ""
-    }
+    if str.eq(n.text, "*default*") { name = "default" }
+    if name.len == 0usize { name = hint }
     try define_data(it, ctor, key_of("name"), str_value(name), P_CONFIGURABLE)
     try define_data(it, ctor, key_of("prototype"), obj_value(proto), 0u8)
     try define_data(it, proto, key_of("constructor"), obj_value(ctor), P_HIDDEN)
-    if inner_name.len > 0usize { try declare(it, class_env, inner_name, undefv(), B_CONST | B_TDZ) }
     // Members.
     let (field_list, fle) = list.init[Value](it.a, 4usize)
     var fields = field_list
