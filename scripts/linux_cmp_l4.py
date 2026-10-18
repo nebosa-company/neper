@@ -39,7 +39,7 @@ SHEETS = {
     "vertical_grid": {"columns": 2, "cell_w": 340, "cell_h": 349, "cells": ["action-rows", "preferences-group"],
                   "text": {"action-rows": [(10, 55 * i + 6, 140, 55 * i + 50) for i in range(6)] + [(266, 290, 288, 314)],
                            "preferences-group": [(0, 0, 130, 50)] + [(10, 56 + 55 * i + 6, 140, 56 + 55 * i + 50) for i in range(2)]},
-                  "art": {"action-rows": [(276, 234, 302, 258), (288, 292, 312, 312)]}},
+                  "art": {"action-rows": [(276, 234, 302, 258), (286, 292, 316, 314)]}},
     "data_grid": {"columns": 1, "cell_w": 300, "cell_h": 220, "cells": ["columnview"],
                   "text": {"columnview": [(4, 6, 56, 26), (58, 6, 108, 26)] + [(r, 31 + 35 * i + 3, w, 31 + 35 * i + 32) for i in range(6) for (r, w) in ((4, 56), (58, 108))]}, "art": {}},
     "dialog": {"columns": 1, "cell_w": 570, "cell_h": 430, "cells": ["alert-dialog"],
