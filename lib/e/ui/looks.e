@@ -281,6 +281,7 @@ fn set_look(rig: *Rig, look: Look) {
     style.set_windark(look == .WindowsDark)
     style.set_neperdark(look == .NeperDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
+    control.set_material_icons(rig.tokens.profile == .MaterialLike)
     scene.set_pixel_exact(rig.tokens.profile == .Windows || rig.tokens.profile == .MaterialLike)
     scene.set_fine_curves(rig.tokens.profile == .Linux)
     scene.set_cff_text(rig.tokens.profile == .Linux)

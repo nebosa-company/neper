@@ -67,6 +67,7 @@ html, body { margin: 0; background: var(--md-sys-color-surface); color: var(--md
 #stage { position: absolute; left: 64px; top: 64px; }
 svg.i { width: 24px; height: 24px; fill: currentColor; display: block; }
 md-filled-button svg.i, md-outlined-button svg.i, md-text-button svg.i, md-filled-tonal-button svg.i, md-elevated-button svg.i, md-assist-chip svg.i { width: 18px; height: 18px; }
+md-fab[size="large"] svg.i { width: 36px; height: 36px; }
 md-filled-text-field, md-outlined-text-field, md-filled-select, md-outlined-select { width: 240px; }
 md-list { width: 280px; }
 md-filled-text-field, md-outlined-text-field { --md-filled-text-field-caret-color: transparent; --md-outlined-text-field-caret-color: transparent; }
@@ -333,9 +334,13 @@ add("date-picker-rest", `<div class="datepicker"><div class="hd"><div class="s">
 // Focus is the 10 % state layer on Android: the ripple's hover layer at 10 % (Material Web itself only draws its focus ring)
 window.focusLayer = () => {
   const walk = (root) => { for (const el of root.querySelectorAll("*")) {
-    if (el.tagName === "MD-RIPPLE") { el.style.setProperty("--md-ripple-hover-opacity", "0.1"); el.hovered = true; }
+    // the focus stands on the chip's own action: an input chip's remove button is a second tab stop with a layer of its own
+    if (el.tagName === "MD-RIPPLE" && !(el.parentElement && el.parentElement.classList.contains("trailing"))) { el.style.setProperty("--md-ripple-hover-opacity", "0.1"); el.hovered = true; }
     if (el.shadowRoot) walk(el.shadowRoot); } };
   walk(document.getElementById("stage"));
+  // M3 (MDC-Android m3_button_outline_color): a focused outlined button's outline is `primary`; Material Web has no token for it, but the outline colour is one
+  const focused = document.activeElement;
+  if (focused && focused.style) { focused.style.setProperty("--md-outlined-button-outline-color", "var(--md-sys-color-primary)"); focused.style.setProperty("--md-outlined-icon-button-outline-color", "var(--md-sys-color-primary)"); }
   for (const f of document.querySelectorAll("md-filled-text-field, md-outlined-text-field")) f.setSelectionRange(f.value.length, f.value.length);
 };
 // Pressed on Android is the 10 % layer alone: drop the hover layer the resting pointer would add under it

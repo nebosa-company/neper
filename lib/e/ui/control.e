@@ -21,6 +21,7 @@ use e.text.shape
 use e.ui.accessibility
 use e.ui.adwicon_l2 as adwicon
 use e.ui.linuxshadow_l2 as linuxshadow
+use e.ui.matglyph
 use e.ui.animation
 use e.ui.gridlook as gl
 use e.ui.input
@@ -3583,6 +3584,11 @@ fn oval(b: *geometry.PathBuilder, cx: f32, cy: f32, rx: f32, ry: f32) -> err {
 
 fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*Glyph](ctx)
+    if looks_material_icons {
+        let (drawn, drawn_error) = material_icon_paint(g, b, area)
+        if drawn_error != ok { ret drawn_error }
+        if drawn { ret ok }
+    }
     if g.filled && glyph_has_body(g.kind) { ret filled_glyph_paint(g, b, area) }
     // (D1302) The gear's two rings and eight teeth need the larger builder.
     var verbs = 16usize
@@ -11382,7 +11388,7 @@ fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipK
     if parts_error != ok { ret (zero, TooLarge) }
     var content = label_node
     if chosen {
-        let (check, check_error) = mark_glyph(a, words, .Check, t.tokens.sizes.icon_sm)
+        let (check, check_error) = stroked_glyph(a, words, .Check, t.tokens.sizes.icon_sm, chip_icon_stroke(t))
         if check_error != ok { ret (zero, check_error) }
         parts[0usize] = check
         parts[1usize] = label_node
@@ -11392,7 +11398,7 @@ fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipK
     if kind == .Input {
         parts[0usize] = label_node
         let muted = style.color(t.tokens, .OnSurfaceVariant)
-        let (cross, cross_error) = mark_glyph(a, muted, .Cross, t.tokens.sizes.icon_sm)
+        let (cross, cross_error) = stroked_glyph(a, muted, .Cross, t.tokens.sizes.icon_sm, chip_icon_stroke(t))
         if cross_error != ok { ret (zero, cross_error) }
         let (removed, removed_error) = mem.alloc[widget.Node](a, 1usize)
         if removed_error != ok { ret (zero, TooLarge) }
@@ -23291,4 +23297,61 @@ fn linux_glyph_square(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: 
     }
     let (mark, mark_error) = adwicon.icon(a, svg, color, size)
     ret (mark, mark_error)
+}
+
+// ---- looks28: the Android look's icons ---------------------------------------------------------------------------
+// With the flag on (the Android look sets it), the glyphs that Material has an icon for are drawn as that icon's filled outline
+// (e.ui.matglyph, from scripts/material/gen_glyphs.py) instead of Neper's strokes. A stroke width below 1 asks for the
+// Symbols close and check that md-input-chip and md-filter-chip draw (the Icons close is the 2 dp one everywhere else; the check
+// of a check box is not replaced).
+var looks_material_icons: bool = false
+
+// A chip's check and cross: 2 as everywhere, the thin Symbols sentinel in the Android look.
+fn chip_icon_stroke(t: *const Theme) -> f32 {
+    if t.tokens.profile == .MaterialLike { ret 0.5 }
+    ret 2.0
+}
+
+fn set_material_icons(on: bool) { looks_material_icons = on }
+
+fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bool, err) {
+    let (pb, pb_error) = geometry.path_builder(g.arena, 48usize, 160usize)
+    if pb_error != ok { ret (false, TooLarge) }
+    var builder = pb
+    let x = area.x
+    let y = area.y
+    let w = area.width
+    let h = area.height
+    var made = true
+    if g.kind == .Cross && g.stroke < 1.0 {
+        try matglyph.mat_close_thin(&builder, x, y, w, h)
+    } else if g.kind == .Cross {
+        try matglyph.mat_close(&builder, x, y, w, h)
+    } else if g.kind == .Check && g.stroke < 1.0 {
+        try matglyph.mat_check_chip(&builder, x, y, w, h)
+    } else if g.kind == .ChevronLeft {
+        try matglyph.mat_prev(&builder, x, y, w, h)
+    } else if g.kind == .ChevronRight {
+        try matglyph.mat_next(&builder, x, y, w, h)
+    } else if g.kind == .Search {
+        try matglyph.mat_search(&builder, x, y, w, h)
+    } else if g.kind == .Menu {
+        try matglyph.mat_menu(&builder, x, y, w, h)
+    } else if g.kind == .Alert {
+        try matglyph.mat_notif(&builder, x, y, w, h)
+    } else if g.kind == .Person {
+        try matglyph.mat_person(&builder, x, y, w, h)
+    } else if g.kind == .Edit {
+        try matglyph.mat_edit(&builder, x, y, w, h)
+    } else if g.kind == .Add {
+        try matglyph.mat_add(&builder, x, y, w, h)
+    } else if g.kind == .MoreVert {
+        try matglyph.mat_more(&builder, x, y, w, h)
+    } else {
+        made = false
+    }
+    if !made { ret (false, ok) }
+    let path = geometry.finish(&builder)
+    let pushed = scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: g.color } } })
+    ret (true, pushed)
 }
